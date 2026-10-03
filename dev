@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 唯一本地入口。up／down／health 走容器；其余已约定子命令仍以非 0 退出。
+# 唯一本地入口。up／down／health／db／lint／test／build／check 走容器。
 set -euo pipefail
 
 cd "$(dirname "$0")"
@@ -9,7 +9,8 @@ source dev.d/compose.sh
 usage() {
   cat >&2 <<'EOF'
 ./dev — 唯一本地入口
-已实现：up、down、health。其余已约定子命令以非 0 退出。不要另开旁路。
+已实现：up、down、health、db migrate、lint、test unit、build、check shield、check secrets。
+不要另开旁路。
 
   up
   down
@@ -22,11 +23,6 @@ usage() {
 
 档位：GZGT_PROFILE=dev（默认，开发档）或 integration（联调档）。
 EOF
-}
-
-unimplemented() {
-  echo "./dev: 未实现: $*" >&2
-  exit 1
 }
 
 reject() {
@@ -74,16 +70,16 @@ case "$cmd" in
     ;;
   lint)
     [[ $# -eq 0 ]] || reject "lint 不接受参数"
-    unimplemented lint
+    dev.d/lint.sh
     ;;
   test)
     [[ $# -eq 1 && "$1" == "unit" ]] || reject "test 仅约定 unit"
-    unimplemented test unit
+    dev.d/test-unit.sh
     ;;
   build)
     [[ $# -eq 1 ]] || reject "build 需要一个目标"
     case "$1" in
-      backend | frontend) unimplemented build "$1" ;;
+      backend | frontend) dev.d/build.sh "$1" ;;
       *) reject "未知 build 目标: $1" ;;
     esac
     ;;
