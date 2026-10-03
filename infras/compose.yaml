@@ -1,0 +1,51 @@
+# 两档共用的数据服务。应用进程在 compose.dev.yaml／compose.integration.yaml。
+services:
+  db:
+    image: postgis/postgis:16-3.5
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-gzgt}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gzgt-dev-only}
+      POSTGRES_DB: ${POSTGRES_DB:-gzgt}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  minio:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/minio/minio:RELEASE.2025-09-07T16-13-09Z-cpuv1
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-gzgt}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-gzgt-dev-only}
+
+  minio-init:
+    image: swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/minio/minio:RELEASE.2025-09-07T16-13-09Z-cpuv1
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-gzgt}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-gzgt-dev-only}
+    volumes:
+      - ./minio-init.sh:/init/minio-init.sh:ro
+    entrypoint: ["/bin/sh", "/init/minio-init.sh"]
+    restart: "no"
+
+  doc-render:
+    build:
+      context: ./doc-render
+    restart: unless-stopped
+    environment:
+      HOME: /tmp
+    healthcheck:
+      test: ["CMD", "libreoffice", "--version"]
+      interval: 10s
+      timeout: 20s
+      retries: 10
+      start_period: 20s
+
+volumes:
+  pgdata:
+  miniodata:
