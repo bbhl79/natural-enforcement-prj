@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# 唯一本地入口。已约定子命令在本票尚未实现，调用以非 0 退出，不另开旁路。
+# 唯一本地入口。up／down／health 走容器；其余已约定子命令仍以非 0 退出。
 set -euo pipefail
+
+cd "$(dirname "$0")"
+# shellcheck source=dev.d/compose.sh
+source dev.d/compose.sh
 
 usage() {
   cat >&2 <<'EOF'
 ./dev — 唯一本地入口
-已约定、尚未实现的子命令以非 0 退出。不要另开旁路。
+已实现：up、down、health。其余已约定子命令以非 0 退出。不要另开旁路。
 
   up
   down
@@ -15,6 +19,8 @@ usage() {
   test unit
   build backend|frontend
   check shield|secrets
+
+档位：GZGT_PROFILE=dev（默认，开发档）或 integration（联调档）。
 EOF
 }
 
@@ -29,6 +35,13 @@ reject() {
   exit 2
 }
 
+require_docker() {
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "./dev: 需要容器运行时（docker compose）" >&2
+    exit 1
+  fi
+}
+
 if [[ $# -lt 1 ]]; then
   reject "缺少子命令"
 fi
@@ -39,16 +52,19 @@ shift
 case "$cmd" in
   up)
     [[ $# -eq 0 ]] || reject "up 不接受参数"
-    unimplemented up
+    require_docker
+    dev.d/up.sh
     ;;
   down)
     [[ $# -eq 0 ]] || reject "down 不接受参数"
-    unimplemented down
+    require_docker
+    compose down --remove-orphans
     ;;
   health)
     [[ $# -eq 1 ]] || reject "health 需要一个目标"
+    require_docker
     case "$1" in
-      backend | frontend | db | minio | doc-render) unimplemented health "$1" ;;
+      backend | frontend | db | minio | doc-render) dev.d/health.sh "$1" ;;
       *) reject "未知 health 目标: $1" ;;
     esac
     ;;
