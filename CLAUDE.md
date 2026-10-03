@@ -1,24 +1,6 @@
-## 语言
+# 广州市规划和自然资源局监督监管与执法协同系统
 
-与用户的交互，以及本仓库中的文档，使用简体中文。专业术语和惯用缩写保留原文，如 GitHub、issue、label、ADR、`gh`。
-
-## Git 提交
-
-准备提交信息，或执行 `git commit`、`git push` 之前，先读 `docs/rules/git-commit.md` 并遵守。
-
-## Agent skills
-
-### Issue tracker
-
-议题与规格说明以 GitHub issue 形式存放在 `bbhl79/natural-enforcement-prj`。见 `docs/agents/issue-tracker.md`。
-
-### Triage labels
-
-五个标准角色，label 字符串与角色名相同（`needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`）。见 `docs/agents/triage-labels.md`。
-
-### Domain docs
-
-单上下文（single-context）：仓库根目录一份 `CONTEXT.md` 与 `docs/adr/`。见 `docs/agents/domain.md`。
+本文件与 `AGENTS.md`、`.cursor/rules/workflow.mdc` 同源。语言、Git 提交、议题跟踪见 `AGENTS.md`。
 
 ## 合并 DoD
 
@@ -34,7 +16,7 @@
 
 ## 红线摘要
 
-全文见飞书《Agent 实施工作流约定》§2（token `AuzJdFfmRo2OLex0qDTcsXVHnvb`）。开工先读 `CONTEXT.md`。
+全文见飞书《Agent 实施工作流约定》§2（token `AuzJdFfmRo2OLex0qDTcsXVHnvb`）。
 
 - 设计口径以飞书为准。issue 内 spec 只留摘要加权威指针，禁止整段复制。冲突时改 issue。
 - 提问前按 `CONTEXT.md` 检索飞书。命中用四元组作答；未命中才问人。
@@ -57,5 +39,3 @@ git worktree add ../natural-enforcement-prj-wts/wt-123 -b feat/123 dev
 - 代码与 GitHub Issues 继续托管在 `bbhl79/natural-enforcement-prj`（[#2](https://github.com/bbhl79/natural-enforcement-prj/issues/2)）。
 - 本阶段不设 spend cap，也不设每 feature 预算硬上限（[#3](https://github.com/bbhl79/natural-enforcement-prj/issues/3)）。tier 路由仍按工作流 §6.1。
 - D3 当前基线＝v0.1.8-r12，revision 167（[#1](https://github.com/bbhl79/natural-enforcement-prj/issues/1)）。
-
-飞书写入先给人看正文，确认后才执行。

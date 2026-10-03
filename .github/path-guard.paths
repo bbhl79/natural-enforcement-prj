@@ -1,0 +1,5 @@
+# 业务 PR 禁改前缀。权威：工作流约定 §4 约束①②④
+# 豁免：PR 带 label channel:main-agent（主 agent 通道的机器编码，待人确认）
+# 以 # 开头或空行忽略。匹配规则：变更路径等于该前缀、以该前缀开头，或在任意层级包含 /前缀。
+packages/shield/
+prisma/migrations/

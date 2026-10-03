@@ -1,0 +1,34 @@
+---
+description: 实施工作流红线、合并 DoD、worktree 位置。与 AGENTS.md、CLAUDE.md 同源。
+alwaysApply: true
+---
+
+# 实施工作流（摘要）
+
+权威：飞书《Agent 实施工作流约定》token `AuzJdFfmRo2OLex0qDTcsXVHnvb`。开工先读仓库根 `CONTEXT.md`。
+
+## 红线
+
+- 设计以飞书为准。spec 只回链权威指针（doc_token＋version＋section＋url），禁止整段复制。
+- 提问前检索 `CONTEXT.md` 索引。未命中才开 decision 票。禁止猜测口径。
+- `gate.*` block 只能是服务端断言，禁止降级，禁止只灰前端按钮。
+- `main` 是 release 分支。feature PR 目标一律 `dev`。
+- 指针 version 必须等于附录基线表当前行，不一致即停。
+
+## 合并 DoD
+
+`./dev lint`／`test`／`build` 绿；A06 空库可 migrate；A07–A12 保护未被旁路；PR 回链 issue 与飞书指针；主 agent 不代 approval，不自审自己改过的 PR。
+
+## worktree
+
+目录：`../natural-enforcement-prj-wts/wt-<票号>`，从最新 `dev` 拉出。
+
+## 已拍板（2026-10-03）
+
+- D3 当前基线＝v0.1.8-r12（revision 167）。
+- 代码与 Issues 继续托管在 GitHub `bbhl79/natural-enforcement-prj`。
+- 本阶段不设 spend cap，也不设每 feature 预算硬上限。
+
+## 飞书写入
+
+准备写入飞书的正文先给人看，确认后才执行。

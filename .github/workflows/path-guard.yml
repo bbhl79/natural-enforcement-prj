@@ -1,0 +1,36 @@
+# §4 约束④：业务 PR 的 diff 触及 shield 契约、Prisma 迁移目录则失败。
+# 路由注册等中央清单文件路径飞书尚未钉死，不在 .github/path-guard.paths 单列。
+# 操作码、挂点、字典种子、审计事件位于 packages/shield/，已覆盖。
+name: path-guard
+
+on:
+  pull_request:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+jobs:
+  path-guard:
+    name: path-guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: guard
+        env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          case ",${LABELS}," in
+            *,channel:main-agent,*)
+              echo "path-guard: exempt label channel:main-agent"
+              exit 0
+              ;;
+          esac
+          git diff --name-only "$BASE_SHA" "$HEAD_SHA" | ./.github/scripts/path-guard.sh .github/path-guard.paths
