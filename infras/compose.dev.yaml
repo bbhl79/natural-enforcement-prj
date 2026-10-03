@@ -17,6 +17,7 @@ services:
       - dev_node_modules:/workspace/node_modules
       - dev_backend_node_modules:/workspace/apps/backend/node_modules
       - dev_frontend_node_modules:/workspace/apps/frontend/node_modules
+      - dev_shield_node_modules:/workspace/packages/shield/node_modules
       - pnpm_store:/pnpm/store
     restart: "no"
 
@@ -36,6 +37,7 @@ services:
       - dev_backend_node_modules:/workspace/apps/backend/node_modules
       - dev_backend_dist:/workspace/apps/backend/dist
       - dev_frontend_node_modules:/workspace/apps/frontend/node_modules
+      - dev_shield_node_modules:/workspace/packages/shield/node_modules
       - pnpm_store:/pnpm/store
     depends_on:
       deps:
@@ -68,6 +70,7 @@ services:
       - dev_node_modules:/workspace/node_modules
       - dev_backend_node_modules:/workspace/apps/backend/node_modules
       - dev_frontend_node_modules:/workspace/apps/frontend/node_modules
+      - dev_shield_node_modules:/workspace/packages/shield/node_modules
       - pnpm_store:/pnpm/store
     depends_on:
       deps:
@@ -108,4 +111,5 @@ volumes:
   dev_backend_node_modules:
   dev_backend_dist:
   dev_frontend_node_modules:
+  dev_shield_node_modules:
   pnpm_store:
