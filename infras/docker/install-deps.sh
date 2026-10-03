@@ -5,7 +5,8 @@ set -eu
 cd /workspace
 stamp=$(sha256sum pnpm-lock.yaml | awk '{print $1}')
 current=$(cat node_modules/.install-stamp 2>/dev/null || true)
-if [ "$current" != "$stamp" ]; then
+# shield 依赖在独立命名卷。卷是空的时 lockfile 戳记仍可能匹配，必须重装。
+if [ "$current" != "$stamp" ] || [ ! -e packages/shield/node_modules/.bin/vitest ]; then
   pnpm install --frozen-lockfile
   echo "$stamp" > node_modules/.install-stamp
 fi
