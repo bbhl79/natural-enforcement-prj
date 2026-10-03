@@ -90,7 +90,8 @@ case "$cmd" in
   check)
     [[ $# -eq 1 ]] || reject "check 需要一个目标"
     case "$1" in
-      shield | secrets) unimplemented check "$1" ;;
+      shield) unimplemented check shield ;;
+      secrets) dev.d/check-secrets.sh ;;
       *) reject "未知 check 目标: $1" ;;
     esac
     ;;
