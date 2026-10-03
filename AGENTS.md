@@ -30,7 +30,7 @@
 - block 门禁是服务端断言
 - PR 回链 issue，且飞书权威指针版本等于当前基线
 - 目标分支是 `dev`。`main` 只收里程碑出口的 `dev→main` release PR（人批准后合入并打 tag）
-- 主 agent 不代替人的 approval；主 agent 改过的 PR 不自审
+- 本仓库是 1 人项目。PR owner 是 Lei（`bbhl79`），无法对自己的 PR 点 GitHub Approve。人的合并闸门是在对话里明确说批准或同意合并；主 agent 收到后执行 merge。`assertions` 与 `path-guard` 仍是 required check。主 agent 先对照验收句检查，不合并未看过或未通过的 PR
 
 ## 红线摘要
 
