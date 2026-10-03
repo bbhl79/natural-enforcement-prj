@@ -70,7 +70,7 @@ case "$cmd" in
     ;;
   db)
     [[ $# -eq 1 && "$1" == "migrate" ]] || reject "db 仅约定 migrate"
-    unimplemented db migrate
+    dev.d/db-migrate.sh
     ;;
   lint)
     [[ $# -eq 0 ]] || reject "lint 不接受参数"
@@ -92,6 +92,8 @@ case "$cmd" in
     case "$1" in
       shield) unimplemented check shield ;;
       secrets) dev.d/check-secrets.sh ;;
+      shield) dev.d/check-shield.sh ;;
+      secrets) unimplemented check secrets ;;
       *) reject "未知 check 目标: $1" ;;
     esac
     ;;

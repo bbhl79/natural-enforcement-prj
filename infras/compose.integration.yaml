@@ -4,6 +4,26 @@ services:
     volumes:
       - miniodata:/data
 
+  db-migrate:
+    build:
+      context: ./docker
+      dockerfile: dev.Dockerfile
+    environment:
+      CI: "true"
+      DATABASE_URL: postgresql://${POSTGRES_USER:-gzgt}:${POSTGRES_PASSWORD:-gzgt-dev-only}@db:5432/${POSTGRES_DB:-gzgt}
+    volumes:
+      - ..:/workspace
+      - integration_node_modules:/workspace/node_modules
+      - integration_backend_node_modules:/workspace/apps/backend/node_modules
+      - pnpm_store:/pnpm/store
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - "pnpm install --frozen-lockfile --filter @gzgt/backend... && pnpm --filter @gzgt/backend exec prisma migrate deploy"
+
   backend:
     build:
       context: ..
@@ -58,3 +78,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+
+volumes:
+  integration_node_modules:
+  integration_backend_node_modules:
+  pnpm_store:

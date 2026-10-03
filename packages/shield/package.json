@@ -1,0 +1,17 @@
+{
+  "name": "@gzgt/shield",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "typescript": "6.0.2",
+    "vitest": "3.2.4"
+  }
+}
