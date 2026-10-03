@@ -8,7 +8,7 @@
 ## 飞书文档索引（token → 内容）
 | token | 文档 | 用途 |
 |-|-|-|
-| BC6GdlshqoCOGWx1ENycorbGnSe | D3 可编码开工包 v0.1.8-r12 | 字段/文书/权限/挂点权威 |
+| BC6GdlshqoCOGWx1ENycorbGnSe | D3 可编码开工包 v0.1.9 | 字段/文书/权限/挂点权威 |
 | MUcYdpn68oEKAvxQQxFcLdBTnSg | 查处段 v0.1.4-r12 | M3a/M3b 业务基线 |
 | HxRBdU96fo7Y7yxeDggcgnsen8c | 线索段 v0.1.5 | M1 业务基线 |
 | GO7jd1PT5oig5QxM65pcQH0kn8b | 立案段 v0.1.4 | M2 业务基线 |
@@ -24,7 +24,7 @@
 1. 先按上表检索飞书（`lark-cli docs +fetch`，只读）。
 2. 命中：用权威指针四元组作答（doc_token＋version＋section＋url）。仅有 URL 无效。
 3. 未命中：才开 Grilling／decision 票问人。禁止用聊天口头结论代替票。
-4. 指针 version 必须等于已拍板的当前基线。D3 当前基线＝v0.1.8-r12（revision 167，[#1](https://github.com/bbhl79/natural-enforcement-prj/issues/1)，2026-10-03）。附录短表里的 r11 行保留；在 LOCK 回写完成前，以 #1 为准。
+4. 指针 version 必须等于已拍板的当前基线。D3 当前基线＝v0.1.9（revision 175，LOCK-20261003-04，2026-10-03）。该锁取代 LOCK-20261003-01；r12 行（revision 167）与 r11 行都保留，不再作为当前基线。
 
 ## 硬规则（摘要，全文见工作流约定 §2）
 1. Grilling 提问前必须检索上表；命中＝权威指针（token＋version＋section＋url）作答；未命中才问人
@@ -34,7 +34,8 @@
 5. risk-tier／reasoning-tier 按 §6.1 定级；具体模型映射见环境配置，不进协议；触及拍板、gate.*、契约强制升档；升降档均留痕
 
 ## 已拍板（2026-10-03，已回写飞书）
-- **LOCK-20261003-01**（[#1](https://github.com/bbhl79/natural-enforcement-prj/issues/1)）：D3 当前基线＝v0.1.8-r12（revision 167）。附录短表 2026-10-02 的 v0.1.8-r11 行被取代，行本身保留。
+- **LOCK-20261003-01**（[#1](https://github.com/bbhl79/natural-enforcement-prj/issues/1)）：D3 当前基线＝v0.1.8-r12（revision 167）。附录短表 2026-10-02 的 v0.1.8-r11 行被取代，行本身保留。本锁已被 LOCK-20261003-04 取代，行本身保留。
+- **LOCK-20261003-04**（2026-10-03，对话确认）：D3 当前基线＝v0.1.9（revision 175）。取代 LOCK-20261003-01；r12 行保留。附录 `OtlRdhezKoxOxSxR3T1cdy1AnGx` 升 v0.1.6（revision 51）。
 - **LOCK-20261003-02**（[#2](https://github.com/bbhl79/natural-enforcement-prj/issues/2)）：允许代码与 GitHub Issues 继续托管在 `bbhl79/natural-enforcement-prj`。
 - **LOCK-20261003-03**（[#3](https://github.com/bbhl79/natural-enforcement-prj/issues/3)）：本阶段不设硬上限。执行会话和每个 feature 都不卡金额或额度。tier 路由仍按工作流 §6.1。
 - **2026-10-03 拍板**：本仓库是 1 人项目。PR owner 是 Lei（`bbhl79`），无法对自己的 PR 点 GitHub Approve。`main`／`dev` 不要求 GitHub approval。人在对话里明确批准后，主 agent 执行 merge。`assertions` 与 `path-guard` 仍是 required check。
