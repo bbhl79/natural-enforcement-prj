@@ -1,4 +1,4 @@
-# 唯一树。packages/shield 由 packages/* 纳入；本票不向该目录提交文件。
+# 唯一树。packages/shield 以占位文件入库，不含契约实现。
 packages:
   - "apps/*"
   - "packages/*"

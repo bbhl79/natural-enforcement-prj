@@ -6,7 +6,7 @@
 |---|---|
 | `apps/backend` | 后端 |
 | `apps/frontend` | 前端 |
-| `packages/shield` | 契约位（本票不写入该目录） |
+| `packages/shield` | 契约 |
 | `e2e` | 端到端 |
 | `infras` | Compose／运维骨架 |
 | `./dev` | 唯一本地入口 |
