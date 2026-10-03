@@ -39,3 +39,4 @@ git worktree add ../natural-enforcement-prj-wts/wt-123 -b feat/123 dev
 - 代码与 GitHub Issues 继续托管在 `bbhl79/natural-enforcement-prj`（[#2](https://github.com/bbhl79/natural-enforcement-prj/issues/2)）。
 - 本阶段不设 spend cap，也不设每 feature 预算硬上限（[#3](https://github.com/bbhl79/natural-enforcement-prj/issues/3)）。tier 路由仍按工作流 §6.1。
 - D3 当前基线＝v0.1.9，revision 175（LOCK-20261003-04，取代 LOCK-20261003-01；r12 行保留）。
+- LOCK-20261003-05：M0b 范围＝MS-M0b ①；五条＝渲染入卷链五个服务端断言；GIS 不接真源；档案年限不进本次；迁移 0001 仅权限五表。附录 v0.1.7。
