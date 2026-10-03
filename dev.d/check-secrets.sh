@@ -17,7 +17,8 @@ allowed() {
     case "$line" in
       ''|\#*) continue ;;
     esac
-    if [[ "$path" == "$line" || "$path" == "$line"* ]]; then
+    # 只放行这一路径，或它作为目录时的下级。".env.example" 不会放行 ".env.example.key"。
+    if [[ "$path" == "$line" || "$path" == "$line"/* ]]; then
       return 0
     fi
   done < "$allow_file"
@@ -28,7 +29,7 @@ hit=0
 while IFS= read -r path; do
   [[ -z "$path" ]] && continue
   base=${path##*/}
-  if [[ "$base" == ".env" || "$path" == *.pem || "$path" == *.key ]]; then
+  if [[ "$base" == .env || "$base" == .env.* || "$path" == *.pem || "$path" == *.key ]]; then
     if allowed "$path"; then
       continue
     fi
