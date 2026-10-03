@@ -70,7 +70,7 @@ case "$cmd" in
     ;;
   db)
     [[ $# -eq 1 && "$1" == "migrate" ]] || reject "db 仅约定 migrate"
-    unimplemented db migrate
+    dev.d/db-migrate.sh
     ;;
   lint)
     [[ $# -eq 0 ]] || reject "lint 不接受参数"
