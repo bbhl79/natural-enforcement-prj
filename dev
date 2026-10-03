@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# 唯一本地入口。已约定子命令在本票尚未实现，调用以非 0 退出，不另开旁路。
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+./dev — 唯一本地入口
+已约定、尚未实现的子命令以非 0 退出。不要另开旁路。
+
+  up
+  down
+  health backend|frontend|db|minio|doc-render
+  db migrate
+  lint
+  test unit
+  build backend|frontend
+  check shield|secrets
+EOF
+}
+
+unimplemented() {
+  echo "./dev: 未实现: $*" >&2
+  exit 1
+}
+
+reject() {
+  echo "./dev: $*" >&2
+  usage
+  exit 2
+}
+
+if [[ $# -lt 1 ]]; then
+  reject "缺少子命令"
+fi
+
+cmd=$1
+shift
+
+case "$cmd" in
+  up)
+    [[ $# -eq 0 ]] || reject "up 不接受参数"
+    unimplemented up
+    ;;
+  down)
+    [[ $# -eq 0 ]] || reject "down 不接受参数"
+    unimplemented down
+    ;;
+  health)
+    [[ $# -eq 1 ]] || reject "health 需要一个目标"
+    case "$1" in
+      backend | frontend | db | minio | doc-render) unimplemented health "$1" ;;
+      *) reject "未知 health 目标: $1" ;;
+    esac
+    ;;
+  db)
+    [[ $# -eq 1 && "$1" == "migrate" ]] || reject "db 仅约定 migrate"
+    unimplemented db migrate
+    ;;
+  lint)
+    [[ $# -eq 0 ]] || reject "lint 不接受参数"
+    unimplemented lint
+    ;;
+  test)
+    [[ $# -eq 1 && "$1" == "unit" ]] || reject "test 仅约定 unit"
+    unimplemented test unit
+    ;;
+  build)
+    [[ $# -eq 1 ]] || reject "build 需要一个目标"
+    case "$1" in
+      backend | frontend) unimplemented build "$1" ;;
+      *) reject "未知 build 目标: $1" ;;
+    esac
+    ;;
+  check)
+    [[ $# -eq 1 ]] || reject "check 需要一个目标"
+    case "$1" in
+      shield | secrets) unimplemented check "$1" ;;
+      *) reject "未知 check 目标: $1" ;;
+    esac
+    ;;
+  *)
+    reject "未知子命令: $cmd"
+    ;;
+esac

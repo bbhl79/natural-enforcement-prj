@@ -1,0 +1,9 @@
+{
+  "name": "gzgt",
+  "private": true,
+  "packageManager": "pnpm@11.27.0",
+  "engines": {
+    "node": ">=24",
+    "pnpm": "11.27.0"
+  }
+}

@@ -1,0 +1,5 @@
+# 唯一树。packages/shield 由 packages/* 纳入；本票不向该目录提交文件。
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "e2e"
