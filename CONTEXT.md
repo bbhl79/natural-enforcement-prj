@@ -37,6 +37,7 @@
 - **LOCK-20261003-01**（[#1](https://github.com/bbhl79/natural-enforcement-prj/issues/1)）：D3 当前基线＝v0.1.8-r12（revision 167）。附录短表 2026-10-02 的 v0.1.8-r11 行被取代，行本身保留。
 - **LOCK-20261003-02**（[#2](https://github.com/bbhl79/natural-enforcement-prj/issues/2)）：允许代码与 GitHub Issues 继续托管在 `bbhl79/natural-enforcement-prj`。
 - **LOCK-20261003-03**（[#3](https://github.com/bbhl79/natural-enforcement-prj/issues/3)）：本阶段不设硬上限。执行会话和每个 feature 都不卡金额或额度。tier 路由仍按工作流 §6.1。
+- **2026-10-03 拍板**：本仓库是 1 人项目。PR owner 是 Lei（`bbhl79`），无法对自己的 PR 点 GitHub Approve。`main`／`dev` 不要求 GitHub approval。人在对话里明确批准后，主 agent 执行 merge。`assertions` 与 `path-guard` 仍是 required check。
 - M0a spec [#4](https://github.com/bbhl79/natural-enforcement-prj/issues/4) 状态 IMPLEMENTING。执行票 [#5](https://github.com/bbhl79/natural-enforcement-prj/issues/5)–[#11](https://github.com/bbhl79/natural-enforcement-prj/issues/11)。前沿是 #5。
 
 ## worktree

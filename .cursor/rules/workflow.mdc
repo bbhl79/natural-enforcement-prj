@@ -17,7 +17,9 @@ alwaysApply: true
 
 ## 合并 DoD
 
-`./dev lint`／`test`／`build` 绿；A06 空库可 migrate；A07–A12 保护未被旁路；PR 回链 issue 与飞书指针；主 agent 不代 approval，不自审自己改过的 PR。
+`./dev lint`／`test`／`build` 绿；A06 空库可 migrate；A07–A12 在 `assertions` 检查里，与 `path-guard` 同为 `main`／`dev` 的 required check。PR 回链 issue 与飞书指针。
+
+本仓库是 1 人项目。PR owner 是 Lei（`bbhl79`），无法对自己的 PR 点 GitHub Approve。人在对话里明确批准后，主 agent 执行 merge。先验收，不合并未通过的 PR。
 
 ## worktree
 
