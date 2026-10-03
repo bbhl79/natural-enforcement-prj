@@ -57,5 +57,6 @@ git worktree add ../natural-enforcement-prj-wts/wt-123 -b feat/123 dev
 - 代码与 GitHub Issues 继续托管在 `bbhl79/natural-enforcement-prj`（[#2](https://github.com/bbhl79/natural-enforcement-prj/issues/2)）。
 - 本阶段不设 spend cap，也不设每 feature 预算硬上限（[#3](https://github.com/bbhl79/natural-enforcement-prj/issues/3)）。tier 路由仍按工作流 §6.1。
 - D3 当前基线＝v0.1.9，revision 175（LOCK-20261003-04，取代 LOCK-20261003-01；r12 行保留）。
+- LOCK-20261003-05（[#21](https://github.com/bbhl79/natural-enforcement-prj/issues/21)）：M0b 范围＝MS-M0b ①；工作流 §7 三件套是子集不是范围上限，不得据此砍掉权限种子、唯一入卷、副驾驶通道、GIS 跳过留痕、监督禁写、shield 可编译形态。五条＝渲染入卷链上的五个服务端断言（红头页／骑缝章位／入卷带 templateId＋templateVersion／错 templateId 混用被拒／前端自产 PDF 冒充被拒）；「至少 1 份」是下限不是替代。GIS 只做适配边界＋失败则跳过并强制留痕，真源不进退出断言。档案年限不挡 M0b，不新增保管年数列。迁移 0001 仅 `org`／`user`／`role`／`user_role`／`role_opcode`。附录 v0.1.7（revision 54）；逐条全文见 CONTEXT.md 该锁条目。
 
 飞书写入先给人看正文，确认后才执行。

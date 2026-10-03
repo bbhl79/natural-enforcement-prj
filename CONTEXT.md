@@ -24,7 +24,7 @@
 1. 先按上表检索飞书（`lark-cli docs +fetch`，只读）。
 2. 命中：用权威指针四元组作答（doc_token＋version＋section＋url）。仅有 URL 无效。
 3. 未命中：才开 Grilling／decision 票问人。禁止用聊天口头结论代替票。
-4. 指针 version 必须等于已拍板的当前基线。D3 当前基线＝v0.1.9（revision 175，LOCK-20261003-04，2026-10-03）。该锁取代 LOCK-20261003-01；r12 行（revision 167）与 r11 行都保留，不再作为当前基线。
+4. 指针 version 必须等于已拍板的当前基线。D3 当前基线＝v0.1.9（revision 175，LOCK-20261003-04，2026-10-03）。该锁取代 LOCK-20261003-01；r12 行（revision 167）与 r11 行都保留，不再作为当前基线。附录当前基线＝v0.1.7（revision 54，LOCK-20261003-05）。
 
 ## 硬规则（摘要，全文见工作流约定 §2）
 1. Grilling 提问前必须检索上表；命中＝权威指针（token＋version＋section＋url）作答；未命中才问人
@@ -36,6 +36,7 @@
 ## 已拍板（2026-10-03，已回写飞书）
 - **LOCK-20261003-01**（[#1](https://github.com/bbhl79/natural-enforcement-prj/issues/1)）：D3 当前基线＝v0.1.8-r12（revision 167）。附录短表 2026-10-02 的 v0.1.8-r11 行被取代，行本身保留。本锁已被 LOCK-20261003-04 取代，行本身保留。
 - **LOCK-20261003-04**（2026-10-03，对话确认）：D3 当前基线＝v0.1.9（revision 175）。取代 LOCK-20261003-01；r12 行保留。附录 `OtlRdhezKoxOxSxR3T1cdy1AnGx` 升 v0.1.6（revision 51）。
+- **LOCK-20261003-05**（2026-10-03，对话确认，[#21](https://github.com/bbhl79/natural-enforcement-prj/issues/21)）：M0b 范围与边界。本锁取代把下列旧句读成「M0b 必做」的解释；旧句不改字、不删除。① 范围＝MS-M0b ①（`NgvYdU5qEouV4mx3jkWcY77LnTg` v0.1）。工作流 §7 第 2 循环「字典种子＋五条样张＋迁移 0001」是子集，不是范围上限；不得据此砍掉权限种子、唯一入卷、副驾驶通道、GIS 跳过留痕、监督禁写、shield 可编译形态；该循环出口「M0b＝D3∧M0a 合闸」仍是进门条件。② 五条＝同一条渲染入卷链上的五个服务端断言，不绑定具体省范本 templateId：红头页保真进 PDF；骑缝章位保真进 PDF；入卷元数据带 templateId＋templateVersion；错 templateId 混用被拒；前端自产 PDF 冒充已套打被拒。「至少 1 份」是这五条里的下限，不是替代品。法定文书样张留在后续段。③ GIS 只做适配边界＋失败则跳过并强制留痕；正式库表名／endpoint／密钥保持开放，不进退出断言，不做「套合成功」的假绿灯。④ 档案保管年限继续留在 D3 §9，不挡 M0b；§11 事件类型照清单落；不新增「保管年数」列，也不设默认年数。⑤ 迁移 0001 仅 `org`／`user`／`role`／`user_role`／`role_opcode`；§7 主实体不进 0001；卷宗表另开迁移。附录 `OtlRdhezKoxOxSxR3T1cdy1AnGx` 升 v0.1.7（revision 54），取代 04 的 v0.1.6（revision 51）行。指针：`OtlRdhezKoxOxSxR3T1cdy1AnGx`｜v0.1.7｜§2｜https://my.feishu.cn/docx/OtlRdhezKoxOxSxR3T1cdy1AnGx#doxcn2iqLre9xDOw2rtNB2yldof
 - **LOCK-20261003-02**（[#2](https://github.com/bbhl79/natural-enforcement-prj/issues/2)）：允许代码与 GitHub Issues 继续托管在 `bbhl79/natural-enforcement-prj`。
 - **LOCK-20261003-03**（[#3](https://github.com/bbhl79/natural-enforcement-prj/issues/3)）：本阶段不设硬上限。执行会话和每个 feature 都不卡金额或额度。tier 路由仍按工作流 §6.1。
 - **2026-10-03 拍板**：本仓库是 1 人项目。PR owner 是 Lei（`bbhl79`），无法对自己的 PR 点 GitHub Approve。`main`／`dev` 不要求 GitHub approval。人在对话里明确批准后，主 agent 执行 merge。`assertions` 与 `path-guard` 仍是 required check。
