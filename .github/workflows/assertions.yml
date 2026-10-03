@@ -1,0 +1,41 @@
+# A06–A12 在 PR 上真执行。失败即红。
+# 不把这些检查写成 main/dev 的 required check；首次绿之后由主 agent 挂保护。
+# 不改路径守卫。
+name: assertions
+
+on:
+  pull_request:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+jobs:
+  assertions:
+    name: assertions
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: A06
+        run: ./dev db migrate
+
+      - name: A07
+        run: ./dev lint
+
+      - name: A08
+        run: ./dev test unit
+
+      - name: A09
+        run: ./dev build backend
+
+      - name: A10
+        run: ./dev build frontend
+
+      - name: A11
+        run: ./dev check shield
+
+      - name: A12
+        run: ./dev check secrets
