@@ -27,7 +27,7 @@ alwaysApply: true
 
 ## 已拍板（2026-10-03）
 
-- D3 当前基线＝v0.1.8-r12（revision 167）。
+- D3 当前基线＝v0.1.9（revision 175，LOCK-20261003-04；r12 行保留）。
 - 代码与 Issues 继续托管在 GitHub `bbhl79/natural-enforcement-prj`。
 - 本阶段不设 spend cap，也不设每 feature 预算硬上限。
 
