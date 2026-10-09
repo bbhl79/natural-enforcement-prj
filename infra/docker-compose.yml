@@ -1,0 +1,58 @@
+# 基础设施容器编排（地基切片01）。
+# 镜像一律显式 tag + digest（唯一依据 infra/VERSIONS.md，严禁 latest）。
+# pull_policy=never：镜像缺失由 dev up 显式拦截并提示，绝不隐式拉取/构建。
+name: natural-enforcement
+
+services:
+  db:
+    image: postgis/postgis:18-3.6@sha256:60f6ad1d21ea86a67d47780b9a0d1e1d200500f62b19293fa834d0dea80b8677
+    pull_policy: never
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      # PG18 镜像采用 major 版本子目录布局（pg_ctlcluster），卷挂 /var/lib/postgresql，
+      # 数据实际落 /var/lib/postgresql/18/docker；严禁挂 /var/lib/postgresql/data（镜像直接报错）
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  redis:
+    image: redis:8.10.2@sha256:2c2dff791878316e3b083188be0d578423b24813cdda5de0e80ea4f7b3e6bfd6
+    pull_policy: never
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  rustfs:
+    image: rustfs/rustfs:1.0.1@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
+    pull_policy: never
+    environment:
+      RUSTFS_ACCESS_KEY: rustfsdev
+      RUSTFS_SECRET_KEY: rustfsdev-secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - rustfs-data:/data
+
+  nginx:
+    image: nginx:1.29.8@sha256:1881968aff6f7cdcc4b888c00a11f4ce241ad7ec957e0cb4a9e19e93a3ff87ea
+    pull_policy: never
+    ports:
+      - "8080:80"
+
+volumes:
+  # 数据卷只由 dev db reset（后续切片）允许删除；dev down 永不触碰
+  pgdata:
+  rustfs-data:
