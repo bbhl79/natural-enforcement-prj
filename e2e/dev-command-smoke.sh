@@ -8,6 +8,9 @@ set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEV="$ROOT/dev"
 cd "$ROOT"
+# 与 dev 脚本同一项目名解析：默认 natural-enforcement，并行工作区用 COMPOSE_PROJECT_NAME 隔离
+PROJECT="${COMPOSE_PROJECT_NAME:-natural-enforcement}"
+COMPOSE=(docker compose -p "$PROJECT" -f infra/docker-compose.yml)
 
 PASS=0
 FAIL=0
@@ -31,33 +34,33 @@ out="$("$DEV" no-such-command 2>&1)"; rc=$?
 # ---------- 2. dev up 幂等 + 数据不丢 ----------
 "$DEV" down >/dev/null 2>&1
 "$DEV" up >/tmp/smoke-up1.log 2>&1; check "首次 dev up 成功" "$?"
-cid_before="$(docker compose -f infra/docker-compose.yml ps -q db)"
+cid_before="$("${COMPOSE[@]}" ps -q db)"
 "$DEV" up >/tmp/smoke-up2.log 2>&1; check "重复 dev up 成功（幂等）" "$?"
-cid_after="$(docker compose -f infra/docker-compose.yml ps -q db)"
+cid_after="$("${COMPOSE[@]}" ps -q db)"
 [ -n "$cid_before" ] && [ "$cid_before" = "$cid_after" ] \
   && ok "重复 up 未重建容器（id 不变，无副作用）" || bad "重复 up 重建了容器（$cid_before -> $cid_after）"
 
-docker compose -f infra/docker-compose.yml exec -T db \
+"${COMPOSE[@]}" exec -T db \
   psql -U postgres -d postgres -c 'CREATE TABLE IF NOT EXISTS smoke_keep(v int); DELETE FROM smoke_keep; INSERT INTO smoke_keep VALUES (42);' >/dev/null 2>&1
 "$DEV" down >/dev/null 2>&1; check "dev down 成功" "$?"
 "$DEV" up >/dev/null 2>&1; check "down 后 dev up 成功" "$?"
-kept="$(docker compose -f infra/docker-compose.yml exec -T db psql -U postgres -d postgres -tA -c 'SELECT v FROM smoke_keep;' 2>/dev/null)"
+kept="$("${COMPOSE[@]}" exec -T db psql -U postgres -d postgres -tA -c 'SELECT v FROM smoke_keep;' 2>/dev/null)"
 [ "$kept" = "42" ] && ok "down/up 后数据仍在（数据卷未被删除）" || bad "数据丢失（smoke_keep=$kept）"
 
 # ---------- 3. dev health 红绿 ----------
 "$DEV" health >/tmp/smoke-health-green.log 2>&1; check "health 全绿退出 0" "$?"
-docker compose -f infra/docker-compose.yml ps --services --filter status=running | while read -r s; do :; done
-n_services="$(docker compose -f infra/docker-compose.yml config --services | wc -l)"
+"${COMPOSE[@]}" ps --services --filter status=running | while read -r s; do :; done
+n_services="$("${COMPOSE[@]}" config --services | wc -l)"
 n_ok="$(grep -c 'OK' /tmp/smoke-health-green.log || true)"
 [ "$n_ok" -ge "$n_services" ] \
   && ok "health 逐行输出覆盖全部 $n_services 个服务" || bad "health 输出行数不足（OK=$n_ok 服务=$n_services）"
 grep -q '数据库\|db' /tmp/smoke-health-green.log && ok "health 含 db 连通检查" || bad "health 缺少 db 连通检查"
 
-docker compose -f infra/docker-compose.yml stop redis >/dev/null 2>&1
+"${COMPOSE[@]}" stop redis >/dev/null 2>&1
 "$DEV" health >/tmp/smoke-health-red.log 2>&1; rc=$?
 [ "$rc" -ne 0 ] && grep -q 'FAIL\|失败\|红' /tmp/smoke-health-red.log \
   && ok "redis 停止后 health 非 0 且逐行标红" || bad "health 未检出 redis 宕（rc=$rc）"
-docker compose -f infra/docker-compose.yml start redis >/dev/null 2>&1
+"${COMPOSE[@]}" start redis >/dev/null 2>&1
 "$DEV" health >/dev/null 2>&1; check "恢复后 health 重新全绿" "$?"
 
 # ---------- 4. dev lint 全量 + 依赖漏入库检查 ----------
@@ -73,7 +76,7 @@ rm -rf "$ROOT/node_modules" "$ROOT/frontend/node_modules"
 # ---------- 5. 镜像缺失路径（可选：删除并恢复本地 redis 镜像） ----------
 if [ "${SMOKE_MISSING_IMAGE:-0}" = "1" ]; then
   "$DEV" down >/dev/null 2>&1
-  redis_img="$(docker compose -f infra/docker-compose.yml config | grep -A2 'redis:' | grep 'image:' | awk '{print $2}')"
+  redis_img="$("${COMPOSE[@]}" config | grep -A2 'redis:' | grep 'image:' | awk '{print $2}')"
   docker rmi -f "$(docker image inspect -f '{{.Id}}' "$redis_img")" >/dev/null 2>&1
   if docker image inspect "$redis_img" >/dev/null 2>&1; then
     bad "前置条件未满足：redis 镜像仍可被 inspect，缺失路径用例无法执行"
@@ -90,7 +93,7 @@ fi
 
 # ---------- 6. down 清容器清网络、不动数据卷 ----------
 "$DEV" down >/tmp/smoke-down.log 2>&1; check "dev down 退出 0" "$?"
-leftover="$(docker compose -f infra/docker-compose.yml ps -q | wc -l)"
+leftover="$("${COMPOSE[@]}" ps -q | wc -l)"
 [ "$leftover" -eq 0 ] && ok "down 后无残留容器" || bad "down 后仍有 $leftover 个容器"
 docker volume ls --format '{{.Name}}' | grep -q 'pgdata' \
   && ok "down 后数据卷保留" || bad "down 后数据卷被删除"
