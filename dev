@@ -1,0 +1,141 @@
+#!/usr/bin/env bash
+# 自然执法工程 唯一本地开发入口（#46/#47 定案）。
+# 命令集逐切片落地，本文件为地基切片01最小集：up / down / health / lint。
+# 退出码只有 0/1，诊断看输出。
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+COMPOSE_FILE="$ROOT/infra/docker-compose.yml"
+COMPOSE=(docker compose -f "$COMPOSE_FILE")
+
+# lint 工具链镜像：唯一依据 infra/VERSIONS.md（运行时行，tag + digest）
+LINT_IMAGE='node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1'
+
+usage() {
+  cat <<'EOF'
+自然执法工程 开发入口（唯一本地入口）
+
+用法：dev <命令>
+
+命令：
+  up       幂等拉起基础设施容器（db/redis/rustfs/nginx）；永不删除已有数据。
+           镜像缺失时非 0 退出并提示先 dev build——本命令不隐式构建。
+  down     停止并清理容器与网络；数据卷保留。
+  health   逐行检查容器存活与 db/redis 连通；全绿退出 0，任一红非 0。
+  lint     全量静态检查（依赖漏入库检查 + ESLint，容器内执行）。
+
+裸 dev 即显示本帮助。
+EOF
+}
+
+require_compose_file() {
+  if [ ! -f "$COMPOSE_FILE" ]; then
+    echo "[FAIL] 未找到编排文件：$COMPOSE_FILE" >&2
+    exit 1
+  fi
+}
+
+cmd_up() {
+  require_compose_file
+  local missing=0 img
+  while IFS= read -r img; do
+    if ! docker image inspect "$img" >/dev/null 2>&1; then
+      echo "镜像缺失：$img"
+      missing=1
+    fi
+  done < <("${COMPOSE[@]}" config --images)
+  if [ "$missing" -ne 0 ]; then
+    echo "请先执行 dev build 构建镜像（或按 infra/VERSIONS.md 官方名手动拉取）后再 dev up。" >&2
+    echo "dev up 不会隐式构建或拉取镜像。" >&2
+    exit 1
+  fi
+  "${COMPOSE[@]}" up -d
+  echo "dev up 完成：基础设施容器已就绪。运行 dev health 检查环境状态。"
+}
+
+cmd_down() {
+  require_compose_file
+  "${COMPOSE[@]}" down
+  echo "dev down 完成：容器与网络已清理，数据卷保留（毁数入口只有 dev db reset，本切片未开放）。"
+}
+
+cmd_health() {
+  require_compose_file
+  local rc=0 svc cid
+  for svc in $("${COMPOSE[@]}" config --services); do
+    cid="$("${COMPOSE[@]}" ps -q "$svc" 2>/dev/null || true)"
+    if [ -n "$cid" ] && [ "$(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null)" = "running" ]; then
+      echo "[OK]   $svc  容器存活"
+    else
+      echo "[FAIL] $svc  容器未运行"
+      rc=1
+    fi
+  done
+  if "${COMPOSE[@]}" exec -T db pg_isready -U postgres -d postgres >/dev/null 2>&1; then
+    echo "[OK]   db   数据库可连通"
+  else
+    echo "[FAIL] db   数据库不可连通"
+    rc=1
+  fi
+  if "${COMPOSE[@]}" exec -T redis redis-cli ping 2>/dev/null | grep -q PONG; then
+    echo "[OK]   redis 队列可连通"
+  else
+    echo "[FAIL] redis 队列不可连通"
+    rc=1
+  fi
+  if [ "$rc" -eq 0 ]; then
+    echo "health：全部检查通过。"
+  else
+    echo "health：存在失败项，详见上方标红行。"
+  fi
+  exit "$rc"
+}
+
+cmd_lint() {
+  # 检查 1：容器依赖漏入库（E6 前半）——仓库内出现 node_modules 等即失败
+  local leaks
+  leaks="$(find "$ROOT" -type d \( -name node_modules -o -name .pnpm-store \) -not -path '*/.git/*' 2>/dev/null)"
+  if [ -n "$leaks" ]; then
+    echo "[FAIL] 检出容器依赖漏入库（node_modules/.pnpm-store 严禁入库）：" >&2
+    echo "$leaks" | sed 's/^/  /' >&2
+    exit 1
+  fi
+
+  # 检查 2：lint 工具链镜像与版本定案表一致且本地可用
+  if ! grep -qF "$LINT_IMAGE" "$ROOT/infra/VERSIONS.md"; then
+    echo "[FAIL] lint 工具链镜像未按定案登记于 infra/VERSIONS.md：$LINT_IMAGE" >&2
+    exit 1
+  fi
+  if ! docker image inspect "$LINT_IMAGE" >/dev/null 2>&1; then
+    echo "[FAIL] lint 工具链镜像缺失：$LINT_IMAGE" >&2
+    echo "请按 infra/VERSIONS.md 登记的官方名 + digest 拉取后重试。" >&2
+    exit 1
+  fi
+
+  # 检查 3：ESLint 全量。工作区只读挂载于 /repo；
+  # 容器内复制到可写层 /work 执行（node_modules 与 pnpm store 挂命名卷，显式读写挂载），
+  # 仓库根是只读挂载，任何写回仓库的企图都会直接失败。
+  echo "lint：容器内安装依赖并运行 ESLint 全量检查（首次较慢）…"
+  docker run --rm \
+    -v "$ROOT:/repo:ro" \
+    -v natural-enforcement-lint-node-modules:/work/node_modules \
+    -v natural-enforcement-lint-store:/pnpm/store \
+    -w /work \
+    "$LINT_IMAGE" \
+    sh -c 'cp -a /repo/. /work/ && corepack enable && pnpm install --frozen-lockfile --store-dir /pnpm/store && pnpm run lint'
+  echo "lint：全部检查通过。"
+}
+
+case "${1:-}" in
+  ""|-h|--help|help) usage ;;
+  up)    cmd_up ;;
+  down)  cmd_down ;;
+  health) cmd_health ;;
+  lint)  cmd_lint ;;
+  *)
+    echo "未知命令：$1" >&2
+    echo >&2
+    usage >&2
+    exit 1
+    ;;
+esac

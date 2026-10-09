@@ -1,0 +1,14 @@
+# 容器依赖一律不入库（E6：dev lint 机检兜底的漏入库路径）
+node_modules/
+.pnpm-store/
+
+# 构建产物（宿主侧产生，gitignore 覆盖）
+dist/
+coverage/
+*.tsbuildinfo
+
+# 本地环境
+.env
+.env.local
+*.log
+.DS_Store
