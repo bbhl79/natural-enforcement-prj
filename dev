@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 自然执法工程 唯一本地开发入口（#46/#47 定案）。
-# 命令集逐切片落地：切片01 up/down/health/lint；切片03 新增 test（unit 层）与 lint 结构测试。
+# 命令集逐切片落地：切片01 up/down/health/lint；切片03 新增 test（unit 层）与 lint 结构测试；
+# 切片04 结构测试扩为全量七模块依赖矩阵（#51）。
 # 退出码只有 0/1，诊断看输出。
 set -euo pipefail
 
@@ -106,7 +107,7 @@ cmd_lint() {
     exit 1
   fi
 
-  # 检查 2：结构测试（#50 最小规则集，含 shield 唯一出口；规则 b 依赖漏入库即本命令
+  # 检查 2：结构测试（#51 全量七模块依赖矩阵，含 shield 唯一出口；规则 b 依赖漏入库即本命令
   # 检查 1，不重复实现）。宿主侧纯源码扫描，无容器/网络依赖；失败即非 0。
   "$ROOT/tools/structural-test.sh" || exit 1
 
