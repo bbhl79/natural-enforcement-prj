@@ -1,0 +1,13 @@
+{
+  "name": "@natural-enforcement/geo-dict",
+  "version": "0.0.0",
+  "private": true,
+  "description": "空间字典模块（#51 空壳：NestJS 模块声明 + 领域占位，无业务实体——G1 不可扩大）",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@nestjs/common": "12.1.2"
+  }
+}

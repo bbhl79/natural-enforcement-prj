@@ -5,7 +5,9 @@
     "moduleResolution": "NodeNext",
     "strict": true,
     "noEmit": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
   },
-  "include": ["packages/shield/src", "packages/shield/test"]
+  "include": ["packages/shield/src", "packages/shield/test", "backend/*/src"]
 }
