@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 自然执法工程 唯一本地开发入口（#46/#47 定案）。
-# 命令集逐切片落地，本文件为地基切片01最小集：up / down / health / lint。
+# 命令集逐切片落地：切片01 up/down/health/lint；切片03 新增 test（unit 层）与 lint 结构测试。
 # 退出码只有 0/1，诊断看输出。
 set -euo pipefail
 
@@ -25,7 +25,9 @@ usage() {
            镜像缺失时非 0 退出并提示先 dev build——本命令不隐式构建。
   down     停止并清理容器与网络；数据卷保留。
   health   逐行检查容器存活与 db/redis 连通；全绿退出 0，任一红非 0。
-  lint     全量静态检查（依赖漏入库检查 + ESLint，容器内执行）。
+  lint     全量静态检查（结构测试 + 依赖漏入库检查 + ESLint，容器内执行）。
+  test     unit 层测试（shield 契约断言 + 类型检查，容器内执行，无库）。
+           integration/e2e 层归后续切片；三层语义见 #46。
 
 裸 dev 即显示本帮助。
 EOF
@@ -104,7 +106,11 @@ cmd_lint() {
     exit 1
   fi
 
-  # 检查 2：lint 工具链镜像与版本定案表一致且本地可用
+  # 检查 2：结构测试（#50 最小规则集，含 shield 唯一出口；规则 b 依赖漏入库即本命令
+  # 检查 1，不重复实现）。宿主侧纯源码扫描，无容器/网络依赖；失败即非 0。
+  "$ROOT/tools/structural-test.sh" || exit 1
+
+  # 检查 3：lint 工具链镜像与版本定案表一致且本地可用
   if ! grep -qF "$LINT_IMAGE" "$ROOT/infra/VERSIONS.md"; then
     echo "[FAIL] lint 工具链镜像未按定案登记于 infra/VERSIONS.md：$LINT_IMAGE" >&2
     exit 1
@@ -115,7 +121,7 @@ cmd_lint() {
     exit 1
   fi
 
-  # 检查 3：ESLint 全量。工作区只读挂载于 /repo；
+  # 检查 4：ESLint 全量。工作区只读挂载于 /repo；
   # 容器内复制到可写层 /work 执行（node_modules 与 pnpm store 挂命名卷，显式读写挂载），
   # 仓库根是只读挂载，任何写回仓库的企图都会直接失败。
   echo "lint：容器内安装依赖并运行 ESLint 全量检查（首次较慢）…"
@@ -129,12 +135,33 @@ cmd_lint() {
   echo "lint：全部检查通过。"
 }
 
+cmd_test() {
+  # unit 层（#46 三层映射：unit = 纯单元 + 契约测试，无库；integration/e2e 归后续切片）。
+  # 容器内安装依赖并运行 Vitest 契约断言 + tsc --noEmit 类型检查；
+  # 挂载形态与 lint 一致：仓库只读，依赖只进容器/命名卷。
+  if ! docker image inspect "$LINT_IMAGE" >/dev/null 2>&1; then
+    echo "[FAIL] 测试工具链镜像缺失：$LINT_IMAGE" >&2
+    echo "请按 infra/VERSIONS.md 登记的官方名 + digest 拉取后重试。" >&2
+    exit 1
+  fi
+  echo "test：容器内运行 unit 层测试（shield 契约断言 + 类型检查）…"
+  docker run --rm \
+    -v "$ROOT:/repo:ro" \
+    -v "${PROJECT}-test-node-modules:/work/node_modules" \
+    -v "${PROJECT}-test-store:/pnpm/store" \
+    -w /work \
+    "$LINT_IMAGE" \
+    sh -c 'cp -a /repo/. /work/ && corepack enable && pnpm install --frozen-lockfile --store-dir /pnpm/store && pnpm test && pnpm run typecheck'
+  echo "test：unit 层全部通过。"
+}
+
 case "${1:-}" in
   ""|-h|--help|help) usage ;;
   up)    cmd_up ;;
   down)  cmd_down ;;
   health) cmd_health ;;
   lint)  cmd_lint ;;
+  test)  cmd_test ;;
   *)
     echo "未知命令：$1" >&2
     echo >&2
