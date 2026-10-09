@@ -1,0 +1,4 @@
+# pnpm workspace 声明（#47 定案：单仓 monorepo，私有 workspace）。
+# 模块包随切片逐个落入 packages/；后端/前端顶层目录后续按需纳入。
+packages:
+  - 'packages/*'

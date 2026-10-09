@@ -4,7 +4,9 @@
   "private": true,
   "packageManager": "pnpm@12.10.1",
   "scripts": {
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "pnpm -r test",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "eslint": "10.12.0",
