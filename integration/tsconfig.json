@@ -1,0 +1,10 @@
+{
+  // integration 层独立类型检查配置（dev test integration 容器内执行 tsc -p integration）。
+  // 不并入根 tsconfig：根 unit 层无库且无生成的 Prisma Client，两边互不污染。
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["./**/*.ts", "../backend/prisma/**/*.ts"]
+}

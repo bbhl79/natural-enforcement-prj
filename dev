@@ -45,7 +45,8 @@ usage() {
            全绿退出 0，任一红非 0。
   lint     全量静态检查（结构测试 + 依赖漏入库检查 + ESLint，容器内执行）。
   test     unit 层测试（shield 契约断言 + 队列设施单测 + 类型检查，容器内执行，无库）。
-           integration/e2e 层归后续切片；三层语义见 #46。
+           test integration = 结构测试 + 需库用例（integration/ 层，含 db 迁移/种子幂等准备）；
+           裸 test = all（unit + integration）。e2e 层归切片10。三层语义见 #46。
   db       数据语义：裸 db = 建库（缺则建）+ 迁移 + 种子，各自幂等（已做则跳过）。
            db migrate 只迁移；db seed 只种子；
            db reset 毁库重建——全系统唯一允许删除数据的入口，其余命令只增不改。
@@ -260,17 +261,19 @@ cmd_db() {
   esac
 }
 
-cmd_test() {
-  # unit 层（#46 三层映射：unit = 纯单元 + 契约测试，无库；integration/e2e 归后续切片）。
-  # 容器内安装依赖并运行 Vitest 契约断言 + tsc --noEmit 类型检查；
-  # 挂载形态与 lint 一致：仓库只读，依赖只进容器/命名卷。
-  # 安装参数与 lint 同因同参：--ignore-scripts + strict-dep-builds=false（msgpackr-extract 原生构建
-  # 与 Prisma 被拦构建脚本，理由见 lint 注释）。
+require_toolchain_image() {
   if ! docker image inspect "$LINT_IMAGE" >/dev/null 2>&1; then
-    echo "[FAIL] 测试工具链镜像缺失：$LINT_IMAGE" >&2
+    echo "[FAIL] 工具链镜像缺失：$LINT_IMAGE" >&2
     echo "请按 infra/VERSIONS.md 登记的官方名 + digest 拉取后重试。" >&2
     exit 1
   fi
+}
+
+test_unit() {
+  # unit 层（#46 三层映射：unit = 纯单元 + 契约测试，无库）。
+  # 容器内安装依赖并运行 Vitest 契约断言 + tsc --noEmit 类型检查；
+  # 挂载形态与 lint 一致：仓库只读，依赖只进容器/命名卷。
+  require_toolchain_image
   echo "test：容器内运行 unit 层测试（shield 契约断言 + 队列设施单测 + 类型检查）…"
   docker run --rm \
     -v "$ROOT:/repo:ro" \
@@ -283,13 +286,61 @@ cmd_test() {
   echo "test：unit 层全部通过。"
 }
 
+test_integration() {
+  # integration 层（#46：结构测试 + 需库用例）。harness 负责：db 在场 + 迁移/种子幂等
+  # + Prisma Client 生成；用例形态与约定见 integration/README.md
+  #（Vitest 需库用例 + *.sh 可执行用例，只测外部可观察行为）。
+  require_toolchain_image
+  ensure_db
+  db_migrate
+  db_seed
+  echo "test：容器内运行 integration 层 Vitest 需库用例（integration/**/*.test.ts）…"
+  docker run --rm \
+    --network "${PROJECT}_default" \
+    -e DATABASE_URL="$DATABASE_URL" \
+    -v "$ROOT:/repo:ro" \
+    -v "${PROJECT}-integration-node-modules:/work/node_modules" \
+    -v "${PROJECT}-integration-store:/pnpm/store" \
+    "${CACHE_VOLUMES[@]}" \
+    -w /work \
+    "$LINT_IMAGE" \
+    sh -c "set -e; cp -a /repo/. /work/; corepack enable; pnpm install ${INSTALL_FLAGS[*]}; cd backend/prisma; pnpm exec prisma generate; cd /work; if ls integration/*.test.ts >/dev/null 2>&1; then pnpm exec tsc -p integration --noEmit; pnpm exec vitest run --config integration/vitest.config.ts; else echo 'integration：暂无 Vitest 需库用例'; fi"
+  # 可执行脚本用例：integration/*.sh（非 _ 开头），按文件名排序逐条执行
+  local script found=0
+  for script in "$ROOT"/integration/*.sh; do
+    [ -e "$script" ] || continue
+    found=1
+    echo "test：运行 integration 脚本用例 ${script##*/} …"
+    COMPOSE_PROJECT_NAME="$PROJECT" bash "$script" || {
+      echo "[FAIL] integration 脚本用例失败：${script##*/}" >&2
+      exit 1
+    }
+  done
+  if [ "$found" -eq 0 ]; then
+    echo "test：integration 层暂无 *.sh 用例（Vitest 层已执行）。"
+  fi
+  echo "test：integration 层全部通过。"
+}
+
+cmd_test() {
+  case "${1:-all}" in
+    all)         test_unit; test_integration ;;
+    unit)        test_unit ;;
+    integration) test_integration ;;
+    *)
+      echo "未知 test 层：$1（可选 unit / integration / 裸 = all）" >&2
+      exit 1
+      ;;
+  esac
+}
+
 case "${1:-}" in
   ""|-h|--help|help) usage ;;
   up)    cmd_up ;;
   down)  cmd_down ;;
   health) cmd_health ;;
   lint)  cmd_lint ;;
-  test)  cmd_test ;;
+  test)  shift; cmd_test "${1:-}" ;;
   db)    shift; cmd_db "${1:-}" ;;
   *)
     echo "未知命令：$1" >&2
