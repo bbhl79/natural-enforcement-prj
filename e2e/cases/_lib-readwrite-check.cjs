@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable @typescript-eslint/no-require-imports -- .cjs 校验器以 node 原生 CJS 运行（容器内 node /repo/...，无 TS 编译链），require 即本意 */
 // e2e 读写通道校验器（e2e/cases/02-readwrite-channel.sh 调用，_ 前缀 + 非 .sh：不作用例执行）。
 // 读通道：/testdata 显式只读挂载内的 fixture 必须可读且 expect 字段逐字一致；
 // 写通道：校验结果写入 /results（显式读写挂载），宿主侧再断言产物内容。
