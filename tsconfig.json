@@ -17,6 +17,8 @@
     "packages/shield/test",
     "packages/queue/src",
     "packages/queue/test",
+    "packages/storage/src",
+    "packages/storage/test",
     "backend/*/src",
     "backend/*/test"
   ],

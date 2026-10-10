@@ -117,3 +117,32 @@ model ExportAudit {
 
   @@map("export_audit")
 }
+
+// 空间字典空间能力载体（#54，法域定几何：土地/矿产=面）：统一口径 geom = EPSG:4490，
+// 来源坐标原样保留（source_srid + source_geom）。空间列一律 Unsupported 透传 + $queryRaw/ST_
+// 访问；含必填空间字段的模型禁用 ORM create/update（执行纪律 2），读写经
+// @natural-enforcement/geo-dict 公共出口（原生空间路径等 Prisma 8，跨 major 回 #60）。
+model GeoDictLandBoundary {
+  id         Int                                 @id @default(autoincrement())
+  name       String
+  domain     String // land | mineral（库内 CHECK 约束承载法域定几何）
+  geom       Unsupported("geometry(Polygon,4490)")?
+  sourceSrid Int                                 @map("source_srid")
+  sourceGeom Unsupported("geometry")?
+  createdAt  DateTime                            @default(now()) @map("created_at")
+
+  @@map("geo_dict_land_boundary")
+}
+
+// 空间字典空间能力载体（#54，法域定几何：测绘/规划=点）：约束同上。
+model GeoDictSurveyPoint {
+  id         Int                                @id @default(autoincrement())
+  name       String
+  domain     String // survey | planning（库内 CHECK 约束承载法域定几何）
+  geom       Unsupported("geometry(Point,4490)")?
+  sourceSrid Int                                @map("source_srid")
+  sourceGeom Unsupported("geometry")?
+  createdAt  DateTime                           @default(now()) @map("created_at")
+
+  @@map("geo_dict_survey_point")
+}

@@ -55,6 +55,9 @@ n_ok="$(grep -c 'OK' /tmp/smoke-health-green.log || true)"
 [ "$n_ok" -ge "$n_services" ] \
   && ok "health 逐行输出覆盖全部 $n_services 个服务" || bad "health 输出行数不足（OK=$n_ok 服务=$n_services）"
 grep -q '数据库\|db' /tmp/smoke-health-green.log && ok "health 含 db 连通检查" || bad "health 缺少 db 连通检查"
+# #56 起前端（第四依赖）为真实检查并计入红绿：全绿输出必含面板可访问行
+grep -q 'frontend 前端面板可访问' /tmp/smoke-health-green.log \
+  && ok "health 含前端可访问检查（第四依赖计入红绿）" || bad "health 缺少前端可访问检查"
 
 "${COMPOSE[@]}" stop redis >/dev/null 2>&1
 "$DEV" health >/tmp/smoke-health-red.log 2>&1; rc=$?

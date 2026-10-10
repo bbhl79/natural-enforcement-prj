@@ -53,7 +53,20 @@ services:
     ports:
       - "${NGINX_PORT:-8080}:80"
 
+  # 前端工作台（#56 切片09）：本地镜像（dev build 构建，Dockerfile 入库），
+  # nginx 服务构建产物；面板数据 = health 快照命名卷（dev health/dev up 写入，
+  # 与 dev health 同源），前端不直连库。宿主端口默认 8899（现有 nginx 服务占 8080）。
+  frontend:
+    image: natural-enforcement/frontend:dev
+    pull_policy: never
+    ports:
+      - "${FRONTEND_PORT:-8899}:80"
+    volumes:
+      - frontend-health:/usr/share/nginx/html/health:ro
+
 volumes:
   # 数据卷只由 dev db reset 允许删除（全系统唯一毁数入口）；dev down 永不触碰
   pgdata:
   rustfs-data:
+  # 面板 health 快照（dev health/dev up 写入；前端容器只读挂载）
+  frontend-health:
