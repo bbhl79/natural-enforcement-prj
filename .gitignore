@@ -7,6 +7,11 @@ dist/
 coverage/
 *.tsbuildinfo
 
+# run-id 复现目录（#57：CI run 日志与关键产物，本地重跑对照用）
+.run/
+# e2e 运行产物（E6：显式读写挂载的写出侧；入库存 fixture 见 e2e/testdata/）
+e2e/results/
+
 # 本地环境
 .env
 .env.local
