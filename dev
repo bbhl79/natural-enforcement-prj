@@ -422,7 +422,7 @@ test_integration() {
     "${CACHE_VOLUMES[@]}" \
     -w /work \
     "$LINT_IMAGE" \
-    sh -c "set -e; cp -a /repo/. /work/; corepack enable; pnpm install ${INSTALL_FLAGS[*]}; cd backend/prisma; pnpm exec prisma generate; cd /work; if ls integration/*.test.ts >/dev/null 2>&1; then pnpm exec tsc -p integration --noEmit; pnpm exec vitest run --config integration/vitest.config.ts; else echo 'integration：暂无 Vitest 需库用例'; fi"
+    sh -c "set -e; cp -a /repo/. /work/; corepack enable; pnpm install ${INSTALL_FLAGS[*]}; cd backend/prisma; pnpm exec prisma generate; cd /work; if ls integration/*.test.ts >/dev/null 2>&1; then pnpm exec tsc -p integration --noEmit; pnpm exec vitest run --config integration/vitest.config.mts; else echo 'integration：暂无 Vitest 需库用例'; fi"
   # 可执行脚本用例：integration/*.sh（非 _ 开头），按文件名排序逐条执行
   local script found=0
   for script in "$ROOT"/integration/*.sh; do
