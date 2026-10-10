@@ -17,6 +17,13 @@
     "packages/shield/test",
     "packages/queue/src",
     "packages/queue/test",
-    "backend/*/src"
-  ]
+    "backend/*/src",
+    "backend/*/test"
+  ],
+  // #52：PrismaIdentityStore 是模块内唯一 import 生成客户端（backend/prisma/generated）
+  // 的文件；生成产物只存在于容器可写层、仓库内无此目录，unit 层类型检查必须排除它，
+  // 其编译由 integration 层承载（dev test integration 先 prisma generate 再 tsc -p integration）。
+  // 排除仅限 include 展开：任何被 unit 层文件重新 import 都会把它拉回程序——
+  // 故模块公共出口与各服务均不得引用本文件（integration 用例深路径装配）。
+  "exclude": ["backend/identity/src/persistence/prisma-identity-store.ts"]
 }
