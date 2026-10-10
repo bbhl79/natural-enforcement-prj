@@ -55,7 +55,9 @@ usage() {
   health   四依赖逐行检查：容器存活 / db 连通 / 队列连通（经队列接口真实投递
            健康检查任务并确认消费，非裸 redis ping）/ 前端面板可访问。
            检查结果同时写入面板快照（与面板展示同源）。全绿退出 0，任一红非 0。
-  lint     全量静态检查（结构测试 + 依赖漏入库检查 + ESLint，容器内执行）。
+  lint     全量静态检查（结构测试 + 依赖漏入库检查 + 工具链镜像核对 + ESLint，容器内执行）。
+           lint <子项> 单跑一项：leak（依赖漏入库）/ structural（结构测试）/
+           image（工具链镜像定案核对）/ eslint（容器内 ESLint 全量）；无参 = 全量四项。
   test     三层语义（#46）：unit = 纯单元+契约；integration = 结构+需库用例；
            e2e = 从零拉起（E1）+ 读写通道（E6）+ 十命令冒烟（E7）。
            test unit / test integration / test e2e / 裸 test = all（unit+integration+e2e）。
@@ -273,8 +275,8 @@ run_queue_probe() { # $1 = redis 容器 id（--network container: 借用其网�
     sh -c "cp -a /repo/. /work/ && corepack enable 2>/dev/null && pnpm install ${INSTALL_FLAGS[*]} >/dev/null && node packages/queue/src/probe.ts"
 }
 
-cmd_lint() {
-  # 检查 1：容器依赖漏入库（E6 前半）——仓库内出现 node_modules 等即失败
+# 检查 1：容器依赖漏入库（E6 前半）——仓库内出现 node_modules 等即失败
+lint_leak() {
   local leaks
   leaks="$(find "$ROOT" -type d \( -name node_modules -o -name .pnpm-store \) -not -path '*/.git/*' 2>/dev/null)"
   if [ -n "$leaks" ]; then
@@ -282,12 +284,17 @@ cmd_lint() {
     echo "$leaks" | sed 's/^/  /' >&2
     exit 1
   fi
+  echo "lint leak：无容器依赖漏入库。"
+}
 
-  # 检查 2：结构测试（#51 全量七模块依赖矩阵，含 shield 唯一出口；规则 b 依赖漏入库即本命令
-  # 检查 1，不重复实现）。宿主侧纯源码扫描，无容器/网络依赖；失败即非 0。
+# 检查 2：结构测试（#51 全量七模块依赖矩阵，含 shield 唯一出口；规则 b 依赖漏入库即
+# lint leak 检查，不重复实现）。宿主侧纯源码扫描，无容器/网络依赖；失败即非 0。
+lint_structural() {
   "$ROOT/tools/structural-test.sh" || exit 1
+}
 
-  # 检查 3：lint 工具链镜像与版本定案表一致且本地可用
+# 检查 3：lint 工具链镜像与版本定案表一致且本地可用
+lint_image() {
   if ! grep -qF "$LINT_IMAGE" "$ROOT/infra/VERSIONS.md"; then
     echo "[FAIL] lint 工具链镜像未按定案登记于 infra/VERSIONS.md：$LINT_IMAGE" >&2
     exit 1
@@ -297,15 +304,18 @@ cmd_lint() {
     echo "请按 infra/VERSIONS.md 登记的官方名 + digest 拉取后重试。" >&2
     exit 1
   fi
+  echo "lint image：工具链镜像与定案表一致且在场。"
+}
 
-  # 检查 4：ESLint 全量。工作区只读挂载于 /repo；
-  # 容器内复制到可写层 /work 执行（node_modules 与 pnpm store 挂命名卷，显式读写挂载），
-  # 仓库根是只读挂载，任何写回仓库的企图都会直接失败。
-  # 安装一律 --ignore-scripts + --config.strict-dep-builds=false：
-  # - bullmq 传递依赖 msgpackr-extract 带原生构建脚本，工具链容器（alpine 无编译链）不构建，
-  #   走其纯 JS 回退（BullMQ 不依赖该原生加速）；
-  # - Prisma 引擎二进制经 optionalDependencies 分发，构建脚本可跳且必须跳；pnpm 12 冻结锁下
-  #   被拦构建脚本默认报 ERR_PNPM_IGNORED_BUILDS 使安装失败。
+# 检查 4：ESLint 全量。工作区只读挂载于 /repo；
+# 容器内复制到可写层 /work 执行（node_modules 与 pnpm store 挂命名卷，显式读写挂载），
+# 仓库根是只读挂载，任何写回仓库的企图都会直接失败。
+# 安装一律 --ignore-scripts + --config.strict-dep-builds=false：
+# - bullmq 传递依赖 msgpackr-extract 带原生构建脚本，工具链容器（alpine 无编译链）不构建，
+#   走其纯 JS 回退（BullMQ 不依赖该原生加速）；
+# - Prisma 引擎二进制经 optionalDependencies 分发，构建脚本可跳且必须跳；pnpm 12 冻结锁下
+#   被拦构建脚本默认报 ERR_PNPM_IGNORED_BUILDS 使安装失败。
+lint_eslint() {
   echo "lint：容器内安装依赖并运行 ESLint 全量检查（首次较慢）…"
   docker run --rm \
     -v "$ROOT:/repo:ro" \
@@ -315,7 +325,23 @@ cmd_lint() {
     -w /work \
     "$LINT_IMAGE" \
     sh -c "cp -a /repo/. /work/ && corepack enable && pnpm install ${INSTALL_FLAGS[*]} && pnpm run lint"
-  echo "lint：全部检查通过。"
+}
+
+# lint 全量 = 四项顺序执行；<子项> 单跑一项（leak/structural/image/eslint）。
+cmd_lint() {
+  local target="${1:-all}"
+  case "$target" in
+    all)        lint_leak; lint_structural; lint_image; lint_eslint ;;
+    leak)       lint_leak ;;
+    structural) lint_structural ;;
+    image)      lint_image ;;
+    eslint)     lint_eslint ;;
+    *)
+      echo "未知 lint 子项：$1（可选 leak / structural / image / eslint / 无参 = 全量）" >&2
+      exit 1
+      ;;
+  esac
+  echo "lint：$target 检查通过。"
 }
 
 # ---------- dev db 数据语义（#49） ----------
