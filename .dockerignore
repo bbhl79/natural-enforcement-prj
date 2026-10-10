@@ -1,0 +1,10 @@
+# 前端本地镜像构建上下文裁剪（#56）：镜像内自行编译（见 frontend/Dockerfile 多阶段构建），
+# 宿主侧的 dist/node_modules 等产物与容器依赖一律不进上下文。
+.git
+**/node_modules
+**/dist
+coverage/
+*.tsbuildinfo
+.env
+.env.local
+*.log
