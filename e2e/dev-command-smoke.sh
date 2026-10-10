@@ -61,7 +61,14 @@ grep -q '数据库\|db' /tmp/smoke-health-green.log && ok "health 含 db 连通�
 [ "$rc" -ne 0 ] && grep -q 'FAIL\|失败\|红' /tmp/smoke-health-red.log \
   && ok "redis 停止后 health 非 0 且逐行标红" || bad "health 未检出 redis 宕（rc=$rc）"
 "${COMPOSE[@]}" start redis >/dev/null 2>&1
-"$DEV" health >/dev/null 2>&1; check "恢复后 health 重新全绿" "$?"
+# #55 起队列连通项经探测容器真实投递并确认消费，探测容器启动需分钟级；
+# redis 恢复后允许重试等待转绿，吸收探测启动延迟（每次 health 同步等待探测完成）。
+recovered=1
+for attempt in 1 2 3; do
+  if "$DEV" health >/tmp/smoke-health-recover.log 2>&1; then recovered=0; break; fi
+  sleep 20
+done
+check "恢复后 health 重新全绿（含探测启动等待，重试 3 次）" "$recovered"
 
 # ---------- 4. dev lint 全量 + 依赖漏入库检查 ----------
 "$DEV" lint >/tmp/smoke-lint.log 2>&1; check "dev lint 全绿" "$?"
