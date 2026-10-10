@@ -54,6 +54,6 @@ services:
       - "${NGINX_PORT:-8080}:80"
 
 volumes:
-  # 数据卷只由 dev db reset（后续切片）允许删除；dev down 永不触碰
+  # 数据卷只由 dev db reset 允许删除（全系统唯一毁数入口）；dev down 永不触碰
   pgdata:
   rustfs-data:

@@ -1,0 +1,26 @@
+// 全库唯一迁移通道（#49）：后续所有模块的建表造数都在本目录追加迁移。
+// 纪律（infra/VERSIONS.md 执行纪律 1/2）：CREATE EXTENSION postgis 为迁移史第一条；
+// 空间列一律 Unsupported("geometry…") 透传，含必填空间字段的模型禁用 ORM create/update。
+
+// moduleFormat/importFileExtension 必须显式钉死：Prisma 按就近 tsconfig 探测 import 扩展名，
+// 仓库 tsconfig module=NodeNext 会生成 .js 扩展（打包器风格），而种子经 Node 原生 TS 运行时
+//（node --experimental-transform-types）执行，只能解析 .ts 扩展。
+generator client {
+  provider            = "prisma-client"
+  output              = "./generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// 迁移/种子通道的最小验证探针：无业务语义，首个真实业务模块（#52 起）落地后由其后迁移取代。
+model MigrationProbe {
+  id        Int      @id @default(autoincrement())
+  note      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("migration_probe")
+}
