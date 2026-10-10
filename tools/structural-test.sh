@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 结构测试设施（#51 全量七模块依赖矩阵；#50 shield 唯一出口规则并入；
-# #55 队列设施唯一入口规则并入）。
+# #55 队列设施唯一入口规则并入；#53 存储设施唯一入口规则并入）。
 # 规则 = #47 Implementation Decisions 依赖矩阵（含 #45 补丁 1）的机器可执行断言；
 # 任一规则红即整体非 0 退出（接入 dev lint，与 ESLint/依赖漏入库检查并列，
 # 构成「失败即构建失败」的本地 CI 等价闸）。
@@ -41,6 +41,10 @@
 #                           packages/queue（设施包）；backend/frontend/e2e/shield 出现
 #                           裸队列依赖 = 业务 worker 绕过队列接口（G5 不可扩大条件的
 #                           机器兜底，强于注释级约定）；业务侧只许经 QUEUE_PORT 注入
+#   storage-facility-entry  存储设施唯一入口（#53）：S3/RustFS SDK 依赖（@aws-sdk/*、
+#                           @smithy/*、minio、rustfs）只许出现在 packages/storage
+#                           （设施包）；其余位置出现 = 绕过 StoragePort 追加式抽象
+#                           直连存储（append-only 最保守语义的机器兜底，强于注释级约定）
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
@@ -48,6 +52,8 @@ BACKEND="$ROOT/backend"
 SHIELD_DIR="$ROOT/packages/shield"
 # 队列设施包（#55）：bullmq/ioredis 的唯一合法出现位置
 QUEUE_DIR="$ROOT/packages/queue"
+# 存储设施包（#53）：S3/RustFS SDK 的唯一合法出现位置
+STORAGE_DIR="$ROOT/packages/storage"
 
 # 业务模块清单（定案命名，#47/#51）：模块名 → 源码目录（相对 ROOT）
 MODULES=(identity geo-dict case approval supervision deadline)
@@ -83,6 +89,7 @@ RULES=(
   frontend-boundary
   weak-reference-entry
   queue-facility-entry
+  storage-facility-entry
 )
 FAIL=0
 
@@ -330,7 +337,32 @@ check_queue-facility-entry() {
   fi
 }
 
-echo "结构测试（#51 全量七模块依赖矩阵，含 #45 补丁 1；规则源头 = #47 Implementation Decisions；#55 队列设施唯一入口并入）"
+# 规则 n（#53 并入）：存储设施唯一入口——S3/RustFS SDK（@aws-sdk/*、@smithy/*、
+# minio、rustfs）只许出现在 packages/storage。业务侧绕过 StoragePort 追加式抽象直连
+# 存储 = 在包外获得原地修改/删除通道，append-only 最保守语义被架空；
+# 本包以零新增第三方依赖落实该纪律（S3 REST/SigV4 基于 node:crypto + fetch 自实现），
+# 本规则防后续切片引入 SDK 时漂移出设施包。
+check_storage-facility-entry() {
+  local file spec fails=0
+  while IFS= read -r file; do
+    case "$file" in
+      "$STORAGE_DIR"/*) continue ;; # 设施包自身豁免
+    esac
+    while IFS= read -r spec; do
+      case "$spec" in
+        @aws-sdk/*|@smithy/*|minio|minio/*|rustfs|rustfs/*)
+          note_fail "storage-facility-entry：${file#"$ROOT"/} 裸依赖 $spec（存储设施唯一入口 = packages/storage；业务侧只许经 STORAGE_PORT 注入）"
+          fails=$((fails + 1)) ;;
+      esac
+    done < <(grep -oE "\b(from|import)[^'\"]{0,40}['\"](@aws-sdk/[^'\"]*|@smithy/[^'\"]*|minio(/[^'\"]*)?|rustfs(/[^'\"]*)?)['\"]" \
+        "$file" 2>/dev/null | sed -E "s/^[a-z]+[^'\"]*['\"]//; s/['\"]$//")
+  done < <(find "$BACKEND" "$ROOT/frontend" "$ROOT/e2e" "$SHIELD_DIR" "$QUEUE_DIR" "${SCAN_TS[@]}")
+  if [ "$fails" -eq 0 ]; then
+    note_ok "storage-facility-entry：S3/RustFS SDK 仅在存储设施包内（业务侧无裸存储依赖，append-only 机器兜底）"
+  fi
+}
+
+echo "结构测试（#51 全量七模块依赖矩阵，含 #45 补丁 1；规则源头 = #47 Implementation Decisions；#55 队列设施唯一入口、#53 存储设施唯一入口并入）"
 for rule in "${RULES[@]}"; do
   "check_$rule"
 done
