@@ -166,6 +166,9 @@ importers:
 
   .:
     dependencies:
+      '@natural-enforcement/geo-dict':
+        specifier: workspace:*
+        version: link:backend/geo-dict
       '@prisma/adapter-pg':
         specifier: 7.10.0
         version: 7.10.0

@@ -3,8 +3,7 @@
   // 不并入根 tsconfig：根 unit 层无库且无生成的 Prisma Client，两边互不污染。
   "extends": "../tsconfig.json",
   "compilerOptions": {
-    "noEmit": true,
-    "types": ["node"]
+    "noEmit": true
   },
   "include": ["./**/*.ts", "../backend/prisma/**/*.ts"]
 }
