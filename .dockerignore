@@ -5,6 +5,8 @@
 **/dist
 coverage/
 *.tsbuildinfo
+.run/
+e2e/results/
 .env
 .env.local
 *.log
