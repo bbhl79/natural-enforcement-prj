@@ -31,8 +31,8 @@
 ## 往来形态：只有「只读查询 + 事件」两种，默认禁止直写
 
 - **公共出口**：每模块唯一公共出口为包名根 `@natural-enforcement/<module>`
- （`package.json` 的 `exports["."]` → `src/index.ts`）。本切片空壳阶段公共出口暂无
-  查询/事件接口内容，形态约定先行。
+ （`package.json` 的 `exports["."]` → `src/index.ts`）。#52 起 identity 公共出口已承载
+  四类动作强校验闸/人员/机构服务与持久化端口；其余模块空壳阶段暂无接口内容，形态约定先行。
 - **只读查询**：跨模块读取只许 import 对方公共出口暴露的查询接口（只读语义），
   严禁深路径导入（`@natural-enforcement/<module>/<内部路径>`）与跨模块相对路径——
   这两种形态即「直写/绕过接口」的代码级同义，由结构测试 `module-public-entry` 拦截。
