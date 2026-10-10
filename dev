@@ -131,7 +131,7 @@ run_queue_probe() { # $1 = redis 容器 id（--network container: 借用其网�
     -v "${PROJECT}-queue-store:/pnpm/store" \
     -w /work \
     "$LINT_IMAGE" \
-    sh -c 'cp -a /repo/. /work/ && corepack enable 2>/dev/null && pnpm install --frozen-lockfile --ignore-scripts --store-dir /pnpm/store >/dev/null && node packages/queue/src/probe.ts'
+    sh -c 'cp -a /repo/. /work/ && corepack enable 2>/dev/null && pnpm install --frozen-lockfile --ignore-scripts --config.strict-dep-builds=false --store-dir /pnpm/store >/dev/null && node packages/queue/src/probe.ts'
 }
 
 cmd_lint() {
