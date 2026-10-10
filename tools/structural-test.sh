@@ -45,6 +45,11 @@
 #                           @smithy/*、minio、rustfs）只许出现在 packages/storage
 #                           （设施包）；其余位置出现 = 绕过 StoragePort 追加式抽象
 #                           直连存储（append-only 最保守语义的机器兜底，强于注释级约定）
+#   spatial-no-orm-mutation 空间纪律机器兜底（评审必修）：backend/ 全源码（含 geo-dict
+#                           以外）不得对 geoDictLandBoundary / geoDictSurveyPoint 两个
+#                           空间模型 delegate 调 .create(/.update(——含必填空间字段的模型
+#                           禁用 ORM 写（infra/VERSIONS.md 执行纪律 2），写一律走
+#                           $queryRaw/ST_ 函数；注释级约定之上的正则兜底
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
@@ -90,6 +95,7 @@ RULES=(
   weak-reference-entry
   queue-facility-entry
   storage-facility-entry
+  spatial-no-orm-mutation
 )
 FAIL=0
 
@@ -364,6 +370,23 @@ check_storage-facility-entry() {
   done < <(find "$BACKEND" "$ROOT/frontend" "$ROOT/e2e" "$SHIELD_DIR" "$QUEUE_DIR" "${SCAN_TS[@]}")
   if [ "$fails" -eq 0 ]; then
     note_ok "storage-facility-entry：S3/RustFS SDK 仅在存储设施包内（业务侧无裸存储依赖，append-only 机器兜底）"
+  fi
+}
+
+# 规则 o（评审必修）：空间纪律机器兜底——backend/ 全源码不得对两个空间模型 delegate
+# 调 .create(/.update(。含必填 Unsupported 空间字段的模型走 ORM 写会绕过 ST_Transform
+# 统一口径（infra/VERSIONS.md 执行纪律 2），写一律 $queryRaw/ST_ 函数；本规则以正则
+# 扫 delegate 调用形态兜底，防后续切片漂移出原生空间路径。
+check_spatial-no-orm-mutation() {
+  local hits=0 line
+  while IFS= read -r line; do
+    note_fail "spatial-no-orm-mutation：空间模型 ORM 写调用 ${line}（含必填空间字段禁用 ORM create/update，执行纪律 2；写一律 \$queryRaw/ST_ 函数）"
+    hits=$((hits + 1))
+  done < <(grep -rEn --include='*.ts' --include='*.tsx' --include='*.mts' --include='*.cts' \
+      -e '(geoDictLandBoundary|geoDictSurveyPoint)\.(create|update)\(' \
+      "$BACKEND" 2>/dev/null)
+  if [ "$hits" -eq 0 ]; then
+    note_ok "spatial-no-orm-mutation：backend 全源码无空间模型 ORM create/update 调用（执行纪律 2 机器兜底）"
   fi
 }
 
