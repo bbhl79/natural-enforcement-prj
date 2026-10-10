@@ -1,0 +1,27 @@
+{
+  "name": "frontend",
+  "version": "0.0.0",
+  "private": true,
+  "description": "前端工作台（#47/#56 地基期：脚手架 + health 面板；无业务 UI——G6；只经统一契约与各模块查询接口消费，不直连库）",
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@reduxjs/toolkit": "2.13.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-redux": "9.3.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.3.3",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.2",
+    "vite": "8.3.4",
+    "vitest": "5.0.3"
+  }
+}
