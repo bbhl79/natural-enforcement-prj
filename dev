@@ -110,7 +110,19 @@ cmd_up() {
   db_seed
   echo "dev up：写入面板健康快照（与 dev health 同源，dev health 会刷新）…"
   write_health_snapshot quiet
-  echo "dev up 完成：迁移与种子就绪。运行 dev health 检查环境状态。"
+  # 健康检查失败不再吞掉（评审必修）：快照照常写入供面板展示，但 up 以非 0 退出，
+  # 让「基础设施就绪」这个承诺可被脚本/CI 信赖（失败明细跑一次 dev health 可见）。
+  local failed_items=""
+  [ "$SVC_STATUS" = fail ] && failed_items="$failed_items 容器存活"
+  [ "$DB_STATUS" = fail ] && failed_items="$failed_items 数据库连通"
+  [ "$QUEUE_STATUS" = fail ] && failed_items="$failed_items 队列连通"
+  [ "$FRONTEND_STATUS" = fail ] && failed_items="$failed_items 前端可访问"
+  if [ -n "$failed_items" ]; then
+    echo "[FAIL] dev up：健康检查存在失败项——$(echo "$failed_items" | xargs | tr ' ' '/')。" >&2
+    echo "  面板快照已照常写入；逐项明细运行 dev health 查看。" >&2
+    exit 1
+  fi
+  echo "dev up 完成：迁移与种子就绪，健康检查全绿。"
 }
 
 cmd_down() {
