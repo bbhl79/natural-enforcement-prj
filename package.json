@@ -1,0 +1,25 @@
+{
+  "name": "natural-enforcement",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@12.10.1",
+  "scripts": {
+    "lint": "eslint .",
+    "test": "pnpm -r test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@natural-enforcement/geo-dict": "workspace:*",
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "argon2": "0.45.1",
+    "pg": "8.23.1"
+  },
+  "devDependencies": {
+    "eslint": "10.12.0",
+    "prisma": "7.10.0",
+    "typescript": "6.0.2",
+    "typescript-eslint": "8.71.1",
+    "vitest": "5.0.3"
+  }
+}

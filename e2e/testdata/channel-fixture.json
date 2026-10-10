@@ -1,0 +1,8 @@
+{
+  "case": "readwrite-channel",
+  "expect": "自然执法工程 e2e 读写通道 fixture",
+  "channels": {
+    "in": "e2e/testdata 显式只读挂载（入库存测试 fixture）",
+    "out": "results 显式读写挂载（运行产物，gitignore）"
+  }
+}

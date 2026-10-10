@@ -1,0 +1,43 @@
+# CI 最小形态（#47 US 21/#57）：只做编排，显式调用同一 dev 入口。
+# 检查范围与本地严格一致——唯一差异是凭据注入回收（--ci 要求凭据来自环境变量）。
+# 检查语义单一来源 = dev 脚本，本文件不另写任何检查脚本。
+name: check
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: run-id（时间戳 + 短随机；本地用同一 id 复现本次 run）
+        id: run
+        run: echo "run_id=$(date -u +%Y%m%d-%H%M%S)-$(head -c 4 /dev/urandom | od -An -tx1 | tr -d ' \n')" >> "$GITHUB_OUTPUT"
+
+      - name: E1 从零建库（经唯一毁数入口 dev db reset，空环境前提；不直删任何数据卷）
+        env:
+          # 与 check 步同一凭据注入回收：db reset 连库需凭据来自环境变量
+          POSTGRES_USER: ${{ secrets.DEV_POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.DEV_POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.DEV_POSTGRES_DB }}
+        run: ./dev db reset
+
+      - name: check（lint 全量 + test all + build，本地同一命令）
+        env:
+          # CI 凭据注入回收：凭据必须来自环境变量（未配置 secrets 时本步会明确失败并提示）。
+          POSTGRES_USER: ${{ secrets.DEV_POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.DEV_POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.DEV_POSTGRES_DB }}
+        run: ./dev check --ci --run-id "${{ steps.run.outputs.run_id }}"
+
+      - name: 上传 run 产物（日志与关键产物；失败现场用同一 run-id 本地复现）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-${{ steps.run.outputs.run_id }}
+          path: .run/${{ steps.run.outputs.run_id }}/
+          if-no-files-found: ignore

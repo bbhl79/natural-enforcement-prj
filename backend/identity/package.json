@@ -1,0 +1,22 @@
+{
+  "name": "@natural-enforcement/identity",
+  "version": "0.0.0",
+  "private": true,
+  "description": "身份组织模块（#52：人员/机构只失效不删除 + 名称版本化 + 读/改/导出/审批四类动作强校验 + 导出留痕 append-only）",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@nestjs/common": "12.1.2",
+    "argon2": "0.45.1",
+    "@natural-enforcement/shield": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "6.0.2",
+    "vitest": "5.0.3"
+  }
+}

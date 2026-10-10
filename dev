@@ -1,0 +1,694 @@
+#!/usr/bin/env bash
+# 自然执法工程 唯一本地开发入口（#46/#47 定案）。
+# 命令集逐切片落地：切片01 up/down/health/lint；切片02 新增 db（#49 数据语义）；
+# 切片03 新增 test（unit 层）与 lint 结构测试；
+# 切片04 结构测试扩为全量七模块依赖矩阵（#51）；
+# 切片08（#55）health 四依赖补齐：队列连通改经队列接口真实投递健康检查任务并确认消费
+#（packages/queue 探测入口，非裸 redis ping），前端项中性占位；
+# 切片09（#56）前端落地：health 前端项改真实检查（面板可访问=绿）并计入红绿，
+# 检查结果写入面板快照（frontend 容器命名卷，面板与 dev health 同源）；新增 build（最小形态）。
+# 切片10（#57）十命令完备：新增 logs/exec（compose 薄封装）、check（lint+test all+build，
+# --ci 凭据注入回收）、test e2e 层（e2e/cases 约定：从零拉起+读写通道+命令冒烟）、
+# build 扩为全量（后端编译+全部本地镜像）；全局 --run-id 复现（日志/产物落 .run/<id>/）。
+# 退出码只有 0/1，诊断看输出。
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+COMPOSE_FILE="$ROOT/infra/docker-compose.yml"
+# 项目名：默认 natural-enforcement；并行工作区（多 worktree 共用宿主 daemon）可
+# 用 COMPOSE_PROJECT_NAME 隔离容器/卷/网络，宿主端口偏移用 POSTGRES_PORT 等环境变量。
+PROJECT="${COMPOSE_PROJECT_NAME:-natural-enforcement}"
+COMPOSE=(docker compose -p "$PROJECT" -f "$COMPOSE_FILE")
+
+# lint / db 工具链镜像：唯一依据 infra/VERSIONS.md（运行时行，tag + digest）
+LINT_IMAGE='node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1'
+# nginx 钉定镜像（#56）：面板快照写入经它落命名卷；与 compose nginx/frontend 服务同一张镜像
+NGINX_IMAGE='nginx:1.29.8@sha256:1881968aff6f7cdcc4b888c00a11f4ce241ad7ec957e0cb4a9e19e93a3ff87ea'
+# 前端本地镜像（#56：dev build 构建，Dockerfile 入库；compose 只按 image 引用 + pull_policy never）
+FRONTEND_IMAGE='natural-enforcement/frontend:dev'
+# dev db 容器网络内连接串（凭据从环境变量读，本地缺省用开发默认值并在输出里标注；
+# CI 模式凭据必须来自环境注入——见 cmd_check 的 --ci 语义）
+DB_USER="${POSTGRES_USER:-postgres}"
+DB_PASS="${POSTGRES_PASSWORD:-postgres}"
+DB_NAME="${POSTGRES_DB:-postgres}"
+DATABASE_URL="postgresql://${DB_USER}:${DB_PASS}@db:5432/${DB_NAME}"
+
+# 容器内工具链缓存（命名卷，依赖只进容器/卷，不入库）：
+# - corepack 卷：缓存 pnpm 二进制（/root/.cache/node/corepack），免去每次容器现下载；
+# - pnpm-cache 卷：挂到 pnpm 默认缓存位 /root/.cache/pnpm，registry 元数据与
+#   pnpm 12 供应链策略校验结果由此跨容器持久化（实测冷校验 335 条约 1 分钟，热运行 <5s）。
+# 注意：pnpm 12 的 install 解析器不收 --cache-dir（无论等号/空格形式），切勿加回。
+# registry 渠道仍默认官方源，境内镜像如需使用属宿主环境配置（dev 不内置、不入库）。
+CACHE_VOLUMES=(-v "${PROJECT}-corepack:/root/.cache/node/corepack" -v "${PROJECT}-pnpm-cache:/root/.cache/pnpm")
+INSTALL_FLAGS=(--frozen-lockfile --ignore-scripts --config.strict-dep-builds=false --store-dir /pnpm/store --prefer-offline)
+
+usage() {
+  cat <<'EOF'
+自然执法工程 开发入口（唯一本地入口，十命令：#46/#47 定案，切片10 #57 完备）
+
+用法：dev <命令> [--run-id <id>]
+
+命令：
+  up       幂等拉起基础设施容器（db/redis/rustfs/nginx/frontend）；永不删除已有数据。
+           镜像缺失时非 0 退出并提示先 dev build——本命令不隐式构建。
+  down     停止并清理容器与网络；数据卷保留。
+  health   四依赖逐行检查：容器存活 / db 连通 / 队列连通（经队列接口真实投递
+           健康检查任务并确认消费，非裸 redis ping）/ 前端面板可访问。
+           检查结果同时写入面板快照（与面板展示同源）。全绿退出 0，任一红非 0。
+  lint     全量静态检查（结构测试 + 依赖漏入库检查 + 工具链镜像核对 + ESLint，容器内执行）。
+           lint <子项> 单跑一项：leak（依赖漏入库）/ structural（结构测试）/
+           image（工具链镜像定案核对）/ eslint（容器内 ESLint 全量）；无参 = 全量四项。
+  test     三层语义（#46）：unit = 纯单元+契约；integration = 结构+需库用例；
+           e2e = 从零拉起（E1）+ 读写通道（E6）+ 十命令冒烟（E7）。
+           test unit / test integration / test e2e / 裸 test = all（unit+integration+e2e）。
+           注意：e2e 层会销毁本项目数据卷做从零拉起（E1 证据），勿在需保留数据时运行。
+  build    全量构建：前端编译（产物写回宿主 frontend/dist，已 gitignore）+ 后端编译
+           （tsc 全程序编译）+ 全部本地镜像（frontend 本地构建；infra 镜像本地拉取
+           即视为可用，不重复构建）。不 push 不部署。
+  check    一条命令 = lint 全量 + test all + build，本地即 CI 全绿。
+           --ci：检查范围/参数/链路与本地严格一致，唯一差异是凭据注入回收——
+           CI 凭据必须来自环境变量（POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB）；
+           本地缺省时用开发默认值并在输出里标注。
+  db       数据语义：裸 db = 建库（缺则建）+ 迁移 + 种子，各自幂等（已做则跳过）。
+           db migrate 只迁移；db seed 只种子；
+           db reset 毁库重建——全系统唯一允许删除数据的入口，其余命令只增不改。
+  logs     docker compose logs 薄封装（不发明自有语义）：dev logs [服务] [compose logs 参数]。
+  exec     docker compose exec 薄封装（不发明自有语义）：dev exec <服务> <命令…>。
+
+全局选项：
+  --run-id <id>  复现某次 CI run：日志与关键产物落到 .run/<id>/（已 gitignore），
+                 用同一 run-id 本地重跑即得同路径产物，可对照 CI 失败现场。
+
+裸 dev 即显示本帮助。
+EOF
+}
+
+require_compose_file() {
+  if [ ! -f "$COMPOSE_FILE" ]; then
+    echo "[FAIL] 未找到编排文件：$COMPOSE_FILE" >&2
+    exit 1
+  fi
+}
+
+cmd_up() {
+  require_compose_file
+  local missing=0 img
+  while IFS= read -r img; do
+    if ! docker image inspect "$img" >/dev/null 2>&1; then
+      echo "镜像缺失：$img"
+      missing=1
+    fi
+  done < <("${COMPOSE[@]}" config --images)
+  if [ "$missing" -ne 0 ]; then
+    echo "请先执行 dev build 构建镜像（或按 infra/VERSIONS.md 官方名手动拉取）后再 dev up。" >&2
+    echo "dev up 不会隐式构建或拉取镜像。" >&2
+    exit 1
+  fi
+  # --wait：等 db/redis 健康检查通过再返回——迁移/种子要求 db 真正就绪，
+  # 冷卷首次 initdb 较慢，不等待会赢不了就绪竞态（#57 回归实测踩中）。
+  "${COMPOSE[@]}" up -d --wait --wait-timeout 120
+  echo "dev up：基础设施容器已就绪。检查迁移与种子（幂等，已完成自动跳过）…"
+  db_migrate
+  db_seed
+  echo "dev up：写入面板健康快照（与 dev health 同源，dev health 会刷新）…"
+  write_health_snapshot quiet
+  # 健康检查失败不再吞掉（评审必修）：快照照常写入供面板展示，但 up 以非 0 退出，
+  # 让「基础设施就绪」这个承诺可被脚本/CI 信赖（失败明细跑一次 dev health 可见）。
+  local failed_items=""
+  [ "$SVC_STATUS" = fail ] && failed_items="$failed_items 容器存活"
+  [ "$DB_STATUS" = fail ] && failed_items="$failed_items 数据库连通"
+  [ "$QUEUE_STATUS" = fail ] && failed_items="$failed_items 队列连通"
+  [ "$FRONTEND_STATUS" = fail ] && failed_items="$failed_items 前端可访问"
+  if [ -n "$failed_items" ]; then
+    echo "[FAIL] dev up：健康检查存在失败项——$(echo "$failed_items" | xargs | tr ' ' '/')。" >&2
+    echo "  面板快照已照常写入；逐项明细运行 dev health 查看。" >&2
+    exit 1
+  fi
+  echo "dev up 完成：迁移与种子就绪，健康检查全绿。"
+}
+
+cmd_down() {
+  require_compose_file
+  "${COMPOSE[@]}" down
+  echo "dev down 完成：容器与网络已清理，数据卷保留（毁数入口只有 dev db reset）。"
+}
+
+# ---------- dev logs / exec（#57 切片10：docker compose 薄封装，不发明自有语义） ----------
+cmd_logs() {
+  require_compose_file
+  "${COMPOSE[@]}" logs "$@"
+}
+
+cmd_exec() {
+  require_compose_file
+  if [ $# -eq 0 ]; then
+    echo "用法：dev exec <服务> <命令…>（docker compose exec 薄封装）" >&2
+    exit 1
+  fi
+  "${COMPOSE[@]}" exec "$@"
+}
+
+# ---------- dev health 四依赖检查（#55 队列探测并入；#56 前端真实检查 + 面板快照） ----------
+# 检查原语：每个 check_* 输出一行人类可读结果、置全局状态变量（快照序列化用）、返回 0/1。
+FRONTEND_URL="http://127.0.0.1:${FRONTEND_PORT:-8899}/"
+SVC_STATUS=fail; SVC_FAILED=""
+DB_STATUS=fail
+QUEUE_STATUS=fail
+FRONTEND_STATUS=fail
+
+check_services() {
+  local svc cid rc=0
+  SVC_FAILED=""
+  for svc in $("${COMPOSE[@]}" config --services); do
+    cid="$("${COMPOSE[@]}" ps -q "$svc" 2>/dev/null || true)"
+    if [ -n "$cid" ] && [ "$(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null)" = "running" ]; then
+      echo "[OK]   $svc  容器存活"
+    else
+      echo "[FAIL] $svc  容器未运行"
+      SVC_FAILED="$SVC_FAILED $svc"
+      rc=1
+    fi
+  done
+  if [ "$rc" -eq 0 ]; then SVC_STATUS=ok; else SVC_STATUS=fail; fi
+  return "$rc"
+}
+
+check_db() {
+  if "${COMPOSE[@]}" exec -T db pg_isready -U "$DB_USER" -d "$DB_NAME" >/dev/null 2>&1; then
+    DB_STATUS=ok
+    echo "[OK]   db   数据库可连通"
+    return 0
+  fi
+  DB_STATUS=fail
+  echo "[FAIL] db   数据库不可连通"
+  return 1
+}
+
+# 队列连通（#55）：经队列接口真实投递健康检查任务并确认消费（非裸 redis ping）。
+# 探测容器借用 redis 容器的网络命名空间直达 127.0.0.1:6379；redis 停服时
+# 容器不存在/不可达，探测失败即红。
+check_queue() {
+  local cid="$("${COMPOSE[@]}" ps -q redis 2>/dev/null || true)" probe_out=""
+  if [ -n "$cid" ] && [ "$(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null)" = "running" ] \
+     && probe_out="$(run_queue_probe "$cid" 2>&1)"; then
+    QUEUE_STATUS=ok
+    echo "[OK]   queue 队列连通（${probe_out}）"
+    return 0
+  fi
+  QUEUE_STATUS=fail
+  [ -n "${probe_out:-}" ] && echo "[FAIL] queue 队列不可连通（${probe_out}）" \
+    || echo "[FAIL] queue 队列不可连通（redis 容器未运行，无法投递健康检查任务）"
+  return 1
+}
+
+# 前端（第四依赖，#56 落地）：面板可访问 = 绿，不可访问 = 红，计入红绿。
+check_frontend() {
+  # 刚 up 时 nginx 可能尚未就绪：重试 3 次（间隔 2s）再判红
+  if curl -fsS --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors "$FRONTEND_URL" >/dev/null 2>&1; then
+    FRONTEND_STATUS=ok
+    echo "[OK]   frontend 前端面板可访问（$FRONTEND_URL）"
+    return 0
+  fi
+  FRONTEND_STATUS=fail
+  echo "[FAIL] frontend 前端面板不可访问（$FRONTEND_URL）"
+  return 1
+}
+
+# 面板快照（#56）：把四依赖检查结果序列化为 JSON，写入 frontend 服务挂载的命名卷
+#（compose frontend-health → /health/health.json，nginx 同域静态端点提供）。
+# 快照唯一生产者 = 本脚本，面板与 dev health 天然同源；前端不直连库、不探容器。
+# 调用前须已跑过 check_*（cmd_health），或传 quiet=1 由本函数静默重跑（cmd_up）。
+write_health_snapshot() { # $1 = quiet 时静默重跑检查（丢弃检查输出）
+  if [ "${1:-}" = "quiet" ]; then
+    check_services >/dev/null 2>&1 || true
+    check_db >/dev/null 2>&1 || true
+    check_queue >/dev/null 2>&1 || true
+    check_frontend >/dev/null 2>&1 || true
+  fi
+  local svc_detail="全部容器运行中"
+  [ -n "$SVC_FAILED" ] && svc_detail="未运行：$(echo "$SVC_FAILED" | xargs | tr ' ' ',')"
+  local db_detail="数据库可连通" queue_detail="队列可连通（健康检查任务已投递并消费）" fe_detail="面板可访问"
+  [ "$DB_STATUS" = fail ] && db_detail="数据库不可连通"
+  [ "$QUEUE_STATUS" = fail ] && queue_detail="队列不可连通"
+  [ "$FRONTEND_STATUS" = fail ] && fe_detail="面板不可访问"
+  if ! printf '{"generatedAt":"%s","checks":[
+    {"id":"containers","label":"容器存活","status":"%s","detail":"%s"},
+    {"id":"db","label":"数据库连通","status":"%s","detail":"%s"},
+    {"id":"queue","label":"队列连通","status":"%s","detail":"%s"},
+    {"id":"frontend","label":"前端可访问","status":"%s","detail":"%s"}]}\n' \
+      "$(date -Iseconds)" "$SVC_STATUS" "$svc_detail" "$DB_STATUS" "$db_detail" \
+      "$QUEUE_STATUS" "$queue_detail" "$FRONTEND_STATUS" "$fe_detail" \
+      | docker run --rm -i -v "${PROJECT}_frontend-health:/out" "$NGINX_IMAGE" \
+          sh -c 'cat > /out/health.json' 2>/dev/null; then
+    echo "[WARN] 面板快照写入失败（面板可能显示上一次快照状态）" >&2
+  fi
+}
+
+cmd_health() {
+  require_compose_file
+  local rc=0
+  check_services || rc=1
+  check_db || rc=1
+  check_queue || rc=1
+  check_frontend || rc=1
+  write_health_snapshot
+  if [ "$rc" -eq 0 ]; then
+    echo "health：全部检查通过。"
+  else
+    echo "health：存在失败项，详见上方标红行。"
+  fi
+  exit "$rc"
+}
+
+# 队列探测（#55）：容器内安装依赖后运行 packages/queue 探测入口。
+# 挂载形态与 lint/test 一致：仓库只读，依赖只进容器/命名卷（防 root 属主泄漏入库）。
+run_queue_probe() { # $1 = redis 容器 id（--network container: 借用其网络命名空间）
+  docker run --rm --network "container:$1" \
+    -e REDIS_URL="${REDIS_URL:-redis://127.0.0.1:6379}" \
+    -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
+    -v "$ROOT:/repo:ro" \
+    -v "${PROJECT}-queue-node-modules:/work/node_modules" \
+    -v "${PROJECT}-queue-store:/pnpm/store" \
+    "${CACHE_VOLUMES[@]}" \
+    -w /work \
+    "$LINT_IMAGE" \
+    sh -c "cp -a /repo/. /work/ && corepack enable 2>/dev/null && pnpm install ${INSTALL_FLAGS[*]} >/dev/null && node packages/queue/src/probe.ts"
+}
+
+# 检查 1：容器依赖漏入库（E6 前半）——仓库内出现 node_modules 等即失败
+lint_leak() {
+  local leaks
+  leaks="$(find "$ROOT" -type d \( -name node_modules -o -name .pnpm-store \) -not -path '*/.git/*' 2>/dev/null)"
+  if [ -n "$leaks" ]; then
+    echo "[FAIL] 检出容器依赖漏入库（node_modules/.pnpm-store 严禁入库）：" >&2
+    echo "$leaks" | sed 's/^/  /' >&2
+    exit 1
+  fi
+  echo "lint leak：无容器依赖漏入库。"
+}
+
+# 检查 2：结构测试（#51 全量七模块依赖矩阵，含 shield 唯一出口；规则 b 依赖漏入库即
+# lint leak 检查，不重复实现）。宿主侧纯源码扫描，无容器/网络依赖；失败即非 0。
+lint_structural() {
+  "$ROOT/tools/structural-test.sh" || exit 1
+}
+
+# 检查 3：lint 工具链镜像与版本定案表一致且本地可用
+lint_image() {
+  if ! grep -qF "$LINT_IMAGE" "$ROOT/infra/VERSIONS.md"; then
+    echo "[FAIL] lint 工具链镜像未按定案登记于 infra/VERSIONS.md：$LINT_IMAGE" >&2
+    exit 1
+  fi
+  if ! docker image inspect "$LINT_IMAGE" >/dev/null 2>&1; then
+    echo "[FAIL] lint 工具链镜像缺失：$LINT_IMAGE" >&2
+    echo "请按 infra/VERSIONS.md 登记的官方名 + digest 拉取后重试。" >&2
+    exit 1
+  fi
+  echo "lint image：工具链镜像与定案表一致且在场。"
+}
+
+# 检查 4：ESLint 全量。工作区只读挂载于 /repo；
+# 容器内复制到可写层 /work 执行（node_modules 与 pnpm store 挂命名卷，显式读写挂载），
+# 仓库根是只读挂载，任何写回仓库的企图都会直接失败。
+# 安装一律 --ignore-scripts + --config.strict-dep-builds=false：
+# - bullmq 传递依赖 msgpackr-extract 带原生构建脚本，工具链容器（alpine 无编译链）不构建，
+#   走其纯 JS 回退（BullMQ 不依赖该原生加速）；
+# - Prisma 引擎二进制经 optionalDependencies 分发，构建脚本可跳且必须跳；pnpm 12 冻结锁下
+#   被拦构建脚本默认报 ERR_PNPM_IGNORED_BUILDS 使安装失败。
+lint_eslint() {
+  echo "lint：容器内安装依赖并运行 ESLint 全量检查（首次较慢）…"
+  docker run --rm \
+    -v "$ROOT:/repo:ro" \
+    -v "${PROJECT}-lint-node-modules:/work/node_modules" \
+    -v "${PROJECT}-lint-store:/pnpm/store" \
+    "${CACHE_VOLUMES[@]}" \
+    -w /work \
+    "$LINT_IMAGE" \
+    sh -c "cp -a /repo/. /work/ && corepack enable && pnpm install ${INSTALL_FLAGS[*]} && pnpm run lint"
+}
+
+# lint 全量 = 四项顺序执行；<子项> 单跑一项（leak/structural/image/eslint）。
+cmd_lint() {
+  local target="${1:-all}"
+  case "$target" in
+    all)        lint_leak; lint_structural; lint_image; lint_eslint ;;
+    leak)       lint_leak ;;
+    structural) lint_structural ;;
+    image)      lint_image ;;
+    eslint)     lint_eslint ;;
+    *)
+      echo "未知 lint 子项：$1（可选 leak / structural / image / eslint / 无参 = 全量）" >&2
+      exit 1
+      ;;
+  esac
+  echo "lint：$target 检查通过。"
+}
+
+# ---------- dev db 数据语义（#49） ----------
+# 运行模型：Prisma 7.10.0 CLI 与种子在工具链容器内执行（仓库只读挂载，不留 node_modules）；
+# 容器接入 compose 项目网络，经服务名 db 连库。迁移/种子一律幂等：已应用/已存在即跳过。
+
+# 确保 db 容器在场（缺则建），并复用 up 的镜像缺失契约（不隐式拉取/构建）
+ensure_db() {
+  require_compose_file
+  local img
+  img="$("${COMPOSE[@]}" config | sed -n '/^  db:/,/^  [a-z]/p' | grep 'image:' | awk '{print $2}' | head -1)"
+  if ! docker image inspect "$img" >/dev/null 2>&1; then
+    echo "镜像缺失：$img" >&2
+    echo "请先执行 dev build 构建镜像（或按 infra/VERSIONS.md 官方名手动拉取）后再重试。" >&2
+    echo "dev db 不会隐式构建或拉取镜像。" >&2
+    exit 1
+  fi
+  "${COMPOSE[@]}" up -d --wait --wait-timeout 120 db
+}
+
+# 在工具链容器内执行 backend/prisma 下的 Prisma 命令（$1 = 分号分隔的命令串）
+run_db_toolchain() {
+  docker run --rm \
+    --network "${PROJECT}_default" \
+    -e DATABASE_URL="$DATABASE_URL" \
+    -v "$ROOT:/repo:ro" \
+    -v "${PROJECT}-db-node-modules:/work/node_modules" \
+    -v "${PROJECT}-pnpm-store:/pnpm/store" \
+    "${CACHE_VOLUMES[@]}" \
+    -w /work \
+    "$LINT_IMAGE" \
+    sh -c "set -e; cp -a /repo/. /work/; corepack enable; pnpm install ${INSTALL_FLAGS[*]}; cd backend/prisma; $1"
+}
+
+db_migrate() {
+  echo "db migrate：应用待执行迁移（已应用的自动跳过）…"
+  run_db_toolchain 'pnpm exec prisma migrate deploy'
+}
+
+db_seed() {
+  echo "db seed：写入种子数据（已存在的自动跳过）…"
+  # 生成的 Prisma Client 在容器可写层，每次现生成（约 1s）
+  run_db_toolchain 'pnpm exec prisma generate && pnpm exec prisma db seed'
+}
+
+db_reset() {
+  ensure_db
+  echo "db reset：全系统唯一允许删除数据的入口。"
+  echo "  将删除 dev 数据库全部数据（数据卷销毁重建），随后自动迁移 + 种子，保证从零可完全重建。"
+  "${COMPOSE[@]}" rm -fs db >/dev/null 2>&1 || true
+  if docker volume inspect "${PROJECT}_pgdata" >/dev/null 2>&1; then
+    docker volume rm "${PROJECT}_pgdata" >/dev/null
+  fi
+  "${COMPOSE[@]}" up -d --wait --wait-timeout 120 db
+  db_migrate
+  db_seed
+}
+
+cmd_db() {
+  case "${1:-}" in
+    "")      ensure_db; db_migrate; db_seed ;;
+    migrate) ensure_db; db_migrate ;;
+    seed)    ensure_db; db_seed ;;
+    reset)   db_reset ;;
+    *)
+      echo "未知 db 子命令：$1" >&2
+      echo >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+}
+
+# ---------- dev build（#57 切片10 全量形态） ----------
+# 范围 = 前端编译（tsc + vite build，产物写回宿主 frontend/dist，已 gitignore）
+# + 后端编译（tsc 全程序编译）+ 全部本地镜像。
+# 后端编译说明：根 tsconfig 为全程序 noEmit 编译（队列包以 node type-stripping 直跑 .ts，
+# allowImportingTsExtensions 前置即 noEmit），故后端「编译」= 全程序类型化编译门；
+# JS 产物（emit）待第一个真实运行入口（首个业务切片）再开，不预先发明打包形态。
+# 镜像范围：frontend 本地镜像多阶段构建（frontend/Dockerfile）；infra 镜像（db/redis/
+# rustfs/nginx，钉定 tag+digest）本地拉取即视为可用，不重复构建。
+# 不 push 不部署；产物/依赖只进容器与命名卷，不入库（E6）。
+build_frontend() {
+  require_toolchain_image
+  mkdir -p "$ROOT/frontend/dist"
+  echo "build：容器内前端编译（tsc + vite build，产物写回宿主 frontend/dist）…"
+  docker run --rm \
+    -v "$ROOT:/repo:ro" \
+    -v "$ROOT/frontend/dist:/out" \
+    -v "${PROJECT}-build-node-modules:/work/node_modules" \
+    -v "${PROJECT}-build-store:/pnpm/store" \
+    "${CACHE_VOLUMES[@]}" \
+    -w /work \
+    "$LINT_IMAGE" \
+    sh -c "cp -a /repo/. /work/ && corepack enable && pnpm install ${INSTALL_FLAGS[*]} && pnpm --filter frontend build && cp -a /work/frontend/dist/. /out/ && chown -R \"\$(stat -c '%u:%g' /out)\" /out"
+  echo "build：构建前端本地镜像 $FRONTEND_IMAGE（多阶段：node 编译 → nginx 运行）…"
+  docker build --tag "$FRONTEND_IMAGE" --file "$ROOT/frontend/Dockerfile" "$ROOT"
+}
+
+build_backend() {
+  require_toolchain_image
+  echo "build：容器内后端编译（tsc 全程序编译门：shield/queue/storage + backend 七模块）…"
+  docker run --rm \
+    -v "$ROOT:/repo:ro" \
+    -v "${PROJECT}-build-backend-node-modules:/work/node_modules" \
+    -v "${PROJECT}-build-backend-store:/pnpm/store" \
+    "${CACHE_VOLUMES[@]}" \
+    -w /work \
+    "$LINT_IMAGE" \
+    sh -c "cp -a /repo/. /work/ && corepack enable && pnpm install ${INSTALL_FLAGS[*]} && pnpm run typecheck"
+  echo "build：后端编译通过。"
+}
+
+# infra 镜像本地拉取即视为可用（不重复构建）：逐个确认 compose 引用的 infra 镜像在场，
+# 缺失则按钉定官方名 + digest 拉取（tag@digest 幂等，已有时秒过）。
+ensure_infra_images() {
+  require_compose_file
+  local img
+  while IFS= read -r img; do
+    [ "$img" = "$FRONTEND_IMAGE" ] && continue
+    if docker image inspect "$img" >/dev/null 2>&1; then
+      echo "build：infra 镜像在场：$img"
+    else
+      echo "build：infra 镜像缺失，按 infra/VERSIONS.md 钉定引用拉取：$img"
+      docker pull "$img"
+    fi
+  done < <("${COMPOSE[@]}" config --images)
+}
+
+cmd_build() {
+  # 裸 build = 全量；--ci 与裸形态范围严格一致（产物与镜像均不 push 不部署）。
+  local ci=0 a
+  for a in "$@"; do
+    case "$a" in
+      --ci) ci=1 ;;
+      *)
+        echo "未知 build 参数：$a（可选：--ci）" >&2
+        echo >&2
+        usage >&2
+        exit 1
+        ;;
+    esac
+  done
+  [ "$ci" -eq 1 ] && echo "build --ci：检查范围与本地严格一致（产物不 push 不部署）。"
+  build_frontend
+  build_backend
+  ensure_infra_images
+  echo "build：全量构建完成（前端编译+后端编译+全部本地镜像；产物已写回宿主并 gitignore）。"
+}
+
+require_toolchain_image() {
+  if ! docker image inspect "$LINT_IMAGE" >/dev/null 2>&1; then
+    echo "[FAIL] 工具链镜像缺失：$LINT_IMAGE" >&2
+    echo "请按 infra/VERSIONS.md 登记的官方名 + digest 拉取后重试。" >&2
+    exit 1
+  fi
+}
+
+test_unit() {
+  # unit 层（#46 三层映射：unit = 纯单元 + 契约测试，无库）。
+  # 容器内安装依赖并运行 Vitest 契约断言 + tsc --noEmit 类型检查；
+  # 挂载形态与 lint 一致：仓库只读，依赖只进容器/命名卷。
+  require_toolchain_image
+  echo "test：容器内运行 unit 层测试（shield 契约断言 + 队列设施单测 + 前端 health 单测 + 类型检查）…"
+  docker run --rm \
+    -v "$ROOT:/repo:ro" \
+    -v "${PROJECT}-test-node-modules:/work/node_modules" \
+    -v "${PROJECT}-test-store:/pnpm/store" \
+    "${CACHE_VOLUMES[@]}" \
+    -w /work \
+    "$LINT_IMAGE" \
+    sh -c "cp -a /repo/. /work/ && corepack enable && pnpm install ${INSTALL_FLAGS[*]} && pnpm test && pnpm run typecheck"
+  echo "test：unit 层全部通过。"
+}
+
+test_integration() {
+  # integration 层（#46：结构测试 + 需库用例）。harness 负责：db 在场 + 迁移/种子幂等
+  # + Prisma Client 生成；用例形态与约定见 integration/README.md
+  #（Vitest 需库用例 + *.sh 可执行用例，只测外部可观察行为）。
+  # 结构测试纳入本层（评审必修）：#46 定案 integration = 结构测试 + 需库用例；
+  # dev lint 里的调用保留不动——同一规则两处跑，双保险。
+  require_toolchain_image
+  echo "test：integration 层结构测试（tools/structural-test.sh，宿主侧纯源码扫描）…"
+  "$ROOT/tools/structural-test.sh" || {
+    echo "[FAIL] integration 层结构测试失败" >&2
+    exit 1
+  }
+  ensure_db
+  db_migrate
+  db_seed
+  echo "test：容器内运行 integration 层 Vitest 需库用例（integration/**/*.test.ts）…"
+  docker run --rm \
+    --network "${PROJECT}_default" \
+    -e DATABASE_URL="$DATABASE_URL" \
+    -v "$ROOT:/repo:ro" \
+    -v "${PROJECT}-integration-node-modules:/work/node_modules" \
+    -v "${PROJECT}-integration-store:/pnpm/store" \
+    "${CACHE_VOLUMES[@]}" \
+    -w /work \
+    "$LINT_IMAGE" \
+    sh -c "set -e; cp -a /repo/. /work/; corepack enable; pnpm install ${INSTALL_FLAGS[*]}; cd backend/prisma; pnpm exec prisma generate; cd /work; if ls integration/*.test.ts >/dev/null 2>&1; then pnpm exec tsc -p integration --noEmit; pnpm exec vitest run --config integration/vitest.config.mts; else echo 'integration：暂无 Vitest 需库用例'; fi"
+  # 可执行脚本用例：integration/*.sh（非 _ 开头），按文件名排序逐条执行
+  local script found=0
+  for script in "$ROOT"/integration/*.sh; do
+    [ -e "$script" ] || continue
+    found=1
+    echo "test：运行 integration 脚本用例 ${script##*/} …"
+    COMPOSE_PROJECT_NAME="$PROJECT" bash "$script" || {
+      echo "[FAIL] integration 脚本用例失败：${script##*/}" >&2
+      exit 1
+    }
+  done
+  if [ "$found" -eq 0 ]; then
+    echo "test：integration 层暂无 *.sh 用例（Vitest 层已执行）。"
+  fi
+  echo "test：integration 层全部通过。"
+}
+
+cmd_test() {
+  case "${1:-all}" in
+    all)         test_unit; test_integration; test_e2e ;;
+    unit)        test_unit ;;
+    integration) test_integration ;;
+    e2e)         test_e2e ;;
+    *)
+      echo "未知 test 层：$1（可选 unit / integration / e2e / 裸 = all）" >&2
+      exit 1
+      ;;
+  esac
+}
+
+# ---------- dev test e2e 层（#57：从零拉起 E1 + 读写通道 E6 后半 + 命令冒烟 E7） ----------
+# 用例目录约定：e2e/cases/*.sh，按文件名排序逐条执行；用例只测外部可观察行为
+#（命令退出码 + 人类可读输出），自行经 compose 访问服务（隔离环境变量同 integration 层）。
+# 产物目录：默认 e2e/results（gitignore）；带 --run-id 时落 .run/<id>/results（复现同路径）。
+test_e2e() {
+  require_compose_file
+  require_toolchain_image
+  local results_dir="$ROOT/e2e/results"
+  [ -n "$RUN_DIR" ] && results_dir="$RUN_DIR/results"
+  mkdir -p "$results_dir"
+  echo "test：e2e 层（用例目录 e2e/cases/*.sh；运行产物目录 $results_dir）"
+  echo "test：注意——e2e 从零拉起用例会销毁本项目数据卷（E1 证据），毁数语义等同 dev db reset 级；其余命令只增不改。"
+  local case_script found=0
+  for case_script in "$ROOT"/e2e/cases/*.sh; do
+    [ -e "$case_script" ] || continue
+    # _ 前缀 = 用例辅助文件（非可执行用例），与 integration 层约定一致
+    [[ "${case_script##*/}" == _* ]] && continue
+    found=1
+    echo "test：运行 e2e 用例 ${case_script##*/} …"
+    COMPOSE_PROJECT_NAME="$PROJECT" E2E_RESULTS="$results_dir" RUN_DIR="$RUN_DIR" bash "$case_script" || {
+      echo "[FAIL] e2e 用例失败：${case_script##*/}" >&2
+      exit 1
+    }
+  done
+  if [ "$found" -eq 0 ]; then
+    echo "[FAIL] e2e 层无用例（e2e/cases/*.sh 为空）" >&2
+    exit 1
+  fi
+  echo "test：e2e 层全部通过。"
+}
+
+# ---------- dev check（#57：lint 全量 + test all + build，本地即 CI 全绿） ----------
+# --ci 等价物原则：检查范围/参数/链路与本地严格一致，唯一差异是凭据注入回收——
+# CI 凭据必须来自环境变量；本地缺省时用开发默认值并在输出里标注。
+cmd_check() {
+  local ci=0 a
+  for a in "$@"; do
+    case "$a" in
+      --ci) ci=1 ;;
+      *)
+        echo "未知 check 参数：$a（可选：--ci）" >&2
+        exit 1
+        ;;
+    esac
+  done
+  if [ "$ci" -eq 1 ]; then
+    if [ -z "${POSTGRES_USER:-}" ] || [ -z "${POSTGRES_PASSWORD:-}" ] || [ -z "${POSTGRES_DB:-}" ]; then
+      echo "[FAIL] check --ci：凭据注入回收——CI 模式要求 POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB 全部来自环境变量注入。" >&2
+      echo "  本地复现某次 CI run 请显式导出同一组凭据（如开发默认值）后再 --ci 重跑。" >&2
+      exit 1
+    fi
+    echo "check --ci：凭据来自环境变量注入（与本地唯一差异）；检查范围/参数/链路与本地严格一致。"
+  else
+    if [ -z "${POSTGRES_USER:-}" ] || [ -z "${POSTGRES_PASSWORD:-}" ] || [ -z "${POSTGRES_DB:-}" ]; then
+      echo "check：凭据未注入，使用开发默认值 postgres/postgres/postgres（仅本地缺省时允许；CI 用 --ci 从环境变量回收）。"
+    fi
+  fi
+  cmd_lint
+  test_unit
+  test_integration
+  test_e2e
+  if [ "$ci" -eq 1 ]; then
+    cmd_build --ci
+  else
+    cmd_build
+  fi
+  echo "check：lint 全量 + test all + build 全部通过（本地即 CI 全绿）。"
+}
+
+# ---------- 全局选项解析（#57：--run-id 复现 CI run） ----------
+# --run-id 可出现在命令后任意位置；剩余参数按原语义分派。
+# 注意：bash 位置参数是动态作用域，set -- 必须在本脚本顶层执行（放函数内不生效）。
+RUN_ID=""
+RUN_DIR=""
+_args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --run-id)
+      [ $# -ge 2 ] || { echo "--run-id 需要 <id> 参数" >&2; exit 1; }
+      RUN_ID="$2"; shift 2 ;;
+    --run-id=*) RUN_ID="${1#*=}"; shift ;;
+    *) _args+=("$1"); shift ;;
+  esac
+done
+if [ "${#_args[@]}" -gt 0 ]; then
+  set -- "${_args[@]}"
+else
+  set --
+fi
+unset _args
+
+# run-id 落盘（#57）：带 run-id 的命令把全部输出（日志）落到 .run/<id>/<命令>.log，
+# e2e 等关键产物目录由 RUN_DIR 传递（test_e2e 用）。复现 = 同一 run-id 重跑得同路径产物。
+if [ -n "$RUN_ID" ]; then
+  RUN_DIR="$ROOT/.run/$RUN_ID"
+  mkdir -p "$RUN_DIR"
+  exec > >(tee -a "$RUN_DIR/${1:-help}.log") 2>&1
+  echo "run-id：$RUN_ID（日志与产物目录：$RUN_DIR）"
+fi
+
+case "${1:-}" in
+  ""|-h|--help|help) usage ;;
+  up)    shift; cmd_up "$@" ;;
+  down)  shift; cmd_down "$@" ;;
+  health) shift; cmd_health "$@" ;;
+  lint)  shift; cmd_lint "$@" ;;
+  test)  shift; cmd_test "$@" ;;
+  db)    shift; cmd_db "$@" ;;
+  build) shift; cmd_build "$@" ;;
+  check) shift; cmd_check "$@" ;;
+  logs)  shift; cmd_logs "$@" ;;
+  exec)  shift; cmd_exec "$@" ;;
+  *)
+    echo "未知命令：$1" >&2
+    echo >&2
+    usage >&2
+    exit 1
+    ;;
+esac

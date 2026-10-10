@@ -1,0 +1,151 @@
+// 全库唯一迁移通道（#49）：后续所有模块的建表造数都在本目录追加迁移。
+// 纪律（infra/VERSIONS.md 执行纪律 1/2）：CREATE EXTENSION postgis 为迁移史第一条；
+// 空间列一律 Unsupported("geometry…") 透传，含必填空间字段的模型禁用 ORM create/update。
+
+// moduleFormat/importFileExtension 必须显式钉死：Prisma 按就近 tsconfig 探测 import 扩展名，
+// 仓库 tsconfig module=NodeNext 会生成 .js 扩展（打包器风格），而种子经 Node 原生 TS 运行时
+//（node --experimental-transform-types）执行，只能解析 .ts 扩展。
+generator client {
+  provider            = "prisma-client"
+  output              = "./generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// 迁移/种子通道的最小验证探针：无业务语义，首个真实业务模块（#52 起）落地后由其后迁移取代。
+model MigrationProbe {
+  id        Int      @id @default(autoincrement())
+  note      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("migration_probe")
+}
+
+// ---- 身份组织（#52）：人员/机构只失效不删除、名称版本化、导出留痕 append-only ----
+// 库层语义（触发器）见迁移 0002_identity_org；ORM 层只映射行结构，禁用任何 delete 调用。
+
+/// 机构（当前态；名称历史见 OrgUnitNameVersion）
+model OrgUnit {
+  id            String    @id
+  code          String    @unique
+  name          String
+  parentId      String?   @map("parent_id")
+  parent        OrgUnit?  @relation("OrgUnitHierarchy", fields: [parentId], references: [id])
+  children      OrgUnit[] @relation("OrgUnitHierarchy")
+  deactivatedAt DateTime? @map("deactivated_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  nameVersions OrgUnitNameVersion[]
+  members      Personnel[]
+  assignments  PersonnelAssignment[]
+  exportAudits ExportAudit[]
+
+  @@map("org_unit")
+}
+
+/// 机构名称版本（append-only：触发器拒 UPDATE/DELETE）
+model OrgUnitNameVersion {
+  id        String   @id
+  orgUnitId String   @map("org_unit_id")
+  orgUnit   OrgUnit  @relation(fields: [orgUnitId], references: [id])
+  name      String
+  version   Int
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([orgUnitId, version])
+  @@map("org_unit_name_version")
+}
+
+/// 人员（当前态；只失效不删除：触发器拒 DELETE，失效 = deactivatedAt）
+model Personnel {
+  id            String    @id
+  code          String    @unique
+  name          String
+  orgUnitId     String    @map("org_unit_id")
+  orgUnit       OrgUnit   @relation(fields: [orgUnitId], references: [id])
+  role          String
+  passwordHash  String?   @map("password_hash")
+  deactivatedAt DateTime? @map("deactivated_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  nameVersions PersonnelNameVersion[]
+  assignments  PersonnelAssignment[]
+  exportAudits ExportAudit[]
+
+  @@map("personnel")
+}
+
+/// 人员名称版本（append-only：触发器拒 UPDATE/DELETE）
+model PersonnelNameVersion {
+  id          String   @id
+  personnelId String   @map("personnel_id")
+  personnel   Personnel @relation(fields: [personnelId], references: [id])
+  name        String
+  version     Int
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([personnelId, version])
+  @@map("personnel_name_version")
+}
+
+/// 任职记录：当前任职 = endedAt 为 NULL 的那条；调岗 = 闭环旧记录 + 插入新记录
+model PersonnelAssignment {
+  id          String    @id
+  personnelId String    @map("personnel_id")
+  personnel   Personnel @relation(fields: [personnelId], references: [id])
+  orgUnitId   String    @map("org_unit_id")
+  orgUnit     OrgUnit   @relation(fields: [orgUnitId], references: [id])
+  startedAt   DateTime  @default(now()) @map("started_at")
+  endedAt     DateTime? @map("ended_at")
+
+  @@map("personnel_assignment")
+}
+
+/// 导出留痕（append-only：触发器拒 UPDATE/DELETE）——谁在何时导出了什么范围、多少行
+model ExportAudit {
+  id               String   @id
+  actorId          String   @map("actor_id")
+  actor            Personnel @relation(fields: [actorId], references: [id])
+  targetOrgUnitId  String   @map("target_org_unit_id")
+  targetOrgUnit    OrgUnit  @relation(fields: [targetOrgUnitId], references: [id])
+  exportedCount    Int      @map("exported_count")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@map("export_audit")
+}
+
+// 空间字典空间能力载体（#54，法域定几何：土地/矿产=面）：统一口径 geom = EPSG:4490，
+// 来源坐标原样保留（source_srid + source_geom）。空间列一律 Unsupported 透传 + $queryRaw/ST_
+// 访问；含必填空间字段的模型禁用 ORM create/update（执行纪律 2），读写经
+// @natural-enforcement/geo-dict 公共出口（原生空间路径等 Prisma 8，跨 major 回 #60）。
+model GeoDictLandBoundary {
+  // 主键形制约定（#16 §1.1）：ULID（26 位大写 Crockford Base32），应用侧生成后落库，
+  // 与 identity 切片一致；schema 层只声明 String，生成逻辑在 geo-dict 领域层。
+  id         String                              @id
+  name       String
+  domain     String // land | mineral（库内 CHECK 约束承载法域定几何）
+  geom       Unsupported("geometry(Polygon,4490)")?
+  sourceSrid Int                                 @map("source_srid")
+  sourceGeom Unsupported("geometry")?
+  createdAt  DateTime                            @default(now()) @map("created_at")
+
+  @@map("geo_dict_land_boundary")
+}
+
+// 空间字典空间能力载体（#54，法域定几何：测绘/规划=点）：约束同上。
+model GeoDictSurveyPoint {
+  // 主键形制同 GeoDictLandBoundary：ULID（#16 §1.1），应用侧生成。
+  id         String                             @id
+  name       String
+  domain     String // survey | planning（库内 CHECK 约束承载法域定几何）
+  geom       Unsupported("geometry(Point,4490)")?
+  sourceSrid Int                                @map("source_srid")
+  sourceGeom Unsupported("geometry")?
+  createdAt  DateTime                           @default(now()) @map("created_at")
+
+  @@map("geo_dict_survey_point")
+}
