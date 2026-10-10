@@ -7,7 +7,16 @@
     "noEmit": true,
     "skipLibCheck": true,
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "emitDecoratorMetadata": true,
+    // #55 队列设施包以 node 原生 type-stripping 直接运行 .ts（dev health 探测），
+    // 相对导入用 .ts 扩展名（noEmit 已置位，满足该选项前置条件）
+    "allowImportingTsExtensions": true
   },
-  "include": ["packages/shield/src", "packages/shield/test", "backend/*/src"]
+  "include": [
+    "packages/shield/src",
+    "packages/shield/test",
+    "packages/queue/src",
+    "packages/queue/test",
+    "backend/*/src"
+  ]
 }

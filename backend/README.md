@@ -67,3 +67,4 @@ BullMQ/RustFS SDK），不引用 backend 内部路径。本切片为规则先行
 | `module-public-entry` | 往来形态（禁内部路径/跨模块相对路径） |
 | `frontend-boundary` | frontend 行（不直连库最小形态） |
 | `weak-reference-entry` | 弱引用经 shield 入口 |
+| `queue-facility-entry` | #55 队列设施唯一入口（bullmq/ioredis 只许在 `packages/queue`，业务侧只许经 `QUEUE_PORT` 注入；G5 机器兜底） |
