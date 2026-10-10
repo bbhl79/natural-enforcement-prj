@@ -1,0 +1,20 @@
+{
+  "name": "@natural-enforcement/storage",
+  "version": "0.0.0",
+  "private": true,
+  "description": "存储设施包（#53：StoragePort 追加式只写抽象 + RustFS(S3 兼容) 适配 + 对象锁(WORM) 最保守语义；NestJS 可注入。无新增第三方依赖——S3 REST/SigV4 签名基于 node:crypto + fetch 自实现；封存/时间戳/电子认证归 G4，本包不宣称）",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@nestjs/common": "12.1.2"
+  },
+  "devDependencies": {
+    "typescript": "6.0.2",
+    "vitest": "5.0.3"
+  }
+}
