@@ -6,7 +6,7 @@ export default defineConfig({
   schema: "schema.prisma",
   migrations: {
     path: "migrations",
-    seed: "node --experimental-transform-types --disable-warning=ExperimentalWarning seed.mjs",
+    seed: "node --experimental-transform-types --disable-warning=ExperimentalWarning --disable-warning=MODULE_TYPELESS_PACKAGE_JSON seed.mjs",
   },
   datasource: {
     url: process.env["DATABASE_URL"],
