@@ -1,0 +1,9 @@
+# pnpm workspace 声明（#47 定案：单仓 monorepo，私有 workspace）。
+# 模块包随切片逐个落入：切片03 packages/shield；切片04（#51）backend/ 七业务模块空壳。
+packages:
+  - 'packages/*'
+  - 'backend/*'
+# pnpm 供应链最小发布龄策略的显式豁免（#55）：bullmq 版本非浮动取新，
+# 由 infra/VERSIONS.md 定案表钉死（6.3.12），此处仅放行该钉定版本
+minimumReleaseAgeExclude:
+  - bullmq@6.3.12
