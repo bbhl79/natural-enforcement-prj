@@ -24,8 +24,8 @@ check() { # check <描述> <退出码>
 # ---------- 1. 裸 dev = 帮助文本，退出 0 ----------
 out="$("$DEV" 2>&1)"; rc=$?
 check "裸 dev 退出 0" "$rc"
-echo "$out" | grep -q 'up' && echo "$out" | grep -q 'health' && echo "$out" | grep -q 'lint' \
-  && ok "裸 dev 输出帮助文本（含 up/health/lint）" || bad "裸 dev 帮助文本缺少命令说明"
+echo "$out" | grep -q 'up' && echo "$out" | grep -q 'health' && echo "$out" | grep -q 'lint' && echo "$out" | grep -q 'db' \
+  && ok "裸 dev 输出帮助文本（含 up/health/lint/db）" || bad "裸 dev 帮助文本缺少命令说明"
 
 out="$("$DEV" no-such-command 2>&1)"; rc=$?
 [ "$rc" -ne 0 ] && echo "$out" | grep -qi 'help\|用法\|usage' \
@@ -73,7 +73,53 @@ mkdir -p "$ROOT/node_modules/.fake" "$ROOT/frontend/node_modules"
 rm -rf "$ROOT/node_modules" "$ROOT/frontend/node_modules"
 "$DEV" lint >/dev/null 2>&1; check "清除 node_modules 后 lint 恢复全绿" "$?"
 
-# ---------- 5. 镜像缺失路径（可选：删除并恢复本地 redis 镜像） ----------
+# ---------- 5. dev db 数据语义（#49：建库/迁移/种子/reset） ----------
+psql_db() { "${COMPOSE[@]}" exec -T db psql -U postgres -d postgres "$@" 2>/dev/null; }
+
+# 5.1 裸 dev db = 建库（缺则建）+ 迁移 + 种子，从零环境一次就绪
+"${COMPOSE[@]}" rm -fs db >/dev/null 2>&1
+docker volume rm -f "${PROJECT}_pgdata" >/dev/null 2>&1 || true
+"$DEV" db >/tmp/smoke-db-bare.log 2>&1; check "裸 dev db 从零（无容器无卷）建库+迁移+种子" "$?"
+grep -q '种子已写入' /tmp/smoke-db-bare.log \
+  && ok "裸 dev db 输出含种子写入说明" || bad "裸 dev db 输出缺少种子写入说明（$(tail -2 /tmp/smoke-db-bare.log | tr '\n' ' '))"
+[ "$(psql_db -tA -c "SELECT 1 FROM pg_extension WHERE extname='postgis';")" = "1" ] \
+  && ok "postgis 扩展已建（prisma/prisma#7455 前提）" || bad "postgis 扩展缺失"
+[ "$(psql_db -tA -c 'SELECT note FROM migration_probe;')" = "seed-probe" ] \
+  && ok "种子数据可查询" || bad "种子数据缺失"
+[ "$(psql_db -tA -c 'SELECT migration_name FROM _prisma_migrations ORDER BY started_at LIMIT 1;')" = "0001_postgis_extension" ] \
+  && ok "迁移历史第一条为 CREATE EXTENSION postgis" || bad "迁移历史第一条不是 postgis 扩展"
+
+# 5.2 幂等：重复执行只增不改
+psql_db -c 'CREATE TABLE IF NOT EXISTS smoke_keep(v int); DELETE FROM smoke_keep; INSERT INTO smoke_keep VALUES (42);' >/dev/null 2>&1
+"$DEV" db >/tmp/smoke-db-bare2.log 2>&1; check "重复裸 dev db 退出 0（幂等）" "$?"
+grep -q '种子已存在，跳过' /tmp/smoke-db-bare2.log \
+  && ok "重复裸 dev db 种子跳过" || bad "重复裸 dev db 未跳过种子"
+[ "$(psql_db -tA -c 'SELECT v FROM smoke_keep;')" = "42" ] \
+  && ok "重复 dev db 不删已有数据（只增不改）" || bad "重复 dev db 丢了数据"
+"$DEV" db migrate >/tmp/smoke-db-migrate.log 2>&1; check "dev db migrate 退出 0" "$?"
+grep -q 'No pending migrations' /tmp/smoke-db-migrate.log \
+  && ok "重复 migrate 识别为已是最新" || bad "重复 migrate 输出异常"
+"$DEV" db seed >/tmp/smoke-db-seed.log 2>&1; check "dev db seed 退出 0" "$?"
+grep -q '种子已存在，跳过' /tmp/smoke-db-seed.log \
+  && ok "重复 seed 跳过" || bad "重复 seed 未跳过"
+
+out="$("$DEV" db no-such-sub 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] && echo "$out" | grep -qi '用法\|usage' \
+  && ok "db 未知子命令非 0 并提示用法" || bad "db 未知子命令处理不符合契约（rc=$rc）"
+
+# 5.3 reset = 唯一允许删除数据的入口：毁数后可从种子完全重建
+"$DEV" db reset >/tmp/smoke-db-reset.log 2>&1; check "dev db reset 退出 0" "$?"
+[ "$(psql_db -tA -c "SELECT to_regclass('public.smoke_keep');")" = "" ] \
+  && ok "reset 后人工数据已删除（毁数生效）" || bad "reset 未删除人工数据"
+[ "$(psql_db -tA -c 'SELECT note FROM migration_probe;')" = "seed-probe" ] \
+  && ok "reset 后种子完全重建可查询" || bad "reset 后种子未重建"
+[ "$(psql_db -tA -c "SELECT 1 FROM pg_extension WHERE extname='postgis';")" = "1" ] \
+  && ok "reset 后 postgis 扩展重建" || bad "reset 后 postgis 扩展缺失"
+[ "$(psql_db -tA -c 'SELECT migration_name FROM _prisma_migrations ORDER BY started_at LIMIT 1;')" = "0001_postgis_extension" ] \
+  && ok "reset 后迁移历史第一条仍为 postgis 扩展" || bad "reset 后迁移历史异常"
+"$DEV" health >/dev/null 2>&1; check "reset 后环境 health 全绿" "$?"
+
+# ---------- 6. 镜像缺失路径（可选：删除并恢复本地 redis 镜像） ----------
 if [ "${SMOKE_MISSING_IMAGE:-0}" = "1" ]; then
   "$DEV" down >/dev/null 2>&1
   redis_img="$("${COMPOSE[@]}" config | grep -A2 'redis:' | grep 'image:' | awk '{print $2}')"
@@ -91,7 +137,7 @@ if [ "${SMOKE_MISSING_IMAGE:-0}" = "1" ]; then
   "$DEV" up >/dev/null 2>&1; check "补齐镜像后 up 恢复成功" "$?"
 fi
 
-# ---------- 6. down 清容器清网络、不动数据卷 ----------
+# ---------- 7. down 清容器清网络、不动数据卷 ----------
 "$DEV" down >/tmp/smoke-down.log 2>&1; check "dev down 退出 0" "$?"
 leftover="$("${COMPOSE[@]}" ps -q | wc -l)"
 [ "$leftover" -eq 0 ] && ok "down 后无残留容器" || bad "down 后仍有 $leftover 个容器"
