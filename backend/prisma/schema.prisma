@@ -24,3 +24,96 @@ model MigrationProbe {
 
   @@map("migration_probe")
 }
+
+// ---- 身份组织（#52）：人员/机构只失效不删除、名称版本化、导出留痕 append-only ----
+// 库层语义（触发器）见迁移 0002_identity_org；ORM 层只映射行结构，禁用任何 delete 调用。
+
+/// 机构（当前态；名称历史见 OrgUnitNameVersion）
+model OrgUnit {
+  id            String    @id
+  code          String    @unique
+  name          String
+  parentId      String?   @map("parent_id")
+  parent        OrgUnit?  @relation("OrgUnitHierarchy", fields: [parentId], references: [id])
+  children      OrgUnit[] @relation("OrgUnitHierarchy")
+  deactivatedAt DateTime? @map("deactivated_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  nameVersions OrgUnitNameVersion[]
+  members      Personnel[]
+  assignments  PersonnelAssignment[]
+  exportAudits ExportAudit[]
+
+  @@map("org_unit")
+}
+
+/// 机构名称版本（append-only：触发器拒 UPDATE/DELETE）
+model OrgUnitNameVersion {
+  id        String   @id
+  orgUnitId String   @map("org_unit_id")
+  orgUnit   OrgUnit  @relation(fields: [orgUnitId], references: [id])
+  name      String
+  version   Int
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([orgUnitId, version])
+  @@map("org_unit_name_version")
+}
+
+/// 人员（当前态；只失效不删除：触发器拒 DELETE，失效 = deactivatedAt）
+model Personnel {
+  id            String    @id
+  code          String    @unique
+  name          String
+  orgUnitId     String    @map("org_unit_id")
+  orgUnit       OrgUnit   @relation(fields: [orgUnitId], references: [id])
+  role          String
+  passwordHash  String?   @map("password_hash")
+  deactivatedAt DateTime? @map("deactivated_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  nameVersions PersonnelNameVersion[]
+  assignments  PersonnelAssignment[]
+  exportAudits ExportAudit[]
+
+  @@map("personnel")
+}
+
+/// 人员名称版本（append-only：触发器拒 UPDATE/DELETE）
+model PersonnelNameVersion {
+  id          String   @id
+  personnelId String   @map("personnel_id")
+  personnel   Personnel @relation(fields: [personnelId], references: [id])
+  name        String
+  version     Int
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@unique([personnelId, version])
+  @@map("personnel_name_version")
+}
+
+/// 任职记录：当前任职 = endedAt 为 NULL 的那条；调岗 = 闭环旧记录 + 插入新记录
+model PersonnelAssignment {
+  id          String    @id
+  personnelId String    @map("personnel_id")
+  personnel   Personnel @relation(fields: [personnelId], references: [id])
+  orgUnitId   String    @map("org_unit_id")
+  orgUnit     OrgUnit   @relation(fields: [orgUnitId], references: [id])
+  startedAt   DateTime  @default(now()) @map("started_at")
+  endedAt     DateTime? @map("ended_at")
+
+  @@map("personnel_assignment")
+}
+
+/// 导出留痕（append-only：触发器拒 UPDATE/DELETE）——谁在何时导出了什么范围、多少行
+model ExportAudit {
+  id               String   @id
+  actorId          String   @map("actor_id")
+  actor            Personnel @relation(fields: [actorId], references: [id])
+  targetOrgUnitId  String   @map("target_org_unit_id")
+  targetOrgUnit    OrgUnit  @relation(fields: [targetOrgUnitId], references: [id])
+  exportedCount    Int      @map("exported_count")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@map("export_audit")
+}
