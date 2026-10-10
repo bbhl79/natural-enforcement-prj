@@ -2,7 +2,7 @@
 // 形制守卫复用 shield 的 isTechnicalPrimaryKey（契约唯一事实源，身份组织矩阵允许依赖 shield），
 // 生成结果自检不合格即抛错——格式常量不允许在模块内另起一份。
 
-import { isTechnicalPrimaryKey } from 'shield';
+import { isTechnicalPrimaryKey } from '@natural-enforcement/shield';
 
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 

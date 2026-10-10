@@ -100,9 +100,11 @@ note_fail() { echo "[FAIL] $1"; FAIL=1; }
 SCAN_TS=(-type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.mts' -o -name '*.cts' \))
 
 # 提取文件中的模块互引 specifier：包名根/深路径导入（@natural-enforcement/<mod>[/<…>]）、
-# shield 及 shield 深路径、相对路径导入。第三方包（@nestjs/*、node: 等）不在矩阵范围，不提取。
+# 相对路径导入。第三方包（@nestjs/*、node: 等）不在矩阵范围，不提取。
+# shield 定名 @natural-enforcement/shield（评审必修补 scope）：旧裸名 shield 不再是
+# 合法 specifier，不在提取范围；其残留深路径引用由 shield-single-entry 规则单独拦截。
 specifiers_of() {
-  grep -oE "\b(from|import)[^'\"]{0,40}['\"](@natural-enforcement/[a-z0-9-]+|shield|\.{1,2}/)[^'\"]*['\"]" \
+  grep -oE "\b(from|import)[^'\"]{0,40}['\"](@natural-enforcement/[a-z0-9-]+|\.{1,2}/)[^'\"]*['\"]" \
       "$1" 2>/dev/null \
     | sed -E "s/^[a-z]+[^'\"]*['\"]//; s/['\"]$//"
 }
@@ -143,7 +145,6 @@ target_of_relative() {
 target_of_spec() { # $1=文件绝对路径 $2=specifier
   case "$2" in
     @natural-enforcement/*) local rest="${2#@natural-enforcement/}"; echo "${rest%%/*}" ;;
-    shield|shield/*)        echo shield ;;
     ./*|../*)               target_of_relative "$1" "$2" ;;
     *)                      echo "" ;;
   esac
@@ -190,12 +191,14 @@ check_shield-single-entry() {
     spec="${spec#?}"; spec="${spec%?}" # 去首尾引号
     case "$spec" in
       packages/shield/src/index|packages/shield/src/index.js|packages/shield/src/index.ts) continue ;;
+      @natural-enforcement/shield/src/index.ts|@natural-enforcement/shield/src/index.js) continue ;;
     esac
     note_fail "shield-single-entry：绕过公共出口的引用  ${file#"$ROOT"/}:$where → $spec"
     hits=$((hits + 1))
   done < <(grep -rEno --include='*.ts' --include='*.tsx' --include='*.mts' --include='*.cts' \
       --include='*.js' --include='*.jsx' --include='*.mjs' --include='*.cjs' \
       -e "['\"]shield/[^'\"]*['\"]" \
+      -e "['\"]@natural-enforcement/shield/[^'\"]*['\"]" \
       -e "['\"][^'\"]*packages/shield/src/[^'\"]*['\"]" \
       "$ROOT/backend" "$ROOT/frontend" "$ROOT/e2e" "$ROOT/packages" 2>/dev/null)
   if [ "$hits" -eq 0 ]; then
@@ -299,7 +302,9 @@ check_weak-reference-entry() {
     esac
     imported=0
     while IFS= read -r spec; do
-      [ "$spec" = "shield" ] && imported=1
+      case "$spec" in
+        shield|@natural-enforcement/shield) imported=1 ;;
+      esac
     done < <(specifiers_of "$file")
     if grep -Eq '\b(function|const|class)\s+requireCrossDomainReference' "$file"; then
       note_fail "weak-reference-entry：${file#"$ROOT"/} 自行定义 requireCrossDomainReference（只许经 shield 入口）"

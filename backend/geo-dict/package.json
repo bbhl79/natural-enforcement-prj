@@ -8,6 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
-    "@nestjs/common": "12.1.2"
+    "@nestjs/common": "12.1.2",
+    "@natural-enforcement/shield": "workspace:*"
   }
 }
