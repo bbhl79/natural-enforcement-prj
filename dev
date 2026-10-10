@@ -26,8 +26,12 @@ LINT_IMAGE='node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70
 NGINX_IMAGE='nginx:1.29.8@sha256:1881968aff6f7cdcc4b888c00a11f4ce241ad7ec957e0cb4a9e19e93a3ff87ea'
 # 前端本地镜像（#56：dev build 构建，Dockerfile 入库；compose 只按 image 引用 + pull_policy never）
 FRONTEND_IMAGE='natural-enforcement/frontend:dev'
-# dev db 容器网络内连接串（凭据与 infra/docker-compose.yml 一致，仅容器内可用）
-DATABASE_URL='postgresql://postgres:postgres@db:5432/postgres'
+# dev db 容器网络内连接串（凭据从环境变量读，本地缺省用开发默认值并在输出里标注；
+# CI 模式凭据必须来自环境注入——见 cmd_check 的 --ci 语义）
+DB_USER="${POSTGRES_USER:-postgres}"
+DB_PASS="${POSTGRES_PASSWORD:-postgres}"
+DB_NAME="${POSTGRES_DB:-postgres}"
+DATABASE_URL="postgresql://${DB_USER}:${DB_PASS}@db:5432/${DB_NAME}"
 
 # 容器内工具链缓存（命名卷，依赖只进容器/卷，不入库）：
 # - corepack 卷：缓存 pnpm 二进制（/root/.cache/node/corepack），免去每次容器现下载；
@@ -154,7 +158,7 @@ check_services() {
 }
 
 check_db() {
-  if "${COMPOSE[@]}" exec -T db pg_isready -U postgres -d postgres >/dev/null 2>&1; then
+  if "${COMPOSE[@]}" exec -T db pg_isready -U "$DB_USER" -d "$DB_NAME" >/dev/null 2>&1; then
     DB_STATUS=ok
     echo "[OK]   db   数据库可连通"
     return 0
@@ -371,9 +375,14 @@ cmd_db() {
   esac
 }
 
-# ---------- dev build（#56 切片09 最小形态；全量形态归 #57 扩展：后端编译 + 全部本地镜像 + --ci） ----------
-# 前端范围 = 容器内前端编译（tsc 类型检查 + vite build，产物写回宿主 frontend/dist，已 gitignore）
-# + 前端本地镜像多阶段构建（frontend/Dockerfile：钉定 node 镜像编译 → 钉定 nginx 镜像运行）。
+# ---------- dev build（#57 切片10 全量形态） ----------
+# 范围 = 前端编译（tsc + vite build，产物写回宿主 frontend/dist，已 gitignore）
+# + 后端编译（tsc 全程序编译）+ 全部本地镜像。
+# 后端编译说明：根 tsconfig 为全程序 noEmit 编译（队列包以 node type-stripping 直跑 .ts，
+# allowImportingTsExtensions 前置即 noEmit），故后端「编译」= 全程序类型化编译门；
+# JS 产物（emit）待第一个真实运行入口（首个业务切片）再开，不预先发明打包形态。
+# 镜像范围：frontend 本地镜像多阶段构建（frontend/Dockerfile）；infra 镜像（db/redis/
+# rustfs/nginx，钉定 tag+digest）本地拉取即视为可用，不重复构建。
 # 不 push 不部署；产物/依赖只进容器与命名卷，不入库（E6）。
 build_frontend() {
   require_toolchain_image
@@ -390,20 +399,57 @@ build_frontend() {
     sh -c "cp -a /repo/. /work/ && corepack enable && pnpm install ${INSTALL_FLAGS[*]} && pnpm --filter frontend build && cp -a /work/frontend/dist/. /out/ && chown -R \"\$(stat -c '%u:%g' /out)\" /out"
   echo "build：构建前端本地镜像 $FRONTEND_IMAGE（多阶段：node 编译 → nginx 运行）…"
   docker build --tag "$FRONTEND_IMAGE" --file "$ROOT/frontend/Dockerfile" "$ROOT"
-  echo "build：前端编译 + 本地镜像构建完成（产物已写回宿主并 gitignore；不 push 不部署）。"
+}
+
+build_backend() {
+  require_toolchain_image
+  echo "build：容器内后端编译（tsc 全程序编译门：shield/queue/storage + backend 七模块）…"
+  docker run --rm \
+    -v "$ROOT:/repo:ro" \
+    -v "${PROJECT}-build-backend-node-modules:/work/node_modules" \
+    -v "${PROJECT}-build-backend-store:/pnpm/store" \
+    "${CACHE_VOLUMES[@]}" \
+    -w /work \
+    "$LINT_IMAGE" \
+    sh -c "cp -a /repo/. /work/ && corepack enable && pnpm install ${INSTALL_FLAGS[*]} && pnpm run typecheck"
+  echo "build：后端编译通过。"
+}
+
+# infra 镜像本地拉取即视为可用（不重复构建）：逐个确认 compose 引用的 infra 镜像在场，
+# 缺失则按钉定官方名 + digest 拉取（tag@digest 幂等，已有时秒过）。
+ensure_infra_images() {
+  require_compose_file
+  local img
+  while IFS= read -r img; do
+    [ "$img" = "$FRONTEND_IMAGE" ] && continue
+    if docker image inspect "$img" >/dev/null 2>&1; then
+      echo "build：infra 镜像在场：$img"
+    else
+      echo "build：infra 镜像缺失，按 infra/VERSIONS.md 钉定引用拉取：$img"
+      docker pull "$img"
+    fi
+  done < <("${COMPOSE[@]}" config --images)
 }
 
 cmd_build() {
-  # 子命令化预留 #57 全量扩展：backend 编译子命令与 --ci 旗标在此分派，勿改裸 build 语义
-  case "${1:-}" in
-    ""|frontend) build_frontend ;;
-    *)
-      echo "未知 build 子命令：$1（本切片可选 frontend；全量形态归 #57）" >&2
-      echo >&2
-      usage >&2
-      exit 1
-      ;;
-  esac
+  # 裸 build = 全量；--ci 与裸形态范围严格一致（产物与镜像均不 push 不部署）。
+  local ci=0 a
+  for a in "$@"; do
+    case "$a" in
+      --ci) ci=1 ;;
+      *)
+        echo "未知 build 参数：$a（可选：--ci）" >&2
+        echo >&2
+        usage >&2
+        exit 1
+        ;;
+    esac
+  done
+  [ "$ci" -eq 1 ] && echo "build --ci：检查范围与本地严格一致（产物不 push 不部署）。"
+  build_frontend
+  build_backend
+  ensure_infra_images
+  echo "build：全量构建完成（前端编译+后端编译+全部本地镜像；产物已写回宿主并 gitignore）。"
 }
 
 require_toolchain_image() {
@@ -469,14 +515,82 @@ test_integration() {
 
 cmd_test() {
   case "${1:-all}" in
-    all)         test_unit; test_integration ;;
+    all)         test_unit; test_integration; test_e2e ;;
     unit)        test_unit ;;
     integration) test_integration ;;
+    e2e)         test_e2e ;;
     *)
-      echo "未知 test 层：$1（可选 unit / integration / 裸 = all）" >&2
+      echo "未知 test 层：$1（可选 unit / integration / e2e / 裸 = all）" >&2
       exit 1
       ;;
   esac
+}
+
+# ---------- dev test e2e 层（#57：从零拉起 E1 + 读写通道 E6 后半 + 命令冒烟 E7） ----------
+# 用例目录约定：e2e/cases/*.sh，按文件名排序逐条执行；用例只测外部可观察行为
+#（命令退出码 + 人类可读输出），自行经 compose 访问服务（隔离环境变量同 integration 层）。
+# 产物目录：默认 e2e/results（gitignore）；带 --run-id 时落 .run/<id>/results（复现同路径）。
+test_e2e() {
+  require_compose_file
+  require_toolchain_image
+  local results_dir="$ROOT/e2e/results"
+  [ -n "$RUN_DIR" ] && results_dir="$RUN_DIR/results"
+  mkdir -p "$results_dir"
+  echo "test：e2e 层（用例目录 e2e/cases/*.sh；运行产物目录 $results_dir）"
+  echo "test：注意——e2e 从零拉起用例会销毁本项目数据卷（E1 证据），毁数语义等同 dev db reset 级；其余命令只增不改。"
+  local case_script found=0
+  for case_script in "$ROOT"/e2e/cases/*.sh; do
+    [ -e "$case_script" ] || continue
+    found=1
+    echo "test：运行 e2e 用例 ${case_script##*/} …"
+    COMPOSE_PROJECT_NAME="$PROJECT" E2E_RESULTS="$results_dir" RUN_DIR="$RUN_DIR" bash "$case_script" || {
+      echo "[FAIL] e2e 用例失败：${case_script##*/}" >&2
+      exit 1
+    }
+  done
+  if [ "$found" -eq 0 ]; then
+    echo "[FAIL] e2e 层无用例（e2e/cases/*.sh 为空）" >&2
+    exit 1
+  fi
+  echo "test：e2e 层全部通过。"
+}
+
+# ---------- dev check（#57：lint 全量 + test all + build，本地即 CI 全绿） ----------
+# --ci 等价物原则：检查范围/参数/链路与本地严格一致，唯一差异是凭据注入回收——
+# CI 凭据必须来自环境变量；本地缺省时用开发默认值并在输出里标注。
+cmd_check() {
+  local ci=0 a
+  for a in "$@"; do
+    case "$a" in
+      --ci) ci=1 ;;
+      *)
+        echo "未知 check 参数：$a（可选：--ci）" >&2
+        exit 1
+        ;;
+    esac
+  done
+  if [ "$ci" -eq 1 ]; then
+    if [ -z "${POSTGRES_USER:-}" ] || [ -z "${POSTGRES_PASSWORD:-}" ] || [ -z "${POSTGRES_DB:-}" ]; then
+      echo "[FAIL] check --ci：凭据注入回收——CI 模式要求 POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB 全部来自环境变量注入。" >&2
+      echo "  本地复现某次 CI run 请显式导出同一组凭据（如开发默认值）后再 --ci 重跑。" >&2
+      exit 1
+    fi
+    echo "check --ci：凭据来自环境变量注入（与本地唯一差异）；检查范围/参数/链路与本地严格一致。"
+  else
+    if [ -z "${POSTGRES_USER:-}" ] || [ -z "${POSTGRES_PASSWORD:-}" ] || [ -z "${POSTGRES_DB:-}" ]; then
+      echo "check：凭据未注入，使用开发默认值 postgres/postgres/postgres（仅本地缺省时允许；CI 用 --ci 从环境变量回收）。"
+    fi
+  fi
+  cmd_lint
+  test_unit
+  test_integration
+  test_e2e
+  if [ "$ci" -eq 1 ]; then
+    cmd_build --ci
+  else
+    cmd_build
+  fi
+  echo "check：lint 全量 + test all + build 全部通过（本地即 CI 全绿）。"
 }
 
 # ---------- 全局选项解析（#57：--run-id 复现 CI run） ----------

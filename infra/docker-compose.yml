@@ -9,9 +9,10 @@ services:
     image: postgis/postgis:18-3.6@sha256:60f6ad1d21ea86a67d47780b9a0d1e1d200500f62b19293fa834d0dea80b8677
     pull_policy: never
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
+      # 凭据从环境注入（#57 --ci 凭据回收）；本地缺省回落开发默认值
+      POSTGRES_USER: "${POSTGRES_USER:-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+      POSTGRES_DB: "${POSTGRES_DB:-postgres}"
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
@@ -19,7 +20,7 @@ services:
       # 数据实际落 /var/lib/postgresql/18/docker；严禁挂 /var/lib/postgresql/data（镜像直接报错）
       - pgdata:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-postgres}"]
       interval: 5s
       timeout: 3s
       retries: 12
