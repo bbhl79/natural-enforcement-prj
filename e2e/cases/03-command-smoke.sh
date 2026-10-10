@@ -96,12 +96,15 @@ rm -rf "$ROOT/node_modules" "$ROOT/frontend/node_modules"
 # ---------- 5. dev db 数据语义（#49：建库/迁移/种子/reset） ----------
 psql_db() { "${COMPOSE[@]}" exec -T db psql -U "$PG_USER" -d "$PG_DB" "$@" 2>/dev/null; }
 
-# 5.1 裸 dev db = 建库（缺则建）+ 迁移 + 种子，从零环境一次就绪
+# 5.1 裸 dev db = 建库（缺则建）+ 迁移 + 种子
+# 毁数入口收敛（评审必修）：冷环境前提经唯一毁数入口 dev db reset 达成，e2e 不再直删
+# 数据卷；随后 rm -fs db 仅复测「容器缺失」分支（compose rm 不动数据卷，冷 initdb/迁移/
+# 种子路径已由 db reset 自身覆盖）。
+"$DEV" db reset >/tmp/smoke-db-reset-pre.log 2>&1; check "前置 dev db reset（唯一毁数入口）退出 0" "$?"
 "${COMPOSE[@]}" rm -fs db >/dev/null 2>&1
-docker volume rm -f "${PROJECT}_pgdata" >/dev/null 2>&1 || true
-"$DEV" db >/tmp/smoke-db-bare.log 2>&1; check "裸 dev db 从零（无容器无卷）建库+迁移+种子" "$?"
-grep -q '种子已写入' /tmp/smoke-db-bare.log \
-  && ok "裸 dev db 输出含种子写入说明" || bad "裸 dev db 输出缺少种子写入说明（$(tail -2 /tmp/smoke-db-bare.log | tr '\n' ' '))"
+"$DEV" db >/tmp/smoke-db-bare.log 2>&1; check "裸 dev db（容器缺失）建库+迁移+种子" "$?"
+grep -q '种子已存在，跳过' /tmp/smoke-db-bare.log \
+  && ok "裸 dev db 种子幂等（reset 已建则跳过）" || bad "裸 dev db 输出缺少种子跳过说明（$(tail -2 /tmp/smoke-db-bare.log | tr '\n' ' '))"
 [ "$(psql_db -tA -c "SELECT 1 FROM pg_extension WHERE extname='postgis';")" = "1" ] \
   && ok "postgis 扩展已建（prisma/prisma#7455 前提）" || bad "postgis 扩展缺失"
 [ "$(psql_db -tA -c 'SELECT note FROM migration_probe;')" = "seed-probe" ] \
