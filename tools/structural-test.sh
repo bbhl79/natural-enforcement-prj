@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# 结构测试设施（#51 全量七模块依赖矩阵；#50 shield 唯一出口规则并入）。
+# 结构测试设施（#51 全量七模块依赖矩阵；#50 shield 唯一出口规则并入；
+# #55 队列设施唯一入口规则并入）。
 # 规则 = #47 Implementation Decisions 依赖矩阵（含 #45 补丁 1）的机器可执行断言；
 # 任一规则红即整体非 0 退出（接入 dev lint，与 ESLint/依赖漏入库检查并列，
 # 构成「失败即构建失败」的本地 CI 等价闸）。
@@ -36,11 +37,17 @@
 #   module-public-entry     backend/frontend/e2e 互引模块只许公共出口（禁内部路径）
 #   frontend-boundary       前端不直连库（本切片最小形态；查询接口规则随前端代码落地扩展）
 #   weak-reference-entry    跨域弱引用只许经 shield 的 requireCrossDomainReference 入口
+#   queue-facility-entry    队列设施唯一入口（#55）：bullmq/ioredis 只许出现在
+#                           packages/queue（设施包）；backend/frontend/e2e/shield 出现
+#                           裸队列依赖 = 业务 worker 绕过队列接口（G5 不可扩大条件的
+#                           机器兜底，强于注释级约定）；业务侧只许经 QUEUE_PORT 注入
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 BACKEND="$ROOT/backend"
 SHIELD_DIR="$ROOT/packages/shield"
+# 队列设施包（#55）：bullmq/ioredis 的唯一合法出现位置
+QUEUE_DIR="$ROOT/packages/queue"
 
 # 业务模块清单（定案命名，#47/#51）：模块名 → 源码目录（相对 ROOT）
 MODULES=(identity geo-dict case approval supervision deadline)
@@ -75,6 +82,7 @@ RULES=(
   module-public-entry
   frontend-boundary
   weak-reference-entry
+  queue-facility-entry
 )
 FAIL=0
 
@@ -299,7 +307,30 @@ check_weak-reference-entry() {
   fi
 }
 
-echo "结构测试（#51 全量七模块依赖矩阵，含 #45 补丁 1；规则源头 = #47 Implementation Decisions）"
+# 规则 m（#55 并入）：队列设施唯一入口——bullmq/ioredis 只许出现在 packages/queue。
+# backend/frontend/e2e/shield 出现裸队列依赖即失败：业务 worker 归各业务切片自带
+#（G5），队列一律经 QueuePort 抽象注入，结构测试兜底防绕过。
+check_queue-facility-entry() {
+  local file spec fails=0
+  while IFS= read -r file; do
+    case "$file" in
+      "$QUEUE_DIR"/*) continue ;; # 设施包自身豁免
+    esac
+    while IFS= read -r spec; do
+      case "$spec" in
+        bullmq|bullmq/*|ioredis|ioredis/*)
+          note_fail "queue-facility-entry：${file#"$ROOT"/} 裸依赖 $spec（队列设施唯一入口 = packages/queue；业务侧只许经 QUEUE_PORT 注入，G5）"
+          fails=$((fails + 1)) ;;
+      esac
+    done < <(grep -oE "\b(from|import)[^'\"]{0,40}['\"](bullmq|ioredis)(/[^'\"]*)?['\"]" \
+        "$file" 2>/dev/null | sed -E "s/^[a-z]+[^'\"]*['\"]//; s/['\"]$//")
+  done < <(find "$BACKEND" "$ROOT/frontend" "$ROOT/e2e" "$SHIELD_DIR" "${SCAN_TS[@]}")
+  if [ "$fails" -eq 0 ]; then
+    note_ok "queue-facility-entry：bullmq/ioredis 仅在队列设施包内（业务侧无裸队列依赖，G5 机器兜底）"
+  fi
+}
+
+echo "结构测试（#51 全量七模块依赖矩阵，含 #45 补丁 1；规则源头 = #47 Implementation Decisions；#55 队列设施唯一入口并入）"
 for rule in "${RULES[@]}"; do
   "check_$rule"
 done
