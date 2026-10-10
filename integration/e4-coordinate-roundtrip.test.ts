@@ -35,8 +35,11 @@ const PLANNING_SOURCE_WKT = 'POINT(500250 3000250)';
 
 let prisma: PrismaClient;
 let db: SqlClient;
-const landIds: number[] = [];
-const pointIds: number[] = [];
+const landIds: string[] = [];
+const pointIds: string[] = [];
+
+// #16 §1.1 技术主键形制：26 位大写 Crockford Base32（shield ULID 契约）
+const ULID_PATTERN = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 
 beforeAll(() => {
   const databaseUrl = process.env['DATABASE_URL'];
@@ -62,6 +65,9 @@ describe('E4 多几何部件存取（法域定几何）', () => {
       landIds.push(id);
       const row = await findLandBoundaryById(db, id);
       expect(row).not.toBeNull();
+      // 主键形制（#16 §1.1）：geo-dict 实体与 identity 同走 ULID 技术主键契约
+      expect(id).toMatch(ULID_PATTERN);
+      expect(row?.id).toBe(id);
       expect(row?.geometryType).toBe('ST_Polygon');
       expect(row?.cgcs2000Srid).toBe(CGCS2000_SRID);
       expect(row?.sourceSrid).toBe(SOURCE_SRID);
@@ -79,6 +85,9 @@ describe('E4 多几何部件存取（法域定几何）', () => {
       pointIds.push(id);
       const row = await findSurveyPointById(db, id);
       expect(row).not.toBeNull();
+      // 主键形制（#16 §1.1）：ULID 技术主键
+      expect(id).toMatch(ULID_PATTERN);
+      expect(row?.id).toBe(id);
       expect(row?.geometryType).toBe('ST_Point');
       expect(row?.cgcs2000Srid).toBe(CGCS2000_SRID);
       expect(row?.sourceSrid).toBe(SOURCE_SRID);

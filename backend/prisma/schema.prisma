@@ -123,7 +123,9 @@ model ExportAudit {
 // 访问；含必填空间字段的模型禁用 ORM create/update（执行纪律 2），读写经
 // @natural-enforcement/geo-dict 公共出口（原生空间路径等 Prisma 8，跨 major 回 #60）。
 model GeoDictLandBoundary {
-  id         Int                                 @id @default(autoincrement())
+  // 主键形制约定（#16 §1.1）：ULID（26 位大写 Crockford Base32），应用侧生成后落库，
+  // 与 identity 切片一致；schema 层只声明 String，生成逻辑在 geo-dict 领域层。
+  id         String                              @id
   name       String
   domain     String // land | mineral（库内 CHECK 约束承载法域定几何）
   geom       Unsupported("geometry(Polygon,4490)")?
@@ -136,7 +138,8 @@ model GeoDictLandBoundary {
 
 // 空间字典空间能力载体（#54，法域定几何：测绘/规划=点）：约束同上。
 model GeoDictSurveyPoint {
-  id         Int                                @id @default(autoincrement())
+  // 主键形制同 GeoDictLandBoundary：ULID（#16 §1.1），应用侧生成。
+  id         String                             @id
   name       String
   domain     String // survey | planning（库内 CHECK 约束承载法域定几何）
   geom       Unsupported("geometry(Point,4490)")?

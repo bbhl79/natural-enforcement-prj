@@ -2,6 +2,7 @@
 // geom 列一律 ST_Transform 至 CGCS2000（EPSG:4490）落库；来源坐标（WKT + 来源 SRID）
 // 原样另列保留。含必填空间字段的表禁用 ORM create/update（infra/VERSIONS.md 执行纪律 2），
 // 全部走 $queryRaw/ST_ 函数；法域→几何类型映射由库内 CHECK 约束承载。
+import { newUlid } from '../domain/ulid.ts';
 import { CGCS2000_SRID } from './constants.ts';
 import type { SqlClient } from './sql-client.ts';
 
@@ -15,7 +16,7 @@ export interface SurveyPointInput {
 }
 
 export interface SurveyPointRow {
-  id: number;
+  id: string;
   name: string;
   domain: SurveyPointDomain;
   cgcs2000Wkt: string;
@@ -25,18 +26,18 @@ export interface SurveyPointRow {
   sourceWkt: string;
 }
 
-export async function insertSurveyPoint(db: SqlClient, input: SurveyPointInput): Promise<number> {
-  const rows = await db.$queryRaw<{ id: number }[]>`
-    INSERT INTO geo_dict_survey_point (name, domain, geom, source_srid, source_geom)
-    VALUES (${input.name}, ${input.domain},
+export async function insertSurveyPoint(db: SqlClient, input: SurveyPointInput): Promise<string> {
+  const id = newUlid();
+  await db.$queryRaw`
+    INSERT INTO geo_dict_survey_point (id, name, domain, geom, source_srid, source_geom)
+    VALUES (${id}, ${input.name}, ${input.domain},
             ST_Transform(ST_GeomFromText(${input.sourceWkt}, ${input.sourceSrid}::integer), ${CGCS2000_SRID}::integer),
             ${input.sourceSrid},
-            ST_GeomFromText(${input.sourceWkt}, ${input.sourceSrid}::integer))
-    RETURNING id`;
-  return rows[0].id;
+            ST_GeomFromText(${input.sourceWkt}, ${input.sourceSrid}::integer))`;
+  return id;
 }
 
-export async function findSurveyPointById(db: SqlClient, id: number): Promise<SurveyPointRow | null> {
+export async function findSurveyPointById(db: SqlClient, id: string): Promise<SurveyPointRow | null> {
   const rows = await db.$queryRaw<SurveyPointRow[]>`
     SELECT id, name, domain,
            ST_AsText(geom) AS "cgcs2000Wkt",
@@ -50,7 +51,7 @@ export async function findSurveyPointById(db: SqlClient, id: number): Promise<Su
 }
 
 /** 仅限测试自清理等运维场景；业务语义删除不在本切片范围 */
-export async function deleteSurveyPointById(db: SqlClient, id: number): Promise<void> {
+export async function deleteSurveyPointById(db: SqlClient, id: string): Promise<void> {
   await db.$queryRaw`
     DELETE FROM geo_dict_survey_point WHERE id = ${id}`;
 }
