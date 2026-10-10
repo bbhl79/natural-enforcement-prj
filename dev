@@ -20,6 +20,15 @@ LINT_IMAGE='node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70
 # dev db 容器网络内连接串（凭据与 infra/docker-compose.yml 一致，仅容器内可用）
 DATABASE_URL='postgresql://postgres:postgres@db:5432/postgres'
 
+# 容器内工具链缓存（命名卷，依赖只进容器/卷，不入库）：
+# - corepack 卷：缓存 pnpm 二进制（/root/.cache/node/corepack），免去每次容器现下载；
+# - pnpm-cache 卷：挂到 pnpm 默认缓存位 /root/.cache/pnpm，registry 元数据与
+#   pnpm 12 供应链策略校验结果由此跨容器持久化（实测冷校验 335 条约 1 分钟，热运行 <5s）。
+# 注意：pnpm 12 的 install 解析器不收 --cache-dir（无论等号/空格形式），切勿加回。
+# registry 渠道仍默认官方源，境内镜像如需使用属宿主环境配置（dev 不内置、不入库）。
+CACHE_VOLUMES=(-v "${PROJECT}-corepack:/root/.cache/node/corepack" -v "${PROJECT}-pnpm-cache:/root/.cache/pnpm")
+INSTALL_FLAGS=(--frozen-lockfile --ignore-scripts --config.strict-dep-builds=false --store-dir /pnpm/store --prefer-offline)
+
 usage() {
   cat <<'EOF'
 自然执法工程 开发入口（唯一本地入口）
@@ -129,9 +138,10 @@ run_queue_probe() { # $1 = redis 容器 id（--network container: 借用其网�
     -v "$ROOT:/repo:ro" \
     -v "${PROJECT}-queue-node-modules:/work/node_modules" \
     -v "${PROJECT}-queue-store:/pnpm/store" \
+    "${CACHE_VOLUMES[@]}" \
     -w /work \
     "$LINT_IMAGE" \
-    sh -c 'cp -a /repo/. /work/ && corepack enable 2>/dev/null && pnpm install --frozen-lockfile --ignore-scripts --config.strict-dep-builds=false --store-dir /pnpm/store >/dev/null && node packages/queue/src/probe.ts'
+    sh -c "cp -a /repo/. /work/ && corepack enable 2>/dev/null && pnpm install ${INSTALL_FLAGS[*]} >/dev/null && node packages/queue/src/probe.ts"
 }
 
 cmd_lint() {
@@ -172,9 +182,10 @@ cmd_lint() {
     -v "$ROOT:/repo:ro" \
     -v "${PROJECT}-lint-node-modules:/work/node_modules" \
     -v "${PROJECT}-lint-store:/pnpm/store" \
+    "${CACHE_VOLUMES[@]}" \
     -w /work \
     "$LINT_IMAGE" \
-    sh -c 'cp -a /repo/. /work/ && corepack enable && pnpm install --frozen-lockfile --ignore-scripts --config.strict-dep-builds=false --store-dir /pnpm/store && pnpm run lint'
+    sh -c "cp -a /repo/. /work/ && corepack enable && pnpm install ${INSTALL_FLAGS[*]} && pnpm run lint"
   echo "lint：全部检查通过。"
 }
 
@@ -204,9 +215,10 @@ run_db_toolchain() {
     -v "$ROOT:/repo:ro" \
     -v "${PROJECT}-db-node-modules:/work/node_modules" \
     -v "${PROJECT}-pnpm-store:/pnpm/store" \
+    "${CACHE_VOLUMES[@]}" \
     -w /work \
     "$LINT_IMAGE" \
-    sh -c "set -e; cp -a /repo/. /work/; corepack enable; pnpm install --frozen-lockfile --ignore-scripts --config.strict-dep-builds=false --store-dir /pnpm/store --prefer-offline; cd backend/prisma; $1"
+    sh -c "set -e; cp -a /repo/. /work/; corepack enable; pnpm install ${INSTALL_FLAGS[*]}; cd backend/prisma; $1"
 }
 
 db_migrate() {
@@ -264,9 +276,10 @@ cmd_test() {
     -v "$ROOT:/repo:ro" \
     -v "${PROJECT}-test-node-modules:/work/node_modules" \
     -v "${PROJECT}-test-store:/pnpm/store" \
+    "${CACHE_VOLUMES[@]}" \
     -w /work \
     "$LINT_IMAGE" \
-    sh -c 'cp -a /repo/. /work/ && corepack enable && pnpm install --frozen-lockfile --ignore-scripts --config.strict-dep-builds=false --store-dir /pnpm/store && pnpm test && pnpm run typecheck'
+    sh -c "cp -a /repo/. /work/ && corepack enable && pnpm install ${INSTALL_FLAGS[*]} && pnpm test && pnpm run typecheck"
   echo "test：unit 层全部通过。"
 }
 
