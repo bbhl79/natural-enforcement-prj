@@ -4,7 +4,9 @@
 # 切片03 新增 test（unit 层）与 lint 结构测试；
 # 切片04 结构测试扩为全量七模块依赖矩阵（#51）；
 # 切片08（#55）health 四依赖补齐：队列连通改经队列接口真实投递健康检查任务并确认消费
-#（packages/queue 探测入口，非裸 redis ping），前端项中性占位（切片09 落地后计入红绿）。
+#（packages/queue 探测入口，非裸 redis ping），前端项中性占位；
+# 切片09（#56）前端落地：health 前端项改真实检查（面板可访问=绿）并计入红绿，
+# 检查结果写入面板快照（frontend 容器命名卷，面板与 dev health 同源）；新增 build（最小形态）。
 # 退出码只有 0/1，诊断看输出。
 set -euo pipefail
 
@@ -17,6 +19,10 @@ COMPOSE=(docker compose -p "$PROJECT" -f "$COMPOSE_FILE")
 
 # lint / db 工具链镜像：唯一依据 infra/VERSIONS.md（运行时行，tag + digest）
 LINT_IMAGE='node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1'
+# nginx 钉定镜像（#56）：面板快照写入经它落命名卷；与 compose nginx/frontend 服务同一张镜像
+NGINX_IMAGE='nginx:1.29.8@sha256:1881968aff6f7cdcc4b888c00a11f4ce241ad7ec957e0cb4a9e19e93a3ff87ea'
+# 前端本地镜像（#56：dev build 构建，Dockerfile 入库；compose 只按 image 引用 + pull_policy never）
+FRONTEND_IMAGE='natural-enforcement/frontend:dev'
 # dev db 容器网络内连接串（凭据与 infra/docker-compose.yml 一致，仅容器内可用）
 DATABASE_URL='postgresql://postgres:postgres@db:5432/postgres'
 
@@ -36,17 +42,21 @@ usage() {
 用法：dev <命令>
 
 命令：
-  up       幂等拉起基础设施容器（db/redis/rustfs/nginx）；永不删除已有数据。
+  up       幂等拉起基础设施容器（db/redis/rustfs/nginx/frontend）；永不删除已有数据。
            镜像缺失时非 0 退出并提示先 dev build——本命令不隐式构建。
   down     停止并清理容器与网络；数据卷保留。
   health   四依赖逐行检查：容器存活 / db 连通 / 队列连通（经队列接口真实投递
-           健康检查任务并确认消费，非裸 redis ping）/ 前端可访问。
-           前端未部署（切片09）：输出中性占位行，不计入红绿。
+           健康检查任务并确认消费，非裸 redis ping）/ 前端面板可访问（切片09 起
+           真实检查并计入红绿）。检查结果同时写入面板快照（与面板展示同源）。
            全绿退出 0，任一红非 0。
   lint     全量静态检查（结构测试 + 依赖漏入库检查 + ESLint，容器内执行）。
-  test     unit 层测试（shield 契约断言 + 队列设施单测 + 类型检查，容器内执行，无库）。
+  test     unit 层测试（shield 契约断言 + 队列设施单测 + 前端 health 单测
+           + 类型检查，容器内执行，无库）。
            test integration = 结构测试 + 需库用例（integration/ 层，含 db 迁移/种子幂等准备）；
            裸 test = all（unit + integration）。e2e 层归切片10。三层语义见 #46。
+  build    构建（切片09 最小形态）：前端编译（产物写回宿主 frontend/dist，已 gitignore）
+           + 前端本地镜像构建（不 push 不部署）。裸 build = 当前全部可用范围；
+           全量形态（后端编译 + 全部本地镜像 + --ci）归 #57 扩展。
   db       数据语义：裸 db = 建库（缺则建）+ 迁移 + 种子，各自幂等（已做则跳过）。
            db migrate 只迁移；db seed 只种子；
            db reset 毁库重建——全系统唯一允许删除数据的入口，其余命令只增不改。
@@ -80,6 +90,8 @@ cmd_up() {
   echo "dev up：基础设施容器已就绪。检查迁移与种子（幂等，已完成自动跳过）…"
   db_migrate
   db_seed
+  echo "dev up：写入面板健康快照（与 dev health 同源，dev health 会刷新）…"
+  write_health_snapshot quiet
   echo "dev up 完成：迁移与种子就绪。运行 dev health 检查环境状态。"
 }
 
@@ -89,39 +101,110 @@ cmd_down() {
   echo "dev down 完成：容器与网络已清理，数据卷保留（毁数入口只有 dev db reset）。"
 }
 
-cmd_health() {
-  require_compose_file
-  local rc=0 svc cid
+# ---------- dev health 四依赖检查（#55 队列探测并入；#56 前端真实检查 + 面板快照） ----------
+# 检查原语：每个 check_* 输出一行人类可读结果、置全局状态变量（快照序列化用）、返回 0/1。
+FRONTEND_URL="http://127.0.0.1:${FRONTEND_PORT:-8899}/"
+SVC_STATUS=fail; SVC_FAILED=""
+DB_STATUS=fail
+QUEUE_STATUS=fail
+FRONTEND_STATUS=fail
+
+check_services() {
+  local svc cid rc=0
+  SVC_FAILED=""
   for svc in $("${COMPOSE[@]}" config --services); do
     cid="$("${COMPOSE[@]}" ps -q "$svc" 2>/dev/null || true)"
     if [ -n "$cid" ] && [ "$(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null)" = "running" ]; then
       echo "[OK]   $svc  容器存活"
     else
       echo "[FAIL] $svc  容器未运行"
+      SVC_FAILED="$SVC_FAILED $svc"
       rc=1
     fi
   done
+  if [ "$rc" -eq 0 ]; then SVC_STATUS=ok; else SVC_STATUS=fail; fi
+  return "$rc"
+}
+
+check_db() {
   if "${COMPOSE[@]}" exec -T db pg_isready -U postgres -d postgres >/dev/null 2>&1; then
+    DB_STATUS=ok
     echo "[OK]   db   数据库可连通"
-  else
-    echo "[FAIL] db   数据库不可连通"
-    rc=1
+    return 0
   fi
-  # 队列连通（#55）：经队列接口真实投递健康检查任务并确认消费（非裸 redis ping）。
-  # 探测容器借用 redis 容器的网络命名空间直达 127.0.0.1:6379；redis 停服时
-  # 容器不存在/不可达，探测失败即红。
-  cid="$("${COMPOSE[@]}" ps -q redis 2>/dev/null || true)"
-  local probe_out
+  DB_STATUS=fail
+  echo "[FAIL] db   数据库不可连通"
+  return 1
+}
+
+# 队列连通（#55）：经队列接口真实投递健康检查任务并确认消费（非裸 redis ping）。
+# 探测容器借用 redis 容器的网络命名空间直达 127.0.0.1:6379；redis 停服时
+# 容器不存在/不可达，探测失败即红。
+check_queue() {
+  local cid="$("${COMPOSE[@]}" ps -q redis 2>/dev/null || true)" probe_out=""
   if [ -n "$cid" ] && [ "$(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null)" = "running" ] \
      && probe_out="$(run_queue_probe "$cid" 2>&1)"; then
+    QUEUE_STATUS=ok
     echo "[OK]   queue 队列连通（${probe_out}）"
-  else
-    [ -n "${probe_out:-}" ] && echo "[FAIL] queue 队列不可连通（${probe_out}）" \
-      || echo "[FAIL] queue 队列不可连通（redis 容器未运行，无法投递健康检查任务）"
-    rc=1
+    return 0
   fi
-  # 前端（第四依赖）尚未部署（#56 切片09）：中性占位行，不计入红绿、不破坏现有契约
-  echo "[--]   frontend 未部署（切片09 落地后本项计入红绿）"
+  QUEUE_STATUS=fail
+  [ -n "${probe_out:-}" ] && echo "[FAIL] queue 队列不可连通（${probe_out}）" \
+    || echo "[FAIL] queue 队列不可连通（redis 容器未运行，无法投递健康检查任务）"
+  return 1
+}
+
+# 前端（第四依赖，#56 落地）：面板可访问 = 绿，不可访问 = 红，计入红绿。
+check_frontend() {
+  # 刚 up 时 nginx 可能尚未就绪：重试 3 次（间隔 2s）再判红
+  if curl -fsS --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors "$FRONTEND_URL" >/dev/null 2>&1; then
+    FRONTEND_STATUS=ok
+    echo "[OK]   frontend 前端面板可访问（$FRONTEND_URL）"
+    return 0
+  fi
+  FRONTEND_STATUS=fail
+  echo "[FAIL] frontend 前端面板不可访问（$FRONTEND_URL）"
+  return 1
+}
+
+# 面板快照（#56）：把四依赖检查结果序列化为 JSON，写入 frontend 服务挂载的命名卷
+#（compose frontend-health → /health/health.json，nginx 同域静态端点提供）。
+# 快照唯一生产者 = 本脚本，面板与 dev health 天然同源；前端不直连库、不探容器。
+# 调用前须已跑过 check_*（cmd_health），或传 quiet=1 由本函数静默重跑（cmd_up）。
+write_health_snapshot() { # $1 = quiet 时静默重跑检查（丢弃检查输出）
+  if [ "${1:-}" = "quiet" ]; then
+    check_services >/dev/null 2>&1 || true
+    check_db >/dev/null 2>&1 || true
+    check_queue >/dev/null 2>&1 || true
+    check_frontend >/dev/null 2>&1 || true
+  fi
+  local svc_detail="全部容器运行中"
+  [ -n "$SVC_FAILED" ] && svc_detail="未运行：$(echo "$SVC_FAILED" | xargs | tr ' ' ',')"
+  local db_detail="数据库可连通" queue_detail="队列可连通（健康检查任务已投递并消费）" fe_detail="面板可访问"
+  [ "$DB_STATUS" = fail ] && db_detail="数据库不可连通"
+  [ "$QUEUE_STATUS" = fail ] && queue_detail="队列不可连通"
+  [ "$FRONTEND_STATUS" = fail ] && fe_detail="面板不可访问"
+  if ! printf '{"generatedAt":"%s","checks":[
+    {"id":"containers","label":"容器存活","status":"%s","detail":"%s"},
+    {"id":"db","label":"数据库连通","status":"%s","detail":"%s"},
+    {"id":"queue","label":"队列连通","status":"%s","detail":"%s"},
+    {"id":"frontend","label":"前端可访问","status":"%s","detail":"%s"}]}\n' \
+      "$(date -Iseconds)" "$SVC_STATUS" "$svc_detail" "$DB_STATUS" "$db_detail" \
+      "$QUEUE_STATUS" "$queue_detail" "$FRONTEND_STATUS" "$fe_detail" \
+      | docker run --rm -i -v "${PROJECT}_frontend-health:/out" "$NGINX_IMAGE" \
+          sh -c 'cat > /out/health.json' 2>/dev/null; then
+    echo "[WARN] 面板快照写入失败（面板可能显示上一次快照状态）" >&2
+  fi
+}
+
+cmd_health() {
+  require_compose_file
+  local rc=0
+  check_services || rc=1
+  check_db || rc=1
+  check_queue || rc=1
+  check_frontend || rc=1
+  write_health_snapshot
   if [ "$rc" -eq 0 ]; then
     echo "health：全部检查通过。"
   else
@@ -261,6 +344,41 @@ cmd_db() {
   esac
 }
 
+# ---------- dev build（#56 切片09 最小形态；全量形态归 #57 扩展：后端编译 + 全部本地镜像 + --ci） ----------
+# 前端范围 = 容器内前端编译（tsc 类型检查 + vite build，产物写回宿主 frontend/dist，已 gitignore）
+# + 前端本地镜像多阶段构建（frontend/Dockerfile：钉定 node 镜像编译 → 钉定 nginx 镜像运行）。
+# 不 push 不部署；产物/依赖只进容器与命名卷，不入库（E6）。
+build_frontend() {
+  require_toolchain_image
+  mkdir -p "$ROOT/frontend/dist"
+  echo "build：容器内前端编译（tsc + vite build，产物写回宿主 frontend/dist）…"
+  docker run --rm \
+    -v "$ROOT:/repo:ro" \
+    -v "$ROOT/frontend/dist:/out" \
+    -v "${PROJECT}-build-node-modules:/work/node_modules" \
+    -v "${PROJECT}-build-store:/pnpm/store" \
+    "${CACHE_VOLUMES[@]}" \
+    -w /work \
+    "$LINT_IMAGE" \
+    sh -c "cp -a /repo/. /work/ && corepack enable && pnpm install ${INSTALL_FLAGS[*]} && pnpm --filter frontend build && cp -a /work/frontend/dist/. /out/ && chown -R \"\$(stat -c '%u:%g' /out)\" /out"
+  echo "build：构建前端本地镜像 $FRONTEND_IMAGE（多阶段：node 编译 → nginx 运行）…"
+  docker build --tag "$FRONTEND_IMAGE" --file "$ROOT/frontend/Dockerfile" "$ROOT"
+  echo "build：前端编译 + 本地镜像构建完成（产物已写回宿主并 gitignore；不 push 不部署）。"
+}
+
+cmd_build() {
+  # 子命令化预留 #57 全量扩展：backend 编译子命令与 --ci 旗标在此分派，勿改裸 build 语义
+  case "${1:-}" in
+    ""|frontend) build_frontend ;;
+    *)
+      echo "未知 build 子命令：$1（本切片可选 frontend；全量形态归 #57）" >&2
+      echo >&2
+      usage >&2
+      exit 1
+      ;;
+  esac
+}
+
 require_toolchain_image() {
   if ! docker image inspect "$LINT_IMAGE" >/dev/null 2>&1; then
     echo "[FAIL] 工具链镜像缺失：$LINT_IMAGE" >&2
@@ -274,7 +392,7 @@ test_unit() {
   # 容器内安装依赖并运行 Vitest 契约断言 + tsc --noEmit 类型检查；
   # 挂载形态与 lint 一致：仓库只读，依赖只进容器/命名卷。
   require_toolchain_image
-  echo "test：容器内运行 unit 层测试（shield 契约断言 + 队列设施单测 + 类型检查）…"
+  echo "test：容器内运行 unit 层测试（shield 契约断言 + 队列设施单测 + 前端 health 单测 + 类型检查）…"
   docker run --rm \
     -v "$ROOT:/repo:ro" \
     -v "${PROJECT}-test-node-modules:/work/node_modules" \
@@ -342,6 +460,7 @@ case "${1:-}" in
   lint)  cmd_lint ;;
   test)  shift; cmd_test "${1:-}" ;;
   db)    shift; cmd_db "${1:-}" ;;
+  build) shift; cmd_build "${1:-}" ;;
   *)
     echo "未知命令：$1" >&2
     echo >&2
