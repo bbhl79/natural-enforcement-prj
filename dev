@@ -102,7 +102,9 @@ cmd_up() {
     echo "dev up 不会隐式构建或拉取镜像。" >&2
     exit 1
   fi
-  "${COMPOSE[@]}" up -d
+  # --wait：等 db/redis 健康检查通过再返回——迁移/种子要求 db 真正就绪，
+  # 冷卷首次 initdb 较慢，不等待会赢不了就绪竞态（#57 回归实测踩中）。
+  "${COMPOSE[@]}" up -d --wait --wait-timeout 120
   echo "dev up：基础设施容器已就绪。检查迁移与种子（幂等，已完成自动跳过）…"
   db_migrate
   db_seed
