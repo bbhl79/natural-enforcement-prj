@@ -541,6 +541,8 @@ test_e2e() {
   local case_script found=0
   for case_script in "$ROOT"/e2e/cases/*.sh; do
     [ -e "$case_script" ] || continue
+    # _ 前缀 = 用例辅助文件（非可执行用例），与 integration 层约定一致
+    [[ "${case_script##*/}" == _* ]] && continue
     found=1
     echo "test：运行 e2e 用例 ${case_script##*/} …"
     COMPOSE_PROJECT_NAME="$PROJECT" E2E_RESULTS="$results_dir" RUN_DIR="$RUN_DIR" bash "$case_script" || {
