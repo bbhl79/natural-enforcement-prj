@@ -521,7 +521,14 @@ test_integration() {
   # integration 层（#46：结构测试 + 需库用例）。harness 负责：db 在场 + 迁移/种子幂等
   # + Prisma Client 生成；用例形态与约定见 integration/README.md
   #（Vitest 需库用例 + *.sh 可执行用例，只测外部可观察行为）。
+  # 结构测试纳入本层（评审必修）：#46 定案 integration = 结构测试 + 需库用例；
+  # dev lint 里的调用保留不动——同一规则两处跑，双保险。
   require_toolchain_image
+  echo "test：integration 层结构测试（tools/structural-test.sh，宿主侧纯源码扫描）…"
+  "$ROOT/tools/structural-test.sh" || {
+    echo "[FAIL] integration 层结构测试失败" >&2
+    exit 1
+  }
   ensure_db
   db_migrate
   db_seed
