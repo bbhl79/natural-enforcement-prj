@@ -14,11 +14,13 @@ psql_db() { "${COMPOSE[@]}" exec -T db psql -U "${POSTGRES_USER:-postgres}" -d "
 echo "[e2e] E1 从零拉起：清空环境（down + 销毁本项目数据卷）…"
 "$DEV" down >/dev/null 2>&1 || true
 docker volume rm -f "${PROJECT}_pgdata" "${PROJECT}_rustfs-data" >/dev/null 2>&1 || true
-leftover="$(docker volume ls --format '{{.Name}}' | grep -c "^${PROJECT}_" || true)"
-if [ "$leftover" -ne 0 ]; then
-  echo "[FAIL] 数据卷未清空（残留 $leftover 个本项目卷），不满足从零前提" >&2
-  exit 1
-fi
+# 从零前提只断言数据卷销毁；frontend-health 是面板快照卷（非数据），down 后允许在场
+for vol in pgdata rustfs-data; do
+  if docker volume inspect "${PROJECT}_${vol}" >/dev/null 2>&1; then
+    echo "[FAIL] 数据卷 ${PROJECT}_${vol} 未销毁，不满足从零前提" >&2
+    exit 1
+  fi
+done
 
 echo "[e2e] E1 容器起（dev up：幂等拉起 + 迁移 + 种子 + 面板快照）…"
 "$DEV" up
