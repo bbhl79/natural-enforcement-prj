@@ -125,7 +125,9 @@ describe('根机构登记', () => {
 
 describe('调岗写入', () => {
   it('三次写入收成一次 transferAssignment', async () => {
-    const transferAssignment = vi.fn(async (_transfer: AssignmentTransfer) => undefined);
+    const transferAssignment = vi.fn<(transfer: AssignmentTransfer) => Promise<void>>(
+      async () => undefined,
+    );
     const closeAssignment = vi.fn();
     const insertAssignment = vi.fn();
     const updatePersonnelOrgUnit = vi.fn();
