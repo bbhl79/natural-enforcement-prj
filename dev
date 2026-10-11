@@ -268,7 +268,7 @@ write_health_snapshot() { # $1 = quiet 时静默重跑检查（丢弃检查输�
     {"id":"containers","label":"容器存活","status":"%s","detail":"%s"},
     {"id":"db","label":"数据库连通","status":"%s","detail":"%s"},
     {"id":"queue","label":"队列连通","status":"%s","detail":"%s"},
-    {"id":"frontend","label":"前端可访问","status":"%s","detail":"%s"}]\n' \
+    {"id":"frontend","label":"前端可访问","status":"%s","detail":"%s"}]}\n' \
       "$(date -Iseconds)" "$SVC_STATUS" "$svc_detail" "$DB_STATUS" "$db_detail" \
       "$QUEUE_STATUS" "$queue_detail" "$FRONTEND_STATUS" "$fe_detail" \
       | docker run --rm --pull=never -i -v "${PROJECT}_frontend-health:/out" "$NGINX_IMAGE" \
