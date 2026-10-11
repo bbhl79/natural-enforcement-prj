@@ -1,0 +1,17 @@
+{
+  "name": "@natural-enforcement/shield",
+  "version": "0.0.0",
+  "private": true,
+  "description": "统一契约载体（#47 定案：公共出口仅 src/index.ts；绕过出口的互引由结构测试拦截）",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "6.0.2",
+    "vitest": "5.0.3"
+  }
+}

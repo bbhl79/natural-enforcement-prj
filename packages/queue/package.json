@@ -1,0 +1,22 @@
+{
+  "name": "@natural-enforcement/queue",
+  "version": "0.0.0",
+  "private": true,
+  "description": "队列设施包（#55：QueuePort 可注入抽象 + BullMQ 适配 + 系统级健康检查任务；业务 worker 禁入——G5，结构测试 queue-facility-entry 机器兜底）",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@nestjs/common": "12.1.2",
+    "bullmq": "6.3.12",
+    "ioredis": "6.0.0"
+  },
+  "devDependencies": {
+    "typescript": "6.0.2",
+    "vitest": "5.0.3"
+  }
+}

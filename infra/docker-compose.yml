@@ -1,0 +1,73 @@
+# 基础设施容器编排（地基切片01）。
+# 镜像一律显式 tag + digest（唯一依据 infra/VERSIONS.md，严禁 latest）。
+# pull_policy=never：镜像缺失由 dev up 显式拦截并提示，绝不隐式拉取/构建。
+# 项目名不入库：默认由 dev 脚本以 -p natural-enforcement 注入；
+# 并行工作区可用 COMPOSE_PROJECT_NAME 隔离（容器/卷/网络各自独立）。
+
+services:
+  db:
+    image: postgis/postgis:18-3.6@sha256:60f6ad1d21ea86a67d47780b9a0d1e1d200500f62b19293fa834d0dea80b8677
+    pull_policy: never
+    environment:
+      # 凭据从环境注入（#57 --ci 凭据回收）；本地缺省回落开发默认值
+      POSTGRES_USER: "${POSTGRES_USER:-postgres}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-postgres}"
+      POSTGRES_DB: "${POSTGRES_DB:-postgres}"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # PG18 镜像采用 major 版本子目录布局（pg_ctlcluster），卷挂 /var/lib/postgresql，
+      # 数据实际落 /var/lib/postgresql/18/docker；严禁挂 /var/lib/postgresql/data（镜像直接报错）
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-postgres}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  redis:
+    image: redis:8.10.2@sha256:2c2dff791878316e3b083188be0d578423b24813cdda5de0e80ea4f7b3e6bfd6
+    pull_policy: never
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  rustfs:
+    image: rustfs/rustfs:1.0.1@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
+    pull_policy: never
+    environment:
+      RUSTFS_ACCESS_KEY: rustfsdev
+      RUSTFS_SECRET_KEY: rustfsdev-secret
+    ports:
+      - "${RUSTFS_PORT:-9000}:9000"
+      - "${RUSTFS_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - rustfs-data:/data
+
+  nginx:
+    image: nginx:1.29.8@sha256:1881968aff6f7cdcc4b888c00a11f4ce241ad7ec957e0cb4a9e19e93a3ff87ea
+    pull_policy: never
+    ports:
+      - "${NGINX_PORT:-8080}:80"
+
+  # 前端工作台（#56 切片09）：本地镜像（dev build 构建，Dockerfile 入库），
+  # nginx 服务构建产物；面板数据 = health 快照命名卷（dev health/dev up 写入，
+  # 与 dev health 同源），前端不直连库。宿主端口默认 8899（现有 nginx 服务占 8080）。
+  frontend:
+    image: natural-enforcement/frontend:dev
+    pull_policy: never
+    ports:
+      - "${FRONTEND_PORT:-8899}:80"
+    volumes:
+      - frontend-health:/usr/share/nginx/html/health:ro
+
+volumes:
+  # 数据卷只由 dev db reset 允许删除（全系统唯一毁数入口）；dev down 永不触碰
+  pgdata:
+  rustfs-data:
+  # 面板 health 快照（dev health/dev up 写入；前端容器只读挂载）
+  frontend-health:

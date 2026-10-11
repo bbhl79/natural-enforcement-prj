@@ -1,0 +1,211 @@
+#!/usr/bin/env bash
+# dev 命令行为契约冒烟测试（E7 子集 + E6 前半），#57 切片10 归位为 e2e/cases 用例。
+# 只测外部可观察行为：命令退出码与人类可读输出。不测内部实现。
+# 覆盖九命令（up/down/health/db/lint/test unit/test integration/build/logs/exec）；
+# check 不在此内嵌执行——check = lint+test all+build，test all 含 e2e 层即本用例自身（递归），
+# 其可执行性由外层 ./dev check（本地/CI 总闸）全绿覆盖。
+# 用法：e2e/cases/03-command-smoke.sh            常规冒烟（要求镜像已就绪）
+#       SMOKE_MISSING_IMAGE=1 e2e/cases/03-command-smoke.sh   追加镜像缺失路径用例（会删除并恢复本地 redis 镜像）
+set -uo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+DEV="$ROOT/dev"
+cd "$ROOT"
+# 与 dev 脚本同一项目名解析：默认 natural-enforcement，并行工作区用 COMPOSE_PROJECT_NAME 隔离
+PROJECT="${COMPOSE_PROJECT_NAME:-natural-enforcement}"
+COMPOSE=(docker compose -p "$PROJECT" -f infra/docker-compose.yml)
+# db 凭据与 dev 脚本同解析：环境注入优先，缺省开发默认值
+PG_USER="${POSTGRES_USER:-postgres}"
+PG_DB="${POSTGRES_DB:-postgres}"
+
+PASS=0
+FAIL=0
+
+ok()   { PASS=$((PASS + 1)); echo "[通过] $1"; }
+bad()  { FAIL=$((FAIL + 1)); echo "[失败] $1"; }
+check() { # check <描述> <退出码>
+  if [ "$2" -eq 0 ]; then ok "$1"; else bad "$1（退出码 $2）"; fi
+}
+
+# ---------- 1. 裸 dev = 帮助文本，退出 0 ----------
+out="$("$DEV" 2>&1)"; rc=$?
+check "裸 dev 退出 0" "$rc"
+echo "$out" | grep -q 'up' && echo "$out" | grep -q 'down' && echo "$out" | grep -q 'health' \
+  && echo "$out" | grep -q 'lint' && echo "$out" | grep -q 'db' && echo "$out" | grep -q 'test' \
+  && echo "$out" | grep -q 'build' && echo "$out" | grep -q 'check' && echo "$out" | grep -q 'logs' \
+  && echo "$out" | grep -q 'exec' \
+  && ok "裸 dev 输出帮助文本（含十命令 up/down/health/lint/test/build/check/db/logs/exec）" \
+  || bad "裸 dev 帮助文本缺少命令说明"
+
+out="$("$DEV" no-such-command 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] && echo "$out" | grep -qi 'help\|用法\|usage' \
+  && ok "未知命令非 0 退出并提示用法" || bad "未知命令处理不符合契约（rc=$rc）"
+
+# ---------- 2. dev up 幂等 + 数据不丢 ----------
+"$DEV" down >/dev/null 2>&1
+"$DEV" up >/tmp/smoke-up1.log 2>&1; check "首次 dev up 成功" "$?"
+cid_before="$("${COMPOSE[@]}" ps -q db)"
+"$DEV" up >/tmp/smoke-up2.log 2>&1; check "重复 dev up 成功（幂等）" "$?"
+cid_after="$("${COMPOSE[@]}" ps -q db)"
+[ -n "$cid_before" ] && [ "$cid_before" = "$cid_after" ] \
+  && ok "重复 up 未重建容器（id 不变，无副作用）" || bad "重复 up 重建了容器（$cid_before -> $cid_after）"
+
+"${COMPOSE[@]}" exec -T db \
+  psql -U "$PG_USER" -d "$PG_DB" -c 'CREATE TABLE IF NOT EXISTS smoke_keep(v int); DELETE FROM smoke_keep; INSERT INTO smoke_keep VALUES (42);' >/dev/null 2>&1
+"$DEV" down >/dev/null 2>&1; check "dev down 成功" "$?"
+"$DEV" up >/dev/null 2>&1; check "down 后 dev up 成功" "$?"
+kept="$("${COMPOSE[@]}" exec -T db psql -U "$PG_USER" -d "$PG_DB" -tA -c 'SELECT v FROM smoke_keep;' 2>/dev/null)"
+[ "$kept" = "42" ] && ok "down/up 后数据仍在（数据卷未被删除）" || bad "数据丢失（smoke_keep=$kept）"
+
+# ---------- 3. dev health 红绿 ----------
+"$DEV" health >/tmp/smoke-health-green.log 2>&1; check "health 全绿退出 0" "$?"
+"${COMPOSE[@]}" ps --services --filter status=running | while read -r s; do :; done
+n_services="$("${COMPOSE[@]}" config --services | wc -l)"
+n_ok="$(grep -c 'OK' /tmp/smoke-health-green.log || true)"
+[ "$n_ok" -ge "$n_services" ] \
+  && ok "health 逐行输出覆盖全部 $n_services 个服务" || bad "health 输出行数不足（OK=$n_ok 服务=$n_services）"
+grep -q '数据库\|db' /tmp/smoke-health-green.log && ok "health 含 db 连通检查" || bad "health 缺少 db 连通检查"
+# #56 起前端（第四依赖）为真实检查并计入红绿：全绿输出必含面板可访问行
+grep -q 'frontend 前端面板可访问' /tmp/smoke-health-green.log \
+  && ok "health 含前端可访问检查（第四依赖计入红绿）" || bad "health 缺少前端可访问检查"
+
+"${COMPOSE[@]}" stop redis >/dev/null 2>&1
+"$DEV" health >/tmp/smoke-health-red.log 2>&1; rc=$?
+[ "$rc" -ne 0 ] && grep -q 'FAIL\|失败\|红' /tmp/smoke-health-red.log \
+  && ok "redis 停止后 health 非 0 且逐行标红" || bad "health 未检出 redis 宕（rc=$rc）"
+"${COMPOSE[@]}" start redis >/dev/null 2>&1
+# #55 起队列连通项经探测容器真实投递并确认消费，探测容器启动需分钟级；
+# redis 恢复后允许重试等待转绿，吸收探测启动延迟（每次 health 同步等待探测完成）。
+recovered=1
+for attempt in 1 2 3; do
+  if "$DEV" health >/tmp/smoke-health-recover.log 2>&1; then recovered=0; break; fi
+  sleep 20
+done
+check "恢复后 health 重新全绿（含探测启动等待，重试 3 次）" "$recovered"
+
+# ---------- 4. dev lint 全量 + 依赖漏入库检查 ----------
+"$DEV" lint >/tmp/smoke-lint.log 2>&1; check "dev lint 全绿" "$?"
+
+mkdir -p "$ROOT/node_modules/.fake" "$ROOT/frontend/node_modules"
+"$DEV" lint >/tmp/smoke-lint-leak.log 2>&1; rc=$?
+[ "$rc" -ne 0 ] && grep -q 'node_modules' /tmp/smoke-lint-leak.log \
+  && ok "检出 node_modules 漏入库即失败（非 0 + 人类可读输出）" || bad "lint 未检出 node_modules（rc=$rc）"
+rm -rf "$ROOT/node_modules" "$ROOT/frontend/node_modules"
+"$DEV" lint >/dev/null 2>&1; check "清除 node_modules 后 lint 恢复全绿" "$?"
+
+# ---------- 5. dev db 数据语义（#49：建库/迁移/种子/reset） ----------
+psql_db() { "${COMPOSE[@]}" exec -T db psql -U "$PG_USER" -d "$PG_DB" "$@" 2>/dev/null; }
+
+# 5.1 裸 dev db = 建库（缺则建）+ 迁移 + 种子
+# 毁数入口收敛（评审必修）：冷环境前提经唯一毁数入口 dev db reset 达成，e2e 不再直删
+# 数据卷；随后 rm -fs db 仅复测「容器缺失」分支（compose rm 不动数据卷，冷 initdb/迁移/
+# 种子路径已由 db reset 自身覆盖）。
+"$DEV" db reset >/tmp/smoke-db-reset-pre.log 2>&1; check "前置 dev db reset（唯一毁数入口）退出 0" "$?"
+"${COMPOSE[@]}" rm -fs db >/dev/null 2>&1
+"$DEV" db >/tmp/smoke-db-bare.log 2>&1; check "裸 dev db（容器缺失）建库+迁移+种子" "$?"
+grep -q '种子已存在，跳过' /tmp/smoke-db-bare.log \
+  && ok "裸 dev db 种子幂等（reset 已建则跳过）" || bad "裸 dev db 输出缺少种子跳过说明（$(tail -2 /tmp/smoke-db-bare.log | tr '\n' ' '))"
+[ "$(psql_db -tA -c "SELECT 1 FROM pg_extension WHERE extname='postgis';")" = "1" ] \
+  && ok "postgis 扩展已建（prisma/prisma#7455 前提）" || bad "postgis 扩展缺失"
+[ "$(psql_db -tA -c 'SELECT note FROM migration_probe;')" = "seed-probe" ] \
+  && ok "种子数据可查询" || bad "种子数据缺失"
+[ "$(psql_db -tA -c 'SELECT migration_name FROM _prisma_migrations ORDER BY started_at LIMIT 1;')" = "0001_postgis_extension" ] \
+  && ok "迁移历史第一条为 CREATE EXTENSION postgis" || bad "迁移历史第一条不是 postgis 扩展"
+
+# 5.2 幂等：重复执行只增不改
+psql_db -c 'CREATE TABLE IF NOT EXISTS smoke_keep(v int); DELETE FROM smoke_keep; INSERT INTO smoke_keep VALUES (42);' >/dev/null 2>&1
+"$DEV" db >/tmp/smoke-db-bare2.log 2>&1; check "重复裸 dev db 退出 0（幂等）" "$?"
+grep -q '种子已存在，跳过' /tmp/smoke-db-bare2.log \
+  && ok "重复裸 dev db 种子跳过" || bad "重复裸 dev db 未跳过种子"
+[ "$(psql_db -tA -c 'SELECT v FROM smoke_keep;')" = "42" ] \
+  && ok "重复 dev db 不删已有数据（只增不改）" || bad "重复 dev db 丢了数据"
+"$DEV" db migrate >/tmp/smoke-db-migrate.log 2>&1; check "dev db migrate 退出 0" "$?"
+grep -q 'No pending migrations' /tmp/smoke-db-migrate.log \
+  && ok "重复 migrate 识别为已是最新" || bad "重复 migrate 输出异常"
+"$DEV" db seed >/tmp/smoke-db-seed.log 2>&1; check "dev db seed 退出 0" "$?"
+grep -q '种子已存在，跳过' /tmp/smoke-db-seed.log \
+  && ok "重复 seed 跳过" || bad "重复 seed 未跳过"
+
+out="$("$DEV" db no-such-sub 2>&1)"; rc=$?
+[ "$rc" -ne 0 ] && echo "$out" | grep -qi '用法\|usage' \
+  && ok "db 未知子命令非 0 并提示用法" || bad "db 未知子命令处理不符合契约（rc=$rc）"
+
+# 5.3 reset = 唯一允许删除数据的入口：毁数后可从种子完全重建
+"$DEV" db reset >/tmp/smoke-db-reset.log 2>&1; check "dev db reset 退出 0" "$?"
+[ "$(psql_db -tA -c "SELECT to_regclass('public.smoke_keep');")" = "" ] \
+  && ok "reset 后人工数据已删除（毁数生效）" || bad "reset 未删除人工数据"
+[ "$(psql_db -tA -c 'SELECT note FROM migration_probe;')" = "seed-probe" ] \
+  && ok "reset 后种子完全重建可查询" || bad "reset 后种子未重建"
+[ "$(psql_db -tA -c "SELECT 1 FROM pg_extension WHERE extname='postgis';")" = "1" ] \
+  && ok "reset 后 postgis 扩展重建" || bad "reset 后 postgis 扩展缺失"
+[ "$(psql_db -tA -c 'SELECT migration_name FROM _prisma_migrations ORDER BY started_at LIMIT 1;')" = "0001_postgis_extension" ] \
+  && ok "reset 后迁移历史第一条仍为 postgis 扩展" || bad "reset 后迁移历史异常"
+"$DEV" health >/dev/null 2>&1; check "reset 后环境 health 全绿" "$?"
+
+# ---------- 6. 镜像缺失路径（可选：删除并恢复本地 redis 镜像） ----------
+if [ "${SMOKE_MISSING_IMAGE:-0}" = "1" ]; then
+  "$DEV" down >/dev/null 2>&1
+  redis_img="$("${COMPOSE[@]}" config | grep -A2 'redis:' | grep 'image:' | awk '{print $2}')"
+  docker rmi -f "$(docker image inspect -f '{{.Id}}' "$redis_img")" >/dev/null 2>&1
+  if docker image inspect "$redis_img" >/dev/null 2>&1; then
+    bad "前置条件未满足：redis 镜像仍可被 inspect，缺失路径用例无法执行"
+  else
+    "$DEV" up >/tmp/smoke-missing.log 2>&1; rc=$?
+    [ "$rc" -ne 0 ] && grep -q 'dev build' /tmp/smoke-missing.log \
+      && ok "镜像缺失时 up 非 0 并提示先 dev build（不隐式构建）" || bad "镜像缺失路径不符合契约（rc=$rc）"
+  fi
+  docker pull "${redis_img%%@*}" >/dev/null 2>&1
+  docker image inspect "$redis_img" >/dev/null 2>&1 \
+    && ok "补齐镜像后本地镜像恢复" || bad "镜像恢复失败"
+  "$DEV" up >/dev/null 2>&1; check "补齐镜像后 up 恢复成功" "$?"
+fi
+
+# ---------- 7. 切片10 新命令：logs/exec/test 分层/build（check 见文件头说明，不内嵌防递归） ----------
+echo "[说明] dev check 不内嵌执行：check = lint+test all+build，test all 含 e2e 层即本用例（递归）；"
+echo "       check 可执行性由外层 ./dev check 总闸全绿覆盖（E1/E7 的总证据）。"
+
+out="$("$DEV" logs db 2>&1)"; rc=$?
+{ [ "$rc" -eq 0 ] && [ -n "$out" ]; } \
+  && ok "dev logs db 退出 0 且有输出（compose logs 薄封装）" || bad "dev logs db 不符合契约（rc=$rc）"
+out="$("$DEV" logs 2>&1)"; rc=$?
+[ "$rc" -eq 0 ] && ok "dev logs（全服务）退出 0" || bad "dev logs 全服务失败（rc=$rc）"
+
+out="$("$DEV" exec db psql -U "$PG_USER" -d "$PG_DB" -tAc 'SELECT 1;' 2>&1)"; rc=$?
+{ [ "$rc" -eq 0 ] && [ "$out" = "1" ]; } \
+  && ok "dev exec db psql 返回 1（compose exec 薄封装）" || bad "dev exec 不符合契约（rc=$rc out=$out）"
+out="$("$DEV" exec 2>&1)"; rc=$?
+{ [ "$rc" -ne 0 ] && echo "$out" | grep -q '用法'; } \
+  && ok "dev exec 无参非 0 并提示用法" || bad "dev exec 无参处理不符合契约（rc=$rc）"
+
+"$DEV" test unit >/tmp/smoke-test-unit.log 2>&1; check "dev test unit 退出 0" "$?"
+grep -q 'unit 层全部通过' /tmp/smoke-test-unit.log \
+  && ok "test unit 输出含通过说明" || bad "test unit 输出异常（$(tail -2 /tmp/smoke-test-unit.log | tr '\n' ' '))"
+out="$("$DEV" test no-such-layer 2>&1)"; rc=$?
+{ [ "$rc" -ne 0 ] && echo "$out" | grep -qi 'unit\|integration\|e2e'; } \
+  && ok "test 未知层非 0 并提示可选层" || bad "test 未知层处理不符合契约（rc=$rc）"
+
+"$DEV" test integration >/tmp/smoke-test-integration.log 2>&1; check "dev test integration 退出 0" "$?"
+grep -q 'integration 层全部通过' /tmp/smoke-test-integration.log \
+  && ok "test integration 输出含通过说明" || bad "test integration 输出异常（$(tail -2 /tmp/smoke-test-integration.log | tr '\n' ' '))"
+
+"$DEV" build >/tmp/smoke-build.log 2>&1; check "dev build 全量退出 0" "$?"
+grep -q '全量构建完成' /tmp/smoke-build.log \
+  && ok "build 输出含全量完成说明（前端编译+后端编译+全部本地镜像）" \
+  || bad "build 输出异常（$(tail -2 /tmp/smoke-build.log | tr '\n' ' '))"
+out="$("$DEV" build --bogus 2>&1)"; rc=$?
+{ [ "$rc" -ne 0 ] && echo "$out" | grep -qi '用法\|usage'; } \
+  && ok "build 未知参数非 0 并提示用法" || bad "build 未知参数处理不符合契约（rc=$rc）"
+
+# ---------- 8. down 清容器清网络、不动数据卷 ----------
+"$DEV" down >/tmp/smoke-down.log 2>&1; check "dev down 退出 0" "$?"
+leftover="$("${COMPOSE[@]}" ps -q | wc -l)"
+[ "$leftover" -eq 0 ] && ok "down 后无残留容器" || bad "down 后仍有 $leftover 个容器"
+docker volume ls --format '{{.Name}}' | grep -q 'pgdata' \
+  && ok "down 后数据卷保留" || bad "down 后数据卷被删除"
+
+# ---------- 收尾 ----------
+[ ! -d "$ROOT/node_modules" ] && ok "仓库无 node_modules 残留" || bad "仓库存在 node_modules 残留"
+
+echo
+echo "========== 结果：$PASS 通过 / $FAIL 失败 =========="
+[ "$FAIL" -eq 0 ]
