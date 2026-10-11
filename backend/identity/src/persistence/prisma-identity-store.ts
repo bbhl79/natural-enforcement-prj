@@ -13,6 +13,7 @@ import type {
   OrgUnitNameVersionRow,
   OrgUnitRow,
   OrgUnitToCreate,
+  AssignmentTransfer,
   PersonnelAssignmentRow,
   PersonnelNameVersionRow,
   PersonnelRow,
@@ -122,6 +123,21 @@ export class PrismaIdentityStore implements IdentityStore {
       where: { id: assignmentId },
       data: { endedAt },
     });
+  }
+
+  async transferAssignment(transfer: AssignmentTransfer): Promise<void> {
+    // 顺序固定：先关止旧任职，部分唯一索引才允许插入新的当前任职。
+    await this.prisma.$transaction([
+      this.prisma.personnelAssignment.update({
+        where: { id: transfer.closedAssignmentId },
+        data: { endedAt: transfer.endedAt },
+      }),
+      this.prisma.personnelAssignment.create({ data: transfer.next }),
+      this.prisma.personnel.update({
+        where: { id: transfer.personnelId },
+        data: { orgUnitId: transfer.toOrgUnitId },
+      }),
+    ]);
   }
 
   async insertExportAudit(row: ExportAuditRow): Promise<void> {

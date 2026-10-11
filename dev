@@ -10,8 +10,23 @@
 # 切片10（#57）十命令完备：新增 logs/exec（compose 薄封装）、check（lint+test all+build，
 # --ci 凭据注入回收）、test e2e 层（e2e/cases 约定：从零拉起+读写通道+命令冒烟）、
 # build 扩为全量（后端编译+全部本地镜像）；全局 --run-id 复现（日志/产物落 .run/<id>/）。
+# 评审必修（#61 合并前，路线 A）：check 时序改 build 前置——镜像与编译产物是 lint 与
+# 测试层的运行前提（test_e2e 需 infra + frontend 本地镜像，二者皆由 build 产出），build
+# 在末位时冷环境结构性跑不到它，dev check --ci 不可能绿；同时 build 承担工具链镜像拉取
+#（LINT_IMAGE 不是 compose 服务镜像，ensure_infra_images 的 compose config --images
+# 遍历覆盖不到，冷环境会死在 require_toolchain_image，CI 加一步 dev build 也救不活）。
 # 退出码只有 0/1，诊断看输出。
 set -euo pipefail
+
+# 十命令退出码只有 0/1（#47 US20）。set -e 会把 docker/compose 的 2/125/126/127 原样带出，
+# 在进程退出时归一。bash 在 EXIT 陷阱里再 exit 不会重入该陷阱。
+normalize_exit_code() {
+  local status=$?
+  if [ "$status" -ne 0 ]; then
+    exit 1
+  fi
+}
+trap normalize_exit_code EXIT
 
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 COMPOSE_FILE="$ROOT/infra/docker-compose.yml"
@@ -31,7 +46,19 @@ FRONTEND_IMAGE='natural-enforcement/frontend:dev'
 DB_USER="${POSTGRES_USER:-postgres}"
 DB_PASS="${POSTGRES_PASSWORD:-postgres}"
 DB_NAME="${POSTGRES_DB:-postgres}"
-DATABASE_URL="postgresql://${DB_USER}:${DB_PASS}@db:5432/${DB_NAME}"
+# 用户名、密码、库名按 URI 组件编码后再拼进连接串。CI secret 里的 @ : / # 不能当分隔符。
+percent_encode() {
+  printf '%s' "$1" | od -An -tx1 | awk '{
+    for (i = 1; i <= NF; i++) {
+      c = strtonum("0x" $i)
+      if ((c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c == 45 || c == 46 || c == 95 || c == 126)
+        printf "%c", c
+      else
+        printf "%%%s", toupper($i)
+    }
+  }'
+}
+DATABASE_URL="postgresql://$(percent_encode "$DB_USER"):$(percent_encode "$DB_PASS")@db:5432/$(percent_encode "$DB_NAME")"
 
 # 容器内工具链缓存（命名卷，依赖只进容器/卷，不入库）：
 # - corepack 卷：缓存 pnpm 二进制（/root/.cache/node/corepack），免去每次容器现下载；
@@ -55,17 +82,20 @@ usage() {
   health   四依赖逐行检查：容器存活 / db 连通 / 队列连通（经队列接口真实投递
            健康检查任务并确认消费，非裸 redis ping）/ 前端面板可访问。
            检查结果同时写入面板快照（与面板展示同源）。全绿退出 0，任一红非 0。
-  lint     全量静态检查（结构测试 + 依赖漏入库检查 + 工具链镜像核对 + ESLint，容器内执行）。
+  lint     全量静态检查（结构测试 + 红探针 + 依赖漏入库检查 + 工具链镜像核对 + ESLint，容器内执行）。
            lint <子项> 单跑一项：leak（依赖漏入库）/ structural（结构测试）/
-           image（工具链镜像定案核对）/ eslint（容器内 ESLint 全量）；无参 = 全量四项。
+           structural-probe（结构测试红探针：写入违例源码断言兜底闸确实变红）/
+           image（工具链镜像定案核对）/ eslint（容器内 ESLint 全量）；无参 = 全量五项。
   test     三层语义（#46）：unit = 纯单元+契约；integration = 结构+需库用例；
            e2e = 从零拉起（E1）+ 读写通道（E6）+ 十命令冒烟（E7）。
            test unit / test integration / test e2e / 裸 test = all（unit+integration+e2e）。
            注意：e2e 层会销毁本项目数据卷做从零拉起（E1 证据），勿在需保留数据时运行。
-  build    全量构建：前端编译（产物写回宿主 frontend/dist，已 gitignore）+ 后端编译
-           （tsc 全程序编译）+ 全部本地镜像（frontend 本地构建；infra 镜像本地拉取
-           即视为可用，不重复构建）。不 push 不部署。
-  check    一条命令 = lint 全量 + test all + build，本地即 CI 全绿。
+  build    全量构建 = 环境自举：拉取工具链与 infra 镜像（按 infra/VERSIONS.md 钉定引用，
+           已在场即跳过）+ 前端编译（产物写回宿主 frontend/dist，已 gitignore）+ 后端编译
+           （tsc 全程序编译）+ frontend 本地镜像构建。镜像拉取只发生在本命令语义内
+           （up/db 不隐式构建或拉取，US13）。不 push 不部署。
+  check    一条命令 = build + lint 全量 + test all，本地即 CI 全绿。三项一律跑齐；
+           build 前置是因为镜像与产物是 lint/测试层的运行前提（非改集合语义）。
            --ci：检查范围/参数/链路与本地严格一致，唯一差异是凭据注入回收——
            CI 凭据必须来自环境变量（POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB）；
            本地缺省时用开发默认值并在输出里标注。
@@ -111,10 +141,10 @@ cmd_up() {
   db_migrate
   db_seed
   echo "dev up：写入面板健康快照（与 dev health 同源，dev health 会刷新）…"
-  write_health_snapshot quiet
-  # 健康检查失败不再吞掉（评审必修）：快照照常写入供面板展示，但 up 以非 0 退出，
-  # 让「基础设施就绪」这个承诺可被脚本/CI 信赖（失败明细跑一次 dev health 可见）。
   local failed_items=""
+  write_health_snapshot quiet || failed_items="$failed_items 面板快照"
+  # 健康检查与快照写入失败都不吞掉（评审必修）：快照能写就照常写，但 up 以非 0 退出，
+  # 让「基础设施就绪」这个承诺可被脚本/CI 信赖（失败明细跑一次 dev health 可见）。
   [ "$SVC_STATUS" = fail ] && failed_items="$failed_items 容器存活"
   [ "$DB_STATUS" = fail ] && failed_items="$failed_items 数据库连通"
   [ "$QUEUE_STATUS" = fail ] && failed_items="$failed_items 队列连通"
@@ -231,16 +261,21 @@ write_health_snapshot() { # $1 = quiet 时静默重跑检查（丢弃检查输�
   [ "$DB_STATUS" = fail ] && db_detail="数据库不可连通"
   [ "$QUEUE_STATUS" = fail ] && queue_detail="队列不可连通"
   [ "$FRONTEND_STATUS" = fail ] && fe_detail="面板不可访问"
-  if ! printf '{"generatedAt":"%s","checks":[
+  # 评审必修：快照写入失败不再吞掉原因。此前 2>/dev/null 把镜像缺失/卷缺失/权限错误
+  # 全部丢掉、只留一句 WARN，且不计入退出码——「面板与 dev health 同源」的承诺因此失真。
+  local snapshot_err
+  if ! snapshot_err="$(printf '{"generatedAt":"%s","checks":[
     {"id":"containers","label":"容器存活","status":"%s","detail":"%s"},
     {"id":"db","label":"数据库连通","status":"%s","detail":"%s"},
     {"id":"queue","label":"队列连通","status":"%s","detail":"%s"},
-    {"id":"frontend","label":"前端可访问","status":"%s","detail":"%s"}]}\n' \
+    {"id":"frontend","label":"前端可访问","status":"%s","detail":"%s"}]\n' \
       "$(date -Iseconds)" "$SVC_STATUS" "$svc_detail" "$DB_STATUS" "$db_detail" \
       "$QUEUE_STATUS" "$queue_detail" "$FRONTEND_STATUS" "$fe_detail" \
-      | docker run --rm -i -v "${PROJECT}_frontend-health:/out" "$NGINX_IMAGE" \
-          sh -c 'cat > /out/health.json' 2>/dev/null; then
-    echo "[WARN] 面板快照写入失败（面板可能显示上一次快照状态）" >&2
+      | docker run --rm --pull=never -i -v "${PROJECT}_frontend-health:/out" "$NGINX_IMAGE" \
+          sh -c 'cat > /out/health.json' 2>&1)"; then
+    echo "[FAIL] 面板快照写入失败（面板将显示上一次快照状态）：" >&2
+    echo "$snapshot_err" | tail -3 | sed 's/^/  /' >&2
+    return 1
   fi
 }
 
@@ -251,7 +286,8 @@ cmd_health() {
   check_db || rc=1
   check_queue || rc=1
   check_frontend || rc=1
-  write_health_snapshot
+  # 快照写入失败同样计入红绿（评审必修）：面板与 dev health 同源，写不进即承诺失效。
+  write_health_snapshot || rc=1
   if [ "$rc" -eq 0 ]; then
     echo "health：全部检查通过。"
   else
@@ -262,8 +298,13 @@ cmd_health() {
 
 # 队列探测（#55）：容器内安装依赖后运行 packages/queue 探测入口。
 # 挂载形态与 lint/test 一致：仓库只读，依赖只进容器/命名卷（防 root 属主泄漏入库）。
+# --pull=never：工具链镜像缺失时失败并提示先 dev build，不借健康检查隐式拉取（US13）。
 run_queue_probe() { # $1 = redis 容器 id（--network container: 借用其网络命名空间）
-  docker run --rm --network "container:$1" \
+  if ! docker image inspect "$LINT_IMAGE" >/dev/null 2>&1; then
+    echo "工具链镜像缺失：$LINT_IMAGE。请先执行 dev build。队列探测不会隐式拉取。"
+    return 1
+  fi
+  docker run --rm --pull=never --network "container:$1" \
     -e REDIS_URL="${REDIS_URL:-redis://127.0.0.1:6379}" \
     -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
     -v "$ROOT:/repo:ro" \
@@ -293,15 +334,27 @@ lint_structural() {
   "$ROOT/tools/structural-test.sh" || exit 1
 }
 
-# 检查 3：lint 工具链镜像与版本定案表一致且本地可用
-lint_image() {
-  if ! grep -qF "$LINT_IMAGE" "$ROOT/infra/VERSIONS.md"; then
-    echo "[FAIL] lint 工具链镜像未按定案登记于 infra/VERSIONS.md：$LINT_IMAGE" >&2
+# 检查 2b：结构测试红探针（评审必修 C6，#51 AC 缺的负例证据）。结构测试只会出示「全绿」，
+# 分不清「规则通过」与「规则根本没在扫」——本 PR 的 frontend-boundary 正是这样一条恒绿死
+# 规则。探针逐条写入违例源码再还原，断言兜底闸确实会变红。宿主侧纯源码扫描，无容器依赖。
+lint_structural_probe() {
+  "$ROOT/tools/structural-probe.sh" || exit 1
+}
+
+# 定案核对（唯一依据 infra/VERSIONS.md，见 docs/VERSIONS.md）：镜像引用必须先登记再使用。
+require_image_registered() { # $1 = 镜像引用
+  if ! grep -qF "$1" "$ROOT/infra/VERSIONS.md"; then
+    echo "[FAIL] 镜像未按定案登记于 infra/VERSIONS.md：$1" >&2
     exit 1
   fi
+}
+
+# 检查 3：lint 工具链镜像与版本定案表一致且本地可用
+lint_image() {
+  require_image_registered "$LINT_IMAGE"
   if ! docker image inspect "$LINT_IMAGE" >/dev/null 2>&1; then
     echo "[FAIL] lint 工具链镜像缺失：$LINT_IMAGE" >&2
-    echo "请按 infra/VERSIONS.md 登记的官方名 + digest 拉取后重试。" >&2
+    echo "请先执行 dev build 拉取（或按 infra/VERSIONS.md 官方名手动拉取）后重试。" >&2
     exit 1
   fi
   echo "lint image：工具链镜像与定案表一致且在场。"
@@ -317,7 +370,7 @@ lint_image() {
 #   被拦构建脚本默认报 ERR_PNPM_IGNORED_BUILDS 使安装失败。
 lint_eslint() {
   echo "lint：容器内安装依赖并运行 ESLint 全量检查（首次较慢）…"
-  docker run --rm \
+  docker run --rm --pull=never \
     -v "$ROOT:/repo:ro" \
     -v "${PROJECT}-lint-node-modules:/work/node_modules" \
     -v "${PROJECT}-lint-store:/pnpm/store" \
@@ -327,17 +380,18 @@ lint_eslint() {
     sh -c "cp -a /repo/. /work/ && corepack enable && pnpm install ${INSTALL_FLAGS[*]} && pnpm run lint"
 }
 
-# lint 全量 = 四项顺序执行；<子项> 单跑一项（leak/structural/image/eslint）。
+# lint 全量 = 五项顺序执行；<子项> 单跑一项（leak/structural/structural-probe/image/eslint）。
 cmd_lint() {
   local target="${1:-all}"
   case "$target" in
-    all)        lint_leak; lint_structural; lint_image; lint_eslint ;;
+    all)        lint_leak; lint_structural; lint_structural_probe; lint_image; lint_eslint ;;
     leak)       lint_leak ;;
     structural) lint_structural ;;
+    structural-probe) lint_structural_probe ;;
     image)      lint_image ;;
     eslint)     lint_eslint ;;
     *)
-      echo "未知 lint 子项：$1（可选 leak / structural / image / eslint / 无参 = 全量）" >&2
+      echo "未知 lint 子项：$1（可选 leak / structural / structural-probe / image / eslint / 无参 = 全量）" >&2
       exit 1
       ;;
   esac
@@ -363,8 +417,10 @@ ensure_db() {
 }
 
 # 在工具链容器内执行 backend/prisma 下的 Prisma 命令（$1 = 分号分隔的命令串）
+# 镜像必须已由 dev build 拉到本地；--pull=never，缺失即失败，db 不隐式拉取。
 run_db_toolchain() {
-  docker run --rm \
+  require_toolchain_image
+  docker run --rm --pull=never \
     --network "${PROJECT}_default" \
     -e DATABASE_URL="$DATABASE_URL" \
     -v "$ROOT:/repo:ro" \
@@ -428,7 +484,7 @@ build_frontend() {
   require_toolchain_image
   mkdir -p "$ROOT/frontend/dist"
   echo "build：容器内前端编译（tsc + vite build，产物写回宿主 frontend/dist）…"
-  docker run --rm \
+  docker run --rm --pull=never \
     -v "$ROOT:/repo:ro" \
     -v "$ROOT/frontend/dist:/out" \
     -v "${PROJECT}-build-node-modules:/work/node_modules" \
@@ -438,13 +494,15 @@ build_frontend() {
     "$LINT_IMAGE" \
     sh -c "cp -a /repo/. /work/ && corepack enable && pnpm install ${INSTALL_FLAGS[*]} && pnpm --filter frontend build && cp -a /work/frontend/dist/. /out/ && chown -R \"\$(stat -c '%u:%g' /out)\" /out"
   echo "build：构建前端本地镜像 $FRONTEND_IMAGE（多阶段：node 编译 → nginx 运行）…"
+  # 基础镜像已由 ensure_toolchain_images / ensure_infra_images 按 digest 拉到本地。
+  # 不传 --pull：构建只用本地钉定镜像，不在 build 之外再走一次注册表。
   docker build --tag "$FRONTEND_IMAGE" --file "$ROOT/frontend/Dockerfile" "$ROOT"
 }
 
 build_backend() {
   require_toolchain_image
   echo "build：容器内后端编译（tsc 全程序编译门：shield/queue/storage + backend 七模块）…"
-  docker run --rm \
+  docker run --rm --pull=never \
     -v "$ROOT:/repo:ro" \
     -v "${PROJECT}-build-backend-node-modules:/work/node_modules" \
     -v "${PROJECT}-build-backend-store:/pnpm/store" \
@@ -453,6 +511,20 @@ build_backend() {
     "$LINT_IMAGE" \
     sh -c "cp -a /repo/. /work/ && corepack enable && pnpm install ${INSTALL_FLAGS[*]} && pnpm run typecheck"
   echo "build：后端编译通过。"
+}
+
+# 工具链镜像拉取（评审必修）：LINT_IMAGE 不是 compose 服务镜像，ensure_infra_images
+# 按 compose config --images 遍历永远覆盖不到它——冷环境下 dev build 会直接死在
+# build_frontend 的 require_toolchain_image 上，CI 无论怎么调顺序都起不来。
+# 拉取只发生在 build 语义内：dev up / dev db 的「不隐式构建或拉取」（US13）语义不变。
+ensure_toolchain_images() {
+  require_image_registered "$LINT_IMAGE"
+  if docker image inspect "$LINT_IMAGE" >/dev/null 2>&1; then
+    echo "build：工具链镜像在场：$LINT_IMAGE"
+  else
+    echo "build：工具链镜像缺失，按 infra/VERSIONS.md 钉定引用拉取：$LINT_IMAGE"
+    docker pull "$LINT_IMAGE"
+  fi
 }
 
 # infra 镜像本地拉取即视为可用（不重复构建）：逐个确认 compose 引用的 infra 镜像在场，
@@ -486,16 +558,19 @@ cmd_build() {
     esac
   done
   [ "$ci" -eq 1 ] && echo "build --ci：检查范围与本地严格一致（产物不 push 不部署）。"
+  # 镜像先就位再编译：冷环境（零本地镜像）下这条顺序是 build 自举的唯一可行序。
+  ensure_toolchain_images
+  ensure_infra_images
   build_frontend
   build_backend
-  ensure_infra_images
-  echo "build：全量构建完成（前端编译+后端编译+全部本地镜像；产物已写回宿主并 gitignore）。"
+  echo "build：全量构建完成（工具链+infra 镜像就位、前端编译、后端编译、前端本地镜像；产物已写回宿主并 gitignore）。"
 }
 
 require_toolchain_image() {
   if ! docker image inspect "$LINT_IMAGE" >/dev/null 2>&1; then
     echo "[FAIL] 工具链镜像缺失：$LINT_IMAGE" >&2
-    echo "请按 infra/VERSIONS.md 登记的官方名 + digest 拉取后重试。" >&2
+    echo "请先执行 dev build 拉取（或按 infra/VERSIONS.md 官方名手动拉取）后重试。" >&2
+    echo "本命令不会隐式拉取镜像——拉取只在 dev build 语义内。" >&2
     exit 1
   fi
 }
@@ -506,7 +581,7 @@ test_unit() {
   # 挂载形态与 lint 一致：仓库只读，依赖只进容器/命名卷。
   require_toolchain_image
   echo "test：容器内运行 unit 层测试（shield 契约断言 + 队列设施单测 + 前端 health 单测 + 类型检查）…"
-  docker run --rm \
+  docker run --rm --pull=never \
     -v "$ROOT:/repo:ro" \
     -v "${PROJECT}-test-node-modules:/work/node_modules" \
     -v "${PROJECT}-test-store:/pnpm/store" \
@@ -533,7 +608,7 @@ test_integration() {
   db_migrate
   db_seed
   echo "test：容器内运行 integration 层 Vitest 需库用例（integration/**/*.test.ts）…"
-  docker run --rm \
+  docker run --rm --pull=never \
     --network "${PROJECT}_default" \
     -e DATABASE_URL="$DATABASE_URL" \
     -v "$ROOT:/repo:ro" \
@@ -630,16 +705,21 @@ cmd_check() {
       echo "check：凭据未注入，使用开发默认值 postgres/postgres/postgres（仅本地缺省时允许；CI 用 --ci 从环境变量回收）。"
     fi
   fi
-  cmd_lint
-  test_unit
-  test_integration
-  test_e2e
+  # 时序（评审必修）：build 前置——镜像与编译产物是 lint/测试层的运行前提
+  #（test_e2e 需 infra 镜像 + frontend 本地镜像在场，二者皆由 build 产出；build 在末位时
+  # 冷环境永远跑不到 build，dev check 结构性不可能绿）。
+  # US18「lint 全量 + test all + build」读作构成集合而非时序：三项一律跑齐，
+  # 本地与 CI 同序同参，US21 的「严格一致」反而更强。
   if [ "$ci" -eq 1 ]; then
     cmd_build --ci
   else
     cmd_build
   fi
-  echo "check：lint 全量 + test all + build 全部通过（本地即 CI 全绿）。"
+  cmd_lint
+  test_unit
+  test_integration
+  test_e2e
+  echo "check：build + lint 全量 + test all 全部通过（本地即 CI 全绿）。"
 }
 
 # ---------- 全局选项解析（#57：--run-id 复现 CI run） ----------

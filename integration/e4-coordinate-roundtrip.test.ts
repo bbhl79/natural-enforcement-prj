@@ -39,7 +39,7 @@ const landIds: string[] = [];
 const pointIds: string[] = [];
 
 // #16 §1.1 技术主键形制：26 位大写 Crockford Base32（shield ULID 契约）
-const ULID_PATTERN = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+const ULID_PATTERN = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
 
 beforeAll(() => {
   const databaseUrl = process.env['DATABASE_URL'];

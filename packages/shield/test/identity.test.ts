@@ -30,6 +30,7 @@ describe('#16 §1.1 主键规则：全局唯一技术主键', () => {
     expect(isTechnicalPrimaryKey(`${KNOWN_GOOD_ULID}Z`)).toBe(false); // 27 位
     expect(isTechnicalPrimaryKey(KNOWN_GOOD_ULID.slice(0, 25))).toBe(false); // 25 位
     expect(isTechnicalPrimaryKey('01ARZ3NDEKTSV4RRFFQ69G5FA!')).toBe(false); // 非法字符
+    expect(isTechnicalPrimaryKey(`8${KNOWN_GOOD_ULID.slice(1)}`)).toBe(false); // 首字符超出 128 位
     expect(isTechnicalPrimaryKey('京自然资罚〔2026〕1号')).toBe(false); // 业务编号形制
     expect(isTechnicalPrimaryKey('')).toBe(false);
     expect(isTechnicalPrimaryKey(null)).toBe(false);

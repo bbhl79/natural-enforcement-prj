@@ -5,7 +5,9 @@
 // 数据层证据同卷给出：名称版本化（版本行 append-only）、只失效不删除（行留存 + 触发器拒删）、
 // 导出留痕不可删改（触发器拒 UPDATE/DELETE）、调岗后旧权限失效（任职记录闭环）。
 // 用例经服务层驱动（模块内设施），直连库仅用于：读种子参考数据、验证触发器兜底。
-import { beforeAll, describe, expect, it } from 'vitest';
+// 自清理：开跑前把开发库 TEMPLATE 克隆成独立库，整套断言打在克隆上，结束 DROP。
+// 开发库本身不被改名、不被追加人员。触发器禁止 DELETE，所以不能靠删行还原。
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 import { PrismaClient } from '../backend/prisma/generated/prisma/client.ts';
@@ -23,7 +25,9 @@ import { PrismaIdentityStore } from '../backend/identity/src/persistence/prisma-
 
 const SEED_PASSWORD = "Seed-pass-52"; // 与 backend/prisma/seed.mjs 的种子口令约定一致
 
-let prisma: PrismaClient;
+let prisma = undefined as unknown as PrismaClient;
+let adminPrisma: PrismaClient | undefined;
+let scratchDbName = '';
 let orgUnits: OrgUnitService;
 let personnel: PersonnelService;
 let credential: CredentialService;
@@ -56,9 +60,39 @@ async function expectDenied(promise: Promise<unknown>, reason: DenyReason): Prom
   throw new Error(`校验缺失形态：越权调用未抛 AccessDeniedError（期望 reason=${reason}）——校验缺失=放行`);
 }
 
+function quoteIdent(name: string): string {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+    throw new Error(`非法数据库标识：${name}`);
+  }
+  return `"${name}"`;
+}
+
 beforeAll(async () => {
-  const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL! });
-  prisma = new PrismaClient({ adapter });
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) throw new Error('DATABASE_URL 未注入（须由 dev test integration harness 提供）');
+  const source = new URL(databaseUrl);
+  const sourceDb = decodeURIComponent(source.pathname.replace(/^\//, ''));
+  scratchDbName = `e2_${Date.now()}`;
+  const adminUrl = new URL(databaseUrl);
+  adminUrl.pathname = '/template1';
+  adminPrisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: adminUrl.toString() }) });
+  let created = false;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 10 && !created; attempt += 1) {
+    try {
+      await adminPrisma.$executeRawUnsafe(
+        `CREATE DATABASE ${quoteIdent(scratchDbName)} TEMPLATE ${quoteIdent(sourceDb)}`,
+      );
+      created = true;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    }
+  }
+  if (!created) throw lastError;
+  const scratchUrl = new URL(databaseUrl);
+  scratchUrl.pathname = `/${scratchDbName}`;
+  prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: scratchUrl.toString() }) });
   const store = new PrismaIdentityStore(prisma);
   const access = new AccessControlService(store);
   credential = new CredentialService(store);
@@ -72,6 +106,99 @@ beforeAll(async () => {
   supAId = (await prisma.personnel.findUniqueOrThrow({ where: { code: "P-SUP-A" } })).id;
   clerkAId = (await prisma.personnel.findUniqueOrThrow({ where: { code: "P-CLERK-A" } })).id;
   clerkBId = (await prisma.personnel.findUniqueOrThrow({ where: { code: "P-CLERK-B" } })).id;
+});
+
+afterAll(async () => {
+  await prisma?.$disconnect();
+  if (adminPrisma && scratchDbName) {
+    await adminPrisma.$executeRawUnsafe(
+      `DROP DATABASE IF EXISTS ${quoteIdent(scratchDbName)} WITH (FORCE)`,
+    );
+    await adminPrisma.$disconnect();
+  }
+});
+
+describe('E2 根机构登记（modify × 身份/权限/数据范围）', () => {
+  it('红·身份（未认证）：未认证 actor 登记根机构被拒，且不写库', async () => {
+    const code = uniqueCode('e2-root-na');
+    await expectDenied(
+      orgUnits.registerOrgUnit(
+        { personnelId: clerkAId, authenticated: false },
+        { code, name: '未认证根机构', parentId: null },
+      ),
+      'not-authenticated',
+    );
+    expect(await prisma.orgUnit.findUnique({ where: { code } })).toBeNull();
+  });
+
+  it('红·权限：viewer 无改动作，登记根机构被拒（permission-denied）', async () => {
+    const viewer = await personnel.registerPersonnel(auth(supAId), {
+      code: uniqueCode('e2-root-viewer'),
+      name: '根机构查看员',
+      orgUnitId: deptAId,
+      role: 'viewer',
+    });
+    await expectDenied(
+      orgUnits.registerOrgUnit(auth(viewer.id), {
+        code: uniqueCode('e2-root-v'),
+        name: '查看员根机构',
+        parentId: null,
+      }),
+      'permission-denied',
+    );
+  });
+
+  it('红·数据范围：有改权限的主管登记根机构仍被拒（scope-denied）', async () => {
+    const code = uniqueCode('e2-root-sup');
+    await expectDenied(
+      orgUnits.registerOrgUnit(auth(supAId), { code, name: '主管根机构', parentId: null }),
+      'scope-denied',
+    );
+    expect(await prisma.orgUnit.findUnique({ where: { code } })).toBeNull();
+  });
+
+  it('绿：主管在本支队下登记子机构', async () => {
+    const created = await orgUnits.registerOrgUnit(auth(supAId), {
+      code: uniqueCode('e2-child'),
+      name: '支队下属机构',
+      parentId: deptAId,
+    });
+    expect(created.parentId).toBe(deptAId);
+  });
+});
+
+describe('E2 任职记录库层不变量', () => {
+  it('只允许关止一次：改其他列被拒，已关止行不可改，不能并存两条当前任职', async () => {
+    const mover = await personnel.registerPersonnel(auth(supAId), {
+      code: uniqueCode('e2-guard'),
+      name: '任职守卫',
+      orgUnitId: deptAId,
+      role: 'clerk',
+    });
+    const current = await prisma.personnelAssignment.findFirstOrThrow({
+      where: { personnelId: mover.id, endedAt: null },
+    });
+    await expect(
+      prisma.$executeRaw`UPDATE personnel_assignment SET org_unit_id = ${deptBId} WHERE id = ${current.id}`,
+    ).rejects.toThrow(/拒绝 UPDATE/);
+    await personnel.transferPersonnel(auth(supAId), mover.id, deptBId);
+    const closed = await prisma.personnelAssignment.findFirstOrThrow({
+      where: { personnelId: mover.id, endedAt: { not: null } },
+    });
+    await expect(
+      prisma.$executeRaw`UPDATE personnel_assignment SET ended_at = NULL WHERE id = ${closed.id}`,
+    ).rejects.toThrow(/拒绝 UPDATE/);
+    await expect(
+      prisma.personnelAssignment.create({
+        data: {
+          id: newUlid(),
+          personnelId: mover.id,
+          orgUnitId: deptAId,
+          startedAt: new Date(),
+        },
+      }),
+    ).rejects.toThrow();
+  });
 });
 
 describe('E2 越权必失败矩阵：读（read × 身份/权限/数据范围）', () => {

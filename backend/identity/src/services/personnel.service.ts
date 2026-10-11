@@ -102,15 +102,19 @@ export class PersonnelService {
       throw new Error(`人员 ${personnelId} 无生效任职，无法调岗`);
     }
     const now = new Date();
-    await this.store.closeAssignment(current.id, now);
-    await this.store.insertAssignment({
-      id: newUlid(),
+    await this.store.transferAssignment({
+      closedAssignmentId: current.id,
+      endedAt: now,
       personnelId,
-      orgUnitId: toOrgUnitId,
-      startedAt: now,
-      endedAt: null,
+      toOrgUnitId,
+      next: {
+        id: newUlid(),
+        personnelId,
+        orgUnitId: toOrgUnitId,
+        startedAt: now,
+        endedAt: null,
+      },
     });
-    await this.store.updatePersonnelOrgUnit(personnelId, toOrgUnitId);
   }
 
   /** 人员失效（modify 动作）：只置失效标记 + 失效时间，无物理删除路径 */

@@ -11,7 +11,7 @@ import { hash } from "argon2";
 // shield 出口内部以 .js 扩展做 NodeNext 风格重导出，node 原生 ESM 不做 .js→.ts 改写，
 // 模块源码只由 vitest/vite 解析。此处维护一份等价实现（同常量、同形制自检）。
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-const ULID_PATTERN = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+const ULID_PATTERN = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
 
 function newUlid() {
   let time = BigInt(Date.now());
@@ -34,7 +34,7 @@ const existing = await prisma.migrationProbe.findFirst({ where: { note: "seed-pr
 if (existing) {
   console.log("种子已存在，跳过。");
 } else {
-  await prisma.migrationProbe.create({ data: { note: "seed-probe" } });
+  await prisma.migrationProbe.create({ data: { id: newUlid(), note: "seed-probe" } });
   console.log("种子已写入。");
 }
 

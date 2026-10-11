@@ -37,26 +37,38 @@ const bytesEqual = (a: Uint8Array, b: Uint8Array): boolean =>
 async function main(): Promise<void> {
   console.log(`E3 不可变必失败用例（RustFS ${endpoint}，桶 ${bucket}）`);
 
-  // 0. 桶在场 + 对象锁 + 版本控制（幂等：已建即跳过）
+  // 0. 桶在场 + 对象锁 + 版本控制（幂等：已建即跳过）。
+  // 前提断言一律经 report() 计入 failures——评审必修：此前用裸 console.log 打 [通过]，
+  // 前提本身没成立也照样绿，后面的红绿对照就失去了基准。
   if (!(await client.bucketExists(bucket))) {
     await client.createBucket(bucket, { objectLockEnabled: true });
-    console.log(`[通过] 建桶（对象锁启用）：${bucket}`);
+    report(true, '建桶（对象锁启用）', `桶已创建：${bucket}`);
   } else {
-    console.log(`[通过] 桶已存在（跳过建桶）：${bucket}`);
+    report(true, '建桶（幂等跳过）', `桶已存在：${bucket}`);
   }
-  if ((await client.getVersioning(bucket)) !== 'Enabled') {
+  let versioning = await client.getVersioning(bucket);
+  if (versioning !== 'Enabled') {
     await client.setVersioning(bucket, 'Enabled');
-    console.log('[通过] 版本控制已启用（Versioning=Enabled）');
-  } else {
-    console.log('[通过] 版本控制已启用（原本即 Enabled）');
+    versioning = await client.getVersioning(bucket);
   }
+  report(
+    versioning === 'Enabled',
+    '版本控制（Versioning=Enabled）',
+    versioning === 'Enabled' ? '已启用' : `实际状态=${versioning}——WORM 断言前提缺失`,
+  );
+  // 桶级默认保留 = #53 验收的「双保险」。RustFS 1.0.1 支持该配置（一手查证见
+  // docs/research/stack-data-compat.md），故此分支本不该触发；一旦触发说明是网络/权限
+  // 故障而非「不支持」——评审必修：此前 catch 对任意异常一律打 [通过]，把故障记成绿。
+  // PUT 幂等，故已存在的桶也在这里被真正断言一次对象锁配置。
   try {
     await client.setDefaultRetention(bucket, { mode: 'COMPLIANCE', years: 100 });
-    console.log('[通过] 桶级默认保留已配置（COMPLIANCE 100 年，双保险）');
+    report(true, '桶级默认保留（COMPLIANCE 100 年）', '配置写入成功（双保险在场）');
   } catch (err) {
-    console.log(
-      `[通过] 桶级默认保留未获支持（${err instanceof S3Error ? err.code : String(err)}），` +
-        '降级为写入侧保留头（适配器强制，语义不放宽）',
+    report(
+      false,
+      '桶级默认保留（COMPLIANCE 100 年）',
+      `配置失败：${err instanceof S3Error ? `${err.status} ${err.code}` : String(err)}` +
+        '（写入侧保留头仍强制，但 #53 的双保险断言不成立）',
     );
   }
 

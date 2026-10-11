@@ -7,9 +7,11 @@ import { isTechnicalPrimaryKey } from '@natural-enforcement/shield';
 
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
-// 不引 @types/node（版本未入定案表）；仅消费 webcrypto 的一个方法，
-// 经 globalThis 窄化取值，避免与 integration 层 @types/node 的全局声明冲突
-//（本包源码同时被根 unit 层与 integration 层编译）。
+// 仓库不引 @types/node 直接依赖（VERSIONS.md「类型」行钉的 24.19.0 只是 overrides 收敛出的
+// peer 传递依赖），故本文件编译时 crypto 全局类型不在场。仅消费 webcrypto 的一个方法，
+// 经 globalThis 窄化取值——不为一个全局拉入整包类型依赖
+//（本包源码同时被根 unit 层与 integration 层编译，两层程序组成不同——故本文件不加任何
+// 全局声明，只在函数内窄化取值）。
 interface CryptoLike {
   getRandomValues<T extends ArrayBufferView | null>(array: T): T;
 }

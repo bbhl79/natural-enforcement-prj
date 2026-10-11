@@ -61,6 +61,18 @@ export class AccessControlService {
     return personnel;
   }
 
+  /**
+   * 新建根机构：先走完身份与权限校验（锚点 = 操作者自己的当前任职机构），
+   * 再以数据范围拒绝。新根不落在任何任职子树内；根机构只经种子通道建立。
+   */
+  async rejectRootRegistration(actor: ActorRef): Promise<never> {
+    await this.authorize(actor, 'modify', await this.currentOrgOf(actor.personnelId));
+    throw new AccessDeniedError(
+      'scope-denied',
+      '新建根机构不在任何任职子树内；根机构只经种子通道建立',
+    );
+  }
+
   /** 人员的当前任职机构（数据范围锚点）；无生效任职按越权处理 */
   async currentOrgOf(personnelId: string): Promise<string> {
     const current = await this.store.findCurrentAssignment(personnelId);

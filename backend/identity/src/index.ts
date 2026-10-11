@@ -17,6 +17,7 @@ export type { ActorRef } from './domain/actor.ts';
 export { newUlid } from './domain/ulid.ts';
 export {
   IDENTITY_STORE,
+  type AssignmentTransfer,
   type ExportAuditRow,
   type IdentityStore,
   type OrgUnitNameVersionRow,

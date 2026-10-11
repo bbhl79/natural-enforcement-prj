@@ -34,22 +34,28 @@
 #   supervision-deps        supervision 只许 → shield、identity、case
 #   supervision-sink        无人依赖 supervision（矩阵行「单向」的反向断言）
 #   deadline-deps           deadline 只许 → shield、case、approval、geo-dict（#45 补丁 1）
-#   module-public-entry     backend/frontend/e2e 互引模块只许公共出口（禁内部路径）
-#   frontend-boundary       前端不直连库（本切片最小形态；查询接口规则随前端代码落地扩展）
+#   module-public-entry     backend/frontend/e2e/integration 互引模块只许公共出口（禁内部路径；
+#                           integration 层按 ASSEMBLY_EXEMPT 名单豁免，评审必修 C7）
+#   frontend-boundary       前端不直连库、不依赖 backend 内部（自带 specifier 提取，评审必修）
 #   weak-reference-entry    跨域弱引用只许经 shield 的 requireCrossDomainReference 入口
+#   g1-model-allowlist      schema.prisma 的 model 名白名单（#47 G1「地基不含业务实体」的
+#                           机检形态，承接 #52 AC4「G1 由结构测试兜底」；新增表即失败）
 #   queue-facility-entry    队列设施唯一入口（#55）：bullmq/ioredis 只许出现在
-#                           packages/queue（设施包）；backend/frontend/e2e/shield 出现
-#                           裸队列依赖 = 业务 worker 绕过队列接口（G5 不可扩大条件的
+#                           packages/queue（设施包）；backend/frontend/e2e/integration/shield
+#                           出现裸队列依赖 = 业务 worker 绕过队列接口（G5 不可扩大条件的
 #                           机器兜底，强于注释级约定）；业务侧只许经 QUEUE_PORT 注入
 #   storage-facility-entry  存储设施唯一入口（#53）：S3/RustFS SDK 依赖（@aws-sdk/*、
 #                           @smithy/*、minio、rustfs）只许出现在 packages/storage
 #                           （设施包）；其余位置出现 = 绕过 StoragePort 追加式抽象
 #                           直连存储（append-only 最保守语义的机器兜底，强于注释级约定）
-#   spatial-no-orm-mutation 空间纪律机器兜底（评审必修）：backend/ 全源码（含 geo-dict
-#                           以外）不得对 geoDictLandBoundary / geoDictSurveyPoint 两个
-#                           空间模型 delegate 调 .create(/.update(——含必填空间字段的模型
-#                           禁用 ORM 写（infra/VERSIONS.md 执行纪律 2），写一律走
-#                           $queryRaw/ST_ 函数；注释级约定之上的正则兜底
+#   spatial-no-orm-mutation 空间纪律机器兜底（评审必修扩口径）：backend/、packages/、
+#                           integration/、e2e/ 全源码
+#                           （SCAN_CODE 形态：ts/tsx/mts/cts + mjs/cjs/sh）不得对
+#                           geoDictLandBoundary / geoDictSurveyPoint 两个空间模型
+#                           delegate 调任何 ORM 写
+#                           （create/createMany/upsert/update/updateMany/delete/deleteMany，
+#                           含换行链式）——含必填空间字段的模型禁用 ORM 写
+#                           （infra/VERSIONS.md 执行纪律 2），写一律走 $queryRaw/ST_ 函数
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
@@ -93,6 +99,7 @@ RULES=(
   module-public-entry
   frontend-boundary
   weak-reference-entry
+  g1-model-allowlist
   queue-facility-entry
   storage-facility-entry
   spatial-no-orm-mutation
@@ -103,23 +110,35 @@ note_ok()   { echo "[OK]   $1"; }
 note_fail() { echo "[FAIL] $1"; FAIL=1; }
 
 # 扫描范围：业务源码（tools/、dev、infra、docs 不扫描：规则约束的是代码互引）
-SCAN_TS=(-type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.mts' -o -name '*.cts' \))
+SCAN_TS_NAMES=(-name '*.ts' -o -name '*.tsx' -o -name '*.mts' -o -name '*.cts')
+# SCAN_CODE（评审必修 C5）：可执行用例与脚本同样书写互引 specifier——e2e/cases/*.sh 直连
+# 后端设施、backend/prisma/*.mjs 装配依赖、*.cjs 校验器走 require。只扫 .ts 让这些形态
+# 落在兜底闸之外（本条为先决改动：加入后现有源码逐条复核，判定结果不变）。
+SCAN_CODE_NAMES=("${SCAN_TS_NAMES[@]}" -o -name '*.mjs' -o -name '*.cjs' -o -name '*.sh')
+SCAN_TS=(-type f \( "${SCAN_TS_NAMES[@]}" \))
+SCAN_CODE=(-type f \( "${SCAN_CODE_NAMES[@]}" \))
 
 # 提取文件中的模块互引 specifier：包名根/深路径导入（@natural-enforcement/<mod>[/<…>]）、
 # 相对路径导入。第三方包（@nestjs/*、node: 等）不在矩阵范围，不提取。
+# require 与 from/import 同权（评审必修 C5）：.cjs 校验器以 node 原生 CJS 运行，只认
+# ESM 语法等于扫而不取。
 # shield 定名 @natural-enforcement/shield（评审必修补 scope）：旧裸名 shield 不再是
 # 合法 specifier，不在提取范围；其残留深路径引用由 shield-single-entry 规则单独拦截。
 specifiers_of() {
-  grep -oE "\b(from|import)[^'\"]{0,40}['\"](@natural-enforcement/[a-z0-9-]+|\.{1,2}/)[^'\"]*['\"]" \
+  grep -oE "\b(from|import|require)[^'\"]{0,40}['\"](@natural-enforcement/[a-z0-9-]+|\.{1,2}/)[^'\"]*['\"]" \
       "$1" 2>/dev/null \
     | sed -E "s/^[a-z]+[^'\"]*['\"]//; s/['\"]$//"
 }
 
-# 文件归属（相对 ROOT 的路径 → 所在模块名；非业务源码返回空）
+# 文件归属（相对 ROOT 的路径 → 所在模块名；非源码返回空）
+# 设施包与测试装配层同列（评审必修 C5）：它们是互引的真实发起方，缺归属即在
+# module-public-entry 里被 `[ -z "$home" ] && continue` 静默跳过——光扩 find 范围不够。
 home_of() {
   local rel="${1#"$ROOT"/}"
   case "$rel" in
     packages/shield/*)           echo shield ;;
+    packages/queue/*)            echo queue ;;
+    packages/storage/*)          echo storage ;;
     backend/identity/*)          echo identity ;;
     backend/geo-dict/*)          echo geo-dict ;;
     backend/case/*)              echo case ;;
@@ -127,6 +146,8 @@ home_of() {
     backend/supervision/*)       echo supervision ;;
     backend/deadline/*)          echo deadline ;;
     frontend/*)                  echo frontend ;;
+    integration/*)               echo integration ;;
+    e2e/*)                       echo e2e ;;
     *)                           echo "" ;;
   esac
 }
@@ -154,6 +175,31 @@ target_of_spec() { # $1=文件绝对路径 $2=specifier
     ./*|../*)               target_of_relative "$1" "$2" ;;
     *)                      echo "" ;;
   esac
+}
+
+# 测试装配层豁免（评审必修 C7：扩范围与豁免必须同批，否则立刻红）
+# integration 层不属于任何业务模块，它按 #47 的验收矩阵做「跨模块装配」——直接引各模块
+# src 深路径与生成的 Prisma Client 是设计而非违规。书面依据：integration/tsconfig.json
+# 把 ../backend/prisma/**/*.ts 纳入 include + backend/identity/src/index.ts 出口注释
+# 「由 integration 层深路径装配」。
+# 此前这一层完全不在扫描范围内，全仓唯一一处跨模块深路径导入正藏在里面（兜底闸的洞）。
+# 豁免只覆盖 module-public-entry 一问（深路径/跨模块相对路径）；形态类规则（队列/存储设施
+# 入口、弱引用入口）一律不豁免：装配层同样不得裸依赖 SDK、不得自定义跨域引用入口。
+# 名单 = 文件 → 允许的 specifier 前缀（空格分隔）；名单外的深路径导入照样判红。
+declare -A ASSEMBLY_EXEMPT=(
+  ["integration/e2-access-matrix.test.ts"]="../backend/identity/src/"
+)
+
+is_assembly_exempt() { # $1 = 相对 ROOT 路径, $2 = specifier
+  local rel="$1" spec="$2" prefix
+  local allowed="${ASSEMBLY_EXEMPT[$rel]:-}"
+  local -a prefixes=()
+  [ -n "$allowed" ] || return 1
+  read -r -a prefixes <<< "$allowed"   # 用 read 拆分：不做 glob 展开
+  for prefix in "${prefixes[@]}"; do
+    case "$spec" in "$prefix"*) return 0 ;; esac
+  done
+  return 1
 }
 
 # 矩阵行规则：某模块的引用不得超出允许列（表外依赖即失败）
@@ -237,6 +283,8 @@ check_supervision-deps() { check_row supervision; }
 check_deadline-deps()    { check_row deadline; }
 
 # 规则 i：矩阵行「监督统计（只读，单向，无人依赖它）」的反向断言
+# 扫描范围含 e2e（评审必修 C5）：本规则断言的是「无人」，范围漏一处即断言不成立；
+# e2e 用例形态是 .sh/.cjs，故用 SCAN_CODE 而非 SCAN_TS。
 check_supervision-sink() {
   local file spec target home fails=0
   while IFS= read -r file; do
@@ -249,20 +297,23 @@ check_supervision-sink() {
         fails=$((fails + 1))
       fi
     done < <(specifiers_of "$file")
-  done < <(find "$BACKEND" "$ROOT/frontend" "${SCAN_TS[@]}")
+  done < <(find "$BACKEND" "$ROOT/frontend" "$ROOT/e2e" "${SCAN_CODE[@]}")
   if [ "$fails" -eq 0 ]; then
     note_ok "supervision-sink：无人依赖 supervision（单向成立）"
   fi
 }
 
-# 规则 j：backend/frontend/e2e 互引模块只许公共出口——@natural-enforcement/<mod>/<深路径>
-# 与跨模块相对路径一律拦截（往来形态 = 只读查询 + 事件，经公共出口表达；默认禁止直写）
+# 规则 j：backend/frontend/e2e/integration 互引模块只许公共出口——@natural-enforcement/<mod>/<深路径>
+# 与跨模块相对路径一律拦截（往来形态 = 只读查询 + 事件，经公共出口表达；默认禁止直写）。
+# 评审必修 C7：纳入 integration 层（此前全不在范围内，全仓唯一一处跨模块深路径导入正藏在
+# 那里）+ 脚本形态（.mjs/.cjs/.sh）；测试装配层豁免见 ASSEMBLY_EXEMPT，与扩范围同批落地。
 check_module-public-entry() {
   local file spec target home fails=0
   while IFS= read -r file; do
     home="$(home_of "$file")"
     [ -z "$home" ] && continue
     while IFS= read -r spec; do
+      is_assembly_exempt "${file#"$ROOT"/}" "$spec" && continue
       case "$spec" in
         @natural-enforcement/*/*)
           note_fail "module-public-entry：内部路径导入 ${file#"$ROOT"/} → $spec（只许 @natural-enforcement/<module> 公共出口）"
@@ -275,24 +326,26 @@ check_module-public-entry() {
           fi ;;
       esac
     done < <(specifiers_of "$file")
-  done < <(find "$BACKEND" "$ROOT/frontend" "$ROOT/e2e" "${SCAN_TS[@]}")
+  done < <(find "$BACKEND" "$ROOT/frontend" "$ROOT/e2e" "$ROOT/integration" "${SCAN_CODE[@]}")
   if [ "$fails" -eq 0 ]; then
     note_ok "module-public-entry：模块互引均经公共出口（无内部路径/跨模块相对路径）"
   fi
 }
 
-# 规则 k：前端不直连库（本切片最小形态；frontend 尚无代码，规则先行，防后续切片漂移）
+# 规则 k：前端不直连库、不依赖 backend 内部路径。
+# 评审必修（死规则修活）：此前复用 specifiers_of，而它只提取 @natural-enforcement/* 与
+# 相对路径，case 里的 pg|ioredis|@prisma/client|… 永远取不到 → 规则恒绿。改为自带
+# specifier 提取（同 queue/storage 设施入口规则的形态），并把「相对路径拐进 backend/」
+# 一并纳入——前端经 ../../backend/… 拿 Prisma Client 同样是直连库。
 check_frontend-boundary() {
   local file spec fails=0
   while IFS= read -r file; do
     while IFS= read -r spec; do
-      case "$spec" in
-        pg|pg/*|ioredis|ioredis/*|bullmq|bullmq/*|@prisma/client|@prisma/client/*|@prisma/orm*|rustfs*|backend/*)
-          note_fail "frontend-boundary：前端直连库/后端内部 ${file#"$ROOT"/} → $spec（前端只许 shield + 各模块查询接口）"
-          fails=$((fails + 1)) ;;
-      esac
-    done < <(specifiers_of "$file")
-  done < <(find "$ROOT/frontend" "${SCAN_TS[@]}")
+      note_fail "frontend-boundary：前端直连库/后端内部 ${file#"$ROOT"/} → $spec（前端只许 shield + 各模块公共出口的查询接口，数据一律经面板快照）"
+      fails=$((fails + 1))
+    done < <(grep -oE "\b(from|import|require)[^'\"]{0,40}['\"](pg|ioredis|bullmq|@prisma/[^'\"]*|rustfs[^'\"]*|@aws-sdk/[^'\"]*|@smithy/[^'\"]*|(backend|infra)/[^'\"]*|\.{1,2}/(backend|infra)/[^'\"]*)['\"]" \
+        "$file" 2>/dev/null | sed -E "s/^[a-z]+[^'\"]*['\"]//; s/['\"]$//")
+  done < <(find "$ROOT/frontend" "${SCAN_CODE[@]}")
   if [ "$fails" -eq 0 ]; then
     note_ok "frontend-boundary：前端无直连库/后端内部路径引用"
   fi
@@ -319,15 +372,65 @@ check_weak-reference-entry() {
       note_fail "weak-reference-entry：${file#"$ROOT"/} 出现跨域弱引用入口名但未从 shield 导入"
       fails=$((fails + 1))
     fi
-  done < <(grep -rlE 'requireCrossDomainReference' "$BACKEND" "$ROOT/frontend" "$ROOT/e2e" --include='*.ts' --include='*.tsx' 2>/dev/null)
+  done < <(grep -rlE 'requireCrossDomainReference' "$BACKEND" "$ROOT/frontend" "$ROOT/e2e" "$ROOT/integration" \
+      --include='*.ts' --include='*.tsx' --include='*.mts' --include='*.cts' \
+      --include='*.mjs' --include='*.cjs' --include='*.sh' 2>/dev/null)
   if [ "$fails" -eq 0 ]; then
     note_ok "weak-reference-entry：跨域弱引用均经 shield requireCrossDomainReference 入口"
   fi
 }
 
+# 规则 p（评审必修，承接 #52 AC4「G1 由结构测试兜底」）：地基不含业务实体（#47 G1），
+# 机检形态 = schema.prisma 的 model 名白名单。白名单外新增即红 = 逼建表动作回到
+# #47/#16 定案票（G1 不可扩大条件：#47 明文「CI 结构测试与评审是缺口不扩大的两道闸」），
+# 白名单内实体缺席同样即红——名单与实际模型必须逐字相等，防止名单腐化成摆设。
+G1_MODELS=(
+  MigrationProbe
+  OrgUnit
+  OrgUnitNameVersion
+  Personnel
+  PersonnelNameVersion
+  PersonnelAssignment
+  ExportAudit
+  GeoDictLandBoundary
+  GeoDictSurveyPoint
+)
+check_g1-model-allowlist() {
+  local schema="$BACKEND/prisma/schema.prisma" model in_schema extra missing fails=0
+  if [ ! -f "$schema" ]; then
+    note_ok "g1-model-allowlist：schema.prisma 不在场（无模型 = 无 G1 越界）"
+    return
+  fi
+  in_schema="$(grep -oE '^[[:space:]]*model [A-Za-z][A-Za-z0-9_]*' "$schema" | awk '{print $NF}' | sort -u)"
+  extra=""
+  while IFS= read -r model; do
+    [ -z "$model" ] && continue
+    case " ${G1_MODELS[*]} " in
+      *" $model "*) ;;
+      *) extra="$extra $model" ;;
+    esac
+  done <<< "$in_schema"
+  if [ -n "$extra" ]; then
+    note_fail "g1-model-allowlist：${schema#"$ROOT"/} 出现白名单外 model：$(echo "$extra" | xargs)（#47 G1 地基不含业务实体；新增表须回定案票，不得自行放宽）"
+    fails=$((fails + 1))
+  fi
+  missing=""
+  for model in "${G1_MODELS[@]}"; do
+    grep -qx -- "$model" <<< "$in_schema" || missing="$missing $model"
+  done
+  if [ -n "$missing" ]; then
+    note_fail "g1-model-allowlist：白名单与实际 model 不符，名单内实体缺席：$(echo "$missing" | xargs)（改表须同步名单并回 #47 留痕）"
+    fails=$((fails + 1))
+  fi
+  if [ "$fails" -eq 0 ]; then
+    note_ok "g1-model-allowlist：${schema#"$ROOT"/} 的 model 与 G1 白名单逐字相等（${#G1_MODELS[@]} 项，无业务实体越界）"
+  fi
+}
+
 # 规则 m（#55 并入）：队列设施唯一入口——bullmq/ioredis 只许出现在 packages/queue。
-# backend/frontend/e2e/shield 出现裸队列依赖即失败：业务 worker 归各业务切片自带
+# backend/frontend/e2e/integration/shield 出现裸队列依赖即失败：业务 worker 归各业务切片自带
 #（G5），队列一律经 QueuePort 抽象注入，结构测试兜底防绕过。
+# 评审必修 C7：范围补 integration 层与脚本形态（.mjs/.cjs/.sh + require 同权）。
 check_queue-facility-entry() {
   local file spec fails=0
   while IFS= read -r file; do
@@ -340,9 +443,9 @@ check_queue-facility-entry() {
           note_fail "queue-facility-entry：${file#"$ROOT"/} 裸依赖 $spec（队列设施唯一入口 = packages/queue；业务侧只许经 QUEUE_PORT 注入，G5）"
           fails=$((fails + 1)) ;;
       esac
-    done < <(grep -oE "\b(from|import)[^'\"]{0,40}['\"](bullmq|ioredis)(/[^'\"]*)?['\"]" \
+    done < <(grep -oE "\b(from|import|require)[^'\"]{0,40}['\"](bullmq|ioredis)(/[^'\"]*)?['\"]" \
         "$file" 2>/dev/null | sed -E "s/^[a-z]+[^'\"]*['\"]//; s/['\"]$//")
-  done < <(find "$BACKEND" "$ROOT/frontend" "$ROOT/e2e" "$SHIELD_DIR" "${SCAN_TS[@]}")
+  done < <(find "$BACKEND" "$ROOT/frontend" "$ROOT/e2e" "$ROOT/integration" "$SHIELD_DIR" "${SCAN_CODE[@]}")
   if [ "$fails" -eq 0 ]; then
     note_ok "queue-facility-entry：bullmq/ioredis 仅在队列设施包内（业务侧无裸队列依赖，G5 机器兜底）"
   fi
@@ -365,28 +468,42 @@ check_storage-facility-entry() {
           note_fail "storage-facility-entry：${file#"$ROOT"/} 裸依赖 $spec（存储设施唯一入口 = packages/storage；业务侧只许经 STORAGE_PORT 注入）"
           fails=$((fails + 1)) ;;
       esac
-    done < <(grep -oE "\b(from|import)[^'\"]{0,40}['\"](@aws-sdk/[^'\"]*|@smithy/[^'\"]*|minio(/[^'\"]*)?|rustfs(/[^'\"]*)?)['\"]" \
+    done < <(grep -oE "\b(from|import|require)[^'\"]{0,40}['\"](@aws-sdk/[^'\"]*|@smithy/[^'\"]*|minio(/[^'\"]*)?|rustfs(/[^'\"]*)?)['\"]" \
         "$file" 2>/dev/null | sed -E "s/^[a-z]+[^'\"]*['\"]//; s/['\"]$//")
-  done < <(find "$BACKEND" "$ROOT/frontend" "$ROOT/e2e" "$SHIELD_DIR" "$QUEUE_DIR" "${SCAN_TS[@]}")
+  done < <(find "$BACKEND" "$ROOT/frontend" "$ROOT/e2e" "$ROOT/integration" "$SHIELD_DIR" "$QUEUE_DIR" "${SCAN_CODE[@]}")
   if [ "$fails" -eq 0 ]; then
     note_ok "storage-facility-entry：S3/RustFS SDK 仅在存储设施包内（业务侧无裸存储依赖，append-only 机器兜底）"
   fi
 }
 
-# 规则 o（评审必修）：空间纪律机器兜底——backend/ 全源码不得对两个空间模型 delegate
-# 调 .create(/.update(。含必填 Unsupported 空间字段的模型走 ORM 写会绕过 ST_Transform
-# 统一口径（infra/VERSIONS.md 执行纪律 2），写一律 $queryRaw/ST_ 函数；本规则以正则
-# 扫 delegate 调用形态兜底，防后续切片漂移出原生空间路径。
+# 规则 o（评审必修扩口径）：空间纪律机器兜底——backend/、packages/、integration/、e2e/
+# 全源码不得对两个空间模型 delegate 调任何 ORM 写。含必填 Unsupported 空间字段的模型走
+# ORM 写会绕过 ST_Transform 统一口径（infra/VERSIONS.md 执行纪律 2），写一律 $queryRaw/ST_ 函数。
+# 扩口径三处：① 方法集补全（create/update 之外的 upsert/createMany/updateMany/
+# delete/deleteMany 同样是 ORM 写）；② 文件形态 = SCAN_CODE（.mjs/.cjs 种子与校验器、
+# .sh 用例内联 node 都能拿到 delegate）；③ 换行链式（prisma.geoDictLandBoundary 换行
+# .create(）折行后二次判定，单行已命中的文件不重复报。
+SPATIAL_MODEL='geoDictLandBoundary|geoDictSurveyPoint'
+SPATIAL_ORM_METHOD='createManyAndReturn|createMany|create|upsert|updateMany|update|deleteMany|delete'
+SPATIAL_ORM_WRITE="(${SPATIAL_MODEL})[[:space:]]*\.[[:space:]]*(${SPATIAL_ORM_METHOD})[[:space:]]*\("
 check_spatial-no-orm-mutation() {
-  local hits=0 line
-  while IFS= read -r line; do
-    note_fail "spatial-no-orm-mutation：空间模型 ORM 写调用 ${line}（含必填空间字段禁用 ORM create/update，执行纪律 2；写一律 \$queryRaw/ST_ 函数）"
-    hits=$((hits + 1))
-  done < <(grep -rEn --include='*.ts' --include='*.tsx' --include='*.mts' --include='*.cts' \
-      -e '(geoDictLandBoundary|geoDictSurveyPoint)\.(create|update)\(' \
-      "$BACKEND" 2>/dev/null)
+  local hits=0 file lines line
+  while IFS= read -r file; do
+    lines="$(grep -En -e "$SPATIAL_ORM_WRITE" "$file" 2>/dev/null)"
+    if [ -n "$lines" ]; then
+      while IFS= read -r line; do
+        note_fail "spatial-no-orm-mutation：空间模型 ORM 写调用 ${file#"$ROOT"/}:${line%%:*}（含必填空间字段禁用 ORM 写，执行纪律 2；写一律 \$queryRaw/ST_ 函数）"
+        hits=$((hits + 1))
+      done <<< "$lines"
+      continue
+    fi
+    if tr '\n' ' ' < "$file" | grep -qE "$SPATIAL_ORM_WRITE"; then
+      note_fail "spatial-no-orm-mutation：${file#"$ROOT"/} 折行后检出空间模型 ORM 写（换行链式形态）"
+      hits=$((hits + 1))
+    fi
+  done < <(find "$BACKEND" "$ROOT/packages" "$ROOT/integration" "$ROOT/e2e" "${SCAN_CODE[@]}")
   if [ "$hits" -eq 0 ]; then
-    note_ok "spatial-no-orm-mutation：backend 全源码无空间模型 ORM create/update 调用（执行纪律 2 机器兜底）"
+    note_ok "spatial-no-orm-mutation：backend + packages + integration + e2e 全源码无空间模型 ORM 写调用（执行纪律 2 机器兜底）"
   fi
 }
 

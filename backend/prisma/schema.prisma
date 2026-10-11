@@ -16,9 +16,14 @@ datasource db {
   provider = "postgresql"
 }
 
-// 迁移/种子通道的最小验证探针：无业务语义，首个真实业务模块（#52 起）落地后由其后迁移取代。
+// 迁移/种子通道的最小验证探针（#49）：无业务语义，只证「迁移链可从零重放 + 种子可幂等写入」。
+// 原注释称「首个业务模块（#52）落地后由其后迁移取代」未成立：E1（e2e/cases/01-from-zero.sh:26）
+// 与 E7/E6 冒烟（03-command-smoke.sh:110/137）都以 note='seed-probe' 作从零建库的锚点断言，
+// 删表即删锚点——故本表作为长期基设探针保留（评审必修 C8 措辞更正）。
+// 主键形制 = #16 §1.1 TEXT/ULID（应用侧生成，无库内默认值）：与 0002_identity_org、
+// geo_dict 两空间表同形制；先例见提交 6f2da16，自增 Int 违反 shield ULID 契约，就地改正。
 model MigrationProbe {
-  id        Int      @id @default(autoincrement())
+  id        String   @id
   note      String
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -36,8 +41,8 @@ model OrgUnit {
   parentId      String?   @map("parent_id")
   parent        OrgUnit?  @relation("OrgUnitHierarchy", fields: [parentId], references: [id])
   children      OrgUnit[] @relation("OrgUnitHierarchy")
-  deactivatedAt DateTime? @map("deactivated_at")
-  createdAt     DateTime  @default(now()) @map("created_at")
+  deactivatedAt DateTime? @db.Timestamptz(6) @map("deactivated_at")
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
 
   nameVersions OrgUnitNameVersion[]
   members      Personnel[]
@@ -54,7 +59,7 @@ model OrgUnitNameVersion {
   orgUnit   OrgUnit  @relation(fields: [orgUnitId], references: [id])
   name      String
   version   Int
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
 
   @@unique([orgUnitId, version])
   @@map("org_unit_name_version")
@@ -69,8 +74,8 @@ model Personnel {
   orgUnit       OrgUnit   @relation(fields: [orgUnitId], references: [id])
   role          String
   passwordHash  String?   @map("password_hash")
-  deactivatedAt DateTime? @map("deactivated_at")
-  createdAt     DateTime  @default(now()) @map("created_at")
+  deactivatedAt DateTime? @db.Timestamptz(6) @map("deactivated_at")
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
 
   nameVersions PersonnelNameVersion[]
   assignments  PersonnelAssignment[]
@@ -86,21 +91,24 @@ model PersonnelNameVersion {
   personnel   Personnel @relation(fields: [personnelId], references: [id])
   name        String
   version     Int
-  createdAt   DateTime @default(now()) @map("created_at")
+  createdAt   DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
 
   @@unique([personnelId, version])
   @@map("personnel_name_version")
 }
 
-/// 任职记录：当前任职 = endedAt 为 NULL 的那条；调岗 = 闭环旧记录 + 插入新记录
+/// 任职记录：当前任职 = endedAt 为 NULL 的那条（迁移里的部分唯一索引
+/// personnel_assignment_one_current 保证至多一条；Prisma schema 无 partial unique，
+/// 后续生成迁移时不得删掉该索引）。调岗 = 同一事务内闭环旧记录 + 插入新记录。
+/// UPDATE 触发器只允许一次 endedAt 从空到非空。
 model PersonnelAssignment {
   id          String    @id
   personnelId String    @map("personnel_id")
   personnel   Personnel @relation(fields: [personnelId], references: [id])
   orgUnitId   String    @map("org_unit_id")
   orgUnit     OrgUnit   @relation(fields: [orgUnitId], references: [id])
-  startedAt   DateTime  @default(now()) @map("started_at")
-  endedAt     DateTime? @map("ended_at")
+  startedAt   DateTime  @default(now()) @db.Timestamptz(6) @map("started_at")
+  endedAt     DateTime? @db.Timestamptz(6) @map("ended_at")
 
   @@map("personnel_assignment")
 }
@@ -113,7 +121,7 @@ model ExportAudit {
   targetOrgUnitId  String   @map("target_org_unit_id")
   targetOrgUnit    OrgUnit  @relation(fields: [targetOrgUnitId], references: [id])
   exportedCount    Int      @map("exported_count")
-  createdAt        DateTime @default(now()) @map("created_at")
+  createdAt        DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
 
   @@map("export_audit")
 }
@@ -128,9 +136,9 @@ model GeoDictLandBoundary {
   id         String                              @id
   name       String
   domain     String // land | mineral（库内 CHECK 约束承载法域定几何）
-  geom       Unsupported("geometry(Polygon,4490)")?
+  geom       Unsupported("geometry(Polygon,4490)")
   sourceSrid Int                                 @map("source_srid")
-  sourceGeom Unsupported("geometry")?
+  sourceGeom Unsupported("geometry")
   createdAt  DateTime                            @default(now()) @map("created_at")
 
   @@map("geo_dict_land_boundary")
@@ -142,9 +150,9 @@ model GeoDictSurveyPoint {
   id         String                             @id
   name       String
   domain     String // survey | planning（库内 CHECK 约束承载法域定几何）
-  geom       Unsupported("geometry(Point,4490)")?
+  geom       Unsupported("geometry(Point,4490)")
   sourceSrid Int                                @map("source_srid")
-  sourceGeom Unsupported("geometry")?
+  sourceGeom Unsupported("geometry")
   createdAt  DateTime                           @default(now()) @map("created_at")
 
   @@map("geo_dict_survey_point")

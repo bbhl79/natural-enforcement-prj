@@ -27,9 +27,10 @@ export const CROSS_DOMAIN_REFERENCE_RULE = {
 /** 技术主键品牌类型：跨域引用字段只接受该类型（结构层禁止业务编号流入引用位） */
 export type TechnicalPrimaryKey = string & { readonly __technicalPrimaryKey: unique symbol };
 
-const ULID_PATTERN = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+// ULID 是 128 位：26 个 Crockford 字符里最高 2 位必须为 0，所以首字符只能是 0–7。
+const ULID_PATTERN = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
 
-/** #16 §1.1 类型守卫：仅放行 26 位大写 Crockford Base32 形制的技术主键 */
+/** #16 §1.1 类型守卫：仅放行 26 位大写 Crockford Base32、且不超出 128 位的技术主键 */
 export function isTechnicalPrimaryKey(value: unknown): value is TechnicalPrimaryKey {
   return typeof value === 'string' && ULID_PATTERN.test(value);
 }

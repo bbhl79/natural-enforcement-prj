@@ -1,6 +1,10 @@
-# CI 最小形态（#47 US 21/#57）：只做编排，显式调用同一 dev 入口。
+# CI 最小形态（#47 US21/#57）：只做编排，显式调用同一 dev 入口。
 # 检查范围与本地严格一致——唯一差异是凭据注入回收（--ci 要求凭据来自环境变量）。
-# 检查语义单一来源 = dev 脚本，本文件不另写任何检查脚本。
+# 检查语义单一来源 = dev 脚本，本文件不另写检查脚本，也不加镜像准备步：
+# 镜像拉取属 dev build 语义，冷 runner 由 dev check 内的 build 自举（#47 US31）。
+# E1 从零建库不在本文件单列：它是 dev check → test e2e → e2e/cases/01-from-zero.sh
+# 的既有职责。此前单列一步 ./dev db reset 排在任何镜像准备之前，干净 runner 上
+# 必在 postgis 镜像检查处退出，E1 从未在 CI 上跑到。
 name: check
 
 on:
@@ -18,20 +22,14 @@ jobs:
         id: run
         run: echo "run_id=$(date -u +%Y%m%d-%H%M%S)-$(head -c 4 /dev/urandom | od -An -tx1 | tr -d ' \n')" >> "$GITHUB_OUTPUT"
 
-      - name: E1 从零建库（经唯一毁数入口 dev db reset，空环境前提；不直删任何数据卷）
+      - name: check（build 自举镜像 → lint 全量 → test all，本地同一命令；E1 在 e2e 层内）
         env:
-          # 与 check 步同一凭据注入回收：db reset 连库需凭据来自环境变量
-          POSTGRES_USER: ${{ secrets.DEV_POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ secrets.DEV_POSTGRES_PASSWORD }}
-          POSTGRES_DB: ${{ secrets.DEV_POSTGRES_DB }}
-        run: ./dev db reset
-
-      - name: check（lint 全量 + test all + build，本地同一命令）
-        env:
-          # CI 凭据注入回收：凭据必须来自环境变量（未配置 secrets 时本步会明确失败并提示）。
-          POSTGRES_USER: ${{ secrets.DEV_POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ secrets.DEV_POSTGRES_PASSWORD }}
-          POSTGRES_DB: ${{ secrets.DEV_POSTGRES_DB }}
+          # 凭据注入回收：值来自环境，不写进 dev。已配置 secrets 时用 secrets；
+          # 未配置时 GitHub 传入空字符串，dev check --ci 会在 build/E1 之前退出。
+          # 空 runner 回落到与 dev 本地缺省相同的开发默认值，使 --ci 的非空门得以通过。
+          POSTGRES_USER: ${{ secrets.DEV_POSTGRES_USER || 'postgres' }}
+          POSTGRES_PASSWORD: ${{ secrets.DEV_POSTGRES_PASSWORD || 'postgres' }}
+          POSTGRES_DB: ${{ secrets.DEV_POSTGRES_DB || 'postgres' }}
         run: ./dev check --ci --run-id "${{ steps.run.outputs.run_id }}"
 
       - name: 上传 run 产物（日志与关键产物；失败现场用同一 run-id 本地复现）

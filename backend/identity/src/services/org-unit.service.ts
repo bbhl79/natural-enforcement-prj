@@ -23,11 +23,12 @@ export class OrgUnitService {
     private readonly access: AccessControlService,
   ) {}
 
-  /** 登记机构（modify 动作）：上级机构须在数据范围内；名称落当前行 + v1 版本行 */
+  /** 登记机构（modify 动作）：上级机构须在数据范围内；根机构一律拒绝。名称落当前行 + v1 版本行 */
   async registerOrgUnit(actor: ActorRef, input: RegisterOrgUnitInput): Promise<OrgUnitRow> {
-    if (input.parentId) {
-      await this.access.authorize(actor, 'modify', input.parentId);
+    if (input.parentId === null) {
+      return this.access.rejectRootRegistration(actor);
     }
+    await this.access.authorize(actor, 'modify', input.parentId);
     const id = newUlid();
     await this.store.insertOrgUnit({ id, ...input });
     await this.store.insertOrgUnitNameVersion({

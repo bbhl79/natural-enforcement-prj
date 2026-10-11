@@ -49,6 +49,7 @@ describe('队列接口（QueuePort）经 BullMQ 适配器', () => {
 
     expect(waitUntilFinishedMock).toHaveBeenCalledWith(expect.anything(), 10_000);
     expect(result).toEqual({ ok: true, probeId: 'p-1', pong: 'PONG' });
+    await expect(port.waitForCompletion(ref, 10_000)).rejects.toThrow(/未知任务引用/);
   });
 
   it('close 关闭队列与消费确认通道（进程级探测可干净退出）', async () => {

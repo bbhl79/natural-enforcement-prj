@@ -28,7 +28,20 @@ export interface PersonnelRow {
   deactivatedAt: Date | null;
 }
 
-/** 任职记录（当前 assignment = endedAt 为 null 的那条） */
+/**
+ * 一次调岗的三笔写入，必须在同一事务里完成：
+ * 先关止旧任职，再插入新的当前任职，再更新人员当前归属。
+ * 关止在前，才能满足「每人最多一条 endedAt 为空」的部分唯一约束。
+ */
+export interface AssignmentTransfer {
+  closedAssignmentId: string;
+  endedAt: Date;
+  personnelId: string;
+  toOrgUnitId: string;
+  next: PersonnelAssignmentRow;
+}
+
+/** 任职记录（当前 assignment = endedAt 为 null 的那条；库层保证至多一条） */
 export interface PersonnelAssignmentRow {
   id: string;
   personnelId: string;
@@ -109,5 +122,7 @@ export interface IdentityStore {
   insertAssignment(row: PersonnelAssignmentRow): Promise<void>;
   /** 结束当前任职（调岗旧权限失效的数据层载体） */
   closeAssignment(assignmentId: string, endedAt: Date): Promise<void>;
+  /** 调岗三笔写入的唯一入口；实现必须放在同一数据库事务中 */
+  transferAssignment(transfer: AssignmentTransfer): Promise<void>;
   insertExportAudit(row: ExportAuditRow): Promise<void>;
 }

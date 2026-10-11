@@ -25,7 +25,11 @@ export function createBullMqQueue(queueName: string, connection: ConnectionOptio
       if (!job) {
         throw new Error(`未知任务引用：${ref.id}`);
       }
-      return job.waitUntilFinished(events, timeoutMs);
+      try {
+        return await job.waitUntilFinished(events, timeoutMs);
+      } finally {
+        jobs.delete(ref.id);
+      }
     },
     async close() {
       jobs.clear();
