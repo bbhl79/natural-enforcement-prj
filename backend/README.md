@@ -73,7 +73,51 @@ BullMQ/RustFS SDK），不引用 backend 内部路径（含 `../../backend/…` 
 | `queue-facility-entry` | #55 队列设施唯一入口（bullmq/ioredis 只许在 `packages/queue`，业务侧只许经 `QUEUE_PORT` 注入；G5 机器兜底） |
 | `storage-facility-entry` | #53 存储设施唯一入口（`@aws-sdk/*`、`@smithy/*`、`minio`、`rustfs` 只许在 `packages/storage`，业务侧只许经 `STORAGE_PORT` 注入；append-only 最保守语义的机器兜底） |
 | `spatial-no-orm-mutation` | 执行纪律 2（`geoDictLandBoundary` / `geoDictSurveyPoint` 两个空间模型禁用任何 ORM 写，含 upsert/createMany/updateMany/delete(Many) 与换行链式；写一律 `$queryRaw`/ST_ 函数。范围 = `backend/` + `packages/` + `integration/` + `e2e/` 全源码，SCAN_CODE 形态） |
-| `g1-model-allowlist` | #47 G1「地基不含业务实体」机检形态（承接 #52 AC4）：`backend/prisma/schema.prisma` 的 model 名与白名单逐字相等，表外新增即红——建表动作必须回 #47/#16 定案票，不得自行放宽 |
+| `g1-model-allowlist` | #47 G1「地基不含业务实体」机检形态（承接 #52 AC4）：`backend/prisma/schema.prisma` 的 model 名与白名单逐字相等，表外新增即红——建表动作必须回 #47/#16 定案票，不得自行放宽。#69 定案列入 `AuthSession`、`AuthRememberMe`（见下节「认证记录」） |
+
+## 认证记录（#69）
+
+会话与记住我分两张表，白名单名字是 `AuthSession`、`AuthRememberMe`。技术主键是 ULID。记录只失效不删除。两张表只存人员标识，不存组织、角色、数据范围、执法资格。浏览器拿到的是 256 位随机数，库里的 `secret_hash` 只存它的 SHA-256（64 位小写十六进制）。
+
+寿命、Cookie、并发与结束条件以 #63 最终决议为准。本表只记录这些规则落在哪一列。
+
+分表的原因：会话 Cookie 在浏览器关闭时消失，记住我可以留到勾选那次认证起 168 小时。换新秘密要保留已作废的旧摘要，旧秘密再次出现时才能认出来。一段会话可以没有记住我。一条记住我也可以没有仍在使用的会话。
+
+一台设备是一个 `chain_id`。链的首行让 `chain_id` 等于自己的 `id`，换新秘密时原样复制。换新的写入顺序是先把旧行结束为 `rotated`，再插入 `predecessor_id` 指向旧行的新行。`predecessor_id` 唯一，所以每个前驱只有一个后继。后继只接受 `end_reason = rotated` 的前驱，退出、未勾选记住我、挤掉、停用这些结束不是换新，不能再延长这条链。同一条链同时只有一行未结束。按设备作废，就是结束这条链上未结束的那一行。
+
+旧秘密再次出现时，用 `secret_hash` 命中 `end_reason = rotated` 的行，再结束该人员的全部会话和全部记住我。
+
+### `auth_session`（会话）
+
+| 列 | 含义 |
+|---|---|
+| `id` | ULID |
+| `personnel_id` | 人员标识 |
+| `secret_hash` | `__Host-sid` 随机数的 SHA-256 |
+| `remember_me_chain_id` | 这台设备的记住我链首行 id。这次登录没有记住我则为空 |
+| `authenticated_at` | 这段会话的认证时刻 |
+| `last_seen_at` | 最近一次请求。空闲从这里起算。只允许向前改 |
+| `absolute_ends_at` | 绝对终点。未勾选记住我时，从这次认证起 8 小时。勾选记住我时，必须等于该链首行的绝对终点，不重新起算 |
+| `ended_at` | 空表示这段会话仍可使用 |
+| `end_reason` | 与 `ended_at` 同一次写入。取值：`logout`、`admin-ended`、`personnel-deactivated`、`idle-timeout`、`absolute-timeout`、`displaced`、`remember-me-reuse` |
+
+未结束的行只允许推进 `last_seen_at`。结束后整行不可再改。查找某人员仍未结束的会话，并取出最旧一段，使用部分索引 `auth_session_active_by_personnel`。
+
+### `auth_remember_me`（记住我）
+
+| 列 | 含义 |
+|---|---|
+| `id` | ULID |
+| `personnel_id` | 人员标识 |
+| `chain_id` | 设备链。首行等于自己的 `id` |
+| `secret_hash` | `__Host-rm` 这一枚秘密的 SHA-256 |
+| `absolute_ends_at` | 勾选那次认证起 168 小时。换新秘密不往后推，复制到新行 |
+| `predecessor_id` | 被换下的上一枚秘密。首行为空 |
+| `ended_at` | 空表示这一枚秘密仍可使用 |
+| `end_reason` | 与 `ended_at` 同一次写入。取值：`logout`、`login-without-remember`、`rotated`、`displaced`、`admin-ended`、`personnel-deactivated`、`remember-me-reuse`、`absolute-timeout` |
+| `created_at` | 这一枚秘密写入的时刻 |
+
+已结束的行不可再改。同一条链同时只有一行未结束，由部分索引 `auth_remember_me_one_active_per_chain` 保证。按人员找出未结束的记住我，用部分索引 `auth_remember_me_active_by_personnel`。`chain_id` 的自引用外键是 `auth_remember_me_chain_fk`。加上会话的 `auth_session_active_by_personnel`，这四样 Prisma schema 表达不了，后续生成迁移时不得删掉。
 
 ## 测试装配层豁免（integration 层）
 

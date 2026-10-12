@@ -39,7 +39,8 @@
 #   frontend-boundary       前端不直连库、不依赖 backend 内部（自带 specifier 提取，评审必修）
 #   weak-reference-entry    跨域弱引用只许经 shield 的 requireCrossDomainReference 入口
 #   g1-model-allowlist      schema.prisma 的 model 名白名单（#47 G1「地基不含业务实体」的
-#                           机检形态，承接 #52 AC4「G1 由结构测试兜底」；新增表即失败）
+#                           机检形态，承接 #52 AC4「G1 由结构测试兜底」；新增表即失败。
+#                           #69 定案列入 AuthSession、AuthRememberMe）
 #   queue-facility-entry    队列设施唯一入口（#55）：bullmq/ioredis 只许出现在
 #                           packages/queue（设施包）；backend/frontend/e2e/integration/shield
 #                           出现裸队列依赖 = 业务 worker 绕过队列接口（G5 不可扩大条件的
@@ -384,6 +385,8 @@ check_weak-reference-entry() {
 # 机检形态 = schema.prisma 的 model 名白名单。白名单外新增即红 = 逼建表动作回到
 # #47/#16 定案票（G1 不可扩大条件：#47 明文「CI 结构测试与评审是缺口不扩大的两道闸」），
 # 白名单内实体缺席同样即红——名单与实际模型必须逐字相等，防止名单腐化成摆设。
+# #69 定案追加 AuthSession、AuthRememberMe。分表理由与字段见 schema.prisma 与
+# backend/README.md「认证记录」。寿命、Cookie、并发与结束条件以 #63 为准，不在此重开。
 G1_MODELS=(
   MigrationProbe
   OrgUnit
@@ -392,6 +395,8 @@ G1_MODELS=(
   PersonnelNameVersion
   PersonnelAssignment
   ExportAudit
+  AuthSession
+  AuthRememberMe
   GeoDictLandBoundary
   GeoDictSurveyPoint
 )

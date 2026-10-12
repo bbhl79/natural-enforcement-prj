@@ -77,9 +77,11 @@ model Personnel {
   deactivatedAt DateTime? @db.Timestamptz(6) @map("deactivated_at")
   createdAt     DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
 
-  nameVersions PersonnelNameVersion[]
-  assignments  PersonnelAssignment[]
-  exportAudits ExportAudit[]
+  nameVersions    PersonnelNameVersion[]
+  assignments     PersonnelAssignment[]
+  exportAudits    ExportAudit[]
+  authSessions    AuthSession[]
+  rememberMeRows  AuthRememberMe[]
 
   @@map("personnel")
 }
@@ -124,6 +126,68 @@ model ExportAudit {
   createdAt        DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
 
   @@map("export_audit")
+}
+
+// ---- 认证记录（#69）：会话与记住我分表 ----
+// 寿命、Cookie、并发与结束条件以 #63 最终决议为准，不在本模型重写数值。
+// 两张表都只绑定人员标识。不存组织、角色、数据范围、执法资格（#64 / ADR 0003）。
+// 技术主键 = ULID（#16 §1.1），应用侧生成。记录只失效不删除：触发器拒 DELETE。
+// 浏览器拿到的是 256 位随机数。secret_hash 只存该随机数的 SHA-256（64 位小写十六进制），不存随机数本身。
+//
+// 为什么分两张表：会话 Cookie 随浏览器关闭消失，记住我可以留到 168 小时终点；
+// 换新秘密要留下已作废的旧摘要，供旧秘密再次出现时识别。一段会话可以没有记住我，
+// 一条记住我也可以没有仍在使用的会话。
+//
+// 一台设备 = 一个 chain_id（首行的 id，换新秘密时原样复制）。
+// 换新秘密的写入顺序：先结束旧行，再插入前驱指向旧行的新行。
+// 每个前驱至多一个后继（predecessor_id 唯一），且前驱的 end_reason 必须是 rotated。
+// 同一 chain 同时至多一行未结束（部分唯一索引 auth_remember_me_one_active_per_chain）。
+// 按人员找出未结束的记住我用部分索引 auth_remember_me_active_by_personnel。
+// chain_id 自引用外键是 auth_remember_me_chain_fk。
+// 这三样 Prisma schema 表达不了，后续生成迁移时不得删掉。按设备作废 = 结束该 chain 上未结束的那一行。
+// 旧秘密再次出现：按 secret_hash 命中 end_reason = rotated 的行，再结束该人员的全部会话和全部记住我。
+// 并发提交只签发一次，由「每个前驱至多一个后继」卡住第二次插入。
+
+/// 记住我（一台设备上的一枚秘密；换新秘密新增一行，旧行只失效不删除）
+model AuthRememberMe {
+  id             String           @id
+  personnelId    String           @map("personnel_id")
+  personnel      Personnel        @relation(fields: [personnelId], references: [id])
+  // chain_id 的自引用外键在迁移里（auth_remember_me_chain_fk）。不写进 Prisma 关系：
+  // 首行的 chain_id 等于自己的 id，Prisma 必填自引用会要求这行先存在。后续生成迁移时不得删掉该外键。
+  chainId        String           @map("chain_id")
+  secretHash     String           @unique @map("secret_hash")
+  absoluteEndsAt DateTime         @db.Timestamptz(6) @map("absolute_ends_at")
+  predecessorId  String?          @unique @map("predecessor_id")
+  predecessor    AuthRememberMe?  @relation("RememberMeRotation", fields: [predecessorId], references: [id])
+  successor      AuthRememberMe?  @relation("RememberMeRotation")
+  endedAt        DateTime?        @db.Timestamptz(6) @map("ended_at")
+  endReason      String?          @map("end_reason")
+  createdAt      DateTime         @default(now()) @db.Timestamptz(6) @map("created_at")
+  sessions       AuthSession[]
+
+  @@map("auth_remember_me")
+}
+
+/// 会话（一段已认证状态）。remember_me_chain_id 指向该设备的记住我链首行；本次登录没有记住我则为空。
+/// 链非空时，absolute_ends_at 必须等于该首行的绝对终点。
+/// 未结束时只允许推进 last_seen_at。结束 = 一次写入 ended_at 与 end_reason。
+/// 有效会话按人员查找、并取最旧一段，走部分索引 auth_session_active_by_personnel
+/// （Prisma schema 表达不了，后续生成迁移时不得删掉）。
+model AuthSession {
+  id                String          @id
+  personnelId       String          @map("personnel_id")
+  personnel         Personnel       @relation(fields: [personnelId], references: [id])
+  secretHash        String          @unique @map("secret_hash")
+  rememberMeChainId String?         @map("remember_me_chain_id")
+  rememberMeChain   AuthRememberMe? @relation(fields: [rememberMeChainId], references: [id])
+  authenticatedAt   DateTime        @db.Timestamptz(6) @map("authenticated_at")
+  lastSeenAt        DateTime        @db.Timestamptz(6) @map("last_seen_at")
+  absoluteEndsAt    DateTime        @db.Timestamptz(6) @map("absolute_ends_at")
+  endedAt           DateTime?       @db.Timestamptz(6) @map("ended_at")
+  endReason         String?         @map("end_reason")
+
+  @@map("auth_session")
 }
 
 // 空间字典空间能力载体（#54，法域定几何：土地/矿产=面）：统一口径 geom = EPSG:4490，
