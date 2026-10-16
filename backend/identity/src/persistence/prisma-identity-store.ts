@@ -53,6 +53,47 @@ export class PrismaIdentityStore implements IdentityStore {
     return rows.map((row) => row.id);
   }
 
+  async listOrgUnitSubtreeIds(orgUnitId: string): Promise<string[]> {
+    const rows = await this.prisma.$queryRaw<{ id: string }[]>`
+      WITH RECURSIVE down AS (
+        SELECT id FROM org_unit WHERE id = ${orgUnitId}
+        UNION ALL
+        SELECT child.id
+        FROM org_unit child
+        JOIN down parent ON child.parent_id = parent.id
+      )
+      SELECT id FROM down`;
+    return rows.map((row) => row.id);
+  }
+
+  async listActiveRoleNames(personnelId: string): Promise<string[]> {
+    const rows = await this.prisma.personnelRole.findMany({
+      where: { personnelId, deactivatedAt: null, role: { deactivatedAt: null } },
+      include: { role: true },
+    });
+    return rows.map((row) => row.role.name);
+  }
+
+  async listGrantingRoleNames(personnelId: string, opcode: string): Promise<string[]> {
+    const rows = await this.prisma.personnelRole.findMany({
+      where: {
+        personnelId,
+        deactivatedAt: null,
+        role: {
+          deactivatedAt: null,
+          rolePermissions: {
+            some: {
+              deactivatedAt: null,
+              permission: { code: opcode, deactivatedAt: null },
+            },
+          },
+        },
+      },
+      include: { role: true },
+    });
+    return rows.map((row) => row.role.name);
+  }
+
   listOrgUnitNameVersions(orgUnitId: string): Promise<OrgUnitNameVersionRow[]> {
     return this.prisma.orgUnitNameVersion.findMany({
       where: { orgUnitId },

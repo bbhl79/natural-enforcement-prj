@@ -3,7 +3,9 @@
 // 不能拆成关止、插入、改归属三次独立提交。
 import { describe, expect, it, vi } from 'vitest';
 
-import { AccessDeniedError } from '../src/domain/access.ts';
+import type { AuditTrailPort } from '@natural-enforcement/audit';
+
+import { IDENTITY_MAINTENANCE_OPCODE, AccessDeniedError } from '../src/domain/access.ts';
 import type { ActorRef } from '../src/domain/actor.ts';
 import type {
   AssignmentTransfer,
@@ -16,14 +18,16 @@ import { CredentialService } from '../src/services/credential.service.ts';
 import { OrgUnitService } from '../src/services/org-unit.service.ts';
 import { PersonnelService } from '../src/services/personnel.service.ts';
 
+const blankCert = { enforcementCertNo: null, enforcementCertExpiresOn: null };
+
 const supervisor: PersonnelRow = {
   id: 'sup',
   code: 'P-SUP',
   name: '主管',
   orgUnitId: 'dept-a',
-  role: 'supervisor',
   passwordHash: null,
   deactivatedAt: null,
+  ...blankCert,
 };
 
 const viewer: PersonnelRow = {
@@ -31,9 +35,9 @@ const viewer: PersonnelRow = {
   code: 'P-VIEW',
   name: '查看',
   orgUnitId: 'dept-a',
-  role: 'viewer',
   passwordHash: null,
   deactivatedAt: null,
+  ...blankCert,
 };
 
 const clerk: PersonnelRow = {
@@ -41,10 +45,16 @@ const clerk: PersonnelRow = {
   code: 'P-CLERK',
   name: '经办',
   orgUnitId: 'dept-a',
-  role: 'clerk',
   passwordHash: null,
   deactivatedAt: null,
+  ...blankCert,
 };
+
+const audit: AuditTrailPort = { append: async () => undefined };
+
+function accessFor(backing: IdentityStore): AccessControlService {
+  return new AccessControlService(backing, audit);
+}
 
 function people(): Record<string, PersonnelRow> {
   return { sup: supervisor, viewer, clerk };
@@ -63,6 +73,10 @@ function store(extra: Partial<IdentityStore> = {}): IdentityStore {
         endedAt: null,
       }) satisfies PersonnelAssignmentRow,
     findOrgUnitPathToRoot: async (orgUnitId) => ['hq', orgUnitId],
+    listOrgUnitSubtreeIds: async (orgUnitId) => [orgUnitId],
+    listActiveRoleNames: async (personnelId) => (personnelId === 'sup' ? ['系统管理'] : []),
+    listGrantingRoleNames: async (personnelId, opcode) =>
+      personnelId === 'sup' && opcode === IDENTITY_MAINTENANCE_OPCODE ? ['系统管理'] : [],
     insertOrgUnit: async () => undefined,
     insertOrgUnitNameVersion: async () => undefined,
     findOrgUnitById: async () => ({
@@ -81,7 +95,7 @@ const authed = (personnelId: string): ActorRef => ({ personnelId, authenticated:
 describe('根机构登记', () => {
   it('未认证被拒（not-authenticated），且不写库', async () => {
     const insertOrgUnit = vi.fn();
-    const orgUnits = new OrgUnitService(store({ insertOrgUnit }), new AccessControlService(store()));
+    const orgUnits = new OrgUnitService(store({ insertOrgUnit }), accessFor(store()));
     await expect(
       orgUnits.registerOrgUnit(
         { personnelId: 'sup', authenticated: false },
@@ -92,7 +106,7 @@ describe('根机构登记', () => {
   });
 
   it('viewer 被拒（permission-denied）', async () => {
-    const orgUnits = new OrgUnitService(store(), new AccessControlService(store()));
+    const orgUnits = new OrgUnitService(store(), accessFor(store()));
     await expect(
       orgUnits.registerOrgUnit(authed('viewer'), { code: 'ROOT', name: '根', parentId: null }),
     ).rejects.toMatchObject({ reason: 'permission-denied' });
@@ -100,7 +114,7 @@ describe('根机构登记', () => {
 
   it('有改权限的主管仍被拒（scope-denied）', async () => {
     const insertOrgUnit = vi.fn();
-    const orgUnits = new OrgUnitService(store({ insertOrgUnit }), new AccessControlService(store()));
+    const orgUnits = new OrgUnitService(store({ insertOrgUnit }), accessFor(store()));
     await expect(
       orgUnits.registerOrgUnit(authed('sup'), { code: 'ROOT', name: '根', parentId: null }),
     ).rejects.toBeInstanceOf(AccessDeniedError);
@@ -112,7 +126,7 @@ describe('根机构登记', () => {
 
   it('上级机构在数据范围内时放行并写入', async () => {
     const insertOrgUnit = vi.fn();
-    const orgUnits = new OrgUnitService(store({ insertOrgUnit }), new AccessControlService(store()));
+    const orgUnits = new OrgUnitService(store({ insertOrgUnit }), accessFor(store()));
     const created = await orgUnits.registerOrgUnit(authed('sup'), {
       code: 'CHILD',
       name: '子机构',
@@ -139,7 +153,7 @@ describe('调岗写入', () => {
     });
     const personnel = new PersonnelService(
       backing,
-      new AccessControlService(backing),
+      accessFor(backing),
       new CredentialService(backing),
     );
 

@@ -1,4 +1,5 @@
 import { Global, Injectable, Module } from '@nestjs/common';
+import { AUDIT_TRAIL_PORT, type AuditTrailPort, type AuthzDeniedEntry } from '@natural-enforcement/audit';
 
 import {
   IDENTITY_STORE,
@@ -45,11 +46,25 @@ export class UnboundIdentityStore implements IdentityStore {
   closeAssignment(assignmentId: string, endedAt: Date) { return unbound(assignmentId, endedAt); }
   transferAssignment(transfer: AssignmentTransfer) { return unbound(transfer); }
   insertExportAudit(row: ExportAuditRow) { return unbound(row); }
+  listOrgUnitSubtreeIds(orgUnitId: string) { return unbound(orgUnitId); }
+  listActiveRoleNames(personnelId: string) { return unbound(personnelId); }
+  listGrantingRoleNames(personnelId: string, opcode: string) { return unbound(personnelId, opcode); }
+}
+
+/** 留痕适配器留到登录票装配。调用即失败，避免进程在缺少令牌时起不来。 */
+@Injectable()
+export class UnboundAuditTrail implements AuditTrailPort {
+  append(entry: AuthzDeniedEntry) {
+    return unbound(entry);
+  }
 }
 
 @Global()
 @Module({
-  providers: [{ provide: IDENTITY_STORE, useClass: UnboundIdentityStore }],
-  exports: [IDENTITY_STORE],
+  providers: [
+    { provide: IDENTITY_STORE, useClass: UnboundIdentityStore },
+    { provide: AUDIT_TRAIL_PORT, useClass: UnboundAuditTrail },
+  ],
+  exports: [IDENTITY_STORE, AUDIT_TRAIL_PORT],
 })
 export class IdentityStoreModule {}

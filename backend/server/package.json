@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@natural-enforcement/approval": "workspace:*",
+    "@natural-enforcement/audit": "workspace:*",
     "@natural-enforcement/case": "workspace:*",
     "@natural-enforcement/deadline": "workspace:*",
     "@natural-enforcement/geo-dict": "workspace:*",

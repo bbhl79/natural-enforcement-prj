@@ -1,0 +1,17 @@
+{
+  "name": "@natural-enforcement/audit",
+  "version": "0.0.0",
+  "private": true,
+  "description": "留痕设施包（ADR 0012：只追加写入。本切片只提供授权拒绝这一条入口）",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "typescript": "6.0.2",
+    "vitest": "5.0.3"
+  }
+}

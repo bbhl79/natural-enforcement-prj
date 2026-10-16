@@ -73,7 +73,6 @@ model Personnel {
   name                           String
   orgUnitId                      String    @map("org_unit_id")
   orgUnit                        OrgUnit   @relation(fields: [orgUnitId], references: [id])
-  role                           String
   passwordHash                   String?   @map("password_hash")
   // 登录标识。有值时全库唯一。PostgreSQL 唯一索引允许多个空值。位数与号段不在 ADR 0005 规定。
   mobilePhone                    String?   @unique @map("mobile_phone")

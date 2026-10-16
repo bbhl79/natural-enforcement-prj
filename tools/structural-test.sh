@@ -27,7 +27,7 @@
 # 规则清单（矩阵每行一条；「依赖漏入库」由 dev lint 既有检查承载，此处不重复）：
 #   shield-single-entry     shield 公共出口仅 packages/shield/src/index.ts
 #   shield-no-business-dep  shield 不依赖任何业务模块
-#   identity-deps           identity 不依赖任何业务模块
+#   identity-deps           identity 不依赖任何业务模块；可依赖 shield 与留痕设施包 audit（ADR 0012）
 #   geo-dict-deps           geo-dict 不依赖任何业务模块
 #   case-deps               case 只许 → shield、identity、geo-dict
 #   approval-deps           approval 只许 → shield、identity、case
@@ -46,6 +46,8 @@
 #                           packages/queue（设施包）；backend/frontend/e2e/integration/shield
 #                           出现裸队列依赖 = 业务 worker 绕过队列接口（G5 不可扩大条件的
 #                           机器兜底，强于注释级约定）；业务侧只许经 QUEUE_PORT 注入
+#   audit-facility-entry    留痕设施唯一入口（ADR 0012）：auditTrail 这个 Prisma 委托
+#                           只许出现在 packages/audit。包外引用即绕过追加写入口
 #   storage-facility-entry  存储设施唯一入口（#53）：S3/RustFS SDK 依赖（@aws-sdk/*、
 #                           @smithy/*、minio、rustfs）只许出现在 packages/storage
 #                           （设施包）；其余位置出现 = 绕过 StoragePort 追加式抽象
@@ -80,7 +82,7 @@ declare -A MOD_DIR=(
 )
 # 依赖矩阵允许列（#47 原文，含 #45 补丁 1；元素 = 模块名或 shield）
 declare -A ALLOW=(
-  [identity]="shield"
+  [identity]="shield audit"
   [geo-dict]="shield"
   [case]="shield identity geo-dict"
   [approval]="shield identity case"
@@ -105,6 +107,7 @@ RULES=(
   queue-facility-entry
   storage-facility-entry
   spatial-no-orm-mutation
+  audit-facility-entry
 )
 FAIL=0
 
@@ -392,7 +395,7 @@ check_weak-reference-entry() {
 # #69 定案追加 AuthSession、AuthRememberMe。分表理由与字段见 schema.prisma 与
 # backend/README.md「认证记录」。寿命、Cookie、并发与结束条件以 #63 为准，不在此重开。
 # #92 定案追加 Role、Permission、RolePermission、PersonnelRole、AuditTrail。
-# 人员旧 role 列本票保留。字段见 schema.prisma 与 backend/README.md「权限与留痕」。
+# #96 去掉人员表旧 role 列。字段见 schema.prisma 与 backend/README.md「权限与留痕」。
 G1_MODELS=(
   MigrationProbe
   OrgUnit
@@ -472,6 +475,24 @@ check_queue-facility-entry() {
 # 存储 = 在包外获得原地修改/删除通道，append-only 最保守语义被架空；
 # 本包以零新增第三方依赖落实该纪律（S3 REST/SigV4 基于 node:crypto + fetch 自实现），
 # 本规则防后续切片引入 SDK 时漂移出设施包。
+# 规则 q（ADR 0012）：留痕委托只许出现在留痕设施包。包外出现 auditTrail 即失败。
+check_audit-facility-entry() {
+  local file hits=0
+  local audit_dir="$ROOT/packages/audit"
+  while IFS= read -r file; do
+    case "$file" in
+      "$audit_dir"/*) continue ;;
+    esac
+    if grep -qE '\bauditTrail\b' "$file"; then
+      note_fail "audit-facility-entry：${file#"$ROOT"/} 引用 auditTrail（留痕只许经 @natural-enforcement/audit 追加写入）"
+      hits=$((hits + 1))
+    fi
+  done < <(find "$BACKEND" "$ROOT/frontend" "$ROOT/e2e" "$ROOT/integration" "$ROOT/packages" "${SCAN_CODE[@]}")
+  if [ "$hits" -eq 0 ]; then
+    note_ok "audit-facility-entry：auditTrail 委托仅在留痕设施包内"
+  fi
+}
+
 check_storage-facility-entry() {
   local file spec fails=0
   while IFS= read -r file; do

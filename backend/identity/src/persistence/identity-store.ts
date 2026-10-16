@@ -23,8 +23,9 @@ export interface PersonnelRow {
   code: string;
   name: string;
   orgUnitId: string;
-  role: string;
   passwordHash: string | null;
+  enforcementCertNo: string | null;
+  enforcementCertExpiresOn: Date | null;
   deactivatedAt: Date | null;
 }
 
@@ -88,7 +89,6 @@ export interface PersonnelToCreate {
   code: string;
   name: string;
   orgUnitId: string;
-  role: string;
   passwordHash: string | null;
 }
 
@@ -100,6 +100,12 @@ export interface IdentityStore {
   findCurrentAssignment(personnelId: string): Promise<PersonnelAssignmentRow | null>;
   /** 目标机构的祖先链（含自身），自根向叶排列；用于数据范围判定 */
   findOrgUnitPathToRoot(orgUnitId: string): Promise<string[]>;
+  /** 某机构及其全部下级机构的 id，含自身 */
+  listOrgUnitSubtreeIds(orgUnitId: string): Promise<string[]>;
+  /** 人员当前未失效的角色名 */
+  listActiveRoleNames(personnelId: string): Promise<string[]>;
+  /** 人员当前仍能放行该操作码的角色名。只含未失效的人员—角色、角色、允许行和权限。 */
+  listGrantingRoleNames(personnelId: string, opcode: string): Promise<string[]>;
   /** 机构全部历史名称版本，按版本号升序 */
   listOrgUnitNameVersions(orgUnitId: string): Promise<OrgUnitNameVersionRow[]>;
   listPersonnelNameVersions(personnelId: string): Promise<PersonnelNameVersionRow[]>;
