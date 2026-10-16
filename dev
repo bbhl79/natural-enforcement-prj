@@ -41,11 +41,21 @@ LINT_IMAGE='node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70
 NGINX_IMAGE='nginx:1.29.8@sha256:1881968aff6f7cdcc4b888c00a11f4ce241ad7ec957e0cb4a9e19e93a3ff87ea'
 # 前端本地镜像（#56：dev build 构建，Dockerfile 入库；compose 只按 image 引用 + pull_policy never）
 FRONTEND_IMAGE='natural-enforcement/frontend:dev'
+# HTTP 进程本地镜像（ADR 0004：dev build 构建；容器内 3000，不映射宿主）
+SERVER_IMAGE='natural-enforcement/server:dev'
+# localhost 证书在仓库外（#94 / #80 开发侧）。dev up 生成，nginx 只读挂载，不入库。
+DEV_CERT_DIR="${HOME}/.local/share/natural-enforcement/dev-certs"
+export NE_DEV_CERT_DIR="$DEV_CERT_DIR"
+HTTPS_PORT="${NGINX_PORT:-8080}"
+PAGE_URL="https://localhost:${HTTPS_PORT}/"
+API_HEALTH_URL="https://localhost:${HTTPS_PORT}/api/health"
 # dev db 容器网络内连接串（凭据从环境变量读，本地缺省用开发默认值并在输出里标注；
 # CI 模式凭据必须来自环境注入——见 cmd_check 的 --ci 语义）
 DB_USER="${POSTGRES_USER:-postgres}"
 DB_PASS="${POSTGRES_PASSWORD:-postgres}"
 DB_NAME="${POSTGRES_DB:-postgres}"
+# 集成测试复制源（#93）。开发库仍是 DB_NAME，测试不复制它。
+IT_TEMPLATE_DB="it_template"
 # 用户名、密码、库名按 URI 组件编码后再拼进连接串。CI secret 里的 @ : / # 不能当分隔符。
 percent_encode() {
   printf '%s' "$1" | od -An -tx1 | awk '{
@@ -76,12 +86,14 @@ usage() {
 用法：dev <命令> [--run-id <id>]
 
 命令：
-  up       幂等拉起基础设施容器（db/redis/rustfs/nginx/frontend）；永不删除已有数据。
+  up       幂等拉起基础设施容器（db/redis/rustfs/nginx/frontend/server）；永不删除已有数据。
            镜像缺失时非 0 退出并提示先 dev build——本命令不隐式构建。
+           若仓库外 localhost 证书缺失，在拉起前生成并挂进 nginx。
   down     停止并清理容器与网络；数据卷保留。
-  health   四依赖逐行检查：容器存活 / db 连通 / 队列连通（经队列接口真实投递
-           健康检查任务并确认消费，非裸 redis ping）/ 前端面板可访问。
-           检查结果同时写入面板快照（与面板展示同源）。全绿退出 0，任一红非 0。
+  health   逐行检查：容器存活 / db 连通 / 队列连通（经队列接口真实投递
+           健康检查任务并确认消费，非裸 redis ping）/ 前端页面可访问 /
+           GET /api/health。页面与 /api/health 走 https://localhost:${NGINX_PORT:-8080}，
+           用 dev up 生成的证书校验。检查结果同时写入面板快照。全绿退出 0，任一红非 0。
   lint     全量静态检查（结构测试 + 红探针 + 依赖漏入库检查 + 工具链镜像核对 + ESLint，容器内执行）。
            lint <子项> 单跑一项：leak（依赖漏入库）/ structural（结构测试）/
            structural-probe（结构测试红探针：写入违例源码断言兜底闸确实变红）/
@@ -92,7 +104,7 @@ usage() {
            注意：e2e 层会销毁本项目数据卷做从零拉起（E1 证据），勿在需保留数据时运行。
   build    全量构建 = 环境自举：拉取工具链与 infra 镜像（按 infra/VERSIONS.md 钉定引用，
            已在场即跳过）+ 前端编译（产物写回宿主 frontend/dist，已 gitignore）+ 后端编译
-           （tsc 全程序编译）+ frontend 本地镜像构建。镜像拉取只发生在本命令语义内
+           （tsc 全程序编译）+ frontend 与 server 本地镜像构建。镜像拉取只发生在本命令语义内
            （up/db 不隐式构建或拉取，US13）。不 push 不部署。
   check    一条命令 = build + lint 全量 + test all，本地即 CI 全绿。三项一律跑齐；
            build 前置是因为镜像与产物是 lint/测试层的运行前提（非改集合语义）。
@@ -134,6 +146,7 @@ cmd_up() {
     echo "dev up 不会隐式构建或拉取镜像。" >&2
     exit 1
   fi
+  ensure_dev_certs
   # --wait：等 db/redis 健康检查通过再返回——迁移/种子要求 db 真正就绪，
   # 冷卷首次 initdb 较慢，不等待会赢不了就绪竞态（#57 回归实测踩中）。
   "${COMPOSE[@]}" up -d --wait --wait-timeout 120
@@ -149,6 +162,7 @@ cmd_up() {
   [ "$DB_STATUS" = fail ] && failed_items="$failed_items 数据库连通"
   [ "$QUEUE_STATUS" = fail ] && failed_items="$failed_items 队列连通"
   [ "$FRONTEND_STATUS" = fail ] && failed_items="$failed_items 前端可访问"
+  [ "$API_STATUS" = fail ] && failed_items="$failed_items 接口健康"
   if [ -n "$failed_items" ]; then
     echo "[FAIL] dev up：健康检查存在失败项——$(echo "$failed_items" | xargs | tr ' ' '/')。" >&2
     echo "  面板快照已照常写入；逐项明细运行 dev health 查看。" >&2
@@ -178,13 +192,34 @@ cmd_exec() {
   "${COMPOSE[@]}" exec "$@"
 }
 
-# ---------- dev health 四依赖检查（#55 队列探测并入；#56 前端真实检查 + 面板快照） ----------
+# ---------- dev health（#55 队列；#56 前端；#94 证书校验页面与 /api/health） ----------
 # 检查原语：每个 check_* 输出一行人类可读结果、置全局状态变量（快照序列化用）、返回 0/1。
-FRONTEND_URL="http://127.0.0.1:${FRONTEND_PORT:-8899}/"
 SVC_STATUS=fail; SVC_FAILED=""
 DB_STATUS=fail
 QUEUE_STATUS=fail
 FRONTEND_STATUS=fail
+API_STATUS=fail
+
+# localhost 证书只在仓库外生成。已存在则跳过。nginx 镜像内的 openssl 签发，不依赖宿主 openssl。
+ensure_dev_certs() {
+  if [ -s "$DEV_CERT_DIR/localhost.crt" ] && [ -s "$DEV_CERT_DIR/localhost.key" ]; then
+    return 0
+  fi
+  if ! docker image inspect "$NGINX_IMAGE" >/dev/null 2>&1; then
+    echo "[FAIL] 无法生成证书：nginx 镜像缺失 $NGINX_IMAGE" >&2
+    exit 1
+  fi
+  mkdir -p "$DEV_CERT_DIR"
+  echo "dev：在仓库外生成 localhost 证书（$DEV_CERT_DIR）…"
+  docker run --rm --pull=never --user "$(id -u):$(id -g)" \
+    -v "$DEV_CERT_DIR:/certs" \
+    "$NGINX_IMAGE" \
+    openssl req -x509 -newkey rsa:2048 -sha256 -days 825 -nodes \
+      -keyout /certs/localhost.key \
+      -out /certs/localhost.crt \
+      -subj "/CN=localhost" \
+      -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+}
 
 check_services() {
   local svc cid rc=0
@@ -231,16 +266,56 @@ check_queue() {
   return 1
 }
 
-# 前端（第四依赖，#56 落地）：面板可访问 = 绿，不可访问 = 红，计入红绿。
+# 页面（#94）：经 nginx 的 HTTPS，用仓库外证书校验。成功行保留「前端面板可访问」字样，
+# 供既有命令冒烟识别第四依赖。8899 不再作为浏览器入口。
 check_frontend() {
-  # 刚 up 时 nginx 可能尚未就绪：重试 3 次（间隔 2s）再判红
-  if curl -fsS --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors "$FRONTEND_URL" >/dev/null 2>&1; then
-    FRONTEND_STATUS=ok
-    echo "[OK]   frontend 前端面板可访问（$FRONTEND_URL）"
-    return 0
+  local cert="$DEV_CERT_DIR/localhost.crt" body=""
+  if [ ! -s "$cert" ]; then
+    FRONTEND_STATUS=fail
+    echo "[FAIL] frontend 前端面板不可访问（缺少证书 $cert，请先 dev up）"
+    return 1
   fi
+  if ! body="$(curl -fsS --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors \
+      --cacert "$cert" "$PAGE_URL" 2>/dev/null)"; then
+    FRONTEND_STATUS=fail
+    echo "[FAIL] frontend 前端面板不可访问（$PAGE_URL）"
+    return 1
+  fi
+  case "$body" in
+    *'id="root"'*)
+      FRONTEND_STATUS=ok
+      echo "[OK]   frontend 前端面板可访问（$PAGE_URL）"
+      return 0
+      ;;
+  esac
   FRONTEND_STATUS=fail
-  echo "[FAIL] frontend 前端面板不可访问（$FRONTEND_URL）"
+  echo "[FAIL] frontend 前端面板不可访问（$PAGE_URL）"
+  return 1
+}
+
+# GET /api/health 不带会话 Cookie。证书校验失败或非 200 即红。
+check_api_health() {
+  local cert="$DEV_CERT_DIR/localhost.crt" body=""
+  if [ ! -s "$cert" ]; then
+    API_STATUS=fail
+    echo "[FAIL] api /api/health 不可访问（缺少证书 $cert，请先 dev up）"
+    return 1
+  fi
+  if ! body="$(curl -fsS --max-time 5 --retry 3 --retry-delay 2 --retry-all-errors \
+      --cacert "$cert" "$API_HEALTH_URL" 2>/dev/null)"; then
+    API_STATUS=fail
+    echo "[FAIL] api /api/health 不可访问（$API_HEALTH_URL）"
+    return 1
+  fi
+  case "$body" in
+    *'"status":"ok"'*)
+      API_STATUS=ok
+      echo "[OK]   api /api/health 不要求会话（$API_HEALTH_URL）"
+      return 0
+      ;;
+  esac
+  API_STATUS=fail
+  echo "[FAIL] api /api/health 不可访问（$API_HEALTH_URL）"
   return 1
 }
 
@@ -254,6 +329,7 @@ write_health_snapshot() { # $1 = quiet 时静默重跑检查（丢弃检查输�
     check_db >/dev/null 2>&1 || true
     check_queue >/dev/null 2>&1 || true
     check_frontend >/dev/null 2>&1 || true
+    check_api_health >/dev/null 2>&1 || true
   fi
   local svc_detail="全部容器运行中"
   [ -n "$SVC_FAILED" ] && svc_detail="未运行：$(echo "$SVC_FAILED" | xargs | tr ' ' ',')"
@@ -286,6 +362,7 @@ cmd_health() {
   check_db || rc=1
   check_queue || rc=1
   check_frontend || rc=1
+  check_api_health || rc=1
   # 快照写入失败同样计入红绿（评审必修）：面板与 dev health 同源，写不进即承诺失效。
   write_health_snapshot || rc=1
   if [ "$rc" -eq 0 ]; then
@@ -499,6 +576,12 @@ build_frontend() {
   docker build --tag "$FRONTEND_IMAGE" --file "$ROOT/frontend/Dockerfile" "$ROOT"
 }
 
+build_server() {
+  require_toolchain_image
+  echo "build：构建 HTTP 进程本地镜像 $SERVER_IMAGE（容器内监听 3000）…"
+  docker build --tag "$SERVER_IMAGE" --file "$ROOT/backend/server/Dockerfile" "$ROOT"
+}
+
 build_backend() {
   require_toolchain_image
   echo "build：容器内后端编译（tsc 全程序编译门：shield/queue/storage + backend 七模块）…"
@@ -534,6 +617,7 @@ ensure_infra_images() {
   local img
   while IFS= read -r img; do
     [ "$img" = "$FRONTEND_IMAGE" ] && continue
+    [ "$img" = "$SERVER_IMAGE" ] && continue
     if docker image inspect "$img" >/dev/null 2>&1; then
       echo "build：infra 镜像在场：$img"
     else
@@ -563,7 +647,8 @@ cmd_build() {
   ensure_infra_images
   build_frontend
   build_backend
-  echo "build：全量构建完成（工具链+infra 镜像就位、前端编译、后端编译、前端本地镜像；产物已写回宿主并 gitignore）。"
+  build_server
+  echo "build：全量构建完成（工具链+infra 镜像就位、前端编译、后端编译、前端与 HTTP 进程本地镜像；产物已写回宿主并 gitignore）。"
 }
 
 require_toolchain_image() {
@@ -592,9 +677,66 @@ test_unit() {
   echo "test：unit 层全部通过。"
 }
 
+# 管理连接落在开发库上。开发库只提供这条连接，不当复制源。
+psql_dev_db() {
+  "${COMPOSE[@]}" exec -T db psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" "$@"
+}
+
+it_template_database_url() {
+  printf 'postgresql://%s:%s@db:5432/%s\n' \
+    "$(percent_encode "$DB_USER")" \
+    "$(percent_encode "$DB_PASS")" \
+    "$(percent_encode "$IT_TEMPLATE_DB")"
+}
+
+# 先断开连到 it_template 的会话。pg_terminate_backend 返回时后端可能尚未退出。
+terminate_it_template_sessions() {
+  psql_dev_db -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${IT_TEMPLATE_DB}' AND pid <> pg_backend_pid();"
+}
+
+# 集成测试开始时重建 it_template：断开会话，删除并新建空库，只对它做迁移和种子，做完断开。
+# 重建只删除这个库，不删除开发库数据卷。
+rebuild_it_template() {
+  local attempt saved_url left
+  echo "test：断开连到 ${IT_TEMPLATE_DB} 的会话…"
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    terminate_it_template_sessions
+    if psql_dev_db -c "DROP DATABASE IF EXISTS \"${IT_TEMPLATE_DB}\";"; then
+      break
+    fi
+    if [ "$attempt" -eq 10 ]; then
+      echo "[FAIL] 无法删除 ${IT_TEMPLATE_DB}" >&2
+      return 1
+    fi
+    sleep 0.4
+  done
+  echo "test：新建空库 ${IT_TEMPLATE_DB}…"
+  psql_dev_db -c "CREATE DATABASE \"${IT_TEMPLATE_DB}\";"
+  saved_url="$DATABASE_URL"
+  DATABASE_URL="$(it_template_database_url)"
+  db_migrate
+  db_seed
+  DATABASE_URL="$saved_url"
+  echo "test：断开 ${IT_TEMPLATE_DB} 上的连接…"
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    terminate_it_template_sessions
+    left="$(psql_dev_db -tA -c "SELECT count(*) FROM pg_stat_activity WHERE datname = '${IT_TEMPLATE_DB}';")"
+    left="$(printf '%s' "$left" | tr -d '[:space:]')"
+    if [ "$left" = "0" ]; then
+      return 0
+    fi
+    sleep 0.4
+  done
+  echo "[FAIL] ${IT_TEMPLATE_DB} 仍有连接" >&2
+  return 1
+}
+
 test_integration() {
-  # integration 层（#46：结构测试 + 需库用例）。harness 负责：db 在场 + 迁移/种子幂等
-  # + Prisma Client 生成；用例形态与约定见 integration/README.md
+  # integration 层（#46：结构测试 + 需库用例）。harness 负责：db 在场
+  # + 重建复制源 it_template（迁移和种子只打在这个库上）+ Prisma Client 生成。
+  # 测试进程的数据库地址指向 it_template。用例再从它复制出 e2_时间戳。
+  # 开发库 postgres 不作为复制源，重建不动它的数据卷。
+  # 用例形态与约定见 integration/README.md
   #（Vitest 需库用例 + *.sh 可执行用例，只测外部可观察行为）。
   # 结构测试纳入本层（评审必修）：#46 定案 integration = 结构测试 + 需库用例；
   # dev lint 里的调用保留不动——同一规则两处跑，双保险。
@@ -605,12 +747,11 @@ test_integration() {
     exit 1
   }
   ensure_db
-  db_migrate
-  db_seed
+  rebuild_it_template
   echo "test：容器内运行 integration 层 Vitest 需库用例（integration/**/*.test.ts）…"
   docker run --rm --pull=never \
     --network "${PROJECT}_default" \
-    -e DATABASE_URL="$DATABASE_URL" \
+    -e DATABASE_URL="$(it_template_database_url)" \
     -v "$ROOT:/repo:ro" \
     -v "${PROJECT}-integration-node-modules:/work/node_modules" \
     -v "${PROJECT}-integration-store:/pnpm/store" \

@@ -1,10 +1,9 @@
 // E2 越权必失败（#96）：操作码 × 身份 / 权限 / 数据范围。
 // 「校验拒绝」= 抛 AccessDeniedError 且 reason 精确命中期望码。
 // 「校验缺失」= 放行或裸异常。expectDenied 把后者判红。
-// 数据层证据同卷给出：名称版本化、只失效不删除、导出留痕不可删改、调岗后数据范围随新任职生效。
-// 自清理：开跑前把开发库 TEMPLATE 克隆成独立库，整套断言打在克隆上，结束 DROP。
+// 自清理：开跑前从 it_template 复制出 e2_时间戳，断言打在复制品上，结束整库删除。
+// 开发库 postgres 不作为复制源。
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaAuditTrail } from '@natural-enforcement/audit';
 import {
   OPCODES,
@@ -13,6 +12,7 @@ import {
 } from '@natural-enforcement/shield';
 
 import { PrismaClient } from '../backend/prisma/generated/prisma/client.ts';
+import { openClonedDatabase, type ClonedDatabase } from './cloned-database.ts';
 import {
   AccessControlService,
   CredentialService,
@@ -60,8 +60,7 @@ const ALLOWED: Record<string, readonly string[]> = {
 };
 
 let prisma = undefined as unknown as PrismaClient;
-let adminPrisma: PrismaClient | undefined;
-let scratchDbName = '';
+let cloned: ClonedDatabase | undefined;
 let access: AccessControlService;
 let orgUnits: OrgUnitService;
 let personnel: PersonnelService;
@@ -99,13 +98,6 @@ async function expectDenied(promise: Promise<unknown>, reason: DenyReason): Prom
   throw new Error(`校验缺失形态：越权调用未抛 AccessDeniedError（期望 reason=${reason}）——校验缺失=放行`);
 }
 
-function quoteIdent(name: string): string {
-  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
-    throw new Error(`非法数据库标识：${name}`);
-  }
-  return `"${name}"`;
-}
-
 interface DenialRow {
   actor_id: string | null;
   actor_code: string | null;
@@ -136,31 +128,8 @@ async function grantRole(personnelId: string, roleName: string): Promise<void> {
 }
 
 beforeAll(async () => {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) throw new Error('DATABASE_URL 未注入（须由 dev test integration harness 提供）');
-  const source = new URL(databaseUrl);
-  const sourceDb = decodeURIComponent(source.pathname.replace(/^\//, ''));
-  scratchDbName = `e2_${Date.now()}`;
-  const adminUrl = new URL(databaseUrl);
-  adminUrl.pathname = '/template1';
-  adminPrisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: adminUrl.toString() }) });
-  let created = false;
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 10 && !created; attempt += 1) {
-    try {
-      await adminPrisma.$executeRawUnsafe(
-        `CREATE DATABASE ${quoteIdent(scratchDbName)} TEMPLATE ${quoteIdent(sourceDb)}`,
-      );
-      created = true;
-    } catch (error) {
-      lastError = error;
-      await new Promise((resolve) => setTimeout(resolve, 400));
-    }
-  }
-  if (!created) throw lastError;
-  const scratchUrl = new URL(databaseUrl);
-  scratchUrl.pathname = `/${scratchDbName}`;
-  prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString: scratchUrl.toString() }) });
+  cloned = await openClonedDatabase();
+  prisma = cloned.prisma;
   const store = new PrismaIdentityStore(prisma);
   const audit = new PrismaAuditTrail(prisma);
   access = new AccessControlService(store, audit);
@@ -184,13 +153,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await prisma?.$disconnect();
-  if (adminPrisma && scratchDbName) {
-    await adminPrisma.$executeRawUnsafe(
-      `DROP DATABASE IF EXISTS ${quoteIdent(scratchDbName)} WITH (FORCE)`,
-    );
-    await adminPrisma.$disconnect();
-  }
+  await cloned?.close();
 });
 
 const personIdByRole: Record<string, () => string> = {

@@ -150,6 +150,7 @@ home_of() {
     backend/approval/*)          echo approval ;;
     backend/supervision/*)       echo supervision ;;
     backend/deadline/*)          echo deadline ;;
+    backend/server/*)            echo server ;;
     frontend/*)                  echo frontend ;;
     integration/*)               echo integration ;;
     e2e/*)                       echo e2e ;;
@@ -290,11 +291,13 @@ check_deadline-deps()    { check_row deadline; }
 # 规则 i：矩阵行「监督统计（只读，单向，无人依赖它）」的反向断言
 # 扫描范围含 e2e（评审必修 C5）：本规则断言的是「无人」，范围漏一处即断言不成立；
 # e2e 用例形态是 .sh/.cjs，故用 SCAN_CODE 而非 SCAN_TS。
+# ADR 0004：server 启动包不是业务模块，允许经公共出口引用全部六个模块，包括监督统计。
 check_supervision-sink() {
   local file spec target home fails=0
   while IFS= read -r file; do
     home="$(home_of "$file")"
     [ "$home" = "supervision" ] && continue
+    [ "$home" = "server" ] && continue
     while IFS= read -r spec; do
       target="$(target_of_spec "$file" "$spec")"
       if [ "$target" = "supervision" ]; then
@@ -304,7 +307,7 @@ check_supervision-sink() {
     done < <(specifiers_of "$file")
   done < <(find "$BACKEND" "$ROOT/frontend" "$ROOT/e2e" "${SCAN_CODE[@]}")
   if [ "$fails" -eq 0 ]; then
-    note_ok "supervision-sink：无人依赖 supervision（单向成立）"
+    note_ok "supervision-sink：业务模块无人依赖 supervision（server 启动包除外，ADR 0004）"
   fi
 }
 
