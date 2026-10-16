@@ -82,6 +82,13 @@ function cookieValue(setCookie: string, name: string): string {
   return pair.slice(`${name}=`.length);
 }
 
+async function endOpenSessions(): Promise<void> {
+  await cloned.prisma.authSession.updateMany({
+    where: { endedAt: null },
+    data: { endedAt: new Date(T0), endReason: 'logout' },
+  });
+}
+
 function pairOf(cookies: string[], name: string): string {
   const found = cookies.find((item) => item.startsWith(`${name}=`));
   if (!found) throw new Error(`缺少 ${name}`);
@@ -218,6 +225,7 @@ describe('勾选记住我', () => {
   });
 
   it('免输口令进入新建会话并换发秘密，绝对终点不往后推', async () => {
+    await endOpenSessions();
     clock.millis = T0;
     const login = await postLogin(true);
     const rm = pairOf(login.headers.getSetCookie(), '__Host-rm');
@@ -257,8 +265,9 @@ describe('勾选记住我', () => {
       lastSeenAt: new Date(T0 + HOUR_MS),
       endedAt: null,
     });
-    expect(added(before, await audits()).map((row) => [row.action, row.outcome])).toEqual([
-      ['login.succeeded', 'succeeded'],
+    expect(added(before, await audits()).map((row) => [row.action, row.outcome, row.reason])).toEqual([
+      ['session.ended', 'succeeded', 'idle-timeout'],
+      ['login.succeeded', 'succeeded', null],
     ]);
   });
 
@@ -450,6 +459,7 @@ describe('勾选记住我', () => {
   });
 
   it('免输口令进入处于强制改密时建立会话并换发', async () => {
+    await endOpenSessions();
     clock.millis = T0;
     const person = await cloned.prisma.personnel.findUniqueOrThrow({ where: { id: personId } });
     await cloned.prisma.personnel.update({
@@ -476,6 +486,7 @@ describe('勾选记住我', () => {
       });
     }
 
+    await endOpenSessions();
     const expiredAt = new Date(T0 - 90 * 24 * HOUR_MS - 1);
     await cloned.prisma.personnel.update({
       where: { id: personId },

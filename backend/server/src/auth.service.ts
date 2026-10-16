@@ -34,11 +34,12 @@ import {
   serializeSessionCookie,
   SESSION_COOKIE,
 } from './session-cookie.ts';
-import { SESSION_STORE, type SessionRow, type SessionStore } from './session-store.ts';
+import { SESSION_CAPACITY, SESSION_STORE, type SessionRow, type SessionStore } from './session-store.ts';
 import { SourceGate } from './source-gate.ts';
 
 const IDLE_MS = 30 * 60 * 1000;
 const ABSOLUTE_MS = 8 * 60 * 60 * 1000;
+const MAX_SESSIONS_PER_PERSON = 3;
 const REMEMBER_MS = 168 * 60 * 60 * 1000;
 const GRACE_MS = 60 * 1000;
 const FAILURE_WINDOW_MS = 15 * 60 * 1000;
@@ -105,7 +106,8 @@ export type LoginOutcome = {
     | { result: 'invalid-credential' }
     | { result: 'locked' }
     | { result: 'deactivated' }
-    | { result: PasswordGate };
+    | { result: PasswordGate }
+    | { result: 'capacity-reached' };
   setCookies?: string[];
 };
 
@@ -146,6 +148,7 @@ export class AuthService {
     @Inject(AUDIT_TRAIL_PORT) private readonly audit: AuditTrailPort,
     private readonly credentials: CredentialService,
     @Inject(CLOCK) private readonly clock: Clock,
+    @Inject(SESSION_CAPACITY) private readonly sessionCapacity: number,
     private readonly sources: SourceGate,
   ) {}
 
@@ -215,13 +218,21 @@ export class AuthService {
     }
     await this.directory.clearFailure(account.id);
     const gate = passwordGate(account.passwordChangedAt, now);
-    const setCookies = await this.openSession(
+    const opened = await this.openSession(
       input.cookieHeader,
       account,
       input.sourceIp,
       now,
       input.rememberMe,
     );
+    if (opened === 'capacity') {
+      await this.audit.append({
+        action: 'login.capacity-reached',
+        ...partiesOf(account, input.sourceIp),
+      });
+      return { status: 503, body: { result: 'capacity-reached' } };
+    }
+    const setCookies = opened;
     if (gate === 'password-change-required') {
       await this.audit.append({
         action: 'login.password-change-required',
@@ -350,6 +361,31 @@ export class AuthService {
     return this.resolve(cookieHeader, sourceIp, true);
   }
 
+  /** 管理员结束某人员全部未结束的会话。独立 HTTP 入口不在本能力里。 */
+  async endPersonnelSessions(input: {
+    personnelId: string;
+    actorId: string;
+    actorCode: string;
+    sourceIp: string | null;
+  }): Promise<void> {
+    const now = this.clock.now();
+    const subject = await this.directory.findById(input.personnelId);
+    const sessions = await this.sessions.listActive(input.personnelId);
+    for (const session of sessions) {
+      await this.sessions.end(session.id, now, 'admin-ended');
+      await this.audit.append({
+        action: 'session.ended',
+        reason: 'admin-ended',
+        actorId: input.actorId,
+        actorCode: input.actorCode,
+        subjectPersonnelId: input.personnelId,
+        subjectCode: subject?.code ?? null,
+        orgUnitId: subject?.orgUnitId ?? null,
+        sourceIp: input.sourceIp,
+      });
+    }
+  }
+
   async logout(
     active: ActiveSession | null,
     cookieHeader: string | undefined,
@@ -417,8 +453,11 @@ export class AuthService {
     sourceIp: string | null,
     now: Date,
     rememberMe: boolean,
-  ): Promise<string[]> {
+  ): Promise<string[] | 'capacity'> {
     await this.closePresentedSession(cookieHeader, account, sourceIp, now);
+    await this.endOwnExpired(account, sourceIp, now);
+    await this.displaceOldest(account, sourceIp, now);
+    if ((await this.countOccupied(now)) >= this.sessionCapacity) return 'capacity';
     const secret = newSessionSecret();
     let absoluteEndsAt = new Date(now.getTime() + ABSOLUTE_MS);
     let rememberMeChainId: string | null = null;
@@ -498,6 +537,15 @@ export class AuthService {
     }
     const rmSecret = newSessionSecret();
     const rmId = newUlid(now.getTime());
+    await this.endOwnExpired(account, sourceIp, now);
+    await this.displaceOldest(account, sourceIp, now);
+    if ((await this.countOccupied(now)) >= this.sessionCapacity) {
+      await this.audit.append({
+        action: 'login.capacity-reached',
+        ...partiesOf(account, sourceIp),
+      });
+      return none;
+    }
     const rotated = await this.remember.rotate(row.id, {
       id: rmId,
       personnelId: row.personnelId,
@@ -620,6 +668,56 @@ export class AuthService {
       return null;
     }
     return { row, account };
+  }
+
+  /** 全系统名额只按时间排除已过期会话，不写他人的留痕。 */
+  private async countOccupied(now: Date): Promise<number> {
+    const open = await this.sessions.listOpen();
+    return open.filter((row) => this.countsTowardCapacity(row, now)).length;
+  }
+
+  private countsTowardCapacity(row: SessionRow, now: Date): boolean {
+    if (now.getTime() - row.lastSeenAt.getTime() >= IDLE_MS) return false;
+    if (now.getTime() >= row.absoluteEndsAt.getTime()) return false;
+    return true;
+  }
+
+  /** 统计本人名额前，结束本人已经超过空闲或绝对终点的会话。操作者空着。 */
+  private async endOwnExpired(account: LoginAccount, sourceIp: string | null, now: Date): Promise<void> {
+    const active = await this.sessions.listActive(account.id);
+    for (const row of active) {
+      if (this.countsTowardCapacity(row, now)) continue;
+      const idle = now.getTime() - row.lastSeenAt.getTime() >= IDLE_MS;
+      const reason = idle ? 'idle-timeout' : 'absolute-timeout';
+      await this.sessions.end(row.id, now, reason);
+      await this.audit.append({
+        action: 'session.ended',
+        reason,
+        actorId: null,
+        actorCode: null,
+        subjectPersonnelId: account.id,
+        subjectCode: account.code,
+        orgUnitId: account.orgUnitId,
+        sourceIp,
+      });
+    }
+  }
+
+  /** 本人已有 3 段时，结束最旧的一段，并作废那台设备的记住我。 */
+  private async displaceOldest(account: LoginAccount, sourceIp: string | null, now: Date): Promise<void> {
+    const active = await this.sessions.listActive(account.id);
+    if (active.length < MAX_SESSIONS_PER_PERSON) return;
+    const oldest = active[0];
+    if (!oldest) return;
+    await this.sessions.end(oldest.id, now, 'displaced');
+    if (oldest.rememberMeChainId) {
+      await this.remember.endActiveOnChain(oldest.rememberMeChainId, now, 'displaced');
+    }
+    await this.audit.append({
+      action: 'session.ended',
+      reason: 'displaced',
+      ...partiesOf(account, sourceIp),
+    });
   }
 
   /** 结束请求里这台浏览器仍有效的记住我。已结束的行不再写。 */

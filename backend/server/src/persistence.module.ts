@@ -28,7 +28,14 @@ import {
   type RememberMeRow,
   type RememberMeStore,
 } from './remember-me-store.ts';
-import { SESSION_STORE, type NewSession, type SessionRow, type SessionStore } from './session-store.ts';
+import {
+  DEFAULT_SESSION_CAPACITY,
+  SESSION_CAPACITY,
+  SESSION_STORE,
+  type NewSession,
+  type SessionRow,
+  type SessionStore,
+} from './session-store.ts';
 
 const PRISMA = Symbol('PRISMA');
 
@@ -169,6 +176,20 @@ class PrismaSessionStore implements SessionStore {
       endedAt: row.endedAt,
     }));
   }
+
+  async listOpen(): Promise<SessionRow[]> {
+    const rows = await this.prisma.authSession.findMany({ where: { endedAt: null } });
+    return rows.map((row) => ({
+      id: row.id,
+      personnelId: row.personnelId,
+      secretHash: row.secretHash,
+      rememberMeChainId: row.rememberMeChainId,
+      authenticatedAt: row.authenticatedAt,
+      lastSeenAt: row.lastSeenAt,
+      absoluteEndsAt: row.absoluteEndsAt,
+      endedAt: row.endedAt,
+    }));
+  }
 }
 
 class LostRace extends Error {}
@@ -293,7 +314,7 @@ class DisconnectPrisma implements OnModuleDestroy {
 
 @Module({})
 class PersistenceModule {
-  static register(databaseUrl: string, clock: Clock): DynamicModule {
+  static register(databaseUrl: string, clock: Clock, sessionCapacity: number): DynamicModule {
     const prisma = new PrismaClient({
       adapter: new PrismaPg({ connectionString: databaseUrl }),
     });
@@ -302,6 +323,7 @@ class PersistenceModule {
       global: true,
       providers: [
         { provide: CLOCK, useValue: clock },
+        { provide: SESSION_CAPACITY, useValue: sessionCapacity },
         { provide: PRISMA, useValue: prisma },
         { provide: IDENTITY_STORE, useValue: new PrismaIdentityStore(prisma) },
         { provide: AUDIT_TRAIL_PORT, useValue: new PrismaAuditTrail(prisma as unknown as AuditTrailCreateClient) },
@@ -314,17 +336,25 @@ class PersistenceModule {
           inject: [PRISMA],
         },
       ],
-      exports: [IDENTITY_STORE, AUDIT_TRAIL_PORT, LOGIN_DIRECTORY, SESSION_STORE, REMEMBER_ME_STORE, CLOCK],
+      exports: [
+        IDENTITY_STORE,
+        AUDIT_TRAIL_PORT,
+        LOGIN_DIRECTORY,
+        SESSION_STORE,
+        REMEMBER_ME_STORE,
+        CLOCK,
+        SESSION_CAPACITY,
+      ],
     };
   }
 }
 
 @Module({})
 class BootModule {
-  static register(databaseUrl: string, clock: Clock): DynamicModule {
+  static register(databaseUrl: string, clock: Clock, sessionCapacity: number): DynamicModule {
     return {
       module: BootModule,
-      imports: [PersistenceModule.register(databaseUrl, clock), AppModule],
+      imports: [PersistenceModule.register(databaseUrl, clock, sessionCapacity), AppModule],
     };
   }
 }
@@ -332,8 +362,9 @@ class BootModule {
 export async function createApplication(
   databaseUrl: string,
   clock: Clock = { now: () => new Date() },
+  sessionCapacity: number = DEFAULT_SESSION_CAPACITY,
 ): Promise<INestApplication> {
-  const app = await NestFactory.create(BootModule.register(databaseUrl, clock), { logger: false });
+  const app = await NestFactory.create(BootModule.register(databaseUrl, clock, sessionCapacity), { logger: false });
   const withCsrf = app as INestApplication & { enableCsrfProtection?: () => void };
   if (typeof withCsrf.enableCsrfProtection !== 'function') {
     throw new Error('当前 NestJS 没有 enableCsrfProtection');
