@@ -3,7 +3,7 @@
 // 改变主状态的操作码不采用监督角色贡献的允许行。
 // 每次拒绝经留痕设施包追加一行 authz.denied。
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import {
   SUPERVISION_ROLE,
   opcodeRequirements,
@@ -38,7 +38,7 @@ export class AccessControlService {
   constructor(
     @Inject(IDENTITY_STORE) private readonly store: IdentityStore,
     @Inject(AUDIT_TRAIL_PORT) private readonly audit: AuditTrailPort,
-    clock?: AuthorizationClock,
+    @Optional() clock?: AuthorizationClock,
   ) {
     this.clock = clock ?? { now: () => new Date() };
   }

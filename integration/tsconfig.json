@@ -5,5 +5,10 @@
   "compilerOptions": {
     "noEmit": true
   },
-  "include": ["./**/*.ts", "../backend/prisma/**/*.ts"]
+  "include": [
+    "./**/*.ts",
+    "../backend/prisma/**/*.ts",
+    "../backend/server/src/main.ts",
+    "../backend/server/src/persistence.module.ts"
+  ]
 }

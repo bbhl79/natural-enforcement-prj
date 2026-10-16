@@ -1,19 +1,48 @@
-// 授权拒绝的只追加写入（ADR 0011 / ADR 0012）。
-// 本切片不提供登录、会话结束、口令维护的写入。接口没有更新和删除。
+import type {
+  AuthzDeniedReason,
+  LoginFailedReason,
+  PasswordChangedReason,
+  SessionEndReason,
+} from './vocabulary.ts';
 
-export const AUDIT_ACTION_AUTHZ_DENIED = 'authz.denied';
+export const AUDIT_ACTION_AUTHZ_DENIED = 'authz.denied' as const;
 
-export const AUTHZ_DENY_REASONS = [
-  'identity-unknown',
-  'not-authenticated',
-  'identity-deactivated',
-  'permission-denied',
-  'scope-denied',
-] as const;
+export {
+  AUTHZ_DENIED_REASONS as AUTHZ_DENY_REASONS,
+} from './vocabulary.ts';
+export type { AuthzDeniedReason as AuthzDenyReason } from './vocabulary.ts';
 
-export type AuthzDenyReason = (typeof AUTHZ_DENY_REASONS)[number];
+/** 写入当时能确定的人员与机构。手机号、执法证号、口令不在此列。 */
+export interface AuditParties {
+  actorId: string | null;
+  actorCode: string | null;
+  subjectPersonnelId: string | null;
+  subjectCode: string | null;
+  orgUnitId: string | null;
+  sourceIp: string | null;
+  opcode?: string | null;
+  resourceType?: string | null;
+  resourceId?: string | null;
+  previousValue?: string | null;
+}
 
-/** 一行授权拒绝。被作用人员、来源地址、前值在本动作里为空。登录标识和执法证号不进入。 */
+export type AuditAppend =
+  | (AuditParties & { action: 'login.succeeded' })
+  | (AuditParties & { action: 'login.failed'; reason: LoginFailedReason })
+  | (AuditParties & { action: 'login.locked' })
+  | (AuditParties & { action: 'login.locked-retry' })
+  | (AuditParties & { action: 'login.deactivated' })
+  | (AuditParties & { action: 'login.password-expired' })
+  | (AuditParties & { action: 'login.password-change-required' })
+  | (AuditParties & { action: 'login.source-limited' })
+  | (AuditParties & { action: 'login.capacity-reached' })
+  | (AuditParties & { action: 'session.ended'; reason: SessionEndReason })
+  | (AuditParties & { action: 'account.unlocked' })
+  | (AuditParties & { action: 'account.password-reset' })
+  | (AuditParties & { action: 'account.password-changed'; reason: PasswordChangedReason })
+  | (AuditParties & { action: 'authz.denied'; reason: AuthzDeniedReason });
+
+/** 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。 */
 export interface AuthzDeniedEntry {
   readonly action: typeof AUDIT_ACTION_AUTHZ_DENIED;
   readonly outcome: 'failed';
@@ -23,13 +52,14 @@ export interface AuthzDeniedEntry {
   readonly subjectCode: null;
   readonly orgUnitId: string | null;
   readonly sourceIp: null;
-  readonly reason: AuthzDenyReason;
+  readonly reason: AuthzDeniedReason;
   readonly opcode: string;
   readonly resourceType: string | null;
   readonly resourceId: string | null;
   readonly previousValue: null;
 }
 
+/** 只追加。没有更新，也没有删除。 */
 export interface AuditTrailPort {
-  append(entry: AuthzDeniedEntry): Promise<void>;
+  append(entry: AuditAppend | AuthzDeniedEntry): Promise<void>;
 }

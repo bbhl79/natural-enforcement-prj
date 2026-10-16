@@ -68,7 +68,7 @@ percent_encode() {
     }
   }'
 }
-DATABASE_URL="postgresql://$(percent_encode "$DB_USER"):$(percent_encode "$DB_PASS")@db:5432/$(percent_encode "$DB_NAME")"
+export DATABASE_URL="postgresql://$(percent_encode "$DB_USER"):$(percent_encode "$DB_PASS")@db:5432/$(percent_encode "$DB_NAME")"
 
 # 容器内工具链缓存（命名卷，依赖只进容器/卷，不入库）：
 # - corepack 卷：缓存 pnpm 二进制（/root/.cache/node/corepack），免去每次容器现下载；

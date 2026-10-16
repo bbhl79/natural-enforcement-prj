@@ -258,12 +258,12 @@ importers:
 
   backend/server:
     dependencies:
-      '@natural-enforcement/approval':
-        specifier: workspace:*
-        version: link:../approval
       '@natural-enforcement/audit':
         specifier: workspace:*
         version: link:../../packages/audit
+      '@natural-enforcement/approval':
+        specifier: workspace:*
+        version: link:../approval
       '@natural-enforcement/case':
         specifier: workspace:*
         version: link:../case

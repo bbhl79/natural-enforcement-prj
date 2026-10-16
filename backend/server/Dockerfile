@@ -10,6 +10,8 @@ RUN --mount=type=cache,target=/root/.cache/node/corepack \
     --mount=type=cache,target=/root/.cache/pnpm \
     --mount=type=cache,target=/root/.local/share/pnpm/store \
     corepack enable \
-    && pnpm install --frozen-lockfile --ignore-scripts --config.strict-dep-builds=false
+    && pnpm install --frozen-lockfile --ignore-scripts --config.strict-dep-builds=false \
+    && cd backend/prisma \
+    && DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/postgres pnpm exec prisma generate
 EXPOSE 3000
 CMD ["node", "--import", "/work/backend/server/register.mjs", "/work/backend/server/src/main.ts"]

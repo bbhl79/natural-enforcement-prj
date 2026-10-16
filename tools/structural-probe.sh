@@ -128,6 +128,13 @@ write_probe_audit-facility-entry() {
     "}"
 }
 
+write_probe_server-adapter-file() {
+  tmp_write "backend/server/src/_structural-probe-adapter.ts" \
+    "// 探针（临时，勿入库）：第二个文件引用身份数据库适配器" \
+    "import { PrismaIdentityStore } from '../../identity/src/persistence/prisma-identity-store.ts';" \
+    "export const store = PrismaIdentityStore;"
+}
+
 write_probe_exempt-tightness() {
   # 豁免必须tight：名单外的深路径导入仍要判红，否则豁免等于把整层放行
   inplace_append "$ROOT/integration/e2-access-matrix.test.ts" \
@@ -146,6 +153,7 @@ SPECS=(
   "spatial-in-integration|spatial-no-orm-mutation|装配层空间模型 ORM 写（空间纪律也扫 integration/e2e）"
   "exempt-tightness|module-public-entry|豁免名单外的深路径导入（豁免不放行整层）"
   "audit-facility-entry|audit-facility-entry|包外引用留痕委托"
+  "server-adapter-file|module-public-entry|启动包第二个文件引用身份数据库适配器"
 )
 
 # $1 = 说明，$2 = 期望规则名，$3 = 结构测试输出，$4 = 结构测试退出码

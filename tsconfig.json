@@ -27,5 +27,9 @@
   // 其编译由 integration 层承载（dev test integration 先 prisma generate 再 tsc -p integration）。
   // 排除仅限 include 展开：任何被 unit 层文件重新 import 都会把它拉回程序——
   // 故模块公共出口与各服务均不得引用本文件（integration 用例深路径装配）。
-  "exclude": ["backend/identity/src/persistence/prisma-identity-store.ts"]
+  "exclude": [
+    "backend/identity/src/persistence/prisma-identity-store.ts",
+    "backend/server/src/persistence.module.ts",
+    "backend/server/src/main.ts"
+  ]
 }
