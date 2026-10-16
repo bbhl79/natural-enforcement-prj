@@ -3,6 +3,7 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 
+import { IDENTITY_MAINTENANCE_OPCODE } from '../domain/access.ts';
 import type { ActorRef } from '../domain/actor.ts';
 import { newUlid } from '../domain/ulid.ts';
 import type { OrgUnitRow } from '../persistence/identity-store.ts';
@@ -23,12 +24,12 @@ export class OrgUnitService {
     private readonly access: AccessControlService,
   ) {}
 
-  /** 登记机构（modify 动作）：上级机构须在数据范围内；根机构一律拒绝。名称落当前行 + v1 版本行 */
+  /** 登记机构：上级机构须在数据范围内；根机构一律拒绝。名称落当前行 + v1 版本行 */
   async registerOrgUnit(actor: ActorRef, input: RegisterOrgUnitInput): Promise<OrgUnitRow> {
     if (input.parentId === null) {
       return this.access.rejectRootRegistration(actor);
     }
-    await this.access.authorize(actor, 'modify', input.parentId);
+    await this.access.authorize(actor, IDENTITY_MAINTENANCE_OPCODE, input.parentId);
     const id = newUlid();
     await this.store.insertOrgUnit({ id, ...input });
     await this.store.insertOrgUnitNameVersion({
@@ -45,7 +46,7 @@ export class OrgUnitService {
 
   /** 机构改名 = 产生新版本行（append-only）+ 更新当前名；历史版本永不可改 */
   async renameOrgUnit(actor: ActorRef, orgUnitId: string, newName: string): Promise<void> {
-    await this.access.authorize(actor, 'modify', orgUnitId);
+    await this.access.authorize(actor, IDENTITY_MAINTENANCE_OPCODE, orgUnitId);
     const versions = await this.store.listOrgUnitNameVersions(orgUnitId);
     const nextVersion = (versions.at(-1)?.version ?? 0) + 1;
     await this.store.insertOrgUnitNameVersion({
@@ -58,9 +59,9 @@ export class OrgUnitService {
     await this.store.updateOrgUnitCurrentName(orgUnitId, newName);
   }
 
-  /** 机构失效（modify 动作）：只置失效标记 + 失效时间，无物理删除路径 */
+  /** 机构失效：只置失效标记 + 失效时间，无物理删除路径 */
   async deactivateOrgUnit(actor: ActorRef, orgUnitId: string): Promise<void> {
-    await this.access.authorize(actor, 'modify', orgUnitId);
+    await this.access.authorize(actor, IDENTITY_MAINTENANCE_OPCODE, orgUnitId);
     await this.store.deactivateOrgUnit(orgUnitId, new Date());
   }
 }

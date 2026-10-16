@@ -3,12 +3,12 @@
 // 它也装配留痕适配器。根类型检查排除本文件：生成客户端只在容器里存在。
 import 'reflect-metadata';
 
-import { type DynamicModule, type OnModuleDestroy } from '@nestjs/common';
+import { Module, type DynamicModule, type OnModuleDestroy } from '@nestjs/common';
 import type { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { PrismaPg } from '@prisma/adapter-pg';
 
-import { PrismaAuditTrail } from '../../../packages/audit/src/prisma-audit-trail.ts';
+import { PrismaAuditTrail, type AuditTrailCreateClient } from '../../../packages/audit/src/prisma-audit-trail.ts';
 import { AUDIT_TRAIL_PORT } from '@natural-enforcement/audit';
 import { IDENTITY_STORE } from '@natural-enforcement/identity';
 import { PrismaIdentityStore } from '../../identity/src/persistence/prisma-identity-store.ts';
@@ -118,6 +118,7 @@ class DisconnectPrisma implements OnModuleDestroy {
   }
 }
 
+@Module({})
 class PersistenceModule {
   static register(databaseUrl: string): DynamicModule {
     const prisma = new PrismaClient({
@@ -129,7 +130,7 @@ class PersistenceModule {
       providers: [
         { provide: PRISMA, useValue: prisma },
         { provide: IDENTITY_STORE, useValue: new PrismaIdentityStore(prisma) },
-        { provide: AUDIT_TRAIL_PORT, useValue: new PrismaAuditTrail(prisma) },
+        { provide: AUDIT_TRAIL_PORT, useValue: new PrismaAuditTrail(prisma as unknown as AuditTrailCreateClient) },
         { provide: LOGIN_DIRECTORY, useValue: new PrismaLoginDirectory(prisma) },
         { provide: SESSION_STORE, useValue: new PrismaSessionStore(prisma) },
         {
@@ -143,6 +144,7 @@ class PersistenceModule {
   }
 }
 
+@Module({})
 class BootModule {
   static register(databaseUrl: string): DynamicModule {
     return {

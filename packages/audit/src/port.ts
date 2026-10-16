@@ -5,6 +5,13 @@ import type {
   SessionEndReason,
 } from './vocabulary.ts';
 
+export const AUDIT_ACTION_AUTHZ_DENIED = 'authz.denied' as const;
+
+export {
+  AUTHZ_DENIED_REASONS as AUTHZ_DENY_REASONS,
+} from './vocabulary.ts';
+export type { AuthzDeniedReason as AuthzDenyReason } from './vocabulary.ts';
+
 /** 写入当时能确定的人员与机构。手机号、执法证号、口令不在此列。 */
 export interface AuditParties {
   actorId: string | null;
@@ -35,7 +42,24 @@ export type AuditAppend =
   | (AuditParties & { action: 'account.password-changed'; reason: PasswordChangedReason })
   | (AuditParties & { action: 'authz.denied'; reason: AuthzDeniedReason });
 
+/** 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。 */
+export interface AuthzDeniedEntry {
+  readonly action: typeof AUDIT_ACTION_AUTHZ_DENIED;
+  readonly outcome: 'failed';
+  readonly actorId: string | null;
+  readonly actorCode: string | null;
+  readonly subjectPersonnelId: null;
+  readonly subjectCode: null;
+  readonly orgUnitId: string | null;
+  readonly sourceIp: null;
+  readonly reason: AuthzDeniedReason;
+  readonly opcode: string;
+  readonly resourceType: string | null;
+  readonly resourceId: string | null;
+  readonly previousValue: null;
+}
+
 /** 只追加。没有更新，也没有删除。 */
 export interface AuditTrailPort {
-  append(entry: AuditAppend): Promise<void>;
+  append(entry: AuditAppend | AuthzDeniedEntry): Promise<void>;
 }

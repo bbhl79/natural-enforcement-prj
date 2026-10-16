@@ -121,10 +121,10 @@ write_probe_spatial-in-integration() {
 }
 
 write_probe_audit-facility-entry() {
-  tmp_write "backend/server/src/_structural-probe.ts" \
+  tmp_write "integration/_structural-probe-audit.ts" \
     "// 探针（临时，勿入库）：包外引用留痕委托" \
-    "export function probe(prisma: { auditTrail: { create(input: unknown): unknown } }): unknown {" \
-    "  return prisma.auditTrail.create({ data: { action: 'login.failed' } });" \
+    "export function probe(db: { auditTrail: { create(input: unknown): Promise<unknown> } }) {" \
+    "  return db.auditTrail.create({ data: { action: 'authz.denied' } });" \
     "}"
 }
 

@@ -29,7 +29,6 @@
   // 故模块公共出口与各服务均不得引用本文件（integration 用例深路径装配）。
   "exclude": [
     "backend/identity/src/persistence/prisma-identity-store.ts",
-    "packages/audit/src/prisma-audit-trail.ts",
     "backend/server/src/persistence.module.ts",
     "backend/server/src/main.ts"
   ]

@@ -27,7 +27,7 @@
 # 规则清单（矩阵每行一条；「依赖漏入库」由 dev lint 既有检查承载，此处不重复）：
 #   shield-single-entry     shield 公共出口仅 packages/shield/src/index.ts
 #   shield-no-business-dep  shield 不依赖任何业务模块
-#   identity-deps           identity 不依赖任何业务模块
+#   identity-deps           identity 不依赖任何业务模块；可依赖 shield 与留痕设施包 audit（ADR 0012）
 #   geo-dict-deps           geo-dict 不依赖任何业务模块
 #   case-deps               case 只许 → shield、identity、geo-dict
 #   approval-deps           approval 只许 → shield、identity、case
@@ -87,7 +87,7 @@ declare -A MOD_DIR=(
 )
 # 依赖矩阵允许列（#47 原文，含 #45 补丁 1；元素 = 模块名或 shield）
 declare -A ALLOW=(
-  [identity]="shield"
+  [identity]="shield audit"
   [geo-dict]="shield"
   [case]="shield identity geo-dict"
   [approval]="shield identity case"
@@ -403,7 +403,7 @@ check_weak-reference-entry() {
 # #69 定案追加 AuthSession、AuthRememberMe。分表理由与字段见 schema.prisma 与
 # backend/README.md「认证记录」。寿命、Cookie、并发与结束条件以 #63 为准，不在此重开。
 # #92 定案追加 Role、Permission、RolePermission、PersonnelRole、AuditTrail。
-# 人员旧 role 列本票保留。字段见 schema.prisma 与 backend/README.md「权限与留痕」。
+# #96 去掉人员表旧 role 列。字段见 schema.prisma 与 backend/README.md「权限与留痕」。
 G1_MODELS=(
   MigrationProbe
   OrgUnit

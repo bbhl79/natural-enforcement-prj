@@ -105,9 +105,9 @@ const EXPECTED_ALLOWANCES: Record<string, readonly string[]> = {
 };
 
 const FIXTURES = [
-  { code: 'P-SUP-A', role: 'supervisor', mobilePhone: '13800001001' },
-  { code: 'P-CLERK-A', role: 'clerk', mobilePhone: '13800001002' },
-  { code: 'P-CLERK-B', role: 'clerk', mobilePhone: '13800001003' },
+  { code: 'P-SUP-A', roles: ['系统管理'], mobilePhone: '13800001001' },
+  { code: 'P-CLERK-A', roles: ['经办'], mobilePhone: '13800001002' },
+  { code: 'P-CLERK-B', roles: ['经办'], mobilePhone: '13800001003' },
 ] as const;
 
 let prisma = undefined as unknown as PrismaClient;
@@ -222,10 +222,13 @@ describe('参照种子可从库中读到', () => {
     await expectReferenceSeed(prisma);
   });
 
-  it('开发夹具人员保留旧角色列，带手机号，上次改密时间为空', async () => {
+  it('开发夹具人员带角色、手机号，上次改密时间为空', async () => {
     for (const fixture of FIXTURES) {
-      const person = await prisma.personnel.findUniqueOrThrow({ where: { code: fixture.code } });
-      expect(person.role).toBe(fixture.role);
+      const person = await prisma.personnel.findUniqueOrThrow({
+        where: { code: fixture.code },
+        include: { personnelRoles: { where: { deactivatedAt: null }, include: { role: true } } },
+      });
+      expect(person.personnelRoles.map((row) => row.role.name).sort()).toEqual([...fixture.roles].sort());
       expect(person.mobilePhone).toBe(fixture.mobilePhone);
       expect(person.passwordChangedAt).toBeNull();
       expect(person.passwordFailureCount).toBe(0);
@@ -240,10 +243,10 @@ describe('人员手机号有值时全库唯一', () => {
     const first = newUlid();
     const second = newUlid();
     await prisma.personnel.create({
-      data: { id: first, code: `e92-a-${first.slice(0, 8).toLowerCase()}`, name: '空号甲', orgUnitId: deptAId, role: 'viewer' },
+      data: { id: first, code: `e92-a-${first.slice(0, 8).toLowerCase()}`, name: '空号甲', orgUnitId: deptAId },
     });
     await prisma.personnel.create({
-      data: { id: second, code: `e92-b-${second.slice(0, 8).toLowerCase()}`, name: '空号乙', orgUnitId: deptAId, role: 'viewer' },
+      data: { id: second, code: `e92-b-${second.slice(0, 8).toLowerCase()}`, name: '空号乙', orgUnitId: deptAId },
     });
     const duplicate = newUlid();
     await expect(
@@ -253,7 +256,6 @@ describe('人员手机号有值时全库唯一', () => {
           code: `e92-c-${duplicate.slice(0, 8).toLowerCase()}`,
           name: '重复号',
           orgUnitId: deptAId,
-          role: 'viewer',
           mobilePhone: '13800001001',
         },
       }),
