@@ -6,7 +6,8 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     include: ['integration/**/*.test.ts'],
-    // E2 用 TEMPLATE 克隆开发库，源库上不能有别的会话。文件并行会让 E4 占着连接。
+    // 两套用例都从 it_template 复制。源库上不能有别的会话。
+    // 文件并行会让两套用例同时复制同一个源。
     fileParallelism: false,
     testTimeout: 60_000,
     hookTimeout: 60_000,
