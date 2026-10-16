@@ -92,6 +92,27 @@ type SessionView =
   | { result: 'password-expired' }
   | ({ result: 'authenticated'; daysRemaining?: number } & OperatorSession);
 
+let startupReady: Promise<void> = Promise.resolve();
+let startupArmed = false;
+
+/** 启动时的会话查询完成前，其他请求停在这里。 */
+export function waitForStartupSession(): Promise<void> {
+  return startupReady;
+}
+
+function armStartupSession(): (() => void) | null {
+  if (startupArmed) return null;
+  startupArmed = true;
+  let finish!: () => void;
+  startupReady = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  return () => {
+    finish();
+    startupReady = Promise.resolve();
+  };
+}
+
 type LoginFailure = {
   result: 'invalid-credential' | 'password-change-required' | 'password-expired' | 'locked' | 'deactivated';
 };
@@ -107,9 +128,14 @@ function operatorFrom(view: SessionView & { result: 'authenticated' }): Operator
 }
 
 export const loadSession = createAsyncThunk<SessionView>('login/loadSession', async () => {
-  const response = await fetch('/api/auth/session', { cache: 'no-store' });
-  if (!response.ok) return { result: 'anonymous' };
-  return (await response.json()) as SessionView;
+  const finish = armStartupSession();
+  try {
+    const response = await fetch('/api/auth/session', { cache: 'no-store' });
+    if (!response.ok) return { result: 'anonymous' };
+    return (await response.json()) as SessionView;
+  } finally {
+    finish?.();
+  }
 });
 
 export const submitLogin = createAsyncThunk<
