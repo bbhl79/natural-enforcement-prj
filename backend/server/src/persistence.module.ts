@@ -15,6 +15,7 @@ import { PrismaIdentityStore } from '../../identity/src/persistence/prisma-ident
 import { PrismaClient } from '../../prisma/generated/prisma/client.ts';
 
 import { AppModule } from './app.module.ts';
+import { CLOCK, type Clock } from './clock.ts';
 import { LOGIN_DIRECTORY, type LoginAccount, type LoginDirectory } from './login-directory.ts';
 import { SESSION_STORE, type NewSession, type SessionRow, type SessionStore } from './session-store.ts';
 
@@ -120,7 +121,7 @@ class DisconnectPrisma implements OnModuleDestroy {
 
 @Module({})
 class PersistenceModule {
-  static register(databaseUrl: string): DynamicModule {
+  static register(databaseUrl: string, clock: Clock): DynamicModule {
     const prisma = new PrismaClient({
       adapter: new PrismaPg({ connectionString: databaseUrl }),
     });
@@ -128,6 +129,7 @@ class PersistenceModule {
       module: PersistenceModule,
       global: true,
       providers: [
+        { provide: CLOCK, useValue: clock },
         { provide: PRISMA, useValue: prisma },
         { provide: IDENTITY_STORE, useValue: new PrismaIdentityStore(prisma) },
         { provide: AUDIT_TRAIL_PORT, useValue: new PrismaAuditTrail(prisma as unknown as AuditTrailCreateClient) },
@@ -139,23 +141,26 @@ class PersistenceModule {
           inject: [PRISMA],
         },
       ],
-      exports: [IDENTITY_STORE, AUDIT_TRAIL_PORT, LOGIN_DIRECTORY, SESSION_STORE],
+      exports: [IDENTITY_STORE, AUDIT_TRAIL_PORT, LOGIN_DIRECTORY, SESSION_STORE, CLOCK],
     };
   }
 }
 
 @Module({})
 class BootModule {
-  static register(databaseUrl: string): DynamicModule {
+  static register(databaseUrl: string, clock: Clock): DynamicModule {
     return {
       module: BootModule,
-      imports: [PersistenceModule.register(databaseUrl), AppModule],
+      imports: [PersistenceModule.register(databaseUrl, clock), AppModule],
     };
   }
 }
 
-export async function createApplication(databaseUrl: string): Promise<INestApplication> {
-  const app = await NestFactory.create(BootModule.register(databaseUrl), { logger: false });
+export async function createApplication(
+  databaseUrl: string,
+  clock: Clock = { now: () => new Date() },
+): Promise<INestApplication> {
+  const app = await NestFactory.create(BootModule.register(databaseUrl, clock), { logger: false });
   const withCsrf = app as INestApplication & { enableCsrfProtection?: () => void };
   if (typeof withCsrf.enableCsrfProtection !== 'function') {
     throw new Error('当前 NestJS 没有 enableCsrfProtection');

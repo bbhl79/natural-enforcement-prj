@@ -125,6 +125,10 @@ export interface IdentityStore {
   /** 调岗后同步人员当前归属机构（任职记录为权威史，此处为读模型冗余） */
   updatePersonnelOrgUnit(personnelId: string, orgUnitId: string): Promise<void>;
   deactivatePersonnel(personnelId: string, deactivatedAt: Date): Promise<void>;
+  /** 只更换口令散列。不改上次改密时间。 */
+  replacePasswordHash(personnelId: string, passwordHash: string): Promise<void>;
+  /** 写入新口令散列，并记下这次改密时间。 */
+  changePassword(personnelId: string, passwordHash: string, passwordChangedAt: Date): Promise<void>;
   insertAssignment(row: PersonnelAssignmentRow): Promise<void>;
   /** 结束当前任职（调岗旧权限失效的数据层载体） */
   closeAssignment(assignmentId: string, endedAt: Date): Promise<void>;

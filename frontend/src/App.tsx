@@ -4,13 +4,15 @@ import { Provider } from 'react-redux';
 import HealthPanel from './health/HealthPanel';
 import { useAppDispatch, useAppSelector } from './hooks';
 import LoginPage from './login/LoginPage';
-import { loadSession, logout } from './login/loginSlice';
+import PasswordPage from './login/PasswordPage';
+import { dismissExpiryNotice, expiryNoticeVisible, loadSession, logout } from './login/loginSlice';
 import { store } from './store';
 
 export function AuthShell() {
   const dispatch = useAppDispatch();
   const phase = useAppSelector((root) => root.login.phase);
   const operator = useAppSelector((root) => root.login.operator);
+  const login = useAppSelector((root) => root.login);
 
   useEffect(() => {
     void dispatch(loadSession());
@@ -19,6 +21,12 @@ export function AuthShell() {
   if (phase === 'authenticated' && operator) {
     return (
       <>
+        {expiryNoticeVisible(login) ? (
+          <p role="status">
+            {`口令还剩 ${login.daysRemaining} 天到期`}
+            <button type="button" onClick={() => dispatch(dismissExpiryNotice())}>关闭</button>
+          </p>
+        ) : null}
         <header className="flex flex-wrap items-center gap-4 border-b border-slate-200 px-6 py-3 text-sm text-slate-800">
           <span>{operator.name}</span>
           <span>{operator.code}</span>
@@ -32,7 +40,7 @@ export function AuthShell() {
   }
 
   if (phase === 'password-change-required') {
-    return <p role="status">必须改口令</p>;
+    return <PasswordPage />;
   }
 
   if (phase === 'unknown') {

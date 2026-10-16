@@ -15,7 +15,20 @@ import { sourceAddress } from './session-cookie.ts';
 export interface AuthenticatedRequest {
   headers: { cookie?: string };
   socket?: { remoteAddress?: string | null };
+  method?: string;
+  path?: string;
+  url?: string;
   actor?: ActorRef;
+}
+
+function allowedDuringPasswordChange(req: AuthenticatedRequest): boolean {
+  const method = (req.method ?? '').toUpperCase();
+  const path = (req.path ?? req.url ?? '').split('?')[0];
+  if (method === 'POST' && path === '/api/auth/password') return true;
+  if (method === 'POST' && path === '/api/auth/logout') return true;
+  if (method === 'GET' && path === '/api/auth/session') return true;
+  if (method === 'POST' && path === '/api/auth/login') return true;
+  return false;
 }
 
 @Injectable()
@@ -30,9 +43,13 @@ export class SessionGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
-    if (isPublic) return true;
     const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
-    const active = await this.auth.requireSession(req.headers.cookie, sourceAddress(req));
+    const active = await this.auth.loadActive(req.headers.cookie, sourceAddress(req), !isPublic);
+    const gate = active ? this.auth.passwordChangeState(active.account) : null;
+    if (active && gate && !allowedDuringPasswordChange(req)) {
+      throw new HttpException({ result: gate }, HttpStatus.FORBIDDEN);
+    }
+    if (isPublic) return true;
     if (!active) {
       throw new HttpException({ reason: 'not-authenticated' }, HttpStatus.UNAUTHORIZED);
     }
