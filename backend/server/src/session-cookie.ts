@@ -23,6 +23,16 @@ export function readCookie(header: string | undefined, name: string): string | n
   return null;
 }
 
-export function sourceAddress(req: { socket?: { remoteAddress?: string | null } }): string | null {
+/** 只采信紧邻一跳写下的单个地址。带逗号的链是客户端自带的，不采信。 */
+export function sourceAddress(req: {
+  socket?: { remoteAddress?: string | null };
+  headers?: { 'x-forwarded-for'?: string | string[] | undefined };
+}): string | null {
+  const header = req.headers?.['x-forwarded-for'];
+  const raw = Array.isArray(header) ? header[0] : header;
+  if (typeof raw === 'string') {
+    const address = raw.trim();
+    if (address !== '' && !address.includes(',')) return address;
+  }
   return req.socket?.remoteAddress ?? null;
 }

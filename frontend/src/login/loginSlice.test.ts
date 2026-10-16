@@ -78,6 +78,71 @@ describe('登录页', () => {
     expect(html).not.toMatch(/type="password"[^>]*value="[^"]+"/);
   });
 
+  it('登录返回锁定时显示琥珀色文案并禁用表单', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ result: 'locked' }), { status: 401 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const view = configureStore({ reducer: { login: reducer, health: healthReducer } });
+    view.dispatch(setPhone('13800009801'));
+    view.dispatch(setPassword('wrong-password'));
+    await view.dispatch(submitLogin());
+    expect(view.getState().login.screen).toBe('locked');
+    expect(view.getState().login.phase).toBe('anonymous');
+    const html = renderToStaticMarkup(
+      createElement(Provider, { store: view, children: createElement(LoginPage) }),
+    );
+    expect(html).toContain('class="banner amber"');
+    expect(html).toContain('账号已锁定。请联系本单位管理员解锁。');
+    expect(html).not.toContain('账号已停用。请联系本单位管理员恢复。');
+    expect(html).toMatch(/placeholder="手机号"[^>]*disabled/);
+    expect(html).toMatch(/placeholder="密码"[^>]*disabled/);
+    expect(html).toMatch(/class="login"[^>]*disabled/);
+  });
+
+  it('登录返回停用时显示红色文案并禁用表单', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ result: 'deactivated' }), { status: 401 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const view = configureStore({ reducer: { login: reducer, health: healthReducer } });
+    view.dispatch(setPhone('13800009802'));
+    view.dispatch(setPassword('wrong-password'));
+    await view.dispatch(submitLogin());
+    expect(view.getState().login.screen).toBe('deactivated');
+    const html = renderToStaticMarkup(
+      createElement(Provider, { store: view, children: createElement(LoginPage) }),
+    );
+    expect(html).toContain('class="banner danger"');
+    expect(html).toContain('账号已停用。请联系本单位管理员恢复。');
+    expect(html).not.toContain('账号已锁定。请联系本单位管理员解锁。');
+    expect(html).toMatch(/placeholder="手机号"[^>]*disabled/);
+    expect(html).toMatch(/class="login"[^>]*disabled/);
+  });
+
+  it('刷新后锁定和停用文案消失，表单恢复可填', () => {
+    const locked = reducer(
+      reducer(reducer(undefined, setPhone('13800009801')), setPassword('wrong-password')),
+      submitLogin.rejected(new Error('rejected'), 'req-refresh', undefined, { result: 'locked' }),
+    );
+    expect(loginSubmitEnabled(locked)).toBe(false);
+    const fresh = reducer(undefined, { type: '@@init' });
+    const filled = reducer(reducer(fresh, setPhone('13800009801')), setPassword('wrong-password'));
+    expect(filled.screen).toBe('default');
+    expect(loginSubmitEnabled(filled)).toBe(true);
+    const view = configureStore({
+      reducer: { login: reducer, health: healthReducer },
+      preloadedState: { login: filled },
+    });
+    const html = renderToStaticMarkup(
+      createElement(Provider, { store: view, children: createElement(LoginPage) }),
+    );
+    expect(html).not.toContain('账号已锁定');
+    expect(html).not.toContain('账号已停用');
+    expect(html).not.toMatch(/placeholder="手机号"[^>]*disabled/);
+    expect(html).not.toMatch(/class="login"[^>]*disabled/);
+  });
+
   it('口令错误时显示同一句文案，不进入系统', () => {
     const ready = reducer(
       reducer(undefined, setPhone('13800138000')),
@@ -229,6 +294,27 @@ describe('登录页', () => {
     const forced = reducer(undefined, enterPasswordChange('expired'));
     expect(forced.phase).toBe('password-change-required');
     expect(forced.passwordChangeKind).toBe('expired');
+  });
+
+  it('改口令返回锁定时显示锁定文案并禁用表单', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ result: 'locked' }), { status: 401 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const view = configureStore({ reducer: { login: reducer, health: healthReducer } });
+    view.dispatch(enterPasswordChange('first-login'));
+    view.dispatch(setCurrentPassword('Old-pass-97!'));
+    view.dispatch(setNewPassword('New-pass-97!'));
+    await view.dispatch(submitPassword());
+    expect(view.getState().login.screen).toBe('locked');
+    const html = renderToStaticMarkup(
+      createElement(Provider, { store: view, children: createElement(AuthShell) }),
+    );
+    expect(html).toContain('class="banner amber"');
+    expect(html).toContain('账号已锁定。请联系本单位管理员解锁。');
+    expect(html).not.toContain('当前口令不正确');
+    expect(html).toMatch(/placeholder="当前口令"[^>]*disabled/);
+    expect(html).toMatch(/placeholder="新口令"[^>]*disabled/);
   });
 
   it('改口令提交当前口令和新口令', async () => {

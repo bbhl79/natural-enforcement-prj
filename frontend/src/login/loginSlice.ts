@@ -1,6 +1,6 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
-/** 四态与原型 S00 一致。锁定和停用由后续票切换。 */
+/** 四态与原型 S00 一致。 */
 export type LoginScreen = 'default' | 'error' | 'locked' | 'deactivated';
 
 export type AuthPhase = 'unknown' | 'anonymous' | 'password-change-required' | 'authenticated';
@@ -92,7 +92,9 @@ type SessionView =
   | { result: 'password-expired' }
   | ({ result: 'authenticated'; daysRemaining?: number } & OperatorSession);
 
-type LoginFailure = { result: 'invalid-credential' | 'password-change-required' | 'password-expired' };
+type LoginFailure = {
+  result: 'invalid-credential' | 'password-change-required' | 'password-expired' | 'locked' | 'deactivated';
+};
 
 function operatorFrom(view: SessionView & { result: 'authenticated' }): OperatorSession & { daysRemaining: number | null } {
   return {
@@ -139,6 +141,9 @@ export const submitLogin = createAsyncThunk<
     if (body.result === 'password-change-required' || body.result === 'password-expired') {
       return rejectWithValue({ result: body.result });
     }
+    if (body.result === 'locked' || body.result === 'deactivated') {
+      return rejectWithValue({ result: body.result });
+    }
     return rejectWithValue({ result: 'invalid-credential' });
   },
   {
@@ -152,6 +157,7 @@ export const logout = createAsyncThunk('login/logout', async () => {
 
 type PasswordFailure =
   | { result: 'invalid-credential' }
+  | { result: 'locked' }
   | { result: 'non-compliant'; rules: string[] };
 
 export const submitPassword = createAsyncThunk<
@@ -177,6 +183,7 @@ export const submitPassword = createAsyncThunk<
     if (body.result === 'non-compliant') {
       return rejectWithValue({ result: 'non-compliant', rules: body.rules ?? [] });
     }
+    if (body.result === 'locked') return rejectWithValue({ result: 'locked' });
     return rejectWithValue({ result: 'invalid-credential' });
   },
   {
@@ -286,6 +293,12 @@ const loginSlice = createSlice({
           state.screen = 'default';
           return;
         }
+        if (action.payload.result === 'locked' || action.payload.result === 'deactivated') {
+          state.phase = 'anonymous';
+          state.passwordChangeKind = null;
+          state.screen = action.payload.result;
+          return;
+        }
         state.phase = 'anonymous';
         state.passwordChangeKind = null;
         state.screen = 'error';
@@ -312,6 +325,12 @@ const loginSlice = createSlice({
         if (action.payload.result === 'non-compliant') {
           state.ruleCodes = action.payload.rules;
           state.currentPasswordRejected = false;
+          return;
+        }
+        if (action.payload.result === 'locked') {
+          state.screen = 'locked';
+          state.currentPasswordRejected = false;
+          state.ruleCodes = [];
           return;
         }
         state.currentPasswordRejected = true;
