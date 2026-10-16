@@ -165,6 +165,24 @@ describe('登录页', () => {
     expect(html).toContain('账号或口令不正确。如需帮助，请联系本单位管理员。');
   });
 
+  it('满员时提示稍后再试，不显示口令错误', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ result: 'capacity-reached' }), { status: 503 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const view = configureStore({ reducer: { login: reducer, health: healthReducer } });
+    view.dispatch(setPhone('13800009501'));
+    view.dispatch(setPassword('Correct-horse-95'));
+    await view.dispatch(submitLogin());
+    expect(view.getState().login.phase).toBe('anonymous');
+    const html = renderToStaticMarkup(
+      createElement(Provider, { store: view, children: createElement(LoginPage) }),
+    );
+    expect(html).toContain('稍后再试');
+    expect(html).not.toContain('账号或口令不正确。如需帮助，请联系本单位管理员。');
+    expect(html).not.toMatch(/placeholder="手机号"[^>]*disabled/);
+  });
+
   it('首次登录进入改口令页，完成前不显示系统功能', () => {
     const ready = reducer(
       reducer(undefined, setPhone('13800009502')),
@@ -296,6 +314,23 @@ describe('登录页', () => {
     expect(forced.passwordChangeKind).toBe('expired');
   });
 
+  it('其他请求返回 403 强制改密时进入改口令', async () => {
+    const responses = [
+      new Response(JSON.stringify({ reason: 'permission-denied' }), { status: 403 }),
+      new Response(JSON.stringify({ result: 'password-expired' }), { status: 403 }),
+      new Response(JSON.stringify({ result: 'password-change-required' }), { status: 403 }),
+    ];
+    vi.stubGlobal('fetch', () => Promise.resolve(responses.shift()!));
+    const view = configureStore({ reducer: { login: reducer, health: healthReducer } });
+    await view.dispatch(fetchHealthSnapshot());
+    expect(view.getState().login.phase).toBe('unknown');
+    await view.dispatch(fetchHealthSnapshot());
+    expect(view.getState().login.phase).toBe('password-change-required');
+    expect(view.getState().login.passwordChangeKind).toBe('expired');
+    await view.dispatch(fetchHealthSnapshot());
+    expect(view.getState().login.passwordChangeKind).toBe('first-login');
+  });
+
   it('改口令返回锁定时显示锁定文案并禁用表单', async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(
       new Response(JSON.stringify({ result: 'locked' }), { status: 401 }),
@@ -340,7 +375,7 @@ describe('登录页', () => {
     expect(view.getState().login.phase).toBe('authenticated');
   });
 
-  it('口令正确且已改密后能看到姓名、工号、机构和角色，并能退出', () => {
+  it('已登录顶栏只显示姓名、机构和退出', () => {
     const ready = reducer(
       reducer(undefined, setPhone('13800009501')),
       setPassword('Correct-horse-95'),
@@ -373,10 +408,12 @@ describe('登录页', () => {
       createElement(Provider, { store: view, children: createElement(AuthShell) }),
     );
     expect(html).toContain('丁经办');
-    expect(html).toContain('P-95-OK');
     expect(html).toContain('第一执法支队');
-    expect(html).toContain('监督、经办');
     expect(html).toContain('>退出</button>');
+    expect(html).not.toContain('P-95-OK');
+    expect(html).not.toContain('监督、经办');
+    expect(entered.operator?.code).toBe('P-95-OK');
+    expect(entered.operator?.roles).toEqual(['监督', '经办']);
     expect(html).toContain('环境健康面板');
     const left = reducer(entered, logout.fulfilled(undefined, 'req-4'));
     expect(left.phase).toBe('anonymous');

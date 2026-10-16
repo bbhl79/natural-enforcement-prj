@@ -18,6 +18,7 @@ const COPY = {
   error: '账号或口令不正确。如需帮助，请联系本单位管理员。',
   locked: '账号已锁定。请联系本单位管理员解锁。',
   deactivated: '账号已停用。请联系本单位管理员恢复。',
+  capacity: '当前在线人数已满。请稍后再试。',
 } as const;
 
 function bannerOf(screen: LoginScreen): { tone: 'danger' | 'amber'; text: string } | null {

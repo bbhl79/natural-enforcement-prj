@@ -10,7 +10,7 @@ import type { ActorRef } from '@natural-enforcement/identity';
 
 import { AuthService, type AuthResolution } from './auth.service.ts';
 import { IS_PUBLIC } from './public.decorator.ts';
-import { sourceAddress } from './session-cookie.ts';
+import { clearRememberCookie, clearSessionCookie, sourceAddress } from './session-cookie.ts';
 
 export interface AuthenticatedRequest {
   headers: { cookie?: string; 'x-forwarded-for'?: string | string[] };
@@ -28,7 +28,6 @@ function allowedDuringPasswordChange(req: AuthenticatedRequest): boolean {
   if (method === 'POST' && path === '/api/auth/password') return true;
   if (method === 'POST' && path === '/api/auth/logout') return true;
   if (method === 'GET' && path === '/api/auth/session') return true;
-  if (method === 'POST' && path === '/api/auth/login') return true;
   return false;
 }
 
@@ -66,6 +65,11 @@ export class SessionGuard implements CanActivate {
     }
     if (isPublic) return true;
     if (!active) {
+      if (method === 'POST' && path === '/api/auth/logout') {
+        await this.auth.dropPresentedRememberMe(req.headers.cookie);
+        const res = context.switchToHttp().getResponse<{ setHeader(name: string, value: string | string[]): void }>();
+        res.setHeader('Set-Cookie', [clearSessionCookie(), clearRememberCookie()]);
+      }
       throw new HttpException({ reason: 'not-authenticated' }, HttpStatus.UNAUTHORIZED);
     }
     req.actor = { personnelId: active.account.id, authenticated: true };
