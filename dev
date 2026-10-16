@@ -253,16 +253,23 @@ check_db() {
 # 探测容器借用 redis 容器的网络命名空间直达 127.0.0.1:6379；redis 停服时
 # 容器不存在/不可达，探测失败即红。
 check_queue() {
-  local cid="$("${COMPOSE[@]}" ps -q redis 2>/dev/null || true)" probe_out=""
-  if [ -n "$cid" ] && [ "$(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null)" = "running" ] \
-     && probe_out="$(run_queue_probe "$cid" 2>&1)"; then
-    QUEUE_STATUS=ok
-    echo "[OK]   queue 队列连通（${probe_out}）"
-    return 0
+  local cid="$("${COMPOSE[@]}" ps -q redis 2>/dev/null || true)" probe_out="" attempt
+  if [ -z "$cid" ] || [ "$(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null)" != "running" ]; then
+    QUEUE_STATUS=fail
+    echo "[FAIL] queue 队列不可连通（redis 容器未运行，无法投递健康检查任务）"
+    return 1
   fi
+  # 探测要另起容器再确认消费。宿主刚跑完构建时，单次可能赶不上。
+  # 连试 3 次。redis 未运行时不重试，停服仍然立刻标红。
+  for attempt in 1 2 3; do
+    if probe_out="$(run_queue_probe "$cid" 2>&1)"; then
+      QUEUE_STATUS=ok
+      echo "[OK]   queue 队列连通（${probe_out}）"
+      return 0
+    fi
+  done
   QUEUE_STATUS=fail
-  [ -n "${probe_out:-}" ] && echo "[FAIL] queue 队列不可连通（${probe_out}）" \
-    || echo "[FAIL] queue 队列不可连通（redis 容器未运行，无法投递健康检查任务）"
+  echo "[FAIL] queue 队列不可连通（${probe_out}）"
   return 1
 }
 
