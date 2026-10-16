@@ -149,6 +149,59 @@ afterAll(async () => {
 });
 
 describe('空闲超时', () => {
+  it('会话已过空闲或绝对终点时退出仍作废记住我并清除两枚 Cookie', async () => {
+    clock.millis = T0;
+    const login = await postLogin(true);
+    const cookies = login.headers.getSetCookie();
+    const sid = pairOf(cookies, '__Host-sid');
+    const rm = pairOf(cookies, '__Host-rm');
+    clock.millis = T0 + 30 * MINUTE_MS;
+    const before = await audits();
+    const idle = await fetch(`${baseUrl}/api/auth/logout`, {
+      method: 'POST',
+      headers: { cookie: `${sid}; ${rm}` },
+    });
+    expect(idle.status).toBe(401);
+    expect(await idle.json()).toEqual({ reason: 'not-authenticated' });
+    const cleared = idle.headers.getSetCookie();
+    expect(cleared.some((item) => item.startsWith('__Host-sid=;') && item.includes('Max-Age=0'))).toBe(true);
+    expect(cleared.some((item) => item.startsWith('__Host-rm=;') && item.includes('Max-Age=0'))).toBe(true);
+    const sidDigest = createHash('sha256').update(sid.slice('__Host-sid='.length)).digest('hex');
+    const ended = await cloned.prisma.authSession.findUniqueOrThrow({ where: { secretHash: sidDigest } });
+    expect(ended.endReason).toBe('idle-timeout');
+    const rmDigest = createHash('sha256').update(rm.slice('__Host-rm='.length)).digest('hex');
+    const voided = await cloned.prisma.authRememberMe.findUniqueOrThrow({ where: { secretHash: rmDigest } });
+    expect(voided.endedAt).not.toBeNull();
+    expect(voided.endReason).toBe('logout');
+    expect(added(before, await audits()).map((row) => [row.action, row.reason])).toEqual([
+      ['session.ended', 'idle-timeout'],
+      ['authz.denied', 'not-authenticated'],
+    ]);
+
+    clock.millis = T0;
+    const plain = await postLogin(false);
+    const plainSid = pairOf(plain.headers.getSetCookie(), '__Host-sid');
+    let cursor = T0;
+    while (cursor + 29 * MINUTE_MS < T0 + 8 * HOUR_MS) {
+      cursor += 29 * MINUTE_MS;
+      clock.millis = cursor;
+      const beat = await fetch(`${baseUrl}/api/auth/session`, { headers: { cookie: plainSid } });
+      expect(await beat.json()).toMatchObject({ result: 'authenticated', code: 'P-101-A' });
+    }
+    clock.millis = T0 + 8 * HOUR_MS;
+    const absolute = await fetch(`${baseUrl}/api/auth/logout`, {
+      method: 'POST',
+      headers: { cookie: plainSid },
+    });
+    expect(absolute.status).toBe(401);
+    const absoluteCleared = absolute.headers.getSetCookie();
+    expect(absoluteCleared.some((item) => item.startsWith('__Host-sid=;') && item.includes('Max-Age=0'))).toBe(true);
+    expect(absoluteCleared.some((item) => item.startsWith('__Host-rm=;') && item.includes('Max-Age=0'))).toBe(true);
+    const plainDigest = createHash('sha256').update(plainSid.slice('__Host-sid='.length)).digest('hex');
+    const absoluteRow = await cloned.prisma.authSession.findUniqueOrThrow({ where: { secretHash: plainDigest } });
+    expect(absoluteRow.endReason).toBe('absolute-timeout');
+  });
+
   it('空闲满 30 分钟后，下一次请求结束会话并要求重新登录', async () => {
     clock.millis = T0;
     const login = await postLogin(false);
@@ -241,7 +294,7 @@ describe('绝对超时', () => {
     expect(first.absoluteEndsAt.toISOString()).toBe(new Date(rememberEnd).toISOString());
 
     clock.millis = T0 + 8 * HOUR_MS + 30 * MINUTE_MS;
-    const idle = await fetch(`${baseUrl}/api/auth/logout`, { method: 'POST', headers: { cookie: sid } });
+    const idle = await fetch(`${baseUrl}/api/admin/locked-personnel`, { headers: { cookie: sid } });
     expect(idle.status).toBe(401);
     const ended = await cloned.prisma.authSession.findUniqueOrThrow({ where: { secretHash: firstDigest } });
     expect(ended.endReason).toBe('idle-timeout');
@@ -357,6 +410,29 @@ describe('每人最多 3 段', () => {
     expect(rows[0]).toMatchObject({ actor_id: personId, subject_personnel_id: personId });
   });
 
+  it('请求里的会话属于他人时登录不结束它', async () => {
+    await endOpenSessions();
+    clock.millis = T0;
+    const holder = await postLoginAs(HOLDER_PHONE, false);
+    expect(holder.status).toBe(200);
+    const holderSid = pairOf(holder.headers.getSetCookie(), '__Host-sid');
+    clock.millis = T0 + 1_000;
+    const before = await audits();
+    const response = await postLogin(false, holderSid);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ result: 'established' });
+    const digest = createHash('sha256').update(holderSid.slice('__Host-sid='.length)).digest('hex');
+    const stored = await cloned.prisma.authSession.findUniqueOrThrow({ where: { secretHash: digest } });
+    expect(stored.endedAt).toBeNull();
+    expect(stored.endReason).toBeNull();
+    const still = await fetch(`${baseUrl}/api/auth/session`, { headers: { cookie: holderSid } });
+    expect(await still.json()).toMatchObject({ result: 'authenticated', code: 'P-101-B' });
+    expect(added(before, await audits()).map((row) => [row.action, row.outcome, row.reason])).toEqual([
+      ['login.succeeded', 'succeeded', null],
+    ]);
+    await endOpenSessions();
+  });
+
   it('统计名额前先结束本人已经超时的会话', async () => {
     await cloned.prisma.authSession.updateMany({
       where: { personnelId: personId, endedAt: null },
@@ -391,6 +467,33 @@ describe('每人最多 3 段', () => {
 });
 
 describe('全系统满员', () => {
+  it('满员时携带他人会话登录不结束那段会话', async () => {
+    await endOpenSessions();
+    clock.millis = T0;
+    const holderCookies: string[] = [];
+    for (let index = 0; index < SESSION_CAPACITY; index += 1) {
+      clock.millis = T0 + index * 1000;
+      const held = await postLoginAs(HOLDER_PHONE, false);
+      expect(held.status).toBe(200);
+      holderCookies.push(pairOf(held.headers.getSetCookie(), '__Host-sid'));
+    }
+    clock.millis = T0 + 10_000;
+    const victim = holderCookies[0]!;
+    const before = await audits();
+    const response = await postLogin(false, victim);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ result: 'capacity-reached' });
+    const digest = createHash('sha256').update(victim.slice('__Host-sid='.length)).digest('hex');
+    const stored = await cloned.prisma.authSession.findUniqueOrThrow({ where: { secretHash: digest } });
+    expect(stored.endedAt).toBeNull();
+    expect(stored.endReason).toBeNull();
+    const still = await fetch(`${baseUrl}/api/auth/session`, { headers: { cookie: victim } });
+    expect(await still.json()).toMatchObject({ result: 'authenticated', code: 'P-101-B' });
+    expect(added(before, await audits()).map((row) => [row.action, row.outcome, row.reason])).toEqual([
+      ['login.capacity-reached', 'failed', null],
+    ]);
+  });
+
   it('已满时口令正确也不建立新会话，并写满员留痕', async () => {
     await endOpenSessions();
     clock.millis = T0;
@@ -476,7 +579,7 @@ describe('全系统满员', () => {
     const rm = pairOf(cookies, '__Host-rm');
     const rmDigest = createHash('sha256').update(rm.slice('__Host-rm='.length)).digest('hex');
     clock.millis = T0 + 30 * MINUTE_MS;
-    const idle = await fetch(`${baseUrl}/api/auth/logout`, { method: 'POST', headers: { cookie: sid } });
+    const idle = await fetch(`${baseUrl}/api/admin/locked-personnel`, { headers: { cookie: sid } });
     expect(idle.status).toBe(401);
     const holderCookies: string[] = [];
     for (let index = 0; index < SESSION_CAPACITY; index += 1) {
@@ -514,7 +617,7 @@ describe('全系统满员', () => {
     const oldSid = pairOf(rememberedCookies, '__Host-sid');
     const rm = pairOf(rememberedCookies, '__Host-rm');
     clock.millis = T0 + 30 * MINUTE_MS;
-    const idle = await fetch(`${baseUrl}/api/auth/logout`, { method: 'POST', headers: { cookie: oldSid } });
+    const idle = await fetch(`${baseUrl}/api/admin/locked-personnel`, { headers: { cookie: oldSid } });
     expect(idle.status).toBe(401);
     const devices: string[] = [];
     for (let index = 0; index < SESSION_CAPACITY; index += 1) {
@@ -539,7 +642,7 @@ describe('全系统满员', () => {
   });
 });
 
-describe('管理员结束会话', () => {
+describe('系统管理结束会话', () => {
   it('结束某人员的全部会话，原因是 admin-ended，不提供独立入口', async () => {
     await endOpenSessions();
     clock.millis = T0;

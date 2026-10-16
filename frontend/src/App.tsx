@@ -29,9 +29,7 @@ export function AuthShell() {
         ) : null}
         <header className="flex flex-wrap items-center gap-4 border-b border-slate-200 px-6 py-3 text-sm text-slate-800">
           <span>{operator.name}</span>
-          <span>{operator.code}</span>
           <span>{operator.orgName ?? ''}</span>
-          <span>{operator.roles.join('、')}</span>
           <button type="button" onClick={() => void dispatch(logout())}>退出</button>
         </header>
         <HealthPanel />

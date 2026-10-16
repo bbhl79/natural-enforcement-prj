@@ -1,7 +1,7 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 /** 四态与原型 S00 一致。 */
-export type LoginScreen = 'default' | 'error' | 'locked' | 'deactivated';
+export type LoginScreen = 'default' | 'error' | 'locked' | 'deactivated' | 'capacity';
 
 export type AuthPhase = 'unknown' | 'anonymous' | 'password-change-required' | 'authenticated';
 
@@ -114,7 +114,7 @@ function armStartupSession(): (() => void) | null {
 }
 
 type LoginFailure = {
-  result: 'invalid-credential' | 'password-change-required' | 'password-expired' | 'locked' | 'deactivated';
+  result: 'invalid-credential' | 'password-change-required' | 'password-expired' | 'locked' | 'deactivated' | 'capacity-reached';
 };
 
 function operatorFrom(view: SessionView & { result: 'authenticated' }): OperatorSession & { daysRemaining: number | null } {
@@ -131,8 +131,12 @@ export const loadSession = createAsyncThunk<SessionView>('login/loadSession', as
   const finish = armStartupSession();
   try {
     const response = await fetch('/api/auth/session', { cache: 'no-store' });
+    const body = (await response.json()) as { result?: string };
+    const kind = passwordChangeKindFromDenial(response.status, body.result);
+    if (kind === 'expired') return { result: 'password-expired' };
+    if (kind === 'first-login') return { result: 'password-change-required' };
     if (!response.ok) return { result: 'anonymous' };
-    return (await response.json()) as SessionView;
+    return body as SessionView;
   } finally {
     finish?.();
   }
@@ -156,6 +160,12 @@ export const submitLogin = createAsyncThunk<
       }),
     });
     const body = (await response.json()) as { result?: string };
+    const denied = passwordChangeKindFromDenial(response.status, body.result);
+    if (denied) {
+      return rejectWithValue({
+        result: denied === 'expired' ? 'password-expired' : 'password-change-required',
+      });
+    }
     if (body.result === 'established') {
       const session = await fetch('/api/auth/session', { cache: 'no-store' });
       const view = (await session.json()) as SessionView;
@@ -169,6 +179,9 @@ export const submitLogin = createAsyncThunk<
     }
     if (body.result === 'locked' || body.result === 'deactivated') {
       return rejectWithValue({ result: body.result });
+    }
+    if (response.status === 503 && body.result === 'capacity-reached') {
+      return rejectWithValue({ result: 'capacity-reached' });
     }
     return rejectWithValue({ result: 'invalid-credential' });
   },
@@ -184,7 +197,8 @@ export const logout = createAsyncThunk('login/logout', async () => {
 type PasswordFailure =
   | { result: 'invalid-credential' }
   | { result: 'locked' }
-  | { result: 'non-compliant'; rules: string[] };
+  | { result: 'non-compliant'; rules: string[] }
+  | { result: 'password-change' };
 
 export const submitPassword = createAsyncThunk<
   OperatorSession & { daysRemaining?: number | null },
@@ -192,7 +206,7 @@ export const submitPassword = createAsyncThunk<
   { state: { login: LoginState }; rejectValue: PasswordFailure }
 >(
   'login/submitPassword',
-  async (_, { getState, rejectWithValue }) => {
+  async (_, { getState, rejectWithValue, dispatch }) => {
     const { currentPassword, newPassword } = getState().login;
     const response = await fetch('/api/auth/password', {
       method: 'POST',
@@ -200,6 +214,11 @@ export const submitPassword = createAsyncThunk<
       body: JSON.stringify({ currentPassword, newPassword }),
     });
     const body = (await response.json()) as { result?: string; rules?: string[] };
+    const denied = passwordChangeKindFromDenial(response.status, body.result);
+    if (denied) {
+      dispatch(enterPasswordChange(denied));
+      return rejectWithValue({ result: 'password-change' });
+    }
     if (body.result === 'established') {
       const session = await fetch('/api/auth/session', { cache: 'no-store' });
       const view = (await session.json()) as SessionView;
@@ -325,6 +344,12 @@ const loginSlice = createSlice({
           state.screen = action.payload.result;
           return;
         }
+        if (action.payload.result === 'capacity-reached') {
+          state.phase = 'anonymous';
+          state.passwordChangeKind = null;
+          state.screen = 'capacity';
+          return;
+        }
         state.phase = 'anonymous';
         state.passwordChangeKind = null;
         state.screen = 'error';
@@ -348,6 +373,7 @@ const loginSlice = createSlice({
       })
       .addCase(submitPassword.rejected, (state, action) => {
         if (!action.payload) return;
+        if (action.payload.result === 'password-change') return;
         if (action.payload.result === 'non-compliant') {
           state.ruleCodes = action.payload.rules;
           state.currentPasswordRejected = false;

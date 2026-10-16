@@ -122,13 +122,14 @@ export type PasswordChangeOutcome = {
 
 export type SessionView =
   | { result: 'anonymous' }
-  | { result: PasswordGate }
   | {
-      result: 'authenticated';
+      result: 'authenticated' | PasswordGate;
       name: string;
       code: string;
       orgName: string | null;
       roles: string[];
+      passwordChangeRequired: boolean;
+      passwordChangeKind: PasswordGate | null;
       daysRemaining?: number;
     };
 
@@ -263,13 +264,14 @@ export class AuthService {
     if (!active) return { result: 'anonymous' };
     const now = this.clock.now();
     const gate = passwordGate(active.account.passwordChangedAt, now);
-    if (gate) return { result: gate };
     return {
-      result: 'authenticated',
+      result: gate ?? 'authenticated',
       name: active.account.name,
       code: active.account.code,
       orgName: active.account.orgName,
       roles: active.account.roles,
+      passwordChangeRequired: gate != null,
+      passwordChangeKind: gate,
       ...this.notice(active.account.passwordChangedAt, now),
     };
   }
@@ -361,7 +363,7 @@ export class AuthService {
     return this.resolve(cookieHeader, sourceIp, true);
   }
 
-  /** 管理员结束某人员全部未结束的会话。独立 HTTP 入口不在本能力里。 */
+  /** 系统管理结束某人员全部未结束的会话。独立 HTTP 入口不在本能力里。 */
   async endPersonnelSessions(input: {
     personnelId: string;
     actorId: string;
@@ -384,6 +386,11 @@ export class AuthService {
         sourceIp: input.sourceIp,
       });
     }
+  }
+
+  /** 会话已经结束时，退出仍作废这台浏览器带来的记住我。 */
+  async dropPresentedRememberMe(cookieHeader: string | undefined): Promise<void> {
+    await this.voidPresentedRememberMe(cookieHeader, this.clock.now(), 'logout');
   }
 
   async logout(
@@ -667,6 +674,10 @@ export class AuthService {
       if (denyWhenMissing) await this.deny(sourceIp);
       return null;
     }
+    if (account.deactivatedAt != null) {
+      await this.endPersonnelAccess(account.id, now, 'personnel-deactivated', sourceIp);
+      return null;
+    }
     return { row, account };
   }
 
@@ -744,6 +755,7 @@ export class AuthService {
     if (!secret) return;
     const row = await this.sessions.findBySecretHash(await sha256Hex(secret));
     if (!row || row.endedAt) return;
+    if (row.personnelId !== actor.id) return;
     const idle = now.getTime() - row.lastSeenAt.getTime() >= IDLE_MS;
     const absolute = now.getTime() >= row.absoluteEndsAt.getTime();
     const reason = idle ? 'idle-timeout' : absolute ? 'absolute-timeout' : 'logout';

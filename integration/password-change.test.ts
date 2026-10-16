@@ -137,6 +137,44 @@ afterAll(async () => {
 });
 
 describe('POST /api/auth/password', () => {
+  it('强制改密期间登录接口返回该种类，改口令和退出仍可用', async () => {
+    clock.millis = T0;
+    try {
+      const fresh = await postLogin('13800009701', OLD_PASSWORD);
+      const freshPair = cookiePair(fresh);
+      const blockedFresh = await postLogin('13800009701', OLD_PASSWORD, freshPair);
+      expect(blockedFresh.status).toBe(403);
+      expect(await blockedFresh.json()).toEqual({ result: 'password-change-required' });
+      const freshSession = await fetch(`${baseUrl}/api/auth/session`, { headers: { cookie: freshPair } });
+      expect((await freshSession.json()).result).toBe('password-change-required');
+
+      const expired = await postLogin('13800009704', OLD_PASSWORD);
+      const expiredPair = cookiePair(expired);
+      const blockedExpired = await postLogin('13800009704', OLD_PASSWORD, expiredPair);
+      expect(blockedExpired.status).toBe(403);
+      expect(await blockedExpired.json()).toEqual({ result: 'password-expired' });
+
+      const changed = await postPassword(freshPair, OLD_PASSWORD, NEW_PASSWORD);
+      expect(changed.status).toBe(200);
+      const out = await fetch(`${baseUrl}/api/auth/logout`, {
+        method: 'POST',
+        headers: { cookie: freshPair },
+      });
+      expect(out.status).toBe(200);
+    } finally {
+      await cloned.prisma.personnel.update({
+        where: { code: 'P-97-NEW' },
+        data: {
+          passwordHash: pinnedHash,
+          passwordChangedAt: null,
+          passwordFailureCount: 0,
+          passwordFailureWindowStartedAt: null,
+          lockedUntil: null,
+        },
+      });
+    }
+  });
+
   it('首次登录必须先改口令，改完沿用同一段会话，初始口令不能再登录', async () => {
     clock.millis = T0;
     const login = await postLogin('13800009701', OLD_PASSWORD);
@@ -155,7 +193,13 @@ describe('POST /api/auth/password', () => {
     expect(wrong.status).toBe(400);
     expect(await wrong.json()).toEqual({ result: 'invalid-credential' });
     const still = await fetch(`${baseUrl}/api/auth/session`, { headers: { cookie: pair } });
-    expect(await still.json()).toEqual({ result: 'password-change-required' });
+    expect(await still.json()).toMatchObject({
+      result: 'password-change-required',
+      passwordChangeRequired: true,
+      passwordChangeKind: 'password-change-required',
+      name: 'P-97-NEW',
+      code: 'P-97-NEW',
+    });
 
     const beforeRules = await audits();
     const rejected = await postPassword(pair, OLD_PASSWORD, '1234');
@@ -251,8 +295,33 @@ describe('90 天与到期提醒', () => {
     clock.millis = T0;
     const within = await postLogin('13800009705', OLD_PASSWORD);
     expect(await within.json()).toEqual({ result: 'established', daysRemaining: 7 });
+    const withinSession = await fetch(`${baseUrl}/api/auth/session`, {
+      headers: { cookie: cookiePair(within) },
+    });
+    expect(await withinSession.json()).toEqual({
+      result: 'authenticated',
+      name: 'P-97-D7',
+      code: 'P-97-D7',
+      orgName: '第一执法支队',
+      roles: [],
+      passwordChangeRequired: false,
+      passwordChangeKind: null,
+      daysRemaining: 7,
+    });
     const eighth = await postLogin('13800009706', OLD_PASSWORD);
     expect(await eighth.json()).toEqual({ result: 'established' });
+    const eighthSession = await fetch(`${baseUrl}/api/auth/session`, {
+      headers: { cookie: cookiePair(eighth) },
+    });
+    expect(await eighthSession.json()).toEqual({
+      result: 'authenticated',
+      name: 'P-97-D8',
+      code: 'P-97-D8',
+      orgName: '第一执法支队',
+      roles: [],
+      passwordChangeRequired: false,
+      passwordChangeKind: null,
+    });
   });
 
   it('已改密人员主动改口令只写改密留痕', async () => {

@@ -196,6 +196,8 @@ describe('POST /api/auth/login', () => {
       code: 'P-95-OK',
       orgName: '第一执法支队',
       roles: ['监督', '经办'],
+      passwordChangeRequired: false,
+      passwordChangeKind: null,
     });
     const text = JSON.stringify(await audits());
     expect(text.includes(KNOWN_PHONE)).toBe(false);
@@ -259,7 +261,15 @@ describe('POST /api/auth/login', () => {
     const pair = cookiePair(sessionCookie(response));
     expect(await cloned.prisma.authSession.count({ where: { personnelId: freshId } })).toBe(1);
     const session = await fetch(`${baseUrl}/api/auth/session`, { headers: { cookie: pair } });
-    expect(await session.json()).toEqual({ result: 'password-change-required' });
+    expect(await session.json()).toEqual({
+      result: 'password-change-required',
+      name: '戊初登',
+      code: 'P-95-NEW',
+      orgName: '第一执法支队',
+      roles: [],
+      passwordChangeRequired: true,
+      passwordChangeKind: 'password-change-required',
+    });
     const blocked = await fetch(`${baseUrl}/api/health`, { headers: { cookie: pair } });
     expect(blocked.status).toBe(403);
     expect(await blocked.json()).toEqual({ result: 'password-change-required' });

@@ -241,6 +241,8 @@ describe('勾选记住我', () => {
       code: 'P-100-OK',
       orgName: null,
       roles: [],
+      passwordChangeRequired: false,
+      passwordChangeKind: null,
     });
     const cookies = response.headers.getSetCookie();
     const nextRm = pairOf(cookies, '__Host-rm');
@@ -388,6 +390,59 @@ describe('勾选记住我', () => {
     }
   });
 
+  it('停用后已有会话的下一次请求结束全部会话和全部记住我', async () => {
+    clock.millis = T0;
+    await endOpenSessions();
+    await cloned.prisma.authRememberMe.updateMany({
+      where: { personnelId: personId, endedAt: null },
+      data: { endedAt: new Date(T0), endReason: 'logout' },
+    });
+    const first = await postLogin(true);
+    const sid = pairOf(first.headers.getSetCookie(), '__Host-sid');
+    const second = await postLogin(true);
+    expect(second.status).toBe(200);
+    await cloned.prisma.personnel.update({
+      where: { id: personId },
+      data: { deactivatedAt: new Date(T0) },
+    });
+    try {
+      const activeSessions = await cloned.prisma.authSession.findMany({
+        where: { personnelId: personId, endedAt: null },
+      });
+      const activeRemember = await cloned.prisma.authRememberMe.findMany({
+        where: { personnelId: personId, endedAt: null },
+      });
+      expect(activeSessions.length).toBe(2);
+      expect(activeRemember.length).toBe(2);
+      const before = await audits();
+      const response = await fetch(`${baseUrl}/api/admin/locked-personnel`, {
+        headers: { cookie: sid },
+      });
+      expect(response.status).toBe(401);
+      expect(await response.json()).toEqual({ reason: 'not-authenticated' });
+      for (const row of activeSessions) {
+        const stored = await cloned.prisma.authSession.findUniqueOrThrow({ where: { id: row.id } });
+        expect(stored.endReason).toBe('personnel-deactivated');
+      }
+      for (const row of activeRemember) {
+        const stored = await cloned.prisma.authRememberMe.findUniqueOrThrow({ where: { id: row.id } });
+        expect(stored.endReason).toBe('personnel-deactivated');
+      }
+      const rows = added(before, await audits());
+      expect(rows.map((row) => [row.action, row.reason])).toEqual([
+        ...activeSessions.map(() => ['session.ended', 'personnel-deactivated']),
+        ['authz.denied', 'not-authenticated'],
+      ]);
+      const again = await sessionWith(sid);
+      expect(await again.json()).toEqual({ result: 'anonymous' });
+    } finally {
+      await cloned.prisma.personnel.update({
+        where: { id: personId },
+        data: { deactivatedAt: null },
+      });
+    }
+  });
+
   it('停用后免输口令进入结束该人员全部记住我和全部会话', async () => {
     clock.millis = T0;
     const here = await postLogin(true);
@@ -473,7 +528,11 @@ describe('勾选记住我', () => {
       const digest = createHash('sha256').update(cookieValue(rm, '__Host-rm')).digest('hex');
       const before = await audits();
       const response = await sessionWith(rm);
-      expect(await response.json()).toEqual({ result: 'password-change-required' });
+      expect(await response.json()).toMatchObject({
+        result: 'password-change-required',
+        passwordChangeRequired: true,
+        passwordChangeKind: 'password-change-required',
+      });
       const rotated = await cloned.prisma.authRememberMe.findUniqueOrThrow({ where: { secretHash: digest } });
       expect(rotated.endReason).toBe('rotated');
       expect(added(before, await audits()).map((row) => [row.action, row.outcome])).toEqual([
@@ -498,7 +557,11 @@ describe('勾选记住我', () => {
       const rm = pairOf(login.headers.getSetCookie(), '__Host-rm');
       const before = await audits();
       const response = await sessionWith(rm);
-      expect(await response.json()).toEqual({ result: 'password-expired' });
+      expect(await response.json()).toMatchObject({
+        result: 'password-expired',
+        passwordChangeRequired: true,
+        passwordChangeKind: 'password-expired',
+      });
       expect(added(before, await audits()).map((row) => row.action)).toEqual(['login.password-expired']);
     } finally {
       await cloned.prisma.personnel.update({
