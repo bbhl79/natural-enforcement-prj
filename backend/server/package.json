@@ -1,0 +1,27 @@
+{
+  "name": "@natural-enforcement/server",
+  "version": "0.0.0",
+  "private": true,
+  "description": "HTTP 启动包（ADR 0004：不是第七个业务模块；NestJS 默认 Express；本票只暴露不要求会话的 GET /api/health）",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@natural-enforcement/approval": "workspace:*",
+    "@natural-enforcement/case": "workspace:*",
+    "@natural-enforcement/deadline": "workspace:*",
+    "@natural-enforcement/geo-dict": "workspace:*",
+    "@natural-enforcement/identity": "workspace:*",
+    "@natural-enforcement/supervision": "workspace:*",
+    "@nestjs/common": "12.1.2",
+    "@nestjs/core": "12.1.2",
+    "@nestjs/platform-express": "12.1.2",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2"
+  },
+  "devDependencies": {
+    "typescript": "6.0.2",
+    "vitest": "5.0.3"
+  }
+}
