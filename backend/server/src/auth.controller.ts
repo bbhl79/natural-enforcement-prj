@@ -17,6 +17,11 @@ interface LoginBody {
   rememberMe?: unknown;
 }
 
+interface PasswordBody {
+  currentPassword?: unknown;
+  newPassword?: unknown;
+}
+
 @Controller('api/auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
@@ -44,6 +49,21 @@ export class AuthController {
   async session(@Req() req: AuthenticatedRequest, @Res() res: HttpReply): Promise<void> {
     const view = await this.auth.session(req.headers.cookie, sourceAddress(req));
     res.status(200).json(view);
+  }
+
+  @Post('password')
+  async password(
+    @Req() req: AuthenticatedRequest,
+    @Res() res: HttpReply,
+    @Body() body: PasswordBody,
+  ): Promise<void> {
+    const outcome = await this.auth.changePassword({
+      currentPassword: typeof body?.currentPassword === 'string' ? body.currentPassword : '',
+      newPassword: typeof body?.newPassword === 'string' ? body.newPassword : '',
+      cookieHeader: req.headers.cookie,
+      sourceIp: sourceAddress(req),
+    });
+    res.status(outcome.status).json(outcome.body);
   }
 
   @Post('logout')

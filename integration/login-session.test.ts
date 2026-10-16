@@ -251,13 +251,18 @@ describe('POST /api/auth/login', () => {
     assertSecretsAbsent(rows);
   });
 
-  it('上次改密时间为空时不进入系统，返回必须改口令', async () => {
+  it('上次改密时间为空时建立会话，但仍须改口令，不能使用其他功能', async () => {
     const before = await audits();
     const response = await postLogin(FRESH_PHONE, PASSWORD, false);
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ result: 'password-change-required' });
-    expect(response.headers.getSetCookie()).toEqual([]);
-    expect(await cloned.prisma.authSession.count({ where: { personnelId: freshId } })).toBe(0);
+    const pair = cookiePair(sessionCookie(response));
+    expect(await cloned.prisma.authSession.count({ where: { personnelId: freshId } })).toBe(1);
+    const session = await fetch(`${baseUrl}/api/auth/session`, { headers: { cookie: pair } });
+    expect(await session.json()).toEqual({ result: 'password-change-required' });
+    const blocked = await fetch(`${baseUrl}/api/health`, { headers: { cookie: pair } });
+    expect(blocked.status).toBe(403);
+    expect(await blocked.json()).toEqual({ result: 'password-change-required' });
     const rows = added(before, await audits());
     expect(rows.map((row) => [row.action, row.outcome, row.reason])).toEqual([
       ['login.password-change-required', 'failed', null],

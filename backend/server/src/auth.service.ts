@@ -1,6 +1,20 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { AUDIT_TRAIL_PORT, type AuditTrailPort } from '@natural-enforcement/audit';
-import { CredentialService, newUlid } from '@natural-enforcement/identity';
+import { AUDIT_TRAIL_PORT, type AuditTrailPort, type PasswordChangedReason } from '@natural-enforcement/audit';
+import {
+  CredentialService,
+  newUlid,
+  rejectedPasswordRules,
+  type PasswordRuleCode,
+} from '@natural-enforcement/identity';
+
+import {
+  CLOCK,
+  daysUntilPasswordExpiry,
+  EXPIRY_NOTICE_DAYS,
+  passwordGate,
+  type Clock,
+  type PasswordGate,
+} from './clock.ts';
 
 import {
   emptyParties,
@@ -74,18 +88,31 @@ export interface LoginInput {
 
 export type LoginOutcome = {
   status: number;
-  body: { result: 'established' | 'invalid-credential' | 'password-change-required' };
+  body:
+    | { result: 'established'; daysRemaining?: number }
+    | { result: 'invalid-credential' }
+    | { result: PasswordGate };
   setCookie?: string;
+};
+
+export type PasswordChangeOutcome = {
+  status: number;
+  body:
+    | { result: 'established' }
+    | { result: 'invalid-credential' }
+    | { result: 'non-compliant'; rules: PasswordRuleCode[] };
 };
 
 export type SessionView =
   | { result: 'anonymous' }
+  | { result: PasswordGate }
   | {
       result: 'authenticated';
       name: string;
       code: string;
       orgName: string | null;
       roles: string[];
+      daysRemaining?: number;
     };
 
 type ActiveSession = { row: SessionRow; account: LoginAccount };
@@ -97,6 +124,7 @@ export class AuthService {
     @Inject(SESSION_STORE) private readonly sessions: SessionStore,
     @Inject(AUDIT_TRAIL_PORT) private readonly audit: AuditTrailPort,
     private readonly credentials: CredentialService,
+    @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
   async login(input: LoginInput): Promise<LoginOutcome> {
@@ -129,32 +157,31 @@ export class AuthService {
       });
       return invalid;
     }
-    if (account.passwordChangedAt == null) {
+    const now = this.clock.now();
+    const gate = passwordGate(account.passwordChangedAt, now);
+    const setCookie = await this.openSession(input.cookieHeader, account, input.sourceIp, now);
+    if (gate === 'password-change-required') {
       await this.audit.append({
         action: 'login.password-change-required',
         ...partiesOf(account, input.sourceIp),
       });
-      return { status: 200, body: { result: 'password-change-required' } };
+      return { status: 200, body: { result: gate }, setCookie };
     }
-    const now = new Date();
-    await this.closePresentedSession(input.cookieHeader, account, input.sourceIp, now);
-    const secret = newSessionSecret();
-    await this.sessions.insert({
-      id: newUlid(now.getTime()),
-      personnelId: account.id,
-      secretHash: await sha256Hex(secret),
-      authenticatedAt: now,
-      lastSeenAt: now,
-      absoluteEndsAt: new Date(now.getTime() + ABSOLUTE_MS),
-    });
+    if (gate === 'password-expired') {
+      await this.audit.append({
+        action: 'login.password-expired',
+        ...partiesOf(account, input.sourceIp),
+      });
+      return { status: 200, body: { result: gate }, setCookie };
+    }
     await this.audit.append({
       action: 'login.succeeded',
       ...partiesOf(account, input.sourceIp),
     });
     return {
       status: 200,
-      body: { result: 'established' },
-      setCookie: serializeSessionCookie(secret),
+      body: this.establishedBody(account.passwordChangedAt, now),
+      setCookie,
     };
   }
 
@@ -162,13 +189,70 @@ export class AuthService {
   async session(cookieHeader: string | undefined, sourceIp: string | null): Promise<SessionView> {
     const active = await this.resolve(cookieHeader, sourceIp, false);
     if (!active) return { result: 'anonymous' };
+    const now = this.clock.now();
+    const gate = passwordGate(active.account.passwordChangedAt, now);
+    if (gate) return { result: gate };
     return {
       result: 'authenticated',
       name: active.account.name,
       code: active.account.code,
       orgName: active.account.orgName,
       roles: active.account.roles,
+      ...this.notice(active.account.passwordChangedAt, now),
     };
+  }
+
+  /** 守卫读取会话。denyWhenMissing 为真且没有会话时写授权拒绝。 */
+  loadActive(
+    cookieHeader: string | undefined,
+    sourceIp: string | null,
+    denyWhenMissing: boolean,
+  ): Promise<ActiveSession | null> {
+    return this.resolve(cookieHeader, sourceIp, denyWhenMissing);
+  }
+
+  passwordChangeState(account: LoginAccount): PasswordGate | null {
+    return passwordGate(account.passwordChangedAt, this.clock.now());
+  }
+
+  async changePassword(input: {
+    cookieHeader: string | undefined;
+    sourceIp: string | null;
+    currentPassword: string;
+    newPassword: string;
+  }): Promise<PasswordChangeOutcome> {
+    const active = await this.resolve(input.cookieHeader, input.sourceIp, false);
+    if (!active) return { status: 401, body: { result: 'invalid-credential' } };
+    const accepted = await this.credentials.authenticate(active.account.id, input.currentPassword);
+    if (!accepted) {
+      await this.audit.append({
+        action: 'login.failed',
+        reason: 'bad-credential',
+        ...partiesOf(active.account, input.sourceIp),
+      });
+      return { status: 400, body: { result: 'invalid-credential' } };
+    }
+    const rules = rejectedPasswordRules({
+      password: input.newPassword,
+      personnelCode: active.account.code,
+      currentPassword: input.currentPassword,
+    });
+    if (rules.length > 0) return { status: 400, body: { result: 'non-compliant', rules } };
+    const now = this.clock.now();
+    const gate = passwordGate(active.account.passwordChangedAt, now);
+    await this.credentials.changePassword(active.account.id, input.newPassword, now);
+    await this.audit.append({
+      action: 'account.password-changed',
+      reason: this.passwordChangedReason(gate),
+      ...partiesOf(active.account, input.sourceIp),
+    });
+    if (gate) {
+      await this.audit.append({
+        action: 'login.succeeded',
+        ...partiesOf(active.account, input.sourceIp),
+      });
+    }
+    return { status: 200, body: { result: 'established' } };
   }
 
   /** 受保护接口。没有有效会话时写授权拒绝，原因是未认证。 */
@@ -182,7 +266,7 @@ export class AuthService {
   async logout(cookieHeader: string | undefined, sourceIp: string | null): Promise<{ result: 'ended' }> {
     const active = await this.resolve(cookieHeader, sourceIp, false);
     if (!active) return { result: 'ended' };
-    const now = new Date();
+    const now = this.clock.now();
     await this.sessions.end(active.row.id, now, 'logout');
     await this.audit.append({
       action: 'session.ended',
@@ -190,6 +274,45 @@ export class AuthService {
       ...partiesOf(active.account, sourceIp),
     });
     return { result: 'ended' };
+  }
+
+  private establishedBody(
+    changedAt: Date | null,
+    now: Date,
+  ): { result: 'established'; daysRemaining?: number } {
+    return { result: 'established', ...this.notice(changedAt, now) };
+  }
+
+  private notice(changedAt: Date | null, now: Date): { daysRemaining?: number } {
+    if (!changedAt) return {};
+    const days = daysUntilPasswordExpiry(changedAt, now);
+    if (days > EXPIRY_NOTICE_DAYS) return {};
+    return { daysRemaining: days };
+  }
+
+  private passwordChangedReason(gate: PasswordGate | null): PasswordChangedReason {
+    if (gate === 'password-change-required') return 'first-login';
+    if (gate === 'password-expired') return 'expired';
+    return 'voluntary';
+  }
+
+  private async openSession(
+    cookieHeader: string | undefined,
+    account: LoginAccount,
+    sourceIp: string | null,
+    now: Date,
+  ): Promise<string> {
+    await this.closePresentedSession(cookieHeader, account, sourceIp, now);
+    const secret = newSessionSecret();
+    await this.sessions.insert({
+      id: newUlid(now.getTime()),
+      personnelId: account.id,
+      secretHash: await sha256Hex(secret),
+      authenticatedAt: now,
+      lastSeenAt: now,
+      absoluteEndsAt: new Date(now.getTime() + ABSOLUTE_MS),
+    });
+    return serializeSessionCookie(secret);
   }
 
   private async resolve(
@@ -207,7 +330,7 @@ export class AuthService {
       if (denyWhenMissing) await this.deny(sourceIp);
       return null;
     }
-    const now = new Date();
+    const now = this.clock.now();
     const idle = now.getTime() - row.lastSeenAt.getTime() >= IDLE_MS;
     const absolute = now.getTime() >= row.absoluteEndsAt.getTime();
     if (idle || absolute) {

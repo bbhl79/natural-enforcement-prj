@@ -8,13 +8,21 @@ import healthReducer from '../health/healthSlice';
 import { AuthShell } from '../App';
 import LoginPage from './LoginPage';
 import reducer, {
+  dismissExpiryNotice,
+  enterPasswordChange,
+  expiryNoticeVisible,
   forgotPassword,
   loadSession,
   loginSubmitEnabled,
   logout,
+  PASSWORD_RULE_TEXT,
+  passwordChangeKindFromDenial,
+  setCurrentPassword,
+  setNewPassword,
   setPassword,
   setPhone,
   submitLogin,
+  submitPassword,
   toggleRemember,
 } from './loginSlice';
 import { store } from '../store';
@@ -91,7 +99,7 @@ describe('登录页', () => {
     expect(html).toContain('账号或口令不正确。如需帮助，请联系本单位管理员。');
   });
 
-  it('上次改密时间为空时显示必须改口令，不提供改口令页', () => {
+  it('首次登录进入改口令页，完成前不显示系统功能', () => {
     const ready = reducer(
       reducer(undefined, setPhone('13800009502')),
       setPassword('Correct-horse-95'),
@@ -106,6 +114,7 @@ describe('登录页', () => {
       ),
     );
     expect(blocked.phase).toBe('password-change-required');
+    expect(blocked.passwordChangeKind).toBe('first-login');
     expect(blocked.operator).toBeNull();
     const view = configureStore({
       reducer: { login: reducer, health: healthReducer },
@@ -115,8 +124,128 @@ describe('登录页', () => {
       createElement(Provider, { store: view, children: createElement(AuthShell) }),
     );
     expect(html).toContain('必须改口令');
-    expect(html).not.toContain('新口令');
-    expect(html).not.toContain('placeholder="密码"');
+    expect(html).toContain('首次登录必须更换初始口令');
+    expect(html).toContain('placeholder="当前口令"');
+    expect(html).toContain('placeholder="新口令"');
+    expect(html).not.toContain('环境健康面板');
+    expect(html).not.toContain('placeholder="手机号"');
+  });
+
+  it('口令超过 90 天时说明必须更换', () => {
+    const blocked = reducer(
+      undefined,
+      submitLogin.rejected(new Error('rejected'), 'req-expired', undefined, { result: 'password-expired' }),
+    );
+    expect(blocked.passwordChangeKind).toBe('expired');
+    const view = configureStore({
+      reducer: { login: reducer, health: healthReducer },
+      preloadedState: { login: blocked },
+    });
+    const html = renderToStaticMarkup(
+      createElement(Provider, { store: view, children: createElement(AuthShell) }),
+    );
+    expect(html).toContain('口令已超过 90 天，必须更换口令');
+  });
+
+  it('规则码一次显示为全部中文提示', () => {
+    const withRules = reducer(
+      reducer(undefined, setCurrentPassword('Old-pass-97!')),
+      submitPassword.rejected(new Error('rejected'), 'req-rules', undefined, {
+        result: 'non-compliant',
+        rules: ['too-short', 'insufficient-classes', 'sequential', 'repeated', 'common', 'contains-code', 'same-as-current', 'too-long'],
+      }),
+    );
+    const view = configureStore({
+      reducer: { login: reducer, health: healthReducer },
+      preloadedState: { login: { ...withRules, phase: 'password-change-required', passwordChangeKind: 'first-login' } },
+    });
+    const html = renderToStaticMarkup(
+      createElement(Provider, { store: view, children: createElement(AuthShell) }),
+    );
+    for (const text of Object.values(PASSWORD_RULE_TEXT)) {
+      expect(html).toContain(text);
+    }
+  });
+
+  it('距到期 7 天显示提醒，关闭后同一会话不再出现，第 8 天不出现', () => {
+    const entered = reducer(
+      undefined,
+      submitLogin.fulfilled(
+        { name: '丁经办', code: 'P-95-OK', orgName: '第一执法支队', roles: ['经办'], daysRemaining: 7 },
+        'req-banner',
+        undefined,
+      ),
+    );
+    expect(expiryNoticeVisible(entered)).toBe(true);
+    const view = configureStore({
+      reducer: { login: reducer, health: healthReducer },
+      preloadedState: { login: entered },
+    });
+    const shown = renderToStaticMarkup(
+      createElement(Provider, { store: view, children: createElement(AuthShell) }),
+    );
+    expect(shown).toContain('口令还剩 7 天到期');
+    const closed = reducer(entered, dismissExpiryNotice());
+    const reloaded = reducer(
+      closed,
+      loadSession.fulfilled({
+        result: 'authenticated',
+        name: '丁经办',
+        code: 'P-95-OK',
+        orgName: '第一执法支队',
+        roles: ['经办'],
+        daysRemaining: 7,
+      }, 'req-reload'),
+    );
+    expect(expiryNoticeVisible(reloaded)).toBe(false);
+    const hidden = configureStore({
+      reducer: { login: reducer, health: healthReducer },
+      preloadedState: { login: reloaded },
+    });
+    const after = renderToStaticMarkup(
+      createElement(Provider, { store: hidden, children: createElement(AuthShell) }),
+    );
+    expect(after).not.toContain('口令还剩');
+    const eighth = reducer(
+      undefined,
+      submitLogin.fulfilled(
+        { name: '丁经办', code: 'P-95-OK', orgName: '第一执法支队', roles: ['经办'], daysRemaining: 8 },
+        'req-eighth',
+        undefined,
+      ),
+    );
+    expect(expiryNoticeVisible(eighth)).toBe(false);
+  });
+
+  it('403 强制改密进入改口令页', () => {
+    expect(passwordChangeKindFromDenial(403, 'password-expired')).toBe('expired');
+    expect(passwordChangeKindFromDenial(401, 'password-expired')).toBeNull();
+    const forced = reducer(undefined, enterPasswordChange('expired'));
+    expect(forced.phase).toBe('password-change-required');
+    expect(forced.passwordChangeKind).toBe('expired');
+  });
+
+  it('改口令提交当前口令和新口令', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ result: 'established' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        result: 'authenticated',
+        name: '丁经办',
+        code: 'P-95-OK',
+        orgName: '第一执法支队',
+        roles: ['经办'],
+      }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const view = configureStore({ reducer: { login: reducer, health: healthReducer } });
+    view.dispatch(setCurrentPassword('Old-pass-97!'));
+    view.dispatch(setNewPassword('New-pass-97!'));
+    await view.dispatch(submitPassword());
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/password', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ currentPassword: 'Old-pass-97!', newPassword: 'New-pass-97!' }),
+    });
+    expect(view.getState().login.phase).toBe('authenticated');
   });
 
   it('口令正确且已改密后能看到姓名、工号、机构和角色，并能退出', () => {

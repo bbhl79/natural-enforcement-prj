@@ -12,6 +12,14 @@ export type {
 export type { ActorRef } from './domain/actor.ts';
 export { newUlid } from './domain/ulid.ts';
 export {
+  PASSWORD_RULES,
+  rejectedPasswordRules,
+} from './domain/password-policy.ts';
+export type {
+  PasswordCheck,
+  PasswordRuleCode,
+} from './domain/password-policy.ts';
+export {
   IDENTITY_STORE,
   type AssignmentTransfer,
   type ExportAuditRow,

@@ -155,6 +155,21 @@ export class PrismaIdentityStore implements IdentityStore {
     await this.prisma.personnel.update({ where: { id: personnelId }, data: { deactivatedAt } });
   }
 
+  async replacePasswordHash(personnelId: string, passwordHash: string): Promise<void> {
+    await this.prisma.personnel.update({ where: { id: personnelId }, data: { passwordHash } });
+  }
+
+  async changePassword(
+    personnelId: string,
+    passwordHash: string,
+    passwordChangedAt: Date,
+  ): Promise<void> {
+    await this.prisma.personnel.update({
+      where: { id: personnelId },
+      data: { passwordHash, passwordChangedAt },
+    });
+  }
+
   async insertAssignment(row: PersonnelAssignmentRow): Promise<void> {
     await this.prisma.personnelAssignment.create({ data: row });
   }
