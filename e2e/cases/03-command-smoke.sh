@@ -69,6 +69,27 @@ grep -q '数据库\|db' /tmp/smoke-health-green.log && ok "health 含 db 连通�
 grep -q 'frontend 前端面板可访问' /tmp/smoke-health-green.log \
   && ok "health 含前端可访问检查（第四依赖计入红绿）" || bad "health 缺少前端可访问检查"
 
+# 经入口访问并校验证书。未设置 NGINX_PORT 时地址是 https://localhost:8080。
+CERT="${HOME}/.local/share/natural-enforcement/dev-certs/localhost.crt"
+HTTPS_PORT="${NGINX_PORT:-8080}"
+PAGE_URL="https://localhost:${HTTPS_PORT}/"
+API_URL="https://localhost:${HTTPS_PORT}/api/health"
+page_body="$(curl -fsS --max-time 10 --cacert "$CERT" "$PAGE_URL" 2>/dev/null || true)"
+printf '%s' "$page_body" | grep -q 'id="root"' \
+  && ok "经入口访问页面并校验证书（$PAGE_URL）" \
+  || bad "经入口访问页面并校验证书（$PAGE_URL）"
+api_body="$(curl -fsS --max-time 10 --cacert "$CERT" "$API_URL" 2>/dev/null || true)"
+printf '%s' "$api_body" | grep -q '"status":"ok"' \
+  && ok "经入口访问 /api/health 并校验证书（$API_URL）" \
+  || bad "经入口访问 /api/health 并校验证书（$API_URL）"
+if curl -fsS --max-time 10 -o /dev/null "$PAGE_URL" 2>/tmp/smoke-cert-err; then
+  bad "未携带开发证书时页面请求不应成功（$PAGE_URL）"
+elif grep -qi 'certificate\|SSL' /tmp/smoke-cert-err; then
+  ok "未携带开发证书时校验证书失败（$PAGE_URL）"
+else
+  bad "未携带开发证书时的失败原因不是证书校验（$PAGE_URL）"
+fi
+
 "${COMPOSE[@]}" stop redis >/dev/null 2>&1
 "$DEV" health >/tmp/smoke-health-red.log 2>&1; rc=$?
 [ "$rc" -ne 0 ] && grep -q 'FAIL\|失败\|红' /tmp/smoke-health-red.log \
