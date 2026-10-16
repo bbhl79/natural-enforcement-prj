@@ -50,6 +50,8 @@
 #                           @smithy/*、minio、rustfs）只许出现在 packages/storage
 #                           （设施包）；其余位置出现 = 绕过 StoragePort 追加式抽象
 #                           直连存储（append-only 最保守语义的机器兜底，强于注释级约定）
+#   audit-facility-entry    留痕设施唯一入口（ADR 0012）：auditTrail 这个 Prisma 委托
+#                           只许出现在 packages/audit。包外引用即失败
 #   spatial-no-orm-mutation 空间纪律机器兜底（评审必修扩口径）：backend/、packages/、
 #                           integration/、e2e/ 全源码
 #                           （SCAN_CODE 形态：ts/tsx/mts/cts + mjs/cjs/sh）不得对
@@ -67,6 +69,11 @@ SHIELD_DIR="$ROOT/packages/shield"
 QUEUE_DIR="$ROOT/packages/queue"
 # 存储设施包（#53）：S3/RustFS SDK 的唯一合法出现位置
 STORAGE_DIR="$ROOT/packages/storage"
+# 留痕设施包（ADR 0012）：auditTrail 委托的唯一合法出现位置
+AUDIT_DIR="$ROOT/packages/audit"
+# ADR 0004：启动包里只有这一个文件可以直接引用身份模块的数据库适配器
+SERVER_ADAPTER_FILE="backend/server/src/persistence.module.ts"
+SERVER_ADAPTER_SPEC="../../identity/src/persistence/prisma-identity-store.ts"
 
 # 业务模块清单（定案命名，#47/#51）：模块名 → 源码目录（相对 ROOT）
 MODULES=(identity geo-dict case approval supervision deadline)
@@ -104,6 +111,7 @@ RULES=(
   g1-model-allowlist
   queue-facility-entry
   storage-facility-entry
+  audit-facility-entry
   spatial-no-orm-mutation
 )
 FAIL=0
@@ -319,6 +327,9 @@ check_module-public-entry() {
     [ -z "$home" ] && continue
     while IFS= read -r spec; do
       is_assembly_exempt "${file#"$ROOT"/}" "$spec" && continue
+      if [ "${file#"$ROOT"/}" = "$SERVER_ADAPTER_FILE" ] && [ "$spec" = "$SERVER_ADAPTER_SPEC" ]; then
+        continue
+      fi
       case "$spec" in
         @natural-enforcement/*/*)
           note_fail "module-public-entry：内部路径导入 ${file#"$ROOT"/} → $spec（只许 @natural-enforcement/<module> 公共出口）"
@@ -489,6 +500,24 @@ check_storage-facility-entry() {
   done < <(find "$BACKEND" "$ROOT/frontend" "$ROOT/e2e" "$ROOT/integration" "$SHIELD_DIR" "$QUEUE_DIR" "${SCAN_CODE[@]}")
   if [ "$fails" -eq 0 ]; then
     note_ok "storage-facility-entry：S3/RustFS SDK 仅在存储设施包内（业务侧无裸存储依赖，append-only 机器兜底）"
+  fi
+}
+
+# 规则：留痕设施唯一入口。auditTrail 委托只许出现在 packages/audit。
+# 包外任何引用都判红，包括读取。测试观察留痕行时走表名，不走这个委托。
+check_audit-facility-entry() {
+  local hits=0 file
+  while IFS= read -r file; do
+    case "$file" in
+      "$AUDIT_DIR"/*) continue ;;
+    esac
+    if grep -qE '(^|[^A-Za-z0-9_])auditTrail([^A-Za-z0-9_]|$)' "$file"; then
+      note_fail "audit-facility-entry：${file#"$ROOT"/} 引用了 auditTrail Prisma 委托（留痕只许经 @natural-enforcement/audit 追加）"
+      hits=$((hits + 1))
+    fi
+  done < <(find "$BACKEND" "$ROOT/packages" "$ROOT/frontend" "$ROOT/e2e" "$ROOT/integration" "${SCAN_CODE[@]}")
+  if [ "$hits" -eq 0 ]; then
+    note_ok "audit-facility-entry：auditTrail 委托仅在留痕设施包内（包外无直接引用）"
   fi
 }
 

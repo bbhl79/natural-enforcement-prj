@@ -1,15 +1,21 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Provider } from 'react-redux';
-import { describe, expect, it } from 'vitest';
+import { configureStore } from '@reduxjs/toolkit';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import healthReducer from '../health/healthSlice';
+import { AuthShell } from '../App';
 import LoginPage from './LoginPage';
 import reducer, {
   forgotPassword,
+  loadSession,
   loginSubmitEnabled,
+  logout,
   setPassword,
   setPhone,
   submitLogin,
+  toggleRemember,
 } from './loginSlice';
 import { store } from '../store';
 
@@ -63,13 +69,142 @@ describe('登录页', () => {
     expect(html).not.toMatch(/type="password"[^>]*value="[^"]+"/);
   });
 
-  it('点登录不建立会话', () => {
+  it('口令错误时显示同一句文案，不进入系统', () => {
     const ready = reducer(
       reducer(undefined, setPhone('13800138000')),
       setPassword('correct-horse'),
     );
-    const submitted = reducer(ready, submitLogin());
-    expect(submitted.session).toBeNull();
-    expect(submitted.screen).toBe('default');
+    const failed = reducer(
+      ready,
+      submitLogin.rejected(new Error('rejected'), 'req-1', undefined, { result: 'invalid-credential' }),
+    );
+    expect(failed.phase).toBe('anonymous');
+    expect(failed.operator).toBeNull();
+    expect(failed.screen).toBe('error');
+    const view = configureStore({
+      reducer: { login: reducer, health: healthReducer },
+      preloadedState: { login: failed },
+    });
+    const html = renderToStaticMarkup(
+      createElement(Provider, { store: view, children: createElement(LoginPage) }),
+    );
+    expect(html).toContain('账号或口令不正确。如需帮助，请联系本单位管理员。');
   });
+
+  it('上次改密时间为空时显示必须改口令，不提供改口令页', () => {
+    const ready = reducer(
+      reducer(undefined, setPhone('13800009502')),
+      setPassword('Correct-horse-95'),
+    );
+    const blocked = reducer(
+      ready,
+      submitLogin.rejected(
+        new Error('rejected'),
+        'req-2',
+        undefined,
+        { result: 'password-change-required' },
+      ),
+    );
+    expect(blocked.phase).toBe('password-change-required');
+    expect(blocked.operator).toBeNull();
+    const view = configureStore({
+      reducer: { login: reducer, health: healthReducer },
+      preloadedState: { login: blocked },
+    });
+    const html = renderToStaticMarkup(
+      createElement(Provider, { store: view, children: createElement(AuthShell) }),
+    );
+    expect(html).toContain('必须改口令');
+    expect(html).not.toContain('新口令');
+    expect(html).not.toContain('placeholder="密码"');
+  });
+
+  it('口令正确且已改密后能看到姓名、工号、机构和角色，并能退出', () => {
+    const ready = reducer(
+      reducer(undefined, setPhone('13800009501')),
+      setPassword('Correct-horse-95'),
+    );
+    const entered = reducer(
+      ready,
+      submitLogin.fulfilled(
+        {
+          name: '丁经办',
+          code: 'P-95-OK',
+          orgName: '第一执法支队',
+          roles: ['监督', '经办'],
+        },
+        'req-3',
+        undefined,
+      ),
+    );
+    expect(entered.phase).toBe('authenticated');
+    expect(entered.operator).toEqual({
+      name: '丁经办',
+      code: 'P-95-OK',
+      orgName: '第一执法支队',
+      roles: ['监督', '经办'],
+    });
+    const view = configureStore({
+      reducer: { login: reducer, health: healthReducer },
+      preloadedState: { login: entered },
+    });
+    const html = renderToStaticMarkup(
+      createElement(Provider, { store: view, children: createElement(AuthShell) }),
+    );
+    expect(html).toContain('丁经办');
+    expect(html).toContain('P-95-OK');
+    expect(html).toContain('第一执法支队');
+    expect(html).toContain('监督、经办');
+    expect(html).toContain('>退出</button>');
+    expect(html).toContain('环境健康面板');
+    const left = reducer(entered, logout.fulfilled(undefined, 'req-4'));
+    expect(left.phase).toBe('anonymous');
+    expect(left.operator).toBeNull();
+  });
+
+  it('未登录显示登录页', () => {
+    const anonymous = reducer(undefined, loadSession.fulfilled({ result: 'anonymous' }, 'req-5'));
+    const view = configureStore({
+      reducer: { login: reducer, health: healthReducer },
+      preloadedState: { login: anonymous },
+    });
+    const html = renderToStaticMarkup(
+      createElement(Provider, { store: view, children: createElement(AuthShell) }),
+    );
+    expect(html).toContain('placeholder="手机号"');
+    expect(html).toContain('>登录</button>');
+  });
+
+  it('登录请求提交手机号、口令和是否记住我', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ result: 'established' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        result: 'authenticated',
+        name: '丁经办',
+        code: 'P-95-OK',
+        orgName: '第一执法支队',
+        roles: ['经办'],
+      }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const view = configureStore({ reducer: { login: reducer, health: healthReducer } });
+    view.dispatch(setPhone(' 13800009501 '));
+    view.dispatch(setPassword('Correct-horse-95'));
+    view.dispatch(toggleRemember());
+    await view.dispatch(submitLogin());
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        mobilePhone: '13800009501',
+        password: 'Correct-horse-95',
+        rememberMe: true,
+      }),
+    });
+    expect(view.getState().login.phase).toBe('authenticated');
+    expect(view.getState().login.operator?.roles).toEqual(['经办']);
+  });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });

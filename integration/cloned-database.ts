@@ -10,6 +10,7 @@ export type ClonedDatabase = {
   prisma: PrismaClient;
   scratchDbName: string;
   sourceDb: string;
+  connectionString: string;
   close: () => Promise<void>;
 };
 
@@ -59,6 +60,7 @@ export async function openClonedDatabase(): Promise<ClonedDatabase> {
     prisma,
     scratchDbName,
     sourceDb,
+    connectionString: scratchUrl.toString(),
     close: async () => {
       try {
         await prisma.$disconnect();

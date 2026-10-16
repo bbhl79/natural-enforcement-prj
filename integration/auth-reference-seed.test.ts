@@ -304,16 +304,19 @@ describe('角色与权限记录只失效不删除', () => {
 describe('留痕表拒绝更新和删除', () => {
   it('直接 UPDATE 或 DELETE 被触发器拒绝', async () => {
     const id = newUlid();
-    await prisma.auditTrail.create({
-      data: { id, action: 'login.failed', outcome: 'failed', reason: 'bad-credential' },
-    });
+    await prisma.$executeRaw`
+      INSERT INTO audit_trail (id, action, outcome, reason)
+      VALUES (${id}, 'login.failed', 'failed', 'bad-credential')
+    `;
     await expect(
       prisma.$executeRaw`UPDATE audit_trail SET action = 'login.succeeded' WHERE id = ${id}`,
     ).rejects.toThrow(/拒绝 UPDATE/);
     await expect(prisma.$executeRaw`DELETE FROM audit_trail WHERE id = ${id}`).rejects.toThrow(/拒绝 DELETE/);
-    const stored = await prisma.auditTrail.findUniqueOrThrow({ where: { id } });
-    expect(stored.action).toBe('login.failed');
-    expect(stored.outcome).toBe('failed');
+    const stored = await prisma.$queryRaw<Array<{ action: string; outcome: string }>>`
+      SELECT action, outcome FROM audit_trail WHERE id = ${id}
+    `;
+    expect(stored[0]?.action).toBe('login.failed');
+    expect(stored[0]?.outcome).toBe('failed');
   });
 });
 

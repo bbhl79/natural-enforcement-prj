@@ -1,0 +1,13 @@
+{
+  "name": "@natural-enforcement/audit",
+  "version": "0.0.0",
+  "private": true,
+  "description": "留痕设施包（ADR 0012：只追加的写入接口与封闭取值表。数据库适配器在包内，server 负责装配）",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@natural-enforcement/shield": "workspace:*"
+  }
+}
