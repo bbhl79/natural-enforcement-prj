@@ -117,7 +117,17 @@ function store(): IdentityStore {
 
 function recorder(): { port: AuditTrailPort; rows: AuthzDeniedEntry[] } {
   const rows: AuthzDeniedEntry[] = [];
-  return { rows, port: { append: async (entry) => { rows.push(entry); } } };
+  return {
+    rows,
+    port: {
+      append: async (entry) => {
+        if (entry.action !== AUDIT_ACTION_AUTHZ_DENIED || !('outcome' in entry)) {
+          throw new Error('授权测试只记录授权拒绝');
+        }
+        rows.push(entry);
+      },
+    },
+  };
 }
 
 const auth = (personnelId: string): ActorRef => ({ personnelId, authenticated: true });
