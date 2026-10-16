@@ -48,6 +48,7 @@ model OrgUnit {
   members      Personnel[]
   assignments  PersonnelAssignment[]
   exportAudits ExportAudit[]
+  auditTrails  AuditTrail[]
 
   @@map("org_unit")
 }
@@ -67,21 +68,32 @@ model OrgUnitNameVersion {
 
 /// 人员（当前态；只失效不删除：触发器拒 DELETE，失效 = deactivatedAt）
 model Personnel {
-  id            String    @id
-  code          String    @unique
-  name          String
-  orgUnitId     String    @map("org_unit_id")
-  orgUnit       OrgUnit   @relation(fields: [orgUnitId], references: [id])
-  role          String
-  passwordHash  String?   @map("password_hash")
-  deactivatedAt DateTime? @db.Timestamptz(6) @map("deactivated_at")
-  createdAt     DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
+  id                             String    @id
+  code                           String    @unique
+  name                           String
+  orgUnitId                      String    @map("org_unit_id")
+  orgUnit                        OrgUnit   @relation(fields: [orgUnitId], references: [id])
+  role                           String
+  passwordHash                   String?   @map("password_hash")
+  // 登录标识。有值时全库唯一。PostgreSQL 唯一索引允许多个空值。位数与号段不在 ADR 0005 规定。
+  mobilePhone                    String?   @unique @map("mobile_phone")
+  passwordFailureCount           Int       @default(0) @map("password_failure_count")
+  passwordFailureWindowStartedAt DateTime? @db.Timestamptz(6) @map("password_failure_window_started_at")
+  lockedUntil                    DateTime? @db.Timestamptz(6) @map("locked_until")
+  passwordChangedAt              DateTime? @db.Timestamptz(6) @map("password_changed_at")
+  enforcementCertNo              String?   @map("enforcement_cert_no")
+  enforcementCertExpiresOn       DateTime? @db.Date @map("enforcement_cert_expires_on")
+  deactivatedAt                  DateTime? @db.Timestamptz(6) @map("deactivated_at")
+  createdAt                      DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
 
   nameVersions    PersonnelNameVersion[]
   assignments     PersonnelAssignment[]
   exportAudits    ExportAudit[]
   authSessions    AuthSession[]
   rememberMeRows  AuthRememberMe[]
+  personnelRoles  PersonnelRole[]
+  auditAsActor    AuditTrail[] @relation("AuditActor")
+  auditAsSubject  AuditTrail[] @relation("AuditSubject")
 
   @@map("personnel")
 }
@@ -188,6 +200,89 @@ model AuthSession {
   endReason         String?         @map("end_reason")
 
   @@map("auth_session")
+}
+
+// ---- 权限与留痕（#92，ADR 0005 / ADR 0011）----
+// 四张权限表主键为 ULID。记录只失效不删除：DELETE 复用 reject_row_mutation，
+// UPDATE 只允许 deactivated_at 从空到非空。部分唯一索引保证未失效行不重复，
+// Prisma schema 表达不了，后续生成迁移时不得删掉。
+// 人员—角色不记机构。并集不落库。
+// AuditTrail 追加写入。UPDATE 与 DELETE 都复用 reject_row_mutation。
+// 动作取值不在库内锁死，以后的图只追加取值。成败只有 succeeded / failed。
+
+/// 角色。name 是词汇表中的七个角色名。未失效的 name 唯一。
+model Role {
+  id            String    @id
+  name          String
+  deactivatedAt DateTime? @db.Timestamptz(6) @map("deactivated_at")
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  rolePermissions RolePermission[]
+  personnelRoles  PersonnelRole[]
+
+  @@map("role")
+}
+
+/// 权限。code 是一条操作码。未失效的 code 唯一。
+model Permission {
+  id            String    @id
+  code          String
+  deactivatedAt DateTime? @db.Timestamptz(6) @map("deactivated_at")
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  rolePermissions RolePermission[]
+
+  @@map("permission")
+}
+
+/// 允许行。旧行只失效，不删除。
+model RolePermission {
+  id            String     @id
+  roleId        String     @map("role_id")
+  role          Role       @relation(fields: [roleId], references: [id])
+  permissionId  String     @map("permission_id")
+  permission    Permission @relation(fields: [permissionId], references: [id])
+  deactivatedAt DateTime?  @db.Timestamptz(6) @map("deactivated_at")
+  createdAt     DateTime   @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@map("role_permission")
+}
+
+/// 人员—角色。不记机构。一名人员可同时持有多行。
+model PersonnelRole {
+  id            String    @id
+  personnelId   String    @map("personnel_id")
+  personnel     Personnel @relation(fields: [personnelId], references: [id])
+  roleId        String    @map("role_id")
+  role          Role      @relation(fields: [roleId], references: [id])
+  deactivatedAt DateTime? @db.Timestamptz(6) @map("deactivated_at")
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@map("personnel_role")
+}
+
+/// 留痕。除主键、时间、动作、成败外都可空。写入后不可改、不可删。
+model AuditTrail {
+  id                 String    @id
+  createdAt          DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
+  action             String
+  outcome            String
+  actorId            String?   @map("actor_id")
+  actor              Personnel? @relation("AuditActor", fields: [actorId], references: [id])
+  actorCode          String?   @map("actor_code")
+  subjectPersonnelId String?   @map("subject_personnel_id")
+  subjectPersonnel   Personnel? @relation("AuditSubject", fields: [subjectPersonnelId], references: [id])
+  subjectCode        String?   @map("subject_code")
+  orgUnitId          String?   @map("org_unit_id")
+  orgUnit            OrgUnit?  @relation(fields: [orgUnitId], references: [id])
+  sourceIp           String?   @map("source_ip")
+  reason             String?
+  opcode             String?
+  resourceType       String?   @map("resource_type")
+  resourceId         String?   @map("resource_id")
+  previousValue      String?   @map("previous_value")
+
+  @@map("audit_trail")
 }
 
 // 空间字典空间能力载体（#54，法域定几何：土地/矿产=面）：统一口径 geom = EPSG:4490，

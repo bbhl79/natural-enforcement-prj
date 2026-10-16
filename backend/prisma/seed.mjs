@@ -1,6 +1,8 @@
-// dev db seed：迁移/种子通道验证探针（#49）+ 身份组织参考数据（#52）。
-// 幂等纪律（dev db 全语义只增不改，毁数入口只有 dev db reset）：按业务 code 判存在即跳过。
-// 身份组织参考数据 = E2 越权必失败矩阵的燃料：总队机关 + 两个平行支队 + 主管/经办各一，
+// dev db seed：迁移探针（#49）+ 参照种子（#92）+ 开发测试夹具（#52）。
+// 幂等纪律（dev db 全语义只增不改，毁数入口只有 dev db reset）：按业务键判存在即跳过。
+// 参照种子（七个角色、操作码名册、允许行）在所有环境写入。允许行以 GitHub issue #71 决议为准。
+// 开发测试夹具（机构与人员）只在非生产环境写入。生产环境设置 NODE_ENV=production。
+// 夹具人员保留旧 role 列。手机号有值。passwordChangedAt 留空。口令符合口令策略。
 // 口令散列 = argon2 0.45.1（infra/VERSIONS.md 身份行；种子运行即预编译二进制实测腿之一）。
 import { PrismaClient } from "./generated/prisma/client.ts";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -38,8 +40,128 @@ if (existing) {
   console.log("种子已写入。");
 }
 
-// ---- 身份组织参考数据（#52；与 integration/e2-access-matrix.test.ts 的 code 约定同步） ----
-const SEED_PASSWORD = "Seed-pass-52"; // 仅开发环境种子口令，首登改密归后续切片
+// ---- 参照种子（#92；允许行 = GitHub issue #71 决议）----
+// 系统管理不持有办案表任何一行。authz.binding 两条只给系统管理。
+const ROLE_ALLOWANCES = {
+  内勤: [
+    "clue.org.assign",
+    "clue.handler.assign",
+    "case.reassign.submit",
+    "clue.read",
+    "case.read",
+    "doc.read",
+  ],
+  经办: [
+    "clue.verify.start",
+    "case.open",
+    "doc.draft",
+    "doc.submit",
+    "case.reassign.submit",
+    "legal.review.request",
+    "clue.read",
+    "case.read",
+    "doc.read",
+    "clue.export",
+    "case.export",
+    "doc.export",
+  ],
+  法制审核: [
+    "legal.opinion.draft",
+    "legal.opinion.submit",
+    "clue.read",
+    "case.read",
+    "doc.read",
+    "clue.export",
+    "case.export",
+    "doc.export",
+  ],
+  行政审核: [
+    "legal.review.request",
+    "doc.admin.review",
+    "clue.read",
+    "case.read",
+    "doc.read",
+    "clue.export",
+    "case.export",
+    "doc.export",
+  ],
+  行政审批: [
+    "legal.review.request",
+    "doc.approve",
+    "clue.read",
+    "case.read",
+    "doc.read",
+    "clue.export",
+    "case.export",
+    "doc.export",
+  ],
+  监督: [
+    "clue.read",
+    "case.read",
+    "doc.read",
+    "clue.export",
+    "case.export",
+    "doc.export",
+    "audit.admin.read",
+    "audit.admin.export",
+  ],
+  系统管理: [
+    ...["template", "rule", "calendar", "metric"].flatMap((object) =>
+      ["submit", "approve", "void", "withdraw", "read"].map((action) => `cfg.${object}.${action}`),
+    ),
+    "personnel.locked.read",
+    "personnel.locked.release",
+    "personnel.password.reset",
+    "audit.admin.read",
+    "audit.admin.export",
+    "authz.binding.submit",
+    "authz.binding.approve",
+  ],
+};
+
+async function seedRole(name) {
+  const found = await prisma.role.findFirst({ where: { name, deactivatedAt: null } });
+  if (found) return found.id;
+  const id = newUlid();
+  await prisma.role.create({ data: { id, name } });
+  return id;
+}
+
+async function seedPermission(code) {
+  const found = await prisma.permission.findFirst({ where: { code, deactivatedAt: null } });
+  if (found) return found.id;
+  const id = newUlid();
+  await prisma.permission.create({ data: { id, code } });
+  return id;
+}
+
+async function seedAllow(roleId, permissionId) {
+  const found = await prisma.rolePermission.findFirst({
+    where: { roleId, permissionId, deactivatedAt: null },
+  });
+  if (found) return;
+  await prisma.rolePermission.create({ data: { id: newUlid(), roleId, permissionId } });
+}
+
+const roleIds = new Map();
+for (const name of Object.keys(ROLE_ALLOWANCES)) {
+  roleIds.set(name, await seedRole(name));
+}
+const permissionIds = new Map();
+for (const code of new Set(Object.values(ROLE_ALLOWANCES).flat())) {
+  permissionIds.set(code, await seedPermission(code));
+}
+for (const [name, codes] of Object.entries(ROLE_ALLOWANCES)) {
+  const roleId = roleIds.get(name);
+  for (const code of codes) {
+    await seedAllow(roleId, permissionIds.get(code));
+  }
+}
+console.log("参照种子已写入或已存在。");
+
+// ---- 开发测试夹具（#52；与 integration/e2-access-matrix.test.ts 的 code 约定同步）----
+// NODE_ENV=production 时不写入。夹具不进入生产库。
+const SEED_PASSWORD = "Seed-pass-52"; // 长度 12，含大写、小写、数字、特殊字符。上次改密时间留空。
 
 /** 机构：存在即复用（返回 id），否则建当前行 + v1 名称版本行 */
 async function seedOrgUnit(code, name, parentId = null) {
@@ -54,13 +176,19 @@ async function seedOrgUnit(code, name, parentId = null) {
   return id;
 }
 
-/** 人员：存在即跳过；否则建当前行 + v1 名称版本行 + 首条任职（当前 = ended_at NULL） */
-async function seedPersonnel(code, name, orgUnitId, role, passwordHash) {
+/** 人员：存在则只补空手机号；否则建当前行 + v1 名称版本行 + 首条任职。不写 passwordChangedAt。 */
+async function seedPersonnel(code, name, orgUnitId, role, passwordHash, mobilePhone) {
   const found = await prisma.personnel.findUnique({ where: { code } });
-  if (found) return;
+  if (found) {
+    if (found.mobilePhone == null) {
+      await prisma.personnel.update({ where: { id: found.id }, data: { mobilePhone } });
+      console.log(`种子人员 ${code} 已补手机号。`);
+    }
+    return;
+  }
   const id = newUlid();
   await prisma.personnel.create({
-    data: { id, code, name, orgUnitId, role, passwordHash },
+    data: { id, code, name, orgUnitId, role, passwordHash, mobilePhone },
   });
   await prisma.personnelNameVersion.create({
     data: { id: newUlid(), personnelId: id, name, version: 1 },
@@ -71,13 +199,17 @@ async function seedPersonnel(code, name, orgUnitId, role, passwordHash) {
   console.log(`种子人员 ${code} 已写入。`);
 }
 
-const hqId = await seedOrgUnit("ORG-HQ", "自然执法总队", null);
-const deptAId = await seedOrgUnit("ORG-DEPT-A", "第一执法支队", hqId);
-const deptBId = await seedOrgUnit("ORG-DEPT-B", "第二执法支队", hqId);
+if (process.env.NODE_ENV === "production") {
+  console.log("生产环境跳过开发测试夹具。");
+} else {
+  const hqId = await seedOrgUnit("ORG-HQ", "自然执法总队", null);
+  const deptAId = await seedOrgUnit("ORG-DEPT-A", "第一执法支队", hqId);
+  const deptBId = await seedOrgUnit("ORG-DEPT-B", "第二执法支队", hqId);
 
-const passwordHash = await hash(SEED_PASSWORD);
-await seedPersonnel("P-SUP-A", "甲主管", deptAId, "supervisor", passwordHash);
-await seedPersonnel("P-CLERK-A", "乙经办", deptAId, "clerk", passwordHash);
-await seedPersonnel("P-CLERK-B", "丙经办", deptBId, "clerk", passwordHash);
+  const passwordHash = await hash(SEED_PASSWORD);
+  await seedPersonnel("P-SUP-A", "甲主管", deptAId, "supervisor", passwordHash, "13800001001");
+  await seedPersonnel("P-CLERK-A", "乙经办", deptAId, "clerk", passwordHash, "13800001002");
+  await seedPersonnel("P-CLERK-B", "丙经办", deptBId, "clerk", passwordHash, "13800001003");
+}
 
 await prisma.$disconnect();
