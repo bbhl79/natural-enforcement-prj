@@ -24,6 +24,7 @@ import reducer, {
   submitLogin,
   submitPassword,
   toggleRemember,
+  type LoginState,
 } from './loginSlice';
 import { store } from '../store';
 
@@ -155,9 +156,14 @@ describe('登录页', () => {
         rules: ['too-short', 'insufficient-classes', 'sequential', 'repeated', 'common', 'contains-code', 'same-as-current', 'too-long'],
       }),
     );
+    const login: LoginState = {
+      ...withRules,
+      phase: 'password-change-required',
+      passwordChangeKind: 'first-login',
+    };
     const view = configureStore({
       reducer: { login: reducer, health: healthReducer },
-      preloadedState: { login: { ...withRules, phase: 'password-change-required', passwordChangeKind: 'first-login' } },
+      preloadedState: { login },
     });
     const html = renderToStaticMarkup(
       createElement(Provider, { store: view, children: createElement(AuthShell) }),
