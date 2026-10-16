@@ -20,6 +20,7 @@ import {
   emptyParties,
   LOGIN_DIRECTORY,
   partiesOf,
+  type FailureSnapshot,
   type LoginAccount,
   type LoginDirectory,
 } from './login-directory.ts';
@@ -29,9 +30,13 @@ import {
   SESSION_COOKIE,
 } from './session-cookie.ts';
 import { SESSION_STORE, type SessionRow, type SessionStore } from './session-store.ts';
+import { SourceGate } from './source-gate.ts';
 
 const IDLE_MS = 30 * 60 * 1000;
 const ABSOLUTE_MS = 8 * 60 * 60 * 1000;
+const FAILURE_WINDOW_MS = 15 * 60 * 1000;
+const LOCK_MS = 30 * 60 * 1000;
+const LOCK_AFTER = 5;
 
 interface WebCrypto {
   getRandomValues<T extends ArrayBufferView>(array: T): T;
@@ -91,6 +96,8 @@ export type LoginOutcome = {
   body:
     | { result: 'established'; daysRemaining?: number }
     | { result: 'invalid-credential' }
+    | { result: 'locked' }
+    | { result: 'deactivated' }
     | { result: PasswordGate };
   setCookie?: string;
 };
@@ -100,6 +107,7 @@ export type PasswordChangeOutcome = {
   body:
     | { result: 'established' }
     | { result: 'invalid-credential' }
+    | { result: 'locked' }
     | { result: 'non-compliant'; rules: PasswordRuleCode[] };
 };
 
@@ -125,18 +133,28 @@ export class AuthService {
     @Inject(AUDIT_TRAIL_PORT) private readonly audit: AuditTrailPort,
     private readonly credentials: CredentialService,
     @Inject(CLOCK) private readonly clock: Clock,
+    private readonly sources: SourceGate,
   ) {}
 
   async login(input: LoginInput): Promise<LoginOutcome> {
     // 本票不发放记住我。勾选随请求收下，不写记住我表，也不下发记住我 Cookie。
     void input.rememberMe;
     const invalid = { status: 401, body: { result: 'invalid-credential' as const } };
+    const now = this.clock.now();
+    if (this.sources.blocked(input.sourceIp, now)) {
+      await this.audit.append({
+        action: 'login.source-limited',
+        ...emptyParties(input.sourceIp),
+      });
+      return invalid;
+    }
     if (input.mobilePhone === '') {
       await this.audit.append({
         action: 'login.failed',
         reason: 'unknown-identifier',
         ...emptyParties(input.sourceIp),
       });
+      this.sources.record(input.sourceIp, now);
       return invalid;
     }
     const account = await this.directory.findByMobile(input.mobilePhone);
@@ -146,18 +164,45 @@ export class AuthService {
         reason: 'unknown-identifier',
         ...emptyParties(input.sourceIp),
       });
+      this.sources.record(input.sourceIp, now);
       return invalid;
+    }
+    if (account.deactivatedAt != null) {
+      await this.audit.append({
+        action: 'login.deactivated',
+        ...partiesOf(account, input.sourceIp),
+      });
+      return { status: 401, body: { result: 'deactivated' } };
+    }
+    if (this.inLock(account, now)) {
+      await this.audit.append({
+        action: 'login.locked-retry',
+        ...partiesOf(account, input.sourceIp),
+      });
+      this.sources.record(input.sourceIp, now);
+      return { status: 401, body: { result: 'locked' } };
     }
     const accepted = await this.credentials.authenticate(account.id, input.password);
     if (!accepted) {
+      const snapshot = this.nextFailure(account, now);
+      await this.directory.saveFailure(account.id, snapshot);
+      if (snapshot.count >= LOCK_AFTER) {
+        await this.audit.append({
+          action: 'login.locked',
+          ...partiesOf(account, input.sourceIp),
+        });
+        this.sources.record(input.sourceIp, now);
+        return { status: 401, body: { result: 'locked' } };
+      }
       await this.audit.append({
         action: 'login.failed',
         reason: 'bad-credential',
         ...partiesOf(account, input.sourceIp),
       });
+      this.sources.record(input.sourceIp, now);
       return invalid;
     }
-    const now = this.clock.now();
+    await this.directory.clearFailure(account.id);
     const gate = passwordGate(account.passwordChangedAt, now);
     const setCookie = await this.openSession(input.cookieHeader, account, input.sourceIp, now);
     if (gate === 'password-change-required') {
@@ -223,8 +268,25 @@ export class AuthService {
   }): Promise<PasswordChangeOutcome> {
     const active = await this.resolve(input.cookieHeader, input.sourceIp, false);
     if (!active) return { status: 401, body: { result: 'invalid-credential' } };
+    const now = this.clock.now();
+    if (this.inLock(active.account, now)) {
+      await this.audit.append({
+        action: 'login.locked-retry',
+        ...partiesOf(active.account, input.sourceIp),
+      });
+      return { status: 401, body: { result: 'locked' } };
+    }
     const accepted = await this.credentials.authenticate(active.account.id, input.currentPassword);
     if (!accepted) {
+      const snapshot = this.nextFailure(active.account, now);
+      await this.directory.saveFailure(active.account.id, snapshot);
+      if (snapshot.count >= LOCK_AFTER) {
+        await this.audit.append({
+          action: 'login.locked',
+          ...partiesOf(active.account, input.sourceIp),
+        });
+        return { status: 401, body: { result: 'locked' } };
+      }
       await this.audit.append({
         action: 'login.failed',
         reason: 'bad-credential',
@@ -232,13 +294,13 @@ export class AuthService {
       });
       return { status: 400, body: { result: 'invalid-credential' } };
     }
+    await this.directory.clearFailure(active.account.id);
     const rules = rejectedPasswordRules({
       password: input.newPassword,
       personnelCode: active.account.code,
       currentPassword: input.currentPassword,
     });
     if (rules.length > 0) return { status: 400, body: { result: 'non-compliant', rules } };
-    const now = this.clock.now();
     const gate = passwordGate(active.account.passwordChangedAt, now);
     await this.credentials.changePassword(active.account.id, input.newPassword, now);
     await this.audit.append({
@@ -274,6 +336,26 @@ export class AuthService {
       ...partiesOf(active.account, sourceIp),
     });
     return { result: 'ended' };
+  }
+
+  private inLock(account: LoginAccount, now: Date): boolean {
+    return account.lockedUntil != null && now.getTime() < account.lockedUntil.getTime();
+  }
+
+  /** 15 分钟固定窗口。窗口起点是窗口内第一次失败。锁定到期后下一次从 1 计。 */
+  private nextFailure(account: LoginAccount, now: Date): FailureSnapshot {
+    const start = account.failureWindowStartedAt;
+    const lockExpired = account.lockedUntil != null && now.getTime() >= account.lockedUntil.getTime();
+    const windowOpen = start != null && now.getTime() - start.getTime() < FAILURE_WINDOW_MS;
+    if (!windowOpen || lockExpired) {
+      return { count: 1, windowStartedAt: now, lockedUntil: null };
+    }
+    const count = account.failureCount + 1;
+    return {
+      count,
+      windowStartedAt: start,
+      lockedUntil: count >= LOCK_AFTER ? new Date(now.getTime() + LOCK_MS) : null,
+    };
   }
 
   private establishedBody(

@@ -6,14 +6,27 @@ export interface LoginAccount {
   code: string;
   name: string;
   passwordChangedAt: Date | null;
+  deactivatedAt: Date | null;
+  failureCount: number;
+  failureWindowStartedAt: Date | null;
+  lockedUntil: Date | null;
   orgUnitId: string | null;
   orgName: string | null;
   roles: string[];
 }
 
+/** 一次口令失败之后要写回的计数。锁定到期时间只在达到 5 次时有值。 */
+export interface FailureSnapshot {
+  count: number;
+  windowStartedAt: Date | null;
+  lockedUntil: Date | null;
+}
+
 export interface LoginDirectory {
   findByMobile(mobile: string): Promise<LoginAccount | null>;
   findById(id: string): Promise<LoginAccount | null>;
+  saveFailure(id: string, snapshot: FailureSnapshot): Promise<void>;
+  clearFailure(id: string): Promise<void>;
 }
 
 export const LOGIN_DIRECTORY = Symbol('LOGIN_DIRECTORY');
