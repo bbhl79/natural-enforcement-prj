@@ -2,7 +2,7 @@
 // 幂等纪律（dev db 全语义只增不改，毁数入口只有 dev db reset）：按业务键判存在即跳过。
 // 参照种子（七个角色、操作码名册、允许行）在所有环境写入。允许行以 GitHub issue #71 决议为准。
 // 开发测试夹具（机构与人员）只在非生产环境写入。生产环境设置 NODE_ENV=production。
-// 夹具人员保留旧 role 列。手机号有值。passwordChangedAt 留空。口令符合口令策略。
+// 夹具人员不写旧 role 列。角色经人员—角色写入。手机号有值。passwordChangedAt 留空。
 // 口令散列 = argon2 0.45.1（infra/VERSIONS.md 身份行；种子运行即预编译二进制实测腿之一）。
 import { PrismaClient } from "./generated/prisma/client.ts";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -176,19 +176,47 @@ async function seedOrgUnit(code, name, parentId = null) {
   return id;
 }
 
-/** 人员：存在则只补空手机号；否则建当前行 + v1 名称版本行 + 首条任职。不写 passwordChangedAt。 */
-async function seedPersonnel(code, name, orgUnitId, role, passwordHash, mobilePhone) {
+async function seedPersonnelRole(personnelId, roleName) {
+  const roleId = roleIds.get(roleName);
+  const found = await prisma.personnelRole.findFirst({
+    where: { personnelId, roleId, deactivatedAt: null },
+  });
+  if (found) return;
+  await prisma.personnelRole.create({ data: { id: newUlid(), personnelId, roleId } });
+}
+
+/**
+ * 人员：存在则补空手机号、空执法证，并确保角色。
+ * 否则建当前行 + v1 名称版本行 + 首条任职。不写 passwordChangedAt。
+ * cert 为 { no, expiresOn } 或 null。expiresOn 是 Asia/Shanghai 日历日的 UTC 午夜。
+ */
+async function seedPersonnel(code, name, orgUnitId, roleNames, passwordHash, mobilePhone, cert) {
   const found = await prisma.personnel.findUnique({ where: { code } });
   if (found) {
-    if (found.mobilePhone == null) {
-      await prisma.personnel.update({ where: { id: found.id }, data: { mobilePhone } });
-      console.log(`种子人员 ${code} 已补手机号。`);
+    const data = {};
+    if (found.mobilePhone == null) data.mobilePhone = mobilePhone;
+    if (cert && found.enforcementCertNo == null) {
+      data.enforcementCertNo = cert.no;
+      data.enforcementCertExpiresOn = cert.expiresOn;
     }
+    if (Object.keys(data).length > 0) {
+      await prisma.personnel.update({ where: { id: found.id }, data });
+    }
+    for (const roleName of roleNames) await seedPersonnelRole(found.id, roleName);
     return;
   }
   const id = newUlid();
   await prisma.personnel.create({
-    data: { id, code, name, orgUnitId, role, passwordHash, mobilePhone },
+    data: {
+      id,
+      code,
+      name,
+      orgUnitId,
+      passwordHash,
+      mobilePhone,
+      enforcementCertNo: cert?.no ?? null,
+      enforcementCertExpiresOn: cert?.expiresOn ?? null,
+    },
   });
   await prisma.personnelNameVersion.create({
     data: { id: newUlid(), personnelId: id, name, version: 1 },
@@ -196,6 +224,7 @@ async function seedPersonnel(code, name, orgUnitId, role, passwordHash, mobilePh
   await prisma.personnelAssignment.create({
     data: { id: newUlid(), personnelId: id, orgUnitId },
   });
+  for (const roleName of roleNames) await seedPersonnelRole(id, roleName);
   console.log(`种子人员 ${code} 已写入。`);
 }
 
@@ -205,11 +234,30 @@ if (process.env.NODE_ENV === "production") {
   const hqId = await seedOrgUnit("ORG-HQ", "自然执法总队", null);
   const deptAId = await seedOrgUnit("ORG-DEPT-A", "第一执法支队", hqId);
   const deptBId = await seedOrgUnit("ORG-DEPT-B", "第二执法支队", hqId);
+  // 所挂在甲区之下。市局 = ORG-HQ，两个区 = 两个支队，所 = ORG-STATION-A。
+  const stationAId = await seedOrgUnit("ORG-STATION-A", "甲区执法所", deptAId);
 
   const passwordHash = await hash(SEED_PASSWORD);
-  await seedPersonnel("P-SUP-A", "甲主管", deptAId, "supervisor", passwordHash, "13800001001");
-  await seedPersonnel("P-CLERK-A", "乙经办", deptAId, "clerk", passwordHash, "13800001002");
-  await seedPersonnel("P-CLERK-B", "丙经办", deptBId, "clerk", passwordHash, "13800001003");
+  const validCert = { no: "CERT-VALID-A", expiresOn: new Date("2099-12-31T00:00:00.000Z") };
+  const expiredCert = { no: "CERT-EXPIRED-B", expiresOn: new Date("2020-01-01T00:00:00.000Z") };
+  const bothCert = { no: "CERT-VALID-BOTH", expiresOn: new Date("2099-12-31T00:00:00.000Z") };
+  await seedPersonnel("P-SUP-A", "甲主管", deptAId, ["系统管理"], passwordHash, "13800001001", null);
+  await seedPersonnel("P-CLERK-A", "乙经办", deptAId, ["经办"], passwordHash, "13800001002", validCert);
+  await seedPersonnel("P-CLERK-B", "丙经办", deptBId, ["经办"], passwordHash, "13800001003", expiredCert);
+  await seedPersonnel("P-INTAKE-HQ", "市局内勤", hqId, ["内勤"], passwordHash, "13800001004", null);
+  await seedPersonnel("P-LEGAL-ST", "甲所法制", stationAId, ["法制审核"], passwordHash, "13800001005", null);
+  await seedPersonnel("P-REVIEW-A", "甲区审核", deptAId, ["行政审核"], passwordHash, "13800001006", null);
+  await seedPersonnel("P-APPROVE-HQ", "市局审批", hqId, ["行政审批"], passwordHash, "13800001007", null);
+  await seedPersonnel("P-SUPER-B", "乙区监督", deptBId, ["监督"], passwordHash, "13800001008", null);
+  await seedPersonnel(
+    "P-BOTH-A",
+    "甲区兼岗",
+    deptAId,
+    ["监督", "经办"],
+    passwordHash,
+    "13800001009",
+    bothCert,
+  );
 }
 
 await prisma.$disconnect();

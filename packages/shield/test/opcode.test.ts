@@ -1,0 +1,125 @@
+// 操作码名册（#71 决议的独立字面）。期望不从实现推导。
+import { describe, expect, it } from 'vitest';
+
+import {
+  OPCODES,
+  effectiveOpcodeRequirements,
+  opcodeRequirements,
+} from '../src/index.js';
+
+const CASE_OPCODES = [
+  'clue.org.assign',
+  'clue.handler.assign',
+  'clue.verify.start',
+  'case.open',
+  'doc.draft',
+  'doc.submit',
+  'case.reassign.submit',
+  'legal.review.request',
+  'legal.opinion.draft',
+  'legal.opinion.submit',
+  'doc.admin.review',
+  'doc.approve',
+  'clue.read',
+  'case.read',
+  'doc.read',
+  'clue.export',
+  'case.export',
+  'doc.export',
+] as const;
+
+const ADMIN_OPCODES = [
+  ...['template', 'rule', 'calendar', 'metric'].flatMap((object) =>
+    ['submit', 'approve', 'void', 'withdraw', 'read'].map((action) => `cfg.${object}.${action}`),
+  ),
+  'personnel.locked.read',
+  'personnel.locked.release',
+  'personnel.password.reset',
+  'audit.admin.read',
+  'audit.admin.export',
+  'authz.binding.submit',
+  'authz.binding.approve',
+] as const;
+
+describe('操作码名册', () => {
+  it('覆盖决议表里的办案操作码和管理台操作码', () => {
+    expect([...OPCODES].sort()).toEqual([...CASE_OPCODES, ...ADMIN_OPCODES].sort());
+  });
+
+  it('名册外的字符串没有要求', () => {
+    expect(opcodeRequirements('menu.visible')).toBeNull();
+    expect(effectiveOpcodeRequirements('menu.visible', ['经办'])).toBeNull();
+  });
+
+  it('启动核查查操作的人，并且必须是主办人或协办人，并且改变主状态', () => {
+    expect(opcodeRequirements('clue.verify.start')).toEqual({
+      qualification: 'operator',
+      mustBeCaseHandler: true,
+      changesPrimaryState: true,
+    });
+  });
+
+  it('指定主办人只查被指定的人', () => {
+    expect(opcodeRequirements('clue.handler.assign')).toEqual({
+      qualification: 'assignee',
+      mustBeCaseHandler: false,
+      changesPrimaryState: true,
+    });
+  });
+
+  it('阅读不要求执法资格，不必是主办人，不改变主状态', () => {
+    expect(opcodeRequirements('clue.read')).toEqual({
+      qualification: 'none',
+      mustBeCaseHandler: false,
+      changesPrimaryState: false,
+    });
+  });
+
+  it('立案改变主状态，拟制不改变主状态', () => {
+    expect(opcodeRequirements('case.open')?.changesPrimaryState).toBe(true);
+    expect(opcodeRequirements('doc.draft')?.changesPrimaryState).toBe(false);
+    expect(opcodeRequirements('doc.approve')?.changesPrimaryState).toBe(true);
+  });
+
+  it('case.reassign.submit：经办必须是主办人或协办人，内勤不必是', () => {
+    expect(effectiveOpcodeRequirements('case.reassign.submit', ['经办'])).toEqual({
+      qualification: 'operator',
+      mustBeCaseHandler: true,
+      changesPrimaryState: false,
+    });
+    expect(effectiveOpcodeRequirements('case.reassign.submit', ['内勤'])).toEqual({
+      qualification: 'operator',
+      mustBeCaseHandler: false,
+      changesPrimaryState: false,
+    });
+  });
+
+  it('case.reassign.submit：经办与内勤同时能放行时，取不必是主办人', () => {
+    expect(effectiveOpcodeRequirements('case.reassign.submit', ['经办', '内勤'])).toEqual({
+      qualification: 'operator',
+      mustBeCaseHandler: false,
+      changesPrimaryState: false,
+    });
+  });
+
+  it('legal.review.request：经办查操作的人并且必须是主办人，行政审核都不要求', () => {
+    expect(effectiveOpcodeRequirements('legal.review.request', ['经办'])).toEqual({
+      qualification: 'operator',
+      mustBeCaseHandler: true,
+      changesPrimaryState: false,
+    });
+    expect(effectiveOpcodeRequirements('legal.review.request', ['行政审核'])).toEqual({
+      qualification: 'none',
+      mustBeCaseHandler: false,
+      changesPrimaryState: false,
+    });
+  });
+
+  it('legal.review.request：经办与行政审核同时能放行时，按行政审核的宽要求', () => {
+    expect(effectiveOpcodeRequirements('legal.review.request', ['经办', '行政审核'])).toEqual({
+      qualification: 'none',
+      mustBeCaseHandler: false,
+      changesPrimaryState: false,
+    });
+  });
+});

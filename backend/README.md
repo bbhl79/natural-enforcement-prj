@@ -21,7 +21,7 @@
 | 模块 | 允许依赖 | 往来方式 |
 |---|---|---|
 | shield | 不依赖任何业务模块 | 契约载体 |
-| identity | 不依赖任何业务模块 | — |
+| identity | 不依赖任何业务模块；可经公共出口使用留痕设施包（ADR 0012） | — |
 | geo-dict | 不依赖任何业务模块 | — |
 | case | shield、identity、geo-dict | 只读引用 |
 | approval | shield、identity、case | 只读引用 + 订阅事件 |
@@ -72,6 +72,7 @@ BullMQ/RustFS SDK），不引用 backend 内部路径（含 `../../backend/…` 
 | `weak-reference-entry` | 弱引用经 shield 入口 |
 | `queue-facility-entry` | #55 队列设施唯一入口（bullmq/ioredis 只许在 `packages/queue`，业务侧只许经 `QUEUE_PORT` 注入；G5 机器兜底） |
 | `storage-facility-entry` | #53 存储设施唯一入口（`@aws-sdk/*`、`@smithy/*`、`minio`、`rustfs` 只许在 `packages/storage`，业务侧只许经 `STORAGE_PORT` 注入；append-only 最保守语义的机器兜底） |
+| `audit-facility-entry` | ADR 0012 留痕设施唯一入口（`auditTrail` 这个 Prisma 委托只许在 `packages/audit`，其余代码经 `AUDIT_TRAIL_PORT` 追加写入） |
 | `spatial-no-orm-mutation` | 执行纪律 2（`geoDictLandBoundary` / `geoDictSurveyPoint` 两个空间模型禁用任何 ORM 写，含 upsert/createMany/updateMany/delete(Many) 与换行链式；写一律 `$queryRaw`/ST_ 函数。范围 = `backend/` + `packages/` + `integration/` + `e2e/` 全源码，SCAN_CODE 形态） |
 | `g1-model-allowlist` | #47 G1「地基不含业务实体」机检形态（承接 #52 AC4）：`backend/prisma/schema.prisma` 的 model 名与白名单逐字相等，表外新增即红——建表动作必须回 #47/#16 定案票，不得自行放宽。#69 定案列入 `AuthSession`、`AuthRememberMe`（见下节「认证记录」）。#92 定案列入 `Role`、`Permission`、`RolePermission`、`PersonnelRole`、`AuditTrail`（见下节「权限与留痕」） |
 
@@ -121,7 +122,7 @@ BullMQ/RustFS SDK），不引用 backend 内部路径（含 `../../backend/…` 
 
 ## 权限与留痕（#92）
 
-人员表保留旧 `role` 列。本票不改现有授权判断。人员新增登录与执法资格的当前值：
+#96 已去掉人员表旧 `role` 列。授权按操作码，不按这一列。人员登录与执法资格的当前值：
 
 | 列 | 含义 |
 |---|---|
