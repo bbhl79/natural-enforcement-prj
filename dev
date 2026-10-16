@@ -54,6 +54,8 @@ API_HEALTH_URL="https://localhost:${HTTPS_PORT}/api/health"
 DB_USER="${POSTGRES_USER:-postgres}"
 DB_PASS="${POSTGRES_PASSWORD:-postgres}"
 DB_NAME="${POSTGRES_DB:-postgres}"
+# 集成测试复制源（#93）。开发库仍是 DB_NAME，测试不复制它。
+IT_TEMPLATE_DB="it_template"
 # 用户名、密码、库名按 URI 组件编码后再拼进连接串。CI secret 里的 @ : / # 不能当分隔符。
 percent_encode() {
   printf '%s' "$1" | od -An -tx1 | awk '{
@@ -675,9 +677,66 @@ test_unit() {
   echo "test：unit 层全部通过。"
 }
 
+# 管理连接落在开发库上。开发库只提供这条连接，不当复制源。
+psql_dev_db() {
+  "${COMPOSE[@]}" exec -T db psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" "$@"
+}
+
+it_template_database_url() {
+  printf 'postgresql://%s:%s@db:5432/%s\n' \
+    "$(percent_encode "$DB_USER")" \
+    "$(percent_encode "$DB_PASS")" \
+    "$(percent_encode "$IT_TEMPLATE_DB")"
+}
+
+# 先断开连到 it_template 的会话。pg_terminate_backend 返回时后端可能尚未退出。
+terminate_it_template_sessions() {
+  psql_dev_db -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${IT_TEMPLATE_DB}' AND pid <> pg_backend_pid();"
+}
+
+# 集成测试开始时重建 it_template：断开会话，删除并新建空库，只对它做迁移和种子，做完断开。
+# 重建只删除这个库，不删除开发库数据卷。
+rebuild_it_template() {
+  local attempt saved_url left
+  echo "test：断开连到 ${IT_TEMPLATE_DB} 的会话…"
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    terminate_it_template_sessions
+    if psql_dev_db -c "DROP DATABASE IF EXISTS \"${IT_TEMPLATE_DB}\";"; then
+      break
+    fi
+    if [ "$attempt" -eq 10 ]; then
+      echo "[FAIL] 无法删除 ${IT_TEMPLATE_DB}" >&2
+      return 1
+    fi
+    sleep 0.4
+  done
+  echo "test：新建空库 ${IT_TEMPLATE_DB}…"
+  psql_dev_db -c "CREATE DATABASE \"${IT_TEMPLATE_DB}\";"
+  saved_url="$DATABASE_URL"
+  DATABASE_URL="$(it_template_database_url)"
+  db_migrate
+  db_seed
+  DATABASE_URL="$saved_url"
+  echo "test：断开 ${IT_TEMPLATE_DB} 上的连接…"
+  for attempt in 1 2 3 4 5 6 7 8 9 10; do
+    terminate_it_template_sessions
+    left="$(psql_dev_db -tA -c "SELECT count(*) FROM pg_stat_activity WHERE datname = '${IT_TEMPLATE_DB}';")"
+    left="$(printf '%s' "$left" | tr -d '[:space:]')"
+    if [ "$left" = "0" ]; then
+      return 0
+    fi
+    sleep 0.4
+  done
+  echo "[FAIL] ${IT_TEMPLATE_DB} 仍有连接" >&2
+  return 1
+}
+
 test_integration() {
-  # integration 层（#46：结构测试 + 需库用例）。harness 负责：db 在场 + 迁移/种子幂等
-  # + Prisma Client 生成；用例形态与约定见 integration/README.md
+  # integration 层（#46：结构测试 + 需库用例）。harness 负责：db 在场
+  # + 重建复制源 it_template（迁移和种子只打在这个库上）+ Prisma Client 生成。
+  # 测试进程的数据库地址指向 it_template。用例再从它复制出 e2_时间戳。
+  # 开发库 postgres 不作为复制源，重建不动它的数据卷。
+  # 用例形态与约定见 integration/README.md
   #（Vitest 需库用例 + *.sh 可执行用例，只测外部可观察行为）。
   # 结构测试纳入本层（评审必修）：#46 定案 integration = 结构测试 + 需库用例；
   # dev lint 里的调用保留不动——同一规则两处跑，双保险。
@@ -688,12 +747,11 @@ test_integration() {
     exit 1
   }
   ensure_db
-  db_migrate
-  db_seed
+  rebuild_it_template
   echo "test：容器内运行 integration 层 Vitest 需库用例（integration/**/*.test.ts）…"
   docker run --rm --pull=never \
     --network "${PROJECT}_default" \
-    -e DATABASE_URL="$DATABASE_URL" \
+    -e DATABASE_URL="$(it_template_database_url)" \
     -v "$ROOT:/repo:ro" \
     -v "${PROJECT}-integration-node-modules:/work/node_modules" \
     -v "${PROJECT}-integration-store:/pnpm/store" \

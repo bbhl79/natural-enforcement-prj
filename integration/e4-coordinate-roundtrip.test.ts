@@ -1,9 +1,9 @@
 // E4 坐标口径验收用例（#47 E4 / #54）：CGCS2000（EPSG:4490）↔ 来源坐标往返可复现
-// + 多几何部件（面/点）存取验证。integration 层 Vitest 需库用例：DATABASE_URL 由
-// dev test integration harness 注入；用例自清理（只删自建行，绝不删数据卷）。
+// + 多几何部件（面/点）存取验证。integration 层 Vitest 需库用例：从 it_template
+// 复制出 e2_时间戳，断言打在复制品上，结束整库删除。开发库 postgres 不作为复制源。
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../backend/prisma/generated/prisma/client.ts';
+import { openClonedDatabase, type ClonedDatabase } from './cloned-database.ts';
 import {
   CGCS2000_SRID,
   cgcs2000ToSource,
@@ -35,24 +35,26 @@ const PLANNING_SOURCE_WKT = 'POINT(500250 3000250)';
 
 let prisma: PrismaClient;
 let db: SqlClient;
+let cloned: ClonedDatabase | undefined;
 const landIds: string[] = [];
 const pointIds: string[] = [];
 
 // #16 §1.1 技术主键形制：26 位大写 Crockford Base32（shield ULID 契约）
 const ULID_PATTERN = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
 
-beforeAll(() => {
-  const databaseUrl = process.env['DATABASE_URL'];
-  if (!databaseUrl) throw new Error('DATABASE_URL 未注入（须由 dev test integration harness 提供）');
-  const adapter = new PrismaPg({ connectionString: databaseUrl });
-  prisma = new PrismaClient({ adapter });
+beforeAll(async () => {
+  cloned = await openClonedDatabase();
+  prisma = cloned.prisma;
   db = prisma;
 });
 
 afterAll(async () => {
-  for (const id of landIds) await deleteLandBoundaryById(db, id);
-  for (const id of pointIds) await deleteSurveyPointById(db, id);
-  await prisma.$disconnect();
+  try {
+    for (const id of landIds) await deleteLandBoundaryById(db, id);
+    for (const id of pointIds) await deleteSurveyPointById(db, id);
+  } finally {
+    await cloned?.close();
+  }
 });
 
 describe('E4 多几何部件存取（法域定几何）', () => {

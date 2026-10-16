@@ -75,7 +75,7 @@ BullMQ/RustFS SDK），不引用 backend 内部路径（含 `../../backend/…` 
 | `queue-facility-entry` | #55 队列设施唯一入口（bullmq/ioredis 只许在 `packages/queue`，业务侧只许经 `QUEUE_PORT` 注入；G5 机器兜底） |
 | `storage-facility-entry` | #53 存储设施唯一入口（`@aws-sdk/*`、`@smithy/*`、`minio`、`rustfs` 只许在 `packages/storage`，业务侧只许经 `STORAGE_PORT` 注入；append-only 最保守语义的机器兜底） |
 | `spatial-no-orm-mutation` | 执行纪律 2（`geoDictLandBoundary` / `geoDictSurveyPoint` 两个空间模型禁用任何 ORM 写，含 upsert/createMany/updateMany/delete(Many) 与换行链式；写一律 `$queryRaw`/ST_ 函数。范围 = `backend/` + `packages/` + `integration/` + `e2e/` 全源码，SCAN_CODE 形态） |
-| `g1-model-allowlist` | #47 G1「地基不含业务实体」机检形态（承接 #52 AC4）：`backend/prisma/schema.prisma` 的 model 名与白名单逐字相等，表外新增即红——建表动作必须回 #47/#16 定案票，不得自行放宽。#69 定案列入 `AuthSession`、`AuthRememberMe`（见下节「认证记录」） |
+| `g1-model-allowlist` | #47 G1「地基不含业务实体」机检形态（承接 #52 AC4）：`backend/prisma/schema.prisma` 的 model 名与白名单逐字相等，表外新增即红——建表动作必须回 #47/#16 定案票，不得自行放宽。#69 定案列入 `AuthSession`、`AuthRememberMe`（见下节「认证记录」）。#92 定案列入 `Role`、`Permission`、`RolePermission`、`PersonnelRole`、`AuditTrail`（见下节「权限与留痕」） |
 
 ## 认证记录（#69）
 
@@ -120,6 +120,26 @@ BullMQ/RustFS SDK），不引用 backend 内部路径（含 `../../backend/…` 
 | `created_at` | 这一枚秘密写入的时刻 |
 
 已结束的行不可再改。同一条链同时只有一行未结束，由部分索引 `auth_remember_me_one_active_per_chain` 保证。按人员找出未结束的记住我，用部分索引 `auth_remember_me_active_by_personnel`。`chain_id` 的自引用外键是 `auth_remember_me_chain_fk`。加上会话的 `auth_session_active_by_personnel`，这四样 Prisma schema 表达不了，后续生成迁移时不得删掉。
+
+## 权限与留痕（#92）
+
+人员表保留旧 `role` 列。本票不改现有授权判断。人员新增登录与执法资格的当前值：
+
+| 列 | 含义 |
+|---|---|
+| `mobile_phone` | 登录标识。有值时全库唯一。空则不能登录。位数与号段不在 ADR 0005 规定 |
+| `password_failure_count` | 失败次数。默认 0 |
+| `password_failure_window_started_at` | 失败窗口起点 |
+| `locked_until` | 锁定到期 |
+| `password_changed_at` | 上次改密时间。空表示尚未改过初始口令 |
+| `enforcement_cert_no` | 执法证号 |
+| `enforcement_cert_expires_on` | 执法证有效期，日期 |
+
+四张权限表白名单名字是 `Role`、`Permission`、`RolePermission`、`PersonnelRole`。技术主键是 ULID。一行权限是一条操作码。并集不落库。人员—角色不记机构。记录只失效不删除：库拒绝 DELETE，UPDATE 只允许把 `deactivated_at` 从空写成非空。未失效行的业务键由部分唯一索引保证：`role_one_active_name`、`permission_one_active_code`、`role_permission_one_active`、`personnel_role_one_active`。Prisma schema 表达不了这四条索引，后续生成迁移时不得删掉。
+
+留痕表白名单名字是 `AuditTrail`。技术主键是 ULID。除主键、`created_at`、`action`、`outcome` 外都可空。`outcome` 只有 `succeeded` 与 `failed`。触发器复用 `reject_row_mutation`，拒绝 UPDATE 和 DELETE。登录标识、执法证号、口令不进入任何一列。
+
+参照种子在所有环境写入七个角色、操作码名册和允许行。允许行以 GitHub issue #71 为准。`authz.binding.submit` 与 `authz.binding.approve` 只给系统管理。开发测试夹具（机构与人员）只在 `NODE_ENV` 不是 `production` 时写入。生产环境必须设置 `NODE_ENV=production`，夹具人员才不进生产库。夹具人员带手机号，`password_changed_at` 为空。生产环境的首个系统管理人员不在本票。
 
 ## 测试装配层豁免（integration 层）
 
