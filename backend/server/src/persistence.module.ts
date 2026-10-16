@@ -16,7 +16,12 @@ import { PrismaClient } from '../../prisma/generated/prisma/client.ts';
 
 import { AppModule } from './app.module.ts';
 import { CLOCK, type Clock } from './clock.ts';
-import { LOGIN_DIRECTORY, type LoginAccount, type LoginDirectory } from './login-directory.ts';
+import {
+  LOGIN_DIRECTORY,
+  type FailureSnapshot,
+  type LoginAccount,
+  type LoginDirectory,
+} from './login-directory.ts';
 import { SESSION_STORE, type NewSession, type SessionRow, type SessionStore } from './session-store.ts';
 
 const PRISMA = Symbol('PRISMA');
@@ -33,35 +38,65 @@ class PrismaLoginDirectory implements LoginDirectory {
   async findByMobile(mobile: string): Promise<LoginAccount | null> {
     const person = await this.prisma.personnel.findUnique({ where: { mobilePhone: mobile } });
     if (!person) return null;
-    return this.toAccount(person.id, person.code, person.name, person.passwordChangedAt);
+    return this.toAccount(person);
   }
 
   async findById(id: string): Promise<LoginAccount | null> {
     const person = await this.prisma.personnel.findUnique({ where: { id } });
     if (!person) return null;
-    return this.toAccount(person.id, person.code, person.name, person.passwordChangedAt);
+    return this.toAccount(person);
   }
 
-  private async toAccount(
-    id: string,
-    code: string,
-    name: string,
-    passwordChangedAt: Date | null,
-  ): Promise<LoginAccount> {
+  async saveFailure(id: string, snapshot: FailureSnapshot): Promise<void> {
+    await this.prisma.personnel.update({
+      where: { id },
+      data: {
+        passwordFailureCount: snapshot.count,
+        passwordFailureWindowStartedAt: snapshot.windowStartedAt,
+        lockedUntil: snapshot.lockedUntil,
+      },
+    });
+  }
+
+  async clearFailure(id: string): Promise<void> {
+    await this.prisma.personnel.update({
+      where: { id },
+      data: {
+        passwordFailureCount: 0,
+        passwordFailureWindowStartedAt: null,
+        lockedUntil: null,
+      },
+    });
+  }
+
+  private async toAccount(person: {
+    id: string;
+    code: string;
+    name: string;
+    passwordChangedAt: Date | null;
+    deactivatedAt: Date | null;
+    passwordFailureCount: number;
+    passwordFailureWindowStartedAt: Date | null;
+    lockedUntil: Date | null;
+  }): Promise<LoginAccount> {
     const assignment = await this.prisma.personnelAssignment.findFirst({
-      where: { personnelId: id, endedAt: null },
+      where: { personnelId: person.id, endedAt: null },
       include: { orgUnit: true },
     });
     const bindings = await this.prisma.personnelRole.findMany({
-      where: { personnelId: id, deactivatedAt: null, role: { deactivatedAt: null } },
+      where: { personnelId: person.id, deactivatedAt: null, role: { deactivatedAt: null } },
       include: { role: true },
     });
     const roles = bindings.map((binding) => binding.role.name).sort(byCodePoint);
     return {
-      id,
-      code,
-      name,
-      passwordChangedAt,
+      id: person.id,
+      code: person.code,
+      name: person.name,
+      passwordChangedAt: person.passwordChangedAt,
+      deactivatedAt: person.deactivatedAt,
+      failureCount: person.passwordFailureCount,
+      failureWindowStartedAt: person.passwordFailureWindowStartedAt,
+      lockedUntil: person.lockedUntil,
       orgUnitId: assignment?.orgUnitId ?? null,
       orgName: assignment?.orgUnit.name ?? null,
       roles,

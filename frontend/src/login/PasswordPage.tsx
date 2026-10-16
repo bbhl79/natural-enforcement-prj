@@ -13,7 +13,8 @@ import {
 export default function PasswordPage() {
   const dispatch = useAppDispatch();
   const state = useAppSelector((root) => root.login);
-  const canSubmit = state.currentPassword !== '' && state.newPassword !== '';
+  const locked = state.screen === 'locked';
+  const canSubmit = !locked && state.currentPassword !== '' && state.newPassword !== '';
   const explanation = state.passwordChangeKind === 'expired'
     ? '口令已超过 90 天，必须更换口令。完成前不能使用其他功能。'
     : '首次登录必须更换初始口令。完成前不能使用其他功能。';
@@ -29,6 +30,9 @@ export default function PasswordPage() {
         <div className="form-wrap">
           <h2>必须改口令</h2>
           <p className="lead" role="status">{explanation}</p>
+          {locked ? (
+            <div className="banner amber" role="status">账号已锁定。请联系本单位管理员解锁。</div>
+          ) : null}
           {state.currentPasswordRejected ? (
             <div className="banner danger" role="status">当前口令不正确。</div>
           ) : null}
@@ -48,6 +52,7 @@ export default function PasswordPage() {
                 placeholder="当前口令"
                 aria-label="当前口令"
                 value={state.currentPassword}
+                disabled={locked}
                 onChange={(event) => dispatch(setCurrentPassword(event.target.value))}
               />
             </div>
@@ -59,6 +64,7 @@ export default function PasswordPage() {
                 placeholder="新口令"
                 aria-label="新口令"
                 value={state.newPassword}
+                disabled={locked}
                 onChange={(event) => dispatch(setNewPassword(event.target.value))}
               />
             </div>

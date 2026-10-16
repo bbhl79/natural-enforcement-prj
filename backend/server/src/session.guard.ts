@@ -13,7 +13,7 @@ import { IS_PUBLIC } from './public.decorator.ts';
 import { sourceAddress } from './session-cookie.ts';
 
 export interface AuthenticatedRequest {
-  headers: { cookie?: string };
+  headers: { cookie?: string; 'x-forwarded-for'?: string | string[] };
   socket?: { remoteAddress?: string | null };
   method?: string;
   path?: string;

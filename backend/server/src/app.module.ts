@@ -12,6 +12,7 @@ import { AuthController } from './auth.controller.ts';
 import { AuthService } from './auth.service.ts';
 import { HealthController } from './health.controller.ts';
 import { SessionGuard } from './session.guard.ts';
+import { SourceGate } from './source-gate.ts';
 
 /** 启动包装入六个业务模块。它本身不是第七个业务模块。 */
 @Module({
@@ -24,6 +25,6 @@ import { SessionGuard } from './session.guard.ts';
     GeoDictModule,
   ],
   controllers: [HealthController, AuthController],
-  providers: [AuthService, { provide: APP_GUARD, useClass: SessionGuard }],
+  providers: [AuthService, SourceGate, { provide: APP_GUARD, useClass: SessionGuard }],
 })
 export class AppModule {}
