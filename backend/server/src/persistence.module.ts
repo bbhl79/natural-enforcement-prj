@@ -22,6 +22,12 @@ import {
   type LoginAccount,
   type LoginDirectory,
 } from './login-directory.ts';
+import {
+  REMEMBER_ME_STORE,
+  type NewRememberMe,
+  type RememberMeRow,
+  type RememberMeStore,
+} from './remember-me-store.ts';
 import { SESSION_STORE, type NewSession, type SessionRow, type SessionStore } from './session-store.ts';
 
 const PRISMA = Symbol('PRISMA');
@@ -113,6 +119,7 @@ class PrismaSessionStore implements SessionStore {
         id: row.id,
         personnelId: row.personnelId,
         secretHash: row.secretHash,
+        rememberMeChainId: row.rememberMeChainId,
         authenticatedAt: row.authenticatedAt,
         lastSeenAt: row.lastSeenAt,
         absoluteEndsAt: row.absoluteEndsAt,
@@ -127,6 +134,7 @@ class PrismaSessionStore implements SessionStore {
       id: row.id,
       personnelId: row.personnelId,
       secretHash: row.secretHash,
+      rememberMeChainId: row.rememberMeChainId,
       authenticatedAt: row.authenticatedAt,
       lastSeenAt: row.lastSeenAt,
       absoluteEndsAt: row.absoluteEndsAt,
@@ -143,6 +151,135 @@ class PrismaSessionStore implements SessionStore {
       where: { id },
       data: { endedAt, endReason: reason },
     });
+  }
+
+  async listActive(personnelId: string): Promise<SessionRow[]> {
+    const rows = await this.prisma.authSession.findMany({
+      where: { personnelId, endedAt: null },
+      orderBy: { authenticatedAt: 'asc' },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      personnelId: row.personnelId,
+      secretHash: row.secretHash,
+      rememberMeChainId: row.rememberMeChainId,
+      authenticatedAt: row.authenticatedAt,
+      lastSeenAt: row.lastSeenAt,
+      absoluteEndsAt: row.absoluteEndsAt,
+      endedAt: row.endedAt,
+    }));
+  }
+}
+
+class LostRace extends Error {}
+
+function isLostRace(error: unknown): boolean {
+  if (error instanceof LostRace) return true;
+  if (typeof error !== 'object' || error == null) return false;
+  const code = 'code' in error ? String(error.code) : '';
+  if (code === 'P2002') return true;
+  const message = 'message' in error ? String(error.message) : '';
+  return message.includes('predecessor_id');
+}
+
+class PrismaRememberMeStore implements RememberMeStore {
+  constructor(private readonly prisma: PrismaClient) {}
+
+  async insert(row: NewRememberMe): Promise<void> {
+    await this.prisma.authRememberMe.create({
+      data: {
+        id: row.id,
+        personnelId: row.personnelId,
+        chainId: row.chainId,
+        secretHash: row.secretHash,
+        absoluteEndsAt: row.absoluteEndsAt,
+        predecessorId: row.predecessorId,
+        createdAt: row.createdAt,
+      },
+    });
+  }
+
+  async findBySecretHash(secretHash: string): Promise<RememberMeRow | null> {
+    const row = await this.prisma.authRememberMe.findUnique({ where: { secretHash } });
+    if (!row) return null;
+    return {
+      id: row.id,
+      personnelId: row.personnelId,
+      chainId: row.chainId,
+      secretHash: row.secretHash,
+      absoluteEndsAt: row.absoluteEndsAt,
+      predecessorId: row.predecessorId,
+      endedAt: row.endedAt,
+      endReason: row.endReason,
+      createdAt: row.createdAt,
+    };
+  }
+
+  async findSuccessor(predecessorId: string): Promise<RememberMeRow | null> {
+    const row = await this.prisma.authRememberMe.findUnique({ where: { predecessorId } });
+    if (!row) return null;
+    return {
+      id: row.id,
+      personnelId: row.personnelId,
+      chainId: row.chainId,
+      secretHash: row.secretHash,
+      absoluteEndsAt: row.absoluteEndsAt,
+      predecessorId: row.predecessorId,
+      endedAt: row.endedAt,
+      endReason: row.endReason,
+      createdAt: row.createdAt,
+    };
+  }
+
+  async end(id: string, endedAt: Date, reason: string): Promise<void> {
+    await this.prisma.authRememberMe.update({
+      where: { id },
+      data: { endedAt, endReason: reason },
+    });
+  }
+
+  async endActiveOnChain(chainId: string, endedAt: Date, reason: string): Promise<void> {
+    await this.prisma.authRememberMe.updateMany({
+      where: { chainId, endedAt: null },
+      data: { endedAt, endReason: reason },
+    });
+  }
+
+  async endActiveForPersonnel(personnelId: string, endedAt: Date, reason: string): Promise<void> {
+    await this.prisma.authRememberMe.updateMany({
+      where: { personnelId, endedAt: null },
+      data: { endedAt, endReason: reason },
+    });
+  }
+
+  async rotate(currentId: string, next: NewRememberMe, endedAt: Date): Promise<'rotated' | 'lost-race'> {
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const locked = await tx.$queryRaw<Array<{ ended_at: Date | null }>>`
+          SELECT ended_at FROM auth_remember_me WHERE id = ${currentId} FOR UPDATE
+        `;
+        if (locked.length === 0 || locked[0]?.ended_at != null) throw new LostRace();
+        await tx.authRememberMe.update({
+          where: { id: currentId },
+          data: { endedAt, endReason: 'rotated' },
+        });
+        await tx.authRememberMe.create({
+          data: {
+            id: next.id,
+            personnelId: next.personnelId,
+            chainId: next.chainId,
+            secretHash: next.secretHash,
+            absoluteEndsAt: next.absoluteEndsAt,
+            predecessorId: next.predecessorId,
+            createdAt: next.createdAt,
+          },
+        });
+      });
+      return 'rotated';
+    } catch (error) {
+      if (isLostRace(error)) return 'lost-race';
+      throw error;
+    }
   }
 }
 
@@ -170,13 +307,14 @@ class PersistenceModule {
         { provide: AUDIT_TRAIL_PORT, useValue: new PrismaAuditTrail(prisma as unknown as AuditTrailCreateClient) },
         { provide: LOGIN_DIRECTORY, useValue: new PrismaLoginDirectory(prisma) },
         { provide: SESSION_STORE, useValue: new PrismaSessionStore(prisma) },
+        { provide: REMEMBER_ME_STORE, useValue: new PrismaRememberMeStore(prisma) },
         {
           provide: DisconnectPrisma,
           useFactory: (client: PrismaClient) => new DisconnectPrisma(client),
           inject: [PRISMA],
         },
       ],
-      exports: [IDENTITY_STORE, AUDIT_TRAIL_PORT, LOGIN_DIRECTORY, SESSION_STORE, CLOCK],
+      exports: [IDENTITY_STORE, AUDIT_TRAIL_PORT, LOGIN_DIRECTORY, SESSION_STORE, REMEMBER_ME_STORE, CLOCK],
     };
   }
 }

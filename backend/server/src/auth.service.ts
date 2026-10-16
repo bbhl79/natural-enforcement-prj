@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { AUDIT_TRAIL_PORT, type AuditTrailPort, type PasswordChangedReason } from '@natural-enforcement/audit';
+import { AUDIT_TRAIL_PORT, type AuditTrailPort, type PasswordChangedReason, type SessionEndReason } from '@natural-enforcement/audit';
 import {
   CredentialService,
   newUlid,
@@ -24,8 +24,13 @@ import {
   type LoginAccount,
   type LoginDirectory,
 } from './login-directory.ts';
+import { REMEMBER_ME_STORE, type RememberMeRow, type RememberMeStore } from './remember-me-store.ts';
 import {
+  clearRememberCookie,
+  clearSessionCookie,
   readCookie,
+  REMEMBER_COOKIE,
+  serializeRememberCookie,
   serializeSessionCookie,
   SESSION_COOKIE,
 } from './session-cookie.ts';
@@ -34,6 +39,8 @@ import { SourceGate } from './source-gate.ts';
 
 const IDLE_MS = 30 * 60 * 1000;
 const ABSOLUTE_MS = 8 * 60 * 60 * 1000;
+const REMEMBER_MS = 168 * 60 * 60 * 1000;
+const GRACE_MS = 60 * 1000;
 const FAILURE_WINDOW_MS = 15 * 60 * 1000;
 const LOCK_MS = 30 * 60 * 1000;
 const LOCK_AFTER = 5;
@@ -99,7 +106,7 @@ export type LoginOutcome = {
     | { result: 'locked' }
     | { result: 'deactivated' }
     | { result: PasswordGate };
-  setCookie?: string;
+  setCookies?: string[];
 };
 
 export type PasswordChangeOutcome = {
@@ -125,11 +132,17 @@ export type SessionView =
 
 type ActiveSession = { row: SessionRow; account: LoginAccount };
 
+export interface AuthResolution {
+  active: ActiveSession | null;
+  setCookies: string[];
+}
+
 @Injectable()
 export class AuthService {
   constructor(
     @Inject(LOGIN_DIRECTORY) private readonly directory: LoginDirectory,
     @Inject(SESSION_STORE) private readonly sessions: SessionStore,
+    @Inject(REMEMBER_ME_STORE) private readonly remember: RememberMeStore,
     @Inject(AUDIT_TRAIL_PORT) private readonly audit: AuditTrailPort,
     private readonly credentials: CredentialService,
     @Inject(CLOCK) private readonly clock: Clock,
@@ -137,8 +150,6 @@ export class AuthService {
   ) {}
 
   async login(input: LoginInput): Promise<LoginOutcome> {
-    // 本票不发放记住我。勾选随请求收下，不写记住我表，也不下发记住我 Cookie。
-    void input.rememberMe;
     const invalid = { status: 401, body: { result: 'invalid-credential' as const } };
     const now = this.clock.now();
     if (this.sources.blocked(input.sourceIp, now)) {
@@ -204,20 +215,26 @@ export class AuthService {
     }
     await this.directory.clearFailure(account.id);
     const gate = passwordGate(account.passwordChangedAt, now);
-    const setCookie = await this.openSession(input.cookieHeader, account, input.sourceIp, now);
+    const setCookies = await this.openSession(
+      input.cookieHeader,
+      account,
+      input.sourceIp,
+      now,
+      input.rememberMe,
+    );
     if (gate === 'password-change-required') {
       await this.audit.append({
         action: 'login.password-change-required',
         ...partiesOf(account, input.sourceIp),
       });
-      return { status: 200, body: { result: gate }, setCookie };
+      return { status: 200, body: { result: gate }, setCookies };
     }
     if (gate === 'password-expired') {
       await this.audit.append({
         action: 'login.password-expired',
         ...partiesOf(account, input.sourceIp),
       });
-      return { status: 200, body: { result: gate }, setCookie };
+      return { status: 200, body: { result: gate }, setCookies };
     }
     await this.audit.append({
       action: 'login.succeeded',
@@ -226,13 +243,12 @@ export class AuthService {
     return {
       status: 200,
       body: this.establishedBody(account.passwordChangedAt, now),
-      setCookie,
+      setCookies,
     };
   }
 
-  /** 会话查询。没有有效会话时返回未登录，不写授权拒绝。 */
-  async session(cookieHeader: string | undefined, sourceIp: string | null): Promise<SessionView> {
-    const active = await this.resolve(cookieHeader, sourceIp, false);
+  /** 会话查询看到的结果。没有有效会话时是未登录，不在这里写授权拒绝。 */
+  describe(active: ActiveSession | null): SessionView {
     if (!active) return { result: 'anonymous' };
     const now = this.clock.now();
     const gate = passwordGate(active.account.passwordChangedAt, now);
@@ -247,13 +263,22 @@ export class AuthService {
     };
   }
 
-  /** 守卫读取会话。denyWhenMissing 为真且没有会话时写授权拒绝。 */
-  loadActive(
+  /** 一次请求只解析一次。无有效会话时，允许的路由才尝试记住我进入。 */
+  async openRequest(
     cookieHeader: string | undefined,
     sourceIp: string | null,
     denyWhenMissing: boolean,
-  ): Promise<ActiveSession | null> {
-    return this.resolve(cookieHeader, sourceIp, denyWhenMissing);
+    rememberMeEntry: boolean,
+  ): Promise<AuthResolution> {
+    const active = await this.resolve(cookieHeader, sourceIp, false);
+    if (active) return { active, setCookies: [] };
+    if (rememberMeEntry) {
+      const entered = await this.enterRememberMe(cookieHeader, sourceIp);
+      if (!entered.active && denyWhenMissing) await this.deny(sourceIp);
+      return entered;
+    }
+    if (denyWhenMissing) await this.deny(sourceIp);
+    return { active: null, setCookies: [] };
   }
 
   passwordChangeState(account: LoginAccount): PasswordGate | null {
@@ -261,12 +286,12 @@ export class AuthService {
   }
 
   async changePassword(input: {
-    cookieHeader: string | undefined;
+    active: ActiveSession | null;
     sourceIp: string | null;
     currentPassword: string;
     newPassword: string;
   }): Promise<PasswordChangeOutcome> {
-    const active = await this.resolve(input.cookieHeader, input.sourceIp, false);
+    const active = input.active;
     if (!active) return { status: 401, body: { result: 'invalid-credential' } };
     const now = this.clock.now();
     if (this.inLock(active.account, now)) {
@@ -325,16 +350,24 @@ export class AuthService {
     return this.resolve(cookieHeader, sourceIp, true);
   }
 
-  async logout(cookieHeader: string | undefined, sourceIp: string | null): Promise<{ result: 'ended' }> {
-    const active = await this.resolve(cookieHeader, sourceIp, false);
-    if (!active) return { result: 'ended' };
+  async logout(
+    active: ActiveSession | null,
+    cookieHeader: string | undefined,
+    sourceIp: string | null,
+  ): Promise<{ result: 'ended' }> {
     const now = this.clock.now();
-    await this.sessions.end(active.row.id, now, 'logout');
-    await this.audit.append({
-      action: 'session.ended',
-      reason: 'logout',
-      ...partiesOf(active.account, sourceIp),
-    });
+    if (active) {
+      await this.sessions.end(active.row.id, now, 'logout');
+      await this.audit.append({
+        action: 'session.ended',
+        reason: 'logout',
+        ...partiesOf(active.account, sourceIp),
+      });
+      if (active.row.rememberMeChainId) {
+        await this.remember.endActiveOnChain(active.row.rememberMeChainId, now, 'logout');
+      }
+    }
+    await this.voidPresentedRememberMe(cookieHeader, now, 'logout');
     return { result: 'ended' };
   }
 
@@ -383,18 +416,165 @@ export class AuthService {
     account: LoginAccount,
     sourceIp: string | null,
     now: Date,
-  ): Promise<string> {
+    rememberMe: boolean,
+  ): Promise<string[]> {
     await this.closePresentedSession(cookieHeader, account, sourceIp, now);
     const secret = newSessionSecret();
+    let absoluteEndsAt = new Date(now.getTime() + ABSOLUTE_MS);
+    let rememberMeChainId: string | null = null;
+    const cookies = [serializeSessionCookie(secret)];
+    if (rememberMe) {
+      const rmSecret = newSessionSecret();
+      const rmId = newUlid(now.getTime());
+      absoluteEndsAt = new Date(now.getTime() + REMEMBER_MS);
+      rememberMeChainId = rmId;
+      await this.voidPresentedRememberMe(cookieHeader, now, 'logout');
+      await this.remember.insert({
+        id: rmId,
+        personnelId: account.id,
+        chainId: rmId,
+        secretHash: await sha256Hex(rmSecret),
+        absoluteEndsAt,
+        predecessorId: null,
+        createdAt: now,
+      });
+      cookies.push(serializeRememberCookie(rmSecret));
+    } else {
+      const voided = await this.voidPresentedRememberMe(cookieHeader, now, 'login-without-remember');
+      if (voided) cookies.push(clearRememberCookie());
+    }
     await this.sessions.insert({
       id: newUlid(now.getTime()),
       personnelId: account.id,
       secretHash: await sha256Hex(secret),
+      rememberMeChainId,
       authenticatedAt: now,
       lastSeenAt: now,
-      absoluteEndsAt: new Date(now.getTime() + ABSOLUTE_MS),
+      absoluteEndsAt,
     });
-    return serializeSessionCookie(secret);
+    return cookies;
+  }
+
+  /** 没有有效会话时，用记住我免输口令进入。这是一次登录。 */
+  private async enterRememberMe(
+    cookieHeader: string | undefined,
+    sourceIp: string | null,
+  ): Promise<AuthResolution> {
+    const none: AuthResolution = { active: null, setCookies: [] };
+    const secret = readCookie(cookieHeader, REMEMBER_COOKIE);
+    if (!secret) return none;
+    const row = await this.remember.findBySecretHash(await sha256Hex(secret));
+    if (!row) return none;
+    if (row.endReason === 'rotated') return this.reuseRotated(row, sourceIp);
+    const now = this.clock.now();
+    if (row.endedAt) return { active: null, setCookies: [clearRememberCookie()] };
+    if (now.getTime() >= row.absoluteEndsAt.getTime()) {
+      await this.remember.end(row.id, now, 'absolute-timeout');
+      return { active: null, setCookies: [clearRememberCookie()] };
+    }
+    const account = await this.directory.findById(row.personnelId);
+    if (!account) return none;
+    if (this.sources.blocked(sourceIp, now)) {
+      await this.audit.append({
+        action: 'login.source-limited',
+        ...emptyParties(sourceIp),
+      });
+      return none;
+    }
+    if (account.deactivatedAt != null) {
+      await this.audit.append({
+        action: 'login.deactivated',
+        ...partiesOf(account, sourceIp),
+      });
+      await this.endPersonnelAccess(account.id, now, 'personnel-deactivated', sourceIp);
+      return { active: null, setCookies: [clearSessionCookie(), clearRememberCookie()] };
+    }
+    if (this.inLock(account, now)) {
+      await this.audit.append({
+        action: 'login.locked-retry',
+        ...partiesOf(account, sourceIp),
+      });
+      return none;
+    }
+    const rmSecret = newSessionSecret();
+    const rmId = newUlid(now.getTime());
+    const rotated = await this.remember.rotate(row.id, {
+      id: rmId,
+      personnelId: row.personnelId,
+      chainId: row.chainId,
+      secretHash: await sha256Hex(rmSecret),
+      absoluteEndsAt: row.absoluteEndsAt,
+      predecessorId: row.id,
+      createdAt: now,
+    }, now);
+    if (rotated === 'lost-race') return none;
+    const sid = newSessionSecret();
+    const sessionId = newUlid(now.getTime());
+    const sessionRow: SessionRow = {
+      id: sessionId,
+      personnelId: account.id,
+      secretHash: await sha256Hex(sid),
+      rememberMeChainId: row.chainId,
+      authenticatedAt: now,
+      lastSeenAt: now,
+      absoluteEndsAt: row.absoluteEndsAt,
+      endedAt: null,
+    };
+    await this.sessions.insert(sessionRow);
+    const gate = passwordGate(account.passwordChangedAt, now);
+    if (gate === 'password-change-required') {
+      await this.audit.append({
+        action: 'login.password-change-required',
+        ...partiesOf(account, sourceIp),
+      });
+    } else if (gate === 'password-expired') {
+      await this.audit.append({
+        action: 'login.password-expired',
+        ...partiesOf(account, sourceIp),
+      });
+    } else {
+      await this.audit.append({
+        action: 'login.succeeded',
+        ...partiesOf(account, sourceIp),
+      });
+    }
+    return {
+      active: { row: sessionRow, account },
+      setCookies: [serializeSessionCookie(sid), serializeRememberCookie(rmSecret)],
+    };
+  }
+
+  private async reuseRotated(row: RememberMeRow, sourceIp: string | null): Promise<AuthResolution> {
+    const successor = await this.remember.findSuccessor(row.id);
+    const now = this.clock.now();
+    const age = successor ? now.getTime() - successor.createdAt.getTime() : GRACE_MS;
+    if (age < GRACE_MS) return { active: null, setCookies: [] };
+    await this.endPersonnelAccess(row.personnelId, now, 'remember-me-reuse', sourceIp);
+    return { active: null, setCookies: [clearSessionCookie(), clearRememberCookie()] };
+  }
+
+  private async endPersonnelAccess(
+    personnelId: string,
+    now: Date,
+    reason: SessionEndReason,
+    sourceIp: string | null,
+  ): Promise<void> {
+    const account = await this.directory.findById(personnelId);
+    const sessions = await this.sessions.listActive(personnelId);
+    for (const session of sessions) {
+      await this.sessions.end(session.id, now, reason);
+      await this.audit.append({
+        action: 'session.ended',
+        reason,
+        actorId: null,
+        actorCode: null,
+        subjectPersonnelId: personnelId,
+        subjectCode: account?.code ?? null,
+        orgUnitId: account?.orgUnitId ?? null,
+        sourceIp,
+      });
+    }
+    await this.remember.endActiveForPersonnel(personnelId, now, reason);
   }
 
   private async resolve(
@@ -440,6 +620,20 @@ export class AuthService {
       return null;
     }
     return { row, account };
+  }
+
+  /** 结束请求里这台浏览器仍有效的记住我。已结束的行不再写。 */
+  private async voidPresentedRememberMe(
+    cookieHeader: string | undefined,
+    now: Date,
+    reason: string,
+  ): Promise<boolean> {
+    const secret = readCookie(cookieHeader, REMEMBER_COOKIE);
+    if (!secret) return false;
+    const row = await this.remember.findBySecretHash(await sha256Hex(secret));
+    if (!row || row.endedAt) return true;
+    await this.remember.endActiveOnChain(row.chainId, now, reason);
+    return true;
   }
 
   private async closePresentedSession(

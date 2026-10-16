@@ -1,5 +1,7 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 
+import { loadSession, waitForStartupSession } from '../login/loginSlice';
+
 /**
  * health 面板数据契约（#56）。
  * 快照唯一生产者 = dev 脚本（dev health / dev up 写入命名卷，经 nginx 同域静态端点
@@ -35,9 +37,14 @@ export const fetchHealthSnapshot = createAsyncThunk<
   HealthSnapshot,
   void,
   { rejectValue: string }
->('health/fetchSnapshot', async (_, { rejectWithValue }) => {
+>('health/fetchSnapshot', async (_, { dispatch, rejectWithValue }) => {
+  await waitForStartupSession();
   try {
     const response = await fetch('/health/health.json', { cache: 'no-store' });
+    if (response.status === 401) {
+      void dispatch(loadSession());
+      return rejectWithValue('未登录');
+    }
     if (!response.ok) {
       return rejectWithValue(`health 快照请求失败：HTTP ${response.status}`);
     }

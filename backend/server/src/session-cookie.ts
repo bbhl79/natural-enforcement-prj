@@ -1,4 +1,5 @@
 export const SESSION_COOKIE = '__Host-sid';
+export const REMEMBER_COOKIE = '__Host-rm';
 
 const COOKIE_ATTRS = 'HttpOnly; Secure; SameSite=Lax; Path=/';
 
@@ -8,6 +9,14 @@ export function serializeSessionCookie(secret: string): string {
 
 export function clearSessionCookie(): string {
   return `${SESSION_COOKIE}=; ${COOKIE_ATTRS}; Max-Age=0`;
+}
+
+export function serializeRememberCookie(secret: string): string {
+  return `${REMEMBER_COOKIE}=${secret}; ${COOKIE_ATTRS}`;
+}
+
+export function clearRememberCookie(): string {
+  return `${REMEMBER_COOKIE}=; ${COOKIE_ATTRS}; Max-Age=0`;
 }
 
 /** 只取指定名字的那一枚。不引入 cookie 解析包。 */

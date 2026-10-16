@@ -2,12 +2,12 @@ import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
 
 import { AuthService, type LoginOutcome } from './auth.service.ts';
 import { Public } from './public.decorator.ts';
-import { clearSessionCookie, sourceAddress } from './session-cookie.ts';
+import { clearRememberCookie, clearSessionCookie, sourceAddress } from './session-cookie.ts';
 import type { AuthenticatedRequest } from './session.guard.ts';
 
 interface HttpReply {
   status(code: number): HttpReply;
-  setHeader(name: string, value: string): void;
+  setHeader(name: string, value: string | string[]): void;
   json(body: unknown): void;
 }
 
@@ -40,14 +40,16 @@ export class AuthController {
       cookieHeader: req.headers.cookie,
       sourceIp: sourceAddress(req),
     });
-    if (outcome.setCookie) res.setHeader('Set-Cookie', outcome.setCookie);
+    if (outcome.setCookies && outcome.setCookies.length > 0) {
+      res.setHeader('Set-Cookie', outcome.setCookies);
+    }
     res.status(outcome.status).json(outcome.body);
   }
 
   @Public()
   @Get('session')
   async session(@Req() req: AuthenticatedRequest, @Res() res: HttpReply): Promise<void> {
-    const view = await this.auth.session(req.headers.cookie, sourceAddress(req));
+    const view = this.auth.describe(req.resolution?.active ?? null);
     res.status(200).json(view);
   }
 
@@ -60,7 +62,7 @@ export class AuthController {
     const outcome = await this.auth.changePassword({
       currentPassword: typeof body?.currentPassword === 'string' ? body.currentPassword : '',
       newPassword: typeof body?.newPassword === 'string' ? body.newPassword : '',
-      cookieHeader: req.headers.cookie,
+      active: req.resolution?.active ?? null,
       sourceIp: sourceAddress(req),
     });
     res.status(outcome.status).json(outcome.body);
@@ -68,8 +70,8 @@ export class AuthController {
 
   @Post('logout')
   async logout(@Req() req: AuthenticatedRequest, @Res() res: HttpReply): Promise<void> {
-    const outcome = await this.auth.logout(req.headers.cookie, sourceAddress(req));
-    res.setHeader('Set-Cookie', clearSessionCookie());
+    const outcome = await this.auth.logout(req.resolution?.active ?? null, req.headers.cookie, sourceAddress(req));
+    res.setHeader('Set-Cookie', [clearSessionCookie(), clearRememberCookie()]);
     res.status(200).json(outcome);
   }
 }

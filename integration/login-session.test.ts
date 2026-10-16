@@ -175,7 +175,7 @@ afterAll(async () => {
 describe('POST /api/auth/login', () => {
   it('口令正确且上次改密时间已有值时建立会话，角色来自人员—角色', async () => {
     const before = await audits();
-    const response = await postLogin(KNOWN_PHONE, PASSWORD, true);
+    const response = await postLogin(KNOWN_PHONE, PASSWORD, false);
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ result: 'established' });
     const setCookie = sessionCookie(response);

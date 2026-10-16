@@ -4,7 +4,7 @@ import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import healthReducer from '../health/healthSlice';
+import healthReducer, { fetchHealthSnapshot } from '../health/healthSlice';
 import { AuthShell } from '../App';
 import LoginPage from './LoginPage';
 import reducer, {
@@ -417,6 +417,46 @@ describe('登录页', () => {
     });
     expect(view.getState().login.phase).toBe('authenticated');
     expect(view.getState().login.operator?.roles).toEqual(['经办']);
+  });
+
+  it('启动时先等会话查询返回，再发其他请求，且不轮询', async () => {
+    let release!: (response: Response) => void;
+    const pending = new Promise<Response>((resolve) => {
+      release = resolve;
+    });
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', (url: string) => {
+      calls.push(url);
+      if (url === '/api/auth/session') return pending;
+      return Promise.resolve(new Response(JSON.stringify({ generatedAt: '2026-10-17T00:00:00.000Z', checks: [] }), { status: 200 }));
+    });
+    const view = configureStore({ reducer: { login: reducer, health: healthReducer } });
+    const boot = view.dispatch(loadSession());
+    const health = view.dispatch(fetchHealthSnapshot());
+    await Promise.resolve();
+    expect(calls).toEqual(['/api/auth/session']);
+    release(new Response(JSON.stringify({ result: 'anonymous' }), { status: 200 }));
+    await boot;
+    await health;
+    expect(calls).toEqual(['/api/auth/session', '/health/health.json']);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls.filter((url) => url === '/api/auth/session')).toHaveLength(1);
+  });
+
+  it('其他请求返回未登录时再查一次会话', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', (url: string) => {
+      calls.push(url);
+      if (url === '/health/health.json') {
+        return Promise.resolve(new Response(JSON.stringify({ reason: 'not-authenticated' }), { status: 401 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ result: 'anonymous' }), { status: 200 }));
+    });
+    const view = configureStore({ reducer: { login: reducer, health: healthReducer } });
+    await view.dispatch(loadSession());
+    await view.dispatch(fetchHealthSnapshot());
+    expect(calls).toEqual(['/api/auth/session', '/health/health.json', '/api/auth/session']);
+    expect(view.getState().login.phase).toBe('anonymous');
   });
 });
 
