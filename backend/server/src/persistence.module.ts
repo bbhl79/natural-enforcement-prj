@@ -19,6 +19,7 @@ import { CLOCK, type Clock } from './clock.ts';
 import {
   LOGIN_DIRECTORY,
   type FailureSnapshot,
+  type LockedPersonnel,
   type LoginAccount,
   type LoginDirectory,
 } from './login-directory.ts';
@@ -75,6 +76,57 @@ class PrismaLoginDirectory implements LoginDirectory {
     await this.prisma.personnel.update({
       where: { id },
       data: {
+        passwordFailureCount: 0,
+        passwordFailureWindowStartedAt: null,
+        lockedUntil: null,
+      },
+    });
+  }
+
+  async listLocked(now: Date): Promise<LockedPersonnel[]> {
+    const people = await this.prisma.personnel.findMany({
+      where: { lockedUntil: { gt: now } },
+      include: {
+        assignments: {
+          where: { endedAt: null },
+          include: { orgUnit: true },
+        },
+      },
+      orderBy: { code: 'asc' },
+    });
+    return people.flatMap((person) => {
+      if (person.lockedUntil == null) return [];
+      const assignment = person.assignments[0] ?? null;
+      return [{
+        id: person.id,
+        code: person.code,
+        name: person.name,
+        orgUnitId: assignment?.orgUnitId ?? null,
+        orgName: assignment?.orgUnit.name ?? null,
+        lockedUntil: person.lockedUntil,
+      }];
+    });
+  }
+
+  async isRootOrg(orgUnitId: string): Promise<boolean> {
+    const org = await this.prisma.orgUnit.findUnique({ where: { id: orgUnitId } });
+    return org != null && org.parentId == null;
+  }
+
+  async rootOrgId(): Promise<string | null> {
+    const org = await this.prisma.orgUnit.findFirst({
+      where: { parentId: null, deactivatedAt: null },
+      orderBy: { code: 'asc' },
+    });
+    return org?.id ?? null;
+  }
+
+  async applyInitialPassword(id: string, passwordHash: string): Promise<void> {
+    await this.prisma.personnel.update({
+      where: { id },
+      data: {
+        passwordHash,
+        passwordChangedAt: null,
         passwordFailureCount: 0,
         passwordFailureWindowStartedAt: null,
         lockedUntil: null,
