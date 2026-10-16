@@ -8,6 +8,8 @@ import { GeoDictModule } from '@natural-enforcement/geo-dict';
 import { IdentityModule } from '@natural-enforcement/identity';
 import { SupervisionModule } from '@natural-enforcement/supervision';
 
+import { AdminController } from './admin.controller.ts';
+import { AdminService } from './admin.service.ts';
 import { AuthController } from './auth.controller.ts';
 import { AuthService } from './auth.service.ts';
 import { HealthController } from './health.controller.ts';
@@ -24,7 +26,7 @@ import { SourceGate } from './source-gate.ts';
     DeadlineModule,
     GeoDictModule,
   ],
-  controllers: [HealthController, AuthController],
-  providers: [AuthService, SourceGate, { provide: APP_GUARD, useClass: SessionGuard }],
+  controllers: [HealthController, AuthController, AdminController],
+  providers: [AuthService, AdminService, SourceGate, { provide: APP_GUARD, useClass: SessionGuard }],
 })
 export class AppModule {}

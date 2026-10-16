@@ -22,11 +22,29 @@ export interface FailureSnapshot {
   lockedUntil: Date | null;
 }
 
+/** 锁定尚未到期的人员。机构取当前任职；没有当前任职时机构为空。 */
+export interface LockedPersonnel {
+  id: string;
+  code: string;
+  name: string;
+  orgUnitId: string | null;
+  orgName: string | null;
+  lockedUntil: Date;
+}
+
 export interface LoginDirectory {
   findByMobile(mobile: string): Promise<LoginAccount | null>;
   findById(id: string): Promise<LoginAccount | null>;
   saveFailure(id: string, snapshot: FailureSnapshot): Promise<void>;
   clearFailure(id: string): Promise<void>;
+  /** 锁定到期时间晚于 now 的人员。 */
+  listLocked(now: Date): Promise<LockedPersonnel[]>;
+  /** 该机构是组织树的根。 */
+  isRootOrg(orgUnitId: string): Promise<boolean>;
+  /** 组织树的根机构。没有根时返回空。 */
+  rootOrgId(): Promise<string | null>;
+  /** 写入初始口令。上次改密时间留空，并清零锁定。 */
+  applyInitialPassword(id: string, passwordHash: string): Promise<void>;
 }
 
 export const LOGIN_DIRECTORY = Symbol('LOGIN_DIRECTORY');
