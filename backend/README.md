@@ -25,9 +25,11 @@
 | geo-dict | 不依赖任何业务模块 | — |
 | case | shield、identity、geo-dict | 只读引用 |
 | approval | shield、identity、case | 只读引用 + 订阅事件 |
-| supervision | shield、identity、case | 只读，**单向，无人依赖它** |
+| supervision | shield、identity、case | 只读，**单向**。业务模块无人依赖它。`backend/server` 启动包除外（ADR 0004） |
 | deadline | shield、case、approval、**geo-dict（#45 补丁 1：只读引用程序节点类型）** | case/approval 为订阅，geo-dict 为只读引用 |
 | frontend | shield + 各模块查询接口 | 不直连库、不依赖 backend 内部路径 |
+
+`backend/server` 是 HTTP 启动包，不是第七个业务模块，不占上表的一行。它经公共出口装入全部六个模块，包括监督统计。结构测试 `supervision-sink` 跳过该目录。ADR 0004 只允许这个包里的一个文件直接引用身份模块的数据库适配器。本票未使用该文件。
 
 ## 往来形态：只有「只读查询 + 事件」两种，默认禁止直写
 
