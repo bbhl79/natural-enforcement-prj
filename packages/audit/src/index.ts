@@ -17,6 +17,7 @@ export type {
 } from './port.ts';
 export {
   AUDIT_ACTIONS,
+  AUDIT_COUNTED_ACTIONS,
   AUDIT_SUCCEEDED_ACTIONS,
   AUTHZ_DENIED_REASONS,
   LOGIN_FAILED_REASONS,
@@ -25,6 +26,7 @@ export {
 } from './vocabulary.ts';
 export type {
   AuditAction,
+  AuditCountedAction,
   AuthzDeniedReason,
   LoginFailedReason,
   PasswordChangedReason,

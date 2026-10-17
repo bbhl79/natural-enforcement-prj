@@ -24,6 +24,8 @@ export interface AuditParties {
   resourceType?: string | null;
   resourceId?: string | null;
   previousValue?: string | null;
+  /** 导出条数（ADR 0013）。只有带条数的动作（AUDIT_COUNTED_ACTIONS）写值，其余为空。 */
+  itemCount?: number | null;
 }
 
 export type AuditAppend =
@@ -40,7 +42,8 @@ export type AuditAppend =
   | (AuditParties & { action: 'account.unlocked' })
   | (AuditParties & { action: 'account.password-reset' })
   | (AuditParties & { action: 'account.password-changed'; reason: PasswordChangedReason })
-  | (AuditParties & { action: 'authz.denied'; reason: AuthzDeniedReason });
+  | (AuditParties & { action: 'authz.denied'; reason: AuthzDeniedReason })
+  | (AuditParties & { action: 'personnel.exported'; itemCount: number });
 
 /** 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。 */
 export interface AuthzDeniedEntry {
