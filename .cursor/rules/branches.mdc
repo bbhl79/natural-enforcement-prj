@@ -24,3 +24,33 @@ Git worktree 只放在与项目目录平级的 `../natural-enforcement-prj-wts/`
 「修这个缺陷并提交」只允许改当前分支上的文件并提交。不新建分支，不切换分支，不创建 worktree。
 
 「从 dev 拉出功能分支，放到 worktree」是对这两项的授权，可以执行。
+
+## 合并后删除分支
+
+本节是「授权后才操作」的例外。Lei Hu 于 2026-10-17 22:04 给出长期授权。PR 合并进 `dev` 后，代理删除该 PR 的 head 分支。本地和远端都删。执行本节动作不需要当次点名授权。
+
+删除前，代理逐项核对：
+
+- PR 状态为已合并。分支名以 PR 的 head.ref 为准。
+- 用 `git merge-base --is-ancestor <分支尖> origin/dev` 确认分支已合入 `dev`。本地分支和远端分支分别核对。
+
+删除时，代理按下列方式执行：
+
+- 本地分支用 `git branch -d` 删除。不用 `-D`。
+- 远端分支用 `git push origin --delete <分支>` 删除。
+- 分支被 worktree 检出时，先在该 worktree 里运行 `git status --porcelain --ignored`。
+- worktree 没有改动、没有未跟踪文件时，用 `git worktree remove <路径>` 移除。不加 `--force`。
+- worktree 有改动或未跟踪文件时，保留该 worktree 和分支，报告用户。
+- 被忽略的构建产物（例如 `node_modules`、`dist`）不阻止移除。代理在报告里列出这些产物。
+- 任一步报错时，跳过该分支，报告用户。
+
+下列对象不动：
+
+- 未合并的分支
+- `dev`、`main`、`infras`
+- 主工作树
+- stash
+
+`infras` 是长期分支。`infras` 与 `dev`、`main` 一样，不在合并后删除之列。依据：Lei Hu 2026-10-17 22:11。
+
+本授权不含 `-D`、`--force`、切换分支、`reset`、`rebase` 和 stash 操作。这些动作仍按「授权后才操作」执行。
