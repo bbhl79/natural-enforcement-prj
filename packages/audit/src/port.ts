@@ -25,6 +25,8 @@ export interface AuditParties {
   resourceType?: string | null;
   resourceId?: string | null;
   previousValue?: string | null;
+  /** 导出条数（ADR 0013）。只有带条数的动作（AUDIT_COUNTED_ACTIONS）写值，其余为空。 */
+  itemCount?: number | null;
 }
 
 export type AuditAppend =
@@ -47,7 +49,8 @@ export type AuditAppend =
     /** 不给时按操作者机构（orgUnitId）兜底，并记 actor-fallback。 */
     targetOrgUnitId?: string | null;
     targetOrgUnitBasis?: AuditTargetOrgBasis;
-  });
+  })
+  | (AuditParties & { action: 'personnel.exported'; itemCount: number });
 
 /**
  * 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。

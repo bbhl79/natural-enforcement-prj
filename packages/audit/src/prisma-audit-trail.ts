@@ -5,6 +5,7 @@ import type { AuditTrailFactory } from './transaction.ts';
 import { newAuditId } from './ulid.ts';
 import {
   AUDIT_ACTIONS,
+  AUDIT_COUNTED_ACTIONS,
   AUDIT_TARGET_ORG_BASES,
   AUDIT_SUCCEEDED_ACTIONS,
   AUTHZ_DENIED_REASONS,
@@ -15,6 +16,7 @@ import {
 
 const SUCCEEDED = new Set<string>(AUDIT_SUCCEEDED_ACTIONS);
 const ACTIONS = new Set<string>(AUDIT_ACTIONS);
+const COUNTED = new Set<string>(AUDIT_COUNTED_ACTIONS);
 const TARGET_BASES = new Set<string>(AUDIT_TARGET_ORG_BASES);
 
 /** 带原因的动作及其封闭原因表。不在表里的动作不许带原因。 */
@@ -42,6 +44,17 @@ function assertVocabulary(action: string, reason: unknown): void {
   }
   if (typeof reason !== 'string' || !allowed.has(reason)) {
     throw new AuditVocabularyError(`动作 ${action} 的表外原因：${String(reason)}`);
+  }
+}
+
+/** 带条数的动作必须带非负整数条数；其余动作不许带条数（ADR 0013）。 */
+function assertItemCount(action: string, itemCount: unknown): void {
+  if (!COUNTED.has(action)) {
+    if (itemCount != null) throw new AuditVocabularyError(`动作 ${action} 不带条数，收到：${String(itemCount)}`);
+    return;
+  }
+  if (typeof itemCount !== 'number' || !Number.isSafeInteger(itemCount) || itemCount < 0) {
+    throw new AuditVocabularyError(`动作 ${action} 的条数须为非负整数，收到：${String(itemCount)}`);
   }
 }
 
@@ -79,7 +92,9 @@ export class PrismaAuditTrail implements AuditTrailPort {
       ? entry.outcome
       : SUCCEEDED.has(entry.action) ? 'succeeded' : 'failed';
     const reason = 'reason' in entry ? entry.reason : null;
+    const itemCount = 'itemCount' in entry ? (entry.itemCount ?? null) : null;
     assertVocabulary(entry.action, reason);
+    assertItemCount(entry.action, itemCount);
     const target = targetOf(entry);
     await this.db.auditTrail.create({
       data: {
@@ -97,6 +112,7 @@ export class PrismaAuditTrail implements AuditTrailPort {
         resourceType: entry.resourceType ?? null,
         resourceId: entry.resourceId ?? null,
         previousValue: entry.previousValue ?? null,
+        itemCount,
         targetOrgUnitId: target.targetOrgUnitId,
         targetOrgUnitBasis: target.targetOrgUnitBasis,
       },

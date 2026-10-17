@@ -54,7 +54,7 @@ const ALLOWED: Record<string, readonly string[]> = {
     ...['template', 'rule', 'calendar', 'metric'].flatMap((object) =>
       ['submit', 'approve', 'void', 'withdraw', 'read'].map((action) => `cfg.${object}.${action}`),
     ),
-    'personnel.locked.read', 'personnel.locked.release', 'personnel.password.reset',
+    'personnel.locked.read', 'personnel.locked.release', 'personnel.password.reset', 'personnel.profile.export',
     'audit.admin.read', 'audit.admin.export', 'authz.binding.submit', 'authz.binding.approve',
   ],
 };
@@ -508,33 +508,26 @@ describe('E2 机构与人员维护', () => {
     ).rejects.toThrow(/拒绝 UPDATE/);
   });
 
-  it('系统管理导出本机构清单并留下导出留痕', async () => {
-    const result = await personnel.exportPersonnel(auth(supAId), deptAId);
-    expect(result.personnel.length).toBeGreaterThan(0);
-    const audit = await prisma.exportAudit.findUniqueOrThrow({ where: { id: result.audit.id } });
-    expect(audit.actorId).toBe(supAId);
-    expect(audit.targetOrgUnitId).toBe(deptAId);
-    expect(audit.exportedCount).toBe(result.personnel.length);
-  });
-
-  it('跨区导出被拒且不写导出留痕', async () => {
-    const auditsBefore = await prisma.exportAudit.count();
-    await expectDenied(personnel.exportPersonnel(auth(supAId), deptBId), 'scope-denied');
-    expect(await prisma.exportAudit.count()).toBe(auditsBefore);
-  });
-
-  it('没有维护允许行的人员导出被拒', async () => {
-    await expectDenied(personnel.exportPersonnel(auth(clerkAId), deptAId), 'permission-denied');
-  });
-
-  it('导出留痕拒绝更新和删除', async () => {
-    const result = await personnel.exportPersonnel(auth(supAId), deptAId);
+  it('冻结的导出留痕表仍在：已有行可查，触发器拒绝更新和删除（ADR 0013）', async () => {
+    // 应用里已没有写入路径。这里直接插入一行，代表停写前已有的导出留痕。
+    const id = newUlid();
+    await prisma.exportAudit.create({
+      data: { id, actorId: supAId, targetOrgUnitId: deptAId, exportedCount: 3 },
+    });
+    const row = await new PrismaIdentityStore(prisma).findExportAuditById(id);
+    expect(row).toMatchObject({ id, actorId: supAId, targetOrgUnitId: deptAId, exportedCount: 3 });
     await expect(
-      prisma.$executeRaw`UPDATE export_audit SET exported_count = 0 WHERE id = ${result.audit.id}`,
+      prisma.$executeRaw`UPDATE export_audit SET exported_count = 0 WHERE id = ${id}`,
     ).rejects.toThrow(/拒绝 UPDATE/);
     await expect(
-      prisma.$executeRaw`DELETE FROM export_audit WHERE id = ${result.audit.id}`,
+      prisma.$executeRaw`DELETE FROM export_audit WHERE id = ${id}`,
     ).rejects.toThrow(/拒绝 DELETE/);
+    const triggers = await prisma.$queryRaw<Array<{ tgname: string }>>`
+      SELECT tgname FROM pg_trigger WHERE tgrelid = 'export_audit'::regclass AND NOT tgisinternal`;
+    expect(triggers.map((trigger) => trigger.tgname)).toContain('export_audit_append_only');
+    const [comment] = await prisma.$queryRaw<Array<{ text: string | null }>>`
+      SELECT obj_description('export_audit'::regclass, 'pg_class') AS text`;
+    expect(comment?.text).toContain('冻结');
   });
 
   it('系统管理调岗后任职记录闭环', async () => {
