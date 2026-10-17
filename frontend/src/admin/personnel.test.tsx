@@ -326,6 +326,14 @@ describe('登记接口', () => {
     expect((await registerPersonnel(store.dispatch, input)) as Json).toMatchObject({ message: '你没有权限执行这个操作，或所选机构不在你的范围内。' });
   });
 
+  it('服务失败用定稿句（原型 assets/shell.js:62，同 #123）', async () => {
+    const FINAL = '网络或服务暂时不可用，请稍后重试。问题持续时请联系本单位的系统管理人员。';
+    const store = fresh();
+    serve(person(ADMIN), { '/api/admin/personnel': [500, {}] });
+    await store.dispatch(loadSession());
+    expect(await registerPersonnel(store.dispatch, input)).toEqual({ ok: false, fields: {}, passwordRules: [], message: FINAL });
+  });
+
   it('取名单与卡片：403 交给无权限卡片，404 交给找不到，其他失败交给错误卡片', async () => {
     const store = fresh();
     serve(person(ADMIN), { '/api/admin/personnel': [200, { result: 'listed', ...LIST }], '/api/admin/personnel/3': [200, { result: 'viewed', personnel: CARD }] });

@@ -274,7 +274,8 @@ export type RegisterResult =
     message: string | null;
   };
 
-const FAILED = '操作没有完成，网络或服务暂时不可用，请稍后重试。';
+/** 网络或服务失败：定稿句（原型 assets/shell.js:62，同 #123 orgTree.ts）。 */
+const FAILED = '网络或服务暂时不可用，请稍后重试。问题持续时请联系本单位的系统管理人员。';
 
 /** 「还有 3 处需要修改」按字段计；口令策略未满足算口令一处。 */
 export function problemCount(result: Extract<RegisterResult, { ok: false }>): number {
