@@ -68,7 +68,7 @@ Issues 和 specs 以 GitHub Issues 形式跟踪，使用 gh CLI。见 `docs/agen
 
 ### Triage labels
 
-使用五个标准 triage 标签（needs-triage / needs-info / ready-for-agent / ready-for-human / wontfix）。见 `docs/agents/triage-labels.md`。
+使用五个标准 triage 标签（needs-triage / needs-info / ready-for-agent / ready-for-human / wontfix），每张票至多一个。分类标签只用 bug、enhancement。二期及以后的票打 deferred，保持打开。spec 先打 needs-triage，过 gate① 并拆票后摘掉状态标签，只给子票打 ready-for-agent。见 `docs/agents/triage-labels.md`。
 
 ### Domain docs
 
