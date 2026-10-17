@@ -320,6 +320,20 @@ describe('POST /api/admin/audit/query：数据范围', () => {
   });
 });
 
+describe('跨区被拒的行（ADR 0011：授权拒绝的所属机构取操作者当时的任职）', () => {
+  it('区 A 监督越区查阅被拒：这一行归区 A，区 A 监督看得到、对象写区 B 的名称；区 B 监督看不到', async () => {
+    const cookie = await login(PHONES.superA);
+    expect((await post('/api/admin/audit/query', cookie, { ...range(), orgUnitId: deptBId })).status).toBe(403);
+    const deptBName = (await cloned.prisma.orgUnit.findUniqueOrThrow({ where: { id: deptBId } })).name;
+    const rowsA = (await query(PHONES.superA)).rows ?? [];
+    const denied = rowsA.find((row) => row.action === 'authz.denied' && row.operation === '查阅管理台留痕' && row.object === deptBName);
+    expect(denied, '区 A 监督的越区查阅被拒行').toBeDefined();
+    expect(denied).toMatchObject({ actorCode: 'P-126-SUPER-A', orgName: '第一执法支队', result: '被拒绝：超出数据范围' });
+    const rowsB = (await query(PHONES.superB)).rows ?? [];
+    expect(rowsB.map((row) => row.id)).not.toContain(denied?.id);
+  });
+});
+
 describe('POST /api/admin/audit/query：筛选与本次查阅留痕', () => {
   it('按类别筛选：解锁与重设口令只含解锁与被拒的解锁；认证与会话只含登录与会话', async () => {
     const unlock = await query(PHONES.superHq, { category: 'unlock-reset' });

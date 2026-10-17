@@ -10,7 +10,13 @@ import {
 } from '@natural-enforcement/audit';
 import { AccessControlService, type ActorRef, type DenyReason } from '@natural-enforcement/identity';
 
-import { describeAuditRow, auditRowCells, AUDIT_COLUMNS, type AuditRowView } from './audit-labels.ts';
+import {
+  describeAuditRow,
+  auditRowCells,
+  AUDIT_COLUMNS,
+  type AuditResourceNames,
+  type AuditRowView,
+} from './audit-labels.ts';
 import { CLOCK, type Clock } from './clock.ts';
 import { UNIT_OF_WORK, type TxScope, type UnitOfWork } from './unit-of-work.ts';
 import { buildXlsx } from './xlsx.ts';
@@ -244,28 +250,36 @@ export class AuditBrowseService {
     const ready = await this.authorize(tx, actor, opcode, input);
     if (!('scope' in ready)) return ready;
     const records = await tx.auditReader.list(ready.query);
-    const codes = await this.resourceCodes(tx, records);
+    const names = await this.resourceNames(tx, records);
     const rows: AuditRowBody[] = records.map((record) => ({
       id: record.id,
       action: record.action,
       outcome: record.outcome,
       category: auditCategoryOf(record.action, record.opcode),
-      ...describeAuditRow(record, codes),
+      ...describeAuditRow(record, names),
     }));
     return { scope: ready.scope, filter: ready.filter, rows, actorCode: ready.actorCode };
   }
 
-  /** 授权拒绝行只写资源标识，不写被作用人员；资源为人员时查出工号用于展示。 */
-  private async resourceCodes(tx: TxScope, records: readonly AuditTrailRecord[]): Promise<Map<string, string>> {
-    const ids = new Set(
-      records.filter((row) => row.resourceType === 'personnel' && row.resourceId).map((row) => row.resourceId as string),
+  /**
+   * 授权拒绝行只写资源标识，不写被作用人员，所属机构是操作者的任职机构（ADR 0011）。
+   * 「对象」一列按资源标识查：人员查工号，机构查名称。
+   */
+  private async resourceNames(tx: TxScope, records: readonly AuditTrailRecord[]): Promise<AuditResourceNames> {
+    const ids = (type: string) => new Set(
+      records.filter((row) => row.resourceType === type && row.resourceId).map((row) => row.resourceId as string),
     );
-    const codes = new Map<string, string>();
-    for (const id of ids) {
+    const personnelCodes = new Map<string, string>();
+    for (const id of ids('personnel')) {
       const person = await tx.store.findPersonnelById(id);
-      if (person) codes.set(id, person.code);
+      if (person) personnelCodes.set(id, person.code);
     }
-    return codes;
+    const orgNames = new Map<string, string>();
+    for (const id of ids('org-unit')) {
+      const org = await tx.store.findOrgUnitById(id);
+      if (org) orgNames.set(id, org.name);
+    }
+    return { personnelCodes, orgNames };
   }
 
   private parties(actor: ActorRef, actorCode: string | null, scope: AuditScope, opcode: string, sourceIp: string | null) {

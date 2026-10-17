@@ -127,14 +127,26 @@ function operationOf(record: AuditTrailRecord): string {
   return OPERATION_OF_ACTION[record.action] ?? record.action;
 }
 
-function objectOf(record: AuditTrailRecord, resourceCodes: ReadonlyMap<string, string>): string {
+/** 按资源标识查到的展示名：人员的工号、机构的名称。 */
+export interface AuditResourceNames {
+  readonly personnelCodes: ReadonlyMap<string, string>;
+  readonly orgNames: ReadonlyMap<string, string>;
+}
+
+const NO_NAMES: AuditResourceNames = { personnelCodes: new Map(), orgNames: new Map() };
+
+function objectOf(record: AuditTrailRecord, names: AuditResourceNames): string {
   if (record.subjectCode) return `人员 ${record.subjectCode}`;
   if (record.action === 'audit.viewed' || record.action === 'audit.exported') return '管理台留痕';
   if (record.resourceType === 'personnel' && record.resourceId) {
-    const code = resourceCodes.get(record.resourceId);
+    const code = names.personnelCodes.get(record.resourceId);
     return code ? `人员 ${code}` : '人员';
   }
-  if (record.resourceType === 'org-unit') return record.orgUnitName ?? '机构';
+  if (record.resourceType === 'org-unit') {
+    // 拒绝行的所属机构是操作者的任职机构，不一定是对象：按资源标识取名称
+    const name = record.resourceId ? names.orgNames.get(record.resourceId) : undefined;
+    return name ?? (record.resourceId && record.resourceId === record.orgUnitId ? record.orgUnitName : null) ?? '机构';
+  }
   if (record.action === 'login.failed' && record.reason === 'unknown-identifier') return '未对上人员';
   return '—';
 }
@@ -156,19 +168,19 @@ function resultOf(record: AuditTrailRecord): { result: string; tone: AuditTone }
 }
 
 /**
- * 一行留痕的展示文字。resourceCodes：资源为人员的拒绝行，按资源标识查到的工号
- * （授权拒绝行不写被作用人员，只写资源）。
+ * 一行留痕的展示文字。names：按资源标识查到的人员工号与机构名称
+ * （授权拒绝行不写被作用人员，只写资源；所属机构是操作者的任职机构，ADR 0011）。
  */
 export function describeAuditRow(
   record: AuditTrailRecord,
-  resourceCodes: ReadonlyMap<string, string> = new Map(),
+  names: AuditResourceNames = NO_NAMES,
 ): AuditRowView {
   const { result, tone } = resultOf(record);
   return {
     time: shanghaiMinute(record.createdAt),
     actorCode: record.actorCode ?? '—',
     operation: operationOf(record),
-    object: objectOf(record, resourceCodes),
+    object: objectOf(record, names),
     orgName: record.orgUnitId ? (record.orgUnitName ?? '') : '无所属机构',
     anchored: record.orgUnitId != null,
     result,

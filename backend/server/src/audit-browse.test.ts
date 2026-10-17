@@ -74,7 +74,7 @@ describe('#126 留痕展示文字（P8）', () => {
         action: 'authz.denied', outcome: 'failed', reason: 'scope-denied', actorCode: 'HZ0101', subjectCode: null,
         opcode: 'personnel.locked.release', resourceType: 'personnel', resourceId: 'p-331',
       }),
-      new Map([['p-331', 'TH0331']]),
+      { personnelCodes: new Map([['p-331', 'TH0331']]), orgNames: new Map() },
     );
     expect(denied).toMatchObject({ operation: '解锁', object: '人员 TH0331', result: '被拒绝：超出数据范围', tone: 'red' });
     const unknown = describeAuditRow(record({
@@ -94,6 +94,17 @@ describe('#126 留痕展示文字（P8）', () => {
     expect(describeAuditRow(record({
       action: 'personnel.exported', subjectCode: null, resourceType: 'org-unit', resourceId: 'org-ld',
     }))).toMatchObject({ operation: '导出人员', object: '龙洞自然资源所' });
+  });
+
+  it('拒绝行的「对象」按资源标识取机构名，「所属机构」仍是操作者的任职机构（ADR 0011）', () => {
+    const crossDistrict = record({
+      action: 'authz.denied', outcome: 'failed', reason: 'scope-denied', actorCode: 'TH0102', subjectCode: null,
+      opcode: 'audit.admin.read', resourceType: 'org-unit', resourceId: 'org-hz',
+    });
+    expect(describeAuditRow(crossDistrict, { personnelCodes: new Map(), orgNames: new Map([['org-hz', '海珠区分局']]) }))
+      .toMatchObject({ operation: '查阅管理台留痕', object: '海珠区分局', orgName: '龙洞自然资源所', anchored: true });
+    // 查不到名称时不拿操作者的机构名冒充对象
+    expect(describeAuditRow(crossDistrict)).toMatchObject({ object: '机构', orgName: '龙洞自然资源所' });
   });
 });
 
