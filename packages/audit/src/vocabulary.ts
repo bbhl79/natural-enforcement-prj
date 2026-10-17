@@ -8,6 +8,10 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   // 机构树（#105「机构树」，#123）。
   'org.unit.registered',
   'org.unit.renamed',
+  // 人员登记与查看、岗位标记（#105「人员与登录凭据」，#128）。
+  'personnel.registered',
+  'personnel.viewed',
+  'personnel.post-granted',
 ] as const;
 
 export const AUDIT_ACTIONS = [
@@ -58,3 +62,11 @@ export type AuthzDeniedReason = (typeof AUTHZ_DENIED_REASONS)[number];
  */
 export const ORG_UNIT_REGISTER_FAILED_REASONS = ['org-unit-deactivated'] as const;
 export type OrgUnitRegisterFailedReason = (typeof ORG_UNIT_REGISTER_FAILED_REASONS)[number];
+
+/** 登记人员被拒（outcome=failed）的原因（#128）：目标机构已停用；工号或手机号已被占用。 */
+export const PERSONNEL_REGISTER_FAILED_REASONS = ['org-unit-deactivated', 'already-exists'] as const;
+export type PersonnelRegisterFailedReason = (typeof PERSONNEL_REGISTER_FAILED_REASONS)[number];
+
+/** 带「后值」的动作（#128）。后值写标记取值；其余动作不许带后值。 */
+export const AUDIT_NEXT_VALUE_ACTIONS = ['personnel.post-granted'] as const;
+export type AuditNextValueAction = (typeof AUDIT_NEXT_VALUE_ACTIONS)[number];

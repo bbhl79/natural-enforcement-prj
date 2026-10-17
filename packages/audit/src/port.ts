@@ -3,6 +3,7 @@ import type {
   LoginFailedReason,
   OrgUnitRegisterFailedReason,
   PasswordChangedReason,
+  PersonnelRegisterFailedReason,
   SessionEndReason,
 } from './vocabulary.ts';
 
@@ -25,6 +26,8 @@ export interface AuditParties {
   resourceType?: string | null;
   resourceId?: string | null;
   previousValue?: string | null;
+  /** 后值（#128）。只有 AUDIT_NEXT_VALUE_ACTIONS 里的动作带，其余为空。 */
+  nextValue?: string | null;
 }
 
 export type AuditAppend =
@@ -44,7 +47,11 @@ export type AuditAppend =
   | (AuditParties & { action: 'authz.denied'; reason: AuthzDeniedReason })
   | (AuditParties & { action: 'org.unit.registered' })
   | (AuditParties & { action: 'org.unit.registered'; outcome: 'failed'; reason: OrgUnitRegisterFailedReason })
-  | (AuditParties & { action: 'org.unit.renamed' });
+  | (AuditParties & { action: 'org.unit.renamed' })
+  | (AuditParties & { action: 'personnel.registered' })
+  | (AuditParties & { action: 'personnel.registered'; outcome: 'failed'; reason: PersonnelRegisterFailedReason })
+  | (AuditParties & { action: 'personnel.viewed' })
+  | (AuditParties & { action: 'personnel.post-granted'; nextValue: string });
 
 /** 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。 */
 export interface AuthzDeniedEntry {

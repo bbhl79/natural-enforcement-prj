@@ -5,16 +5,19 @@ import type { AuditTrailFactory } from './transaction.ts';
 import { newAuditId } from './ulid.ts';
 import {
   AUDIT_ACTIONS,
+  AUDIT_NEXT_VALUE_ACTIONS,
   AUDIT_SUCCEEDED_ACTIONS,
   AUTHZ_DENIED_REASONS,
   LOGIN_FAILED_REASONS,
   ORG_UNIT_REGISTER_FAILED_REASONS,
   PASSWORD_CHANGED_REASONS,
+  PERSONNEL_REGISTER_FAILED_REASONS,
   SESSION_END_REASONS,
 } from './vocabulary.ts';
 
 const SUCCEEDED = new Set<string>(AUDIT_SUCCEEDED_ACTIONS);
 const ACTIONS = new Set<string>(AUDIT_ACTIONS);
+const NEXT_VALUE_ACTIONS = new Set<string>(AUDIT_NEXT_VALUE_ACTIONS);
 
 /** 带原因的动作及其封闭原因表。不在表里的动作不许带原因。 */
 const REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
@@ -27,7 +30,19 @@ const REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
 /** 记成功的动作被拒绝（outcome=failed）时的封闭原因表。不在表里的成功动作不能记失败。 */
 const FAILED_REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['org.unit.registered', new Set<string>(ORG_UNIT_REGISTER_FAILED_REASONS)],
+  ['personnel.registered', new Set<string>(PERSONNEL_REGISTER_FAILED_REASONS)],
 ]);
+
+/** 后值只许出现在带后值的动作上，且这些动作必须带非空后值（#128）。 */
+function assertNextValue(action: string, nextValue: unknown): void {
+  if (NEXT_VALUE_ACTIONS.has(action)) {
+    if (typeof nextValue !== 'string' || nextValue === '') {
+      throw new AuditVocabularyError(`动作 ${action} 必须带后值`);
+    }
+    return;
+  }
+  if (nextValue != null) throw new AuditVocabularyError(`动作 ${action} 不带后值，收到：${String(nextValue)}`);
+}
 
 /** 封闭取值表的运行时把关：类型之外（如 as 断言、JS 调用方）传入的表外取值一律拒绝，不写库。 */
 export class AuditVocabularyError extends Error {
@@ -77,7 +92,9 @@ export class PrismaAuditTrail implements AuditTrailPort {
       ? entry.outcome
       : SUCCEEDED.has(entry.action) ? 'succeeded' : 'failed';
     const reason = 'reason' in entry ? entry.reason : null;
+    const nextValue = 'nextValue' in entry ? entry.nextValue ?? null : null;
     assertVocabulary(entry.action, outcome, reason);
+    assertNextValue(entry.action, nextValue);
     await this.db.auditTrail.create({
       data: {
         id: newAuditId(),
@@ -94,6 +111,7 @@ export class PrismaAuditTrail implements AuditTrailPort {
         resourceType: entry.resourceType ?? null,
         resourceId: entry.resourceId ?? null,
         previousValue: entry.previousValue ?? null,
+        nextValue,
       },
     });
   }
