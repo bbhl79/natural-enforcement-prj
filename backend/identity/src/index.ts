@@ -45,9 +45,9 @@ export type {
 } from './services/org-unit.service.ts';
 export { OrgUnitService } from './services/org-unit.service.ts';
 export type {
-  ExportResult,
   PersonnelDetail,
+  PersonnelExportItem,
   RegisterPersonnelInput,
 } from './services/personnel.service.ts';
-export { PersonnelService } from './services/personnel.service.ts';
+export { PERSONNEL_EXPORT_OPCODE, PersonnelService } from './services/personnel.service.ts';
 export { IdentityModule } from './identity.module.ts';

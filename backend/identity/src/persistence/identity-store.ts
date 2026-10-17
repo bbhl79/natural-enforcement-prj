@@ -51,7 +51,10 @@ export interface PersonnelAssignmentRow {
   endedAt: Date | null;
 }
 
-/** 导出留痕行（写入后不可变：库层触发器拒 UPDATE/DELETE，见迁移 0002_identity_org） */
+/**
+ * 导出留痕行（写入后不可变：库层触发器拒 UPDATE/DELETE，见迁移 0002_identity_org）。
+ * 冻结（ADR 0013，#125）：不再写入，端口没有写入方法；已有行只读可查。人员导出改写共用留痕表。
+ */
 export interface ExportAuditRow {
   id: string;
   actorId: string;
@@ -179,5 +182,4 @@ export interface IdentityStore {
   closeAssignment(assignmentId: string, endedAt: Date): Promise<void>;
   /** 调岗三笔写入的唯一入口；实现必须放在同一数据库事务中（已绑定事务时用当前事务） */
   transferAssignment(transfer: AssignmentTransfer): Promise<void>;
-  insertExportAudit(row: ExportAuditRow): Promise<void>;
 }
