@@ -21,9 +21,13 @@ const T0 = Date.parse('2026-10-17T03:00:00.000Z');
 const SEED_PASSWORD = 'Seed-pass-52';
 const NEW_PASSWORD = 'Menu-opcode-73!';
 
-/** 管理台菜单所需的码（frontend/src/shell/menu.ts）。期望独立写出。 */
+/**
+ * 管理台菜单所需的码（frontend/src/shell/menu.ts）。期望独立写出。
+ * 「机构」菜单按维护码出现（#123）：org.tree.read 也给内勤（业务侧选承办机构），不作为管理台菜单码。
+ */
 const ADMIN_MENU_OPCODES = [
-  'org.tree.read',
+  'org.unit.register',
+  'org.unit.rename',
   'personnel.profile.read',
   'personnel.locked.read',
   'audit.admin.read',
@@ -165,6 +169,22 @@ describe('#122 会话查询返回本人允许的操作码清单', () => {
         .toEqual({ code, admin: [] });
     }
     expect(await sessionOpcodes(await personByCode('P-SUP-A'))).toContain('personnel.locked.read');
+  });
+
+  it('机构树读码（#123）：内勤和系统管理有，其余种子角色没有；维护码只有系统管理有', async () => {
+    const intake = await sessionOpcodes(await personByCode('P-INTAKE-HQ'));
+    expect(intake).toContain('org.tree.read');
+    expect(intake).not.toContain('org.unit.register');
+    expect(intake).not.toContain('org.unit.rename');
+    for (const code of ['P-SUP-A', 'P-ADMIN-HQ']) {
+      const listed = await sessionOpcodes(await personByCode(code));
+      expect({ code, listed: ['org.tree.read', 'org.unit.register', 'org.unit.rename'].filter((item) => listed.includes(item)) })
+        .toEqual({ code, listed: ['org.tree.read', 'org.unit.register', 'org.unit.rename'] });
+    }
+    for (const code of ['P-CLERK-A', 'P-LEGAL-ST', 'P-REVIEW-A', 'P-APPROVE-HQ', 'P-SUPER-B']) {
+      expect({ code, read: (await sessionOpcodes(await personByCode(code))).includes('org.tree.read') })
+        .toEqual({ code, read: false });
+    }
   });
 
   it('监督反例：给监督角色补改变主状态的允许行，清单仍不含该码、授权仍拒绝；兼任经办时由经办贡献', async () => {

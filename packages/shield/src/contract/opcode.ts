@@ -73,6 +73,10 @@ for (const object of ADMIN_OBJECTS) {
   }
 }
 for (const code of [
+  // 机构树（#105「机构树」，#123）。停用码 org.unit.deactivate 随停用票（#124）入册。
+  'org.tree.read',
+  'org.unit.register',
+  'org.unit.rename',
   'personnel.locked.read',
   'personnel.locked.release',
   'personnel.password.reset',

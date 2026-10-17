@@ -32,6 +32,9 @@ const ADMIN_OPCODES = [
   ...['template', 'rule', 'calendar', 'metric'].flatMap((object) =>
     ['submit', 'approve', 'void', 'withdraw', 'read'].map((action) => `cfg.${object}.${action}`),
   ),
+  'org.tree.read',
+  'org.unit.register',
+  'org.unit.rename',
   'personnel.locked.read',
   'personnel.locked.release',
   'personnel.password.reset',
@@ -76,6 +79,16 @@ describe('操作码名册', () => {
       mustBeCaseHandler: false,
       changesPrimaryState: true,
     });
+  });
+
+  it('机构树三码（#123）不要求执法资格，不必是主办人，不改变主状态', () => {
+    for (const opcode of ['org.tree.read', 'org.unit.register', 'org.unit.rename']) {
+      expect(opcodeRequirements(opcode), opcode).toEqual({
+        qualification: 'none',
+        mustBeCaseHandler: false,
+        changesPrimaryState: false,
+      });
+    }
   });
 
   it('阅读不要求执法资格，不必是主办人，不改变主状态', () => {

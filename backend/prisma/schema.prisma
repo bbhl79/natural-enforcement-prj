@@ -34,10 +34,13 @@ model MigrationProbe {
 // 库层语义（触发器）见迁移 0002_identity_org；ORM 层只映射行结构，禁用任何 delete 调用。
 
 /// 机构（当前态；名称历史见 OrgUnitNameVersion）
+/// level = 层级（#123）：city 市、district 区、station 所。CHECK 与上下级触发器在迁移
+/// 20261018013000_issue123_org_unit_level 里（Prisma schema 表达不了，后续生成迁移时不得删掉）。
 model OrgUnit {
   id            String    @id
   code          String    @unique
   name          String
+  level         String
   parentId      String?   @map("parent_id")
   parent        OrgUnit?  @relation("OrgUnitHierarchy", fields: [parentId], references: [id])
   children      OrgUnit[] @relation("OrgUnitHierarchy")
