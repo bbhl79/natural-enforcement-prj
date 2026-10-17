@@ -423,6 +423,7 @@ check_weak-reference-entry() {
 # backend/README.md「认证记录」。寿命、Cookie、并发与结束条件以 #63 为准，不在此重开。
 # #92 定案追加 Role、Permission、RolePermission、PersonnelRole、AuditTrail。
 # #96 去掉人员表旧 role 列。字段见 schema.prisma 与 backend/README.md「权限与留痕」。
+# #128（#105 岗位标记 A1）追加 PersonnelPost，记入 PR 供 #47 G1 定案。
 G1_MODELS=(
   MigrationProbe
   OrgUnit
@@ -437,6 +438,7 @@ G1_MODELS=(
   Permission
   RolePermission
   PersonnelRole
+  PersonnelPost
   AuditTrail
   GeoDictLandBoundary
   GeoDictSurveyPoint

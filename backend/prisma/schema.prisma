@@ -94,6 +94,7 @@ model Personnel {
   authSessions    AuthSession[]
   rememberMeRows  AuthRememberMe[]
   personnelRoles  PersonnelRole[]
+  personnelPosts  PersonnelPost[]
   auditAsActor    AuditTrail[] @relation("AuditActor")
   auditAsSubject  AuditTrail[] @relation("AuditSubject")
 
@@ -264,6 +265,19 @@ model PersonnelRole {
 }
 
 /// 留痕。除主键、时间、动作、成败外都可空。写入后不可改、不可删。
+// 人员—岗位标记（#128，#105 A1）。取值 legal-review-lead / legal-affairs-leader（库内 CHECK）。
+// 只失效不删除；未失效行的「人员 + 标记」唯一由迁移里的部分唯一索引保证。不进允许行，不授予操作码。
+model PersonnelPost {
+  id            String    @id
+  personnelId   String    @map("personnel_id")
+  personnel     Personnel @relation(fields: [personnelId], references: [id])
+  post          String
+  deactivatedAt DateTime? @db.Timestamptz(6) @map("deactivated_at")
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@map("personnel_post")
+}
+
 model AuditTrail {
   id                 String    @id
   createdAt          DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
@@ -283,6 +297,8 @@ model AuditTrail {
   resourceType       String?   @map("resource_type")
   resourceId         String?   @map("resource_id")
   previousValue      String?   @map("previous_value")
+  // 后值（#128）：personnel.post-granted 写标记取值。其余动作为空。
+  nextValue          String?   @map("next_value")
 
   @@map("audit_trail")
 }
