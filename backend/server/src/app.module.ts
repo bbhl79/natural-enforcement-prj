@@ -15,6 +15,8 @@ import { AuthService } from './auth.service.ts';
 import { HealthController } from './health.controller.ts';
 import { OrgUnitsController } from './org-units.controller.ts';
 import { OrgUnitsService } from './org-units.service.ts';
+import { PersonnelController } from './personnel.controller.ts';
+import { PersonnelProfilesService } from './personnel-profiles.service.ts';
 import { SessionGuard } from './session.guard.ts';
 import { SourceGate } from './source-gate.ts';
 
@@ -28,11 +30,12 @@ import { SourceGate } from './source-gate.ts';
     DeadlineModule,
     GeoDictModule,
   ],
-  controllers: [HealthController, AuthController, AdminController, OrgUnitsController],
+  controllers: [HealthController, AuthController, AdminController, OrgUnitsController, PersonnelController],
   providers: [
     AuthService,
     AdminService,
     OrgUnitsService,
+    PersonnelProfilesService,
     SourceGate,
     { provide: APP_GUARD, useClass: SessionGuard },
   ],
