@@ -4,10 +4,9 @@ import { Provider } from 'react-redux';
 import { configureStore } from '@reduxjs/toolkit';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import healthReducer, { fetchHealthSnapshot } from '../health/healthSlice';
-import { AuthShell } from '../App';
 import LoginPage from './LoginPage';
 import reducer, {
+  acknowledgeSessionEnd,
   dismissExpiryNotice,
   enterPasswordChange,
   expiryNoticeVisible,
@@ -27,7 +26,8 @@ import reducer, {
   type LoginState,
 } from './loginSlice';
 import { store } from '../store';
-import { createHealthOnAuthMiddleware } from '../healthOnAuth';
+import { apiFetch } from '../api';
+import { renderRoute } from '../test-utils';
 
 function loginHtml(): string {
   return renderToStaticMarkup(
@@ -84,7 +84,7 @@ describe('登录页', () => {
       new Response(JSON.stringify({ result: 'locked' }), { status: 401 }),
     );
     vi.stubGlobal('fetch', fetchMock);
-    const view = configureStore({ reducer: { login: reducer, health: healthReducer } });
+    const view = configureStore({ reducer: { login: reducer } });
     view.dispatch(setPhone('13800009801'));
     view.dispatch(setPassword('wrong-password'));
     await view.dispatch(submitLogin());
@@ -106,7 +106,7 @@ describe('登录页', () => {
       new Response(JSON.stringify({ result: 'deactivated' }), { status: 401 }),
     );
     vi.stubGlobal('fetch', fetchMock);
-    const view = configureStore({ reducer: { login: reducer, health: healthReducer } });
+    const view = configureStore({ reducer: { login: reducer } });
     view.dispatch(setPhone('13800009802'));
     view.dispatch(setPassword('wrong-password'));
     await view.dispatch(submitLogin());
@@ -132,7 +132,7 @@ describe('登录页', () => {
     expect(filled.screen).toBe('default');
     expect(loginSubmitEnabled(filled)).toBe(true);
     const view = configureStore({
-      reducer: { login: reducer, health: healthReducer },
+      reducer: { login: reducer },
       preloadedState: { login: filled },
     });
     const html = renderToStaticMarkup(
@@ -157,7 +157,7 @@ describe('登录页', () => {
     expect(failed.operator).toBeNull();
     expect(failed.screen).toBe('error');
     const view = configureStore({
-      reducer: { login: reducer, health: healthReducer },
+      reducer: { login: reducer },
       preloadedState: { login: failed },
     });
     const html = renderToStaticMarkup(
@@ -171,7 +171,7 @@ describe('登录页', () => {
       new Response(JSON.stringify({ result: 'capacity-reached' }), { status: 503 }),
     );
     vi.stubGlobal('fetch', fetchMock);
-    const view = configureStore({ reducer: { login: reducer, health: healthReducer } });
+    const view = configureStore({ reducer: { login: reducer } });
     view.dispatch(setPhone('13800009501'));
     view.dispatch(setPassword('Correct-horse-95'));
     await view.dispatch(submitLogin());
@@ -184,7 +184,7 @@ describe('登录页', () => {
     expect(html).not.toMatch(/placeholder="手机号"[^>]*disabled/);
   });
 
-  it('首次登录进入改口令页，完成前不显示系统功能', () => {
+  it('首次登录进入改口令页，完成前不显示系统功能', async () => {
     const ready = reducer(
       reducer(undefined, setPhone('13800009502')),
       setPassword('Correct-horse-95'),
@@ -202,37 +202,33 @@ describe('登录页', () => {
     expect(blocked.passwordChangeKind).toBe('first-login');
     expect(blocked.operator).toBeNull();
     const view = configureStore({
-      reducer: { login: reducer, health: healthReducer },
+      reducer: { login: reducer },
       preloadedState: { login: blocked },
     });
-    const html = renderToStaticMarkup(
-      createElement(Provider, { store: view, children: createElement(AuthShell) }),
-    );
+    const { html } = await renderRoute(view, '/auth/password');
     expect(html).toContain('必须改口令');
     expect(html).toContain('首次登录必须更换初始口令');
     expect(html).toContain('placeholder="当前口令"');
     expect(html).toContain('placeholder="新口令"');
-    expect(html).not.toContain('环境健康面板');
+    expect(html).not.toContain('class="sidenav"');
     expect(html).not.toContain('placeholder="手机号"');
   });
 
-  it('口令超过 90 天时说明必须更换', () => {
+  it('口令超过 90 天时说明必须更换', async () => {
     const blocked = reducer(
       undefined,
       submitLogin.rejected(new Error('rejected'), 'req-expired', undefined, { result: 'password-expired' }),
     );
     expect(blocked.passwordChangeKind).toBe('expired');
     const view = configureStore({
-      reducer: { login: reducer, health: healthReducer },
+      reducer: { login: reducer },
       preloadedState: { login: blocked },
     });
-    const html = renderToStaticMarkup(
-      createElement(Provider, { store: view, children: createElement(AuthShell) }),
-    );
+    const { html } = await renderRoute(view, '/auth/password');
     expect(html).toContain('口令已超过 90 天，必须更换口令');
   });
 
-  it('规则码一次显示为全部中文提示', () => {
+  it('规则码一次显示为全部中文提示', async () => {
     const withRules = reducer(
       reducer(undefined, setCurrentPassword('Old-pass-97!')),
       submitPassword.rejected(new Error('rejected'), 'req-rules', undefined, {
@@ -246,34 +242,30 @@ describe('登录页', () => {
       passwordChangeKind: 'first-login',
     };
     const view = configureStore({
-      reducer: { login: reducer, health: healthReducer },
+      reducer: { login: reducer },
       preloadedState: { login },
     });
-    const html = renderToStaticMarkup(
-      createElement(Provider, { store: view, children: createElement(AuthShell) }),
-    );
+    const { html } = await renderRoute(view, '/auth/password');
     for (const text of Object.values(PASSWORD_RULE_TEXT)) {
       expect(html).toContain(text);
     }
   });
 
-  it('距到期 7 天显示提醒，关闭后同一会话不再出现，第 8 天不出现', () => {
+  it('距到期 7 天显示提醒，关闭后同一会话不再出现，第 8 天不出现', async () => {
     const entered = reducer(
       undefined,
       submitLogin.fulfilled(
-        { name: '丁经办', code: 'P-95-OK', orgName: '第一执法支队', roles: ['经办'], daysRemaining: 7 },
+        { name: '丁经办', code: 'P-95-OK', orgName: '第一执法支队', roles: ['经办'], opcodes: [], daysRemaining: 7 },
         'req-banner',
         undefined,
       ),
     );
     expect(expiryNoticeVisible(entered)).toBe(true);
     const view = configureStore({
-      reducer: { login: reducer, health: healthReducer },
+      reducer: { login: reducer },
       preloadedState: { login: entered },
     });
-    const shown = renderToStaticMarkup(
-      createElement(Provider, { store: view, children: createElement(AuthShell) }),
-    );
+    const { html: shown } = await renderRoute(view, '/');
     expect(shown).toContain('口令还剩 7 天到期');
     const closed = reducer(entered, dismissExpiryNotice());
     const reloaded = reducer(
@@ -285,21 +277,19 @@ describe('登录页', () => {
         orgName: '第一执法支队',
         roles: ['经办'],
         daysRemaining: 7,
-      }, 'req-reload'),
+      }, 'req-reload', undefined),
     );
     expect(expiryNoticeVisible(reloaded)).toBe(false);
     const hidden = configureStore({
-      reducer: { login: reducer, health: healthReducer },
+      reducer: { login: reducer },
       preloadedState: { login: reloaded },
     });
-    const after = renderToStaticMarkup(
-      createElement(Provider, { store: hidden, children: createElement(AuthShell) }),
-    );
+    const { html: after } = await renderRoute(hidden, '/');
     expect(after).not.toContain('口令还剩');
     const eighth = reducer(
       undefined,
       submitLogin.fulfilled(
-        { name: '丁经办', code: 'P-95-OK', orgName: '第一执法支队', roles: ['经办'], daysRemaining: 8 },
+        { name: '丁经办', code: 'P-95-OK', orgName: '第一执法支队', roles: ['经办'], opcodes: [], daysRemaining: 8 },
         'req-eighth',
         undefined,
       ),
@@ -315,21 +305,51 @@ describe('登录页', () => {
     expect(forced.passwordChangeKind).toBe('expired');
   });
 
-  it('其他请求返回 403 强制改密时进入改口令', async () => {
+  it('其他请求返回 403：强制改密进入改口令；其他 403 重新拉一次会话', async () => {
     const responses = [
       new Response(JSON.stringify({ reason: 'permission-denied' }), { status: 403 }),
       new Response(JSON.stringify({ result: 'password-expired' }), { status: 403 }),
       new Response(JSON.stringify({ result: 'password-change-required' }), { status: 403 }),
     ];
-    vi.stubGlobal('fetch', () => Promise.resolve(responses.shift()!));
-    const view = configureStore({ reducer: { login: reducer, health: healthReducer } });
-    await view.dispatch(fetchHealthSnapshot());
-    expect(view.getState().login.phase).toBe('unknown');
-    await view.dispatch(fetchHealthSnapshot());
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', (url: string) => {
+      calls.push(url);
+      if (url === '/api/auth/session') {
+        return Promise.resolve(new Response(JSON.stringify({
+          result: 'authenticated', name: '丁经办', code: 'P-95-OK', orgName: '第一执法支队', roles: ['经办'], opcodes: [],
+        }), { status: 200 }));
+      }
+      return Promise.resolve(responses.shift()!);
+    });
+    const view = configureStore({ reducer: { login: reducer } });
+    await view.dispatch(loadSession());
+    await apiFetch(view.dispatch, '/api/admin/locked-personnel');
+    expect(calls).toEqual(['/api/auth/session', '/api/admin/locked-personnel', '/api/auth/session']);
+    expect(view.getState().login.phase).toBe('authenticated');
+    await apiFetch(view.dispatch, '/api/admin/locked-personnel');
     expect(view.getState().login.phase).toBe('password-change-required');
     expect(view.getState().login.passwordChangeKind).toBe('expired');
-    await view.dispatch(fetchHealthSnapshot());
+    await apiFetch(view.dispatch, '/api/admin/locked-personnel');
     expect(view.getState().login.passwordChangeKind).toBe('first-login');
+    expect(calls.filter((url) => url === '/api/auth/session')).toHaveLength(2);
+  });
+
+  it('重新拉会话失败时保持现状，启动查询失败时进入「暂时无法确认登录状态」', async () => {
+    let healthy = true;
+    vi.stubGlobal('fetch', () => Promise.resolve(healthy
+      ? new Response(JSON.stringify({
+        result: 'authenticated', name: '丁经办', code: 'P-95-OK', orgName: '第一执法支队', roles: ['经办'], opcodes: ['clue.read'],
+      }), { status: 200 })
+      : new Response(JSON.stringify({}), { status: 502 })));
+    const view = configureStore({ reducer: { login: reducer } });
+    await view.dispatch(loadSession());
+    healthy = false;
+    await view.dispatch(loadSession({ refresh: true }));
+    expect(view.getState().login.phase).toBe('authenticated');
+    expect(view.getState().login.operator?.opcodes).toEqual(['clue.read']);
+    const fresh = configureStore({ reducer: { login: reducer } });
+    await fresh.dispatch(loadSession());
+    expect(fresh.getState().login.phase).toBe('error');
   });
 
   it('改口令返回锁定时显示锁定文案并禁用表单', async () => {
@@ -337,15 +357,13 @@ describe('登录页', () => {
       new Response(JSON.stringify({ result: 'locked' }), { status: 401 }),
     );
     vi.stubGlobal('fetch', fetchMock);
-    const view = configureStore({ reducer: { login: reducer, health: healthReducer } });
+    const view = configureStore({ reducer: { login: reducer } });
     view.dispatch(enterPasswordChange('first-login'));
     view.dispatch(setCurrentPassword('Old-pass-97!'));
     view.dispatch(setNewPassword('New-pass-97!'));
     await view.dispatch(submitPassword());
     expect(view.getState().login.screen).toBe('locked');
-    const html = renderToStaticMarkup(
-      createElement(Provider, { store: view, children: createElement(AuthShell) }),
-    );
+    const { html } = await renderRoute(view, '/auth/password');
     expect(html).toContain('class="banner amber"');
     expect(html).toContain('账号已锁定。请联系本单位管理员解锁。');
     expect(html).not.toContain('当前口令不正确');
@@ -364,7 +382,7 @@ describe('登录页', () => {
         roles: ['经办'],
       }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
-    const view = configureStore({ reducer: { login: reducer, health: healthReducer } });
+    const view = configureStore({ reducer: { login: reducer } });
     view.dispatch(setCurrentPassword('Old-pass-97!'));
     view.dispatch(setNewPassword('New-pass-97!'));
     await view.dispatch(submitPassword());
@@ -376,7 +394,7 @@ describe('登录页', () => {
     expect(view.getState().login.phase).toBe('authenticated');
   });
 
-  it('已登录顶栏只显示姓名、机构和退出', () => {
+  it('已登录顶栏显示姓名、机构、角色和退出，不显示工号', async () => {
     const ready = reducer(
       reducer(undefined, setPhone('13800009501')),
       setPassword('Correct-horse-95'),
@@ -389,6 +407,7 @@ describe('登录页', () => {
           code: 'P-95-OK',
           orgName: '第一执法支队',
           roles: ['监督', '经办'],
+          opcodes: ['clue.read'],
         },
         'req-3',
         undefined,
@@ -400,36 +419,35 @@ describe('登录页', () => {
       code: 'P-95-OK',
       orgName: '第一执法支队',
       roles: ['监督', '经办'],
+      opcodes: ['clue.read'],
     });
     const view = configureStore({
-      reducer: { login: reducer, health: healthReducer },
+      reducer: { login: reducer },
       preloadedState: { login: entered },
     });
-    const html = renderToStaticMarkup(
-      createElement(Provider, { store: view, children: createElement(AuthShell) }),
-    );
+    const { html } = await renderRoute(view, '/');
     expect(html).toContain('丁经办');
     expect(html).toContain('第一执法支队');
     expect(html).toContain('>退出</button>');
     expect(html).not.toContain('P-95-OK');
-    expect(html).not.toContain('监督、经办');
+    // 原型 v0.4 P1：顶栏显示姓名·机构·角色。
+    expect(html).toContain('第一执法支队 · 监督、经办');
     expect(entered.operator?.code).toBe('P-95-OK');
     expect(entered.operator?.roles).toEqual(['监督', '经办']);
-    expect(html).toContain('环境健康面板');
+    // #80：一期不展示连通状态。
+    expect(html).not.toContain('健康');
     const left = reducer(entered, logout.fulfilled(undefined, 'req-4'));
     expect(left.phase).toBe('anonymous');
     expect(left.operator).toBeNull();
   });
 
-  it('未登录显示登录页', () => {
-    const anonymous = reducer(undefined, loadSession.fulfilled({ result: 'anonymous' }, 'req-5'));
+  it('未登录显示登录页', async () => {
+    const anonymous = reducer(undefined, loadSession.fulfilled({ result: 'anonymous' }, 'req-5', undefined));
     const view = configureStore({
-      reducer: { login: reducer, health: healthReducer },
+      reducer: { login: reducer },
       preloadedState: { login: anonymous },
     });
-    const html = renderToStaticMarkup(
-      createElement(Provider, { store: view, children: createElement(AuthShell) }),
-    );
+    const { html } = await renderRoute(view, '/auth/login');
     expect(html).toContain('placeholder="手机号"');
     expect(html).toContain('>登录</button>');
   });
@@ -445,7 +463,7 @@ describe('登录页', () => {
         roles: ['经办'],
       }), { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
-    const view = configureStore({ reducer: { login: reducer, health: healthReducer } });
+    const view = configureStore({ reducer: { login: reducer } });
     view.dispatch(setPhone(' 13800009501 '));
     view.dispatch(setPassword('Correct-horse-95'));
     view.dispatch(toggleRemember());
@@ -472,78 +490,58 @@ describe('登录页', () => {
     vi.stubGlobal('fetch', (url: string) => {
       calls.push(url);
       if (url === '/api/auth/session') return pending;
-      return Promise.resolve(new Response(JSON.stringify({ generatedAt: '2026-10-17T00:00:00.000Z', checks: [] }), { status: 200 }));
+      return Promise.resolve(new Response(JSON.stringify({ personnel: [] }), { status: 200 }));
     });
-    const view = configureStore({ reducer: { login: reducer, health: healthReducer } });
-    const boot = view.dispatch(loadSession());
-    const health = view.dispatch(fetchHealthSnapshot());
+    // 启动闸门是模块级的一次性状态，这里用全新模块模拟一次冷启动。
+    vi.resetModules();
+    const fresh = await import('./loginSlice');
+    const { apiFetch: freshFetch } = await import('../api');
+    const view = configureStore({ reducer: { login: fresh.default } });
+    const boot = view.dispatch(fresh.loadSession());
+    const other = freshFetch(view.dispatch, '/api/admin/locked-personnel');
     await Promise.resolve();
     expect(calls).toEqual(['/api/auth/session']);
     release(new Response(JSON.stringify({ result: 'anonymous' }), { status: 200 }));
     await boot;
-    await health;
-    expect(calls).toEqual(['/api/auth/session', '/health/health.json']);
+    await other;
+    expect(calls).toEqual(['/api/auth/session', '/api/admin/locked-personnel']);
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(calls.filter((url) => url === '/api/auth/session')).toHaveLength(1);
   });
 
-  it('其他请求返回未登录时再查一次会话', async () => {
-    const calls: string[] = [];
+  it('已登录时其他请求返回 401：会话已结束，看过提示后去登录页', async () => {
     vi.stubGlobal('fetch', (url: string) => {
-      calls.push(url);
-      if (url === '/health/health.json') {
+      if (url === '/api/admin/locked-personnel') {
         return Promise.resolve(new Response(JSON.stringify({ reason: 'not-authenticated' }), { status: 401 }));
       }
-      return Promise.resolve(new Response(JSON.stringify({ result: 'anonymous' }), { status: 200 }));
+      return Promise.resolve(new Response(JSON.stringify({
+        result: 'authenticated', name: '丁经办', code: 'P-95-OK', orgName: '第一执法支队', roles: ['经办'], opcodes: [],
+      }), { status: 200 }));
     });
-    const view = configureStore({ reducer: { login: reducer, health: healthReducer } });
+    const view = configureStore({ reducer: { login: reducer } });
     await view.dispatch(loadSession());
-    await view.dispatch(fetchHealthSnapshot());
-    expect(calls).toEqual(['/api/auth/session', '/health/health.json', '/api/auth/session']);
+    await apiFetch(view.dispatch, '/api/admin/locked-personnel');
+    expect(view.getState().login.phase).toBe('expired');
+    expect(view.getState().login.operator).toBeNull();
+    view.dispatch(acknowledgeSessionEnd());
     expect(view.getState().login.phase).toBe('anonymous');
+    expect(view.getState().login.explicitLogout).toBe(false);
+  });
+
+  it('会话查询带回本人允许的操作码清单；退出后清空并标记主动退出', async () => {
+    vi.stubGlobal('fetch', () => Promise.resolve(new Response(JSON.stringify({
+      result: 'authenticated', name: '何静', code: 'TH0102', orgName: '天河区分局', roles: ['经办', '系统管理'],
+      opcodes: ['clue.read', 'personnel.locked.read'],
+    }), { status: 200 })));
+    const view = configureStore({ reducer: { login: reducer } });
+    await view.dispatch(loadSession());
+    expect(view.getState().login.operator?.opcodes).toEqual(['clue.read', 'personnel.locked.read']);
+    await view.dispatch(logout());
+    expect(view.getState().login.operator).toBeNull();
+    expect(view.getState().login.explicitLogout).toBe(true);
   });
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
-});
-
-describe('认证后的健康快照', () => {
-  it('认证完成后自动读取一次健康快照，未登录时不读', async () => {
-    const calls: string[] = [];
-    let sessionBody: unknown = { result: 'anonymous' };
-    vi.stubGlobal('fetch', (url: string) => {
-      calls.push(url);
-      if (url === '/api/auth/session') {
-        return Promise.resolve(new Response(JSON.stringify(sessionBody), { status: 200 }));
-      }
-      return Promise.resolve(new Response(JSON.stringify({ generatedAt: '2026-10-17T00:00:00.000Z', checks: [] }), { status: 200 }));
-    });
-    const anonymousView = configureStore({
-      reducer: { login: reducer, health: healthReducer },
-      middleware: (getDefault) => getDefault().prepend(createHealthOnAuthMiddleware()),
-    });
-    await anonymousView.dispatch(loadSession());
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(calls).toEqual(['/api/auth/session']);
-
-    calls.length = 0;
-    sessionBody = {
-      result: 'authenticated',
-      name: '张三',
-      code: 'P-1',
-      orgName: '一区',
-      roles: ['经办'],
-      passwordChangeRequired: false,
-      passwordChangeKind: null,
-    };
-    const view = configureStore({
-      reducer: { login: reducer, health: healthReducer },
-      middleware: (getDefault) => getDefault().prepend(createHealthOnAuthMiddleware()),
-    });
-    await view.dispatch(loadSession());
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(calls).toEqual(['/api/auth/session', '/health/health.json']);
-    expect(view.getState().health.snapshot).not.toBeNull();
-  });
 });

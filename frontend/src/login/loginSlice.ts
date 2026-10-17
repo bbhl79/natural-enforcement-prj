@@ -1,9 +1,21 @@
 import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
+import { forgetExpiryDismissed, readExpiryDismissed, rememberExpiryDismissed } from './expiryNotice';
+
 /** 四态与原型 S00 一致。 */
 export type LoginScreen = 'default' | 'error' | 'locked' | 'deactivated' | 'capacity';
 
-export type AuthPhase = 'unknown' | 'anonymous' | 'password-change-required' | 'authenticated';
+/**
+ * 认证状态。expired：已登录时某个接口返回 401，会话已结束，先说明再去登录页（P1）。
+ * error：启动时会话查询失败（网络或服务不可用），可刷新重试（P1）。
+ */
+export type AuthPhase =
+  | 'unknown'
+  | 'anonymous'
+  | 'password-change-required'
+  | 'authenticated'
+  | 'expired'
+  | 'error';
 
 export type PasswordChangeKind = 'first-login' | 'expired';
 
@@ -23,6 +35,8 @@ export interface OperatorSession {
   code: string;
   orgName: string | null;
   roles: string[];
+  /** 本人允许的操作码清单（会话查询返回，#105 菜单来源） */
+  opcodes: string[];
 }
 
 export interface LoginState {
@@ -40,6 +54,8 @@ export interface LoginState {
   currentPasswordRejected: boolean;
   daysRemaining: number | null;
   expiryNoticeDismissed: boolean;
+  /** 主动退出后去登录页不记原路径 */
+  explicitLogout: boolean;
 }
 
 const initialState: LoginState = {
@@ -57,6 +73,7 @@ const initialState: LoginState = {
   currentPasswordRejected: false,
   daysRemaining: null,
   expiryNoticeDismissed: false,
+  explicitLogout: false,
 };
 
 export function expiryNoticeVisible(state: LoginState): boolean {
@@ -90,7 +107,8 @@ type SessionView =
   | { result: 'anonymous' }
   | { result: 'password-change-required' }
   | { result: 'password-expired' }
-  | ({ result: 'authenticated'; daysRemaining?: number } & OperatorSession);
+  | ({ result: 'authenticated'; daysRemaining?: number; expiryNoticeDismissed?: boolean }
+    & Omit<OperatorSession, 'opcodes'> & { opcodes?: string[] });
 
 let startupReady: Promise<void> = Promise.resolve();
 let startupArmed = false;
@@ -117,30 +135,53 @@ type LoginFailure = {
   result: 'invalid-credential' | 'password-change-required' | 'password-expired' | 'locked' | 'deactivated' | 'capacity-reached';
 };
 
-function operatorFrom(view: SessionView & { result: 'authenticated' }): OperatorSession & { daysRemaining: number | null } {
+type SessionOperator = OperatorSession & { daysRemaining: number | null };
+
+function operatorFrom(view: SessionView & { result: 'authenticated' }): SessionOperator {
   return {
     name: view.name,
     code: view.code,
     orgName: view.orgName,
     roles: view.roles,
+    opcodes: Array.isArray(view.opcodes) ? view.opcodes : [],
     daysRemaining: typeof view.daysRemaining === 'number' ? view.daysRemaining : null,
   };
 }
 
-export const loadSession = createAsyncThunk<SessionView>('login/loadSession', async () => {
-  const finish = armStartupSession();
-  try {
-    const response = await fetch('/api/auth/session', { cache: 'no-store' });
-    const body = (await response.json()) as { result?: string };
-    const kind = passwordChangeKindFromDenial(response.status, body.result);
-    if (kind === 'expired') return { result: 'password-expired' };
-    if (kind === 'first-login') return { result: 'password-change-required' };
-    if (!response.ok) return { result: 'anonymous' };
-    return body as SessionView;
-  } finally {
-    finish?.();
-  }
-});
+function operatorOnly(payload: OperatorSession): OperatorSession {
+  return {
+    name: payload.name,
+    code: payload.code,
+    orgName: payload.orgName,
+    roles: payload.roles,
+    opcodes: Array.isArray(payload.opcodes) ? payload.opcodes : [],
+  };
+}
+
+/**
+ * 会话查询。refresh 为真表示已在使用中重新拉一次（收到 403 后），失败时保持现状；
+ * 否则是启动查询，失败时进入「暂时无法确认登录状态」。
+ */
+export const loadSession = createAsyncThunk<SessionView, { refresh?: boolean } | undefined>(
+  'login/loadSession',
+  async () => {
+    const finish = armStartupSession();
+    try {
+      const response = await fetch('/api/auth/session', { cache: 'no-store' });
+      const body = (await response.json()) as { result?: string; code?: string };
+      const kind = passwordChangeKindFromDenial(response.status, body.result);
+      if (kind === 'expired') return { result: 'password-expired' };
+      if (kind === 'first-login') return { result: 'password-change-required' };
+      if (!response.ok) throw new Error(`会话查询失败：HTTP ${response.status}`);
+      if (body.result === 'authenticated' && typeof body.code === 'string') {
+        return { ...(body as SessionView & { result: 'authenticated' }), expiryNoticeDismissed: readExpiryDismissed(body.code) };
+      }
+      return body as SessionView;
+    } finally {
+      finish?.();
+    }
+  },
+);
 
 export const submitLogin = createAsyncThunk<
   OperatorSession & { daysRemaining?: number | null },
@@ -150,6 +191,7 @@ export const submitLogin = createAsyncThunk<
   'login/submit',
   async (_, { getState, rejectWithValue }) => {
     const { phone, password, rememberMe } = getState().login;
+    forgetExpiryDismissed();
     const response = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -191,8 +233,19 @@ export const submitLogin = createAsyncThunk<
 );
 
 export const logout = createAsyncThunk('login/logout', async () => {
+  forgetExpiryDismissed();
   await fetch('/api/auth/logout', { method: 'POST' });
 });
+
+/** 关闭口令到期横幅，并记下：同一会话不再出现。 */
+export const closeExpiryNotice = createAsyncThunk<void, void, { state: { login: LoginState } }>(
+  'login/closeExpiryNotice',
+  async (_, { getState, dispatch }) => {
+    const code = getState().login.operator?.code;
+    if (code) rememberExpiryDismissed(code);
+    dispatch(dismissExpiryNotice());
+  },
+);
 
 type PasswordFailure =
   | { result: 'invalid-credential' }
@@ -279,22 +332,32 @@ const loginSlice = createSlice({
       state.operator = null;
       state.screen = 'default';
     },
+    /** 已登录时接口返回 401：会话已结束（P1）。 */
+    sessionEnded(state) {
+      if (state.phase !== 'authenticated') return;
+      state.phase = 'expired';
+      state.operator = null;
+      state.daysRemaining = null;
+      state.expiryNoticeDismissed = false;
+    },
+    /** 看过「会话已结束」后去登录页，登录后回到原页。 */
+    acknowledgeSessionEnd(state) {
+      if (state.phase !== 'expired') return;
+      state.phase = 'anonymous';
+      state.explicitLogout = false;
+    },
   },
   extraReducers: (builder) => {
     builder
       .addCase(loadSession.fulfilled, (state, action) => {
         if (action.payload.result === 'authenticated') {
+          const operator = operatorFrom(action.payload);
           state.phase = 'authenticated';
           state.passwordChangeKind = null;
-          state.operator = {
-            name: action.payload.name,
-            code: action.payload.code,
-            orgName: action.payload.orgName,
-            roles: action.payload.roles,
-          };
-          state.daysRemaining = typeof action.payload.daysRemaining === 'number'
-            ? action.payload.daysRemaining
-            : null;
+          state.operator = operatorOnly(operator);
+          state.daysRemaining = operator.daysRemaining;
+          state.expiryNoticeDismissed = state.expiryNoticeDismissed || action.payload.expiryNoticeDismissed === true;
+          state.explicitLogout = false;
           state.screen = 'default';
           return;
         }
@@ -311,19 +374,16 @@ const loginSlice = createSlice({
         state.daysRemaining = null;
         state.expiryNoticeDismissed = false;
       })
-      .addCase(loadSession.rejected, (state) => {
-        state.phase = 'anonymous';
+      .addCase(loadSession.rejected, (state, action) => {
+        if (action.meta.arg?.refresh) return;
+        state.phase = 'error';
         state.operator = null;
       })
       .addCase(submitLogin.fulfilled, (state, action) => {
         state.phase = 'authenticated';
         state.passwordChangeKind = null;
-        state.operator = {
-          name: action.payload.name,
-          code: action.payload.code,
-          orgName: action.payload.orgName,
-          roles: action.payload.roles,
-        };
+        state.operator = operatorOnly(action.payload);
+        state.explicitLogout = false;
         state.daysRemaining = action.payload.daysRemaining ?? null;
         state.expiryNoticeDismissed = false;
         state.screen = 'default';
@@ -357,12 +417,8 @@ const loginSlice = createSlice({
       .addCase(submitPassword.fulfilled, (state, action) => {
         state.phase = 'authenticated';
         state.passwordChangeKind = null;
-        state.operator = {
-          name: action.payload.name,
-          code: action.payload.code,
-          orgName: action.payload.orgName,
-          roles: action.payload.roles,
-        };
+        state.operator = operatorOnly(action.payload);
+        state.explicitLogout = false;
         state.daysRemaining = action.payload.daysRemaining ?? null;
         state.expiryNoticeDismissed = false;
         state.currentPassword = '';
@@ -400,6 +456,7 @@ const loginSlice = createSlice({
         state.currentPasswordRejected = false;
         state.daysRemaining = null;
         state.expiryNoticeDismissed = false;
+        state.explicitLogout = true;
       });
   },
 });
@@ -414,6 +471,8 @@ export const {
   setNewPassword,
   dismissExpiryNotice,
   enterPasswordChange,
+  sessionEnded,
+  acknowledgeSessionEnd,
 } = loginSlice.actions;
 
 export default loginSlice.reducer;
