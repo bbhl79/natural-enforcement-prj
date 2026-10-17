@@ -24,7 +24,8 @@ function quoted(roles: readonly string[]): string {
 }
 
 /**
- * 工作台（P1）。业务区内容由线索、案件等切片提供，这里只放壳层提示。
+ * 工作台（P1）。业务区内容由线索、案件等切片提供，这里只放壳层提示；
+ * 「我的待办」卡片照原型 P1-shell.html:23 原样保留占位文字，待业务切片替换。
  * 只有管理台入口、没有业务入口的人员直接进管理台首页。
  */
 export default function WorkbenchPage() {
@@ -51,8 +52,8 @@ export default function WorkbenchPage() {
       </div>
       {tip ? <div className="banner gray">{tip}</div> : null}
       <div className="card">
-        <div className="card-h">我的待办</div>
-        <div className="empty" style={{ padding: '28px 0' }}><div>暂无待办</div></div>
+        <div className="card-h">我的待办<span className="hint">业务区内容不在本样板范围，仅占位</span></div>
+        <div className="empty" style={{ padding: '28px 0' }}><div>业务工作台由线索、案件等切片提供</div></div>
       </div>
     </>
   );
