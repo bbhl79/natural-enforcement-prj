@@ -9,6 +9,9 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'org.unit.registered',
   'org.unit.renamed',
   'personnel.exported',
+  // 生产引导命令（#105「生产引导命令（D5）」，ADR 0013 第 3 条，#131）。所属机构写根机构。
+  'bootstrap.root-registered',
+  'bootstrap.admin-registered',
 ] as const;
 
 export const AUDIT_ACTIONS = [
