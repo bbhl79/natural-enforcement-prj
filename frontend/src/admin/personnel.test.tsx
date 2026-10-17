@@ -260,6 +260,11 @@ describe('新建人员（P6 create / createInvalid）', () => {
     expect(html.match(/data-rule=/g)).toHaveLength(7);
     expect(html).toContain('请当面或电话告知，不要通过群聊发送。');
     expect(html).toContain('不登记执法证也能建人员；未登记的人员不能启动核查、不能立案。');
+    // 原型 P6:51：执法证号、有效期至两个输入框，可留空，不是必填
+    expect(html).toContain('<label for="p-cert-no">执法证号</label>');
+    expect(html).toContain('placeholder="未登记可留空"');
+    expect(html).toContain('<label for="p-cert-expires">有效期至</label>');
+    expect(html).toContain('placeholder="年-月-日"');
     expect(html).toContain('<option value="ld">龙洞自然资源所</option>');
   });
 
@@ -333,6 +338,25 @@ describe('登记接口', () => {
     expect((await registerPersonnel(store.dispatch, input)) as Json).toMatchObject({ fields: { orgUnitId: '所选机构已停用，请选择在用的机构' } });
     serve(person(ADMIN), { '/api/admin/personnel': [403, { reason: 'scope-denied' }] });
     expect((await registerPersonnel(store.dispatch, input)) as Json).toMatchObject({ message: '你没有权限执行这个操作，或所选机构不在你的范围内。' });
+  });
+
+  it('执法证规则码落到执法证号、有效期两栏；请求体带两项', async () => {
+    const store = fresh();
+    const calls = serve(person(ADMIN), { '/api/admin/personnel': [400, { result: 'non-compliant', rules: ['cert-expires-on-required', 'cert-no-too-long'] }] });
+    await store.dispatch(loadSession());
+    const withCert = { ...input, certNo: 'GD-0001', certExpiresOn: '' };
+    expect(await registerPersonnel(store.dispatch, withCert)).toEqual({
+      ok: false,
+      fields: { certExpiresOn: '填了执法证号，请同时填写有效期', certNo: '执法证号不能超过 64 个字符' },
+      passwordRules: [],
+      message: null,
+    });
+    const post = calls.find((call) => call.url === '/api/admin/personnel');
+    expect(JSON.parse(String(post?.init?.body))).toMatchObject({ certNo: 'GD-0001', certExpiresOn: '' });
+    serve(person(ADMIN), { '/api/admin/personnel': [400, { result: 'non-compliant', rules: ['cert-no-required', 'cert-expires-on-invalid'] }] });
+    expect((await registerPersonnel(store.dispatch, withCert)) as Json).toMatchObject({
+      fields: { certNo: '填了有效期，请同时填写执法证号', certExpiresOn: '请按「年-月-日」填写有效的日期，如 2027-06-30' },
+    });
   });
 
   it('服务失败用定稿句（原型 assets/shell.js:62，同 #123）', async () => {

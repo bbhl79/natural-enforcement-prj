@@ -24,7 +24,7 @@ function Crumb() {
 }
 
 export const EMPTY_INPUT: RegisterInput = {
-  code: '', name: '', orgUnitId: '', mobilePhone: '', initialPassword: '', roles: [], posts: [],
+  code: '', name: '', orgUnitId: '', mobilePhone: '', initialPassword: '', roles: [], posts: [], certNo: '', certExpiresOn: '',
 };
 
 type Failure = Extract<RegisterResult, { ok: false }>;
@@ -152,7 +152,28 @@ export function PersonnelCreateForm({
             </div>
           </div>
           <div className="section-title">执法证（可稍后登记）</div>
-          {/* 执法证号、有效期的录入在人员卡片的执法证一段（#105 故事 54），随 #133 接入。 */}
+          {/* 原型 P6:51。可留空；要填须两项都填。变更与证件状态在卡片的执法证一段（#133）。 */}
+          <div className="form-row">
+            <label htmlFor="p-cert-no">执法证号</label>
+            <div>
+              <input id="p-cert-no" className="input" placeholder="未登记可留空" value={input.certNo} onChange={(e) => onInput({ ...input, certNo: e.target.value })} />
+              {hint('certNo', null)}
+            </div>
+          </div>
+          <div className="form-row">
+            <label htmlFor="p-cert-expires">有效期至</label>
+            <div>
+              <input
+                id="p-cert-expires"
+                className="input"
+                placeholder="年-月-日"
+                style={{ width: 200 }}
+                value={input.certExpiresOn}
+                onChange={(e) => onInput({ ...input, certExpiresOn: e.target.value })}
+              />
+              {hint('certExpiresOn', null)}
+            </div>
+          </div>
           <div className="banner gray">不登记执法证也能建人员；未登记的人员不能启动核查、不能立案。</div>
           <div className="actions">
             <Link className="btn" to="/admin/personnel">取消</Link>

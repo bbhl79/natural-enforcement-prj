@@ -242,9 +242,13 @@ export interface RegisterInput {
   initialPassword: string;
   roles: string[];
   posts: PersonnelPost[];
+  /** 执法证号、有效期至（YYYY-MM-DD），可留空（原型 P6:51） */
+  certNo: string;
+  certExpiresOn: string;
 }
 
-export type RegisterField = 'code' | 'name' | 'orgUnitId' | 'mobilePhone' | 'initialPassword' | 'roles' | 'posts';
+export type RegisterField =
+  | 'code' | 'name' | 'orgUnitId' | 'mobilePhone' | 'initialPassword' | 'roles' | 'posts' | 'certNo' | 'certExpiresOn';
 
 /** 字段规则码 → 字段与提示。口令策略的规则码另在右侧「初始口令要求」里标红。 */
 export const FIELD_RULES: Record<string, { field: RegisterField; text: string }> = {
@@ -259,6 +263,10 @@ export const FIELD_RULES: Record<string, { field: RegisterField; text: string }>
   'roles-required': { field: 'roles', text: '请至少选一个角色' },
   'role-unknown': { field: 'roles', text: '所选角色不在可选范围内，请刷新页面后重选' },
   'post-unknown': { field: 'posts', text: '所选岗位标记不在可选范围内，请刷新页面后重选' },
+  'cert-no-required': { field: 'certNo', text: '填了有效期，请同时填写执法证号' },
+  'cert-no-too-long': { field: 'certNo', text: '执法证号不能超过 64 个字符' },
+  'cert-expires-on-required': { field: 'certExpiresOn', text: '填了执法证号，请同时填写有效期' },
+  'cert-expires-on-invalid': { field: 'certExpiresOn', text: '请按「年-月-日」填写有效的日期，如 2027-06-30' },
 };
 
 /** 右侧「初始口令要求」七条，顺序与文案同改口令页。 */
