@@ -338,10 +338,11 @@ describe('POST /api/admin/personnel/export', () => {
   it('跨站请求被拒：外站 Origin 与 Sec-Fetch-Site: cross-site 都得 403，不写留痕', async () => {
     const cookie = await login(ADMIN_A_PHONE);
     const before = await snapshot();
-    for (const headers of [
+    const crossSite: Array<Record<string, string>> = [
       { origin: 'https://evil.example' },
       { 'sec-fetch-site': 'cross-site' },
-    ]) {
+    ];
+    for (const headers of crossSite) {
       const response = await exportFor(cookie, deptAId, headers);
       expect(response.status, JSON.stringify(headers)).toBe(403);
       expect(await response.text()).not.toContain('P-125-MEMBER');
