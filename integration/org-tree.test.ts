@@ -26,6 +26,7 @@ const PHONES = {
   clerk: '13800012305',
   supervisor: '13800012306',
   homeless: '13800012307',
+  remember: '13800012308',
 } as const;
 
 function newUlid(): string {
@@ -61,7 +62,7 @@ let seamUrl = '';
 const closers: Array<() => Promise<void>> = [];
 let passwordHash = '';
 const org = { hq: '', deptA: '', deptB: '', station: '', deactivated: '' };
-const people = { root: '', adminA: '', adminStation: '', intake: '', clerk: '', supervisor: '', homeless: '' };
+const people = { root: '', adminA: '', adminStation: '', intake: '', clerk: '', supervisor: '', homeless: '', remember: '' };
 
 type AuditRecord = {
   id: string;
@@ -239,6 +240,7 @@ beforeAll(async () => {
   people.homeless = await addPerson({
     code: 'P-123-NONE', phone: PHONES.homeless, orgUnitId: org.deptA, role: '系统管理', assign: false,
   });
+  people.remember = await addPerson({ code: 'P-123-RM', phone: PHONES.remember, orgUnitId: org.deptB, role: '系统管理' });
   baseUrl = await startApp();
   seamUrl = await startApp(failingFactory);
 }, 60_000);
@@ -364,6 +366,32 @@ describe('GET /api/org-units', () => {
     expect(added(before, await audits())).toEqual([]);
     const sameOrigin = await getTree(PHONES.root, { 'sec-fetch-site': 'same-origin' });
     expect(sameOrigin.status).toBe(200);
+  });
+
+  it('跨站读请求在识别身份之前被拒：无凭据、失效会话、记住我凭据、有效会话都不写留痕、不动会话与记住我凭据', async () => {
+    const login = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mobilePhone: PHONES.remember, password: PASSWORD, rememberMe: true }),
+    });
+    expect(login.status).toBe(200);
+    const remember = login.headers.getSetCookie().find((item) => item.startsWith('__Host-rm='))?.split(';')[0];
+    if (!remember) throw new Error('缺少记住我 Cookie');
+    const presented: Array<string | null> = [null, '__Host-sid=no-such-session', remember, await signIn(PHONES.root)];
+    const before = await audits();
+    const sessions = await cloned.prisma.authSession.findMany({ orderBy: { id: 'asc' } });
+    const remembered = await cloned.prisma.authRememberMe.findMany({ orderBy: { id: 'asc' } });
+    for (const cookie of presented) {
+      const response = await fetch(`${baseUrl}/api/org-units`, {
+        headers: { 'sec-fetch-site': 'cross-site', ...(cookie ? { cookie } : {}) },
+      });
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ result: 'cross-site' });
+      expect(response.headers.getSetCookie()).toEqual([]);
+    }
+    expect(added(before, await audits())).toEqual([]);
+    expect(await cloned.prisma.authSession.findMany({ orderBy: { id: 'asc' } })).toEqual(sessions);
+    expect(await cloned.prisma.authRememberMe.findMany({ orderBy: { id: 'asc' } })).toEqual(remembered);
   });
 });
 

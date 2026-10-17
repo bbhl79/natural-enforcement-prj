@@ -13,8 +13,11 @@ import {
   formerNames,
   loadOrgTree,
   namePeriods,
+  onlyRootOrgUnit,
   registerOrgUnit,
   treeCountHint,
+  treeKeyAction,
+  visibleOrder,
   type OrgTreeData,
   type OrgUnit,
 } from './orgTree';
@@ -126,6 +129,49 @@ describe('机构树纯函数', () => {
   });
 });
 
+describe('机构树键盘操作（PR #142 Copilot 意见 3）', () => {
+  const root = buildTree(TREE)!;
+  const order = visibleOrder(root, new Set());
+  const at = (id: string, open = true) => {
+    const node = TREE.orgUnits.find((item) => item.id === id)!;
+    const hasChildren = TREE.orgUnits.some((item) => item.parentId === id);
+    return { parentId: node.parentId, hasChildren, open: hasChildren && open, collapsible: node.parentId !== null };
+  };
+
+  it('看得见的节点顺序：折叠的节点不展开下级，根节点始终展开', () => {
+    expect(order).toEqual(['gz', 'th', 'sp', 'ws', 'hz', 'py']);
+    expect(visibleOrder(root, new Set(['th', 'gz']))).toEqual(['gz', 'th', 'hz', 'py']);
+  });
+
+  it('上下、首尾键移动选中；回车、空格选中当前节点', () => {
+    expect(treeKeyAction('ArrowDown', order, 'th', at('th'))).toEqual({ kind: 'select', id: 'sp' });
+    expect(treeKeyAction('ArrowUp', order, 'th', at('th'))).toEqual({ kind: 'select', id: 'gz' });
+    expect(treeKeyAction('ArrowUp', order, 'gz', at('gz'))).toBeNull();
+    expect(treeKeyAction('ArrowDown', order, 'py', at('py'))).toBeNull();
+    expect(treeKeyAction('Home', order, 'hz', at('hz'))).toEqual({ kind: 'select', id: 'gz' });
+    expect(treeKeyAction('End', order, 'th', at('th'))).toEqual({ kind: 'select', id: 'py' });
+    expect(treeKeyAction('Enter', order, 'hz', at('hz'))).toEqual({ kind: 'select', id: 'hz' });
+    expect(treeKeyAction(' ', order, 'hz', at('hz'))).toEqual({ kind: 'select', id: 'hz' });
+    expect(treeKeyAction('a', order, 'hz', at('hz'))).toBeNull();
+  });
+
+  it('右键展开或进入第一个下级，左键折叠或回到上级；根节点不折叠', () => {
+    expect(treeKeyAction('ArrowRight', order, 'th', at('th', false))).toEqual({ kind: 'toggle', id: 'th' });
+    expect(treeKeyAction('ArrowRight', order, 'th', at('th'))).toEqual({ kind: 'select', id: 'sp' });
+    expect(treeKeyAction('ArrowRight', order, 'sp', at('sp'))).toBeNull();
+    expect(treeKeyAction('ArrowLeft', order, 'th', at('th'))).toEqual({ kind: 'toggle', id: 'th' });
+    expect(treeKeyAction('ArrowLeft', order, 'sp', at('sp'))).toEqual({ kind: 'select', id: 'th' });
+    expect(treeKeyAction('ArrowLeft', order, 'gz', at('gz'))).toBeNull();
+  });
+
+  it('节点可以获得焦点：只有选中的节点在 Tab 序列里', () => {
+    const html = view(ADMIN, { selectedId: 'th' });
+    expect(html).toContain('role="tree" aria-label="机构树"');
+    expect(html).toMatch(/data-org-unit="th" role="treeitem" aria-selected="true" aria-expanded="true" tabindex="0"/);
+    expect(html).toMatch(/data-org-unit="gz" role="treeitem" aria-selected="false" aria-expanded="true" tabindex="-1"/);
+  });
+});
+
 describe('机构树界面（P4）', () => {
   it('expanded：全部展开，已停用节点标出，详情有在职人员、下级、调整隶属说明，无移动入口', () => {
     const html = view(ADMIN, { selectedId: 'th' });
@@ -165,6 +211,22 @@ describe('机构树界面（P4）', () => {
     expect(html).not.toContain('全部展开');
   });
 
+  it('区分局管理员反例：树里有根和区分局但还没有所时，不显示「请先建区分局」', () => {
+    const district = unit({ id: 'th', name: '天河区分局', level: 'district', parentId: 'gz' });
+    // 区分局管理员的子树：根是区分局（上级不在范围内），还没有所。
+    const ownSubtree: OrgTreeData = { rootId: 'th', orgUnits: [district] };
+    // 树里有根机构和区分局，区分局下还没有所。
+    const rootAndDistrict: OrgTreeData = { rootId: 'gz', orgUnits: [TREE.orgUnits[0]!, district] };
+    expect(onlyRootOrgUnit(ownSubtree)).toBe(false);
+    expect(onlyRootOrgUnit(rootAndDistrict)).toBe(false);
+    expect(onlyRootOrgUnit({ rootId: 'gz', orgUnits: [TREE.orgUnits[0]!] })).toBe(true);
+    for (const html of [view(ADMIN, {}, ownSubtree), view(ADMIN, { selectedId: 'th' }, rootAndDistrict)]) {
+      expect(html).toContain('天河区分局');
+      expect(html).not.toContain('请先建区分局');
+      expect(html).toContain('机构不能移动到其他上级下面。');
+    }
+  });
+
   it('所节点不能新建下级；已停用机构不能新建下级', () => {
     expect(view(ADMIN, { selectedId: 'sp' })).toContain('所下不能再建下级机构。');
     const off = view(ADMIN, { selectedId: 'py' });
@@ -187,6 +249,8 @@ describe('机构树界面（P4）', () => {
     expect(html).toMatch(/<input class="input ro" disabled="" value="天河区分局"\/>|<input class="input ro" value="天河区分局" disabled=""\/>/);
     expect(html).toContain('<option value="station" selected="">所</option>');
     expect(html).toContain('名称以编制批复为准。以后改名会保留历史名称。');
+    // 打开时焦点落在名称输入框（PR #142 Copilot 意见 4）。
+    expect(html).toContain('<input id="org-name" class="input" data-autofocus="true" value=""/>');
   });
 
   it('rename：显示历史名称及使用期间', () => {
@@ -194,6 +258,7 @@ describe('机构树界面（P4）', () => {
       <RenameDialog unit={TREE.orgUnits[1]!} onCancel={() => undefined} onSubmit={async () => ({ ok: true, id: 'x' })} />,
     );
     expect(html).toContain('改名：天河区分局');
+    expect(html).toContain('<input id="org-new-name" class="input" data-autofocus="true" value=""/>');
     expect(html).toContain('改名后，此前的案件、卷宗和记录仍显示当时的名称。');
     expect(html).toContain('<td>天河区分局</td><td>2019-03-01 至今</td>');
     expect(html).toContain('<td>天河区国土资源和规划分局</td><td>2015-06-01 至 2019-02-28</td>');
@@ -248,5 +313,17 @@ describe('机构页路由与接口', () => {
     expect(conflict).toEqual({ ok: false, rules: [], message: '上级机构已停用，不能在它下面新建机构。' });
     expect(calls[0]?.init?.method).toBe('POST');
     expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ parentId: 'py', name: '甲', level: 'station' });
+  });
+
+  it('写请求网络失败或服务出错：用定稿句（原型 shell.js:62）', async () => {
+    const store = fresh();
+    serve(person(ADMIN), { '/api/admin/org-units': [500, {}] });
+    await store.dispatch(loadSession());
+    const FINAL = '网络或服务暂时不可用，请稍后重试。问题持续时请联系本单位的系统管理人员。';
+    expect(await registerOrgUnit(store.dispatch, { parentId: 'gz', name: '甲', level: 'district' }))
+      .toEqual({ ok: false, rules: [], message: FINAL });
+    vi.stubGlobal('fetch', () => Promise.reject(new TypeError('network down')));
+    expect(await registerOrgUnit(store.dispatch, { parentId: 'gz', name: '甲', level: 'district' }))
+      .toEqual({ ok: false, rules: [], message: FINAL });
   });
 });
