@@ -55,7 +55,10 @@ export interface PersonnelAssignmentRow {
   endedAt: Date | null;
 }
 
-/** 导出留痕行（写入后不可变：库层触发器拒 UPDATE/DELETE，见迁移 0002_identity_org） */
+/**
+ * 导出留痕行（写入后不可变：库层触发器拒 UPDATE/DELETE，见迁移 0002_identity_org）。
+ * 冻结（ADR 0013，#125）：不再写入，端口没有写入方法；已有行只读可查。人员导出改写共用留痕表。
+ */
 export interface ExportAuditRow {
   id: string;
   actorId: string;
@@ -179,6 +182,21 @@ export interface IdentityStore {
   listActivePersonnelOfOrgUnit(orgUnitId: string): Promise<PersonnelRow[]>;
   findExportAuditById(id: string): Promise<ExportAuditRow | null>;
 
+  // 生产引导（#131）
+  /**
+   * 取引导的事务级咨询锁，事务结束时释放。必须在交互式事务里调用（已绑定事务的存储），
+   * 且作为事务的第一条语句。根客户端上调用抛错。
+   */
+  lockBootstrap(): Promise<void>;
+  /** 按编码找机构（含已停用）。 */
+  findOrgUnitByCode(code: string): Promise<OrgUnitRow | null>;
+  /** 按工号找人员（含已停用）。 */
+  findPersonnelByCode(code: string): Promise<PersonnelRow | null>;
+  /** 机构行数与人员行数（含已停用）。引导用它判断是否空库。 */
+  countOrgUnitsAndPersonnel(): Promise<{ orgUnits: number; personnel: number }>;
+  /** 未停用的同名角色 id；没有则 null。 */
+  findActiveRoleIdByName(name: string): Promise<string | null>;
+
   // 写入（只增/只失效；无删除路径）
   insertOrgUnit(input: OrgUnitToCreate): Promise<void>;
   insertOrgUnitNameVersion(row: OrgUnitNameVersionRow): Promise<void>;
@@ -209,5 +227,4 @@ export interface IdentityStore {
   closeAssignment(assignmentId: string, endedAt: Date): Promise<void>;
   /** 调岗三笔写入的唯一入口；实现必须放在同一数据库事务中（已绑定事务时用当前事务） */
   transferAssignment(transfer: AssignmentTransfer): Promise<void>;
-  insertExportAudit(row: ExportAuditRow): Promise<void>;
 }

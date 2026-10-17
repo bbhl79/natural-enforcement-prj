@@ -101,6 +101,7 @@ const EXPECTED_ALLOWANCES: Record<string, readonly string[]> = {
     'personnel.locked.read',
     'personnel.locked.release',
     'personnel.password.reset',
+    'personnel.profile.export',
     'audit.admin.read',
     'audit.admin.export',
     'authz.binding.submit',
