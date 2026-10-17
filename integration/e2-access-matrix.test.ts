@@ -546,7 +546,8 @@ describe('E2 机构与人员维护', () => {
     await personnel.transferPersonnel(auth(supAId), mover.id, deptBId);
     const assignments = await prisma.personnelAssignment.findMany({
       where: { personnelId: mover.id },
-      orderBy: { startedAt: 'asc' },
+      // 关止与新建可能落在同一毫秒，startedAt 相同时让已关止的那条排前。
+      orderBy: [{ startedAt: 'asc' }, { endedAt: { sort: 'asc', nulls: 'last' } }],
     });
     expect(assignments).toHaveLength(2);
     expect(assignments[0]!.endedAt).not.toBeNull();
