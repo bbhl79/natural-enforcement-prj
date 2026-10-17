@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<!--
+  管理台 HTML 样板 v0.3 · P6 人员卡片与新建人员（含执法证一段）
+  对应 issue：#83（创建、停用、恢复、重设口令、结束全部登录；入口放人员卡片危险操作区，wayfinder 3.4）；#85 / #70（执法证：证号＋有效期，空即未登记；无资格仍可登录但不能启动核查、立案、当主办或协办）；wayfinder D7（恢复同时重设初始口令；恢复前所在机构须未停用，否则拒绝并提示先调岗——v0.3 按 spec 5.4④ 改，G21）、D8（证件状态：有效、暂扣、注销，团队建议，待闸①）；#91 口令策略（10–64 位、四类至少三类等，提示文案取自 loginSlice.ts PASSWORD_RULE_TEXT）与 A10 自身操作被拒；#63（结束全部登录下一次请求生效）；#86（打开卡片记入操作记录）；ADR 0009 七个角色。
+  参照：S71/S50 表单行（120px 标签列）；login.css 配色与横幅。
+  状态见下方 STATES。许可（建议名，未进名册）：personnel.register / personnel.update / personnel.deactivate / personnel.restore / personnel.sessions.end / personnel.cert.update；已定名：personnel.password.reset
+-->
+<html lang="zh-CN"><head><meta charset="utf-8"><title>P6</title><link rel="stylesheet" href="assets/admin.css"><script src="assets/shell.js"></script></head><body><script>
+var S=NE.SESSIONS;
+var ROLES=['内勤','经办','法制审核','行政审核','行政审批','监督','系统管理'];
+var RULES=['口令至少 10 位','口令最多 64 位','大写、小写、数字、特殊字符中至少包含 3 类','不能包含 4 位及以上连续数字或字母','不能包含 4 位及以上重复字符','不能使用常见弱口令','不能包含本人工号'];
+function roleChecks(sel,dis){ return '<div class="checks">'+ROLES.map(function(r){return '<label><input type="checkbox" '+(sel.indexOf(r)>=0?'checked':'')+(dis?' disabled':'')+'> '+r+'</label>';}).join('')+'</div>'; }
+var CERT={
+  valid:{tag:'<span class="tag">有效</span>', no:'44010020210315', exp:'2028-05-31', st:'有效', note:'可以启动核查、立案，可以担任主办人或协办人。'},
+  none:{tag:'<span class="tag gray">未登记</span>', no:'', exp:'', st:'', note:'尚未登记执法证。可以登录和查看材料，但不能启动核查、不能立案、不能担任主办人或协办人。'},
+  expiring:{tag:'<span class="tag amber">30 天内到期</span>', no:'44010020210315', exp:'2026-11-08', st:'有效', note:'还有 22 天到期。到期后将不能启动核查、立案，请提醒本人按期换发。'},
+  expired:{tag:'<span class="tag red">已过期</span>', no:'44010020160412', exp:'2026-09-30', st:'有效', note:'已于 2026-09-30 过期。可以登录和查看材料，但不能启动核查、不能立案、不能担任主办人或协办人。换发后请登记新证。'},
+  suspended:{tag:'<span class="tag red">暂扣</span>', no:'44010020210315', exp:'2028-05-31', st:'暂扣', note:'执法证被暂扣期间，不能启动核查、不能立案、不能担任主办人或协办人。恢复后请把证件状态改回「有效」。'}
+};
+function certBlock(c,edit){
+  var x=CERT[c];
+  if(edit) return '<div class="section-title">执法证</div><div class="form-row"><label>执法证号</label><div><input class="input" value="44010020260917"><div class="help">按证件原样填写。一人一证。</div></div></div><div class="form-row"><label>有效期至</label><input class="input" value="2031-09-16" style="width:200px"></div><div class="form-row"><label>证件状态</label><select class="select" style="width:200px"><option>有效</option><option>暂扣</option><option>注销</option></select></div><div class="banner gray">换发新证时直接改为新证号和新有效期。只能逐条人工登记，请对照实物证件核对。</div><div class="actions"><button class="btn">取消</button><button class="btn btn-primary">保存执法证</button></div>';
+  var tone = (c==='valid')?'gray':(c==='expiring'||c==='none')?'amber':'danger';
+  return '<div class="section-title">执法证 '+x.tag+'</div><div class="kv"><div class="k">执法证号</div><div>'+(x.no||'—')+'</div><div class="k">有效期至</div><div>'+(x.exp||'—')+'</div><div class="k">证件状态</div><div>'+(x.st||'—')+'</div></div><div class="banner '+tone+'" style="margin-top:10px">'+x.note+'</div><button class="btn btn-sm" data-requires="personnel.cert.update">'+(c==='none'?'登记执法证':'变更执法证')+'</button>';
+}
+function card(o){
+  o=o||{};
+  var off=o.off;
+  var left='<div class="card"><div class="card-h">'+(o.name||'陈晓宁')+(off?'<span class="tag gray">已停用</span>':'<span class="tag">在职</span>')+'<span class="hint">打开人员详情会留痕</span></div>'+
+   (o.edit?'<div class="form-row"><label>工号</label><input class="input ro" value="TH0315" disabled></div><div class="form-row"><label>姓名<span class="req">*</span></label><input class="input" value="陈晓宁"></div><div class="form-row"><label>手机号<span class="req">*</span></label><div><input class="input" value="13800005521"><div class="help">手机号用于登录，全系统不能重复。</div></div></div><div class="form-row"><label>角色<span class="req">*</span></label><div>'+roleChecks(['经办','法制审核'])+'<div class="help">至少保留一个角色。角色变化在对方下一次操作时生效，不用重新登录。</div></div></div><div class="actions"><button class="btn">取消</button><button class="btn btn-primary">保存</button></div>'
+   :'<div class="kv"><div class="k">工号</div><div class="mono">'+(o.code||'TH0315')+'</div><div class="k">姓名</div><div>'+(o.name||'陈晓宁')+'</div><div class="k">手机号</div><div>138****5521 <button class="link-btn" style="font-size:12px">显示完整号码</button></div><div class="k">当前机构</div><div>'+(o.org||'天河区分局石牌自然资源所')+'</div><div class="k">角色</div><div>'+(o.roles||'经办')+'</div><div class="k">口令</div><div>'+(off?'—':'已改过初始口令（2026-09-02）')+'</div></div><div class="actions" style="margin-top:12px"><button class="btn btn-sm" data-requires="personnel.update"'+(off?' disabled':'')+'>编辑姓名、手机号、角色</button></div>')+
+   (o.edit?'':certBlock(o.cert||'valid',o.certEdit))+'</div>';
+  var self=o.self;
+  var right='<div class="card"><div class="card-h">需谨慎的操作</div><div class="danger-zone">'+
+   (off?'<div class="row"><div>调岗<div class="help">原机构已停用时，须先调到在用机构再恢复</div></div><button class="btn btn-sm" data-requires="personnel.update">调岗</button></div><div class="row"><div>恢复人员<div class="help">恢复后需用新的初始口令登录</div></div><button class="btn btn-sm btn-primary" data-requires="personnel.restore">恢复</button></div>'
+   :'<div class="row"><div>调岗<div class="help">新机构的数据范围下一次操作即生效</div></div><button class="btn btn-sm" data-requires="personnel.update"'+(self?' disabled':'')+'>调岗</button></div>'+
+    '<div class="row"><div>重设初始口令<div class="help">同时解锁，并结束对方全部会话</div></div><button class="btn btn-sm btn-ghost-danger" data-requires="personnel.password.reset"'+(self?' disabled':'')+'>重设</button></div>'+
+    '<div class="row"><div>结束全部会话<div class="help">对方的全部会话在下一次操作时结束</div></div><button class="btn btn-sm btn-ghost-danger" data-requires="personnel.sessions.end"'+(self?' disabled':'')+'>结束</button></div>'+
+    '<div class="row"><div>停用人员<div class="help">停用后不能登录，记录照常保留</div></div><button class="btn btn-sm btn-ghost-danger" data-requires="personnel.deactivate"'+(self?' disabled':'')+'>停用</button></div>')+
+   '</div>'+(self?'<div class="banner amber" style="margin-top:10px;margin-bottom:0">这是你本人。不能给自己调岗、重设口令、结束会话或停用，请找本单位其他系统管理人员办理。</div>':'')+'</div>';
+  return '<div class="grid2">'+left+right+'</div>';
+}
+function head(t){ return '<div class="crumb">管理台 / 人员 / <b>'+t+'</b></div>'; }
+function createForm(bad){
+  return head('新建人员')+'<div class="page-h"><div><h1>新建人员</h1><div class="desc">带 <span class="req">*</span> 的为必填。执法证可以稍后登记。</div></div></div>'+
+  (bad?'<div class="banner danger">还有 3 处需要修改，改好后再保存。</div>':'')+
+  '<div class="grid2"><div class="card"><div class="form-row"><label>工号<span class="req">*</span></label><input class="input" value="TH0360"></div><div class="form-row"><label>姓名<span class="req">*</span></label><input class="input" value="'+(bad?'':'邓雅')+'">'+(bad?'<div></div><div class="err" style="grid-column:2">请填写姓名</div>':'')+'</div>'+
+  '<div class="form-row"><label>手机号<span class="req">*</span></label><div><input class="input" value="13900007788"><div class="'+(bad?'err':'help')+'">'+(bad?'这个手机号已被其他人员使用，请核对':'用于登录，全系统不能重复')+'</div></div></div>'+
+  '<div class="form-row"><label>任职机构<span class="req">*</span></label><div><select class="select"><option>龙洞自然资源所</option></select><div class="help">只能选你任职机构及其下级</div></div></div>'+
+  '<div class="form-row"><label>角色<span class="req">*</span></label><div>'+roleChecks(['经办'])+'<div class="help">至少选一个，可多选</div></div></div>'+
+  '<div class="form-row"><label>初始口令<span class="req">*</span></label><div><input class="input" type="text" value="'+(bad?'Th0360abc':'')+'" placeholder="请输入新的初始口令"><div class="help">对方首次登录时必须改掉初始口令。请当面或电话告知，不要通过群聊发送。</div></div></div>'+
+  '<div class="section-title">执法证（可稍后登记）</div><div class="form-row"><label>执法证号</label><input class="input" placeholder="未登记可留空"></div><div class="form-row"><label>有效期至</label><input class="input" placeholder="年-月-日" style="width:200px"></div><div class="banner gray">不登记执法证也能建人员；未登记的人员不能启动核查、不能立案。</div>'+
+  '<div class="actions"><a class="btn" href="P5-personnel-list.html">取消</a><button class="btn btn-primary">保存</button></div></div>'+
+  '<div class="card"><div class="card-h">初始口令要求</div><ul style="margin-left:18px;line-height:1.9">'+RULES.map(function(r,i){var miss=bad&&(i===0||i===6);return '<li style="color:'+(miss?'var(--danger)':'inherit')+'">'+r+(miss?'（未满足）':'')+'</li>';}).join('')+'</ul></div></div>';
+}
+var D=NE.dialog;
+NE.mount({title:'P6 人员卡片', active:'person', states:{
+  view:{label:'默认（执法证有效）'}, create:{label:'新建人员'}, createInvalid:{label:'新建：填写有误'}, edit:{label:'编辑姓名手机号角色'}, transfer:{label:'调岗'},
+  deactivate:{label:'停用确认'}, restore:{label:'恢复确认（已停用的人）'}, restoreDenied:{label:'恢复被拒：原机构已停用'}, resetpw:{label:'重设初始口令'}, endsessions:{label:'结束全部会话'}, self:{label:'对自己操作（阻止）'},
+  certNone:{label:'执法证：未登记'}, certExpiring:{label:'执法证：临期'}, certExpired:{label:'执法证：已过期'}, certSuspended:{label:'执法证：暂扣'}, certEdit:{label:'执法证：登记/变更'},
+  loading:{label:'加载中'}, error:{label:'加载失败'}, denied:{label:'权限不足（监督）'}},
+ render:function(k){
+  var s=S.distAdmin, h=head('陈晓宁'), ov='';
+  if(k==='create') return {session:s, html:createForm(false)};
+  if(k==='createInvalid') return {session:s, html:createForm(true)};
+  if(k==='loading') return {session:s, html:h+'<div class="grid2">'+NE.skelRows(8)+NE.skelRows(4)+'</div>'};
+  if(k==='error') return {session:s, html:h+NE.errorCard('人员详情')};
+  if(k==='denied') return {session:S.supervisor, html:head('人员详情')+'<div class="card"><div class="empty"><div class="t">你没有查看人员详情的权限</div><div>监督可以在「管理台留痕」里查阅人员维护的留痕。</div><div style="margin-top:14px"><a class="btn btn-primary" href="P8-admin-audit.html?state=supervise">去看留痕</a></div></div></div>'};
+  var body;
+  if(k==='self') body=card({self:1,name:'何静',code:'TH0102',org:'天河区分局',roles:'经办、系统管理'}), h=head('何静');
+  else if(k==='restore') body=card({off:1,name:'冯晨',code:'TH0290',org:'龙洞自然资源所',cert:'none'}), h=head('冯晨');
+  else if(k==='restoreDenied') body=card({off:1,name:'冯晨',code:'TH0290',org:'五山自然资源所（已停用）',cert:'none'}), h=head('冯晨');
+  else if(k==='edit') body=card({edit:1});
+  else body=card({cert:{certNone:'none',certExpiring:'expiring',certExpired:'expired',certSuspended:'suspended',certEdit:'valid'}[k]||'valid', certEdit:k==='certEdit'});
+  if(k==='transfer') ov=D('调岗：陈晓宁','<div class="form-row"><label>现机构</label><input class="input ro" value="天河区分局石牌自然资源所" disabled></div><div class="form-row"><label>调入机构<span class="req">*</span></label><div><select class="select"><option>海珠区分局南华自然资源所</option></select><div class="help">调入机构不限于本区。</div></div></div><ul><li>对方下一次操作起，只能看到新机构范围内的线索和案件；</li><li>对方经手的历史记录不变。</li></ul>','<button class="btn">取消</button><button class="btn btn-primary">确认调岗</button>');
+  if(k==='deactivate') ov=D('停用「陈晓宁」？','<ul><li>对方的全部会话会在下一次操作时结束，之后不能再登录；</li><li>对方经手的线索、案件和记录照常保留；</li><li>以后可以恢复，恢复时需要重设初始口令。</li></ul>','<button class="btn">取消</button><button class="btn btn-danger">确认停用</button>');
+  if(k==='restore') ov=D('恢复「冯晨」？','<div class="kv" style="margin-bottom:12px"><div class="k">所在机构</div><div>龙洞自然资源所（在用）</div></div><div class="form-row"><label>新的初始口令<span class="req">*</span></label><div><input class="input" placeholder="请输入新的初始口令"><div class="help">恢复后对方首次登录必须改掉这个口令。</div></div></div>','<button class="btn">取消</button><button class="btn btn-primary">确认恢复</button>');
+  if(k==='restoreDenied') ov=D('暂时不能恢复「冯晨」','<div class="banner amber" data-reason="org-deactivated">冯晨所在的机构「五山自然资源所」已停用，不能直接恢复。</div><p>请先把冯晨调岗到一个在用的机构，再回来恢复。</p>','<button class="btn">知道了</button><button class="btn btn-primary">先调岗</button>');
+  if(k==='resetpw') ov=D('为「陈晓宁」重设初始口令','<div class="form-row"><label>新的初始口令<span class="req">*</span></label><div><input class="input" placeholder="请输入新的初始口令"><div class="help">要求同新建人员：至少 10 位，大写、小写、数字、特殊字符中至少 3 类，不能包含对方工号等。</div></div></div><p>确认后：</p><ul><li>如对方正被锁定，会同时解锁；</li><li>对方的全部会话都会结束；</li><li>对方下次登录必须先改口令。</li></ul>','<button class="btn">取消</button><button class="btn btn-danger">确认重设</button>');
+  if(k==='endsessions') ov=D('结束「陈晓宁」的全部会话？','<p>适用于怀疑口令泄露、设备丢失等情况。</p><ul><li>对方的全部会话和全部「记住我」，会在下一次操作时结束；</li><li>对方可以用原口令重新登录。如怀疑口令泄露，请改用「重设初始口令」。</li></ul>','<button class="btn">取消</button><button class="btn btn-danger">确认结束</button>');
+  return {session:s, html:h+body, overlay:ov};
+ }});
+</script></body></html>

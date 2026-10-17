@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<!--
+  管理台 HTML 样板 v0.4 · P1 应用壳（顶栏 + 左导 + 业务区/管理台区）
+  对应 issue：#79 第 2 问（同一个壳分两区，团队建议 A）、第 3 问（菜单按会话返回的许可裁剪，团队建议 B，待定）；#80（不展示连通状态）；#91 页面路径约定（401 回登录）；ADR 0009 七个角色。
+  参照：frontend/src/login/login.css（配色、字体、横幅）；tmp/d2d-prototypes S01-workbench（52px 顶栏 + 196px 左导）。
+  状态：?state=multi|single|noadmin|loading|expired|error
+  菜单项所需许可写在 data-requires 上；org.* / personnel.*（除 locked/password）为 wayfinder 3.3/3.4 建议名，尚未进名册。
+-->
+<html lang="zh-CN"><head><meta charset="utf-8"><title>P1</title><link rel="stylesheet" href="assets/admin.css"><script src="assets/shell.js"></script></head><body><script>
+var S=NE.SESSIONS;
+NE.mount({title:'P1 应用壳', active:'home', states:{
+  multi:{label:'多角色（经办＋系统管理）'}, single:{label:'单角色（经办）'}, noadmin:{label:'没有任何管理权（内勤）'},
+  loading:{label:'加载中'}, expired:{label:'会话已结束'}, error:{label:'会话查询失败'}},
+ render:function(k){
+  if(k==='loading') return {loading:true, html:'<div class="center-page"><div class="center-box"><p>正在确认登录状态…</p></div></div>'};
+  if(k==='error') return {session:null, bare:true, html:'<div class="center-page"><div class="center-box"><h2>暂时无法确认登录状态</h2><p>网络或服务暂时不可用。请稍后刷新页面重试。</p><button class="btn btn-primary">刷新</button></div></div>'};
+  if(k==='expired') return {session:null, bare:true, html:'<div class="center-page"><div class="center-box"><h2>会话已结束</h2><p>你已较长时间未操作，或会话已被结束。即将前往登录页，重新登录后回到刚才的页面。</p><a class="btn btn-primary" href="#" data-route="/auth/login?next=/admin/personnel">去登录</a></div></div>'};
+  var s = k==='single'?S.handler : k==='noadmin'?S.clerk : S.distAdmin;
+  var adminTip = k==='multi'
+    ? '<div class="banner gray">你同时担任「经办」和「系统管理」。左侧「业务办理」和「管理台」两区都可进入，不用换一个登录标识重新登录。</div>'
+    : '<div class="banner gray">左侧只显示你当前角色可用的入口。你的角色不含管理权，所以没有「管理台」一区。</div>';
+  return {session:s, html:'<div class="crumb"><b>工作台</b></div><div class="page-h"><div><h1>工作台</h1><div class="desc">'+s.org+' · '+s.roles.join('、')+'</div></div></div>'+adminTip+
+   '<div class="card"><div class="card-h">我的待办<span class="hint">业务区内容不在本样板范围，仅占位</span></div><div class="empty" style="padding:28px 0"><div>业务工作台由线索、案件等切片提供</div></div></div>'};
+ }});
+</script></body></html>

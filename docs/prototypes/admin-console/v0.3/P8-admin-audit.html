@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<!--
+  管理台 HTML 样板 v0.3 · P8 管理台操作记录（审计查阅与导出）
+  对应 issue：#86 / ADR 0007（系统管理与监督都可查阅和导出其数据范围内的全部管理台审计；有所属机构时按对象所属机构过滤；写工号、动作、时间、成败，不写登录标识与执法证号）；#83 评论（监督可查阅人员维护动作的审计）；#89 / wayfinder 3.8（无机构锚点的条目视同根机构，只有数据范围含根机构的人能看到）；#91 用户故事 69（谁在何时解锁或重设了谁的口令）、ADR 0011/0012（共用留痕）；wayfinder 第 4 节（导出留痕表与 AuditTrail 合流待定）。
+  参照：S01/S71 表格与筛选条；login.css 配色。
+  v0.2 起新增：认证与会话类事件（v0.3 类别名由「登录」改为「认证与会话」）（登录成功、登录失败、被锁定、结束会话）与人员查阅类事件（打开人员详情），依据 #86 决议（监督可查认证与授权拒绝、人员查阅）、#91 用户故事 67–71、74、75；两类都可在「操作类别」筛选（v0.3：页面名改为「管理台留痕」），并出现在默认列表里。
+  状态：?state=admin|login|view|supervise|noanchor|exportConfirm|exportDone|empty|loading|error|denied
+  许可（已定名）：audit.admin.read / audit.admin.export。动作原文（account.unlocked 等）只放 data-action。
+-->
+<html lang="zh-CN"><head><meta charset="utf-8"><title>P8</title><link rel="stylesheet" href="assets/admin.css"><script src="assets/shell.js"></script></head><body><script>
+var S=NE.SESSIONS;
+var R=[
+ ['2026-10-17 09:48','TH0102','account.unlocked','解锁','人员 TH0331','龙洞自然资源所','成功'],
+ ['2026-10-17 09:41','TH0102','account.password-reset','重设初始口令','人员 TH0322','石牌自然资源所','成功'],
+ ['2026-10-17 09:30','HZ0101','authz.denied','解锁','人员 TH0331','龙洞自然资源所','被拒绝：超出管理范围'],
+ ['2026-10-17 09:12','TH0102','personnel.cert.updated','变更执法证','人员 TH0340','龙洞自然资源所','成功'],
+ ['2026-10-17 08:55','HZ0101','personnel.registered','新建人员','人员 HZ0233','南华自然资源所','成功'],
+ ['2026-10-16 17:20','SJ0001','org.unit.renamed','机构改名','天河区分局','天河区分局','成功'],
+ ['2026-10-16 16:05','SJ0001','org.unit.deactivated','停用机构','五山自然资源所','五山自然资源所','成功'],
+ ['2026-10-16 15:40','SJ0001','admin.audit.exported','导出管理台留痕','2026-10-01 至 2026-10-15','广州市规划和自然资源局','成功']];
+var LG=[
+ ['2026-10-17 09:52','TH0315','login.succeeded','登录','人员 TH0315','石牌自然资源所','成功'],
+ ['2026-10-17 09:47','TH0331','login.locked','登录','人员 TH0331','龙洞自然资源所','失败：连续输错口令，已锁定'],
+ ['2026-10-17 09:46','TH0331','login.failed','登录','人员 TH0331','龙洞自然资源所','失败：口令不正确'],
+ ['2026-10-17 09:20','—','login.failed','登录','未对上人员','','失败：未对上人员'],
+ ['2026-10-17 09:05','TH0322','session.ended','结束会话','人员 TH0322','石牌自然资源所','系统管理人员重设口令后结束'],
+ ['2026-10-17 08:40','TH0201','session.ended','结束会话','人员 TH0201','天河区分局','空闲超过 30 分钟']];
+var VW=[
+ ['2026-10-17 09:50','TH0102','personnel.viewed','打开人员详情','人员 TH0315','石牌自然资源所','成功'],
+ ['2026-10-17 09:44','TH0102','personnel.viewed','打开人员详情','人员 TH0322','石牌自然资源所','成功'],
+ ['2026-10-17 09:10','TH0102','personnel.viewed','打开人员详情','人员 TH0340','龙洞自然资源所','成功']];
+var NA=[['2026-10-16 11:02','SJ0001','account.unlocked','解锁','人员 PY0042','',"成功"],['2026-10-15 09:30','—','bootstrap','建立首个系统管理人员','人员 SJ0001','','成功']];
+function table(rows){
+  return '<table class="table"><tr><th>时间</th><th>操作人工号</th><th>操作</th><th>对象</th><th>所属机构</th><th>结果</th></tr>'+rows.map(function(r){
+   var org=r[5]===''?'<span class="tag gray">无所属机构</span>':r[5];
+   var res=r[2]==='session.ended'?'<span class="tag gray">'+r[6]+'</span>':r[6]==='成功'?'<span class="tag">成功</span>':'<span class="tag red">'+r[6]+'</span>';
+   return '<tr data-action="'+r[2]+'"><td>'+r[0]+'</td><td class="mono">'+r[1]+'</td><td>'+r[3]+'</td><td>'+r[4]+'</td><td>'+org+'</td><td>'+res+'</td></tr>';}).join('')+'</table>';
+}
+var CATS=['全部操作','认证与会话','人员查阅','人员维护','机构维护','解锁与重设口令','执法证','导出'];
+function catSel(cat){ return '<select class="select" data-filter="category">'+CATS.map(function(c){return '<option'+(c===(cat||'全部操作')?' selected':'')+'>'+c+'</option>';}).join('')+'</select>'; }
+function filters(cat){ return '<div class="filters"><input class="input" value="2026-10-16 至 2026-10-17">'+catSel(cat)+'<input class="input" placeholder="操作人工号"><select class="select"><option>结果：全部</option></select><button class="btn">查询</button></div>'; }
+var NOTE='<div class="help" style="margin-top:8px">留痕写入后不能更改。只写工号，不写手机号和执法证号。</div>';
+NE.mount({title:'P8 管理台留痕', active:'audit', states:{
+  admin:{label:'系统管理视角'}, login:{label:'筛选：认证与会话'}, view:{label:'筛选：人员查阅'}, supervise:{label:'监督视角（按范围过滤）'}, noanchor:{label:'无所属机构的条目'}, exportConfirm:{label:'导出确认'}, exportDone:{label:'导出完成'}, empty:{label:'空'}, loading:{label:'加载中'}, error:{label:'加载失败'}, denied:{label:'权限不足'}},
+ render:function(k){
+  var head=function(desc){return '<div class="crumb">管理台 / <b>管理台留痕</b></div><div class="page-h"><div><h1>管理台留痕</h1><div class="desc">'+desc+'</div></div><div class="actions"><button class="btn btn-primary" data-requires="audit.admin.export">导出</button></div></div>';};
+  var dAdmin='你任职机构及其下级范围内的机构维护、人员维护、执法证、解锁与重设口令、导出等记录。';
+  if(k==='denied') return {session:S.handler, html:'<div class="crumb">管理台 / <b>管理台留痕</b></div>'+NE.deniedCard('管理台留痕')};
+  if(k==='loading') return {session:S.cityAdmin, html:head(dAdmin)+filters()+NE.skelRows(8)};
+  if(k==='error') return {session:S.cityAdmin, html:head(dAdmin)+filters()+NE.errorCard('留痕')};
+  if(k==='empty') return {session:S.distSupervisor, html:head('海珠区分局及其下级范围内的管理台留痕。')+filters()+'<div class="card"><div class="empty"><div class="t">所选时间内没有留痕</div><div>可以放宽时间范围或清空筛选再试。</div></div></div>'};
+  if(k==='supervise') return {session:S.distSupervisor, html:head('海珠区分局及其下级范围内的管理台留痕。按被操作对象所属机构筛选。')+
+    '<div class="banner gray">你任职在海珠区分局，只能看到对象属于海珠区分局及其下级的记录。不属于任何机构的记录（如全市共用的配置类对象，例如工作日历）只有市局任职的人员能看到。</div>'+filters()+'<div class="card"><div class="card-h">共 4 条</div>'+table([VW[0].slice(0,1).concat(['HZ0101','personnel.viewed','打开人员详情','人员 HZ0233','南华自然资源所','成功']),['2026-10-17 08:31','HZ0233','login.succeeded','登录','人员 HZ0233','南华自然资源所','成功'],R[4],['2026-10-16 14:10','HZ0101','personnel.deactivated','停用人员','人员 HZ0188','赤岗自然资源所','成功']])+NOTE+'</div>'};
+  var rows=[R[0],LG[0],VW[0],LG[1],R[1],LG[3],R[2],VW[1],R[3],LG[4],R[4],R[5]].sort(function(x,y){return x[0]<y[0]?1:-1;}), ov='', banner='';
+  if(k==='login') return {session:S.cityAdmin, html:head(dAdmin)+filters('认证与会话')+'<div class="card"><div class="card-h">共 '+LG.length+' 条<span class="hint">操作类别：认证与会话（含登录的成功与失败、被锁定、结束会话）</span></div>'+table(LG)+NOTE+'</div>'};
+  if(k==='view') return {session:S.cityAdmin, html:head(dAdmin)+filters('人员查阅')+'<div class="card"><div class="card-h">共 '+VW.length+' 条<span class="hint">操作类别：人员查阅（打开人员详情）</span></div>'+table(VW)+NOTE+'</div>'};
+  if(k==='noanchor'){ rows=NA.concat(R.slice(0,3)); banner='<div class="banner gray">标有「无所属机构」的记录，对象不属于任何机构（例如没有任职的人员、系统首次建立系统管理人员）。这类记录视同属于市局，只有市局任职的系统管理和监督能看到。</div>'; }
+  if(k==='exportConfirm') ov=NE.dialog('导出管理台留痕','<div class="kv"><div class="k">范围</div><div>广州市规划和自然资源局及全部下级</div><div class="k">时间</div><div>2026-10-16 至 2026-10-17</div><div class="k">筛选</div><div>全部操作</div><div class="k">文件名</div><div>管理台留痕_20261016-20261017.xlsx</div><div class="k">条数</div><div>46 条</div><div class="k">格式</div><div>表格文件（.xlsx）</div></div><ul style="margin-top:10px"><li>导出内容与页面一致，只含工号，不含手机号和执法证号；</li><li>本次导出本身也会留痕。</li></ul>','<button class="btn">取消</button><button class="btn btn-primary">确认导出</button>');
+  if(k==='exportDone') banner='<div class="banner ok">已导出 46 条留痕，文件「管理台留痕_20261016-20261017.xlsx」已开始下载。本次导出已留痕。</div>';
+  return {session:S.cityAdmin, html:head(dAdmin)+banner+filters()+'<div class="card"><div class="card-h">共 '+(k==='noanchor'?75:73)+' 条<span class="hint">第 1 页</span></div>'+table(rows)+NOTE+'</div>', overlay:ov};
+ }});
+</script></body></html>

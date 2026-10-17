@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<!--
+  管理台 HTML 样板 v0.3 · P4 机构树维护
+  对应 issue：#81（组织维护动作集：新建下级、改名、停用；树查询按数据范围返回整棵子树，含已停用并标出）；wayfinder 3.3 D3（一期不移动机构：无拖拽、无移动按钮）、D4（停用前提：没有在职人员、没有未停用的下级机构）、名称版本化（改名保留历史名称，#16）；#84（危险操作确认）。
+  参照：S74-org-role（树 + 右侧详情的布局）；login.css 配色。
+  状态：?state=expanded|collapsed|onlyroot|create|rename|blocked|confirm|loading|error|denied
+  许可（建议名，未进名册）：org.tree.read / org.unit.register / org.unit.rename / org.unit.deactivate
+-->
+<html lang="zh-CN"><head><meta charset="utf-8"><title>P4</title><link rel="stylesheet" href="assets/admin.css"><script src="assets/shell.js"></script></head><body><script>
+var S=NE.SESSIONS;
+var T={n:'广州市规划和自然资源局',c:[{n:'天河区分局',sel:1,c:[{n:'石牌自然资源所'},{n:'五山自然资源所',off:1},{n:'龙洞自然资源所'}]},{n:'海珠区分局',c:[{n:'南华自然资源所'},{n:'赤岗自然资源所'}]},{n:'越秀区分局',c:[]},{n:'番禺区分局（旧）',off:1,c:[]}]};
+function tree(t,collapsed,depth){
+  var kids=t.c||[], open=!collapsed||depth===0;
+  var h='<li><div class="node'+(t.sel?' sel':'')+(t.off?' off':'')+'"><span class="tg">'+(kids.length?(open?'▾':'▸'):'')+'</span><span class="nm">'+t.n+'</span>'+(t.off?'<span class="tag gray">已停用</span>':'')+(kids.length&&!open?'<span class="help" style="margin:0">'+kids.length+' 个下级</span>':'')+'</div>';
+  if(kids.length&&open) h+='<ul>'+kids.map(function(x){return tree(x,collapsed,depth+1);}).join('')+'</ul>';
+  return h+'</li>';
+}
+function detail(only){
+  if(only) return '<div class="card"><div class="card-h">广州市规划和自然资源局<span class="tag">根机构</span></div><div class="kv"><div class="k">上级机构</div><div>无（根机构）</div><div class="k">状态</div><div>启用</div><div class="k">在职人员</div><div>1 人</div><div class="k">下级机构</div><div>无</div></div><div class="actions" style="margin-top:14px"><button class="btn btn-primary" data-requires="org.unit.register">新建下级机构</button><button class="btn" data-requires="org.unit.rename">改名</button></div><div class="help" style="margin-top:10px">根机构不能停用。</div></div>';
+  return '<div class="card"><div class="card-h">天河区分局<span class="tag">启用</span></div><div class="kv"><div class="k">上级机构</div><div>广州市规划和自然资源局</div><div class="k">在职人员</div><div>46 人</div><div class="k">下级机构</div><div>3 个（其中 1 个已停用）</div><div class="k">历史名称</div><div>天河区国土资源和规划分局<br><span class="help">2019-03-01 前使用</span></div></div>'+
+   '<div class="actions" style="margin-top:14px"><button class="btn btn-primary" data-requires="org.unit.register">新建下级机构</button><button class="btn" data-requires="org.unit.rename">改名</button><button class="btn btn-ghost-danger" data-requires="org.unit.deactivate">停用</button></div>'+
+   '<div class="banner gray" style="margin-top:12px;margin-bottom:0">机构不能移动到其他上级下面。需要调整隶属时：新建机构，把人员调岗过去，再停用旧机构。</div></div>';
+}
+NE.mount({title:'P4 机构', active:'org', states:{
+  expanded:{label:'默认（全部展开）'}, collapsed:{label:'折叠'}, onlyroot:{label:'空（只有根机构）'}, create:{label:'新建下级'}, rename:{label:'改名（显示历史名称）'}, blocked:{label:'停用条件未齐'}, confirm:{label:'停用确认'}, loading:{label:'加载中'}, error:{label:'加载失败'}, denied:{label:'权限不足'}},
+ render:function(k){
+  var head='<div class="crumb">管理台 / <b>机构</b></div><div class="page-h"><div><h1>机构</h1><div class="desc">显示你任职机构及其全部下级，已停用的机构也会列出并标明。</div></div></div>';
+  if(k==='loading') return {session:S.cityAdmin, html:head+'<div class="grid2">'+NE.skelRows(8)+NE.skelRows(5)+'</div>'};
+  if(k==='error') return {session:S.cityAdmin, html:head+NE.errorCard('机构树')};
+  if(k==='denied') return {session:S.supervisor, html:'<div class="crumb">管理台 / <b>机构</b></div>'+NE.deniedCard('机构')};
+  var only=k==='onlyroot';
+  var t= only ? {n:'广州市规划和自然资源局',sel:1,c:[]} : T;
+  var left='<div class="card"><div class="card-h">机构树<span class="hint">'+(only?'1 个机构':'11 个机构，2 个已停用')+'</span></div>'+(only?'':'<div class="filters"><button class="btn btn-sm">全部展开</button><button class="btn btn-sm">全部折叠</button><label class="checks" style="padding:0"><input type="checkbox" checked> 显示已停用</label></div>')+'<ul class="tree">'+tree(t,k==='collapsed',0)+'</ul>'+(only?'<div class="banner gray" style="margin-top:12px">还没有下级机构。请先建区分局，再在区分局下建所。</div>':'')+'</div>';
+  var ov='';
+  if(k==='create') ov=NE.dialog('在「天河区分局」下新建机构','<div class="form-row"><label>上级机构</label><input class="input ro" value="天河区分局" disabled></div><div class="form-row"><label>机构名称<span class="req">*</span></label><div><input class="input" value="长兴自然资源所"><div class="help">名称以编制批复为准。以后改名会保留历史名称。</div></div></div>','<button class="btn">取消</button><button class="btn btn-primary">新建</button>');
+  if(k==='rename') ov=NE.dialog('改名：天河区分局','<div class="form-row"><label>现名称</label><input class="input ro" value="天河区分局" disabled></div><div class="form-row"><label>新名称<span class="req">*</span></label><div><input class="input" value="天河区规划和自然资源分局"><div class="help">改名后，此前的案件、卷宗和记录仍显示当时的名称。</div></div></div><div class="section-title">历史名称</div><table class="table"><tr><th>名称</th><th>使用期间</th></tr><tr><td>天河区分局</td><td>2019-03-01 至今</td></tr><tr><td>天河区国土资源和规划分局</td><td>2015-06-01 至 2019-02-28</td></tr></table>','<button class="btn">取消</button><button class="btn btn-primary">确认改名</button>');
+  if(k==='blocked') ov=NE.dialog('暂时不能停用「天河区分局」','<div class="banner amber" style="margin-bottom:8px">停用机构前，需要先满足以下条件：</div><ul><li>还有 <b>46 名</b>在职人员：请先把他们调岗到其他机构，或停用相应人员。<a href="P5-personnel-list.html">查看人员</a></li><li>还有 <b>2 个</b>未停用的下级机构（石牌自然资源所、龙洞自然资源所）：请先停用下级机构。</li></ul>','<button class="btn btn-primary">知道了</button>');
+  if(k==='confirm') ov=NE.dialog('停用「五山自然资源所」？','<p>停用后：</p><ul><li>不能再在这个机构下建人员或下级机构；</li><li>业务办理时不能再选它作为承办机构；</li><li>历史记录照常保留，仍显示这个机构名称；</li><li>一期不提供撤销停用，请确认后再操作。</li></ul><div class="banner gray" style="margin-top:10px;margin-bottom:0">已核对：没有在职人员，没有未停用的下级机构。</div>','<button class="btn">取消</button><button class="btn btn-danger">确认停用</button>');
+  return {session:S.cityAdmin, html:head+'<div class="grid2">'+left+detail(only)+'</div>', overlay:ov};
+ }});
+</script></body></html>

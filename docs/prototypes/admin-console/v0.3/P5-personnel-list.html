@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<!--
+  管理台 HTML 样板 v0.3 · P5 人员列表
+  对应 issue：#83（人员与登录凭据管理；作用域＝操作者任职机构子树，wayfinder 3.4 第 3 问建议）；#86（监督看不到人员列表；含登录标识和执法证号的列表要留痕）；#85 / #70（执法证状态：证号空或有效期早于今天即无资格）；ADR 0009 七个角色。
+  参照：S01/S71 表格密度；login.css 配色。
+  状态：?state=district|filtered|empty|loading|error|denied
+  列表不显示手机号与执法证号（设计假设 A5），只显示证件情况。
+-->
+<html lang="zh-CN"><head><meta charset="utf-8"><title>P5</title><link rel="stylesheet" href="assets/admin.css"><script src="assets/shell.js"></script></head><body><script>
+var S=NE.SESSIONS;
+var ROWS=[
+ ['TH0102','何静','天河区分局','经办、系统管理','<span class="tag">有效</span>','在职'],
+ ['TH0201','黄志远','天河区分局','内勤','<span class="tag gray">未登记</span>','在职'],
+ ['TH0315','陈晓宁','石牌自然资源所','经办','<span class="tag">有效</span>','在职'],
+ ['TH0322','李伟','石牌自然资源所','经办','<span class="tag amber">30 天内到期</span>','在职'],
+ ['TH0331','王芳','龙洞自然资源所','经办','<span class="tag red">已过期</span>','在职'],
+ ['TH0340','赵磊','龙洞自然资源所','经办','<span class="tag red">暂扣</span>','在职'],
+ ['TH0410','孙丽','天河区分局','法制审核','<span class="tag">有效</span>','在职'],
+ ['TH0501','吴刚','天河区分局','行政审核','<span class="tag">有效</span>','在职'],
+ ['TH0601','郭明','天河区分局','行政审批','<span class="tag">有效</span>','在职'],
+ ['TH0350','刘洋','龙洞自然资源所','经办','<span class="tag gray">未登记</span>','在职'],
+ ['TH0290','冯晨','五山自然资源所','经办','<span class="tag gray">未登记</span>','已停用']];
+function table(rows){
+  return '<table class="table"><tr><th>工号</th><th>姓名</th><th>当前机构</th><th>角色</th><th>执法证</th><th>状态</th><th></th></tr>'+rows.map(function(r){
+   return '<tr class="'+(r[5]==='已停用'?'off':'')+'"><td class="mono">'+r[0]+'</td><td>'+r[1]+'</td><td>'+r[2]+'</td><td>'+r[3]+'</td><td>'+r[4]+'</td><td>'+(r[5]==='已停用'?'<span class="tag gray">已停用</span>':'在职')+'</td><td><a class="btn btn-sm" href="P6-personnel-card.html">查看</a></td></tr>';}).join('')+'</table>';
+}
+function filters(f){ return '<div class="filters"><input class="input" placeholder="工号或姓名" value="'+(f?'':'')+'"><select class="select"><option>'+(f?'龙洞自然资源所':'全部机构（含下级）')+'</option></select><select class="select"><option>'+(f?'经办':'全部角色')+'</option></select><select class="select"><option>'+(f?'需处理（过期、暂扣、未登记、临期）':'执法证：全部')+'</option></select><label class="checks" style="padding:0"><input type="checkbox" '+(f?'':'checked')+'> 含已停用人员</label></div>'; }
+NE.mount({title:'P5 人员', active:'person', states:{
+  district:{label:'默认（本区列表，含已停用）'}, filtered:{label:'筛选'}, empty:{label:'空（筛选无结果）'}, loading:{label:'加载中'}, error:{label:'加载失败'}, denied:{label:'权限不足（监督）'}},
+ render:function(k){
+  var head='<div class="crumb">管理台 / <b>人员</b></div><div class="page-h"><div><h1>人员</h1><div class="desc">天河区分局及下级机构的人员。打开人员详情会留痕。</div></div><div class="actions"><a class="btn btn-primary" href="P6-personnel-card.html?state=create" data-requires="personnel.register">新建人员</a></div></div>';
+  if(k==='denied') return {session:S.supervisor, html:'<div class="crumb">管理台 / <b>人员</b></div><div class="card"><div class="empty"><div class="t">你没有查看人员名单的权限</div><div>监督可以在「管理台留痕」里查阅人员维护的留痕，但不能打开人员名单和人员详情。</div><div style="margin-top:14px"><a class="btn btn-primary" href="P8-admin-audit.html?state=supervise">去看留痕</a></div></div></div>'};
+  if(k==='loading') return {session:S.distAdmin, html:head+filters()+NE.skelRows(9)};
+  if(k==='error') return {session:S.distAdmin, html:head+filters()+NE.errorCard('人员名单')};
+  if(k==='empty') return {session:S.distAdmin, html:head+'<div class="filters"><input class="input" value="张三丰"><select class="select"><option>全部机构（含下级）</option></select><select class="select"><option>全部角色</option></select><select class="select"><option>执法证：全部</option></select><label class="checks" style="padding:0"><input type="checkbox" checked> 含已停用人员</label></div><div class="card"><div class="empty"><div class="t">没有符合条件的人员</div><div>换个关键词或清空筛选条件再试。要找的人如果还没建，可以新建。</div><div style="margin-top:14px"><button class="btn">清空筛选</button> <a class="btn btn-primary" href="P6-personnel-card.html?state=create">新建人员</a></div></div></div>'};
+  if(k==='filtered') return {session:S.distAdmin, html:head+filters(true)+'<div class="card"><div class="card-h">共 3 人<span class="hint">筛选：龙洞自然资源所 · 经办 · 执法证需处理</span></div>'+table([ROWS[4],ROWS[5],ROWS[9]])+'</div>'};
+  return {session:S.distAdmin, html:head+filters()+'<div class="card"><div class="card-h">共 47 人<span class="hint">其中 1 人已停用 · 第 1 页</span></div>'+table(ROWS)+'</div>'};
+ }});
+</script></body></html>
