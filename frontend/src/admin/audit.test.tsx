@@ -298,7 +298,7 @@ describe('导出（P8 exportConfirm / exportDone）', () => {
     expect(outcome).toMatchObject({ kind: 'exported', count: 46, filename: '管理台留痕_20261016-20261017.xlsx' });
   });
 
-  it('导出接口：403 → 无权导出；400 → 不合规；网络错误 → 未完成', async () => {
+  it('导出接口：403 → 无权导出；400 → 不合规；网络错误或文件内容读取中断 → 未完成', async () => {
     const store = fresh();
     serve(person(['系统管理'], ADMIN), { '/api/admin/audit/export': [403, { reason: 'permission-denied' }] });
     await store.dispatch(loadSession());
@@ -306,6 +306,10 @@ describe('导出（P8 exportConfirm / exportDone）', () => {
     serve(person(['系统管理'], ADMIN), { '/api/admin/audit/export': [400, { result: 'non-compliant', rules: ['invalid-filter'] }] });
     expect(await exportAudit(store.dispatch, filter)).toEqual({ kind: 'non-compliant', rules: ['invalid-filter'] });
     vi.stubGlobal('fetch', () => Promise.reject(new TypeError('network')));
+    expect(await exportAudit(store.dispatch, filter)).toEqual({ kind: 'failed' });
+    // 响应头已到、文件内容读到一半断开：也是未完成，确认框不会卡在「正在导出…」
+    const broken = new ReadableStream<Uint8Array>({ start(controller) { controller.error(new TypeError('aborted')); } });
+    vi.stubGlobal('fetch', () => Promise.resolve(new Response(broken, { status: 200, headers: { 'x-item-count': '3' } })));
     expect(await exportAudit(store.dispatch, filter)).toEqual({ kind: 'failed' });
   });
 });

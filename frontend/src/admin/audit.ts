@@ -218,7 +218,13 @@ export async function exportAudit(dispatch: ApiDispatch, filter: AuditFilter): P
   if (response.status === 403) return { kind: 'denied' };
   if (response.status === 400) return { kind: 'non-compliant', rules: await rulesOf(response) };
   if (!response.ok) return { kind: 'failed' };
-  const file = await response.blob();
+  let file: Blob;
+  try {
+    file = await response.blob();
+  } catch {
+    // 响应头到了、文件内容传到一半断开
+    return { kind: 'failed' };
+  }
   const counted = Number(response.headers.get('x-item-count'));
   return {
     kind: 'exported',
