@@ -286,6 +286,32 @@ export class PrismaIdentityStore implements IdentityStore {
     return this.prisma.exportAudit.findUnique({ where: { id } });
   }
 
+  async lockBootstrap(): Promise<void> {
+    if (this.root) throw new Error('引导咨询锁须在交互式事务里取得');
+    // 事务级咨询锁（#131）。键由固定字符串派生，与其他咨询锁不相撞。
+    await this.prisma.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('natural-enforcement:identity:bootstrap', 0))::text AS locked`;
+  }
+
+  async findOrgUnitByCode(code: string): Promise<OrgUnitRow | null> {
+    const row = await this.prisma.orgUnit.findUnique({ where: { code } });
+    return row ? toOrgUnitRow(row) : null;
+  }
+
+  findPersonnelByCode(code: string): Promise<PersonnelRow | null> {
+    return this.prisma.personnel.findUnique({ where: { code } });
+  }
+
+  async countOrgUnitsAndPersonnel(): Promise<{ orgUnits: number; personnel: number }> {
+    const orgUnits = await this.prisma.orgUnit.count();
+    const personnel = await this.prisma.personnel.count();
+    return { orgUnits, personnel };
+  }
+
+  async findActiveRoleIdByName(name: string): Promise<string | null> {
+    const row = await this.prisma.role.findFirst({ where: { name, deactivatedAt: null }, orderBy: { id: 'asc' } });
+    return row?.id ?? null;
+  }
+
   async insertOrgUnit(input: OrgUnitToCreate): Promise<void> {
     await this.prisma.orgUnit.create({ data: input });
   }

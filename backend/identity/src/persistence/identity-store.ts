@@ -182,6 +182,21 @@ export interface IdentityStore {
   listActivePersonnelOfOrgUnit(orgUnitId: string): Promise<PersonnelRow[]>;
   findExportAuditById(id: string): Promise<ExportAuditRow | null>;
 
+  // 生产引导（#131）
+  /**
+   * 取引导的事务级咨询锁，事务结束时释放。必须在交互式事务里调用（已绑定事务的存储），
+   * 且作为事务的第一条语句。根客户端上调用抛错。
+   */
+  lockBootstrap(): Promise<void>;
+  /** 按编码找机构（含已停用）。 */
+  findOrgUnitByCode(code: string): Promise<OrgUnitRow | null>;
+  /** 按工号找人员（含已停用）。 */
+  findPersonnelByCode(code: string): Promise<PersonnelRow | null>;
+  /** 机构行数与人员行数（含已停用）。引导用它判断是否空库。 */
+  countOrgUnitsAndPersonnel(): Promise<{ orgUnits: number; personnel: number }>;
+  /** 未停用的同名角色 id；没有则 null。 */
+  findActiveRoleIdByName(name: string): Promise<string | null>;
+
   // 写入（只增/只失效；无删除路径）
   insertOrgUnit(input: OrgUnitToCreate): Promise<void>;
   insertOrgUnitNameVersion(row: OrgUnitNameVersionRow): Promise<void>;
