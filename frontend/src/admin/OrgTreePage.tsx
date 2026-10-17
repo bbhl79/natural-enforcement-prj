@@ -1,4 +1,4 @@
-import { Suspense, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Await, useAsyncError, useLoaderData, useRevalidator } from 'react-router';
 
 import { useAppDispatch, useAppSelector } from '../hooks';
@@ -11,10 +11,13 @@ import {
   LEVEL_LABEL,
   LEVELS,
   namePeriods,
+  onlyRootOrgUnit,
   registerOrgUnit,
   renameOrgUnit,
   RULE_TEXT,
   treeCountHint,
+  treeKeyAction,
+  visibleOrder,
   type OrgRuleCode,
   type OrgTreeData,
   type OrgTreeNode,
@@ -88,12 +91,14 @@ function TreeNodeView({
   ui,
   onSelect,
   onToggle,
+  onKey,
 }: {
   node: OrgTreeNode;
   depth: number;
   ui: OrgTreeUi;
   onSelect: (id: string) => void;
   onToggle: (id: string) => void;
+  onKey: (event: KeyboardEvent<HTMLDivElement>, node: OrgTreeNode, depth: number, open: boolean) => void;
 }) {
   const { unit, children } = node;
   const open = depth === 0 || !ui.collapsed.has(unit.id);
@@ -108,10 +113,13 @@ function TreeNodeView({
         role="treeitem"
         aria-selected={ui.selectedId === unit.id}
         aria-expanded={children.length > 0 ? open : undefined}
+        tabIndex={ui.selectedId === unit.id ? 0 : -1}
         onClick={() => onSelect(unit.id)}
+        onKeyDown={(event) => onKey(event, node, depth, open)}
       >
         <span
           className="tg"
+          aria-hidden="true"
           onClick={(event) => {
             if (children.length === 0 || depth === 0) return;
             event.stopPropagation();
@@ -127,7 +135,7 @@ function TreeNodeView({
       {children.length > 0 && open ? (
         <ul role="group">
           {children.map((child) => (
-            <TreeNodeView key={child.unit.id} node={child} depth={depth + 1} ui={ui} onSelect={onSelect} onToggle={onToggle} />
+            <TreeNodeView key={child.unit.id} node={child} depth={depth + 1} ui={ui} onSelect={onSelect} onToggle={onToggle} onKey={onKey} />
           ))}
         </ul>
       ) : null}
@@ -150,7 +158,7 @@ function Detail({
 }) {
   const parent = tree.orgUnits.find((item) => item.id === unit.parentId) ?? null;
   const isRoot = unit.parentId === null;
-  const onlyRoot = tree.orgUnits.length === 1;
+  const onlyRoot = onlyRootOrgUnit(tree);
   const former = formerNames(unit.names);
   const childLevel = childLevelOf(unit.level);
   const createBlocked = unit.deactivatedAt
@@ -221,10 +229,42 @@ function RuleErrors({ rules, only }: { rules: readonly OrgRuleCode[]; only: read
   return <>{shown.map((rule) => <div key={rule} className="err">{RULE_TEXT[rule]}</div>)}</>;
 }
 
+/** 弹窗里能拿到焦点的元素（不含禁用的）。 */
+const FOCUSABLE = 'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+
+/**
+ * 弹窗（P4 create、rename）。打开时焦点移到标了 data-autofocus 的输入框（没有时取第一个可聚焦元素），
+ * Tab、Shift+Tab 在弹窗内循环，不落到背景；关闭时焦点回到打开弹窗前的元素（通常是触发按钮）。
+ */
 function Modal({ title, children, foot }: { title: string; children: ReactNode; foot: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const box = ref.current;
+    (box?.querySelector<HTMLElement>('[data-autofocus]') ?? box?.querySelector<HTMLElement>(FOCUSABLE))?.focus();
+    return () => {
+      if (opener?.isConnected) opener.focus();
+    };
+  }, []);
+  const trapTab = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Tab' || !ref.current) return;
+    const items = Array.from(ref.current.querySelectorAll<HTMLElement>(FOCUSABLE));
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (!first || !last) return;
+    const current = document.activeElement;
+    const inside = current instanceof Node && ref.current.contains(current);
+    if (event.shiftKey && (current === first || !inside)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (current === last || !inside)) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
   return (
     <div className="mask">
-      <div className="dialog" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="dialog" role="dialog" aria-modal="true" aria-label={title} ref={ref} onKeyDown={trapTab}>
         <h3>{title}</h3>
         {children}
         <div className="foot">{foot}</div>
@@ -280,7 +320,7 @@ export function CreateDialog({
       <div className="form-row">
         <label htmlFor="org-name">机构名称<span className="req">*</span></label>
         <div>
-          <input id="org-name" className="input" value={name} onChange={(event) => setName(event.target.value)} />
+          <input id="org-name" className="input" data-autofocus value={name} onChange={(event) => setName(event.target.value)} />
           <div className="help">名称以编制批复为准。以后改名会保留历史名称。</div>
           <RuleErrors rules={failure.rules} only={['org-name-required', 'org-name-too-long']} />
         </div>
@@ -325,7 +365,7 @@ export function RenameDialog({
       <div className="form-row">
         <label htmlFor="org-new-name">新名称<span className="req">*</span></label>
         <div>
-          <input id="org-new-name" className="input" value={name} onChange={(event) => setName(event.target.value)} />
+          <input id="org-new-name" className="input" data-autofocus value={name} onChange={(event) => setName(event.target.value)} />
           <div className="help">改名后，此前的案件、卷宗和记录仍显示当时的名称。</div>
           <RuleErrors rules={failure.rules} only={['org-name-required', 'org-name-too-long']} />
         </div>
@@ -376,14 +416,39 @@ export function OrgTreeView({
   onRename: (unit: OrgUnit, name: string) => Promise<OrgWriteResult>;
 }) {
   const root = buildTree(tree, ui.showDeactivated);
+  const selectedId = tree.orgUnits.find((unit) => unit.id === ui.selectedId)?.id ?? root?.unit.id ?? null;
+  // 键盘移动选中后把焦点跟到新节点上（单选树的「游走焦点」：只有选中的节点在 Tab 序列里）。
+  const treeRef = useRef<HTMLUListElement>(null);
+  const focusAfterKey = useRef(false);
+  useEffect(() => {
+    if (!focusAfterKey.current || selectedId === null) return;
+    focusAfterKey.current = false;
+    treeRef.current?.querySelector<HTMLElement>(`[data-org-unit="${CSS.escape(selectedId)}"]`)?.focus();
+  }, [selectedId]);
   if (!root) return <ErrorCard what="机构树" onRetry={() => window.location.reload()} />;
-  const onlyRoot = tree.orgUnits.length === 1;
+  const onlyRoot = onlyRootOrgUnit(tree);
   const selected = tree.orgUnits.find((unit) => unit.id === ui.selectedId) ?? root.unit;
   const toggle = (id: string) => {
     const next = new Set(ui.collapsed);
     if (next.has(id)) next.delete(id);
     else next.add(id);
     onUi({ ...ui, collapsed: next });
+  };
+  const onKey = (event: KeyboardEvent<HTMLDivElement>, node: OrgTreeNode, depth: number, open: boolean) => {
+    const action = treeKeyAction(event.key, visibleOrder(root, ui.collapsed), node.unit.id, {
+      parentId: node.unit.parentId,
+      hasChildren: node.children.length > 0,
+      open,
+      collapsible: depth > 0,
+    });
+    if (!action) return;
+    event.preventDefault();
+    if (action.kind === 'toggle') {
+      toggle(action.id);
+      return;
+    }
+    focusAfterKey.current = true;
+    onUi({ ...ui, selectedId: action.id });
   };
   return (
     <>
@@ -404,13 +469,14 @@ export function OrgTreeView({
               </label>
             </div>
           )}
-          <ul className="tree" role="tree">
+          <ul className="tree" role="tree" aria-label="机构树" ref={treeRef}>
             <TreeNodeView
               node={root}
               depth={0}
               ui={{ ...ui, selectedId: selected.id }}
               onSelect={(id) => onUi({ ...ui, selectedId: id })}
               onToggle={toggle}
+              onKey={onKey}
             />
           </ul>
           {onlyRoot ? <div className="banner gray" style={{ marginTop: 12 }}>还没有下级机构。请先建区分局，再在区分局下建所。</div> : null}
