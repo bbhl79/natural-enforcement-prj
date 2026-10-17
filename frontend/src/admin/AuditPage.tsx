@@ -12,6 +12,7 @@ import {
   exportAudit,
   exportFilename,
   filterSummary,
+  hasUnanchoredObject,
   OUTCOME_OPTIONS,
   rangeText,
   RULE_MESSAGES,
@@ -220,7 +221,7 @@ export function AuditContent(props: AuditContentProps) {
       ) : null}
       {exportState.phase === 'failed' ? <div className="banner danger">{exportState.message}</div> : null}
       {supervise && !scope.includesUnanchored && !empty ? <div className="banner gray">{superviseBanner(scope.orgName)}</div> : null}
-      {rows.some((row) => !row.anchored) ? <div className="banner gray">{NO_ANCHOR_BANNER}</div> : null}
+      {hasUnanchoredObject(rows) ? <div className="banner gray">{NO_ANCHOR_BANNER}</div> : null}
       <Filters filter={filter} />
       {empty ? (
         <div className="card">
@@ -233,7 +234,8 @@ export function AuditContent(props: AuditContentProps) {
         <div className="card">
           <div className="card-h">
             {`共 ${total} 条`}
-            {hint ? <span className="hint">{hint}</span> : null}
+            {/* 原型：选了类别写类别说明；系统管理视角未选类别写「第 1 页」（本票一次列出全部行，只有一页） */}
+            {hint ? <span className="hint">{hint}</span> : supervise ? null : <span className="hint">第 1 页</span>}
           </div>
           <AuditTable rows={rows} />
           <div className="help" style={{ marginTop: 8 }}>{NOTE}</div>

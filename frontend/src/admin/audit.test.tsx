@@ -113,7 +113,7 @@ describe('筛选条件', () => {
 });
 
 describe('管理台留痕页（P8）', () => {
-  it('系统管理：按查询串 POST 查阅；表格、无所属机构标记与说明、导出按钮', async () => {
+  it('系统管理：按查询串 POST 查阅；表格、无所属机构标记、「第 1 页」、导出按钮；只有未对上人员的行时不出说明条', async () => {
     const calls = serve(person(['系统管理'], ADMIN, '广州市规划和自然资源局'), {
       '/api/admin/audit/query': listed([
         row('A'),
@@ -133,16 +133,30 @@ describe('管理台留痕页（P8）', () => {
     expect(html).toContain('你任职机构及其下级范围内的机构维护、人员维护、执法证、解锁与重设口令、导出等记录。');
     expect(html).toContain('data-requires="audit.admin.export"');
     expect(html).toContain('value="2026-10-16 至 2026-10-17"');
-    expect(html).toContain('共 4 条');
+    expect(html).toContain('共 4 条<span class="hint">第 1 页</span>');
     expect(html).toContain('<tr data-action="account.unlocked"><td>2026-10-17 09:48</td><td class="mono">TH0102</td><td>解锁</td><td>人员 TH0331</td><td>龙洞自然资源所</td><td><span class="tag">成功</span></td></tr>');
     expect(html).toContain('<span class="tag red">被拒绝：超出数据范围</span>');
     expect(html).toContain('<span class="tag gray">空闲超过 30 分钟</span>');
     expect(html).toContain('<td><span class="tag gray">无所属机构</span></td>');
-    expect(html).toContain('标有「无所属机构」的记录，对象不属于任何机构（例如没有任职的人员）。');
+    // 原型 admin 态也有未对上人员的行，不放「无所属机构」说明条（只在 noanchor 态出现）
+    expect(html).not.toContain('标有「无所属机构」');
     expect(html).toContain('留痕写入后不能更改。只写工号，不写手机号和执法证号。');
     expect(html).not.toContain('你任职在');
     expect(html).not.toContain('class="mask"');
     expect(html.match(/<tr data-action=/g)).toHaveLength(4);
+  });
+
+  it('对象不属于任何机构的行（noanchor）：出「无所属机构」说明条；根机构一行原样显示服务端给的名称', async () => {
+    serve(person(['系统管理'], ADMIN, '广州市规划和自然资源局'), {
+      '/api/admin/audit/query': listed([
+        row('N1', { object: '人员 PY0042', orgName: '无所属机构', anchored: false }),
+        row('N2', { action: 'bootstrap.admin-registered', actorCode: '—', operation: '建立首个系统管理人员', object: '人员 SJ0001', orgName: '广州市规划和自然资源局（根机构）' }),
+      ], { orgUnitId: 'HQ', orgName: '广州市规划和自然资源局', includesUnanchored: true }),
+    });
+    const { html } = await renderSettled('/admin/audit');
+    expect(html).toContain('<div class="banner gray">标有「无所属机构」的记录，对象不属于任何机构（例如没有任职的人员）。这类记录视同属于市局，只有市局任职的系统管理和监督能看到。</div>');
+    expect(html).toContain('<td>广州市规划和自然资源局（根机构）</td>');
+    expect(html).toContain('共 2 条<span class="hint">第 1 页</span>');
   });
 
   it('可见文字里没有动作原文：动作只放 data-action，兜底行写中文通用说法', async () => {
@@ -161,9 +175,10 @@ describe('管理台留痕页（P8）', () => {
     expect(text).toContain('<td>其他操作</td>');
   });
 
-  it('区监督：说明与范围横幅带任职机构；不出无所属机构说明', async () => {
+  it('区监督：说明与范围横幅带任职机构；不出无所属机构说明，也不写「第 1 页」', async () => {
     serve(person(['监督'], SUPERVISE), { '/api/admin/audit/query': listed([row('A')]) });
     const { html } = await renderSettled('/admin/audit');
+    expect(html).not.toContain('第 1 页');
     expect(html).toContain('海珠区分局及其下级范围内的管理台留痕。按被操作对象所属机构筛选。');
     expect(html).toContain('你任职在海珠区分局，只能看到对象属于海珠区分局及其下级的记录。不属于任何机构的记录（如全市共用的配置类对象，例如工作日历）只有市局任职的人员能看到。');
     expect(html).not.toContain('标有「无所属机构」');
@@ -183,6 +198,7 @@ describe('管理台留痕页（P8）', () => {
     });
     expect(html).toContain('<option value="auth-session" selected="">认证与会话</option>');
     expect(html).toContain('<option value="succeeded" selected="">结果：成功</option>');
+    expect(html).not.toContain('第 1 页');
     expect(html).toContain('<span class="hint">操作类别：认证与会话（含登录的成功与失败、被锁定、结束会话）</span>');
     const view = await renderSettled('/admin/audit?category=personnel-view');
     expect(view.html).toContain('<span class="hint">操作类别：人员查阅（打开人员详情）</span>');

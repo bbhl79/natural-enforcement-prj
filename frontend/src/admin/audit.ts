@@ -73,6 +73,14 @@ export interface AuditRow {
   tone: 'ok' | 'gray' | 'red';
 }
 
+/**
+ * 列表里有「对象不属于任何机构」的行（原型 noanchor 态）：说明条只在这时出现。
+ * 未对上人员的登录失败也没有所属机构，但它没有对象，原型 admin、login 两态不放说明条。
+ */
+export function hasUnanchoredObject(rows: readonly AuditRow[]): boolean {
+  return rows.some((row) => !row.anchored && row.action !== 'login.failed');
+}
+
 export interface AuditScope {
   orgUnitId: string;
   orgName: string;

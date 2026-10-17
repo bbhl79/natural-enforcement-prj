@@ -110,6 +110,8 @@ export const UNKNOWN_OPERATION = '其他操作';
 /** 对照表里没有的失败或拒绝原因：只写「失败」「被拒绝」，不写原因码（工程稿，随 v0.5 定稿）。 */
 export const UNKNOWN_FAILED = '失败';
 export const UNKNOWN_DENIED = '被拒绝';
+/** 根机构的所属机构名后缀（原型 v0.4 G34）。 */
+export const ROOT_SUFFIX = '（根机构）';
 
 const SHANGHAI_MINUTE = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Shanghai',
@@ -175,12 +177,15 @@ function resultOf(record: AuditTrailRecord): { result: string; tone: AuditTone }
   return { result: UNKNOWN_FAILED, tone: 'red' };
 }
 
+const BOOTSTRAP_ACTIONS = new Set(['bootstrap.root-registered', 'bootstrap.admin-registered']);
+
 /** 所属机构名称：与 org_unit_id 相同时用连表取到的名称，否则按标识查（授权拒绝行的目标机构）。 */
 function anchorNameOf(record: AuditTrailRecord, names: AuditResourceNames): string {
   const anchor = record.anchorOrgUnitId;
   if (!anchor) return '无所属机构';
-  if (anchor === record.orgUnitId && record.orgUnitName) return record.orgUnitName;
-  return names.orgNames.get(anchor) ?? '';
+  const name = anchor === record.orgUnitId && record.orgUnitName ? record.orgUnitName : names.orgNames.get(anchor) ?? '';
+  // 建立根机构、建立首个系统管理人员只发生在根机构上：所属机构写「名称（根机构）」（G34）
+  return name && BOOTSTRAP_ACTIONS.has(record.action) ? `${name}${ROOT_SUFFIX}` : name;
 }
 
 /**

@@ -149,6 +149,20 @@ describe('#126 可见文字不出现工程码（SCREENS.md:8；P8 动作原文�
   });
 });
 
+describe('#126 根机构（G34）', () => {
+  it('建立首个系统管理人员一行，所属机构写「名称（根机构）」；其他行不加', () => {
+    const boot = describeAuditRow(record({
+      action: 'bootstrap.admin-registered', actorCode: null, subjectCode: 'SJ0001',
+      orgUnitId: 'hq', orgUnitName: '广州市规划和自然资源局',
+    }));
+    expect(boot).toMatchObject({ operation: '建立首个系统管理人员', object: '人员 SJ0001', orgName: '广州市规划和自然资源局（根机构）' });
+    const exported = describeAuditRow(record({
+      action: 'audit.exported', subjectCode: null, orgUnitId: 'hq', orgUnitName: '广州市规划和自然资源局', itemCount: 3,
+    }));
+    expect(exported.orgName).toBe('广州市规划和自然资源局');
+  });
+});
+
 describe('#126 xlsx 写出', () => {
   it('是 ZIP（PK 开头），含工作簿与工作表，文字经 XML 转义', () => {
     const file = buildXlsx('管理台留痕', [['时间', '对象'], ['2026-10-17 09:48', '人员 <A&B>']]);
