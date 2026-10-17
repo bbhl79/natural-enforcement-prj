@@ -84,14 +84,16 @@ export class AccessControlService {
   /**
    * 与 authorize 同一套判断，但不写留痕、不抛错（#119）。
    * 拒绝时交出 authz.denied 留痕行，由调用方在业务事务回滚后写入。
+   * 在交互式事务里传入事务内的 store（如 tx.store），读取复用事务连接，不再向连接池另取连接。
    */
   async check(
     actor: ActorRef,
     opcode: string,
     targetOrgUnitId: string,
     resource?: AuthorizationResource,
+    store: IdentityStore = this.store,
   ): Promise<AuthorizationDecision> {
-    const personnel = await this.store.findPersonnelById(actor.personnelId);
+    const personnel = await store.findPersonnelById(actor.personnelId);
     if (!personnel) {
       return denied('identity-unknown', `人员 ${actor.personnelId} 不存在`, {
         actorId: null,
@@ -101,7 +103,7 @@ export class AccessControlService {
         resource,
       });
     }
-    const assignment = await this.store.findCurrentAssignment(personnel.id);
+    const assignment = await store.findCurrentAssignment(personnel.id);
     const actorOrgId = assignment?.orgUnitId ?? null;
     if (!actor.authenticated) {
       return denied('not-authenticated', `人员 ${personnel.code} 未认证`, {
@@ -122,7 +124,7 @@ export class AccessControlService {
       });
     }
     const rule = opcodeRequirements(opcode);
-    let granting = rule ? await this.store.listGrantingRoleNames(personnel.id, opcode) : [];
+    let granting = rule ? await store.listGrantingRoleNames(personnel.id, opcode) : [];
     if (rule?.changesPrimaryState) {
       granting = granting.filter((name) => name !== SUPERVISION_ROLE);
     }
@@ -148,7 +150,7 @@ export class AccessControlService {
         resource,
       });
     }
-    const path = await this.store.findOrgUnitPathToRoot(targetOrgUnitId);
+    const path = await store.findOrgUnitPathToRoot(targetOrgUnitId);
     if (!path.includes(assignment.orgUnitId)) {
       return denied(
         'scope-denied',
@@ -162,7 +164,7 @@ export class AccessControlService {
         },
       );
     }
-    const roles = [...(await this.store.listActiveRoleNames(personnel.id))].sort((a, b) =>
+    const roles = [...(await store.listActiveRoleNames(personnel.id))].sort((a, b) =>
       a.localeCompare(b, 'zh-CN'),
     );
     return {
@@ -206,9 +208,9 @@ export class AccessControlService {
     ));
   }
 
-  /** 人员的当前任职机构（数据范围锚点）；无生效任职按越权处理 */
-  async currentOrgOf(personnelId: string): Promise<string> {
-    const current = await this.store.findCurrentAssignment(personnelId);
+  /** 人员的当前任职机构（数据范围锚点）；无生效任职按越权处理。store 同 check。 */
+  async currentOrgOf(personnelId: string, store: IdentityStore = this.store): Promise<string> {
+    const current = await store.findCurrentAssignment(personnelId);
     if (!current) {
       throw new AccessDeniedError('scope-denied', `人员 ${personnelId} 无生效任职`);
     }

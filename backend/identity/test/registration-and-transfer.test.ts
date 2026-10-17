@@ -218,6 +218,39 @@ describe('调岗写入', () => {
     expect(inside).toHaveBeenCalledOnce();
   });
 
+  it('传入调用方事务时授权读取也走事务内的存储，不碰根存储', async () => {
+    const inside = vi.fn<(transfer: AssignmentTransfer) => Promise<void>>(async () => undefined);
+    const bound = store({ transferAssignment: inside });
+    const untouchable = () => {
+      throw new Error('事务内调岗不应读根存储');
+    };
+    const root = store({
+      findPersonnelById: untouchable,
+      findCurrentAssignment: untouchable,
+      listGrantingRoleNames: untouchable,
+    });
+    const personnel = new PersonnelService(root, accessFor(root), new CredentialService(root));
+
+    await personnel.transferPersonnel(authed('sys-admin'), 'handler', 'dept-b', { store: bound, client: 'caller-tx' });
+
+    expect(inside).toHaveBeenCalledOnce();
+  });
+
+  it('传入调用方事务且未授权时不写留痕，错误带上待写的 authz.denied', async () => {
+    const appended = vi.fn(async () => undefined);
+    const bound = store();
+    const access = new AccessControlService(bound, { append: appended });
+    const personnel = new PersonnelService(bound, access, new CredentialService(bound));
+
+    const attempt = personnel.transferPersonnel(authed('intake'), 'handler', 'dept-b', { store: bound, client: 'tx' });
+    await expect(attempt).rejects.toBeInstanceOf(AccessDeniedError);
+    await expect(attempt).rejects.toMatchObject({
+      reason: 'permission-denied',
+      denial: { action: 'authz.denied', outcome: 'failed', reason: 'permission-denied' },
+    });
+    expect(appended).not.toHaveBeenCalled();
+  });
+
   it('未授权时不开事务、不写入', async () => {
     const inside = vi.fn(async () => undefined);
     const opened = vi.fn();

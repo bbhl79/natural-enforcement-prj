@@ -8,6 +8,7 @@ import { hash, type HashOptions } from 'argon2';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   prismaAuditTrailFactory,
+  rejected,
   runAuditedTransaction,
   type AuditTrailFactory,
 } from '@natural-enforcement/audit';
@@ -16,6 +17,7 @@ import {
   AccessControlService,
   CredentialService,
   PersonnelService,
+  isAccessDenied,
   newUlid,
   type IdentityTransaction,
 } from '../backend/identity/src/index.ts';
@@ -254,6 +256,37 @@ describe('接缝①：留痕工厂覆写为「业务写完后抛错」', () => {
 });
 
 describe('拒绝留痕在业务回滚后另起事务写入', () => {
+  it('调用方事务里调岗被拒：任职不变，回滚后写出 authz.denied', async () => {
+    const targetId = await addPerson({ code: 'P-119-FAR', phone: '13800011915', orgUnitId: deptBId });
+    const store = new PrismaIdentityStore(cloned.prisma);
+    const access = new AccessControlService(store, prismaAuditTrailFactory.forClient(cloned.prisma));
+    const personnel = new PersonnelService(store, access, new CredentialService(store));
+    const before = await snapshot();
+    const outcome = await runAuditedTransaction<IdentityTransaction, string>(
+      (body) => store.inTransaction(body),
+      (tx) => tx.client,
+      prismaAuditTrailFactory,
+      async (tx) => {
+        try {
+          await personnel.transferPersonnel({ personnelId: adminId, authenticated: true }, targetId, deptAId, tx);
+        } catch (error) {
+          if (isAccessDenied(error) && error.denial) return rejected(error.reason, error.denial);
+          throw error;
+        }
+        return 'moved';
+      },
+    );
+    expect(outcome).toBe('scope-denied');
+    const after = await snapshot();
+    expect(after.personnel).toEqual(before.personnel);
+    expect(after.personnel_assignment).toEqual(before.personnel_assignment);
+    const added = after.audit_trail.filter((line) => !before.audit_trail.includes(line))
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(added).toEqual([
+      expect.objectContaining({ action: 'authz.denied', outcome: 'failed', reason: 'scope-denied', actor_id: adminId }),
+    ]);
+  });
+
   it('解锁自己被拒：返回 403，写出 authz.denied 失败留痕，人员行不变', async () => {
     const admin = await login(ADMIN_PHONE);
     const before = await snapshot();

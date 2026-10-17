@@ -4,7 +4,7 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 
-import { IDENTITY_MAINTENANCE_OPCODE } from '../domain/access.ts';
+import { AccessDeniedError, IDENTITY_MAINTENANCE_OPCODE } from '../domain/access.ts';
 import { AlreadyExistsError } from '../domain/already-exists.ts';
 import type { ActorRef } from '../domain/actor.ts';
 import { newUlid } from '../domain/ulid.ts';
@@ -98,8 +98,10 @@ export class PersonnelService {
    * 数据范围锚点 = 该人员「现属」机构（须归 actor 管辖）；目的地不限——
    * 调岗正是跨机构动作。调岗完成后该人员数据范围随新任职生效，旧机构权限即失效（E2 证据）。
    *
-   * 交互式事务（#119）：传入 tx 时并入调用方的事务，与调用方随后追加的留痕同成同败；
-   * 不传时自开一个事务。授权在事务之外判断，拒绝留痕不随业务事务回滚。
+   * 交互式事务（#119）：
+   * - 不传 tx：先在事务外授权（拒绝即写 authz.denied 并抛错），再自开一个事务写入。
+   * - 传入 tx：并入调用方事务，读取与授权都经 tx.store。拒绝时抛 AccessDeniedError，
+   *   denial 带着尚未写入的留痕行，调用方回滚后用 rejected(..., error.denial) 写入。
    */
   async transferPersonnel(
     actor: ActorRef,
@@ -107,8 +109,20 @@ export class PersonnelService {
     toOrgUnitId: string,
     tx?: IdentityTransaction,
   ): Promise<void> {
-    const fromOrgUnitId = await this.access.currentOrgOf(personnelId);
-    await this.access.authorize(actor, IDENTITY_MAINTENANCE_OPCODE, fromOrgUnitId);
+    if (tx) {
+      const fromOrgUnitId = await this.access.currentOrgOf(personnelId, tx.store);
+      const decision = await this.access.check(
+        actor,
+        IDENTITY_MAINTENANCE_OPCODE,
+        fromOrgUnitId,
+        undefined,
+        tx.store,
+      );
+      if (!decision.allowed) throw new AccessDeniedError(decision.reason, decision.detail, decision.denial);
+    } else {
+      const fromOrgUnitId = await this.access.currentOrgOf(personnelId);
+      await this.access.authorize(actor, IDENTITY_MAINTENANCE_OPCODE, fromOrgUnitId);
+    }
     const write = async ({ store }: IdentityTransaction): Promise<void> => {
       const current = await store.findCurrentAssignment(personnelId);
       if (!current) {

@@ -171,10 +171,11 @@ export class AdminService {
     if (!target) return { status: 404, body: { result: 'not-found' } };
     const targetOrg = target.orgUnitId ?? await tx.directory.rootOrgId();
     if (!targetOrg) return { status: 403, body: { reason: 'scope-denied' } };
+    // 授权读取经 tx.store，复用本事务连接（#119）。
     const decision = await this.access.check(actor, opcode, targetOrg, {
       resourceType: 'personnel',
       resourceId: target.id,
-    });
+    }, tx.store);
     if (!decision.allowed) {
       return rejected<AdminDenial>({ status: 403, body: { reason: decision.reason } }, decision.denial);
     }
