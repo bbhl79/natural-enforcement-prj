@@ -229,10 +229,42 @@ function RuleErrors({ rules, only }: { rules: readonly OrgRuleCode[]; only: read
   return <>{shown.map((rule) => <div key={rule} className="err">{RULE_TEXT[rule]}</div>)}</>;
 }
 
+/** 弹窗里能拿到焦点的元素（不含禁用的）。 */
+const FOCUSABLE = 'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+
+/**
+ * 弹窗（P4 create、rename）。打开时焦点移到标了 data-autofocus 的输入框（没有时取第一个可聚焦元素），
+ * Tab、Shift+Tab 在弹窗内循环，不落到背景；关闭时焦点回到打开弹窗前的元素（通常是触发按钮）。
+ */
 function Modal({ title, children, foot }: { title: string; children: ReactNode; foot: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const box = ref.current;
+    (box?.querySelector<HTMLElement>('[data-autofocus]') ?? box?.querySelector<HTMLElement>(FOCUSABLE))?.focus();
+    return () => {
+      if (opener?.isConnected) opener.focus();
+    };
+  }, []);
+  const trapTab = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Tab' || !ref.current) return;
+    const items = Array.from(ref.current.querySelectorAll<HTMLElement>(FOCUSABLE));
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (!first || !last) return;
+    const current = document.activeElement;
+    const inside = current instanceof Node && ref.current.contains(current);
+    if (event.shiftKey && (current === first || !inside)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (current === last || !inside)) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
   return (
     <div className="mask">
-      <div className="dialog" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="dialog" role="dialog" aria-modal="true" aria-label={title} ref={ref} onKeyDown={trapTab}>
         <h3>{title}</h3>
         {children}
         <div className="foot">{foot}</div>
@@ -288,7 +320,7 @@ export function CreateDialog({
       <div className="form-row">
         <label htmlFor="org-name">机构名称<span className="req">*</span></label>
         <div>
-          <input id="org-name" className="input" value={name} onChange={(event) => setName(event.target.value)} />
+          <input id="org-name" className="input" data-autofocus value={name} onChange={(event) => setName(event.target.value)} />
           <div className="help">名称以编制批复为准。以后改名会保留历史名称。</div>
           <RuleErrors rules={failure.rules} only={['org-name-required', 'org-name-too-long']} />
         </div>
@@ -333,7 +365,7 @@ export function RenameDialog({
       <div className="form-row">
         <label htmlFor="org-new-name">新名称<span className="req">*</span></label>
         <div>
-          <input id="org-new-name" className="input" value={name} onChange={(event) => setName(event.target.value)} />
+          <input id="org-new-name" className="input" data-autofocus value={name} onChange={(event) => setName(event.target.value)} />
           <div className="help">改名后，此前的案件、卷宗和记录仍显示当时的名称。</div>
           <RuleErrors rules={failure.rules} only={['org-name-required', 'org-name-too-long']} />
         </div>

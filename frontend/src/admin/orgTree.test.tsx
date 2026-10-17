@@ -249,6 +249,8 @@ describe('机构树界面（P4）', () => {
     expect(html).toMatch(/<input class="input ro" disabled="" value="天河区分局"\/>|<input class="input ro" value="天河区分局" disabled=""\/>/);
     expect(html).toContain('<option value="station" selected="">所</option>');
     expect(html).toContain('名称以编制批复为准。以后改名会保留历史名称。');
+    // 打开时焦点落在名称输入框（PR #142 Copilot 意见 4）。
+    expect(html).toContain('<input id="org-name" class="input" data-autofocus="true" value=""/>');
   });
 
   it('rename：显示历史名称及使用期间', () => {
@@ -256,6 +258,7 @@ describe('机构树界面（P4）', () => {
       <RenameDialog unit={TREE.orgUnits[1]!} onCancel={() => undefined} onSubmit={async () => ({ ok: true, id: 'x' })} />,
     );
     expect(html).toContain('改名：天河区分局');
+    expect(html).toContain('<input id="org-new-name" class="input" data-autofocus="true" value=""/>');
     expect(html).toContain('改名后，此前的案件、卷宗和记录仍显示当时的名称。');
     expect(html).toContain('<td>天河区分局</td><td>2019-03-01 至今</td>');
     expect(html).toContain('<td>天河区国土资源和规划分局</td><td>2015-06-01 至 2019-02-28</td>');
