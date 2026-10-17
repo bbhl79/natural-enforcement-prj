@@ -22,6 +22,8 @@ describe('next 参数校验（#91 约定第 3 条）', () => {
     ['认证接口前缀', '/auth/'],
     ['/auth 本身', '/auth'],
     ['经 .. 归一到 /auth/', '/x/../auth/login'],
+    ['经 .. 归一出双斜杠', '/x/..//evil.example/path'],
+    ['经编码点段归一出双斜杠', '/x/%2e%2e//evil.example/path'],
   ])('反例：%s', (_label, raw) => {
     expect(safeNext(raw)).toBeNull();
   });
@@ -62,6 +64,7 @@ describe('按认证状态改写地址（#91 约定第 2 条）', () => {
     expect(authRedirect('authenticated', at(LOGIN_PATH, '?next=https%3A%2F%2Fevil.example.com'))).toBe(HOME_PATH);
     expect(authRedirect('authenticated', at(LOGIN_PATH, '?next=%2F%2Fevil.example.com'))).toBe(HOME_PATH);
     expect(authRedirect('authenticated', at(LOGIN_PATH, '?next=%2Fauth%2Fpassword'))).toBe(HOME_PATH);
+    expect(authRedirect('authenticated', at(LOGIN_PATH, '?next=%2Fx%2F..%2F%2Fevil.example%2Fpath'))).toBe(HOME_PATH);
     expect(authRedirect('authenticated', at('/admin'))).toBeNull();
   });
 

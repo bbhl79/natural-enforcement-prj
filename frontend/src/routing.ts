@@ -26,6 +26,8 @@ export function safeNext(raw: string | null | undefined): string | null {
   }
   if (parsed.origin !== PROBE_ORIGIN) return null;
   const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+  // 归一化后可能重新出现 `//`（如 `/x/..//evil.example/path`），交给 redirect 会变成站外地址
+  if (!path.startsWith('/') || path.startsWith('//')) return null;
   if (path === '/auth' || path.startsWith('/auth/')) return null;
   return path;
 }
