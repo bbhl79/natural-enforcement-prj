@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 经 nginx 的首登冒烟。只用专用夹具人员，不做跨账号试错。
-# 四步：初始口令登录得到强制改密；提交合规新口令；带原会话调用受保护接口成功；
+# 四步：初始口令登录得到强制改密；提交合规新口令；带原会话通过会话守卫（无 Cookie 得 401）；
 # 再用初始口令登录，得到口令错误。同一条用例核对会话 Cookie 经过入口后的属性。
 set -euo pipefail
 
@@ -86,11 +86,30 @@ password_code="$(request "$work/password.body" "$work/password.hdr" /api/auth/pa
 grep -q '"result":"established"' "$work/password.body" \
   || fail "改口令未成功：$(cat "$work/password.body")"
 
-echo "[e2e] 首登冒烟：带原会话调用受保护接口…"
-health_code="$(request "$work/health.body" "$work/health.hdr" /api/health "" "$session_cookie")"
-[ "$health_code" = "200" ] || fail "带原会话调用受保护接口状态码是 ${health_code}，正文：$(cat "$work/health.body")"
-grep -q '"status":"ok"' "$work/health.body" \
-  || fail "带原会话调用受保护接口未成功：$(cat "$work/health.body")"
+echo "[e2e] 首登冒烟：带原会话查询会话，期望已登录且不再强制改密…"
+# /api/health 是公开接口，不能证明会话仍有效（#103 评审）。改用会话查询与受保护接口。
+session_code="$(request "$work/session.body" "$work/session.hdr" /api/auth/session "" "$session_cookie")"
+[ "$session_code" = "200" ] || fail "会话查询状态码是 ${session_code}，正文：$(cat "$work/session.body")"
+grep -q '"result":"authenticated"' "$work/session.body" \
+  || fail "改密后原会话不再代表本人：$(cat "$work/session.body")"
+grep -q '"code":"P-E2E-99"' "$work/session.body" \
+  || fail "会话查询返回的不是首登夹具人员：$(cat "$work/session.body")"
+grep -q '"passwordChangeRequired":false' "$work/session.body" \
+  || fail "改密后仍处于强制改密：$(cat "$work/session.body")"
+
+echo "[e2e] 首登冒烟：不带 Cookie 调用受保护接口，期望 401…"
+anon_code="$(request "$work/anon.body" "$work/anon.hdr" /api/admin/locked-personnel "" "")"
+[ "$anon_code" = "401" ] || fail "无会话调用受保护接口状态码是 ${anon_code}，正文：$(cat "$work/anon.body")"
+grep -q '"reason":"not-authenticated"' "$work/anon.body" \
+  || fail "无会话调用受保护接口不是未认证：$(cat "$work/anon.body")"
+
+echo "[e2e] 首登冒烟：带原会话调用受保护接口，期望通过会话守卫、按权限拒绝…"
+# 夹具人员是经办，不持有 personnel.locked.read。403 permission-denied 说明会话守卫已放行；
+# 会话失效时这里会是 401。
+guarded_code="$(request "$work/guarded.body" "$work/guarded.hdr" /api/admin/locked-personnel "" "$session_cookie")"
+[ "$guarded_code" = "403" ] || fail "带原会话调用受保护接口状态码是 ${guarded_code}，正文：$(cat "$work/guarded.body")"
+grep -q '"reason":"permission-denied"' "$work/guarded.body" \
+  || fail "带原会话调用受保护接口未按权限拒绝：$(cat "$work/guarded.body")"
 
 echo "[e2e] 首登冒烟：再用初始口令登录，期望口令错误…"
 again_code="$(request "$work/again.body" "$work/again.hdr" /api/auth/login "$work/login.json")"
