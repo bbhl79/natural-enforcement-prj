@@ -21,9 +21,9 @@ const T0 = Date.parse('2026-10-17T03:00:00.000Z');
 const SEED_PASSWORD = 'Seed-pass-52';
 const NEW_PASSWORD = 'Menu-opcode-73!';
 
-/** 管理台菜单所需的码（frontend/src/shell/menu.ts）。期望独立写出。 */
+/** 管理台菜单所需的码（frontend/src/shell/menu.ts）。期望独立写出。机构用只给系统管理的 org.unit.register（#105:178）。 */
 const ADMIN_MENU_OPCODES = [
-  'org.tree.read',
+  'org.unit.register',
   'personnel.profile.read',
   'personnel.locked.read',
   'audit.admin.read',

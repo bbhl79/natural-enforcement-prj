@@ -16,8 +16,10 @@ function person(roles: string[], opcodes: string[], extra: Json = {}): Json {
 }
 
 const CLERK = ['clue.read', 'case.read', 'case.open'];
-const ADMIN = ['org.tree.read', 'personnel.profile.read', 'personnel.locked.read', 'personnel.locked.release', 'audit.admin.read'];
+const ADMIN = ['org.unit.register', 'personnel.profile.read', 'personnel.locked.read', 'personnel.locked.release', 'audit.admin.read'];
 const SUPERVISE = ['audit.admin.read', 'audit.admin.export'];
+/** 内勤：业务读码，外加选承办机构用的 org.tree.read（#105:178）。 */
+const INTAKE = ['clue.read', 'case.read', 'org.tree.read'];
 
 /** 按地址回答：会话查询返回 session，其余接口返回 routes 里登记的结果。 */
 function serve(session: Json | number, routes: Record<string, [number, Json]> = {}) {
@@ -113,7 +115,9 @@ describe('应用壳与菜单（P1）', () => {
     }
     expect(html).toContain('你同时担任「经办」和「系统管理」');
     expect(html).toContain('天河区分局 · 经办、系统管理');
-    expect(html).toContain('暂无待办');
+    expect(html).toContain('我的待办<span class="hint">业务区内容不在本样板范围，仅占位</span>');
+    expect(html).toContain('业务工作台由线索、案件等切片提供');
+    expect(html).not.toContain('暂无待办');
   });
 
   it('无管理权：没有管理台一区', async () => {
@@ -121,6 +125,15 @@ describe('应用壳与菜单（P1）', () => {
     const { html } = await renderRoute(fresh(), '/');
     expect(html).not.toContain('>管理台</div>');
     expect(html).not.toContain('管理台首页');
+    expect(html).toContain('你的角色不含管理权，所以没有「管理台」一区。');
+  });
+
+  it('内勤反例：持有 org.tree.read 也没有管理台一区（#105:178，P1 noadmin）', async () => {
+    serve(person(['内勤'], INTAKE));
+    const { html } = await renderRoute(fresh(), '/');
+    expect(html).not.toContain('>管理台</div>');
+    expect(html).not.toContain('管理台首页');
+    expect(html).not.toContain('data-menu="org"');
     expect(html).toContain('你的角色不含管理权，所以没有「管理台」一区。');
   });
 
@@ -161,6 +174,15 @@ describe('管理台首页（P3）', () => {
     expect(html).not.toContain('class="tiles"');
   });
 
+  it('内勤反例：持有 org.tree.read 打开 /admin 显示无权限卡片', async () => {
+    serve(person(['内勤'], INTAKE));
+    const { html, router } = await renderRoute(fresh(), '/admin');
+    expect(router.state.location.pathname).toBe('/admin');
+    expect(html).toContain('你没有查看管理台的权限');
+    expect(html).not.toContain('class="tiles"');
+    expect(html).not.toContain('>管理台</div>');
+  });
+
   it('首屏先出骨架', async () => {
     let release!: (response: Response) => void;
     serve(person(['系统管理'], ADMIN));
@@ -179,6 +201,7 @@ describe('管理台首页（P3）', () => {
     expect(adminHomeView(['personnel.locked.read'])).toBe('admin');
     expect(adminHomeView(SUPERVISE)).toBe('supervise');
     expect(adminHomeView(CLERK)).toBe('denied');
+    expect(adminHomeView(INTAKE)).toBe('denied');
   });
 
   const render = (opcodes: string[], summary = EMPTY_SUMMARY) => renderToStaticMarkup(
