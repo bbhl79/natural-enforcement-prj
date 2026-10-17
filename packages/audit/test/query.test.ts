@@ -26,8 +26,22 @@ function row(action: string, opcode: string | null = null) {
     resourceType: null,
     resourceId: null,
     itemCount: null,
+    targetOrgUnitId: null as string | null,
+    targetOrgUnitBasis: null as string | null,
     orgUnit: { name: '甲区' },
   };
+}
+
+/** 范围条件（ADR 0011 修正）：带来源的拒绝行按目标机构，其余行按 org_unit_id。 */
+function anchors(ids: string[], unanchored = false): Array<Record<string, unknown>> {
+  const list: Array<Record<string, unknown>> = [
+    { targetOrgUnitBasis: null, orgUnitId: { in: ids } },
+    { targetOrgUnitBasis: { not: null }, targetOrgUnitId: { in: ids } },
+  ];
+  if (unanchored) {
+    list.push({ targetOrgUnitBasis: null, orgUnitId: null }, { targetOrgUnitBasis: { not: null }, targetOrgUnitId: null });
+  }
+  return list;
 }
 
 function fake(rows: ReturnType<typeof row>[]): { db: AuditTrailReadClient; calls: FindManyArgs[]; counts: unknown[] } {
@@ -93,7 +107,7 @@ describe('#126 PrismaAuditTrailReader', () => {
     await new PrismaAuditTrailReader(db).list({ ...RANGE, orgUnitIds: ['org-a', 'org-b'], includeUnanchored: false });
     expect(calls[0]?.where).toEqual({
       createdAt: { gte: RANGE.from, lt: RANGE.to },
-      AND: [{ OR: [{ orgUnitId: { in: ['org-a', 'org-b'] } }] }],
+      AND: [{ OR: anchors(['org-a', 'org-b']) }],
     });
     expect(calls[0]?.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
   });
@@ -105,7 +119,7 @@ describe('#126 PrismaAuditTrailReader', () => {
     });
     expect(calls[0]?.where).toEqual({
       createdAt: { gte: RANGE.from, lt: RANGE.to },
-      AND: [{ OR: [{ orgUnitId: { in: ['root'] } }, { orgUnitId: null }] }],
+      AND: [{ OR: anchors(['root'], true) }],
       actorCode: 'P-9',
       outcome: 'failed',
     });
@@ -115,7 +129,7 @@ describe('#126 PrismaAuditTrailReader', () => {
     const { db, calls } = fake([]);
     await new PrismaAuditTrailReader(db).list({ ...RANGE, orgUnitIds: ['org-a'], includeUnanchored: false, category: 'export' });
     expect(calls[0]?.where.AND).toEqual([
-      { OR: [{ orgUnitId: { in: ['org-a'] } }] },
+      { OR: anchors(['org-a']) },
       {
         OR: [
           { action: { in: ['personnel.exported', 'audit.exported'] } },
@@ -146,7 +160,7 @@ describe('#126 PrismaAuditTrailReader', () => {
     const today = await new PrismaAuditTrailReader(db).count({ ...RANGE, orgUnitIds: ['org-a'], includeUnanchored: false });
     expect(today).toBe(7);
     expect(calls).toHaveLength(0);
-    expect(counts).toEqual([{ createdAt: { gte: RANGE.from, lt: RANGE.to }, AND: [{ OR: [{ orgUnitId: { in: ['org-a'] } }] }] }]);
+    expect(counts).toEqual([{ createdAt: { gte: RANGE.from, lt: RANGE.to }, AND: [{ OR: anchors(['org-a']) }] }]);
   });
 
   it('类别按 auditCategoryOf 筛，返回行带所属机构名，不带来源地址与前值', async () => {
@@ -161,5 +175,19 @@ describe('#126 PrismaAuditTrailReader', () => {
     expect(rows[0]?.orgUnitName).toBe('甲区');
     expect(Object.keys(rows[0] ?? {})).not.toContain('sourceIp');
     expect(Object.keys(rows[0] ?? {})).not.toContain('previousValue');
+  });
+
+  it('所属机构：带来源的拒绝行取目标机构，来源为空的旧拒绝行和其他行取 org_unit_id', async () => {
+    const target = { ...row('authz.denied', 'personnel.locked.release'), id: 'new', targetOrgUnitId: 'org-b', targetOrgUnitBasis: 'object' };
+    const fallback = { ...row('authz.denied', 'audit.admin.read'), id: 'fb', targetOrgUnitId: 'org-a', targetOrgUnitBasis: 'actor-fallback' };
+    const old = { ...row('authz.denied', 'personnel.locked.release'), id: 'old' };
+    const { db } = fake([target, fallback, old, row('account.unlocked')]);
+    const rows = await new PrismaAuditTrailReader(db).list({ ...RANGE, orgUnitIds: ['org-a', 'org-b'], includeUnanchored: false });
+    expect(rows.map((item) => [item.id, item.anchorOrgUnitId, item.targetOrgUnitBasis])).toEqual([
+      ['new', 'org-b', 'object'],
+      ['fb', 'org-a', 'actor-fallback'],
+      ['old', 'org-a', null],
+      ['id-account.unlocked-', 'org-a', null],
+    ]);
   });
 });

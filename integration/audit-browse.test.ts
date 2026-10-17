@@ -67,6 +67,8 @@ type AuditRecord = {
   resource_type: string | null;
   resource_id: string | null;
   item_count: number | null;
+  target_org_unit_id: string | null;
+  target_org_unit_basis: string | null;
 };
 
 type Row = {
@@ -118,7 +120,8 @@ function range(): { from: string; to: string } {
 async function audits(): Promise<AuditRecord[]> {
   return cloned.prisma.$queryRaw<AuditRecord[]>`
     SELECT id, action, outcome, reason, actor_id, actor_code, subject_personnel_id,
-           org_unit_id, opcode, resource_type, resource_id, item_count
+           org_unit_id, opcode, resource_type, resource_id, item_count,
+           target_org_unit_id, target_org_unit_basis
     FROM audit_trail ORDER BY created_at, id`;
 }
 
@@ -243,6 +246,7 @@ beforeAll(async () => {
     action: 'authz.denied', outcome: 'failed', actorId: ids.clerkA, actorCode: 'P-126-CLERK-A',
     subjectPersonnelId: null, subjectCode: null, orgUnitId: deptAId, sourceIp: null, reason: 'permission-denied',
     opcode: 'personnel.locked.release', resourceType: 'personnel', resourceId: ids.memberA, previousValue: null,
+    targetOrgUnitId: deptAId, targetOrgUnitBasis: 'object',
   });
   for (const row of await audits()) {
     if (row.action === 'account.unlocked' && row.org_unit_id === deptAId) seeded.unlockA = row.id;
@@ -317,20 +321,6 @@ describe('POST /api/admin/audit/query：数据范围', () => {
     const rowIds = ((await query(PHONES.adminA)).rows ?? []).map((row) => row.id);
     expect(rowIds).toContain(seeded.unlockA);
     expect(rowIds).not.toContain(seeded.unlockB);
-  });
-});
-
-describe('跨区被拒的行（ADR 0011：授权拒绝的所属机构取操作者当时的任职）', () => {
-  it('区 A 监督越区查阅被拒：这一行归区 A，区 A 监督看得到、对象写区 B 的名称；区 B 监督看不到', async () => {
-    const cookie = await login(PHONES.superA);
-    expect((await post('/api/admin/audit/query', cookie, { ...range(), orgUnitId: deptBId })).status).toBe(403);
-    const deptBName = (await cloned.prisma.orgUnit.findUniqueOrThrow({ where: { id: deptBId } })).name;
-    const rowsA = (await query(PHONES.superA)).rows ?? [];
-    const denied = rowsA.find((row) => row.action === 'authz.denied' && row.operation === '查阅管理台留痕' && row.object === deptBName);
-    expect(denied, '区 A 监督的越区查阅被拒行').toBeDefined();
-    expect(denied).toMatchObject({ actorCode: 'P-126-SUPER-A', orgName: '第一执法支队', result: '被拒绝：超出数据范围' });
-    const rowsB = (await query(PHONES.superB)).rows ?? [];
-    expect(rowsB.map((row) => row.id)).not.toContain(denied?.id);
   });
 });
 
@@ -468,7 +458,10 @@ describe('四条必测', () => {
     path: string,
     phone: string,
     body: unknown,
-    expected: { reason: string; actorId: string; actorCode: string; actorOrgId: string; opcode: string; resourceType: string; resourceId: string },
+    expected: {
+      reason: string; actorId: string; actorCode: string; actorOrgId: string; targetOrgId: string;
+      opcode: string; resourceType: string; resourceId: string;
+    },
   ): Promise<void> {
     const cookie = await login(phone);
     const before = await snapshot();
@@ -484,6 +477,8 @@ describe('四条必测', () => {
       action: 'authz.denied', outcome: 'failed', reason: expected.reason, actor_id: expected.actorId,
       actor_code: expected.actorCode, subject_personnel_id: null, org_unit_id: expected.actorOrgId,
       opcode: expected.opcode, resource_type: expected.resourceType, resource_id: expected.resourceId, item_count: null,
+      // 被拒行归对象所属机构（#105；ADR 0011 修正），操作者任职照记在 org_unit_id
+      target_org_unit_id: expected.targetOrgId, target_org_unit_basis: 'object',
     });
     expect(business(await snapshot())).toEqual(business(before));
   }
@@ -491,12 +486,12 @@ describe('四条必测', () => {
   it('没有该码（经办）：查阅与导出都 403 permission-denied，写 authz.denied，不写 audit.viewed/exported', async () => {
     for (const [path, opcode] of [['/api/admin/audit/query', 'audit.admin.read'], ['/api/admin/audit/export', 'audit.admin.export']] as const) {
       await expectDenied(path, PHONES.clerkA, range(), {
-        reason: 'permission-denied', actorId: ids.clerkA, actorCode: 'P-126-CLERK-A', actorOrgId: deptAId,
+        reason: 'permission-denied', actorId: ids.clerkA, actorCode: 'P-126-CLERK-A', actorOrgId: deptAId, targetOrgId: deptAId,
         opcode, resourceType: 'org-unit', resourceId: deptAId,
       });
     }
     await expectDenied('GET /api/admin/audit/summary', PHONES.clerkA, null, {
-      reason: 'permission-denied', actorId: ids.clerkA, actorCode: 'P-126-CLERK-A', actorOrgId: deptAId,
+      reason: 'permission-denied', actorId: ids.clerkA, actorCode: 'P-126-CLERK-A', actorOrgId: deptAId, targetOrgId: deptAId,
       opcode: 'audit.admin.read', resourceType: 'org-unit', resourceId: deptAId,
     });
   });
@@ -504,32 +499,32 @@ describe('四条必测', () => {
   it('跨区：区 A 监督查阅或导出区 B，403 scope-denied，写 authz.denied', async () => {
     for (const [path, opcode] of [['/api/admin/audit/query', 'audit.admin.read'], ['/api/admin/audit/export', 'audit.admin.export']] as const) {
       await expectDenied(path, PHONES.superA, { ...range(), orgUnitId: deptBId }, {
-        reason: 'scope-denied', actorId: ids.superA, actorCode: 'P-126-SUPER-A', actorOrgId: deptAId,
+        reason: 'scope-denied', actorId: ids.superA, actorCode: 'P-126-SUPER-A', actorOrgId: deptAId, targetOrgId: deptBId,
         opcode, resourceType: 'org-unit', resourceId: deptBId,
       });
     }
     // 区监督也不能把范围放大到根机构（无所属机构的行因此看不到）
     await expectDenied('/api/admin/audit/query', PHONES.superA, { ...range(), orgUnitId: hqId }, {
-      reason: 'scope-denied', actorId: ids.superA, actorCode: 'P-126-SUPER-A', actorOrgId: deptAId,
+      reason: 'scope-denied', actorId: ids.superA, actorCode: 'P-126-SUPER-A', actorOrgId: deptAId, targetOrgId: hqId,
       opcode: 'audit.admin.read', resourceType: 'org-unit', resourceId: hqId,
     });
   });
 
   it('监督调人员接口：403 permission-denied，写 authz.denied（人员导出、被锁人员列表、解锁、重设口令）', async () => {
     await expectDenied('/api/admin/personnel/export', PHONES.superA, { orgUnitId: deptAId }, {
-      reason: 'permission-denied', actorId: ids.superA, actorCode: 'P-126-SUPER-A', actorOrgId: deptAId,
+      reason: 'permission-denied', actorId: ids.superA, actorCode: 'P-126-SUPER-A', actorOrgId: deptAId, targetOrgId: deptAId,
       opcode: 'personnel.profile.export', resourceType: 'org-unit', resourceId: deptAId,
     });
     await expectDenied('/api/admin/personnel/export', PHONES.superHq, { orgUnitId: hqId }, {
-      reason: 'permission-denied', actorId: ids.superHq, actorCode: 'P-126-SUPER-HQ', actorOrgId: hqId,
+      reason: 'permission-denied', actorId: ids.superHq, actorCode: 'P-126-SUPER-HQ', actorOrgId: hqId, targetOrgId: hqId,
       opcode: 'personnel.profile.export', resourceType: 'org-unit', resourceId: hqId,
     });
     await expectDenied(`/api/admin/personnel/${ids.memberA}/unlock`, PHONES.superA, {}, {
-      reason: 'permission-denied', actorId: ids.superA, actorCode: 'P-126-SUPER-A', actorOrgId: deptAId,
+      reason: 'permission-denied', actorId: ids.superA, actorCode: 'P-126-SUPER-A', actorOrgId: deptAId, targetOrgId: deptAId,
       opcode: 'personnel.locked.release', resourceType: 'personnel', resourceId: ids.memberA,
     });
     await expectDenied(`/api/admin/personnel/${ids.memberA}/password-reset`, PHONES.superA, { password: 'Reset-pass-126!' }, {
-      reason: 'permission-denied', actorId: ids.superA, actorCode: 'P-126-SUPER-A', actorOrgId: deptAId,
+      reason: 'permission-denied', actorId: ids.superA, actorCode: 'P-126-SUPER-A', actorOrgId: deptAId, targetOrgId: deptAId,
       opcode: 'personnel.password.reset', resourceType: 'personnel', resourceId: ids.memberA,
     });
     const cookie = await login(PHONES.superA);
@@ -594,5 +589,54 @@ describe('GET /api/admin/audit/summary（管理台首页今日条数）', () => 
     // 上一步查阅本身写了一行 audit.viewed，今日条数因此多 1
     expect(await response.json()).toEqual({ result: 'counted', today: expected + 1 });
     expect(added(before, await audits())).toEqual([]);
+  });
+});
+
+describe('被拒的行归对象所属机构（#105；ADR 0011 修正）', () => {
+  it('甲区系统管理越区操作乙区人员被拒：乙区监督看得到，甲区监督看不到', async () => {
+    const admin = await login(PHONES.adminA);
+    const auditsBefore = await audits();
+    const response = await post(`/api/admin/personnel/${ids.memberB}/unlock`, admin, {});
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ reason: 'scope-denied' });
+    const [written] = added(auditsBefore, await audits());
+    expect(written).toMatchObject({
+      action: 'authz.denied', reason: 'scope-denied', actor_id: ids.adminA, org_unit_id: deptAId,
+      target_org_unit_id: deptBId, target_org_unit_basis: 'object', resource_id: ids.memberB,
+    });
+    const deptBName = (await cloned.prisma.orgUnit.findUniqueOrThrow({ where: { id: deptBId } })).name;
+    const rowsB = (await query(PHONES.superB)).rows ?? [];
+    expect(rowsB.find((row) => row.id === written?.id), '乙区监督看得到').toMatchObject({
+      actorCode: 'P-126-ADM-A', operation: '解锁', object: '人员 P-126-MEM-B', orgName: deptBName,
+      anchored: true, result: '被拒绝：超出数据范围', category: 'unlock-reset',
+    });
+    const rowsA = (await query(PHONES.superA)).rows ?? [];
+    expect(rowsA.map((row) => row.id), '甲区监督看不到').not.toContain(written?.id);
+  });
+
+  it('对象机构不存在：按操作者机构兜底并标 actor-fallback，甲区监督看得到，乙区监督看不到', async () => {
+    const cookie = await login(PHONES.superA);
+    const auditsBefore = await audits();
+    const missing = '01ZZZZZZZZZZZZZZZZZZZZZZZZ';
+    expect((await post('/api/admin/audit/query', cookie, { ...range(), orgUnitId: missing })).status).toBe(403);
+    const [written] = added(auditsBefore, await audits());
+    expect(written).toMatchObject({
+      action: 'authz.denied', reason: 'scope-denied', actor_id: ids.superA, org_unit_id: deptAId,
+      target_org_unit_id: deptAId, target_org_unit_basis: 'actor-fallback', resource_id: missing,
+    });
+    const rowsA = (await query(PHONES.superA)).rows ?? [];
+    expect(rowsA.find((row) => row.id === written?.id)).toMatchObject({ orgName: '第一执法支队', anchored: true });
+    const rowsB = (await query(PHONES.superB)).rows ?? [];
+    expect(rowsB.map((row) => row.id)).not.toContain(written?.id);
+  });
+
+  it('目标机构来源为空的旧拒绝行不补，仍按操作者机构套', async () => {
+    const id = '01ZZZZZZZZZZZZZZZZZZZZZZZY';
+    await cloned.prisma.$executeRaw`
+      INSERT INTO audit_trail (id, action, outcome, actor_id, actor_code, org_unit_id, reason, opcode, resource_type, resource_id)
+      VALUES (${id}, 'authz.denied', 'failed', ${ids.superA}, 'P-126-SUPER-A', ${deptAId}, 'scope-denied',
+              'audit.admin.read', 'org-unit', ${deptBId})`;
+    expect(((await query(PHONES.superA)).rows ?? []).map((row) => row.id)).toContain(id);
+    expect(((await query(PHONES.superB)).rows ?? []).map((row) => row.id)).not.toContain(id);
   });
 });

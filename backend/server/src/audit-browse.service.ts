@@ -150,6 +150,7 @@ export function auditExportFilename(filter: Pick<AuditFilter, 'from' | 'to'>): s
  * 管理台留痕的查阅与导出（#126，#105「留痕查阅与导出」）。
  * - 授权：audit.admin.read / audit.admin.export，目标机构 = 请求的范围根（默认本人任职机构）。
  * - 范围：有所属机构的行按所属机构落在范围根子树内；没有所属机构的行视同根机构，只有范围根是根机构时出现。
+ *   授权拒绝行的所属机构是目标机构（#105；ADR 0011 修正）。
  * - 查阅写 audit.viewed，导出写 audit.exported（带条数）。都在读完之后写，所以本次写的行不在本次结果里。
  *   读取与留痕同一事务：留痕写失败时整体失败，不交出数据。
  * - 导出范围等于查阅范围：同一筛选条件、同一段代码取行，文件的每一行与页面一行的文字相同。
@@ -262,8 +263,9 @@ export class AuditBrowseService {
   }
 
   /**
-   * 授权拒绝行只写资源标识，不写被作用人员，所属机构是操作者的任职机构（ADR 0011）。
+   * 授权拒绝行只写资源标识，不写被作用人员（ADR 0011）。
    * 「对象」一列按资源标识查：人员查工号，机构查名称。
+   * 「所属机构」一列：授权拒绝行的所属机构是目标机构，库里不连机构表，按标识查名称（ADR 0011 修正）。
    */
   private async resourceNames(tx: TxScope, records: readonly AuditTrailRecord[]): Promise<AuditResourceNames> {
     const ids = (type: string) => new Set(
@@ -275,7 +277,11 @@ export class AuditBrowseService {
       if (person) personnelCodes.set(id, person.code);
     }
     const orgNames = new Map<string, string>();
-    for (const id of ids('org-unit')) {
+    const orgIds = ids('org-unit');
+    for (const row of records) {
+      if (row.anchorOrgUnitId && row.anchorOrgUnitId !== row.orgUnitId) orgIds.add(row.anchorOrgUnitId);
+    }
+    for (const id of orgIds) {
       const org = await tx.store.findOrgUnitById(id);
       if (org) orgNames.set(id, org.name);
     }

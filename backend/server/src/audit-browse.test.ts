@@ -9,7 +9,10 @@ import { buildXlsx } from './xlsx.ts';
 const NOW = new Date('2026-10-17T01:48:00.000Z');
 
 function record(overrides: Partial<AuditTrailRecord>): AuditTrailRecord {
+  const orgUnitId = overrides.orgUnitId === undefined ? 'org-ld' : overrides.orgUnitId;
   return {
+    anchorOrgUnitId: orgUnitId,
+    targetOrgUnitBasis: null,
     id: 'r1',
     createdAt: NOW,
     action: 'account.unlocked',
@@ -96,15 +99,25 @@ describe('#126 留痕展示文字（P8）', () => {
     }))).toMatchObject({ operation: '导出人员', object: '龙洞自然资源所' });
   });
 
-  it('拒绝行的「对象」按资源标识取机构名，「所属机构」仍是操作者的任职机构（ADR 0011）', () => {
+  it('拒绝行的「所属机构」是目标机构，「对象」按资源标识取机构名（#105；ADR 0011 修正）', () => {
     const crossDistrict = record({
       action: 'authz.denied', outcome: 'failed', reason: 'scope-denied', actorCode: 'TH0102', subjectCode: null,
       opcode: 'audit.admin.read', resourceType: 'org-unit', resourceId: 'org-hz',
+      anchorOrgUnitId: 'org-hz', targetOrgUnitBasis: 'object',
     });
     expect(describeAuditRow(crossDistrict, { personnelCodes: new Map(), orgNames: new Map([['org-hz', '海珠区分局']]) }))
-      .toMatchObject({ operation: '查阅管理台留痕', object: '海珠区分局', orgName: '龙洞自然资源所', anchored: true });
-    // 查不到名称时不拿操作者的机构名冒充对象
-    expect(describeAuditRow(crossDistrict)).toMatchObject({ object: '机构', orgName: '龙洞自然资源所' });
+      .toMatchObject({ operation: '查阅管理台留痕', object: '海珠区分局', orgName: '海珠区分局', anchored: true });
+    // 查不到名称时不拿操作者的机构名冒充
+    expect(describeAuditRow(crossDistrict)).toMatchObject({ object: '机构', orgName: '', anchored: true });
+  });
+
+  it('对象机构解析不出、按操作者机构兜底的拒绝行，所属机构是操作者的任职机构', () => {
+    const fallback = record({
+      action: 'authz.denied', outcome: 'failed', reason: 'scope-denied', actorCode: 'TH0102', subjectCode: null,
+      opcode: 'audit.admin.read', resourceType: 'org-unit', resourceId: 'no-such-org',
+      anchorOrgUnitId: 'org-ld', targetOrgUnitBasis: 'actor-fallback',
+    });
+    expect(describeAuditRow(fallback)).toMatchObject({ object: '机构', orgName: '龙洞自然资源所', anchored: true });
   });
 });
 

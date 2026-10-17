@@ -153,6 +153,8 @@ export interface AuditTrailReadClient {
       resourceType: string | null;
       resourceId: string | null;
       itemCount: number | null;
+      targetOrgUnitId: string | null;
+      targetOrgUnitBasis: string | null;
       orgUnit: { name: string } | null;
     }>>;
     count(args: { where: Record<string, unknown> }): Promise<number>;
@@ -161,8 +163,16 @@ export interface AuditTrailReadClient {
 
 /** 范围、时间、操作人、结果，以及（有类别时）类别预筛，都放进库里的 where。 */
 function auditWhere(query: AuditTrailQuery): Record<string, unknown> {
-  const anchors: Array<Record<string, unknown>> = [{ orgUnitId: { in: [...query.orgUnitIds] } }];
-  if (query.includeUnanchored) anchors.push({ orgUnitId: null });
+  // 所属机构（ADR 0011 修正）：带来源的授权拒绝行按目标机构套；其余行（含来源为空的旧拒绝行）按 org_unit_id 套。
+  const ids = [...query.orgUnitIds];
+  const anchors: Array<Record<string, unknown>> = [
+    { targetOrgUnitBasis: null, orgUnitId: { in: ids } },
+    { targetOrgUnitBasis: { not: null }, targetOrgUnitId: { in: ids } },
+  ];
+  if (query.includeUnanchored) {
+    anchors.push({ targetOrgUnitBasis: null, orgUnitId: null });
+    anchors.push({ targetOrgUnitBasis: { not: null }, targetOrgUnitId: null });
+  }
   const and: Array<Record<string, unknown>> = [{ OR: anchors }];
   if (query.category) {
     const pre = auditCategoryPrefilter(query.category);
@@ -208,6 +218,8 @@ export class PrismaAuditTrailReader implements AuditTrailReader {
         subjectCode: row.subjectCode,
         orgUnitId: row.orgUnitId,
         orgUnitName: row.orgUnit?.name ?? null,
+        anchorOrgUnitId: row.targetOrgUnitBasis != null ? row.targetOrgUnitId : row.orgUnitId,
+        targetOrgUnitBasis: row.targetOrgUnitBasis,
         opcode: row.opcode,
         resourceType: row.resourceType,
         resourceId: row.resourceId,

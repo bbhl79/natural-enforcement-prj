@@ -1,5 +1,7 @@
 // 管理台留痕的查阅（#126，#105「留痕查阅与导出」）：只读接口与类别口径。
 // 有机构的行按所属机构（对象所属机构）套数据范围；没有机构的行视同根机构（Lei Hu 7-8）。
+// 所属机构：授权拒绝行取目标机构（target_org_unit_id，#105；ADR 0011 修正），其余行取 org_unit_id。
+// 目标机构来源为空的旧拒绝行不补，仍按 org_unit_id 套。
 // 数据库适配器在 prisma-audit-trail.ts。
 
 /** 管理台留痕的筛选类别（原型 v0.4 P8，G33）。「全部操作」不是类别，筛选时不传。 */
@@ -129,8 +131,13 @@ export interface AuditTrailRecord {
   readonly reason: string | null;
   readonly actorCode: string | null;
   readonly subjectCode: string | null;
+  /** 操作者或被作用人员当时的任职机构（写入快照）。 */
   readonly orgUnitId: string | null;
   readonly orgUnitName: string | null;
+  /** 所属机构：查阅范围按它套。授权拒绝行是目标机构，其余行同 orgUnitId（ADR 0011 修正）。 */
+  readonly anchorOrgUnitId: string | null;
+  /** 授权拒绝行的目标机构来源：object、actor-fallback；其余行和旧拒绝行为空。 */
+  readonly targetOrgUnitBasis: string | null;
   readonly opcode: string | null;
   readonly resourceType: string | null;
   readonly resourceId: string | null;

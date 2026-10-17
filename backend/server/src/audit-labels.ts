@@ -143,7 +143,7 @@ function objectOf(record: AuditTrailRecord, names: AuditResourceNames): string {
     return code ? `人员 ${code}` : '人员';
   }
   if (record.resourceType === 'org-unit') {
-    // 拒绝行的所属机构是操作者的任职机构，不一定是对象：按资源标识取名称
+    // 对象按资源标识取名称（所属机构不一定就是对象，例如对象机构解析不出时按操作者机构兜底）
     const name = record.resourceId ? names.orgNames.get(record.resourceId) : undefined;
     return name ?? (record.resourceId && record.resourceId === record.orgUnitId ? record.orgUnitName : null) ?? '机构';
   }
@@ -167,9 +167,17 @@ function resultOf(record: AuditTrailRecord): { result: string; tone: AuditTone }
   return { result: record.reason ? `失败：${record.reason}` : '失败', tone: 'red' };
 }
 
+/** 所属机构名称：与 org_unit_id 相同时用连表取到的名称，否则按标识查（授权拒绝行的目标机构）。 */
+function anchorNameOf(record: AuditTrailRecord, names: AuditResourceNames): string {
+  const anchor = record.anchorOrgUnitId;
+  if (!anchor) return '无所属机构';
+  if (anchor === record.orgUnitId && record.orgUnitName) return record.orgUnitName;
+  return names.orgNames.get(anchor) ?? '';
+}
+
 /**
  * 一行留痕的展示文字。names：按资源标识查到的人员工号与机构名称
- * （授权拒绝行不写被作用人员，只写资源；所属机构是操作者的任职机构，ADR 0011）。
+ * （授权拒绝行不写被作用人员，只写资源；所属机构是目标机构，#105；ADR 0011 修正）。
  */
 export function describeAuditRow(
   record: AuditTrailRecord,
@@ -181,8 +189,8 @@ export function describeAuditRow(
     actorCode: record.actorCode ?? '—',
     operation: operationOf(record),
     object: objectOf(record, names),
-    orgName: record.orgUnitId ? (record.orgUnitName ?? '') : '无所属机构',
-    anchored: record.orgUnitId != null,
+    orgName: anchorNameOf(record, names),
+    anchored: record.anchorOrgUnitId != null,
     result,
     tone,
   };
