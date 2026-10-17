@@ -22,6 +22,11 @@ const ADMIN = [
   'personnel.profile.read', 'personnel.locked.read', 'personnel.locked.release', 'audit.admin.read',
 ];
 const TREE: [number, Json] = [200, { result: 'listed', rootId: 'hq', orgUnits: [{ id: 'hq' }, { id: 'a' }, { id: 'b' }] }];
+/** 人员名单（#128）：首页人员数只数未停用的。 */
+const PERSONNEL: [number, Json] = [200, {
+  result: 'listed', rootId: 'hq', orgUnits: [],
+  personnel: [{ id: 'p1', deactivatedAt: null }, { id: 'p2', deactivatedAt: null }, { id: 'p3', deactivatedAt: '2026-09-01T00:00:00Z' }],
+}];
 const SUPERVISE = ['audit.admin.read', 'audit.admin.export'];
 /** 内勤：业务读码，外加选承办机构用的 org.tree.read（#105:178）。 */
 const INTAKE = ['clue.read', 'case.read', 'org.tree.read'];
@@ -36,7 +41,7 @@ function serve(session: Json | number, routes: Record<string, [number, Json]> = 
         ? new Response('{}', { status: session })
         : new Response(JSON.stringify(session), { status: 200 }));
     }
-    const [status, body] = routes[url] ?? (url === '/api/org-units' ? TREE : [404, {}]);
+    const [status, body] = routes[url] ?? (url === '/api/org-units' ? TREE : url === '/api/admin/personnel' ? PERSONNEL : [404, {}]);
     return Promise.resolve(new Response(JSON.stringify(body), { status }));
   });
   return calls;
@@ -244,11 +249,11 @@ describe('管理台首页（P3）', () => {
     expect(html).not.toContain('后续开放');
   });
 
-  it('取数：被锁人员数来自被锁人员接口；403 交给无权限页', async () => {
+  it('取数：被锁人员数来自被锁人员接口，人员数来自人员名单（不数已停用）；403 交给无权限页', async () => {
     const store = fresh();
     serve(person(['系统管理'], ADMIN), { '/api/admin/locked-personnel': [200, { result: 'listed', personnel: [{}, {}] }] });
     await store.dispatch(loadSession());
-    expect(await loadAdminHomeSummary(store.dispatch, ADMIN)).toMatchObject({ lockedPersonnel: 2, orgUnits: 3 });
+    expect(await loadAdminHomeSummary(store.dispatch, ADMIN)).toMatchObject({ lockedPersonnel: 2, orgUnits: 3, personnel: 2 });
     // 只有树读码（内勤）不取机构数：机构入口按维护码出现
     expect((await loadAdminHomeSummary(store.dispatch, ['org.tree.read', 'personnel.locked.read'])).orgUnits).toBeNull();
     expect(await loadAdminHomeSummary(store.dispatch, SUPERVISE)).toEqual(EMPTY_SUMMARY);

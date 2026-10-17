@@ -35,6 +35,8 @@ const ADMIN_OPCODES = [
   'org.tree.read',
   'org.unit.register',
   'org.unit.rename',
+  'personnel.profile.read',
+  'personnel.profile.register',
   'personnel.locked.read',
   'personnel.locked.release',
   'personnel.password.reset',
@@ -88,6 +90,27 @@ describe('操作码名册', () => {
         mustBeCaseHandler: false,
         changesPrimaryState: false,
       });
+    }
+  });
+
+  it('人员登记与查看两码（#128）不要求执法资格，不必是主办人，不改变主状态', () => {
+    for (const opcode of ['personnel.profile.read', 'personnel.profile.register']) {
+      expect(opcodeRequirements(opcode), opcode).toEqual({
+        qualification: 'none',
+        mustBeCaseHandler: false,
+        changesPrimaryState: false,
+      });
+    }
+  });
+
+  it('管理台操作码一律三段「域.对象.动作」（GLOSSARY:77，#105）', () => {
+    const THREE_SEGMENTS = /^[a-z]+\.[a-z]+(?:-[a-z]+)*\.[a-z]+(?:-[a-z]+)*$/;
+    for (const opcode of ADMIN_OPCODES) {
+      expect(THREE_SEGMENTS.test(opcode), opcode).toBe(true);
+    }
+    expect(OPCODES.filter((opcode) => opcode.startsWith('personnel.')).every((opcode) => THREE_SEGMENTS.test(opcode))).toBe(true);
+    for (const bad of ['personnel.register', 'personnel.profile', 'personnel.profile.read.all', 'Personnel.profile.read']) {
+      expect(THREE_SEGMENTS.test(bad), bad).toBe(false);
     }
   });
 

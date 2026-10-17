@@ -17,18 +17,23 @@ export type {
 } from './port.ts';
 export {
   AUDIT_ACTIONS,
+  AUDIT_NEXT_VALUE_ACTIONS,
   AUDIT_SUCCEEDED_ACTIONS,
+  AUDIT_TARGET_ORG_BASES,
   AUTHZ_DENIED_REASONS,
   LOGIN_FAILED_REASONS,
   ORG_UNIT_REGISTER_FAILED_REASONS,
   PASSWORD_CHANGED_REASONS,
+  PERSONNEL_REGISTER_FAILED_REASONS,
   SESSION_END_REASONS,
 } from './vocabulary.ts';
 export type {
   AuditAction,
+  AuditTargetOrgBasis,
   AuthzDeniedReason,
   LoginFailedReason,
   OrgUnitRegisterFailedReason,
   PasswordChangedReason,
+  PersonnelRegisterFailedReason,
   SessionEndReason,
 } from './vocabulary.ts';
