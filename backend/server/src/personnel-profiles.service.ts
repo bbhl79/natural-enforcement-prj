@@ -50,6 +50,7 @@ export interface PersonnelCardView {
   mobilePhone: string | null;
   orgUnitId: string | null;
   orgName: string | null;
+  orgParentName: string | null;
   roles: string[];
   posts: PersonnelPost[];
   passwordChangedAt: string | null;
