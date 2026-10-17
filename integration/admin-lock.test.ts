@@ -778,3 +778,56 @@ describe('POST /api/admin/personnel/:id/password-reset', () => {
     ]);
   });
 });
+
+describe('留痕不含个人信息与口令', () => {
+  it('留痕任何一列都不含手机号、执法证号、口令原文', async () => {
+    // 对不上人员的一次登录：手机号只在请求里，不能进入任何列。
+    const unknownPhone = '13800019999';
+    const unknown = await fetch(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-forwarded-for': '203.0.113.250' },
+      body: JSON.stringify({ mobilePhone: unknownPhone, password: WRONG, rememberMe: false }),
+    });
+    expect(unknown.status).toBe(401);
+
+    const people = await cloned.prisma.personnel.findMany({
+      select: { mobilePhone: true, enforcementCertNo: true },
+    });
+    const phones = people.map((row) => row.mobilePhone).filter((value): value is string => !!value);
+    const certs = people.map((row) => row.enforcementCertNo).filter((value): value is string => !!value);
+    const passwords = [
+      PASSWORD,
+      WRONG,
+      'Seed-pass-52',
+      'Bare-pass-102!',
+      'Clerk-pass-102!',
+      'Cross-pass-102!',
+      'Open-pass-102!',
+      'P-102-ADM-A-z!',
+      'Reset-pass-102!',
+      'Self-pass-102!',
+      'p-102-code-Zz9!',
+    ];
+    const forbidden = [...phones, unknownPhone, ...certs, ...passwords];
+    expect(phones.length).toBeGreaterThan(0);
+    expect(certs).toEqual(expect.arrayContaining([LOCKED_A_CERT, LOCKED_STATION_CERT, NONE_CERT]));
+
+    const rows = await cloned.prisma.$queryRaw<Array<{ line: string }>>`
+      SELECT row_to_json(t)::text AS line FROM audit_trail t
+    `;
+    expect(rows.length).toBeGreaterThan(0);
+    const actions = new Set<string>();
+    for (const { line } of rows) {
+      actions.add((JSON.parse(line) as { action: string }).action);
+      for (const value of forbidden) expect(line).not.toContain(value);
+    }
+    // 覆盖本文件产生的登录、解锁、重设、会话结束与授权拒绝几类留痕。
+    expect([...actions]).toEqual(expect.arrayContaining([
+      'login.failed',
+      'account.unlocked',
+      'account.password-reset',
+      'session.ended',
+      'authz.denied',
+    ]));
+  });
+});
