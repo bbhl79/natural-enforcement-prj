@@ -36,6 +36,7 @@ import {
 } from './session-cookie.ts';
 import { SESSION_CAPACITY, SESSION_STORE, type SessionRow, type SessionStore } from './session-store.ts';
 import { SourceGate } from './source-gate.ts';
+import type { TxScope } from './unit-of-work.ts';
 
 const IDLE_MS = 30 * 60 * 1000;
 const ABSOLUTE_MS = 8 * 60 * 60 * 1000;
@@ -364,18 +365,28 @@ export class AuthService {
   }
 
   /** 系统管理结束某人员全部未结束的会话。独立 HTTP 入口不在本能力里。 */
-  async endPersonnelSessions(input: {
-    personnelId: string;
-    actorId: string;
-    actorCode: string;
-    sourceIp: string | null;
-  }): Promise<void> {
+  /**
+   * 结束某人员全部未结束的会话，每段写一行 session.ended（admin-ended）。
+   * 传入 tx 时读写与留痕都在该事务里（#119），与调用方的业务行同成同败。
+   */
+  async endPersonnelSessions(
+    input: {
+      personnelId: string;
+      actorId: string;
+      actorCode: string;
+      sourceIp: string | null;
+    },
+    tx?: Pick<TxScope, 'directory' | 'sessions' | 'audit'>,
+  ): Promise<void> {
+    const directory = tx?.directory ?? this.directory;
+    const store = tx?.sessions ?? this.sessions;
+    const audit = tx?.audit ?? this.audit;
     const now = this.clock.now();
-    const subject = await this.directory.findById(input.personnelId);
-    const sessions = await this.sessions.listActive(input.personnelId);
+    const subject = await directory.findById(input.personnelId);
+    const sessions = await store.listActive(input.personnelId);
     for (const session of sessions) {
-      await this.sessions.end(session.id, now, 'admin-ended');
-      await this.audit.append({
+      await store.end(session.id, now, 'admin-ended');
+      await audit.append({
         action: 'session.ended',
         reason: 'admin-ended',
         actorId: input.actorId,
