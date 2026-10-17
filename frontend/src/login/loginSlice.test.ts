@@ -579,6 +579,19 @@ describe('登录页', () => {
     await first;
     expect(view.getState().login.operator?.opcodes).toEqual(['case.read']);
   });
+
+  it('到期横幅的关闭记录跟着会话走：同一会话不再出现，换了会话（如记住我新建）重新出现', () => {
+    const view = (tag: string) => loadSession.fulfilled({
+      result: 'authenticated', name: '丁经办', code: 'P-95-OK', orgName: '第一执法支队', roles: ['经办'],
+      opcodes: [], daysRemaining: 5, noticeTag: tag,
+    }, `req-${tag}`, undefined);
+    const first = reducer(undefined, view('aaaaaaaaaaaaaaaa'));
+    expect(first.noticeTag).toBe('aaaaaaaaaaaaaaaa');
+    expect(expiryNoticeVisible(first)).toBe(true);
+    const closed = reducer(first, dismissExpiryNotice());
+    expect(expiryNoticeVisible(reducer(closed, view('aaaaaaaaaaaaaaaa')))).toBe(false);
+    expect(expiryNoticeVisible(reducer(closed, view('bbbbbbbbbbbbbbbb')))).toBe(true);
+  });
 });
 
 afterEach(() => {

@@ -58,7 +58,7 @@ export class AuthController {
     const opcodes = active && !this.auth.passwordChangeState(active.account)
       ? await this.access.listPermittedOpcodes(active.account.id)
       : [];
-    res.status(200).json(this.auth.describe(active, opcodes));
+    res.status(200).json(await this.auth.describe(active, opcodes));
   }
 
   @Post('password')

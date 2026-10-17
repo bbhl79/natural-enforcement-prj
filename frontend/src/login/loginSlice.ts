@@ -54,6 +54,8 @@ export interface LoginState {
   currentPasswordRejected: boolean;
   daysRemaining: number | null;
   expiryNoticeDismissed: boolean;
+  /** 到期横幅的会话标记（服务端按会话派生）；关闭记录按它保存 */
+  noticeTag: string | null;
   /** 主动退出后去登录页不记原路径 */
   explicitLogout: boolean;
   /**
@@ -81,6 +83,7 @@ const initialState: LoginState = {
   currentPasswordRejected: false,
   daysRemaining: null,
   expiryNoticeDismissed: false,
+  noticeTag: null,
   explicitLogout: false,
   sessionRequest: null,
 };
@@ -116,7 +119,7 @@ type SessionView =
   | { result: 'anonymous' }
   | { result: 'password-change-required' }
   | { result: 'password-expired' }
-  | ({ result: 'authenticated'; daysRemaining?: number; expiryNoticeDismissed?: boolean }
+  | ({ result: 'authenticated'; daysRemaining?: number; noticeTag?: string; expiryNoticeDismissed?: boolean }
     & Omit<OperatorSession, 'opcodes'> & { opcodes?: string[] });
 
 let startupReady: Promise<void> = Promise.resolve();
@@ -144,7 +147,7 @@ type LoginFailure = {
   result: 'invalid-credential' | 'password-change-required' | 'password-expired' | 'locked' | 'deactivated' | 'capacity-reached';
 };
 
-type SessionOperator = OperatorSession & { daysRemaining: number | null };
+type SessionOperator = OperatorSession & { daysRemaining: number | null; noticeTag?: string | null };
 
 function operatorFrom(view: SessionView & { result: 'authenticated' }): SessionOperator {
   return {
@@ -154,6 +157,7 @@ function operatorFrom(view: SessionView & { result: 'authenticated' }): SessionO
     roles: view.roles,
     opcodes: Array.isArray(view.opcodes) ? view.opcodes : [],
     daysRemaining: typeof view.daysRemaining === 'number' ? view.daysRemaining : null,
+    noticeTag: typeof view.noticeTag === 'string' ? view.noticeTag : null,
   };
 }
 
@@ -177,13 +181,16 @@ export const loadSession = createAsyncThunk<SessionView, { refresh?: boolean } |
     const finish = armStartupSession();
     try {
       const response = await fetch('/api/auth/session', { cache: 'no-store' });
-      const body = (await response.json()) as { result?: string; code?: string };
+      const body = (await response.json()) as { result?: string; code?: string; noticeTag?: string };
       const kind = passwordChangeKindFromDenial(response.status, body.result);
       if (kind === 'expired') return { result: 'password-expired' };
       if (kind === 'first-login') return { result: 'password-change-required' };
       if (!response.ok) throw new Error(`会话查询失败：HTTP ${response.status}`);
       if (body.result === 'authenticated' && typeof body.code === 'string') {
-        return { ...(body as SessionView & { result: 'authenticated' }), expiryNoticeDismissed: readExpiryDismissed(body.code) };
+        return {
+          ...(body as SessionView & { result: 'authenticated' }),
+          expiryNoticeDismissed: typeof body.noticeTag === 'string' && readExpiryDismissed(body.noticeTag),
+        };
       }
       return body as SessionView;
     } finally {
@@ -193,7 +200,7 @@ export const loadSession = createAsyncThunk<SessionView, { refresh?: boolean } |
 );
 
 export const submitLogin = createAsyncThunk<
-  OperatorSession & { daysRemaining?: number | null },
+  OperatorSession & { daysRemaining?: number | null; noticeTag?: string | null },
   void,
   { state: { login: LoginState }; rejectValue: LoginFailure }
 >(
@@ -250,8 +257,8 @@ export const logout = createAsyncThunk('login/logout', async () => {
 export const closeExpiryNotice = createAsyncThunk<void, void, { state: { login: LoginState } }>(
   'login/closeExpiryNotice',
   async (_, { getState, dispatch }) => {
-    const code = getState().login.operator?.code;
-    if (code) rememberExpiryDismissed(code);
+    const tag = getState().login.noticeTag;
+    if (tag) rememberExpiryDismissed(tag);
     dispatch(dismissExpiryNotice());
   },
 );
@@ -263,7 +270,7 @@ type PasswordFailure =
   | { result: 'password-change' };
 
 export const submitPassword = createAsyncThunk<
-  OperatorSession & { daysRemaining?: number | null },
+  OperatorSession & { daysRemaining?: number | null; noticeTag?: string | null },
   void,
   { state: { login: LoginState }; rejectValue: PasswordFailure }
 >(
@@ -350,6 +357,7 @@ const loginSlice = createSlice({
       state.operator = null;
       state.daysRemaining = null;
       state.expiryNoticeDismissed = false;
+      state.noticeTag = null;
     },
     /** 看过「会话已结束」后去登录页，登录后回到原页。 */
     acknowledgeSessionEnd(state) {
@@ -367,11 +375,14 @@ const loginSlice = createSlice({
         if (state.sessionRequest !== null && state.sessionRequest !== action.meta.requestId) return;
         if (action.payload.result === 'authenticated') {
           const operator = operatorFrom(action.payload);
+          const sameSession = (operator.noticeTag ?? null) === state.noticeTag;
           state.phase = 'authenticated';
           state.passwordChangeKind = null;
           state.operator = operatorOnly(operator);
           state.daysRemaining = operator.daysRemaining;
-          state.expiryNoticeDismissed = state.expiryNoticeDismissed || action.payload.expiryNoticeDismissed === true;
+          state.expiryNoticeDismissed = (sameSession && state.expiryNoticeDismissed)
+            || action.payload.expiryNoticeDismissed === true;
+          state.noticeTag = operator.noticeTag ?? null;
           state.explicitLogout = false;
           state.screen = 'default';
           return;
@@ -388,6 +399,7 @@ const loginSlice = createSlice({
         state.passwordChangeKind = null;
         state.daysRemaining = null;
         state.expiryNoticeDismissed = false;
+        state.noticeTag = null;
       })
       .addCase(loadSession.rejected, (state, action) => {
         if (state.sessionRequest !== null && state.sessionRequest !== action.meta.requestId) return;
@@ -405,6 +417,7 @@ const loginSlice = createSlice({
         state.explicitLogout = false;
         state.daysRemaining = action.payload.daysRemaining ?? null;
         state.expiryNoticeDismissed = false;
+        state.noticeTag = action.payload.noticeTag ?? null;
         state.screen = 'default';
         state.password = '';
       })
@@ -441,6 +454,7 @@ const loginSlice = createSlice({
         state.explicitLogout = false;
         state.daysRemaining = action.payload.daysRemaining ?? null;
         state.expiryNoticeDismissed = false;
+        state.noticeTag = action.payload.noticeTag ?? null;
         state.currentPassword = '';
         state.newPassword = '';
         state.ruleCodes = [];
@@ -480,6 +494,7 @@ const loginSlice = createSlice({
         state.currentPasswordRejected = false;
         state.daysRemaining = null;
         state.expiryNoticeDismissed = false;
+        state.noticeTag = null;
         state.explicitLogout = true;
       });
   },
