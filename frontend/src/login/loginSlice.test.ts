@@ -540,6 +540,45 @@ describe('登录页', () => {
     expect(view.getState().login.operator).toBeNull();
     expect(view.getState().login.explicitLogout).toBe(true);
   });
+
+  it('退出后迟到的会话刷新结果被丢弃，不会恢复登录态', async () => {
+    const authenticated = () => new Response(JSON.stringify({
+      result: 'authenticated', name: '丁经办', code: 'P-95-OK', orgName: '第一执法支队', roles: ['经办'], opcodes: ['clue.read'],
+    }), { status: 200 });
+    let release!: (response: Response) => void;
+    let calls = 0;
+    vi.stubGlobal('fetch', (url: string) => {
+      if (url === '/api/auth/logout') return Promise.resolve(new Response('{}', { status: 200 }));
+      calls += 1;
+      if (calls === 1) return Promise.resolve(authenticated());
+      return new Promise<Response>((resolve) => { release = resolve; });
+    });
+    const view = configureStore({ reducer: { login: reducer } });
+    await view.dispatch(loadSession());
+    const refresh = view.dispatch(loadSession({ refresh: true }));
+    await view.dispatch(logout());
+    release(authenticated());
+    await refresh;
+    expect(view.getState().login.phase).toBe('anonymous');
+    expect(view.getState().login.operator).toBeNull();
+    expect(view.getState().login.explicitLogout).toBe(true);
+  });
+
+  it('两次会话刷新乱序返回时只采用后发的那次', async () => {
+    const pending: Array<(response: Response) => void> = [];
+    vi.stubGlobal('fetch', () => new Promise<Response>((resolve) => { pending.push(resolve); }));
+    const view = configureStore({ reducer: { login: reducer } });
+    const first = view.dispatch(loadSession({ refresh: true }));
+    const second = view.dispatch(loadSession({ refresh: true }));
+    const body = (opcodes: string[]) => new Response(JSON.stringify({
+      result: 'authenticated', name: '丁经办', code: 'P-95-OK', orgName: '第一执法支队', roles: ['经办'], opcodes,
+    }), { status: 200 });
+    pending[1](body(['case.read']));
+    await second;
+    pending[0](body(['clue.read', 'audit.admin.read']));
+    await first;
+    expect(view.getState().login.operator?.opcodes).toEqual(['case.read']);
+  });
 });
 
 afterEach(() => {

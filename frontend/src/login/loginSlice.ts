@@ -56,7 +56,15 @@ export interface LoginState {
   expiryNoticeDismissed: boolean;
   /** 主动退出后去登录页不记原路径 */
   explicitLogout: boolean;
+  /**
+   * 最近一次发出的会话查询的请求号，只采用它的结果（乱序时先发的作废）。
+   * 退出、会话结束、重新登录时置为 STALE：之前发出、迟到的查询结果一律丢弃，
+   * 不会把已退出的界面恢复成登录态。
+   */
+  sessionRequest: string | null;
 }
+
+const STALE = 'stale';
 
 const initialState: LoginState = {
   screen: 'default',
@@ -74,6 +82,7 @@ const initialState: LoginState = {
   daysRemaining: null,
   expiryNoticeDismissed: false,
   explicitLogout: false,
+  sessionRequest: null,
 };
 
 export function expiryNoticeVisible(state: LoginState): boolean {
@@ -327,6 +336,7 @@ const loginSlice = createSlice({
       state.expiryNoticeDismissed = true;
     },
     enterPasswordChange(state, action: PayloadAction<PasswordChangeKind>) {
+      state.sessionRequest = STALE;
       state.phase = 'password-change-required';
       state.passwordChangeKind = action.payload;
       state.operator = null;
@@ -335,6 +345,7 @@ const loginSlice = createSlice({
     /** 已登录时接口返回 401：会话已结束（P1）。 */
     sessionEnded(state) {
       if (state.phase !== 'authenticated') return;
+      state.sessionRequest = STALE;
       state.phase = 'expired';
       state.operator = null;
       state.daysRemaining = null;
@@ -349,7 +360,11 @@ const loginSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
+      .addCase(loadSession.pending, (state, action) => {
+        state.sessionRequest = action.meta.requestId;
+      })
       .addCase(loadSession.fulfilled, (state, action) => {
+        if (state.sessionRequest !== null && state.sessionRequest !== action.meta.requestId) return;
         if (action.payload.result === 'authenticated') {
           const operator = operatorFrom(action.payload);
           state.phase = 'authenticated';
@@ -375,9 +390,13 @@ const loginSlice = createSlice({
         state.expiryNoticeDismissed = false;
       })
       .addCase(loadSession.rejected, (state, action) => {
+        if (state.sessionRequest !== null && state.sessionRequest !== action.meta.requestId) return;
         if (action.meta.arg?.refresh) return;
         state.phase = 'error';
         state.operator = null;
+      })
+      .addCase(submitLogin.pending, (state) => {
+        state.sessionRequest = STALE;
       })
       .addCase(submitLogin.fulfilled, (state, action) => {
         state.phase = 'authenticated';
@@ -415,6 +434,7 @@ const loginSlice = createSlice({
         state.screen = 'error';
       })
       .addCase(submitPassword.fulfilled, (state, action) => {
+        state.sessionRequest = STALE;
         state.phase = 'authenticated';
         state.passwordChangeKind = null;
         state.operator = operatorOnly(action.payload);
@@ -444,7 +464,11 @@ const loginSlice = createSlice({
         state.currentPasswordRejected = true;
         state.ruleCodes = [];
       })
+      .addCase(logout.pending, (state) => {
+        state.sessionRequest = STALE;
+      })
       .addCase(logout.fulfilled, (state) => {
+        state.sessionRequest = STALE;
         state.phase = 'anonymous';
         state.operator = null;
         state.passwordChangeKind = null;
