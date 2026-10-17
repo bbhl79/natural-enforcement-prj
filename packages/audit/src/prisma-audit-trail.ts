@@ -1,9 +1,11 @@
 // 留痕表适配器（ADR 0012）。本文件是包内唯一引用 auditTrail 委托的地方。
 // 调用方传入带 auditTrail.create 的客户端。不在这里 import 生成客户端。
 import type { AuditAppend, AuditTrailPort, AuthzDeniedEntry } from './port.ts';
+import type { AuditTrailFactory } from './transaction.ts';
 import { newAuditId } from './ulid.ts';
 import {
   AUDIT_ACTIONS,
+  AUDIT_TARGET_ORG_BASES,
   AUDIT_SUCCEEDED_ACTIONS,
   AUTHZ_DENIED_REASONS,
   LOGIN_FAILED_REASONS,
@@ -13,6 +15,7 @@ import {
 
 const SUCCEEDED = new Set<string>(AUDIT_SUCCEEDED_ACTIONS);
 const ACTIONS = new Set<string>(AUDIT_ACTIONS);
+const TARGET_BASES = new Set<string>(AUDIT_TARGET_ORG_BASES);
 
 /** 带原因的动作及其封闭原因表。不在表里的动作不许带原因。 */
 const REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
@@ -42,6 +45,26 @@ function assertVocabulary(action: string, reason: unknown): void {
   }
 }
 
+/**
+ * 授权拒绝行的目标机构（#119 修正，ADR 0011）。
+ * 调用方没给时取操作者机构并记 actor-fallback。其他动作两列都空。
+ */
+function targetOf(entry: AuditAppend | AuthzDeniedEntry): {
+  targetOrgUnitId: string | null;
+  targetOrgUnitBasis: string | null;
+} {
+  if (entry.action !== 'authz.denied') {
+    if ('targetOrgUnitId' in entry || 'targetOrgUnitBasis' in entry) {
+      throw new AuditVocabularyError(`动作 ${entry.action} 不带目标机构`);
+    }
+    return { targetOrgUnitId: null, targetOrgUnitBasis: null };
+  }
+  const basis = entry.targetOrgUnitBasis;
+  if (basis === undefined) return { targetOrgUnitId: entry.orgUnitId, targetOrgUnitBasis: 'actor-fallback' };
+  if (!TARGET_BASES.has(basis)) throw new AuditVocabularyError(`表外目标机构来源：${String(basis)}`);
+  return { targetOrgUnitId: entry.targetOrgUnitId ?? null, targetOrgUnitBasis: basis };
+}
+
 export interface AuditTrailCreateClient {
   auditTrail: {
     create(args: { data: Record<string, unknown> }): Promise<unknown>;
@@ -57,6 +80,7 @@ export class PrismaAuditTrail implements AuditTrailPort {
       : SUCCEEDED.has(entry.action) ? 'succeeded' : 'failed';
     const reason = 'reason' in entry ? entry.reason : null;
     assertVocabulary(entry.action, reason);
+    const target = targetOf(entry);
     await this.db.auditTrail.create({
       data: {
         id: newAuditId(),
@@ -73,7 +97,14 @@ export class PrismaAuditTrail implements AuditTrailPort {
         resourceType: entry.resourceType ?? null,
         resourceId: entry.resourceId ?? null,
         previousValue: entry.previousValue ?? null,
+        targetOrgUnitId: target.targetOrgUnitId,
+        targetOrgUnitBasis: target.targetOrgUnitBasis,
       },
     });
   }
 }
+
+/** 默认留痕工厂：client 是 Prisma 根客户端或交互式事务客户端。 */
+export const prismaAuditTrailFactory: AuditTrailFactory = {
+  forClient: (client) => new PrismaAuditTrail(client as AuditTrailCreateClient),
+};

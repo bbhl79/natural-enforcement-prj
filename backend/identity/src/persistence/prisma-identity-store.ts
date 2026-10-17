@@ -5,7 +5,7 @@
 // 触发器（迁移 0002_identity_org）在库层兜底 append-only/只失效不删除，
 // 适配器不提供任何 delete 调用。
 
-import type { PrismaClient } from '../../../prisma/generated/prisma/client.ts';
+import type { Prisma, PrismaClient } from '../../../prisma/generated/prisma/client.ts';
 
 import type {
   ExportAuditRow,
@@ -14,14 +14,94 @@ import type {
   OrgUnitRow,
   OrgUnitToCreate,
   AssignmentTransfer,
+  IdentityTransaction,
+  IdentityUniqueConflict,
   PersonnelAssignmentRow,
+  PersonnelRoleToCreate,
   PersonnelNameVersionRow,
   PersonnelRow,
   PersonnelToCreate,
+  UniqueWriteResult,
 } from './identity-store.ts';
 
+/** Prisma 根客户端，或一个交互式事务客户端（#119）。 */
+export type IdentityDb = PrismaClient | Prisma.TransactionClient;
+
+const WRITTEN: UniqueWriteResult = { result: 'written' };
+
+/**
+ * 同一事务客户端上的受唯一约束写入排队执行（#119）。
+ * 保存点、写入、回到保存点、释放必须连成一段，不能与同一事务里的另一笔唯一写入交错，
+ * 否则冲突后、回滚前插进来的语句会被 PostgreSQL 以 25P02 拒绝。
+ * 按客户端对象排队，绑定同一事务的多个存储实例共享同一队列。
+ */
+const uniqueQueues = new WeakMap<object, Promise<unknown>>();
+
+function enqueue<T>(client: object, task: () => Promise<T>): Promise<T> {
+  const previous = uniqueQueues.get(client) ?? Promise.resolve();
+  const next = previous.then(task, task);
+  uniqueQueues.set(client, next.catch(() => undefined));
+  return next;
+}
+
+/** 唯一约束冲突（P2002，即 PostgreSQL 23505）。 */
+function isUniqueViolation(error: unknown): boolean {
+  if (typeof error !== 'object' || error == null) return false;
+  if ('code' in error && String(error.code) === 'P2002') return true;
+  const message = 'message' in error ? String(error.message) : '';
+  return message.includes('23505') || message.includes('Unique constraint');
+}
+
 export class PrismaIdentityStore implements IdentityStore {
-  constructor(private readonly prisma: PrismaClient) {}
+  private readonly prisma: IdentityDb;
+  private readonly root: PrismaClient | null;
+
+  /** 根客户端：inTransaction 另开交互式事务。 */
+  constructor(prisma: PrismaClient);
+  /** 交互式事务客户端：全部读写都在该事务里，inTransaction 不另开事务。 */
+  constructor(tx: Prisma.TransactionClient, bound: 'transaction');
+  constructor(db: IdentityDb, bound?: 'transaction') {
+    this.prisma = db;
+    this.root = bound === 'transaction' ? null : (db as PrismaClient);
+  }
+
+  async inTransaction<T>(work: (tx: IdentityTransaction) => Promise<T>): Promise<T> {
+    if (!this.root) return work({ store: this, client: this.prisma });
+    return this.root.$transaction((client) =>
+      work({ store: new PrismaIdentityStore(client, 'transaction'), client }));
+  }
+
+  /**
+   * 执行一笔受唯一约束的写入。冲突时交给 classify 判定种类，返回 already-exists。
+   * 事务里先设保存点，冲突只回到保存点，事务仍可继续。根客户端每条语句自成事务，无需保存点。
+   * 同一事务里的唯一写入排队执行（见 enqueue）。同一事务里与其他写入并发仍不受支持。
+   */
+  private unique(
+    write: () => Promise<unknown>,
+    classify: () => Promise<IdentityUniqueConflict | null>,
+  ): Promise<UniqueWriteResult> {
+    if (this.root) return this.uniqueNow(write, classify, false);
+    return enqueue(this.prisma, () => this.uniqueNow(write, classify, true));
+  }
+
+  private async uniqueNow(
+    write: () => Promise<unknown>,
+    classify: () => Promise<IdentityUniqueConflict | null>,
+    inTx: boolean,
+  ): Promise<UniqueWriteResult> {
+    if (inTx) await this.prisma.$executeRawUnsafe('SAVEPOINT identity_unique_write');
+    try {
+      await write();
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+      if (inTx) await this.prisma.$executeRawUnsafe('ROLLBACK TO SAVEPOINT identity_unique_write');
+      const conflict = await classify();
+      if (!conflict) throw error;
+      return { result: 'already-exists', conflict };
+    }
+    if (inTx) await this.prisma.$executeRawUnsafe('RELEASE SAVEPOINT identity_unique_write');
+    return WRITTEN;
+  }
 
   findPersonnelById(id: string): Promise<PersonnelRow | null> {
     return this.prisma.personnel.findUnique({ where: { id } });
@@ -135,8 +215,36 @@ export class PrismaIdentityStore implements IdentityStore {
     await this.prisma.orgUnit.update({ where: { id: orgUnitId }, data: { deactivatedAt } });
   }
 
-  async insertPersonnel(input: PersonnelToCreate): Promise<void> {
-    await this.prisma.personnel.create({ data: input });
+  insertPersonnel(input: PersonnelToCreate): Promise<UniqueWriteResult> {
+    return this.unique(
+      () => this.prisma.personnel.create({ data: input }),
+      async () => {
+        if (await this.prisma.personnel.findUnique({ where: { code: input.code } })) return 'personnel-code';
+        if (input.mobilePhone && await this.prisma.personnel.findUnique({
+          where: { mobilePhone: input.mobilePhone },
+        })) return 'mobile-phone';
+        return null;
+      },
+    );
+  }
+
+  updatePersonnelMobilePhone(personnelId: string, mobilePhone: string | null): Promise<UniqueWriteResult> {
+    return this.unique(
+      () => this.prisma.personnel.update({ where: { id: personnelId }, data: { mobilePhone } }),
+      async () => 'mobile-phone',
+    );
+  }
+
+  insertPersonnelRole(row: PersonnelRoleToCreate): Promise<UniqueWriteResult> {
+    return this.unique(
+      () => this.prisma.personnelRole.create({ data: row }),
+      async () => {
+        const active = await this.prisma.personnelRole.findFirst({
+          where: { personnelId: row.personnelId, roleId: row.roleId, deactivatedAt: null },
+        });
+        return active ? 'personnel-role' : null;
+      },
+    );
   }
 
   async insertPersonnelNameVersion(row: PersonnelNameVersionRow): Promise<void> {
@@ -190,18 +298,20 @@ export class PrismaIdentityStore implements IdentityStore {
   }
 
   async transferAssignment(transfer: AssignmentTransfer): Promise<void> {
+    // 交互式事务（#119）。已绑定事务时并入当前事务，与调用方的留痕同成同败。
     // 顺序固定：先关止旧任职，部分唯一索引才允许插入新的当前任职。
-    await this.prisma.$transaction([
-      this.prisma.personnelAssignment.update({
+    await this.inTransaction(async ({ client }) => {
+      const tx = client as Prisma.TransactionClient;
+      await tx.personnelAssignment.update({
         where: { id: transfer.closedAssignmentId },
         data: { endedAt: transfer.endedAt },
-      }),
-      this.prisma.personnelAssignment.create({ data: transfer.next }),
-      this.prisma.personnel.update({
+      });
+      await tx.personnelAssignment.create({ data: transfer.next });
+      await tx.personnel.update({
         where: { id: transfer.personnelId },
         data: { orgUnitId: transfer.toOrgUnitId },
-      }),
-    ]);
+      });
+    });
   }
 
   async insertExportAudit(row: ExportAuditRow): Promise<void> {
