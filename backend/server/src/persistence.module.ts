@@ -8,11 +8,17 @@ import type { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { PrismaPg } from '@prisma/adapter-pg';
 
-import { PrismaAuditTrail, type AuditTrailCreateClient } from '../../../packages/audit/src/prisma-audit-trail.ts';
-import { AUDIT_TRAIL_PORT } from '@natural-enforcement/audit';
+import { prismaAuditTrailFactory } from '../../../packages/audit/src/prisma-audit-trail.ts';
+import {
+  AUDIT_TRAIL_FACTORY,
+  AUDIT_TRAIL_PORT,
+  runAuditedTransaction,
+  type AuditTrailFactory,
+  type Rejected,
+} from '@natural-enforcement/audit';
 import { IDENTITY_STORE } from '@natural-enforcement/identity';
 import { PrismaIdentityStore } from '../../identity/src/persistence/prisma-identity-store.ts';
-import { PrismaClient } from '../../prisma/generated/prisma/client.ts';
+import { PrismaClient, type Prisma } from '../../prisma/generated/prisma/client.ts';
 
 import { AppModule } from './app.module.ts';
 import { CLOCK, type Clock } from './clock.ts';
@@ -37,8 +43,12 @@ import {
   type SessionRow,
   type SessionStore,
 } from './session-store.ts';
+import { UNIT_OF_WORK, type TxScope, type UnitOfWork } from './unit-of-work.ts';
 
 const PRISMA = Symbol('PRISMA');
+
+/** Prisma 根客户端，或一个交互式事务客户端（#119）。 */
+type Db = PrismaClient | Prisma.TransactionClient;
 
 function byCodePoint(left: string, right: string): number {
   if (left < right) return -1;
@@ -47,7 +57,7 @@ function byCodePoint(left: string, right: string): number {
 }
 
 class PrismaLoginDirectory implements LoginDirectory {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: Db) {}
 
   async findByMobile(mobile: string): Promise<LoginAccount | null> {
     const person = await this.prisma.personnel.findUnique({ where: { mobilePhone: mobile } });
@@ -170,7 +180,7 @@ class PrismaLoginDirectory implements LoginDirectory {
 }
 
 class PrismaSessionStore implements SessionStore {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(private readonly prisma: Db) {}
 
   async insert(row: NewSession): Promise<void> {
     await this.prisma.authSession.create({
@@ -256,7 +266,8 @@ function isLostRace(error: unknown): boolean {
 }
 
 class PrismaRememberMeStore implements RememberMeStore {
-  constructor(private readonly prisma: PrismaClient) {}
+  /** root 为空表示本存储绑定在调用方的交互式事务里。 */
+  constructor(private readonly prisma: Db, private readonly root: PrismaClient | null) {}
 
   async insert(row: NewRememberMe): Promise<void> {
     await this.prisma.authRememberMe.create({
@@ -326,8 +337,11 @@ class PrismaRememberMeStore implements RememberMeStore {
   }
 
   async rotate(currentId: string, next: NewRememberMe, endedAt: Date): Promise<'rotated' | 'lost-race'> {
+    // 已在调用方事务里时并入该事务；否则自开一个事务。
+    const inTransaction = <T>(body: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> =>
+      this.root ? this.root.$transaction(body) : body(this.prisma);
     try {
-      await this.prisma.$transaction(async (tx) => {
+      await inTransaction(async (tx) => {
         const locked = await tx.$queryRaw<Array<{ ended_at: Date | null }>>`
           SELECT ended_at FROM auth_remember_me WHERE id = ${currentId} FOR UPDATE
         `;
@@ -356,6 +370,40 @@ class PrismaRememberMeStore implements RememberMeStore {
   }
 }
 
+/** 管理动作的工作单元（#119）。每次 run 开一个交互式事务，事务内各存储与留痕共用同一事务客户端。 */
+class PrismaUnitOfWork implements UnitOfWork {
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly factory: AuditTrailFactory,
+  ) {}
+
+  run<T>(work: (tx: TxScope) => Promise<T | Rejected<T>>): Promise<T> {
+    return runAuditedTransaction<TxScope, T>(
+      (body) => this.prisma.$transaction((client) => body(this.scope(client))),
+      (tx) => tx.client,
+      this.factory,
+      (tx) => work(tx),
+    );
+  }
+
+  private scope(client: Prisma.TransactionClient): TxScope {
+    return {
+      client,
+      store: new PrismaIdentityStore(client, 'transaction'),
+      directory: new PrismaLoginDirectory(client),
+      sessions: new PrismaSessionStore(client),
+      remember: new PrismaRememberMeStore(client, null),
+      audit: this.factory.forClient(client),
+    };
+  }
+}
+
+/** 启动参数之外的可覆写项。只给测试用。 */
+export interface ApplicationOverrides {
+  /** 接缝①：覆写留痕工厂，例如「业务写完后抛错」。 */
+  auditTrailFactory?: AuditTrailFactory;
+}
+
 class DisconnectPrisma implements OnModuleDestroy {
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -366,10 +414,16 @@ class DisconnectPrisma implements OnModuleDestroy {
 
 @Module({})
 class PersistenceModule {
-  static register(databaseUrl: string, clock: Clock, sessionCapacity: number): DynamicModule {
+  static register(
+    databaseUrl: string,
+    clock: Clock,
+    sessionCapacity: number,
+    overrides: ApplicationOverrides,
+  ): DynamicModule {
     const prisma = new PrismaClient({
       adapter: new PrismaPg({ connectionString: databaseUrl }),
     });
+    const auditTrailFactory = overrides.auditTrailFactory ?? prismaAuditTrailFactory;
     return {
       module: PersistenceModule,
       global: true,
@@ -378,10 +432,12 @@ class PersistenceModule {
         { provide: SESSION_CAPACITY, useValue: sessionCapacity },
         { provide: PRISMA, useValue: prisma },
         { provide: IDENTITY_STORE, useValue: new PrismaIdentityStore(prisma) },
-        { provide: AUDIT_TRAIL_PORT, useValue: new PrismaAuditTrail(prisma as unknown as AuditTrailCreateClient) },
+        { provide: AUDIT_TRAIL_FACTORY, useValue: auditTrailFactory },
+        { provide: AUDIT_TRAIL_PORT, useValue: auditTrailFactory.forClient(prisma) },
         { provide: LOGIN_DIRECTORY, useValue: new PrismaLoginDirectory(prisma) },
         { provide: SESSION_STORE, useValue: new PrismaSessionStore(prisma) },
-        { provide: REMEMBER_ME_STORE, useValue: new PrismaRememberMeStore(prisma) },
+        { provide: REMEMBER_ME_STORE, useValue: new PrismaRememberMeStore(prisma, prisma) },
+        { provide: UNIT_OF_WORK, useValue: new PrismaUnitOfWork(prisma, auditTrailFactory) },
         {
           provide: DisconnectPrisma,
           useFactory: (client: PrismaClient) => new DisconnectPrisma(client),
@@ -390,7 +446,9 @@ class PersistenceModule {
       ],
       exports: [
         IDENTITY_STORE,
+        AUDIT_TRAIL_FACTORY,
         AUDIT_TRAIL_PORT,
+        UNIT_OF_WORK,
         LOGIN_DIRECTORY,
         SESSION_STORE,
         REMEMBER_ME_STORE,
@@ -403,10 +461,15 @@ class PersistenceModule {
 
 @Module({})
 class BootModule {
-  static register(databaseUrl: string, clock: Clock, sessionCapacity: number): DynamicModule {
+  static register(
+    databaseUrl: string,
+    clock: Clock,
+    sessionCapacity: number,
+    overrides: ApplicationOverrides,
+  ): DynamicModule {
     return {
       module: BootModule,
-      imports: [PersistenceModule.register(databaseUrl, clock, sessionCapacity), AppModule],
+      imports: [PersistenceModule.register(databaseUrl, clock, sessionCapacity, overrides), AppModule],
     };
   }
 }
@@ -415,8 +478,12 @@ export async function createApplication(
   databaseUrl: string,
   clock: Clock = { now: () => new Date() },
   sessionCapacity: number = DEFAULT_SESSION_CAPACITY,
+  overrides: ApplicationOverrides = {},
 ): Promise<INestApplication> {
-  const app = await NestFactory.create(BootModule.register(databaseUrl, clock, sessionCapacity), { logger: false });
+  const app = await NestFactory.create(
+    BootModule.register(databaseUrl, clock, sessionCapacity, overrides),
+    { logger: false },
+  );
   const withCsrf = app as INestApplication & { enableCsrfProtection?: () => void };
   if (typeof withCsrf.enableCsrfProtection !== 'function') {
     throw new Error('当前 NestJS 没有 enableCsrfProtection');
