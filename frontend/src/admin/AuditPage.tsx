@@ -26,9 +26,13 @@ import {
 const ADMIN_DESC = '你任职机构及其下级范围内的机构维护、人员维护、执法证、解锁与重设口令、导出等记录。';
 const NOTE = '留痕写入后不能更改。只写工号，不写手机号和执法证号。';
 const NO_ANCHOR_BANNER = '标有「无所属机构」的记录，对象不属于任何机构（例如没有任职的人员）。这类记录视同属于市局，只有市局任职的系统管理和监督能看到。';
+/** 列表没取到（加载中、加载失败）时点「导出」的提示。原型没有这句，工程稿，随 v0.5 定稿。 */
+export const EXPORT_BLOCKED = '留痕列表还没有取到，暂时不能导出。请等列表出来后再导出；加载失败时先点「重新加载」。';
 
 export type ExportState =
   | { phase: 'idle' }
+  /** 列表没取到时点了「导出」：只提示，不取数、不下载 */
+  | { phase: 'blocked' }
   | { phase: 'confirm' }
   | { phase: 'running' }
   | { phase: 'done'; count: number; filename: string }
@@ -255,14 +259,34 @@ export function AuditContent(props: AuditContentProps) {
   );
 }
 
-function ListError({ desc, canExport, filter }: { desc: string; canExport: boolean; filter: AuditFilter }) {
+export interface PendingHeadProps {
+  desc: string;
+  canExport: boolean;
+  exportState: ExportState;
+  setExportState: (state: ExportState) => void;
+}
+
+/**
+ * 列表没取到（加载中、加载失败）时的页头。「导出」按钮按原型可以点，但这时不知道范围和条数，
+ * 导出可能是错的或空的，所以点了只出提示，不调导出接口，也不下载文件。
+ */
+export function PendingHead({ desc, canExport, exportState, setExportState }: PendingHeadProps) {
+  return (
+    <>
+      <Head desc={desc} canExport={canExport} onExport={() => setExportState({ phase: 'blocked' })} />
+      {exportState.phase === 'blocked' ? <div className="banner danger">{EXPORT_BLOCKED}</div> : null}
+    </>
+  );
+}
+
+function ListError({ head, filter }: { head: PendingHeadProps; filter: AuditFilter }) {
   const error = useAsyncError();
   const revalidator = useRevalidator();
   // 403 交给壳内路由错误边界，整页显示无权限页（P2 forbidden），与管理台首页一致
   if (errorStatus(error) === 403) throw error;
   return (
     <>
-      <Head desc={desc} canExport={canExport} />
+      <PendingHead {...head} />
       <Filters filter={filter} />
       <ErrorCard what="留痕" onRetry={() => void revalidator.revalidate()} />
     </>
@@ -305,11 +329,12 @@ function AuditPageBody() {
     }
   };
 
+  const pendingHead: PendingHeadProps = { desc: pendingDesc, canExport, exportState, setExportState };
   return (
-    <Suspense fallback={<><Head desc={pendingDesc} canExport={canExport} /><Filters filter={filter} /><SkeletonRows /></>}>
+    <Suspense fallback={<><PendingHead {...pendingHead} /><Filters filter={filter} /><SkeletonRows /></>}>
       <Await
         resolve={list}
-        errorElement={<ListError desc={pendingDesc} canExport={canExport} filter={filter} />}
+        errorElement={<ListError head={pendingHead} filter={filter} />}
       >
         {(result: AuditListResult) => (
           <AuditContent

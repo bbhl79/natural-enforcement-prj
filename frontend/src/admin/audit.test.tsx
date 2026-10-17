@@ -1,4 +1,5 @@
 import { configureStore } from '@reduxjs/toolkit';
+import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -6,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import reducer, { loadSession } from '../login/loginSlice';
 import type { RouterStore } from '../router';
 import { renderRoute, renderRouter } from '../test-utils';
-import { AuditContent, type AuditContentProps, type ExportState } from './AuditPage';
+import { AuditContent, EXPORT_BLOCKED, PendingHead, type AuditContentProps, type ExportState } from './AuditPage';
 import {
   defaultRange,
   exportAudit,
@@ -78,6 +79,26 @@ async function renderSettled(path: string): Promise<{ html: string; first: strin
   for (let i = 0; i < 5; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
   return { html: renderRouter(store as RouterStore, router), first };
 }
+
+type ButtonProps = { children?: ReactNode; disabled?: boolean; onClick?: () => void };
+
+/** 在元素树里找文字为 text 的按钮；不带钩子的函数组件就地展开（node 环境没有 DOM，用它代替点击）。 */
+function findButton(node: ReactNode, text: string): ReactElement<ButtonProps> | null {
+  if (Array.isArray(node)) {
+    for (const child of node as ReactNode[]) {
+      const hit = findButton(child, text);
+      if (hit) return hit;
+    }
+    return null;
+  }
+  if (!isValidElement(node)) return null;
+  const element = node as ReactElement<ButtonProps>;
+  if (typeof element.type === 'function') return findButton((element.type as (props: ButtonProps) => ReactNode)(element.props), text);
+  if (element.type === 'button' && element.props.children === text) return element;
+  return findButton(element.props.children, text);
+}
+
+const EXPORT_BUTTON = '<button type="button" class="btn btn-primary" data-requires="audit.admin.export">导出</button>';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -220,6 +241,7 @@ describe('管理台留痕页（P8）', () => {
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain('class="filters"');
     expect(html).not.toContain('class="table"');
+    expect(html).toContain(EXPORT_BUTTON);
   });
 
   it('加载失败：可重试的错误卡片，无工程报错', async () => {
@@ -229,6 +251,9 @@ describe('管理台留痕页（P8）', () => {
     expect(html).toContain('重新加载');
     expect(html).not.toContain('HTTP');
     expect(html).not.toContain('Internal');
+    // 按原型，「导出」不置灰
+    expect(html).toContain(EXPORT_BUTTON);
+    expect(html).not.toContain(EXPORT_BLOCKED);
   });
 
   it('筛选不合规：人话提示，不出表格', async () => {
@@ -299,6 +324,28 @@ describe('导出（P8 exportConfirm / exportDone）', () => {
     expect(html).toContain('<li>导出内容与页面一致，只含工号，不含手机号和执法证号；</li><li>本次导出本身也会留痕。</li>');
     expect(html).toContain('>取消</button>');
     expect(html).toContain('>确认导出</button>');
+  });
+
+  it('列表没取到（加载中、加载失败）：「导出」可以点；点了不调导出接口、不下载文件，只出提示', () => {
+    const calls = serve(person(['系统管理'], ADMIN));
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL');
+    let state: ExportState = { phase: 'idle' };
+    const head = (exportState: ExportState) => (
+      <PendingHead desc="说明" canExport exportState={exportState} setExportState={(next) => { state = next; }} />
+    );
+    const button = findButton(head(state), '导出');
+    expect(button).not.toBeNull();
+    expect(button?.props.disabled).toBe(false);
+    button?.props.onClick?.();
+    expect(state).toEqual({ phase: 'blocked' });
+    expect(calls).toEqual([]);
+    expect(createObjectURL).not.toHaveBeenCalled();
+    const html = renderToStaticMarkup(head(state));
+    expect(html).toContain(`<div class="banner danger">${EXPORT_BLOCKED}</div>`);
+    expect(html).toContain(EXPORT_BUTTON);
+    // 列表到了以后不再出这句提示
+    expect(content({ phase: 'blocked' })).not.toContain(EXPORT_BLOCKED);
+    createObjectURL.mockRestore();
   });
 
   it('导出完成横幅；失败时说明原因', () => {
