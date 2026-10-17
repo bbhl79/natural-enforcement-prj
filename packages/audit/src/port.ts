@@ -1,4 +1,5 @@
 import type {
+  AuditTargetOrgBasis,
   AuthzDeniedReason,
   LoginFailedReason,
   OrgUnitRegisterFailedReason,
@@ -44,7 +45,13 @@ export type AuditAppend =
   | (AuditParties & { action: 'account.unlocked' })
   | (AuditParties & { action: 'account.password-reset' })
   | (AuditParties & { action: 'account.password-changed'; reason: PasswordChangedReason })
-  | (AuditParties & { action: 'authz.denied'; reason: AuthzDeniedReason })
+  | (AuditParties & {
+    action: 'authz.denied';
+    reason: AuthzDeniedReason;
+    /** 不给时按操作者机构（orgUnitId）兜底，并记 actor-fallback。 */
+    targetOrgUnitId?: string | null;
+    targetOrgUnitBasis?: AuditTargetOrgBasis;
+  })
   | (AuditParties & { action: 'org.unit.registered' })
   | (AuditParties & { action: 'org.unit.registered'; outcome: 'failed'; reason: OrgUnitRegisterFailedReason })
   | (AuditParties & { action: 'org.unit.renamed' })
@@ -53,7 +60,11 @@ export type AuditAppend =
   | (AuditParties & { action: 'personnel.viewed' })
   | (AuditParties & { action: 'personnel.post-granted'; nextValue: string });
 
-/** 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。 */
+/**
+ * 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。
+ * orgUnitId 是操作者当时任职机构，照记，不用来套范围。
+ * targetOrgUnitId 是目标机构，查阅范围按它套（#119 修正，ADR 0011）。
+ */
 export interface AuthzDeniedEntry {
   readonly action: typeof AUDIT_ACTION_AUTHZ_DENIED;
   readonly outcome: 'failed';
@@ -68,6 +79,8 @@ export interface AuthzDeniedEntry {
   readonly resourceType: string | null;
   readonly resourceId: string | null;
   readonly previousValue: null;
+  readonly targetOrgUnitId: string | null;
+  readonly targetOrgUnitBasis: AuditTargetOrgBasis;
 }
 
 /** 只追加。没有更新，也没有删除。 */

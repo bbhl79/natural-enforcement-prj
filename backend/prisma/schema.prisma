@@ -299,6 +299,10 @@ model AuditTrail {
   previousValue      String?   @map("previous_value")
   // 后值（#128）：personnel.post-granted 写标记取值。其余动作为空。
   nextValue          String?   @map("next_value")
+  /// 授权拒绝行的目标机构（#119 修正，ADR 0011）：查阅范围按它套。其他动作为空。
+  targetOrgUnitId    String?   @map("target_org_unit_id")
+  /// 目标机构从哪来：object = 对象所属机构；actor-fallback = 对象机构解析不出，取操作者当时任职机构。
+  targetOrgUnitBasis String?   @map("target_org_unit_basis")
 
   @@map("audit_trail")
 }

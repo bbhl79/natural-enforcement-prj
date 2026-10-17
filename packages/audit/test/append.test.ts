@@ -25,6 +25,8 @@ const entry: AuthzDeniedEntry = {
   resourceType: 'case',
   resourceId: 'case-1',
   previousValue: null,
+  targetOrgUnitId: '01ARZ3NDEKTSV4RRFFQ69G5FAC',
+  targetOrgUnitBasis: 'object',
 };
 
 describe('授权拒绝追加', () => {
@@ -52,8 +54,53 @@ describe('授权拒绝追加', () => {
       subjectPersonnelId: null,
       sourceIp: null,
       previousValue: null,
+      targetOrgUnitId: '01ARZ3NDEKTSV4RRFFQ69G5FAC',
+      targetOrgUnitBasis: 'object',
     });
     expect(written[0]?.id).toMatch(ULID);
+  });
+
+  it('拒绝行没给目标机构时按操作者机构兜底，并标 actor-fallback（ADR 0011 修正）', async () => {
+    const { db, written } = recorder();
+    await new PrismaAuditTrail(db).append({
+      action: 'authz.denied',
+      reason: 'not-authenticated',
+      actorId: null,
+      actorCode: null,
+      subjectPersonnelId: null,
+      subjectCode: null,
+      orgUnitId: 'org-actor',
+      sourceIp: null,
+    });
+    expect(written[0]).toMatchObject({ targetOrgUnitId: 'org-actor', targetOrgUnitBasis: 'actor-fallback' });
+  });
+
+  it('其他动作两列都空；表外来源或非拒绝动作带目标机构都拒绝写', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    await trail.append({
+      action: 'login.succeeded',
+      actorId: 'p',
+      actorCode: 'P',
+      subjectPersonnelId: 'p',
+      subjectCode: 'P',
+      orgUnitId: 'org-actor',
+      sourceIp: null,
+    });
+    expect(written[0]).toMatchObject({ targetOrgUnitId: null, targetOrgUnitBasis: null });
+    await expect(trail.append({ ...entry, targetOrgUnitBasis: 'guess' } as unknown as AuthzDeniedEntry))
+      .rejects.toBeInstanceOf(AuditVocabularyError);
+    await expect(trail.append({
+      action: 'login.succeeded',
+      actorId: 'p',
+      actorCode: 'P',
+      subjectPersonnelId: 'p',
+      subjectCode: 'P',
+      orgUnitId: 'org-actor',
+      sourceIp: null,
+      targetOrgUnitId: 'x',
+    } as unknown as AuthzDeniedEntry)).rejects.toBeInstanceOf(AuditVocabularyError);
+    expect(written).toHaveLength(1);
   });
 });
 
