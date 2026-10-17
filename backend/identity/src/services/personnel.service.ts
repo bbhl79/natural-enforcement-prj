@@ -4,10 +4,15 @@
 
 import { Inject, Injectable } from '@nestjs/common';
 
-import { IDENTITY_MAINTENANCE_OPCODE } from '../domain/access.ts';
+import { AccessDeniedError, IDENTITY_MAINTENANCE_OPCODE } from '../domain/access.ts';
+import { AlreadyExistsError } from '../domain/already-exists.ts';
 import type { ActorRef } from '../domain/actor.ts';
 import { newUlid } from '../domain/ulid.ts';
-import type { ExportAuditRow, PersonnelRow } from '../persistence/identity-store.ts';
+import type {
+  ExportAuditRow,
+  IdentityTransaction,
+  PersonnelRow,
+} from '../persistence/identity-store.ts';
 import { IDENTITY_STORE, type IdentityStore } from '../persistence/identity-store.ts';
 import { AccessControlService } from './access-control.service.ts';
 import { CredentialService } from './credential.service.ts';
@@ -44,13 +49,14 @@ export class PersonnelService {
     const passwordHash = input.initialPassword
       ? await this.credential.hashPassword(input.initialPassword)
       : null;
-    await this.store.insertPersonnel({
+    const inserted = await this.store.insertPersonnel({
       id,
       code: input.code,
       name: input.name,
       orgUnitId: input.orgUnitId,
       passwordHash,
     });
+    if (inserted.result === 'already-exists') throw new AlreadyExistsError(inserted.conflict);
     await this.store.insertPersonnelNameVersion({
       id: newUlid(),
       personnelId: id,
@@ -91,33 +97,55 @@ export class PersonnelService {
    * 调岗：旧任职记录闭环 + 新任职建立 + 当前归属迁移。
    * 数据范围锚点 = 该人员「现属」机构（须归 actor 管辖）；目的地不限——
    * 调岗正是跨机构动作。调岗完成后该人员数据范围随新任职生效，旧机构权限即失效（E2 证据）。
+   *
+   * 交互式事务（#119）：
+   * - 不传 tx：先在事务外授权（拒绝即写 authz.denied 并抛错），再自开一个事务写入。
+   * - 传入 tx：并入调用方事务，读取与授权都经 tx.store。拒绝时抛 AccessDeniedError，
+   *   denial 带着尚未写入的留痕行，调用方回滚后用 rejected(..., error.denial) 写入。
    */
   async transferPersonnel(
     actor: ActorRef,
     personnelId: string,
     toOrgUnitId: string,
+    tx?: IdentityTransaction,
   ): Promise<void> {
-    const fromOrgUnitId = await this.access.currentOrgOf(personnelId);
-    await this.access.authorize(actor, IDENTITY_MAINTENANCE_OPCODE, fromOrgUnitId);
-    const current = await this.store.findCurrentAssignment(personnelId);
-    if (!current) {
-      // currentOrgOf 已兜底，此处仅类型收窄
-      throw new Error(`人员 ${personnelId} 无生效任职，无法调岗`);
+    if (tx) {
+      const fromOrgUnitId = await this.access.currentOrgOf(personnelId, tx.store);
+      const decision = await this.access.check(
+        actor,
+        IDENTITY_MAINTENANCE_OPCODE,
+        fromOrgUnitId,
+        undefined,
+        tx.store,
+      );
+      if (!decision.allowed) throw new AccessDeniedError(decision.reason, decision.detail, decision.denial);
+    } else {
+      const fromOrgUnitId = await this.access.currentOrgOf(personnelId);
+      await this.access.authorize(actor, IDENTITY_MAINTENANCE_OPCODE, fromOrgUnitId);
     }
-    const now = new Date();
-    await this.store.transferAssignment({
-      closedAssignmentId: current.id,
-      endedAt: now,
-      personnelId,
-      toOrgUnitId,
-      next: {
-        id: newUlid(),
+    const write = async ({ store }: IdentityTransaction): Promise<void> => {
+      const current = await store.findCurrentAssignment(personnelId);
+      if (!current) {
+        // currentOrgOf 已兜底，此处仅类型收窄
+        throw new Error(`人员 ${personnelId} 无生效任职，无法调岗`);
+      }
+      const now = new Date();
+      await store.transferAssignment({
+        closedAssignmentId: current.id,
+        endedAt: now,
         personnelId,
-        orgUnitId: toOrgUnitId,
-        startedAt: now,
-        endedAt: null,
-      },
-    });
+        toOrgUnitId,
+        next: {
+          id: newUlid(),
+          personnelId,
+          orgUnitId: toOrgUnitId,
+          startedAt: now,
+          endedAt: null,
+        },
+      });
+    };
+    if (tx) await write(tx);
+    else await this.store.inTransaction(write);
   }
 
   /** 人员失效：只置失效标记 + 失效时间，无物理删除路径 */

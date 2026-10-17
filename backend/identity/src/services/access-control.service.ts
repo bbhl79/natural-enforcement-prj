@@ -13,6 +13,7 @@ import {
   AUDIT_ACTION_AUTHZ_DENIED,
   AUDIT_TRAIL_PORT,
   type AuditTrailPort,
+  type AuthzDeniedEntry,
   type AuthzDenyReason,
 } from '@natural-enforcement/audit';
 
@@ -32,6 +33,27 @@ export interface AuthorizationClock {
 
 const SHANGHAI = 'Asia/Shanghai';
 
+/**
+ * 一次授权判断的结果（#119）。拒绝时带上应写的 authz.denied 留痕行，由调用方决定何时写。
+ * 交互式事务里用 check：拒绝行交给 rejected(...)，在业务事务回滚后另起事务写入。
+ */
+export type AuthorizationDecision =
+  | { readonly allowed: true; readonly context: IdentityContext }
+  | {
+    readonly allowed: false;
+    readonly reason: AuthzDenyReason;
+    readonly detail: string;
+    readonly denial: AuthzDeniedEntry;
+  };
+
+type DenialInput = {
+  actorId: string | null;
+  actorCode: string | null;
+  orgUnitId: string | null;
+  opcode: string;
+  resource?: AuthorizationResource;
+};
+
 @Injectable()
 export class AccessControlService {
   private readonly clock: AuthorizationClock;
@@ -45,7 +67,8 @@ export class AccessControlService {
   }
 
   /**
-   * 按操作码重新判断。通过则交出身份上下文，否则抛 AccessDeniedError。
+   * 按操作码重新判断。通过则交出身份上下文。
+   * 拒绝时先追加一行 authz.denied（经 AUDIT_TRAIL_PORT，自成事务），再抛 AccessDeniedError。
    * @param targetOrgUnitId 动作所涉数据的归属机构
    */
   async authorize(
@@ -54,9 +77,26 @@ export class AccessControlService {
     targetOrgUnitId: string,
     resource?: AuthorizationResource,
   ): Promise<IdentityContext> {
-    const personnel = await this.store.findPersonnelById(actor.personnelId);
+    const decision = await this.check(actor, opcode, targetOrgUnitId, resource);
+    if (decision.allowed) return decision.context;
+    return this.raise(decision);
+  }
+
+  /**
+   * 与 authorize 同一套判断，但不写留痕、不抛错（#119）。
+   * 拒绝时交出 authz.denied 留痕行，由调用方在业务事务回滚后写入。
+   * 在交互式事务里传入事务内的 store（如 tx.store），读取复用事务连接，不再向连接池另取连接。
+   */
+  async check(
+    actor: ActorRef,
+    opcode: string,
+    targetOrgUnitId: string,
+    resource?: AuthorizationResource,
+    store: IdentityStore = this.store,
+  ): Promise<AuthorizationDecision> {
+    const personnel = await store.findPersonnelById(actor.personnelId);
     if (!personnel) {
-      return this.deny('identity-unknown', `人员 ${actor.personnelId} 不存在`, {
+      return denied('identity-unknown', `人员 ${actor.personnelId} 不存在`, {
         actorId: null,
         actorCode: null,
         orgUnitId: null,
@@ -64,10 +104,10 @@ export class AccessControlService {
         resource,
       });
     }
-    const assignment = await this.store.findCurrentAssignment(personnel.id);
+    const assignment = await store.findCurrentAssignment(personnel.id);
     const actorOrgId = assignment?.orgUnitId ?? null;
     if (!actor.authenticated) {
-      return this.deny('not-authenticated', `人员 ${personnel.code} 未认证`, {
+      return denied('not-authenticated', `人员 ${personnel.code} 未认证`, {
         actorId: personnel.id,
         actorCode: personnel.code,
         orgUnitId: actorOrgId,
@@ -76,7 +116,7 @@ export class AccessControlService {
       });
     }
     if (personnel.deactivatedAt) {
-      return this.deny('identity-deactivated', `人员 ${personnel.code} 已失效`, {
+      return denied('identity-deactivated', `人员 ${personnel.code} 已失效`, {
         actorId: personnel.id,
         actorCode: personnel.code,
         orgUnitId: actorOrgId,
@@ -85,10 +125,10 @@ export class AccessControlService {
       });
     }
     const granting = opcodeRequirements(opcode)
-      ? effectiveGrantingRoles(opcode, await this.store.listGrantingRoleNames(personnel.id, opcode))
+      ? effectiveGrantingRoles(opcode, await store.listGrantingRoleNames(personnel.id, opcode))
       : [];
     if (granting.length === 0) {
-      return this.deny(
+      return denied(
         'permission-denied',
         `人员 ${personnel.code} 不能执行操作码 ${opcode}`,
         {
@@ -101,7 +141,7 @@ export class AccessControlService {
       );
     }
     if (!assignment) {
-      return this.deny('scope-denied', `人员 ${personnel.code} 无生效任职，数据范围为空`, {
+      return denied('scope-denied', `人员 ${personnel.code} 无生效任职，数据范围为空`, {
         actorId: personnel.id,
         actorCode: personnel.code,
         orgUnitId: null,
@@ -109,9 +149,9 @@ export class AccessControlService {
         resource,
       });
     }
-    const path = await this.store.findOrgUnitPathToRoot(targetOrgUnitId);
+    const path = await store.findOrgUnitPathToRoot(targetOrgUnitId);
     if (!path.includes(assignment.orgUnitId)) {
-      return this.deny(
+      return denied(
         'scope-denied',
         `机构 ${targetOrgUnitId} 不在人员 ${personnel.code} 的数据范围（当前任职机构 ${assignment.orgUnitId}）内`,
         {
@@ -123,14 +163,17 @@ export class AccessControlService {
         },
       );
     }
-    const roles = [...(await this.store.listActiveRoleNames(personnel.id))].sort((a, b) =>
+    const roles = [...(await store.listActiveRoleNames(personnel.id))].sort((a, b) =>
       a.localeCompare(b, 'zh-CN'),
     );
     return {
-      personnelId: personnel.id,
-      orgUnitId: assignment.orgUnitId,
-      roles,
-      hasEnforcementQualification: hasEnforcementQualification(personnel, this.clock.now()),
+      allowed: true,
+      context: {
+        personnelId: personnel.id,
+        orgUnitId: assignment.orgUnitId,
+        roles,
+        hasEnforcementQualification: hasEnforcementQualification(personnel, this.clock.now()),
+      },
     };
   }
 
@@ -173,7 +216,7 @@ export class AccessControlService {
       await this.currentOrgOf(actor.personnelId),
     );
     const personnel = await this.store.findPersonnelById(context.personnelId);
-    return this.deny(
+    return this.raise(denied(
       'scope-denied',
       '新建根机构不在任何任职子树内；根机构只经种子通道建立',
       {
@@ -182,30 +225,34 @@ export class AccessControlService {
         orgUnitId: context.orgUnitId,
         opcode: IDENTITY_MAINTENANCE_OPCODE,
       },
-    );
+    ));
   }
 
-  /** 人员的当前任职机构（数据范围锚点）；无生效任职按越权处理 */
-  async currentOrgOf(personnelId: string): Promise<string> {
-    const current = await this.store.findCurrentAssignment(personnelId);
+  /** 人员的当前任职机构（数据范围锚点）；无生效任职按越权处理。store 同 check。 */
+  async currentOrgOf(personnelId: string, store: IdentityStore = this.store): Promise<string> {
+    const current = await store.findCurrentAssignment(personnelId);
     if (!current) {
       throw new AccessDeniedError('scope-denied', `人员 ${personnelId} 无生效任职`);
     }
     return current.orgUnitId;
   }
 
-  private async deny(
-    reason: AuthzDenyReason,
-    detail: string,
-    input: {
-      actorId: string | null;
-      actorCode: string | null;
-      orgUnitId: string | null;
-      opcode: string;
-      resource?: AuthorizationResource;
-    },
-  ): Promise<never> {
-    await this.audit.append({
+  private async raise(decision: Extract<AuthorizationDecision, { allowed: false }>): Promise<never> {
+    await this.audit.append(decision.denial);
+    throw new AccessDeniedError(decision.reason, decision.detail);
+  }
+}
+
+function denied(
+  reason: AuthzDenyReason,
+  detail: string,
+  input: DenialInput,
+): Extract<AuthorizationDecision, { allowed: false }> {
+  return {
+    allowed: false,
+    reason,
+    detail,
+    denial: {
       action: AUDIT_ACTION_AUTHZ_DENIED,
       outcome: 'failed',
       actorId: input.actorId,
@@ -219,9 +266,8 @@ export class AccessControlService {
       resourceType: input.resource?.resourceType ?? null,
       resourceId: input.resource?.resourceId ?? null,
       previousValue: null,
-    });
-    throw new AccessDeniedError(reason, detail);
-  }
+    },
+  };
 }
 
 /**

@@ -240,6 +240,31 @@ describe('按操作码授权', () => {
     expect(await access.listDataScopeOrgUnitIds('handler')).toEqual(['dept-a', 'station']);
   });
 
+  it('check 与 authorize 同判，拒绝时交出留痕行但不写、不抛错（#119）', async () => {
+    const recorded = recorder();
+    const access = new AccessControlService(store(), recorded.port);
+    const decision = await access.check(auth('handler'), 'clue.read', 'dept-b', {
+      resourceType: 'clue',
+      resourceId: 'c1',
+    });
+    expect(decision).toMatchObject({
+      allowed: false,
+      reason: 'scope-denied',
+      denial: {
+        action: AUDIT_ACTION_AUTHZ_DENIED,
+        outcome: 'failed',
+        reason: 'scope-denied',
+        opcode: 'clue.read',
+        resourceType: 'clue',
+        resourceId: 'c1',
+        orgUnitId: 'dept-a',
+      },
+    });
+    expect(recorded.rows).toEqual([]);
+    const allowed = await access.check(auth('handler'), 'clue.read', 'dept-a');
+    expect(allowed).toMatchObject({ allowed: true, context: { personnelId: 'handler', orgUnitId: 'dept-a' } });
+  });
+
   it('放行不写授权拒绝', async () => {
     const recorded = recorder();
     const access = new AccessControlService(store(), recorded.port);
