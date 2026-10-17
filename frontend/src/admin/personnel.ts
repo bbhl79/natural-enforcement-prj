@@ -361,6 +361,27 @@ export async function loadRegisterOrgUnits(dispatch: ApiDispatch): Promise<OrgUn
 }
 
 /** loader 只取数，不做授权判断；没有对应码时不发请求，页面显示无权限卡片。 */
+/**
+ * 名单页的重验证：只改了查询参数（筛选）时不重取名单，筛选在前端完成。
+ * 进入页面、提交写操作、显式刷新（地址不变的 revalidate）照常取数。
+ */
+export function shouldRevalidatePersonnelList({
+  currentUrl,
+  nextUrl,
+  formMethod,
+  defaultShouldRevalidate,
+}: {
+  currentUrl: URL;
+  nextUrl: URL;
+  formMethod?: string;
+  defaultShouldRevalidate: boolean;
+}): boolean {
+  const onlySearchChanged = !formMethod
+    && currentUrl.pathname === nextUrl.pathname
+    && currentUrl.search !== nextUrl.search;
+  return onlySearchChanged ? false : defaultShouldRevalidate;
+}
+
 export function personnelListLoader(store: SessionStore) {
   return () => {
     const list = sessionOpcodes(store).then((opcodes) =>

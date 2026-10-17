@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import reducer, { loadSession } from '../login/loginSlice';
 import { visibleMenu } from '../shell/menu';
-import { renderRoute } from '../test-utils';
+import { renderRoute, settled } from '../test-utils';
 import { PersonnelCardView } from './PersonnelCardPage';
 import { EMPTY_INPUT, PersonnelCreateForm } from './PersonnelCreatePage';
 import { PersonnelListView } from './PersonnelListPage';
@@ -22,6 +22,7 @@ import {
   problemCount,
   registerPersonnel,
   searchFromFilter,
+  shouldRevalidatePersonnelList,
   type PersonnelCard,
   type PersonnelFilter,
   type PersonnelList,
@@ -127,6 +128,33 @@ describe('人员名单筛选（P5）', () => {
     expect(filterFromSearch(searchFromFilter(filter))).toEqual(filter);
     expect(searchFromFilter(DEFAULT_FILTER).toString()).toBe('');
     expect(filterFromSearch(new URLSearchParams('cert=bogus')).cert).toBe('all');
+  });
+});
+
+describe('名单页重验证', () => {
+  const at = (path: string) => new URL(`http://x${path}`);
+  it('只改筛选（查询参数）不重取名单；进入页面、提交写操作、显式刷新照常取数', () => {
+    const run = (from: string, to: string, formMethod?: string) => shouldRevalidatePersonnelList({
+      currentUrl: at(from), nextUrl: at(to), formMethod, defaultShouldRevalidate: true,
+    });
+    expect(run('/admin/personnel', '/admin/personnel?q=%E7%8E%8B')).toBe(false);
+    expect(run('/admin/personnel?q=a', '/admin/personnel?q=ab')).toBe(false);
+    expect(run('/admin/personnel?q=a', '/admin/personnel?q=a')).toBe(true);
+    expect(run('/admin', '/admin/personnel?q=a')).toBe(true);
+    expect(run('/admin/personnel', '/admin/personnel?q=a', 'POST')).toBe(true);
+  });
+
+  it('筛选导航时不再请求名单接口', async () => {
+    const calls = serve(person(ADMIN), { '/api/admin/personnel': [200, { result: 'listed', ...LIST }] });
+    const { router } = await renderRoute(fresh(), '/admin/personnel');
+    const count = () => calls.filter((call) => call.url === '/api/admin/personnel').length;
+    expect(count()).toBe(1);
+    await router.navigate('/admin/personnel?q=%E7%8E%8B', { replace: true });
+    await settled(router);
+    expect(count()).toBe(1);
+    await router.revalidate();
+    await settled(router);
+    expect(count()).toBe(2);
   });
 });
 
