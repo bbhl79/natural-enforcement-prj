@@ -3,13 +3,15 @@
 // 新建下级与改名在调用方的交互式事务里执行，业务行与留痕同成同败（#119）。
 // 被拒时只抛错或返回结果，不在事务里写失败留痕：拒绝行交给调用方 rejected(...)，回滚后另起事务写入。
 
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Optional } from '@nestjs/common';
 import type { AuditAppend, AuditTrailPort } from '@natural-enforcement/audit';
 
-import { AccessDeniedError, IDENTITY_MAINTENANCE_OPCODE } from '../domain/access.ts';
+import { AccessDeniedError } from '../domain/access.ts';
 import type { ActorRef } from '../domain/actor.ts';
+import { NO_OPEN_ITEMS, OPEN_ITEMS_COUNTER, type OpenItems, type OpenItemsCounter } from '../domain/open-items.ts';
 import {
   ORG_TREE_READ_OPCODE,
+  ORG_UNIT_DEACTIVATE_OPCODE,
   ORG_UNIT_REGISTER_OPCODE,
   ORG_UNIT_RENAME_OPCODE,
   childLevelOf,
@@ -46,6 +48,20 @@ export type RenameOrgUnitResult =
   | { result: 'unchanged'; orgUnit: OrgUnitRow }
   | { result: 'non-compliant'; rules: OrgUnitRuleCode[] };
 
+/** 停用被拒的那一条前提（判定顺序中的第一条）及给人看的条数。 */
+export type DeactivationBlocker =
+  | { reason: 'org-unit-root' }
+  | { reason: 'org-has-active-children'; children: number }
+  | { reason: 'org-has-assignments'; assignments: number }
+  | { reason: 'org-has-open-items'; openItems: OpenItems };
+
+export type DeactivateOrgUnitResult =
+  | { result: 'deactivated'; orgUnit: OrgUnitRow }
+  /** 已停用：不写行，不改首次停用时间，不写留痕。 */
+  | { result: 'unchanged'; orgUnit: OrgUnitRow }
+  /** 409。failure 是 org.unit.deactivated 的失败留痕行，由调用方回滚后写入。 */
+  | { result: 'invalid-state'; blocker: DeactivationBlocker; failure: AuditAppend };
+
 /** 机构树上的一个节点：当前态、全部名称版本（版本号升序）和在职人员数。 */
 export interface OrgTreeUnit extends OrgUnitRow {
   names: OrgUnitNameVersionRow[];
@@ -67,6 +83,8 @@ export class OrgUnitService {
   constructor(
     @Inject(IDENTITY_STORE) private readonly store: IdentityStore,
     private readonly access: AccessControlService,
+    /** 接缝③：承办中事项计数。未绑定时用恒为 0 的实现。 */
+    @Optional() @Inject(OPEN_ITEMS_COUNTER) private readonly openItems: OpenItemsCounter = NO_OPEN_ITEMS,
   ) {}
 
   /**
@@ -223,9 +241,59 @@ export class OrgUnitService {
     return { result: 'renamed', orgUnit: { ...current, name } };
   }
 
-  /** 机构失效：只置失效标记 + 失效时间，无物理删除路径。操作码与前提由停用票（#124）接入。 */
-  async deactivateOrgUnit(actor: ActorRef, orgUnitId: string): Promise<void> {
-    await this.access.authorize(actor, IDENTITY_MAINTENANCE_OPCODE, orgUnitId);
-    await this.store.deactivateOrgUnit(orgUnitId, new Date());
+  /**
+   * 停用机构（#124，#105「停用（D4）」）。在调用方的交互式事务里执行，业务行与留痕同成同败。
+   * 判定顺序：授权（越权 403，不暴露任何条数）→ 已停用（200 unchanged，不写行、不改首次停用时间、不写留痕）
+   * → 根机构 → 未停用下级 → 生效任职 → 未办结事项，只返回第一条（409 invalid-state）。
+   * 本机构行先加 FOR UPDATE：与在它下面新建下级（锁上级 FOR SHARE）串行，不会留下「已停用机构下有新下级」。
+   * 被拒时不在事务里写失败留痕：failure 交给调用方 rejected(...)，回滚后另起事务写入。
+   */
+  async deactivateOrgUnit(
+    actor: ActorRef,
+    orgUnitId: string,
+    tx: IdentityTransaction,
+    audit: AuditTrailPort,
+    sourceIp: string | null = null,
+  ): Promise<DeactivateOrgUnitResult> {
+    const resource = { resourceType: 'org-unit', resourceId: orgUnitId };
+    const decision = await this.access.check(actor, ORG_UNIT_DEACTIVATE_OPCODE, orgUnitId, resource, tx.store);
+    if (!decision.allowed) raiseDenied(decision);
+    const current = await tx.store.lockOrgUnit(orgUnitId, 'update');
+    if (!current) throw new Error(`机构 ${orgUnitId} 通过授权后读取失败`);
+    if (current.deactivatedAt) return { result: 'unchanged', orgUnit: current };
+
+    const actorCode = (await tx.store.findPersonnelById(actor.personnelId))?.code ?? null;
+    const parties = {
+      actorId: actor.personnelId,
+      actorCode,
+      subjectPersonnelId: null,
+      subjectCode: null,
+      orgUnitId,
+      sourceIp,
+      opcode: ORG_UNIT_DEACTIVATE_OPCODE,
+      resourceType: 'org-unit',
+      resourceId: orgUnitId,
+    };
+    const refuse = (blocker: DeactivationBlocker): DeactivateOrgUnitResult => ({
+      result: 'invalid-state',
+      blocker,
+      failure: { ...parties, action: 'org.unit.deactivated', outcome: 'failed', reason: blocker.reason },
+    });
+
+    if (current.parentId === null) return refuse({ reason: 'org-unit-root' });
+    const children = await tx.store.countActiveChildOrgUnits(orgUnitId);
+    if (children > 0) return refuse({ reason: 'org-has-active-children', children });
+    const assignments = await tx.store.countOpenAssignmentsOfOrgUnit(orgUnitId);
+    if (assignments > 0) return refuse({ reason: 'org-has-assignments', assignments });
+    const openItems = await this.openItems.countOpenItems(orgUnitId, tx);
+    if (openItems.clues + openItems.cases > 0) {
+      return refuse({ reason: 'org-has-open-items', openItems: { clues: openItems.clues, cases: openItems.cases } });
+    }
+
+    const deactivatedAt = new Date();
+    await tx.store.deactivateOrgUnit(orgUnitId, deactivatedAt);
+    await audit.append({ ...parties, action: 'org.unit.deactivated' });
+    return { result: 'deactivated', orgUnit: { ...current, deactivatedAt } };
   }
+
 }
