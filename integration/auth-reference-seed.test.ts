@@ -98,6 +98,8 @@ const EXPECTED_ALLOWANCES: Record<string, readonly string[]> = {
     'org.tree.read',
     'org.unit.register',
     'org.unit.rename',
+    'personnel.profile.read',
+    'personnel.profile.register',
     'personnel.locked.read',
     'personnel.locked.release',
     'personnel.password.reset',

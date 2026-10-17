@@ -77,6 +77,9 @@ for (const code of [
   'org.tree.read',
   'org.unit.register',
   'org.unit.rename',
+  // 人员登记、列表与卡片（#105「人员与登录凭据」，#128）。其余 personnel.profile.* 随 #129、#130、#133 入册。
+  'personnel.profile.read',
+  'personnel.profile.register',
   'personnel.locked.read',
   'personnel.locked.release',
   'personnel.password.reset',
