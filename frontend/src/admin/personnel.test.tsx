@@ -272,6 +272,30 @@ describe('新建人员（P6 create / createInvalid）', () => {
   });
 });
 
+describe('用户可见文本不露操作码与原始结果码（SCREENS.md:8）', () => {
+  const visible = (html: string) => html.replace(/<[^>]*>/g, ' ');
+  const RAW = /personnel\.|audit\.|org\.|permission-denied|scope-denied|invalid-state|already-exists|non-compliant|not-found|-required|too-short|contains-code|legal-review-lead|legal-affairs-leader/;
+  it('名单、空状态、卡片、新建、填写有误：可见文本里没有操作码和规则码', () => {
+    const failure = {
+      ok: false as const,
+      fields: { name: '请填写姓名', code: '这个工号已被其他人员使用，请核对', orgUnitId: '所选机构已停用，请选择在用的机构' },
+      passwordRules: ['too-short', 'contains-code'],
+      message: '你没有权限执行这个操作，或所选机构不在你的范围内。',
+    };
+    const pages = [
+      listHtml(),
+      listHtml({ keyword: '张三丰' }),
+      renderToStaticMarkup(<MemoryRouter><PersonnelCardView card={CARD} now={new Date('2026-10-17T04:00:00Z')} registered /></MemoryRouter>),
+      renderToStaticMarkup(
+        <MemoryRouter>
+          <PersonnelCreateForm orgUnits={ORGS} input={EMPTY_INPUT} failure={failure} busy={false} onInput={() => undefined} onSubmit={() => undefined} />
+        </MemoryRouter>,
+      ),
+    ];
+    for (const html of pages) expect(visible(html)).not.toMatch(RAW);
+  });
+});
+
 describe('登记接口', () => {
   const input = { ...EMPTY_INPUT, code: 'TH0360', name: '邓雅', orgUnitId: 'ld', mobilePhone: '13900007788', initialPassword: 'Gz@Field2026', roles: ['经办'], posts: ['legal-review-lead' as const] };
 
