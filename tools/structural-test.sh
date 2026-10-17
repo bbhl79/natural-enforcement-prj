@@ -67,6 +67,10 @@
 #   user-lock-assertions    锁清单断言（#105「锁清单」、#111、#120）：docs/user-lock.md 每节
 #                           带一个断言编号；测试代码里必须有标题以该编号开头的 it/test
 #                           （含 it.todo「待实现」登记）；测试里出现清单外编号同样判红
+#   frontend-router-mode    前端路由模式（#105「前端：路由与应用壳」、#122）：react-router 只用
+#                           data 模式（createBrowserRouter + RouterProvider）。前端源码出现
+#                           声明式 <BrowserRouter>/<HashRouter>，或任何 package.json、源码、
+#                           vite 配置引用框架模式开发插件 @react-router/dev 即失败
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
@@ -122,6 +126,7 @@ RULES=(
   spatial-no-orm-mutation
   runtime-manifest
   user-lock-assertions
+  frontend-router-mode
 )
 FAIL=0
 
@@ -761,6 +766,35 @@ check_user-lock-assertions() {
   done <<< "$tested"
   if [ "$fails" -eq 0 ]; then
     note_ok "user-lock-assertions：锁清单 $(wc -l <<< "$sections" | xargs) 条，每条断言编号在测试代码里都有断言或「待实现」登记"
+  fi
+}
+
+# 规则（#122，#105「前端：路由与应用壳」）：前端路由只用 data 模式。
+# ① 前端源码（不含 node_modules、原型、构建产物）不得出现声明式路由组件 BrowserRouter /
+#    HashRouter（createBrowserRouter、createHashRouter 不受影响：按整词匹配，前缀 create 不算）。
+# ② 前端的 package.json、源码与配置不得引用框架模式开发插件 @react-router/dev。
+FRONTEND_DIR="$ROOT/frontend"
+check_frontend-router-mode() {
+  local fails=0 file
+  while IFS= read -r file; do
+    note_fail "frontend-router-mode：${file#"$ROOT"/} 使用了声明式路由组件（只许 createBrowserRouter + RouterProvider）"
+    fails=$((fails + 1))
+  done < <(find "$FRONTEND_DIR" -path '*/node_modules' -prune -o -path "$FRONTEND_DIR/prototype" -prune \
+      -o -path "$FRONTEND_DIR/dist" -prune -o "${SCAN_TS[@]}" -print 2>/dev/null \
+    | while IFS= read -r file; do
+        grep -qE '(^|[^A-Za-z0-9_$])(BrowserRouter|HashRouter)([^A-Za-z0-9_$]|$)' "$file" && echo "$file"
+      done)
+  while IFS= read -r file; do
+    note_fail "frontend-router-mode：${file#"$ROOT"/} 引用了框架模式插件 @react-router/dev"
+    fails=$((fails + 1))
+  done < <(find "$FRONTEND_DIR" -path '*/node_modules' -prune -o -path "$FRONTEND_DIR/prototype" -prune \
+      -o -path "$FRONTEND_DIR/dist" -prune -o -type f \( "${SCAN_TS_NAMES[@]}" -o -name 'package.json' \
+      -o -name '*.mjs' -o -name '*.cjs' -o -name '*.js' \) -print 2>/dev/null \
+    | while IFS= read -r file; do
+        grep -qF '@react-router/dev' "$file" && echo "$file"
+      done)
+  if [ "$fails" -eq 0 ]; then
+    note_ok "frontend-router-mode：前端只用 data 模式路由，无声明式路由组件、无 @react-router/dev"
   fi
 }
 
