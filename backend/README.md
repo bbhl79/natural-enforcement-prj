@@ -138,7 +138,7 @@ BullMQ/RustFS SDK），不引用 backend 内部路径（含 `../../backend/…` 
 
 四张权限表白名单名字是 `Role`、`Permission`、`RolePermission`、`PersonnelRole`。技术主键是 ULID。一行权限是一条操作码。并集不落库。人员—角色不记机构。记录只失效不删除：库拒绝 DELETE，UPDATE 只允许把 `deactivated_at` 从空写成非空。未失效行的业务键由部分唯一索引保证：`role_one_active_name`、`permission_one_active_code`、`role_permission_one_active`、`personnel_role_one_active`。Prisma schema 表达不了这四条索引，后续生成迁移时不得删掉。
 
-留痕表白名单名字是 `AuditTrail`。技术主键是 ULID。除主键、`created_at`、`action`、`outcome` 外都可空。`outcome` 只有 `succeeded` 与 `failed`。触发器复用 `reject_row_mutation`，拒绝 UPDATE 和 DELETE。登录标识、执法证号、口令不进入任何一列。
+留痕表白名单名字是 `AuditTrail`。技术主键是 ULID。除主键、`created_at`、`action`、`outcome` 外都可空。`outcome` 只有 `succeeded` 与 `failed`。触发器复用 `reject_row_mutation`，拒绝 UPDATE 和 DELETE。登录标识、执法证号、口令不进入任何一列。可空整数列 `item_count` 记导出条数，只有带条数的动作写值（ADR 0013）。人员导出写 `personnel.exported`。导出留痕表 `ExportAudit` 已冻结：不再写入，表、触发器和白名单条目保留，已有行可查（ADR 0013）。
 
 参照种子在所有环境写入七个角色、操作码名册和允许行。允许行以 GitHub issue #71 为准。`authz.binding.submit` 与 `authz.binding.approve` 只给系统管理。人员导出 `personnel.profile.export` 只给系统管理（#125）。开发测试夹具（机构与人员）只在 `NODE_ENV` 不是 `production` 时写入。生产环境必须设置 `NODE_ENV=production`，夹具人员才不进生产库。夹具人员带手机号，`password_changed_at` 为空。生产环境的首个系统管理人员不在本票。
 
