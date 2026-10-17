@@ -25,7 +25,7 @@ const text = (value: unknown): string => (typeof value === 'string' ? value : ''
 
 /**
  * 机构树（#123）。树查询放在 /api/org-units：管理台和业务侧（内勤选承办机构）复用同一接口。
- * 新建下级与改名放在 /api/admin/org-units。
+ * 新建下级、改名与停用（#124）放在 /api/admin/org-units。
  * 跨站写请求由框架 CSRF 拒绝，跨站读请求由 SameOriginReadGuard 拒绝。
  */
 @Controller('api')
@@ -63,6 +63,13 @@ export class OrgUnitsController {
     @Body() body: RenameBody,
   ): Promise<void> {
     const outcome = await this.orgUnits.rename(req.actor as ActorRef, id, text(body?.name), sourceAddress(req));
+    res.status(outcome.status).json(outcome.body);
+  }
+
+  /** 停用（#124）。重复停用返回 200 unchanged。 */
+  @Post('admin/org-units/:id/deactivate')
+  async deactivate(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {
+    const outcome = await this.orgUnits.deactivate(req.actor as ActorRef, id, sourceAddress(req));
     res.status(outcome.status).json(outcome.body);
   }
 }
