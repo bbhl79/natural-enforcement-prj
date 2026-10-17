@@ -6,7 +6,6 @@ import type { AddressInfo } from 'node:net';
 import { hash, type HashOptions } from 'argon2';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { prismaAuditTrailFactory, type AuditTrailFactory } from '@natural-enforcement/audit';
-import type { OpenItems, OpenItemsCounter } from '../backend/identity/src/index.ts';
 
 import { createApplication } from '../backend/server/src/persistence.module.ts';
 import { openClonedDatabase, type ClonedDatabase } from './cloned-database.ts';
@@ -78,6 +77,11 @@ const barrierFactory: AuditTrailFactory = {
     };
   },
 };
+
+// 计数端口的类型取自应用装配的覆写参数，不跨模块深路径导入 identity（结构测试 module-public-entry）。
+type Overrides = NonNullable<Parameters<typeof createApplication>[3]>;
+type OpenItemsCounter = NonNullable<Overrides['openItemsCounter']>;
+type OpenItems = Awaited<ReturnType<OpenItemsCounter['countOpenItems']>>;
 
 /** 接缝③：按机构注入未办结条数，没登记的机构为 0。 */
 const openItemsByUnit = new Map<string, OpenItems>();
@@ -211,7 +215,7 @@ async function deactivatedAtOf(id: string): Promise<Date | null> {
   return (await cloned.prisma.orgUnit.findUniqueOrThrow({ where: { id } })).deactivatedAt;
 }
 
-async function startApp(overrides: Parameters<typeof createApplication>[3]): Promise<string> {
+async function startApp(overrides: Overrides): Promise<string> {
   const app = await createApplication(cloned.connectionString, { now: () => new Date(T0) }, undefined, overrides);
   await app.listen(0, '127.0.0.1');
   closers.push(() => app.close());
