@@ -54,7 +54,7 @@ const ALLOWED: Record<string, readonly string[]> = {
     ...['template', 'rule', 'calendar', 'metric'].flatMap((object) =>
       ['submit', 'approve', 'void', 'withdraw', 'read'].map((action) => `cfg.${object}.${action}`),
     ),
-    'personnel.locked.read', 'personnel.locked.release', 'personnel.password.reset',
+    'personnel.locked.read', 'personnel.locked.release', 'personnel.password.reset', 'personnel.profile.export',
     'audit.admin.read', 'audit.admin.export', 'authz.binding.submit', 'authz.binding.approve',
   ],
 };

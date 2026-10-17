@@ -140,7 +140,7 @@ BullMQ/RustFS SDK），不引用 backend 内部路径（含 `../../backend/…` 
 
 留痕表白名单名字是 `AuditTrail`。技术主键是 ULID。除主键、`created_at`、`action`、`outcome` 外都可空。`outcome` 只有 `succeeded` 与 `failed`。触发器复用 `reject_row_mutation`，拒绝 UPDATE 和 DELETE。登录标识、执法证号、口令不进入任何一列。
 
-参照种子在所有环境写入七个角色、操作码名册和允许行。允许行以 GitHub issue #71 为准。`authz.binding.submit` 与 `authz.binding.approve` 只给系统管理。开发测试夹具（机构与人员）只在 `NODE_ENV` 不是 `production` 时写入。生产环境必须设置 `NODE_ENV=production`，夹具人员才不进生产库。夹具人员带手机号，`password_changed_at` 为空。生产环境的首个系统管理人员不在本票。
+参照种子在所有环境写入七个角色、操作码名册和允许行。允许行以 GitHub issue #71 为准。`authz.binding.submit` 与 `authz.binding.approve` 只给系统管理。人员导出 `personnel.profile.export` 只给系统管理（#125）。开发测试夹具（机构与人员）只在 `NODE_ENV` 不是 `production` 时写入。生产环境必须设置 `NODE_ENV=production`，夹具人员才不进生产库。夹具人员带手机号，`password_changed_at` 为空。生产环境的首个系统管理人员不在本票。
 
 ## 测试装配层豁免（integration 层）
 
