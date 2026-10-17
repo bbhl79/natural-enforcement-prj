@@ -69,12 +69,15 @@ type AuditRecord = {
   org_unit_id: string | null;
   source_ip: string | null;
   opcode: string | null;
+  target_org_unit_id: string | null;
+  target_org_unit_basis: string | null;
 };
 
 async function audits(): Promise<AuditRecord[]> {
   return cloned.prisma.$queryRaw<AuditRecord[]>`
     SELECT id, action, outcome, reason, actor_id, actor_code,
-           subject_personnel_id, subject_code, org_unit_id, source_ip, opcode
+           subject_personnel_id, subject_code, org_unit_id, source_ip, opcode,
+           target_org_unit_id, target_org_unit_basis
     FROM audit_trail
     ORDER BY created_at, id
   `;
@@ -422,6 +425,10 @@ describe('POST /api/admin/personnel/:id/unlock', () => {
         actor_id: adminAId,
         actor_code: 'P-102-ADM-A',
         opcode: 'personnel.locked.release',
+        // 越区被拒归对象机构（#105；ADR 0011 修正），操作者任职照记。
+        org_unit_id: deptAId,
+        target_org_unit_id: other.orgUnitId,
+        target_org_unit_basis: 'object',
       }),
     ]);
     const still = await fetch(`${baseUrl}/api/auth/login`, {

@@ -10,7 +10,7 @@
 |---|---|---|
 | `packages/shield` | 统一契约（非业务模块） | 公共出口仅 `src/index.ts` |
 | `backend/identity` | 身份组织 | 人员/机构（名称版本化，只失效不删除） |
-| `backend/geo-dict` | 空间字典 | 含合规规则参考数据 |
+| `backend/geo-dict` | 空间字典 | 持有合规规则参考数据，不依赖任何业务模块（承载见 ADR 0016） |
 | `backend/case` | 案件聚合 | `clue`（线索，含立案前「线索登记域」写权）/ `dossier`（卷宗）/ `document`（文书） |
 | `backend/approval` | 审批协同 | — |
 | `backend/supervision` | 监督统计 | — |

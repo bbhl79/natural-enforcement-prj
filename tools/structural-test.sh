@@ -213,6 +213,9 @@ target_of_spec() { # $1=文件绝对路径 $2=specifier
 # 名单 = 文件 → 允许的 specifier 前缀（空格分隔）；名单外的深路径导入照样判红。
 declare -A ASSEMBLY_EXEMPT=(
   ["integration/e2-access-matrix.test.ts"]="../backend/identity/src/"
+  # #119：身份存储层唯一冲突与事务接缝①，同样在 integration 层装配 PrismaIdentityStore。
+  ["integration/identity-store-unique.test.ts"]="../backend/identity/src/"
+  ["integration/tx-audit-seam.test.ts"]="../backend/identity/src/"
   # #122：会话操作码清单与授权判定的等价性断言，同样直接装配 AccessControlService
   ["integration/session-opcodes.test.ts"]="../backend/identity/src/"
 )
