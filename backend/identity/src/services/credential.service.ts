@@ -44,7 +44,13 @@ export class CredentialService {
       timeCost: ARGON2_OPTIONS.timeCost,
       parallelism: ARGON2_OPTIONS.parallelism,
     })) {
-      await this.store.replacePasswordHash(personnelId, await this.hashPassword(plain));
+      const replaced = await this.store.replacePasswordHash(
+        personnelId,
+        personnel.passwordHash,
+        await this.hashPassword(plain),
+      );
+      // 散列已被并发的重设或改密换掉：本次验真针对的是旧口令，拒绝。
+      if (!replaced) return false;
     }
     return true;
   }

@@ -52,8 +52,10 @@ describe('口令散列（argon2 0.45.1，#52）', () => {
       findPersonnelById: async (id: string) => (
         id === 'known' ? { id, passwordHash: row.passwordHash } : null
       ),
-      replacePasswordHash: async (_id: string, passwordHash: string) => {
+      replacePasswordHash: async (_id: string, expected: string, passwordHash: string) => {
+        if (row.passwordHash !== expected) return false;
         row.passwordHash = passwordHash;
+        return true;
       },
     } as unknown as IdentityStore;
     const service = new CredentialService(store);
@@ -63,14 +65,38 @@ describe('口令散列（argon2 0.45.1，#52）', () => {
     await expect(service.verifyHash(row.passwordHash, 's3cret-pass')).resolves.toBe(true);
   });
 
+  it('重散列期间散列被并发重设换掉时不覆盖新散列，并拒绝本次认证', async () => {
+    const legacy = await hashWithDefaults('old-pass-1A!');
+    const resetHash = await new CredentialService(noopStore()).hashPassword('New-reset-9x');
+    const row = { passwordHash: legacy };
+    const store = {
+      findPersonnelById: async () => {
+        const snapshot = { id: 'known', passwordHash: row.passwordHash };
+        // 读出旧散列之后、写回之前，管理员重设了口令
+        row.passwordHash = resetHash;
+        return snapshot;
+      },
+      replacePasswordHash: async (_id: string, expected: string, passwordHash: string) => {
+        if (row.passwordHash !== expected) return false;
+        row.passwordHash = passwordHash;
+        return true;
+      },
+    } as unknown as IdentityStore;
+    const service = new CredentialService(store);
+    await expect(service.authenticate('known', 'old-pass-1A!')).resolves.toBe(false);
+    expect(row.passwordHash).toBe(resetHash);
+  });
+
   it('已存参数已是定版时验真成功不重写散列', async () => {
     const pinned = await new CredentialService(noopStore()).hashPassword('s3cret-pass');
     const changedAt = new Date('2026-02-01T00:00:00.000Z');
     const row = { passwordHash: pinned, passwordChangedAt: changedAt };
     const store = {
       findPersonnelById: async () => ({ id: 'known', passwordHash: row.passwordHash }),
-      replacePasswordHash: async (_id: string, passwordHash: string) => {
+      replacePasswordHash: async (_id: string, expected: string, passwordHash: string) => {
+        if (row.passwordHash !== expected) return false;
         row.passwordHash = passwordHash;
+        return true;
       },
     } as unknown as IdentityStore;
     const service = new CredentialService(store);
