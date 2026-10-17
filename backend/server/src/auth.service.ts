@@ -131,6 +131,8 @@ export type SessionView =
       passwordChangeRequired: boolean;
       passwordChangeKind: PasswordGate | null;
       daysRemaining?: number;
+      /** 本人允许的操作码清单（#105 菜单来源）。强制改密期间为空。不含数据范围。 */
+      opcodes: string[];
     };
 
 type ActiveSession = { row: SessionRow; account: LoginAccount };
@@ -259,8 +261,11 @@ export class AuthService {
     };
   }
 
-  /** 会话查询看到的结果。没有有效会话时是未登录，不在这里写授权拒绝。 */
-  describe(active: ActiveSession | null): SessionView {
+  /**
+   * 会话查询看到的结果。没有有效会话时是未登录，不在这里写授权拒绝。
+   * opcodes 由调用方按 AccessControlService.listPermittedOpcodes 算好传入。
+   */
+  describe(active: ActiveSession | null, opcodes: readonly string[] = []): SessionView {
     if (!active) return { result: 'anonymous' };
     const now = this.clock.now();
     const gate = passwordGate(active.account.passwordChangedAt, now);
@@ -273,6 +278,7 @@ export class AuthService {
       passwordChangeRequired: gate != null,
       passwordChangeKind: gate,
       ...this.notice(active.account.passwordChangedAt, now),
+      opcodes: gate ? [] : [...opcodes],
     };
   }
 

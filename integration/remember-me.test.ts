@@ -244,6 +244,7 @@ describe('勾选记住我', () => {
       roles: [],
       passwordChangeRequired: false,
       passwordChangeKind: null,
+      opcodes: [],
     });
     const cookies = response.headers.getSetCookie();
     const nextRm = pairOf(cookies, '__Host-rm');

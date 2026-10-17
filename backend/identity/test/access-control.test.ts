@@ -9,6 +9,8 @@ import {
 import { isAccessDenied, type DenyReason } from '../src/domain/access.ts';
 import type { ActorRef } from '../src/domain/actor.ts';
 import type { IdentityStore, PersonnelRow } from '../src/persistence/identity-store.ts';
+import { OPCODES } from '@natural-enforcement/shield';
+
 import { AccessControlService } from '../src/services/access-control.service.ts';
 
 const CERT = 'CERT-SHOULD-NOT-LEAK';
@@ -112,6 +114,9 @@ function store(): IdentityStore {
     listOrgUnitSubtreeIds: async (orgUnitId) => subtrees[orgUnitId] ?? [],
     listActiveRoleNames: async (personnelId) => roles[personnelId] ?? [],
     listGrantingRoleNames: async (personnelId, opcode) => grants[personnelId]?.[opcode] ?? [],
+    listGrantedOpcodes: async (personnelId) =>
+      Object.entries(grants[personnelId] ?? {}).flatMap(([opcode, names]) =>
+        names.map((roleName) => ({ opcode, roleName }))),
   } as IdentityStore;
 }
 
@@ -295,5 +300,61 @@ describe('按操作码授权', () => {
     await expect(access.authorize(auth('supervisor'), 'clue.read', 'dept-a')).resolves.toMatchObject({
       personnelId: 'supervisor',
     });
+  });
+});
+
+describe('本人允许的操作码清单（#105 菜单来源）', () => {
+  it('只列本人角色能放行的名册内操作码，顺序同名册', async () => {
+    const access = new AccessControlService(store(), recorder().port);
+    expect(await access.listPermittedOpcodes('handler')).toEqual(
+      OPCODES.filter((code) => ['clue.read', 'clue.verify.start', 'case.open'].includes(code)),
+    );
+  });
+
+  it('监督对改变主状态的码不进清单；兼任经办时由经办贡献', async () => {
+    const access = new AccessControlService(store(), recorder().port);
+    expect(await access.listPermittedOpcodes('supervisor')).toEqual(['clue.read']);
+    expect(await access.listPermittedOpcodes('both')).toEqual(
+      OPCODES.filter((code) => ['clue.read', 'case.open'].includes(code)),
+    );
+  });
+
+  it('未知人员、已停用人员、没有生效任职的人员清单为空', async () => {
+    const access = new AccessControlService(store(), recorder().port);
+    expect(await access.listPermittedOpcodes('missing')).toEqual([]);
+    expect(await access.listPermittedOpcodes('ghost')).toEqual([]);
+    expect(await access.listPermittedOpcodes('noorg')).toEqual([]);
+  });
+
+  it('名册外的码即使有允许行也不进清单', async () => {
+    const base = store();
+    const access = new AccessControlService(
+      {
+        ...base,
+        listGrantedOpcodes: async () => [{ opcode: 'menu.visible', roleName: '经办' }],
+      } as IdentityStore,
+      recorder().port,
+    );
+    expect(await access.listPermittedOpcodes('handler')).toEqual([]);
+  });
+
+  it('等价性：清单有这个码，当且仅当对本人任职机构授权能通过；查清单不写留痕', async () => {
+    for (const personnelId of [...Object.keys(people), 'missing']) {
+      const listed = recorder();
+      const permitted = await new AccessControlService(store(), listed.port).listPermittedOpcodes(personnelId);
+      expect(listed.rows).toEqual([]);
+      for (const opcode of OPCODES) {
+        const access = new AccessControlService(store(), recorder().port);
+        const passed = await access.authorize(auth(personnelId), opcode, 'dept-a').then(
+          () => true,
+          (error: unknown) => {
+            if (!isAccessDenied(error)) throw error;
+            return false;
+          },
+        );
+        expect({ personnelId, opcode, listed: permitted.includes(opcode) })
+          .toEqual({ personnelId, opcode, listed: passed });
+      }
+    }
   });
 });

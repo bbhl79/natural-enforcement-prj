@@ -307,6 +307,7 @@ describe('90 天与到期提醒', () => {
       passwordChangeRequired: false,
       passwordChangeKind: null,
       daysRemaining: 7,
+      opcodes: [],
     });
     const eighth = await postLogin('13800009706', OLD_PASSWORD);
     expect(await eighth.json()).toEqual({ result: 'established' });
@@ -321,6 +322,7 @@ describe('90 天与到期提醒', () => {
       roles: [],
       passwordChangeRequired: false,
       passwordChangeKind: null,
+      opcodes: [],
     });
   });
 
