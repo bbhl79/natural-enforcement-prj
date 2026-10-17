@@ -266,4 +266,16 @@ describe('机构页路由与接口', () => {
     expect(calls[0]?.init?.method).toBe('POST');
     expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ parentId: 'py', name: '甲', level: 'station' });
   });
+
+  it('写请求网络失败或服务出错：用定稿句（原型 shell.js:62）', async () => {
+    const store = fresh();
+    serve(person(ADMIN), { '/api/admin/org-units': [500, {}] });
+    await store.dispatch(loadSession());
+    const FINAL = '网络或服务暂时不可用，请稍后重试。问题持续时请联系本单位的系统管理人员。';
+    expect(await registerOrgUnit(store.dispatch, { parentId: 'gz', name: '甲', level: 'district' }))
+      .toEqual({ ok: false, rules: [], message: FINAL });
+    vi.stubGlobal('fetch', () => Promise.reject(new TypeError('network down')));
+    expect(await registerOrgUnit(store.dispatch, { parentId: 'gz', name: '甲', level: 'district' }))
+      .toEqual({ ok: false, rules: [], message: FINAL });
+  });
 });

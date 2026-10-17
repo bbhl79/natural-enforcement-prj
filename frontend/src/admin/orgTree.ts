@@ -140,7 +140,8 @@ export type OrgWriteResult =
   | { ok: true; id: string }
   | { ok: false; rules: OrgRuleCode[]; message: string | null };
 
-const FAILED = '操作没有完成，网络或服务暂时不可用，请稍后重试。';
+// 定稿句，取自原型 assets/shell.js:62（PR #142 界面验收必须改 3）。
+const FAILED = '网络或服务暂时不可用，请稍后重试。问题持续时请联系本单位的系统管理人员。';
 
 async function write(dispatch: ApiDispatch, url: string, body: unknown, idOf: (json: Record<string, unknown>) => string): Promise<OrgWriteResult> {
   let response: Response;
