@@ -136,7 +136,8 @@ describe('勾选记住我', () => {
     expect(sid).toHaveLength(1);
     expect(rm).toHaveLength(1);
     expect(sid[0]).toMatch(/^__Host-sid=[^;]+; HttpOnly; Secure; SameSite=Lax; Path=\/$/);
-    expect(rm[0]).toMatch(/^__Host-rm=[^;]+; HttpOnly; Secure; SameSite=Lax; Path=\/$/);
+    expect(rm[0]).toMatch(/^__Host-rm=[^;]+; HttpOnly; Secure; SameSite=Lax; Path=\/; Expires=[^;]+$/);
+    expect(rm[0]).toContain(`Expires=${new Date(REMEMBER_END).toUTCString()}`);
     const secret = cookieValue(rm[0] ?? '', '__Host-rm');
     const digest = createHash('sha256').update(secret).digest('hex');
     expect(digest).not.toBe(secret);
@@ -248,6 +249,9 @@ describe('勾选记住我', () => {
     const nextRm = pairOf(cookies, '__Host-rm');
     const nextSid = pairOf(cookies, '__Host-sid');
     expect(nextRm).not.toBe(rm);
+    const nextRmHeader = cookies.find((item) => item.startsWith('__Host-rm=')) ?? '';
+    // 换发的 Cookie 过期时间仍是这条链的终点，不往后推。
+    expect(nextRmHeader).toContain(`Expires=${new Date(REMEMBER_END).toUTCString()}`);
     const nextDigest = createHash('sha256').update(cookieValue(nextRm, '__Host-rm')).digest('hex');
     const rotated = await cloned.prisma.authRememberMe.findUniqueOrThrow({ where: { secretHash: oldDigest } });
     expect(rotated.endReason).toBe('rotated');

@@ -11,8 +11,13 @@ export function clearSessionCookie(): string {
   return `${SESSION_COOKIE}=; ${COOKIE_ATTRS}; Max-Age=0`;
 }
 
-export function serializeRememberCookie(secret: string): string {
-  return `${REMEMBER_COOKIE}=${secret}; ${COOKIE_ATTRS}`;
+/**
+ * 记住我 Cookie 带 Expires，等于这条链的绝对终点（#103 评审）。
+ * 没有 Expires 时浏览器会把它当会话 Cookie，关掉浏览器就丢，168 小时免输口令落空。
+ * 首次签发与换发都传链上的 absoluteEndsAt，换发不往后推。
+ */
+export function serializeRememberCookie(secret: string, absoluteEndsAt: Date): string {
+  return `${REMEMBER_COOKIE}=${secret}; ${COOKIE_ATTRS}; Expires=${absoluteEndsAt.toUTCString()}`;
 }
 
 export function clearRememberCookie(): string {

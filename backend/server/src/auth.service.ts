@@ -484,7 +484,7 @@ export class AuthService {
         predecessorId: null,
         createdAt: now,
       });
-      cookies.push(serializeRememberCookie(rmSecret));
+      cookies.push(serializeRememberCookie(rmSecret, absoluteEndsAt));
     } else {
       const voided = await this.voidPresentedRememberMe(cookieHeader, now, 'login-without-remember');
       if (voided) cookies.push(clearRememberCookie());
@@ -595,7 +595,7 @@ export class AuthService {
     }
     return {
       active: { row: sessionRow, account },
-      setCookies: [serializeSessionCookie(sid), serializeRememberCookie(rmSecret)],
+      setCookies: [serializeSessionCookie(sid), serializeRememberCookie(rmSecret, row.absoluteEndsAt)],
     };
   }
 
