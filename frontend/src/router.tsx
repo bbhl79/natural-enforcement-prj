@@ -4,6 +4,8 @@ import { createBrowserRouter, redirect, type LoaderFunctionArgs, type RouteObjec
 
 import AdminHomePage from './admin/AdminHomePage';
 import { adminHomeLoader } from './admin/adminHome';
+import LockedPersonnelPage from './admin/LockedPersonnelPage';
+import { lockedPersonnelLoader } from './admin/lockedPersonnel';
 import LoginPage from './login/LoginPage';
 import PasswordPage from './login/PasswordPage';
 import WorkbenchPage, { workbenchLoader } from './pages/WorkbenchPage';
@@ -51,6 +53,12 @@ export function appRoutes(store: RouterStore): RouteObject[] {
               children: [
                 { id: 'workbench', index: true, loader: workbenchLoader(store), element: <WorkbenchPage /> },
                 { id: 'admin-home', path: 'admin', loader: adminHomeLoader(store), element: <AdminHomePage /> },
+                {
+                  id: 'locked-personnel',
+                  path: 'admin/locked-personnel',
+                  loader: lockedPersonnelLoader(store),
+                  element: <LockedPersonnelPage />,
+                },
                 { id: 'not-found', path: '*', element: <NotFoundPage /> },
               ],
             },
