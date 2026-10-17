@@ -20,4 +20,6 @@ RUN --mount=type=cache,target=/root/.cache/node/corepack \
 
 FROM nginx:1.29.8@sha256:1881968aff6f7cdcc4b888c00a11f4ce241ad7ec957e0cb4a9e19e93a3ff87ea
 COPY --from=build /work/frontend/dist /usr/share/nginx/html
+# 页面路径回落到 index.html（#91 约定第 5 条，#122）
+COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
 # /usr/share/nginx/html/health 由 compose 挂命名卷（快照端点 /health/health.json），此处不 COPY

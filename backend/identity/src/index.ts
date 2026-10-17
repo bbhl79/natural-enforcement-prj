@@ -24,6 +24,7 @@ export {
   type AssignmentTransfer,
   type ExportAuditRow,
   type IdentityStore,
+  type OpcodeGrant,
   type OrgUnitNameVersionRow,
   type OrgUnitRow,
   type OrgUnitToCreate,

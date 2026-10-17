@@ -228,6 +228,19 @@ write_probe_user-lock-assertion-deleted() {
     "  it.todo('USER-LOCK-L4 037：待实现');"
 }
 
+write_probe_frontend-browser-router() {
+  # 前端改用声明式 <BrowserRouter>（#122：只许 data 模式）
+  tmp_write "frontend/src/__probe_router.tsx" \
+    "import { BrowserRouter } from 'react-router';" \
+    "export const probe = BrowserRouter;"
+}
+
+write_probe_frontend-router-dev-plugin() {
+  # 前端引入框架模式开发插件 @react-router/dev（#122）
+  inplace_append "$ROOT/frontend/package.json" \
+    '  "@react-router/dev": "8.4.0"'
+}
+
 SPECS=(
   "frontend-boundary|frontend-boundary|前端直连库（@prisma/client）"
   "spatial-orm-chain|spatial-no-orm-mutation|空间模型 ORM 写（换行链式）"
@@ -249,6 +262,8 @@ SPECS=(
   "ci-run-assignment|runtime-manifest|CI run 行内赋值写字面量密钥"
   "ci-env-context|runtime-manifest|CI 经 env 上下文引用清单外变量名"
   "user-lock-assertion-commented|user-lock-assertions|注释掉一条锁清单「待实现」登记"
+  "frontend-browser-router|frontend-router-mode|前端使用声明式 BrowserRouter"
+  "frontend-router-dev-plugin|frontend-router-mode|前端依赖框架模式插件 @react-router/dev"
 )
 
 # $1 = 说明，$2 = 期望规则名，$3 = 结构测试输出，$4 = 结构测试退出码

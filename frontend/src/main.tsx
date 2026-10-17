@@ -1,16 +1,23 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { Provider } from 'react-redux';
+import { RouterProvider } from 'react-router/dom';
 
-import App from './App';
 import './index.css';
+import { createAppRouter } from './router';
+import { store } from './store';
 
 const container = document.getElementById('root');
 if (!container) {
   throw new Error('未找到 #root 挂载点');
 }
 
+const router = createAppRouter(store);
+
 createRoot(container).render(
   <StrictMode>
-    <App />
+    <Provider store={store}>
+      <RouterProvider router={router} />
+    </Provider>
   </StrictMode>,
 );
