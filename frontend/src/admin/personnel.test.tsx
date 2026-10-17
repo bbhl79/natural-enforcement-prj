@@ -18,6 +18,7 @@ import {
   loadPersonnelCard,
   loadPersonnelList,
   maskPhone,
+  orgText,
   passwordText,
   problemCount,
   registerPersonnel,
@@ -62,6 +63,7 @@ const CARD: PersonnelCard = {
   mobilePhone: '13800005521',
   orgUnitId: 'sp',
   orgName: '石牌自然资源所',
+  orgParentName: '天河区分局',
   roles: ['经办', '法制审核'],
   posts: ['legal-review-lead'],
   passwordChangedAt: '2026-09-02T02:00:00Z',
@@ -203,6 +205,7 @@ describe('人员卡片（P6 view）', () => {
     expect(html).toContain('打开人员详情会留痕');
     expect(html).toContain('已改过初始口令（2026-09-02）');
     expect(html).toContain('经办、法制审核');
+    expect(html).toContain('<div class="k">当前机构</div><div>天河区分局石牌自然资源所</div>');
     expect(html).toContain('44010020210315');
     expect(html).toContain('可以启动核查、立案，可以担任主办人或协办人。');
   });
@@ -222,6 +225,12 @@ describe('人员卡片（P6 view）', () => {
   it('本票不放未入名册码的按钮（编辑、危险操作区、执法证变更）', () => {
     const html = card();
     expect(html).not.toMatch(/需谨慎的操作|personnel\.profile\.update|personnel\.cert\.update|personnel\.password\.reset/);
+  });
+
+  it('当前机构带上级名（原型 P6:30）；根机构只写本名；没有当前任职写「—」', () => {
+    expect(orgText(CARD)).toBe('天河区分局石牌自然资源所');
+    expect(orgText({ orgName: '广州市自然资源局', orgParentName: null })).toBe('广州市自然资源局');
+    expect(orgText({ orgName: null, orgParentName: null })).toBe('—');
   });
 
   it('遮挡与执法证说明', () => {

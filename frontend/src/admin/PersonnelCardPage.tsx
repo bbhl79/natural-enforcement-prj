@@ -7,6 +7,7 @@ import {
   CERT_TAG,
   certNote,
   maskPhone,
+  orgText,
   passwordText,
   PERSONNEL_READ,
   POST_LABEL,
@@ -109,7 +110,7 @@ export function PersonnelCardView({
               ) : null}
             </div>
             <div className="k">当前机构</div>
-            <div>{card.orgName ?? '—'}</div>
+            <div>{orgText(card)}</div>
             <div className="k">角色</div>
             <div>{card.roles.join('、') || '—'}</div>
             <div className="k">口令</div>

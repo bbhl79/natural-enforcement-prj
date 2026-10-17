@@ -65,6 +65,8 @@ export interface PersonnelCard {
   mobilePhone: string | null;
   orgUnitId: string | null;
   orgName: string | null;
+  /** 当前机构的上级名；根机构或没有当前任职时为 null */
+  orgParentName: string | null;
   roles: string[];
   posts: PersonnelPost[];
   passwordChangedAt: string | null;
@@ -198,6 +200,12 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** 北京时间的日期（YYYY-MM-DD）。 */
 export function shanghaiDay(at: Date): string {
   return DATE.format(at);
+}
+
+/** 「当前机构」带上级名，原型 P6:30「天河区分局石牌自然资源所」。 */
+export function orgText(card: Pick<PersonnelCard, 'orgName' | 'orgParentName'>): string {
+  if (!card.orgName) return '—';
+  return `${card.orgParentName ?? ''}${card.orgName}`;
 }
 
 export function passwordText(card: PersonnelCard): string {
