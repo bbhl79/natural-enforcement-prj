@@ -185,6 +185,43 @@ write_probe_ci-unlisted-name() {
     "        run: true"
 }
 
+write_probe_compose-quoted-list-secret() {
+  # compose 环境列表项带引号的字面量密钥（Copilot 评审：- "NAME=value" 形式）
+  inplace_append "$ROOT/infra/docker-compose.yml" \
+    "  probe:" \
+    "    environment:" \
+    "      - \"POSTGRES_PASSWORD=probe-literal\""
+}
+
+write_probe_compose-database-url-literal() {
+  # DATABASE_URL 含口令，按密钥处理，不许写字面量连接串（Copilot 评审）
+  inplace_append "$ROOT/infra/docker-compose.yml" \
+    "  probe:" \
+    "    environment:" \
+    "      DATABASE_URL: \"postgresql://probe:probe-literal@db:5432/probe\""
+}
+
+write_probe_ci-run-assignment() {
+  # CI run 里的行内 shell 赋值写字面量密钥（Copilot 评审）
+  inplace_append "$ROOT/.github/workflows/ci.yml" \
+    "      - name: probe" \
+    "        run: POSTGRES_PASSWORD=probe-literal true"
+}
+
+write_probe_ci-env-context() {
+  # CI 经 env 上下文引用清单外变量名（Copilot 评审）
+  inplace_append "$ROOT/.github/workflows/ci.yml" \
+    "      - name: probe" \
+    "        run: echo \"\${{ env.PROBE_UNLISTED }}\""
+}
+
+write_probe_user-lock-assertion-commented() {
+  # 把一条「待实现」登记注释掉：Vitest 不再登记，结构测试也不得计入（Copilot 评审）
+  inplace_delete "$ROOT/backend/server/src/user-lock.test.ts" \
+    "  it.todo('USER-LOCK-L4 037：待实现');"
+  printf '%s\n' "// it.todo('USER-LOCK-L4 037：待实现');" >> "$ROOT/backend/server/src/user-lock.test.ts"
+}
+
 write_probe_user-lock-assertion-deleted() {
   # 删掉一条「待实现」登记（#120：锁清单断言编号在测试代码里找不到即判红）
   inplace_delete "$ROOT/backend/server/src/user-lock.test.ts" \
@@ -207,6 +244,11 @@ SPECS=(
   "ci-literal-secret|runtime-manifest|CI 密钥带 || 回落字面量"
   "ci-unlisted-name|runtime-manifest|CI 出现清单外变量名"
   "user-lock-assertion-deleted|user-lock-assertions|删掉一条锁清单「待实现」登记"
+  "compose-quoted-list-secret|runtime-manifest|compose 环境列表项带引号的字面量密钥"
+  "compose-database-url-literal|runtime-manifest|compose 写字面量 DATABASE_URL 连接串"
+  "ci-run-assignment|runtime-manifest|CI run 行内赋值写字面量密钥"
+  "ci-env-context|runtime-manifest|CI 经 env 上下文引用清单外变量名"
+  "user-lock-assertion-commented|user-lock-assertions|注释掉一条锁清单「待实现」登记"
 )
 
 # $1 = 说明，$2 = 期望规则名，$3 = 结构测试输出，$4 = 结构测试退出码

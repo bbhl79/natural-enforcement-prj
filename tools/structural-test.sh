@@ -569,8 +569,9 @@ RUNTIME_ENV_FILE="$ROOT/infra/runtime.env"
 MANIFEST_SCAN_FILES=(infra/docker-compose.yml .github/workflows/ci.yml)
 # CI 平台自带变量：由 GitHub Actions 提供，不是运行参数，不进清单
 CI_PLATFORM_VARS=" GITHUB_OUTPUT GITHUB_ENV GITHUB_STEP_SUMMARY GITHUB_PATH "
-# 名字里带这些词的变量一律按密钥处理，清单漏标 secret 也拦得住
-SECRET_NAME_PATTERN='(PASSWORD|SECRET|TOKEN|ACCESS_KEY|PRIVATE_KEY)'
+# 名字里带这些词的变量一律按密钥处理，清单漏标 secret 也拦得住。
+# DATABASE_URL 是 derived 项，但连接串里含数据库口令，同样只许引用。
+SECRET_NAME_PATTERN='(PASSWORD|SECRET|TOKEN|ACCESS_KEY|PRIVATE_KEY|^DATABASE_URL$)'
 MANIFEST_NAMES=" "
 MANIFEST_SECRETS=" "
 
@@ -581,7 +582,7 @@ manifest_secret_name() {
 }
 
 check_runtime-manifest() {
-  local table fails=0 rel file nr line key value name kind secret_value
+  local table fails=0 rel file nr line key value name kind secret_value line_assign
   if ! table="$(runtime_env_table 2>&1)"; then
     note_fail "runtime-manifest：清单 infra/runtime.env 格式错误：$table"
     return
@@ -617,6 +618,17 @@ check_runtime-manifest() {
           fails=$((fails + 1))
         fi
       done < <(grep -oE '\$\{[A-Za-z_][A-Za-z0-9_]*:?-' <<< "$line" | sed -E 's/^\$\{//; s/:?-$//')
+      # ①b CI 的 env 上下文引用：${{ env.NAME }}、env['NAME']、env["NAME"]
+      if [ "$kind" = ci ]; then
+        while IFS= read -r name; do
+          [ -z "$name" ] && continue
+          manifest_has "$name" && continue
+          case "$CI_PLATFORM_VARS" in *" $name "*) continue ;; esac
+          note_fail "runtime-manifest：$rel:$nr 引用清单外变量名 env.$name（先登记到 infra/runtime.env）"
+          fails=$((fails + 1))
+        done < <(grep -oE "(^|[^A-Za-z0-9_./-])env(\.[A-Za-z_][A-Za-z0-9_]*|\[['\"][A-Za-z_][A-Za-z0-9_]*['\"]\])" <<< "$line" \
+                   | sed -E "s/^[^e]?env\.?//; s/^\[['\"]//; s/['\"]\]$//")
+      fi
       # ③ CI 的 secrets 引用：名字必须是 DEV_<清单名>，且不许 || 回落字面量
       if [ "$kind" = ci ]; then
         while IFS= read -r name; do
@@ -634,8 +646,10 @@ check_runtime-manifest() {
       key=""; value=""
       if [[ "$line" =~ ^[[:space:]]+([A-Z][A-Z0-9_]*):[[:space:]]*(.*)$ ]]; then
         key="${BASH_REMATCH[1]}"; value="${BASH_REMATCH[2]}"
-      elif [[ "$line" =~ ^[[:space:]]+-[[:space:]]+([A-Z][A-Z0-9_]*)=(.*)$ ]]; then
+      elif [[ "$line" =~ ^[[:space:]]+-[[:space:]]+[\"\']?([A-Z][A-Z0-9_]*)=(.*)$ ]]; then
+        # compose 环境列表项，含带引号的 - "NAME=value" / - 'NAME=value'
         key="${BASH_REMATCH[1]}"; value="${BASH_REMATCH[2]}"
+        value="${value%\"}"; value="${value%\'}"
       fi
       if [ -n "$key" ]; then
         if ! manifest_has "$key"; then
@@ -655,6 +669,23 @@ check_runtime-manifest() {
           fi
         fi
       fi
+      # ④b 行内 shell 环境赋值：NAME=value（如 CI run: 里的 NAME=x cmd）。
+      # 名字必须在清单里；密钥只许 $NAME / ${NAME} / ${{ secrets.… }} 形式的引用。
+      while IFS= read -r line_assign; do
+        [ -z "$line_assign" ] && continue
+        key="${line_assign%%=*}"; value="${line_assign#*=}"
+        if ! manifest_has "$key" && [[ "$CI_PLATFORM_VARS" != *" $key "* ]]; then
+          note_fail "runtime-manifest：$rel:$nr 行内赋值出现清单外变量名 $key（先登记到 infra/runtime.env）"
+          fails=$((fails + 1))
+        fi
+        value="${value#\"}"; value="${value#\'}"
+        if manifest_secret_name "$key" && [[ "$value" != \$* ]]; then
+          note_fail "runtime-manifest：$rel:$nr 行内赋值给密钥 $key 写了字面量（只许引用变量）"
+          fails=$((fails + 1))
+        fi
+      done < <(grep -oE "(^|[[:space:];&|(])[A-Z][A-Z0-9_]*=[^[:space:]]*" <<< "$line" \
+                 | sed -E 's/^[[:space:];&|(]//' \
+                 | grep -vE "^[A-Z][A-Z0-9_]*=$" || true)
       # ⑤ 清单里密钥的夹具值不许原样出现
       for name in $MANIFEST_SECRETS; do
         secret_value="$(awk -F'\t' -v n="$name" '$1 == n { print $4 }' <<< "$table")"
@@ -705,7 +736,12 @@ check_user-lock-assertions() {
       -path '*/node_modules' -prune -o -path "$ROOT/frontend/prototype" -prune -o \
       -type f \( -name '*.test.ts' -o -name '*.test.tsx' -o -name '*.test.mts' \) -print 2>/dev/null \
     | while IFS= read -r file; do
-        grep -ohE "\b(it|test)(\.todo)?\([[:space:]]*['\"\`]$USER_LOCK_ID_RE\b" "$file" 2>/dev/null
+        # 只认行首的实际调用：去掉 /* … */ 块注释里的行；// 注释和字符串里的调用不在行首，不计
+        awk '
+          inblock { if (index($0, "*/")) inblock = 0; next }
+          /^[[:space:]]*\/\*/ { if (!index($0, "*/")) inblock = 1; next }
+          { print }
+        ' "$file" | grep -oE "^[[:space:]]*(it|test)(\.todo)?\([[:space:]]*['\"\`]$USER_LOCK_ID_RE\b"
       done | grep -oE "$USER_LOCK_ID_RE" | sort -u)"
   while IFS= read -r id; do
     [ -z "$id" ] && continue
