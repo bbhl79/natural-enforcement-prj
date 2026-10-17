@@ -1,6 +1,7 @@
 // 留痕表适配器（ADR 0012）。本文件是包内唯一引用 auditTrail 委托的地方。
 // 调用方传入带 auditTrail.create 的客户端。不在这里 import 生成客户端。
 import type { AuditAppend, AuditTrailPort, AuthzDeniedEntry } from './port.ts';
+import type { AuditTrailFactory } from './transaction.ts';
 import { newAuditId } from './ulid.ts';
 import {
   AUDIT_ACTIONS,
@@ -77,3 +78,8 @@ export class PrismaAuditTrail implements AuditTrailPort {
     });
   }
 }
+
+/** 默认留痕工厂：client 是 Prisma 根客户端或交互式事务客户端。 */
+export const prismaAuditTrailFactory: AuditTrailFactory = {
+  forClient: (client) => new PrismaAuditTrail(client as AuditTrailCreateClient),
+};
