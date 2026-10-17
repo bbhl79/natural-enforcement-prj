@@ -198,6 +198,11 @@ describe('POST /api/auth/login', () => {
       roles: ['监督', '经办'],
       passwordChangeRequired: false,
       passwordChangeKind: null,
+      opcodes: [
+        'clue.verify.start', 'case.open', 'doc.draft', 'doc.submit', 'case.reassign.submit',
+        'legal.review.request', 'clue.read', 'case.read', 'doc.read', 'clue.export', 'case.export',
+        'doc.export', 'audit.admin.read', 'audit.admin.export',
+      ],
     });
     const text = JSON.stringify(await audits());
     expect(text.includes(KNOWN_PHONE)).toBe(false);
@@ -269,6 +274,7 @@ describe('POST /api/auth/login', () => {
       roles: [],
       passwordChangeRequired: true,
       passwordChangeKind: 'password-change-required',
+      opcodes: [],
     });
     const blocked = await fetch(`${baseUrl}/api/health`, { headers: { cookie: pair } });
     expect(blocked.status).toBe(403);

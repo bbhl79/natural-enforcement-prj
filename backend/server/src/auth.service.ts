@@ -86,6 +86,14 @@ async function sha256Hex(value: string): Promise<string> {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * 到期横幅的会话标记（#105 X1「同一会话关闭后不再出现」）：同一会话内不变，换会话（含记住我新建的会话）即变。
+ * 由会话行标识单向派生，不是会话密钥，不能反推会话标识。
+ */
+async function noticeTagOf(sessionId: string): Promise<string> {
+  return (await sha256Hex(`expiry-notice:${sessionId}`)).slice(0, 16);
+}
+
 function newSessionSecret(): string {
   const bytes = new Uint8Array(32);
   webcrypto().getRandomValues(bytes);
@@ -132,6 +140,10 @@ export type SessionView =
       passwordChangeRequired: boolean;
       passwordChangeKind: PasswordGate | null;
       daysRemaining?: number;
+      /** 到期横幅的会话标记，只在带 daysRemaining 时出现 */
+      noticeTag?: string;
+      /** 本人允许的操作码清单（#105 菜单来源）。强制改密期间为空。不含数据范围。 */
+      opcodes: string[];
     };
 
 type ActiveSession = { row: SessionRow; account: LoginAccount };
@@ -260,11 +272,15 @@ export class AuthService {
     };
   }
 
-  /** 会话查询看到的结果。没有有效会话时是未登录，不在这里写授权拒绝。 */
-  describe(active: ActiveSession | null): SessionView {
+  /**
+   * 会话查询看到的结果。没有有效会话时是未登录，不在这里写授权拒绝。
+   * opcodes 由调用方按 AccessControlService.listPermittedOpcodes 算好传入。
+   */
+  async describe(active: ActiveSession | null, opcodes: readonly string[] = []): Promise<SessionView> {
     if (!active) return { result: 'anonymous' };
     const now = this.clock.now();
     const gate = passwordGate(active.account.passwordChangedAt, now);
+    const notice = this.notice(active.account.passwordChangedAt, now);
     return {
       result: gate ?? 'authenticated',
       name: active.account.name,
@@ -273,7 +289,9 @@ export class AuthService {
       roles: active.account.roles,
       passwordChangeRequired: gate != null,
       passwordChangeKind: gate,
-      ...this.notice(active.account.passwordChangedAt, now),
+      ...notice,
+      ...(notice.daysRemaining === undefined ? {} : { noticeTag: await noticeTagOf(active.row.id) }),
+      opcodes: gate ? [] : [...opcodes],
     };
   }
 

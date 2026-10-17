@@ -36,6 +36,15 @@ inplace_append() { # $1 = 绝对路径，$2.. = 追加内容行（先备份，cl
   printf '%s\n' "$@" >> "$path"
 }
 
+inplace_delete() { # $1 = 绝对路径，$2 = 要删掉的行（整行逐字匹配；先备份，cleanup 时逐字节还原）
+  local path="$1" line="$2" backup
+  backup="$(mktemp "${TMPDIR:-/tmp}/structural-probe-backup-XXXXXX")"
+  cp -a "$path" "$backup"
+  MODIFIED+=("$path")
+  SAVED+=("$backup")
+  grep -vxF -- "$line" "$backup" > "$path" || true
+}
+
 cleanup() { # 幂等：删临时文件 + 还原就地改写文件，还原后逐字节校验
   local i path backup
   for path in "${CREATED[@]}"; do rm -f "$path"; done
@@ -143,6 +152,95 @@ write_probe_exempt-tightness() {
     "export const thing = ProbeThing;"
 }
 
+write_probe_compose-literal-secret() {
+  # compose 写字面量密钥（#120）
+  inplace_append "$ROOT/infra/docker-compose.yml" \
+    "  probe:" \
+    "    environment:" \
+    "      RUSTFS_SECRET_KEY: probe-literal"
+}
+
+write_probe_compose-unlisted-name() {
+  # compose 引用清单外变量名（#120）
+  inplace_append "$ROOT/infra/docker-compose.yml" \
+    "  probe:" \
+    "    image: \"\${PROBE_UNLISTED_IMAGE:?probe}\""
+}
+
+write_probe_ci-literal-secret() {
+  # CI 给密钥写 || 回落字面量（#120 之前的写法）
+  inplace_append "$ROOT/.github/workflows/ci.yml" \
+    "      - name: probe" \
+    "        env:" \
+    "          POSTGRES_PASSWORD: \${{ secrets.DEV_POSTGRES_PASSWORD || 'probe-literal' }}" \
+    "        run: true"
+}
+
+write_probe_ci-unlisted-name() {
+  # CI 的 env 出现清单外变量名（#120）
+  inplace_append "$ROOT/.github/workflows/ci.yml" \
+    "      - name: probe" \
+    "        env:" \
+    "          PROBE_UNLISTED: x" \
+    "        run: true"
+}
+
+write_probe_compose-quoted-list-secret() {
+  # compose 环境列表项带引号的字面量密钥（Copilot 评审：- "NAME=value" 形式）
+  inplace_append "$ROOT/infra/docker-compose.yml" \
+    "  probe:" \
+    "    environment:" \
+    "      - \"POSTGRES_PASSWORD=probe-literal\""
+}
+
+write_probe_compose-database-url-literal() {
+  # DATABASE_URL 含口令，按密钥处理，不许写字面量连接串（Copilot 评审）
+  inplace_append "$ROOT/infra/docker-compose.yml" \
+    "  probe:" \
+    "    environment:" \
+    "      DATABASE_URL: \"postgresql://probe:probe-literal@db:5432/probe\""
+}
+
+write_probe_ci-run-assignment() {
+  # CI run 里的行内 shell 赋值写字面量密钥（Copilot 评审）
+  inplace_append "$ROOT/.github/workflows/ci.yml" \
+    "      - name: probe" \
+    "        run: POSTGRES_PASSWORD=probe-literal true"
+}
+
+write_probe_ci-env-context() {
+  # CI 经 env 上下文引用清单外变量名（Copilot 评审）
+  inplace_append "$ROOT/.github/workflows/ci.yml" \
+    "      - name: probe" \
+    "        run: echo \"\${{ env.PROBE_UNLISTED }}\""
+}
+
+write_probe_user-lock-assertion-commented() {
+  # 把一条「待实现」登记注释掉：Vitest 不再登记，结构测试也不得计入（Copilot 评审）
+  inplace_delete "$ROOT/backend/server/src/user-lock.test.ts" \
+    "  it.todo('USER-LOCK-L4 037：待实现');"
+  printf '%s\n' "// it.todo('USER-LOCK-L4 037：待实现');" >> "$ROOT/backend/server/src/user-lock.test.ts"
+}
+
+write_probe_user-lock-assertion-deleted() {
+  # 删掉一条「待实现」登记（#120：锁清单断言编号在测试代码里找不到即判红）
+  inplace_delete "$ROOT/backend/server/src/user-lock.test.ts" \
+    "  it.todo('USER-LOCK-L4 037：待实现');"
+}
+
+write_probe_frontend-browser-router() {
+  # 前端改用声明式 <BrowserRouter>（#122：只许 data 模式）
+  tmp_write "frontend/src/__probe_router.tsx" \
+    "import { BrowserRouter } from 'react-router';" \
+    "export const probe = BrowserRouter;"
+}
+
+write_probe_frontend-router-dev-plugin() {
+  # 前端引入框架模式开发插件 @react-router/dev（#122）
+  inplace_append "$ROOT/frontend/package.json" \
+    '  "@react-router/dev": "8.4.0"'
+}
+
 SPECS=(
   "frontend-boundary|frontend-boundary|前端直连库（@prisma/client）"
   "spatial-orm-chain|spatial-no-orm-mutation|空间模型 ORM 写（换行链式）"
@@ -154,6 +252,18 @@ SPECS=(
   "exempt-tightness|module-public-entry|豁免名单外的深路径导入（豁免不放行整层）"
   "audit-facility-entry|audit-facility-entry|包外引用留痕委托"
   "server-adapter-file|module-public-entry|启动包第二个文件引用身份数据库适配器"
+  "compose-literal-secret|runtime-manifest|compose 写字面量密钥"
+  "compose-unlisted-name|runtime-manifest|compose 引用清单外变量名"
+  "ci-literal-secret|runtime-manifest|CI 密钥带 || 回落字面量"
+  "ci-unlisted-name|runtime-manifest|CI 出现清单外变量名"
+  "user-lock-assertion-deleted|user-lock-assertions|删掉一条锁清单「待实现」登记"
+  "compose-quoted-list-secret|runtime-manifest|compose 环境列表项带引号的字面量密钥"
+  "compose-database-url-literal|runtime-manifest|compose 写字面量 DATABASE_URL 连接串"
+  "ci-run-assignment|runtime-manifest|CI run 行内赋值写字面量密钥"
+  "ci-env-context|runtime-manifest|CI 经 env 上下文引用清单外变量名"
+  "user-lock-assertion-commented|user-lock-assertions|注释掉一条锁清单「待实现」登记"
+  "frontend-browser-router|frontend-router-mode|前端使用声明式 BrowserRouter"
+  "frontend-router-dev-plugin|frontend-router-mode|前端依赖框架模式插件 @react-router/dev"
 )
 
 # $1 = 说明，$2 = 期望规则名，$3 = 结构测试输出，$4 = 结构测试退出码
