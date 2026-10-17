@@ -205,7 +205,18 @@ out="$("$DEV" test no-such-layer 2>&1)"; rc=$?
 { [ "$rc" -ne 0 ] && echo "$out" | grep -qi 'unit\|integration\|e2e'; } \
   && ok "test 未知层非 0 并提示可选层" || bad "test 未知层处理不符合契约（rc=$rc）"
 
-"$DEV" test integration >/tmp/smoke-test-integration.log 2>&1; check "dev test integration 退出 0" "$?"
+"$DEV" test integration >/tmp/smoke-test-integration.log 2>&1; rc=$?
+check "dev test integration 退出 0" "$rc"
+# 嵌套用例失败时列出失败用例名（Vitest 的 FAIL 行与 dev 的 [FAIL] 行）。只打印，不改计数与退出码。
+if [ "$rc" -ne 0 ]; then
+  cases="$(sed 's/\x1b\[[0-9;]*m//g' /tmp/smoke-test-integration.log | grep -E '^ *FAIL +|\[FAIL\]' | sed 's/^ */  /' | sort -u)"
+  echo "  失败用例（日志 /tmp/smoke-test-integration.log）："
+  if [ -n "$cases" ]; then
+    echo "$cases"
+  else
+    echo "  未找到 FAIL 行，日志末尾：$(tail -5 /tmp/smoke-test-integration.log | tr '\n' ' ')"
+  fi
+fi
 grep -q 'integration 层全部通过' /tmp/smoke-test-integration.log \
   && ok "test integration 输出含通过说明" || bad "test integration 输出异常（$(tail -2 /tmp/smoke-test-integration.log | tr '\n' ' '))"
 
