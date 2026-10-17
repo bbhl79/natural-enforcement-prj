@@ -145,6 +145,22 @@ describe('管理台留痕页（P8）', () => {
     expect(html.match(/<tr data-action=/g)).toHaveLength(4);
   });
 
+  it('可见文字里没有动作原文：动作只放 data-action，兜底行写中文通用说法', async () => {
+    serve(person(['系统管理'], ADMIN, '广州市规划和自然资源局'), {
+      '/api/admin/audit/query': listed([
+        row('U1', { action: 'future.thing.done', operation: '其他操作', object: '—', result: '失败', tone: 'red' }),
+        row('U2', { action: 'authz.denied', operation: '其他操作', result: '被拒绝', tone: 'red' }),
+      ], { orgUnitId: 'HQ', orgName: '广州市规划和自然资源局', includesUnanchored: true }),
+    });
+    const { html } = await renderSettled('/admin/audit');
+    expect(html).toContain('<tr data-action="future.thing.done">');
+    const text = html.replace(/ data-[a-z-]+="[^"]*"/g, '');
+    for (const code of ['future.thing.done', 'authz.denied', 'audit.admin.read', 'audit.admin.export']) {
+      expect(text, code).not.toContain(code);
+    }
+    expect(text).toContain('<td>其他操作</td>');
+  });
+
   it('区监督：说明与范围横幅带任职机构；不出无所属机构说明', async () => {
     serve(person(['监督'], SUPERVISE), { '/api/admin/audit/query': listed([row('A')]) });
     const { html } = await renderSettled('/admin/audit');

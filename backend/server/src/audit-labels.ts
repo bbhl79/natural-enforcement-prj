@@ -1,5 +1,7 @@
 // 管理台留痕的展示文字（#126，原型 v0.4 P8）。页面表格与导出文件用同一份文字，保证「导出内容与页面一致」。
 // 只写工号；不写手机号、执法证号、口令（ADR 0007、ADR 0011）。
+// 用户可见文字不出现操作码、动作原文、原因码（SCREENS.md 通用检查「用户可见文本无工程词」，P8「动作原文只放 data-action」）：
+// 对照表里没有的码一律用下面的中文通用说法兜底（工程稿，随 v0.5 定稿）。
 
 import type { AuditTrailRecord } from '@natural-enforcement/audit';
 
@@ -103,6 +105,12 @@ const SESSION_END_RESULT: Readonly<Record<string, string>> = {
   'remember-me-reuse': '「记住我」凭据被重复使用后结束',
 };
 
+/** 对照表里没有的操作（工程稿，随 v0.5 定稿）。 */
+export const UNKNOWN_OPERATION = '其他操作';
+/** 对照表里没有的失败或拒绝原因：只写「失败」「被拒绝」，不写原因码（工程稿，随 v0.5 定稿）。 */
+export const UNKNOWN_FAILED = '失败';
+export const UNKNOWN_DENIED = '被拒绝';
+
 const SHANGHAI_MINUTE = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Shanghai',
   year: 'numeric',
@@ -122,9 +130,9 @@ export function shanghaiMinute(at: Date): string {
 function operationOf(record: AuditTrailRecord): string {
   if (LOGIN_ACTIONS.has(record.action)) return '登录';
   if (record.action === 'authz.denied') {
-    return (record.opcode && OPERATION_OF_OPCODE[record.opcode]) || `操作 ${record.opcode ?? '未知'}`;
+    return (record.opcode && OPERATION_OF_OPCODE[record.opcode]) || UNKNOWN_OPERATION;
   }
-  return OPERATION_OF_ACTION[record.action] ?? record.action;
+  return OPERATION_OF_ACTION[record.action] ?? UNKNOWN_OPERATION;
 }
 
 /** 按资源标识查到的展示名：人员的工号、机构的名称。 */
@@ -157,14 +165,14 @@ function resultOf(record: AuditTrailRecord): { result: string; tone: AuditTone }
   }
   if (record.outcome === 'succeeded') return { result: '成功', tone: 'ok' };
   if (record.action === 'authz.denied') {
-    return { result: (record.reason && DENIED_RESULT[record.reason]) || '被拒绝', tone: 'red' };
+    return { result: (record.reason && DENIED_RESULT[record.reason]) || UNKNOWN_DENIED, tone: 'red' };
   }
   if (record.action === 'login.failed') {
-    return { result: (record.reason && LOGIN_FAILED_RESULT[record.reason]) || '失败', tone: 'red' };
+    return { result: (record.reason && LOGIN_FAILED_RESULT[record.reason]) || UNKNOWN_FAILED, tone: 'red' };
   }
   const fixed = FAILED_RESULT[record.action];
   if (fixed) return { result: fixed, tone: 'red' };
-  return { result: record.reason ? `失败：${record.reason}` : '失败', tone: 'red' };
+  return { result: UNKNOWN_FAILED, tone: 'red' };
 }
 
 /** 所属机构名称：与 org_unit_id 相同时用连表取到的名称，否则按标识查（授权拒绝行的目标机构）。 */

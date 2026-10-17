@@ -640,3 +640,31 @@ describe('被拒的行归对象所属机构（#105；ADR 0011 修正）', () => 
     expect(((await query(PHONES.superB)).rows ?? []).map((row) => row.id)).not.toContain(id);
   });
 });
+
+describe('可见文字不出现操作码与原因码（SCREENS.md:8；P8 动作原文只放 data-action）', () => {
+  it('对照表外的拒绝码、动作和原因：查阅的可见字段与导出的每个单元格都只有中文通用说法', async () => {
+    const codes = ['clue.read', 'future.thing.done', 'mystery-reason', 'odd-denial'];
+    await cloned.prisma.$executeRaw`
+      INSERT INTO audit_trail (id, action, outcome, actor_id, actor_code, org_unit_id, reason, opcode, resource_type, resource_id,
+                               target_org_unit_id, target_org_unit_basis)
+      VALUES (${'01ZZZZZZZZZZZZZZZZZZZZZZZA'}, 'authz.denied', 'failed', ${ids.clerkA}, 'P-126-CLERK-A', ${deptAId}, 'odd-denial',
+              'clue.read', 'clue', 'clue-1', ${deptAId}, 'object')`;
+    await cloned.prisma.$executeRaw`
+      INSERT INTO audit_trail (id, action, outcome, actor_id, actor_code, org_unit_id, reason)
+      VALUES (${'01ZZZZZZZZZZZZZZZZZZZZZZZB'}, 'future.thing.done', 'failed', ${ids.adminA}, 'P-126-ADM-A', ${deptAId}, 'mystery-reason')`;
+    const body = await query(PHONES.superA);
+    const unknown = (body.rows ?? []).filter((row) => row.id.startsWith('01ZZZZZZZZZZZZZZZZZZZZZZZ') && /[AB]$/.test(row.id));
+    expect(unknown.map((row) => [row.operation, row.result])).toEqual([
+      ['其他操作', '失败'],
+      ['其他操作', '被拒绝'],
+    ]);
+    const visible = (body.rows ?? []).flatMap(cells);
+    const { response, file } = await exportFile(PHONES.superA);
+    expect(response.status).toBe(200);
+    const exported = readXlsxSheet(file).rows.flat();
+    for (const code of codes) {
+      expect(visible.filter((cell) => cell.includes(code)), `页面：${code}`).toEqual([]);
+      expect(exported.filter((cell) => cell.includes(code)), `导出：${code}`).toEqual([]);
+    }
+  });
+});

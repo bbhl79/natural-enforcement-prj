@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { AuditTrailRecord } from '@natural-enforcement/audit';
 
 import { auditExportFilename, parseAuditFilter } from './audit-browse.service.ts';
-import { auditRowCells, describeAuditRow, shanghaiMinute } from './audit-labels.ts';
+import { auditRowCells, describeAuditRow, shanghaiMinute, type AuditRowView } from './audit-labels.ts';
 import { buildXlsx } from './xlsx.ts';
 
 // 2026-10-17 09:48（Asia/Shanghai）
@@ -118,6 +118,34 @@ describe('#126 留痕展示文字（P8）', () => {
       anchorOrgUnitId: 'org-ld', targetOrgUnitBasis: 'actor-fallback',
     });
     expect(describeAuditRow(fallback)).toMatchObject({ object: '机构', orgName: '龙洞自然资源所', anchored: true });
+  });
+});
+
+describe('#126 可见文字不出现工程码（SCREENS.md:8；P8 动作原文只放 data-action）', () => {
+  /** 页面与导出共用的可见文字：表格六格。 */
+  const visible = (view: AuditRowView) => auditRowCells(view).join('|');
+  const codes = ['clue.read', 'future.thing.done', 'mystery-reason', 'odd-denial', 'authz.denied', 'login.failed'];
+
+  it('对照表里没有的拒绝码、动作和原因，一律用中文通用说法兜底', () => {
+    const rows = [
+      record({ action: 'authz.denied', outcome: 'failed', reason: 'odd-denial', subjectCode: null, opcode: 'clue.read' }),
+      record({ action: 'authz.denied', outcome: 'failed', reason: null, subjectCode: null, opcode: null }),
+      record({ action: 'future.thing.done', outcome: 'failed', reason: 'mystery-reason', subjectCode: null }),
+      record({ action: 'future.thing.done', outcome: 'succeeded', subjectCode: null }),
+      record({ action: 'login.failed', outcome: 'failed', reason: 'mystery-reason', subjectCode: 'TH0331' }),
+      record({ action: 'session.ended', reason: 'mystery-reason', subjectCode: 'TH0331' }),
+    ].map((item) => describeAuditRow(item));
+    expect(rows.map((row) => [row.operation, row.result])).toEqual([
+      ['其他操作', '被拒绝'],
+      ['其他操作', '被拒绝'],
+      ['其他操作', '失败'],
+      ['其他操作', '成功'],
+      ['登录', '失败'],
+      ['结束会话', '结束会话'],
+    ]);
+    for (const row of rows) {
+      for (const code of codes) expect(visible(row), code).not.toContain(code);
+    }
   });
 });
 
