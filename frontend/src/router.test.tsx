@@ -1,13 +1,14 @@
 import { configureStore } from '@reduxjs/toolkit';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { data, MemoryRouter } from 'react-router';
+import { createMemoryRouter, data, MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AdminHomeContent } from './admin/AdminHomePage';
 import { adminHomeView, EMPTY_SUMMARY, firstDayPending, loadAdminHomeSummary } from './admin/adminHome';
 import reducer, { loadSession } from './login/loginSlice';
+import AppShell, { AppShellError } from './shell/AppShell';
 import { errorStatus } from './shell/StatusPages';
-import { renderRoute } from './test-utils';
+import { renderRoute, renderRouter, settled } from './test-utils';
 
 type Json = Record<string, unknown>;
 
@@ -264,6 +265,30 @@ describe('管理台首页（P3）', () => {
   it('留痕入口显示今日条数', () => {
     const html = render(SUPERVISE, { ...EMPTY_SUMMARY, auditToday: 12 });
     expect(html).toContain('<div class="n">今日 12 条</div>');
+  });
+
+  it('无权限页：左侧导航没有任何项高亮（原型 P2-forbidden、P3-denied）', async () => {
+    // 经办打开 /admin：管理台首页对本人不可见，出无权限卡片。
+    serve(person(['经办'], CLERK));
+    const denied = await renderRoute(fresh(), '/admin');
+    expect(denied.html).toContain('你没有查看管理台的权限');
+    expect(denied.html).toContain('data-menu="home"');
+    expect(denied.html).not.toContain('nav-item active');
+
+    // 管理台首页对本人可见，但页面取数 403 → 壳内整页无权限页（P2 forbidden），左导同样不高亮。
+    const store = fresh();
+    serve(person(['经办', '系统管理'], [...CLERK, ...ADMIN]));
+    await store.dispatch(loadSession());
+    const router = createMemoryRouter([{
+      element: <AppShell />,
+      errorElement: <AppShellError />,
+      children: [{ path: 'admin', loader: () => { throw data(null, { status: 403 }); }, element: null }],
+    }], { initialEntries: ['/admin'] });
+    await settled(router);
+    const forbidden = renderRouter(store, router);
+    expect(forbidden).toContain('你没有权限打开这个页面');
+    expect(forbidden).toContain('data-menu="admin"');
+    expect(forbidden).not.toContain('nav-item active');
   });
 
   it('延迟数据里拒绝的 403 与 loader 抛出的 403 都被认作无权限', () => {

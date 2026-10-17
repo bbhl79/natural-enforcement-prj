@@ -52,7 +52,14 @@ describe('按操作码裁剪菜单（#105「菜单来源」）', () => {
     expect(activeMenuId('/admin/audit', MENU)).toBe('audit');
     expect(activeMenuId('/admin/locked-personnel/abc', MENU)).toBe('locked');
     expect(activeMenuId('/admins', MENU)).toBeNull();
-    expect(activeMenuId('/admin/audit', visibleMenu(['personnel.locked.read']))).toBe('admin');
+  });
+
+  it('无权限页：当前页自己的菜单项对本人不可见时，没有任何导航项高亮（原型 shell.js:48）', () => {
+    expect(activeMenuId('/admin/audit', visibleMenu(['personnel.locked.read']))).toBeNull();
+    expect(activeMenuId('/admin', visibleMenu(['clue.read', 'case.read']))).toBeNull();
+    expect(activeMenuId('/admin/org-units', visibleMenu(['clue.read', 'audit.admin.read']))).toBeNull();
+    expect(activeMenuId('/admin/locked-personnel', visibleMenu(['case.read', 'audit.admin.read']))).toBeNull();
+    expect(activeMenuId('/admin/audit', visibleMenu(['audit.admin.read']))).toBe('audit');
   });
 
   it('菜单文字里不出现操作码原文', () => {
