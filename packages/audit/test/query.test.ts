@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  AUDIT_ACTIONS,
   AUDIT_CATEGORIES,
   PrismaAuditTrailReader,
   auditCategoryOf,
+  auditCategoryPrefilter,
+  type AuditCategory,
   type AuditTrailReadClient,
 } from '../src/index.ts';
 
@@ -27,13 +30,36 @@ function row(action: string, opcode: string | null = null) {
   };
 }
 
-function fake(rows: ReturnType<typeof row>[]): { db: AuditTrailReadClient; calls: FindManyArgs[] } {
+function fake(rows: ReturnType<typeof row>[]): { db: AuditTrailReadClient; calls: FindManyArgs[]; counts: unknown[] } {
   const calls: FindManyArgs[] = [];
+  const counts: unknown[] = [];
   return {
     calls,
-    db: { auditTrail: { findMany: async (args) => { calls.push(args); return rows; } } },
+    counts,
+    db: {
+      auditTrail: {
+        findMany: async (args) => { calls.push(args); return rows; },
+        count: async (args) => { counts.push(args.where); return 7; },
+      },
+    },
   };
 }
+
+/** 与库里预筛条件同义的判断：动作在列表里，或是授权拒绝且操作码命中。 */
+function prefilterMatches(category: AuditCategory, action: string, opcode: string | null): boolean {
+  const pre = auditCategoryPrefilter(category);
+  if (pre.actions.includes(action)) return true;
+  if (action !== 'authz.denied' || !opcode) return false;
+  return pre.deniedOpcodes.includes(opcode) || pre.deniedOpcodePrefixes.some((prefix) => opcode.startsWith(prefix));
+}
+
+/** 名册里管理台相关的码，外加业务区的码作反例。 */
+const OPCODES = [
+  'personnel.locked.read', 'personnel.locked.release', 'personnel.password.reset', 'personnel.profile.export',
+  'personnel.profile.read', 'personnel.profile.register', 'personnel.profile.rename', 'personnel.sessions.end',
+  'personnel.cert.update', 'audit.admin.read', 'audit.admin.export', 'authz.binding.submit', 'org.tree.read',
+  'org.unit.register', 'org.unit.rename', 'org.unit.deactivate', 'case.open', 'clue.read', null,
+];
 
 const RANGE = { from: new Date('2026-10-15T16:00:00.000Z'), to: new Date('2026-10-17T16:00:00.000Z') };
 
@@ -67,7 +93,7 @@ describe('#126 PrismaAuditTrailReader', () => {
     await new PrismaAuditTrailReader(db).list({ ...RANGE, orgUnitIds: ['org-a', 'org-b'], includeUnanchored: false });
     expect(calls[0]?.where).toEqual({
       createdAt: { gte: RANGE.from, lt: RANGE.to },
-      OR: [{ orgUnitId: { in: ['org-a', 'org-b'] } }],
+      AND: [{ OR: [{ orgUnitId: { in: ['org-a', 'org-b'] } }] }],
     });
     expect(calls[0]?.orderBy).toEqual([{ createdAt: 'desc' }, { id: 'desc' }]);
   });
@@ -79,10 +105,48 @@ describe('#126 PrismaAuditTrailReader', () => {
     });
     expect(calls[0]?.where).toEqual({
       createdAt: { gte: RANGE.from, lt: RANGE.to },
-      OR: [{ orgUnitId: { in: ['root'] } }, { orgUnitId: null }],
+      AND: [{ OR: [{ orgUnitId: { in: ['root'] } }, { orgUnitId: null }] }],
       actorCode: 'P-9',
       outcome: 'failed',
     });
+  });
+
+  it('有类别时在库里按动作与被拒的操作码预筛', async () => {
+    const { db, calls } = fake([]);
+    await new PrismaAuditTrailReader(db).list({ ...RANGE, orgUnitIds: ['org-a'], includeUnanchored: false, category: 'export' });
+    expect(calls[0]?.where.AND).toEqual([
+      { OR: [{ orgUnitId: { in: ['org-a'] } }] },
+      {
+        OR: [
+          { action: { in: ['personnel.exported', 'audit.exported'] } },
+          { action: 'authz.denied', OR: [{ opcode: { in: ['personnel.profile.export', 'audit.admin.export'] } }] },
+        ],
+      },
+    ]);
+    await new PrismaAuditTrailReader(db).list({ ...RANGE, orgUnitIds: ['org-a'], includeUnanchored: false, category: 'auth-session' });
+    // 认证与会话没有对应的拒绝码：只按动作
+    expect((calls[1]?.where.AND as unknown[])[1]).toEqual({ OR: [{ action: { in: auditCategoryPrefilter('auth-session').actions } }] });
+  });
+
+  it('库里预筛是精确类别的超集：凡 auditCategoryOf 归入该类的动作与码，预筛都放行', () => {
+    const actions = [...AUDIT_ACTIONS, ...AUDIT_CATEGORIES.flatMap((category) => auditCategoryPrefilter(category).actions)];
+    for (const category of AUDIT_CATEGORIES) {
+      for (const action of [...new Set(actions)]) {
+        for (const opcode of OPCODES) {
+          if (auditCategoryOf(action, opcode) === category) {
+            expect(prefilterMatches(category, action, opcode), `${category} ${action} ${opcode}`).toBe(true);
+          }
+        }
+      }
+    }
+  });
+
+  it('只数条数：同一范围条件进 count，不取行', async () => {
+    const { db, calls, counts } = fake([]);
+    const today = await new PrismaAuditTrailReader(db).count({ ...RANGE, orgUnitIds: ['org-a'], includeUnanchored: false });
+    expect(today).toBe(7);
+    expect(calls).toHaveLength(0);
+    expect(counts).toEqual([{ createdAt: { gte: RANGE.from, lt: RANGE.to }, AND: [{ OR: [{ orgUnitId: { in: ['org-a'] } }] }] }]);
   });
 
   it('类别按 auditCategoryOf 筛，返回行带所属机构名，不带来源地址与前值', async () => {

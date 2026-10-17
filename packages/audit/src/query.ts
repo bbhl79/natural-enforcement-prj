@@ -52,6 +52,36 @@ const CATEGORY_OF_ACTION: Readonly<Record<string, AuditCategory>> = {
   'audit.exported': 'export',
 };
 
+/**
+ * 库里预筛用的条件：动作在 actions 里，或者是授权拒绝且操作码在 deniedOpcodes 里、或以 deniedOpcodePrefixes 之一开头。
+ * 这是 auditCategoryOf 的超集（前缀会多带几个别类的码），取回后仍按 auditCategoryOf 精确筛一遍。
+ */
+export interface AuditCategoryPrefilter {
+  readonly actions: readonly string[];
+  readonly deniedOpcodes: readonly string[];
+  readonly deniedOpcodePrefixes: readonly string[];
+}
+
+const DENIED_OPCODE_PREFILTER: Readonly<Record<AuditCategory, Pick<AuditCategoryPrefilter, 'deniedOpcodes' | 'deniedOpcodePrefixes'>>> = {
+  'auth-session': { deniedOpcodes: [], deniedOpcodePrefixes: [] },
+  'personnel-view': { deniedOpcodes: ['personnel.profile.read'], deniedOpcodePrefixes: [] },
+  'personnel-maintenance': { deniedOpcodes: ['personnel.sessions.end'], deniedOpcodePrefixes: ['personnel.profile.'] },
+  'org-maintenance': { deniedOpcodes: [], deniedOpcodePrefixes: ['org.'] },
+  'unlock-reset': {
+    deniedOpcodes: ['personnel.locked.read', 'personnel.locked.release', 'personnel.password.reset'],
+    deniedOpcodePrefixes: [],
+  },
+  cert: { deniedOpcodes: ['personnel.cert.update'], deniedOpcodePrefixes: [] },
+  export: { deniedOpcodes: ['personnel.profile.export', 'audit.admin.export'], deniedOpcodePrefixes: [] },
+};
+
+export function auditCategoryPrefilter(category: AuditCategory): AuditCategoryPrefilter {
+  return {
+    actions: Object.keys(CATEGORY_OF_ACTION).filter((action) => CATEGORY_OF_ACTION[action] === category),
+    ...DENIED_OPCODE_PREFILTER[category],
+  };
+}
+
 /** 授权拒绝按被拒的操作码归类。归不进任何类别的（如业务区的码），只在「全部操作」里出现。 */
 function categoryOfDeniedOpcode(opcode: string | null): AuditCategory | null {
   if (!opcode) return null;
@@ -110,4 +140,6 @@ export interface AuditTrailRecord {
 /** 只读。按时间倒序（同一时刻按主键倒序）。 */
 export interface AuditTrailReader {
   list(query: AuditTrailQuery): Promise<AuditTrailRecord[]>;
+  /** 只数条数（管理台首页「今日 N 条」）：不取行，不按类别筛。 */
+  count(query: Omit<AuditTrailQuery, 'category'>): Promise<number>;
 }

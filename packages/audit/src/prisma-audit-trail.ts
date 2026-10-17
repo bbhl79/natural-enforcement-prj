@@ -1,9 +1,10 @@
 // 留痕表适配器（ADR 0012）。本文件是包内唯一引用 auditTrail 委托的地方。
 // 追加（PrismaAuditTrail）与查阅（PrismaAuditTrailReader，#126）都在这里。
 // 调用方传入带 auditTrail.create 的客户端。不在这里 import 生成客户端。
-import type { AuditAppend, AuditTrailPort, AuthzDeniedEntry } from './port.ts';
+import { AUDIT_ACTION_AUTHZ_DENIED, type AuditAppend, type AuditTrailPort, type AuthzDeniedEntry } from './port.ts';
 import {
   auditCategoryOf,
+  auditCategoryPrefilter,
   type AuditTrailQuery,
   type AuditTrailReader,
   type AuditTrailRecord,
@@ -129,27 +130,44 @@ export interface AuditTrailReadClient {
       itemCount: number | null;
       orgUnit: { name: string } | null;
     }>>;
+    count(args: { where: Record<string, unknown> }): Promise<number>;
   };
 }
 
+/** 范围、时间、操作人、结果，以及（有类别时）类别预筛，都放进库里的 where。 */
+function auditWhere(query: AuditTrailQuery): Record<string, unknown> {
+  const anchors: Array<Record<string, unknown>> = [{ orgUnitId: { in: [...query.orgUnitIds] } }];
+  if (query.includeUnanchored) anchors.push({ orgUnitId: null });
+  const and: Array<Record<string, unknown>> = [{ OR: anchors }];
+  if (query.category) {
+    const pre = auditCategoryPrefilter(query.category);
+    const opcodes: Array<Record<string, unknown>> = [];
+    if (pre.deniedOpcodes.length > 0) opcodes.push({ opcode: { in: [...pre.deniedOpcodes] } });
+    for (const prefix of pre.deniedOpcodePrefixes) opcodes.push({ opcode: { startsWith: prefix } });
+    const kinds: Array<Record<string, unknown>> = [{ action: { in: [...pre.actions] } }];
+    if (opcodes.length > 0) kinds.push({ action: AUDIT_ACTION_AUTHZ_DENIED, OR: opcodes });
+    and.push({ OR: kinds });
+  }
+  const where: Record<string, unknown> = { createdAt: { gte: query.from, lt: query.to }, AND: and };
+  if (query.actorCode) where.actorCode = query.actorCode;
+  if (query.outcome) where.outcome = query.outcome;
+  return where;
+}
+
 /**
- * 管理台留痕查阅（#126）。范围、时间、操作人、结果在库里筛；类别按 auditCategoryOf 在内存里筛，
- * 与页面上的类别口径同一份代码。
+ * 管理台留痕查阅（#126）。范围、时间、操作人、结果和类别预筛在库里筛；
+ * 取回后再按 auditCategoryOf 精确筛一遍，与页面上的类别口径同一份代码。
  */
 export class PrismaAuditTrailReader implements AuditTrailReader {
   constructor(private readonly db: AuditTrailReadClient) {}
 
+  async count(query: Omit<AuditTrailQuery, 'category'>): Promise<number> {
+    return this.db.auditTrail.count({ where: auditWhere({ ...query, category: null }) });
+  }
+
   async list(query: AuditTrailQuery): Promise<AuditTrailRecord[]> {
-    const anchors: Array<Record<string, unknown>> = [{ orgUnitId: { in: [...query.orgUnitIds] } }];
-    if (query.includeUnanchored) anchors.push({ orgUnitId: null });
-    const where: Record<string, unknown> = {
-      createdAt: { gte: query.from, lt: query.to },
-      OR: anchors,
-    };
-    if (query.actorCode) where.actorCode = query.actorCode;
-    if (query.outcome) where.outcome = query.outcome;
     const rows = await this.db.auditTrail.findMany({
-      where,
+      where: auditWhere(query),
       include: { orgUnit: { select: { name: true } } },
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });

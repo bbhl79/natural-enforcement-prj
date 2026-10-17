@@ -6,8 +6,8 @@ export {
   prismaAuditTrailFactory,
 } from './prisma-audit-trail.ts';
 export type { AuditTrailCreateClient, AuditTrailReadClient } from './prisma-audit-trail.ts';
-export { AUDIT_CATEGORIES, auditCategoryOf, isAuditCategory } from './query.ts';
-export type { AuditCategory, AuditTrailQuery, AuditTrailReader, AuditTrailRecord } from './query.ts';
+export { AUDIT_CATEGORIES, auditCategoryOf, auditCategoryPrefilter, isAuditCategory } from './query.ts';
+export type { AuditCategory, AuditCategoryPrefilter, AuditTrailQuery, AuditTrailReader, AuditTrailRecord } from './query.ts';
 export { AUDIT_TRAIL_FACTORY, AUDIT_TRAIL_PORT } from './tokens.ts';
 export { isRejected, rejected, runAuditedTransaction } from './transaction.ts';
 export type { AuditEntry, AuditTrailFactory, OpenTransaction, Rejected } from './transaction.ts';
