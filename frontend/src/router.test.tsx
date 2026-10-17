@@ -16,7 +16,11 @@ function person(roles: string[], opcodes: string[], extra: Json = {}): Json {
 }
 
 const CLERK = ['clue.read', 'case.read', 'case.open'];
-const ADMIN = ['org.tree.read', 'personnel.profile.read', 'personnel.locked.read', 'personnel.locked.release', 'audit.admin.read'];
+const ADMIN = [
+  'org.tree.read', 'org.unit.register', 'org.unit.rename',
+  'personnel.profile.read', 'personnel.locked.read', 'personnel.locked.release', 'audit.admin.read',
+];
+const TREE: [number, Json] = [200, { result: 'listed', rootId: 'hq', orgUnits: [{ id: 'hq' }, { id: 'a' }, { id: 'b' }] }];
 const SUPERVISE = ['audit.admin.read', 'audit.admin.export'];
 
 /** 按地址回答：会话查询返回 session，其余接口返回 routes 里登记的结果。 */
@@ -29,7 +33,7 @@ function serve(session: Json | number, routes: Record<string, [number, Json]> = 
         ? new Response('{}', { status: session })
         : new Response(JSON.stringify(session), { status: 200 }));
     }
-    const [status, body] = routes[url] ?? [404, {}];
+    const [status, body] = routes[url] ?? (url === '/api/org-units' ? TREE : [404, {}]);
     return Promise.resolve(new Response(JSON.stringify(body), { status }));
   });
   return calls;
@@ -220,7 +224,9 @@ describe('管理台首页（P3）', () => {
     const store = fresh();
     serve(person(['系统管理'], ADMIN), { '/api/admin/locked-personnel': [200, { result: 'listed', personnel: [{}, {}] }] });
     await store.dispatch(loadSession());
-    expect((await loadAdminHomeSummary(store.dispatch, ADMIN)).lockedPersonnel).toBe(2);
+    expect(await loadAdminHomeSummary(store.dispatch, ADMIN)).toMatchObject({ lockedPersonnel: 2, orgUnits: 3 });
+    // 只有树读码（内勤）不取机构数：机构入口按维护码出现
+    expect((await loadAdminHomeSummary(store.dispatch, ['org.tree.read', 'personnel.locked.read'])).orgUnits).toBeNull();
     expect(await loadAdminHomeSummary(store.dispatch, SUPERVISE)).toEqual(EMPTY_SUMMARY);
     serve(person(['系统管理'], ADMIN), { '/api/admin/locked-personnel': [403, { reason: 'permission-denied' }] });
     await expect(loadAdminHomeSummary(store.dispatch, ADMIN)).rejects.toMatchObject({ init: { status: 403 } });

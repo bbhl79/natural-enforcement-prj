@@ -1,0 +1,481 @@
+import { Suspense, useState, type ReactNode } from 'react';
+import { Await, useAsyncError, useLoaderData, useRevalidator } from 'react-router';
+
+import { useAppDispatch, useAppSelector } from '../hooks';
+import { DeniedCard, ErrorCard, errorStatus } from '../shell/StatusPages';
+import {
+  buildTree,
+  childCountText,
+  childLevelOf,
+  formerNames,
+  LEVEL_LABEL,
+  LEVELS,
+  namePeriods,
+  registerOrgUnit,
+  renameOrgUnit,
+  RULE_TEXT,
+  treeCountHint,
+  type OrgRuleCode,
+  type OrgTreeData,
+  type OrgTreeNode,
+  type OrgUnit,
+  type OrgUnitLevel,
+  type OrgWriteResult,
+} from './orgTree';
+
+const REGISTER = 'org.unit.register';
+const RENAME = 'org.unit.rename';
+
+function Crumb() {
+  return <div className="crumb">管理台 / <b>机构</b></div>;
+}
+
+function Head() {
+  return (
+    <>
+      <Crumb />
+      <div className="page-h">
+        <div>
+          <h1>机构</h1>
+          <div className="desc">显示你任职机构及其全部下级，已停用的机构也会列出并标明。</div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function SkeletonRows({ rows }: { rows: number }) {
+  return (
+    <div className="card">
+      {Array.from({ length: rows }, (_, i) => (
+        <div key={i} className="skel" style={{ width: `${60 + ((i * 13) % 40)}%` }} />
+      ))}
+    </div>
+  );
+}
+
+/** P4 loading：左树右详情两块骨架。 */
+export function OrgTreeSkeleton() {
+  return (
+    <div className="grid2" aria-busy="true">
+      <SkeletonRows rows={8} />
+      <SkeletonRows rows={5} />
+    </div>
+  );
+}
+
+function TreeError() {
+  const error = useAsyncError();
+  const revalidator = useRevalidator();
+  if (errorStatus(error) === 403) return <DeniedCard what="机构" />;
+  return <ErrorCard what="机构树" onRetry={() => void revalidator.revalidate()} />;
+}
+
+type Dialog = { kind: 'create'; parent: OrgUnit } | { kind: 'rename'; unit: OrgUnit } | null;
+
+export interface OrgTreeUi {
+  selectedId: string | null;
+  /** 折叠起来的节点 */
+  collapsed: ReadonlySet<string>;
+  showDeactivated: boolean;
+}
+
+export const INITIAL_UI: OrgTreeUi = { selectedId: null, collapsed: new Set(), showDeactivated: true };
+
+function TreeNodeView({
+  node,
+  depth,
+  ui,
+  onSelect,
+  onToggle,
+}: {
+  node: OrgTreeNode;
+  depth: number;
+  ui: OrgTreeUi;
+  onSelect: (id: string) => void;
+  onToggle: (id: string) => void;
+}) {
+  const { unit, children } = node;
+  const open = depth === 0 || !ui.collapsed.has(unit.id);
+  const classes = ['node'];
+  if (ui.selectedId === unit.id) classes.push('sel');
+  if (unit.deactivatedAt) classes.push('off');
+  return (
+    <li>
+      <div
+        className={classes.join(' ')}
+        data-org-unit={unit.id}
+        role="treeitem"
+        aria-selected={ui.selectedId === unit.id}
+        aria-expanded={children.length > 0 ? open : undefined}
+        onClick={() => onSelect(unit.id)}
+      >
+        <span
+          className="tg"
+          onClick={(event) => {
+            if (children.length === 0 || depth === 0) return;
+            event.stopPropagation();
+            onToggle(unit.id);
+          }}
+        >
+          {children.length > 0 ? (open ? '▾' : '▸') : ''}
+        </span>
+        <span className="nm">{unit.name}</span>
+        {unit.deactivatedAt ? <span className="tag gray">已停用</span> : null}
+        {children.length > 0 && !open ? <span className="help" style={{ margin: 0 }}>{`${children.length} 个下级`}</span> : null}
+      </div>
+      {children.length > 0 && open ? (
+        <ul role="group">
+          {children.map((child) => (
+            <TreeNodeView key={child.unit.id} node={child} depth={depth + 1} ui={ui} onSelect={onSelect} onToggle={onToggle} />
+          ))}
+        </ul>
+      ) : null}
+    </li>
+  );
+}
+
+function Detail({
+  tree,
+  unit,
+  opcodes,
+  onCreate,
+  onRename,
+}: {
+  tree: OrgTreeData;
+  unit: OrgUnit;
+  opcodes: readonly string[];
+  onCreate: () => void;
+  onRename: () => void;
+}) {
+  const parent = tree.orgUnits.find((item) => item.id === unit.parentId) ?? null;
+  const isRoot = unit.parentId === null;
+  const onlyRoot = tree.orgUnits.length === 1;
+  const former = formerNames(unit.names);
+  const childLevel = childLevelOf(unit.level);
+  const createBlocked = unit.deactivatedAt
+    ? '已停用的机构下不能新建下级机构。'
+    : childLevel === null
+      ? '所下不能再建下级机构。'
+      : null;
+  const tag = unit.deactivatedAt
+    ? <span className="tag gray">已停用</span>
+    : isRoot ? <span className="tag">根机构</span> : <span className="tag">启用</span>;
+  return (
+    <div className="card">
+      <div className="card-h">{unit.name}{tag}</div>
+      <div className="kv">
+        <div className="k">上级机构</div>
+        <div>{isRoot ? '无（根机构）' : parent?.name ?? '不在你的范围内'}</div>
+        <div className="k">层级</div>
+        <div>{LEVEL_LABEL[unit.level]}</div>
+        {isRoot ? (
+          <>
+            <div className="k">状态</div>
+            <div>{unit.deactivatedAt ? '已停用' : '启用'}</div>
+          </>
+        ) : null}
+        <div className="k">在职人员</div>
+        <div>{`${unit.activePersonnel} 人`}</div>
+        <div className="k">下级机构</div>
+        <div>{childCountText(tree, unit.id)}</div>
+        {former.length > 0 ? (
+          <>
+            <div className="k">历史名称</div>
+            <div>
+              {former.map((item, index) => (
+                <div key={`${item.name}-${index}`}>
+                  {item.name}
+                  <br />
+                  <span className="help">{item.until}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : null}
+      </div>
+      <div className="actions" style={{ marginTop: 14 }}>
+        {opcodes.includes(REGISTER) ? (
+          <button type="button" className="btn btn-primary" data-requires={REGISTER} disabled={createBlocked !== null} onClick={onCreate}>
+            新建下级机构
+          </button>
+        ) : null}
+        {opcodes.includes(RENAME) ? (
+          <button type="button" className="btn" data-requires={RENAME} onClick={onRename}>改名</button>
+        ) : null}
+        {/* 停用入口由停用票（#124）放在这里。 */}
+      </div>
+      {createBlocked && opcodes.includes(REGISTER) ? <div className="help" style={{ marginTop: 10 }}>{createBlocked}</div> : null}
+      {isRoot ? <div className="help" style={{ marginTop: 10 }}>根机构不能停用。</div> : null}
+      {onlyRoot ? null : (
+        <div className="banner gray" style={{ marginTop: 12, marginBottom: 0 }}>
+          机构不能移动到其他上级下面。需要调整隶属时：新建机构，把人员调岗过去，再停用旧机构。
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RuleErrors({ rules, only }: { rules: readonly OrgRuleCode[]; only: readonly OrgRuleCode[] }) {
+  const shown = rules.filter((rule) => only.includes(rule));
+  return <>{shown.map((rule) => <div key={rule} className="err">{RULE_TEXT[rule]}</div>)}</>;
+}
+
+function Modal({ title, children, foot }: { title: string; children: ReactNode; foot: ReactNode }) {
+  return (
+    <div className="mask">
+      <div className="dialog" role="dialog" aria-modal="true" aria-label={title}>
+        <h3>{title}</h3>
+        {children}
+        <div className="foot">{foot}</div>
+      </div>
+    </div>
+  );
+}
+
+export function CreateDialog({
+  parent,
+  onCancel,
+  onSubmit,
+}: {
+  parent: OrgUnit;
+  onCancel: () => void;
+  onSubmit: (input: { name: string; level: OrgUnitLevel }) => Promise<OrgWriteResult>;
+}) {
+  const [name, setName] = useState('');
+  const [level, setLevel] = useState<OrgUnitLevel>(childLevelOf(parent.level) ?? 'station');
+  const [failure, setFailure] = useState<{ rules: OrgRuleCode[]; message: string | null }>({ rules: [], message: null });
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    setBusy(true);
+    const result = await onSubmit({ name, level });
+    setBusy(false);
+    if (!result.ok) setFailure({ rules: result.rules, message: result.message });
+  };
+  return (
+    <Modal
+      title={`在「${parent.name}」下新建机构`}
+      foot={(
+        <>
+          <button type="button" className="btn" onClick={onCancel}>取消</button>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void submit()}>新建</button>
+        </>
+      )}
+    >
+      {failure.message ? <div className="banner danger">{failure.message}</div> : null}
+      <div className="form-row">
+        <label>上级机构</label>
+        <input className="input ro" value={parent.name} disabled />
+      </div>
+      <div className="form-row">
+        <label htmlFor="org-level">层级<span className="req">*</span></label>
+        <div>
+          <select id="org-level" className="select" value={level} onChange={(event) => setLevel(event.target.value as OrgUnitLevel)}>
+            {LEVELS.map((item) => <option key={item} value={item}>{LEVEL_LABEL[item]}</option>)}
+          </select>
+          <div className="help">市下只能建区，区下只能建所，所下不能再建下级机构。</div>
+          <RuleErrors rules={failure.rules} only={['org-level-mismatch']} />
+        </div>
+      </div>
+      <div className="form-row">
+        <label htmlFor="org-name">机构名称<span className="req">*</span></label>
+        <div>
+          <input id="org-name" className="input" value={name} onChange={(event) => setName(event.target.value)} />
+          <div className="help">名称以编制批复为准。以后改名会保留历史名称。</div>
+          <RuleErrors rules={failure.rules} only={['org-name-required', 'org-name-too-long']} />
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+export function RenameDialog({
+  unit,
+  onCancel,
+  onSubmit,
+}: {
+  unit: OrgUnit;
+  onCancel: () => void;
+  onSubmit: (name: string) => Promise<OrgWriteResult>;
+}) {
+  const [name, setName] = useState('');
+  const [failure, setFailure] = useState<{ rules: OrgRuleCode[]; message: string | null }>({ rules: [], message: null });
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    setBusy(true);
+    const result = await onSubmit(name);
+    setBusy(false);
+    if (!result.ok) setFailure({ rules: result.rules, message: result.message });
+  };
+  return (
+    <Modal
+      title={`改名：${unit.name}`}
+      foot={(
+        <>
+          <button type="button" className="btn" onClick={onCancel}>取消</button>
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void submit()}>确认改名</button>
+        </>
+      )}
+    >
+      {failure.message ? <div className="banner danger">{failure.message}</div> : null}
+      <div className="form-row">
+        <label>现名称</label>
+        <input className="input ro" value={unit.name} disabled />
+      </div>
+      <div className="form-row">
+        <label htmlFor="org-new-name">新名称<span className="req">*</span></label>
+        <div>
+          <input id="org-new-name" className="input" value={name} onChange={(event) => setName(event.target.value)} />
+          <div className="help">改名后，此前的案件、卷宗和记录仍显示当时的名称。</div>
+          <RuleErrors rules={failure.rules} only={['org-name-required', 'org-name-too-long']} />
+        </div>
+      </div>
+      <div className="section-title">历史名称</div>
+      <table className="table">
+        <thead>
+          <tr><th>名称</th><th>使用期间</th></tr>
+        </thead>
+        <tbody>
+          {namePeriods(unit.names).map((item, index) => (
+            <tr key={`${item.name}-${index}`}><td>{item.name}</td><td>{item.period}</td></tr>
+          ))}
+        </tbody>
+      </table>
+    </Modal>
+  );
+}
+
+/** 有下级的非根节点：全部折叠时收起它们。根节点始终展开。 */
+function collapsibleIds(tree: OrgTreeData): Set<string> {
+  const parents = new Set(tree.orgUnits.map((unit) => unit.parentId).filter((id): id is string => id !== null));
+  parents.delete(tree.rootId);
+  return parents;
+}
+
+/**
+ * 机构树主体（P4 expanded/collapsed/onlyroot 与新建、改名弹窗）。
+ * 界面没有移动、合并、恢复机构的入口。按钮按会话清单显示，真正的授权由服务端每次校验。
+ */
+export function OrgTreeView({
+  tree,
+  opcodes,
+  ui,
+  onUi,
+  dialog,
+  onDialog,
+  onCreate,
+  onRename,
+}: {
+  tree: OrgTreeData;
+  opcodes: readonly string[];
+  ui: OrgTreeUi;
+  onUi: (ui: OrgTreeUi) => void;
+  dialog: Dialog;
+  onDialog: (dialog: Dialog) => void;
+  onCreate: (parent: OrgUnit, input: { name: string; level: OrgUnitLevel }) => Promise<OrgWriteResult>;
+  onRename: (unit: OrgUnit, name: string) => Promise<OrgWriteResult>;
+}) {
+  const root = buildTree(tree, ui.showDeactivated);
+  if (!root) return <ErrorCard what="机构树" onRetry={() => window.location.reload()} />;
+  const onlyRoot = tree.orgUnits.length === 1;
+  const selected = tree.orgUnits.find((unit) => unit.id === ui.selectedId) ?? root.unit;
+  const toggle = (id: string) => {
+    const next = new Set(ui.collapsed);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onUi({ ...ui, collapsed: next });
+  };
+  return (
+    <>
+      <div className="grid2">
+        <div className="card">
+          <div className="card-h">机构树<span className="hint">{treeCountHint(tree)}</span></div>
+          {onlyRoot ? null : (
+            <div className="filters">
+              <button type="button" className="btn btn-sm" onClick={() => onUi({ ...ui, collapsed: new Set() })}>全部展开</button>
+              <button type="button" className="btn btn-sm" onClick={() => onUi({ ...ui, collapsed: collapsibleIds(tree) })}>全部折叠</button>
+              <label className="checks" style={{ padding: 0 }}>
+                <input
+                  type="checkbox"
+                  checked={ui.showDeactivated}
+                  onChange={(event) => onUi({ ...ui, showDeactivated: event.target.checked })}
+                />
+                {' 显示已停用'}
+              </label>
+            </div>
+          )}
+          <ul className="tree" role="tree">
+            <TreeNodeView
+              node={root}
+              depth={0}
+              ui={{ ...ui, selectedId: selected.id }}
+              onSelect={(id) => onUi({ ...ui, selectedId: id })}
+              onToggle={toggle}
+            />
+          </ul>
+          {onlyRoot ? <div className="banner gray" style={{ marginTop: 12 }}>还没有下级机构。请先建区分局，再在区分局下建所。</div> : null}
+        </div>
+        <Detail
+          tree={tree}
+          unit={selected}
+          opcodes={opcodes}
+          onCreate={() => onDialog({ kind: 'create', parent: selected })}
+          onRename={() => onDialog({ kind: 'rename', unit: selected })}
+        />
+      </div>
+      {dialog?.kind === 'create' ? (
+        <CreateDialog parent={dialog.parent} onCancel={() => onDialog(null)} onSubmit={(input) => onCreate(dialog.parent, input)} />
+      ) : null}
+      {dialog?.kind === 'rename' ? (
+        <RenameDialog unit={dialog.unit} onCancel={() => onDialog(null)} onSubmit={(name) => onRename(dialog.unit, name)} />
+      ) : null}
+    </>
+  );
+}
+
+/** 机构（P4）：系统管理看树、新建下级、改名；内勤只读看树；没有树读码的人员看到无权限卡片。 */
+export default function OrgTreePage() {
+  const { tree } = useLoaderData() as { tree: Promise<OrgTreeData | null> };
+  const opcodes = useAppSelector((root) => root.login.operator?.opcodes ?? []);
+  const dispatch = useAppDispatch();
+  const revalidator = useRevalidator();
+  const [ui, setUi] = useState<OrgTreeUi>(INITIAL_UI);
+  const [dialog, setDialog] = useState<Dialog>(null);
+  if (!opcodes.includes('org.tree.read')) {
+    return (
+      <>
+        <Crumb />
+        <DeniedCard what="机构" />
+      </>
+    );
+  }
+  const done = async (result: OrgWriteResult): Promise<OrgWriteResult> => {
+    if (result.ok) {
+      setDialog(null);
+      setUi((current) => ({ ...current, selectedId: result.id }));
+      await revalidator.revalidate();
+    }
+    return result;
+  };
+  return (
+    <>
+      <Head />
+      <Suspense fallback={<OrgTreeSkeleton />}>
+        <Await resolve={tree} errorElement={<TreeError />}>
+          {(resolved: OrgTreeData | null) => (resolved ? (
+            <OrgTreeView
+              tree={resolved}
+              opcodes={opcodes}
+              ui={ui}
+              onUi={setUi}
+              dialog={dialog}
+              onDialog={setDialog}
+              onCreate={async (parent, input) => done(await registerOrgUnit(dispatch, { parentId: parent.id, ...input }))}
+              onRename={async (unit, name) => done(await renameOrgUnit(dispatch, unit.id, name))}
+            />
+          ) : null)}
+        </Await>
+      </Suspense>
+    </>
+  );
+}

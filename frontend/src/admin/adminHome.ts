@@ -1,12 +1,12 @@
 // 管理台首页（P3）的数据与视图判定。
-// 各入口的数字来自各自功能的查询；本票只接被锁人员（A10 已有接口）。
-// 机构、人员、留痕、执法证的数字由 #123、#128、#126、#133 接入，未接入时为 null，入口不显示数字。
+// 各入口的数字来自各自功能的查询：被锁人员（A10）、机构（#123，取机构树节点数）。
+// 人员、留痕、执法证的数字由 #128、#126、#133 接入，未接入时为 null，入口不显示数字。
 
 import { data } from 'react-router';
 
 import { apiFetch, type ApiDispatch } from '../api';
 import { sessionOpcodes, type SessionStore } from '../session';
-import { ADMIN_HOME_OPCODES, hasAny } from '../shell/menu';
+import { ADMIN_HOME_OPCODES, hasAny, ORG_ADMIN_OPCODES } from '../shell/menu';
 
 export interface AdminHomeSummary {
   /** 数据范围内的机构数 */
@@ -30,7 +30,7 @@ export const EMPTY_SUMMARY: AdminHomeSummary = {
 };
 
 /** 维护类入口码。只有留痕入口、没有维护入口的是监督视角。 */
-const MAINTENANCE_OPCODES = ['org.tree.read', 'personnel.profile.read', 'personnel.locked.read'] as const;
+const MAINTENANCE_OPCODES = [...ORG_ADMIN_OPCODES, 'personnel.profile.read', 'personnel.locked.read'] as const;
 
 export type AdminHomeView = 'admin' | 'supervise' | 'denied';
 
@@ -54,7 +54,8 @@ export interface AdminTile {
   title: string;
   desc: string;
   path: string;
-  opcode: string;
+  /** 会话清单含其中任一码即显示 */
+  anyOf: readonly string[];
   count: (summary: AdminHomeSummary) => string | null;
 }
 
@@ -63,10 +64,10 @@ function counted(value: number | null, unit: string, prefix = ''): string | null
 }
 
 export const ADMIN_TILES: readonly AdminTile[] = [
-  { id: 'org', title: '机构', desc: '建下级机构、改名、停用', path: '/admin/org-units', opcode: 'org.tree.read', count: (s) => counted(s.orgUnits, '个') },
-  { id: 'person', title: '人员', desc: '建人员、分配角色、调岗、停用与恢复', path: '/admin/personnel', opcode: 'personnel.profile.read', count: (s) => counted(s.personnel, '人') },
-  { id: 'locked', title: '被锁人员', desc: '连续输错口令被锁的人员', path: '/admin/locked-personnel', opcode: 'personnel.locked.read', count: (s) => counted(s.lockedPersonnel, '人') },
-  { id: 'audit', title: '管理台留痕', desc: '查阅与导出维护记录', path: '/admin/audit', opcode: 'audit.admin.read', count: (s) => counted(s.auditToday, '条', '今日 ') },
+  { id: 'org', title: '机构', desc: '建下级机构、改名、停用', path: '/admin/org-units', anyOf: ORG_ADMIN_OPCODES, count: (s) => counted(s.orgUnits, '个') },
+  { id: 'person', title: '人员', desc: '建人员、分配角色、调岗、停用与恢复', path: '/admin/personnel', anyOf: ['personnel.profile.read'], count: (s) => counted(s.personnel, '人') },
+  { id: 'locked', title: '被锁人员', desc: '连续输错口令被锁的人员', path: '/admin/locked-personnel', anyOf: ['personnel.locked.read'], count: (s) => counted(s.lockedPersonnel, '人') },
+  { id: 'audit', title: '管理台留痕', desc: '查阅与导出维护记录', path: '/admin/audit', anyOf: ['audit.admin.read'], count: (s) => counted(s.auditToday, '条', '今日 ') },
 ];
 
 /** 监督视角的留痕入口说明（P3 supervise）。 */
@@ -75,6 +76,14 @@ export const SUPERVISE_AUDIT_DESC = '谁在什么时候做了哪些维护，结�
 /** 取首页数字。接口 403：重新拉会话后显示无权限页；401 交给会话已结束页处理。 */
 export async function loadAdminHomeSummary(dispatch: ApiDispatch, opcodes: readonly string[]): Promise<AdminHomeSummary> {
   const summary: AdminHomeSummary = { ...EMPTY_SUMMARY };
+  if (hasAny(opcodes, ORG_ADMIN_OPCODES) && opcodes.includes('org.tree.read')) {
+    const response = await apiFetch(dispatch, '/api/org-units');
+    if (response.status === 401) return summary;
+    if (response.status === 403) throw data(null, { status: 403 });
+    if (!response.ok) throw new Error(`机构数读取失败：HTTP ${response.status}`);
+    const body = (await response.json()) as { orgUnits?: unknown };
+    summary.orgUnits = Array.isArray(body.orgUnits) ? body.orgUnits.length : null;
+  }
   if (opcodes.includes('personnel.locked.read')) {
     const response = await apiFetch(dispatch, '/api/admin/locked-personnel');
     if (response.status === 401) return summary;

@@ -24,9 +24,19 @@ describe('按操作码裁剪菜单（#105「菜单来源」）', () => {
   });
 
   it('兼任多角色时是并集，顺序按菜单定义', () => {
-    const union = ids(['audit.admin.read', 'clue.read', 'personnel.locked.read', 'org.tree.read', 'personnel.profile.read']);
+    const union = ids(['audit.admin.read', 'clue.read', 'personnel.locked.read', 'org.unit.register', 'personnel.profile.read']);
     expect(union).toEqual(['home', 'clue', 'admin', 'org', 'person', 'locked', 'audit']);
     expect(visibleSections(['audit.admin.read', 'clue.read'])).toEqual(['业务办理', '管理台']);
+  });
+
+  it('内勤持机构树读码（业务侧选承办机构用）：不出管理台区（#123）', () => {
+    expect(ids(['clue.read', 'case.read', 'org.tree.read'])).toEqual(['home', 'clue', 'case']);
+    expect(visibleSections(['clue.read', 'org.tree.read'])).toEqual(['业务办理']);
+  });
+
+  it('机构菜单按维护码出现：新建或改名任一', () => {
+    expect(ids(['org.unit.register'])).toEqual(['admin', 'org']);
+    expect(ids(['org.unit.rename'])).toEqual(['admin', 'org']);
   });
 
   it('不认识的码不影响菜单', () => {
