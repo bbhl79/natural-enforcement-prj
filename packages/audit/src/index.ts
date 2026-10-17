@@ -26,6 +26,7 @@ export {
   AUDIT_ACTIONS,
   AUDIT_COUNTED_ACTIONS,
   AUDIT_SUCCEEDED_ACTIONS,
+  AUDIT_TARGET_ORG_BASES,
   AUTHZ_DENIED_REASONS,
   LOGIN_FAILED_REASONS,
   PASSWORD_CHANGED_REASONS,
@@ -34,6 +35,7 @@ export {
 export type {
   AuditAction,
   AuditCountedAction,
+  AuditTargetOrgBasis,
   AuthzDeniedReason,
   LoginFailedReason,
   PasswordChangedReason,

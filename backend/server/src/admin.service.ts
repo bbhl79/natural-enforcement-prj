@@ -215,7 +215,7 @@ export class AdminService {
     if (!decision.allowed) {
       return rejected<AdminDenial>({ status: 403, body: { reason: decision.reason } }, decision.denial);
     }
-    if (target.id === actor.personnelId) return this.denySelf(tx, actor, opcode, target.id);
+    if (target.id === actor.personnelId) return this.denySelf(tx, actor, opcode, target.id, targetOrg);
     return { target };
   }
 
@@ -224,6 +224,7 @@ export class AdminService {
     actor: ActorRef,
     opcode: string,
     targetId: string,
+    targetOrg: string,
   ): Promise<Rejected<AdminDenial>> {
     const admin = await tx.directory.findById(actor.personnelId);
     return rejected<AdminDenial>({ status: 403, body: { reason: 'permission-denied' } }, {
@@ -240,6 +241,9 @@ export class AdminService {
       resourceType: 'personnel',
       resourceId: targetId,
       previousValue: null,
+      // 对象就是本人，目标机构取对象机构（#105；ADR 0011 修正）。
+      targetOrgUnitId: targetOrg,
+      targetOrgUnitBasis: 'object',
     });
   }
 }

@@ -14,6 +14,7 @@ import { newAuditId } from './ulid.ts';
 import {
   AUDIT_ACTIONS,
   AUDIT_COUNTED_ACTIONS,
+  AUDIT_TARGET_ORG_BASES,
   AUDIT_SUCCEEDED_ACTIONS,
   AUTHZ_DENIED_REASONS,
   LOGIN_FAILED_REASONS,
@@ -24,6 +25,7 @@ import {
 const SUCCEEDED = new Set<string>(AUDIT_SUCCEEDED_ACTIONS);
 const ACTIONS = new Set<string>(AUDIT_ACTIONS);
 const COUNTED = new Set<string>(AUDIT_COUNTED_ACTIONS);
+const TARGET_BASES = new Set<string>(AUDIT_TARGET_ORG_BASES);
 
 /** 带原因的动作及其封闭原因表。不在表里的动作不许带原因。 */
 const REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
@@ -64,6 +66,26 @@ function assertItemCount(action: string, itemCount: unknown): void {
   }
 }
 
+/**
+ * 授权拒绝行的目标机构（#119 修正，ADR 0011）。
+ * 调用方没给时取操作者机构并记 actor-fallback。其他动作两列都空。
+ */
+function targetOf(entry: AuditAppend | AuthzDeniedEntry): {
+  targetOrgUnitId: string | null;
+  targetOrgUnitBasis: string | null;
+} {
+  if (entry.action !== 'authz.denied') {
+    if ('targetOrgUnitId' in entry || 'targetOrgUnitBasis' in entry) {
+      throw new AuditVocabularyError(`动作 ${entry.action} 不带目标机构`);
+    }
+    return { targetOrgUnitId: null, targetOrgUnitBasis: null };
+  }
+  const basis = entry.targetOrgUnitBasis;
+  if (basis === undefined) return { targetOrgUnitId: entry.orgUnitId, targetOrgUnitBasis: 'actor-fallback' };
+  if (!TARGET_BASES.has(basis)) throw new AuditVocabularyError(`表外目标机构来源：${String(basis)}`);
+  return { targetOrgUnitId: entry.targetOrgUnitId ?? null, targetOrgUnitBasis: basis };
+}
+
 export interface AuditTrailCreateClient {
   auditTrail: {
     create(args: { data: Record<string, unknown> }): Promise<unknown>;
@@ -81,6 +103,7 @@ export class PrismaAuditTrail implements AuditTrailPort {
     const itemCount = 'itemCount' in entry ? (entry.itemCount ?? null) : null;
     assertVocabulary(entry.action, reason);
     assertItemCount(entry.action, itemCount);
+    const target = targetOf(entry);
     await this.db.auditTrail.create({
       data: {
         id: newAuditId(),
@@ -98,6 +121,8 @@ export class PrismaAuditTrail implements AuditTrailPort {
         resourceId: entry.resourceId ?? null,
         previousValue: entry.previousValue ?? null,
         itemCount,
+        targetOrgUnitId: target.targetOrgUnitId,
+        targetOrgUnitBasis: target.targetOrgUnitBasis,
       },
     });
   }
