@@ -1,15 +1,15 @@
 // 人员服务（#52）：登记 / 改名（名称版本化）/ 调岗 / 失效 / 读 / 导出——
 // 每个动作都先经 AccessControlService 重新校验身份、权限、数据范围；
-// 导出必产生 append-only 留痕（谁在何时导出了什么范围、多少行）。
+// 导出写共用留痕表的 personnel.exported，带导出条数（#125，ADR 0013）。ExportAudit 已冻结，不再写入。
 
 import { Inject, Injectable } from '@nestjs/common';
+import type { AuditTrailPort } from '@natural-enforcement/audit';
 
 import { AccessDeniedError, IDENTITY_MAINTENANCE_OPCODE } from '../domain/access.ts';
 import { AlreadyExistsError } from '../domain/already-exists.ts';
 import type { ActorRef } from '../domain/actor.ts';
 import { newUlid } from '../domain/ulid.ts';
 import type {
-  ExportAuditRow,
   IdentityTransaction,
   PersonnelRow,
 } from '../persistence/identity-store.ts';
@@ -29,9 +29,14 @@ export interface PersonnelDetail extends PersonnelRow {
   currentOrgUnitId: string;
 }
 
-export interface ExportResult {
-  audit: ExportAuditRow;
-  personnel: PersonnelRow[];
+/** 人员导出的操作码（#125，ADR 0013）。只给系统管理。 */
+export const PERSONNEL_EXPORT_OPCODE = 'personnel.profile.export';
+
+/** 人员导出的一行。不含手机号、执法证号、口令（ADR 0011、#105）。 */
+export interface PersonnelExportItem {
+  id: string;
+  code: string;
+  name: string;
 }
 
 @Injectable()
@@ -168,19 +173,41 @@ export class PersonnelService {
     return this.detail(personnelId);
   }
 
-  /** 导出人员清单：先校验，后写导出留痕——留痕写入即不可删改（触发器兜底） */
-  async exportPersonnel(actor: ActorRef, orgUnitId: string): Promise<ExportResult> {
-    const context = await this.access.authorize(actor, IDENTITY_MAINTENANCE_OPCODE, orgUnitId);
-    const rows = await this.store.listActivePersonnelOfOrgUnit(orgUnitId);
-    const audit: ExportAuditRow = {
-      id: newUlid(),
-      actorId: context.personnelId,
-      targetOrgUnitId: orgUnitId,
-      exportedCount: rows.length,
-      createdAt: new Date(),
-    };
-    await this.store.insertExportAudit(audit);
-    return { audit, personnel: rows };
+  /**
+   * 导出某机构（不含下级）的未停用人员（#125，ADR 0013）。
+   * 在调用方的交互式事务里执行，授权与读取都经 tx.store。
+   * 通过时在同一事务里先写一行 personnel.exported（itemCount = 导出条数），写成功才交出数据；
+   * 留痕写入抛错时由调用方整体回滚，不交出数据。
+   * 拒绝时抛 AccessDeniedError，denial 带着尚未写入的 authz.denied，调用方回滚后用 rejected(..., error.denial) 写入。
+   * 不再写 ExportAudit（已冻结）。
+   */
+  async exportPersonnel(
+    actor: ActorRef,
+    orgUnitId: string,
+    tx: IdentityTransaction,
+    audit: AuditTrailPort,
+    sourceIp: string | null = null,
+  ): Promise<PersonnelExportItem[]> {
+    const resource = { resourceType: 'org-unit', resourceId: orgUnitId };
+    const decision = await this.access.check(actor, PERSONNEL_EXPORT_OPCODE, orgUnitId, resource, tx.store);
+    if (!decision.allowed) throw new AccessDeniedError(decision.reason, decision.detail, decision.denial);
+    const exporter = await tx.store.findPersonnelById(decision.context.personnelId);
+    const rows = await tx.store.listActivePersonnelOfOrgUnit(orgUnitId);
+    const items = rows.map((row) => ({ id: row.id, code: row.code, name: row.name }));
+    await audit.append({
+      action: 'personnel.exported',
+      actorId: decision.context.personnelId,
+      actorCode: exporter?.code ?? null,
+      subjectPersonnelId: null,
+      subjectCode: null,
+      orgUnitId,
+      sourceIp,
+      opcode: PERSONNEL_EXPORT_OPCODE,
+      resourceType: resource.resourceType,
+      resourceId: resource.resourceId,
+      itemCount: items.length,
+    });
+    return items;
   }
 
   private async detail(personnelId: string): Promise<PersonnelDetail> {

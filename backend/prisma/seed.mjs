@@ -42,6 +42,7 @@ if (existing) {
 
 // ---- 参照种子（#92；允许行 = GitHub issue #71 决议）----
 // 系统管理不持有办案表任何一行。authz.binding 两条只给系统管理。
+// 人员导出 personnel.profile.export 只给系统管理（#125，ADR 0013）。已初始化的库再次播种时补写这一条允许行。
 const ROLE_ALLOWANCES = {
   内勤: [
     "clue.org.assign",
@@ -112,6 +113,7 @@ const ROLE_ALLOWANCES = {
     "personnel.locked.read",
     "personnel.locked.release",
     "personnel.password.reset",
+    "personnel.profile.export",
     "audit.admin.read",
     "audit.admin.export",
     "authz.binding.submit",
