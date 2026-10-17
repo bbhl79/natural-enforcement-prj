@@ -5,6 +5,7 @@ import type { AuditTrailFactory } from './transaction.ts';
 import { newAuditId } from './ulid.ts';
 import {
   AUDIT_ACTIONS,
+  AUDIT_COUNTED_ACTIONS,
   AUDIT_SUCCEEDED_ACTIONS,
   AUTHZ_DENIED_REASONS,
   LOGIN_FAILED_REASONS,
@@ -15,6 +16,7 @@ import {
 
 const SUCCEEDED = new Set<string>(AUDIT_SUCCEEDED_ACTIONS);
 const ACTIONS = new Set<string>(AUDIT_ACTIONS);
+const COUNTED = new Set<string>(AUDIT_COUNTED_ACTIONS);
 
 /** 带原因的动作及其封闭原因表。不在表里的动作不许带原因。 */
 const REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
@@ -63,6 +65,17 @@ function assertVocabulary(action: string, outcome: unknown, reason: unknown): vo
   }
 }
 
+/** 带条数的动作必须带非负整数条数；其余动作不许带条数（ADR 0013）。 */
+function assertItemCount(action: string, itemCount: unknown): void {
+  if (!COUNTED.has(action)) {
+    if (itemCount != null) throw new AuditVocabularyError(`动作 ${action} 不带条数，收到：${String(itemCount)}`);
+    return;
+  }
+  if (typeof itemCount !== 'number' || !Number.isSafeInteger(itemCount) || itemCount < 0) {
+    throw new AuditVocabularyError(`动作 ${action} 的条数须为非负整数，收到：${String(itemCount)}`);
+  }
+}
+
 export interface AuditTrailCreateClient {
   auditTrail: {
     create(args: { data: Record<string, unknown> }): Promise<unknown>;
@@ -77,7 +90,9 @@ export class PrismaAuditTrail implements AuditTrailPort {
       ? entry.outcome
       : SUCCEEDED.has(entry.action) ? 'succeeded' : 'failed';
     const reason = 'reason' in entry ? entry.reason : null;
+    const itemCount = 'itemCount' in entry ? (entry.itemCount ?? null) : null;
     assertVocabulary(entry.action, outcome, reason);
+    assertItemCount(entry.action, itemCount);
     await this.db.auditTrail.create({
       data: {
         id: newAuditId(),
@@ -94,6 +109,7 @@ export class PrismaAuditTrail implements AuditTrailPort {
         resourceType: entry.resourceType ?? null,
         resourceId: entry.resourceId ?? null,
         previousValue: entry.previousValue ?? null,
+        itemCount,
       },
     });
   }

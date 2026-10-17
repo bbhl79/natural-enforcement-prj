@@ -129,7 +129,9 @@ model PersonnelAssignment {
   @@map("personnel_assignment")
 }
 
-/// 导出留痕（append-only：触发器拒 UPDATE/DELETE）——谁在何时导出了什么范围、多少行
+/// 导出留痕（append-only：触发器拒 UPDATE/DELETE）——谁在何时导出了什么范围、多少行。
+/// 冻结（ADR 0013，#125）：不再写入，应用里没有写入路径。人员导出改写 AuditTrail 的 personnel.exported。
+/// 表、追加式触发器 export_audit_append_only、G1 白名单条目都保留，已有行永久可查。不删表（#49、#37）。
 model ExportAudit {
   id               String   @id
   actorId          String   @map("actor_id")
@@ -283,6 +285,8 @@ model AuditTrail {
   resourceType       String?   @map("resource_type")
   resourceId         String?   @map("resource_id")
   previousValue      String?   @map("previous_value")
+  /// 导出条数（ADR 0013）。只有带条数的动作写值，其余为空。库层 CHECK 不得为负。
+  itemCount          Int?      @map("item_count")
 
   @@map("audit_trail")
 }
