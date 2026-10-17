@@ -270,7 +270,8 @@ export type LockedEvent =
   | { type: 'close' }
   | { type: 'password'; value: string }
   | { type: 'submit' }
-  | { type: 'settled'; result: ActionResult };
+  /** 结算时带上发请求时的动作与目标，不读当前弹窗，免得结算到别的行上 */
+  | { type: 'settled'; kind: LockedActionKind; row: LockedRow; result: ActionResult };
 
 export function initialLockedState(rows: LockedRow[]): LockedState {
   return { rows, dialog: null, password: '', ruleCodes: [], pending: false, notice: null };
@@ -279,6 +280,8 @@ export function initialLockedState(rows: LockedRow[]): LockedState {
 export function lockedReducer(state: LockedState, event: LockedEvent): LockedState {
   switch (event.type) {
     case 'open':
+      // 请求进行中不换弹窗目标
+      if (state.pending) return state;
       return { ...state, dialog: { kind: event.kind, row: event.row }, password: '', ruleCodes: [], pending: false };
     case 'close':
       return state.pending ? state : { ...state, dialog: null, password: '', ruleCodes: [] };
@@ -287,17 +290,18 @@ export function lockedReducer(state: LockedState, event: LockedEvent): LockedSta
     case 'submit':
       return { ...state, pending: true };
     case 'settled': {
-      const dialog = state.dialog;
-      if (!dialog) return { ...state, pending: false };
-      const { result } = event;
-      if (result.type === 'non-compliant') return { ...state, pending: false, ruleCodes: result.rules };
-      const closed = { ...state, dialog: null, password: '', ruleCodes: [], pending: false };
+      const { kind, row: target, result } = event;
+      const sameDialog = state.dialog?.kind === kind && state.dialog.row.id === target.id;
+      if (result.type === 'non-compliant') {
+        return sameDialog ? { ...state, pending: false, ruleCodes: result.rules } : { ...state, pending: false };
+      }
+      const closed = sameDialog
+        ? { ...state, dialog: null, password: '', ruleCodes: [], pending: false }
+        : { ...state, pending: false };
       if (result.type === 'ended') return closed;
       if (result.type === 'denied') return { ...closed, notice: result.notice };
-      const notice: Notice = dialog.kind === 'unlock'
-        ? { kind: 'unlocked', row: dialog.row }
-        : { kind: 'reset', row: dialog.row };
-      return { ...closed, rows: state.rows.filter((row) => row.id !== dialog.row.id), notice };
+      const notice: Notice = kind === 'unlock' ? { kind: 'unlocked', row: target } : { kind: 'reset', row: target };
+      return { ...closed, rows: state.rows.filter((row) => row.id !== target.id), notice };
     }
   }
 }

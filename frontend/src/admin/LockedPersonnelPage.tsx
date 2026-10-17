@@ -1,4 +1,4 @@
-import { Suspense, useReducer, type ReactNode } from 'react';
+import { Suspense, useEffect, useReducer, useRef, type ReactNode, type RefObject } from 'react';
 import { Await, useAsyncError, useLoaderData, useRevalidator } from 'react-router';
 
 import type { ApiDispatch } from '../api';
@@ -84,9 +84,52 @@ function NoticeBanner({ notice }: { notice: Notice }) {
   );
 }
 
-function Dialog({ title, children, foot }: { title: string; children: ReactNode; foot: ReactNode }) {
+/** 遮罩固定在视口上，弹窗过高时遮罩内滚动（.mask 原为相对页面顶部定位）。 */
+const MASK_STYLE = { position: 'fixed', overflowY: 'auto', paddingBottom: 40 } as const;
+
+/**
+ * 弹窗打开期间：背景（顶栏、左导、页面其余部分）设为 inert，焦点移进弹窗并留在弹窗里；
+ * Esc 等同取消。关闭后焦点回到触发按钮；按钮已随该行移除时回到列表第一个按钮或「刷新」。
+ */
+function useModalFocus(maskRef: RefObject<HTMLDivElement | null>) {
+  useEffect(() => {
+    const mask = maskRef.current;
+    if (!mask) return undefined;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const inerted: HTMLElement[] = [];
+    for (let node: HTMLElement = mask; !node.classList.contains('console') && node.parentElement && node !== document.body;) {
+      const parent: HTMLElement = node.parentElement;
+      for (const sibling of Array.from(parent.children)) {
+        if (sibling !== node && sibling instanceof HTMLElement && !sibling.inert) {
+          sibling.inert = true;
+          inerted.push(sibling);
+        }
+      }
+      node = parent;
+    }
+    mask.querySelector<HTMLElement>('input, button:not([disabled])')?.focus();
+    return () => {
+      for (const element of inerted) element.inert = false;
+      const target = opener?.isConnected
+        ? opener
+        : document.querySelector<HTMLElement>('.console tbody button') ?? document.querySelector<HTMLElement>('.console .page-h .btn');
+      target?.focus();
+    };
+  }, [maskRef]);
+}
+
+function Dialog({ title, children, foot, onCancel }: { title: string; children: ReactNode; foot: ReactNode; onCancel: () => void }) {
+  const maskRef = useRef<HTMLDivElement>(null);
+  useModalFocus(maskRef);
   return (
-    <div className="mask">
+    <div
+      ref={maskRef}
+      className="mask"
+      style={MASK_STYLE}
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') onCancel();
+      }}
+    >
       <div className="dialog" role="dialog" aria-modal="true" aria-label={title}>
         <h3>{title}</h3>
         {children}
@@ -107,6 +150,7 @@ function UnlockDialog({ row, pending, send, onConfirm }: { row: LockedRow; pendi
   return (
     <Dialog
       title={unlockDialogTitle(row)}
+      onCancel={() => send({ type: 'close' })}
       foot={(
         <>
           <button type="button" className="btn" disabled={pending} onClick={() => send({ type: 'close' })}>取消</button>
@@ -129,6 +173,7 @@ function ResetDialog({ row, state, send, onConfirm }: { row: LockedRow; state: L
   return (
     <Dialog
       title={resetDialogTitle(row)}
+      onCancel={() => send({ type: 'close' })}
       foot={(
         <>
           <button type="button" className="btn" disabled={state.pending} onClick={() => send({ type: 'close' })}>取消</button>
@@ -263,7 +308,7 @@ function LockedPersonnelList({ rows, opcodes, selfCode }: { rows: LockedRow[]; o
     if (!dialog || state.pending) return;
     send({ type: 'submit' });
     void performAction(dispatch, dialog.kind, dialog.row, state.password, selfCode)
-      .then((result) => send({ type: 'settled', result }));
+      .then((result) => send({ type: 'settled', kind: dialog.kind, row: dialog.row, result }));
   };
   return <LockedPersonnelView state={state} opcodes={opcodes} send={send} onConfirm={onConfirm} />;
 }

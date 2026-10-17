@@ -189,7 +189,7 @@ describe('动作：解锁与重设初始口令', () => {
     lockedReducer(initialLockedState(ROWS), { type: 'open', kind, row });
 
   it('解锁成功：该行从列表移除，显示成功横幅', () => {
-    const state = lockedReducer(lockedReducer(open('unlock', WANG), { type: 'submit' }), { type: 'settled', result: { type: 'done' } });
+    const state = lockedReducer(lockedReducer(open('unlock', WANG), { type: 'submit' }), { type: 'settled', kind: 'unlock', row: WANG, result: { type: 'done' } });
     expect(state.rows.map((row) => row.code)).toEqual(['HZ0217', 'SJ0001', 'PY0042']);
     expect(state.dialog).toBeNull();
     const html = view(state);
@@ -200,7 +200,7 @@ describe('动作：解锁与重设初始口令', () => {
 
   it('重设成功：该行移除，横幅说明同时解锁、会话和记住我已结束', () => {
     let state = lockedReducer(open('reset', WANG), { type: 'password', value: 'Gz@Field2026' });
-    state = lockedReducer(lockedReducer(state, { type: 'submit' }), { type: 'settled', result: { type: 'done' } });
+    state = lockedReducer(lockedReducer(state, { type: 'submit' }), { type: 'settled', kind: 'reset', row: WANG, result: { type: 'done' } });
     expect(state.rows).toHaveLength(3);
     expect(state.password).toBe('');
     expect(view(state)).toContain('已为「王芳」（TH0331）重设初始口令，并已解锁。对方的全部会话和全部「记住我」已结束，下次登录须先改口令。');
@@ -208,14 +208,14 @@ describe('动作：解锁与重设初始口令', () => {
 
   it('跨区被拒：行保留并高亮，横幅为「超出数据范围」定稿句', () => {
     const unlock = lockedReducer(open('unlock', ZHANG), {
-      type: 'settled', result: { type: 'denied', notice: { kind: 'scope-denied', action: 'unlock', row: ZHANG } },
+      type: 'settled', kind: 'unlock', row: ZHANG, result: { type: 'denied', notice: { kind: 'scope-denied', action: 'unlock', row: ZHANG } },
     });
     expect(unlock.rows).toHaveLength(4);
     const html = view(unlock);
     expect(html).toContain('data-reason="scope-denied">没有解锁「张敏」（HZ0217）：对方已不在你的数据范围内，可能刚刚调岗。请刷新列表，或联系对方现在所在单位的系统管理人员。</div>');
     expect(html).toContain(`<tr style="background:#fffaeb" data-personnel="${ZHANG.id}">`);
     const reset = lockedReducer(open('reset', ZHANG), {
-      type: 'settled', result: { type: 'denied', notice: { kind: 'scope-denied', action: 'reset', row: ZHANG } },
+      type: 'settled', kind: 'reset', row: ZHANG, result: { type: 'denied', notice: { kind: 'scope-denied', action: 'reset', row: ZHANG } },
     });
     expect(view(reset)).toContain('没有为「张敏」（HZ0217）重设初始口令：对方已不在你的数据范围内，可能刚刚调岗。');
   });
@@ -223,7 +223,7 @@ describe('动作：解锁与重设初始口令', () => {
   it('对自己操作被拒：解锁和重设都显示同一句定稿句', () => {
     for (const kind of ['unlock', 'reset'] as const) {
       const state = lockedReducer(open(kind, ZHOU), {
-        type: 'settled', result: { type: 'denied', notice: { kind: 'self-denied', action: kind, row: ZHOU } },
+        type: 'settled', kind, row: ZHOU, result: { type: 'denied', notice: { kind: 'self-denied', action: kind, row: ZHOU } },
       });
       const html = view(state);
       expect(html).toContain(`data-reason="permission-denied">${SELF_DENIED}</div>`);
@@ -233,13 +233,24 @@ describe('动作：解锁与重设初始口令', () => {
 
   it('重设口令不合规：弹窗不关，输入框下逐条列出', () => {
     const state = lockedReducer(open('reset', WANG), {
-      type: 'settled', result: { type: 'non-compliant', rules: ['too-short', 'contains-code', 'unknown-code'] },
+      type: 'settled', kind: 'reset', row: WANG, result: { type: 'non-compliant', rules: ['too-short', 'contains-code', 'unknown-code'] },
     });
     expect(state.dialog?.row).toBe(WANG);
     const html = view(state);
     expect(html).toContain('<li>口令至少 10 位</li><li>不能包含对方工号</li></ul>');
     expect(html).not.toContain('unknown-code');
     expect(lockedReducer(state, { type: 'password', value: 'x' }).ruleCodes).toEqual([]);
+  });
+
+  it('请求中不换弹窗目标；结算按发请求时的目标，不误删别的行', () => {
+    const pending = lockedReducer(open('unlock', WANG), { type: 'submit' });
+    expect(lockedReducer(pending, { type: 'open', kind: 'reset', row: ZHANG })).toBe(pending);
+    // 即便当前弹窗已不是这一行，结算也只移除发请求的那一行
+    const elsewhere = { ...pending, dialog: { kind: 'reset' as const, row: ZHANG } };
+    const settled = lockedReducer(elsewhere, { type: 'settled', kind: 'unlock', row: WANG, result: { type: 'done' } });
+    expect(settled.rows.map((row) => row.code)).toEqual(['HZ0217', 'SJ0001', 'PY0042']);
+    expect(settled.dialog?.row).toBe(ZHANG);
+    expect(settled.notice).toEqual({ kind: 'unlocked', row: WANG });
   });
 
   it('请求中不能取消；取消后弹窗关闭、口令清空', () => {
@@ -254,6 +265,8 @@ describe('动作：解锁与重设初始口令', () => {
   it('解锁确认弹窗只展示五字段内的信息', () => {
     const html = view(open('unlock', WANG));
     expect(html).toContain('<h3>解锁「王芳」？</h3>');
+    expect(html).toContain('class="mask" style="position:fixed;overflow-y:auto;padding-bottom:40px"');
+    expect(html).toContain('role="dialog" aria-modal="true" aria-label="解锁「王芳」？"');
     expect(html).toContain('<div class="k">工号</div><div class="mono">TH0331</div><div class="k">当前机构名</div><div>龙洞自然资源所</div><div class="k">自动解锁时间</div><div>2026-10-17 10:21</div>');
     expect(html).toContain(UNLOCK_NOTE);
     expect(html).toContain('确认解锁');
