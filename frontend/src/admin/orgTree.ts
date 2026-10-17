@@ -68,6 +68,56 @@ export function buildTree(tree: OrgTreeData, showDeactivated = true): OrgTreeNod
   return grow(root);
 }
 
+/** 当前看得见的节点，按树上从上到下的顺序；折叠起来的节点不展开它的下级（根节点始终展开）。 */
+export function visibleOrder(root: OrgTreeNode, collapsed: ReadonlySet<string>): string[] {
+  const order: string[] = [];
+  const walk = (node: OrgTreeNode, depth: number) => {
+    order.push(node.unit.id);
+    if (depth > 0 && collapsed.has(node.unit.id)) return;
+    for (const child of node.children) walk(child, depth + 1);
+  };
+  walk(root, 0);
+  return order;
+}
+
+export type TreeKeyAction = { kind: 'select'; id: string } | { kind: 'toggle'; id: string } | null;
+
+/**
+ * 树的键盘操作（WAI-ARIA treeview 的常用键）：上下键移到上一个、下一个看得见的节点；Home、End 到首尾；
+ * 右键展开折叠的节点，已展开时移到第一个下级；左键折叠展开的节点，否则移到上级；回车、空格选中当前节点。
+ */
+export function treeKeyAction(
+  key: string,
+  order: readonly string[],
+  current: string,
+  node: { parentId: string | null; hasChildren: boolean; open: boolean; collapsible: boolean },
+): TreeKeyAction {
+  const at = order.indexOf(current);
+  if (at < 0) return null;
+  const select = (id: string | undefined): TreeKeyAction => (id === undefined ? null : { kind: 'select', id });
+  switch (key) {
+    case 'ArrowDown':
+      return select(order[at + 1]);
+    case 'ArrowUp':
+      return select(order[at - 1]);
+    case 'Home':
+      return select(order[0]);
+    case 'End':
+      return select(order[order.length - 1]);
+    case 'ArrowRight':
+      if (!node.hasChildren) return null;
+      return node.open ? select(order[at + 1]) : { kind: 'toggle', id: current };
+    case 'ArrowLeft':
+      if (node.hasChildren && node.open && node.collapsible) return { kind: 'toggle', id: current };
+      return node.parentId !== null && order.includes(node.parentId) ? select(node.parentId) : null;
+    case 'Enter':
+    case ' ':
+      return { kind: 'select', id: current };
+    default:
+      return null;
+  }
+}
+
 export function childrenOf(tree: OrgTreeData, id: string): OrgUnit[] {
   return tree.orgUnits.filter((unit) => unit.parentId === id);
 }
@@ -85,6 +135,16 @@ export function childCountText(tree: OrgTreeData, id: string): string {
   if (children.length === 0) return '无';
   const off = children.filter((unit) => unit.deactivatedAt).length;
   return off > 0 ? `${children.length} 个（其中 ${off} 个已停用）` : `${children.length} 个`;
+}
+
+/**
+ * P4「只有根」：树根是根机构（没有上级），并且没有任何下级（SCREENS.md:48，P4-org-tree.html:31-33）。
+ * 区分局、所的人员看到的子树即使只有一个节点，也不是这个状态：区下只能建所（#105:182），不该提示先建区分局。
+ */
+export function onlyRootOrgUnit(tree: OrgTreeData): boolean {
+  const root = tree.orgUnits.find((unit) => unit.id === tree.rootId);
+  if (!root || root.parentId !== null) return false;
+  return !tree.orgUnits.some((unit) => unit.parentId === root.id);
 }
 
 /** 业务侧选承办机构：只取未停用节点（#105 故事 26）。 */
@@ -130,7 +190,8 @@ export type OrgWriteResult =
   | { ok: true; id: string }
   | { ok: false; rules: OrgRuleCode[]; message: string | null };
 
-const FAILED = '操作没有完成，网络或服务暂时不可用，请稍后重试。';
+// 定稿句，取自原型 assets/shell.js:62（PR #142 界面验收必须改 3）。
+const FAILED = '网络或服务暂时不可用，请稍后重试。问题持续时请联系本单位的系统管理人员。';
 
 const REGISTER_CONFLICT = '上级机构已停用，不能在它下面新建机构。';
 

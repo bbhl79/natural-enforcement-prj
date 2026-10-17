@@ -60,14 +60,19 @@ export function visibleSections(opcodes: readonly string[]): MenuSection[] {
   return sections;
 }
 
-/** 当前地址落在哪个菜单项上：取路径前缀最长的可见项。 */
+/**
+ * 当前地址落在哪个菜单项上：先在全部菜单里取路径前缀最长的一项，即当前页自己的菜单项；
+ * 这一项对本人可见才高亮，不可见（无权限页）时不高亮任何项。
+ * 原型 `assets/shell.js:48` 只在菜单项就是当前页时高亮，P2-forbidden、P4-denied、P7-denied 都不高亮。
+ */
 export function activeMenuId(pathname: string, items: readonly MenuItem[]): string | null {
   let best: MenuItem | null = null;
-  for (const item of items) {
+  for (const item of MENU) {
     const hit = item.path === '/'
       ? pathname === '/'
       : pathname === item.path || pathname.startsWith(`${item.path}/`);
     if (hit && (!best || item.path.length > best.path.length)) best = item;
   }
-  return best?.id ?? null;
+  const id = best?.id ?? null;
+  return id !== null && items.some((item) => item.id === id) ? id : null;
 }
