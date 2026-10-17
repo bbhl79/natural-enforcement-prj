@@ -6,6 +6,10 @@ import AdminHomePage from './admin/AdminHomePage';
 import { adminHomeLoader } from './admin/adminHome';
 import OrgTreePage from './admin/OrgTreePage';
 import { orgTreeLoader } from './admin/orgTree';
+import PersonnelCardPage from './admin/PersonnelCardPage';
+import PersonnelCreatePage from './admin/PersonnelCreatePage';
+import PersonnelListPage from './admin/PersonnelListPage';
+import { personnelCardLoader, personnelCreateLoader, personnelListLoader } from './admin/personnel';
 import LoginPage from './login/LoginPage';
 import PasswordPage from './login/PasswordPage';
 import WorkbenchPage, { workbenchLoader } from './pages/WorkbenchPage';
@@ -54,6 +58,9 @@ export function appRoutes(store: RouterStore): RouteObject[] {
                 { id: 'workbench', index: true, loader: workbenchLoader(store), element: <WorkbenchPage /> },
                 { id: 'admin-home', path: 'admin', loader: adminHomeLoader(store), element: <AdminHomePage /> },
                 { id: 'org-tree', path: 'admin/org-units', loader: orgTreeLoader(store), element: <OrgTreePage /> },
+                { id: 'personnel', path: 'admin/personnel', loader: personnelListLoader(store), element: <PersonnelListPage /> },
+                { id: 'personnel-new', path: 'admin/personnel/new', loader: personnelCreateLoader(store), element: <PersonnelCreatePage /> },
+                { id: 'personnel-card', path: 'admin/personnel/:id', loader: personnelCardLoader(store), element: <PersonnelCardPage /> },
                 { id: 'not-found', path: '*', element: <NotFoundPage /> },
               ],
             },

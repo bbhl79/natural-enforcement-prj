@@ -1,0 +1,353 @@
+import { configureStore } from '@reduxjs/toolkit';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { MemoryRouter } from 'react-router';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import reducer, { loadSession } from '../login/loginSlice';
+import { visibleMenu } from '../shell/menu';
+import { renderRoute } from '../test-utils';
+import { PersonnelCardView } from './PersonnelCardPage';
+import { EMPTY_INPUT, PersonnelCreateForm } from './PersonnelCreatePage';
+import { PersonnelListView } from './PersonnelListPage';
+import {
+  certNote,
+  DEFAULT_FILTER,
+  filterFromSearch,
+  filterHint,
+  filterPersonnel,
+  loadPersonnelCard,
+  loadPersonnelList,
+  maskPhone,
+  passwordText,
+  problemCount,
+  registerPersonnel,
+  searchFromFilter,
+  type PersonnelCard,
+  type PersonnelFilter,
+  type PersonnelList,
+  type PersonnelRow,
+} from './personnel';
+import type { OrgUnit } from './orgTree';
+
+type Json = Record<string, unknown>;
+
+function row(partial: Partial<PersonnelRow> & Pick<PersonnelRow, 'id' | 'code' | 'name'>): PersonnelRow {
+  return { orgUnitId: 'th', orgName: '天河区分局', roles: ['经办'], certStatus: 'valid', deactivatedAt: null, ...partial };
+}
+
+const LIST: PersonnelList = {
+  rootId: 'th',
+  orgUnits: [
+    { id: 'th', name: '天河区分局', parentId: 'gz', deactivatedAt: null },
+    { id: 'sp', name: '石牌自然资源所', parentId: 'th', deactivatedAt: null },
+    { id: 'ld', name: '龙洞自然资源所', parentId: 'th', deactivatedAt: null },
+    { id: 'ws', name: '五山自然资源所', parentId: 'th', deactivatedAt: '2026-09-01T00:00:00Z' },
+  ],
+  personnel: [
+    row({ id: '1', code: 'TH0102', name: '何静', roles: ['经办', '系统管理'] }),
+    row({ id: '2', code: 'TH0201', name: '黄志远', roles: ['内勤'], certStatus: 'none' }),
+    row({ id: '3', code: 'TH0315', name: '陈晓宁', orgUnitId: 'sp', orgName: '石牌自然资源所' }),
+    row({ id: '4', code: 'TH0331', name: '王芳', orgUnitId: 'ld', orgName: '龙洞自然资源所', certStatus: 'expired' }),
+    row({ id: '5', code: 'TH0350', name: '刘洋', orgUnitId: 'ld', orgName: '龙洞自然资源所', certStatus: 'none' }),
+    row({ id: '6', code: 'TH0360', name: '赵敏', orgUnitId: 'ld', orgName: '龙洞自然资源所', roles: ['内勤'], certStatus: 'expiring' }),
+    row({ id: '7', code: 'TH0290', name: '冯晨', orgUnitId: 'ws', orgName: '五山自然资源所', certStatus: 'none', deactivatedAt: '2026-09-01T00:00:00Z' }),
+  ],
+};
+
+const CARD: PersonnelCard = {
+  id: '3',
+  code: 'TH0315',
+  name: '陈晓宁',
+  mobilePhone: '13800005521',
+  orgUnitId: 'sp',
+  orgName: '石牌自然资源所',
+  roles: ['经办', '法制审核'],
+  posts: ['legal-review-lead'],
+  passwordChangedAt: '2026-09-02T02:00:00Z',
+  deactivatedAt: null,
+  cert: { no: '44010020210315', expiresOn: '2028-05-31', status: 'valid' },
+};
+
+const ORGS = [
+  { id: 'th', name: '天河区分局' },
+  { id: 'ld', name: '龙洞自然资源所' },
+] as OrgUnit[];
+
+const ADMIN = ['org.tree.read', 'org.unit.register', 'org.unit.rename', 'personnel.profile.read', 'personnel.profile.register', 'audit.admin.read'];
+const SUPERVISE = ['audit.admin.read', 'audit.admin.export'];
+const CLERK = ['clue.read', 'case.read', 'case.open'];
+
+function person(opcodes: string[]): Json {
+  return { result: 'authenticated', name: '何静', code: 'TH0102', orgName: '天河区分局', roles: ['系统管理'], opcodes };
+}
+
+function serve(session: Json, routes: Record<string, [number, Json]> = {}) {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  vi.stubGlobal('fetch', (url: string, init?: RequestInit) => {
+    calls.push({ url, init });
+    if (url === '/api/auth/session') return Promise.resolve(new Response(JSON.stringify(session), { status: 200 }));
+    const [status, body] = routes[url] ?? [404, {}];
+    return Promise.resolve(new Response(JSON.stringify(body), { status }));
+  });
+  return calls;
+}
+
+const fresh = () => configureStore({ reducer: { login: reducer } });
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+const listHtml = (filter: Partial<PersonnelFilter> = {}, opcodes = ADMIN) => renderToStaticMarkup(
+  <MemoryRouter>
+    <PersonnelListView list={LIST} filter={{ ...DEFAULT_FILTER, ...filter }} opcodes={opcodes} onFilter={() => undefined} />
+  </MemoryRouter>,
+);
+
+describe('人员名单筛选（P5）', () => {
+  it('默认含已停用人员；去掉勾选后不含', () => {
+    expect(filterPersonnel(LIST, DEFAULT_FILTER)).toHaveLength(7);
+    expect(filterPersonnel(LIST, { ...DEFAULT_FILTER, includeDeactivated: false }).map((r) => r.code)).not.toContain('TH0290');
+  });
+
+  it('工号或姓名、机构（含下级）、角色、执法证需处理', () => {
+    expect(filterPersonnel(LIST, { ...DEFAULT_FILTER, keyword: 'th03' }).map((r) => r.code))
+      .toEqual(['TH0315', 'TH0331', 'TH0350', 'TH0360']);
+    expect(filterPersonnel(LIST, { ...DEFAULT_FILTER, keyword: '何' }).map((r) => r.code)).toEqual(['TH0102']);
+    expect(filterPersonnel(LIST, { ...DEFAULT_FILTER, orgUnitId: 'th' })).toHaveLength(7);
+    expect(filterPersonnel(LIST, { ...DEFAULT_FILTER, orgUnitId: 'ld' }).map((r) => r.code)).toEqual(['TH0331', 'TH0350', 'TH0360']);
+    const filtered = { ...DEFAULT_FILTER, orgUnitId: 'ld', role: '经办', cert: 'attention' as const };
+    expect(filterPersonnel(LIST, filtered).map((r) => r.code)).toEqual(['TH0331', 'TH0350']);
+    expect(filterHint(LIST, filtered)).toBe('筛选：龙洞自然资源所 · 经办 · 执法证需处理');
+    expect(filterHint(LIST, DEFAULT_FILTER)).toBeNull();
+  });
+
+  it('筛选写在地址栏里，往返不变', () => {
+    const filter: PersonnelFilter = { keyword: '王', orgUnitId: 'ld', role: '经办', cert: 'attention', includeDeactivated: false };
+    expect(filterFromSearch(searchFromFilter(filter))).toEqual(filter);
+    expect(searchFromFilter(DEFAULT_FILTER).toString()).toBe('');
+    expect(filterFromSearch(new URLSearchParams('cert=bogus')).cert).toBe('all');
+  });
+});
+
+describe('人员名单界面（P5）', () => {
+  it('district：共 N 人、已停用行置灰、执法证情况标签，没有手机号和证号列', () => {
+    const html = listHtml();
+    expect(html).toContain('共 7 人');
+    expect(html).toContain('其中 1 人已停用');
+    expect(html).toContain('<th>工号</th><th>姓名</th><th>当前机构</th><th>角色</th><th>执法证</th><th>状态</th>');
+    expect(html).toContain('<tr class="off" data-personnel="7">');
+    expect(html).toContain('<span class="tag red">已过期</span>');
+    expect(html).toContain('<span class="tag amber">30 天内到期</span>');
+    expect(html).toContain('<span class="tag gray">未登记</span>');
+    expect(html).toContain('经办、系统管理');
+    expect(html).not.toMatch(/手机|执法证号/);
+  });
+
+  it('filtered：提示筛选条件', () => {
+    const html = listHtml({ orgUnitId: 'ld', role: '经办', cert: 'attention' });
+    expect(html).toContain('共 2 人');
+    expect(html).toContain('筛选：龙洞自然资源所 · 经办 · 执法证需处理');
+  });
+
+  it('empty：没有符合条件的人员，可清空筛选、可新建；没有登记码时不显示新建', () => {
+    const html = listHtml({ keyword: '张三丰' });
+    expect(html).toContain('没有符合条件的人员');
+    expect(html).toContain('换个关键词或清空筛选条件再试。要找的人如果还没建，可以新建。');
+    expect(html).toContain('清空筛选');
+    expect(html).toContain('data-requires="personnel.profile.register"');
+    expect(listHtml({ keyword: '张三丰' }, ['personnel.profile.read'])).not.toContain('data-requires="personnel.profile.register"');
+  });
+});
+
+describe('人员卡片（P6 view）', () => {
+  const card = (partial: Partial<PersonnelCard> = {}, registered = false) => renderToStaticMarkup(
+    <MemoryRouter>
+      <PersonnelCardView card={{ ...CARD, ...partial }} now={new Date('2026-10-17T04:00:00Z')} registered={registered} />
+    </MemoryRouter>,
+  );
+
+  it('手机号默认遮挡，可点开；留痕提示；口令改过日期；执法证有效', () => {
+    const html = card();
+    expect(html).toContain('138****5521');
+    expect(html).not.toContain('13800005521');
+    expect(html).toContain('显示完整号码');
+    expect(html).toContain('打开人员详情会留痕');
+    expect(html).toContain('已改过初始口令（2026-09-02）');
+    expect(html).toContain('经办、法制审核');
+    expect(html).toContain('44010020210315');
+    expect(html).toContain('可以启动核查、立案，可以担任主办人或协办人。');
+  });
+
+  it('岗位标记一段（spec 例外）：显示标记中文名；没有标记时显示「无」', () => {
+    expect(card()).toContain('<span class="tag" data-post="legal-review-lead">法制审核负责人</span>');
+    expect(card({ posts: [] })).toMatch(/岗位标记<\/div><div>无<\/div>/);
+  });
+
+  it('登记后回到卡片：提示当面或电话告知初始口令', () => {
+    const html = card({ passwordChangedAt: null }, true);
+    expect(html).toContain('请当面或电话告知初始口令');
+    expect(html).toContain('尚未改过初始口令');
+    expect(card()).not.toContain('data-notice="registered"');
+  });
+
+  it('本票不放未入名册码的按钮（编辑、危险操作区、执法证变更）', () => {
+    const html = card();
+    expect(html).not.toMatch(/需谨慎的操作|personnel\.profile\.update|personnel\.cert\.update|personnel\.password\.reset/);
+  });
+
+  it('遮挡与执法证说明', () => {
+    expect(maskPhone(null)).toBe('—');
+    expect(passwordText({ ...CARD, deactivatedAt: '2026-01-01T00:00:00Z' })).toBe('—');
+    const now = new Date('2026-10-17T04:00:00Z');
+    expect(certNote({ no: 'x', expiresOn: '2026-11-08', status: 'expiring' }, now).text).toContain('还有 22 天到期');
+    expect(certNote({ no: 'x', expiresOn: '2026-09-30', status: 'expired' }, now).text).toContain('已于 2026-09-30 过期');
+    expect(certNote({ no: null, expiresOn: null, status: 'none' }, now).text).toContain('尚未登记执法证');
+  });
+});
+
+describe('新建人员（P6 create / createInvalid）', () => {
+  const form = (failure: Parameters<typeof PersonnelCreateForm>[0]['failure'] = null) => renderToStaticMarkup(
+    <MemoryRouter>
+      <PersonnelCreateForm orgUnits={ORGS} input={EMPTY_INPUT} failure={failure} busy={false} onInput={() => undefined} onSubmit={() => undefined} />
+    </MemoryRouter>,
+  );
+
+  it('create：六项必填、七个角色、两个岗位标记、七条口令要求、执法证可稍后登记', () => {
+    const html = form();
+    expect(html.match(/class="req"/g)).toHaveLength(6);
+    for (const role of ['内勤', '经办', '法制审核', '行政审核', '行政审批', '监督', '系统管理']) expect(html).toContain(` ${role}`);
+    expect(html).toContain('data-post="legal-review-lead"');
+    expect(html).toContain('data-post="legal-affairs-leader"');
+    expect(html).toContain('分管法制的局领导');
+    expect(html.match(/data-rule=/g)).toHaveLength(7);
+    expect(html).toContain('请当面或电话告知，不要通过群聊发送。');
+    expect(html).toContain('不登记执法证也能建人员；未登记的人员不能启动核查、不能立案。');
+    expect(html).toContain('<option value="ld">龙洞自然资源所</option>');
+  });
+
+  it('createInvalid：「还有 3 处」按字段计，口令未满足项标红', () => {
+    const failure = {
+      ok: false as const,
+      fields: { name: '请填写姓名', mobilePhone: '这个手机号已被其他人员使用，请核对' },
+      passwordRules: ['too-short', 'contains-code'],
+      message: null,
+    };
+    expect(problemCount(failure)).toBe(3);
+    const html = form(failure);
+    expect(html).toContain('还有 3 处需要修改，改好后再保存。');
+    expect(html).toContain('请填写姓名');
+    expect(html).toContain('这个手机号已被其他人员使用，请核对');
+    expect(html).toContain('口令至少 10 位（未满足）');
+    expect(html).toContain('不能包含本人工号（未满足）');
+    expect(html).not.toContain('口令最多 64 位（未满足）');
+  });
+});
+
+describe('登记接口', () => {
+  const input = { ...EMPTY_INPUT, code: 'TH0360', name: '邓雅', orgUnitId: 'ld', mobilePhone: '13900007788', initialPassword: 'Gz@Field2026', roles: ['经办'], posts: ['legal-review-lead' as const] };
+
+  it('200 交回新人员；请求体原样', async () => {
+    const store = fresh();
+    const calls = serve(person(ADMIN), { '/api/admin/personnel': [200, { result: 'registered', personnel: { id: 'N1', name: '邓雅' } }] });
+    await store.dispatch(loadSession());
+    expect(await registerPersonnel(store.dispatch, input)).toEqual({ ok: true, id: 'N1', name: '邓雅' });
+    const post = calls.find((call) => call.url === '/api/admin/personnel');
+    expect(post?.init?.method).toBe('POST');
+    expect(JSON.parse(String(post?.init?.body))).toEqual(input);
+  });
+
+  it('400 规则码落到字段与口令要求；409 重复落到对应字段；409 停用落到机构；403 整页提示', async () => {
+    const store = fresh();
+    serve(person(ADMIN), { '/api/admin/personnel': [400, { result: 'non-compliant', rules: ['personnel-name-required', 'too-short', 'contains-code'] }] });
+    await store.dispatch(loadSession());
+    expect(await registerPersonnel(store.dispatch, input)).toEqual({
+      ok: false, fields: { name: '请填写姓名' }, passwordRules: ['too-short', 'contains-code'], message: null,
+    });
+    serve(person(ADMIN), { '/api/admin/personnel': [409, { result: 'already-exists', conflict: 'mobile-phone' }] });
+    expect((await registerPersonnel(store.dispatch, input)) as Json).toMatchObject({ fields: { mobilePhone: '这个手机号已被其他人员使用，请核对' } });
+    serve(person(ADMIN), { '/api/admin/personnel': [409, { result: 'already-exists', conflict: 'personnel-code' }] });
+    expect((await registerPersonnel(store.dispatch, input)) as Json).toMatchObject({ fields: { code: '这个工号已被其他人员使用，请核对' } });
+    serve(person(ADMIN), { '/api/admin/personnel': [409, { result: 'invalid-state' }] });
+    expect((await registerPersonnel(store.dispatch, input)) as Json).toMatchObject({ fields: { orgUnitId: '所选机构已停用，请选择在用的机构' } });
+    serve(person(ADMIN), { '/api/admin/personnel': [403, { reason: 'scope-denied' }] });
+    expect((await registerPersonnel(store.dispatch, input)) as Json).toMatchObject({ message: '你没有权限执行这个操作，或所选机构不在你的范围内。' });
+  });
+
+  it('取名单与卡片：403 交给无权限卡片，404 交给找不到，其他失败交给错误卡片', async () => {
+    const store = fresh();
+    serve(person(ADMIN), { '/api/admin/personnel': [200, { result: 'listed', ...LIST }], '/api/admin/personnel/3': [200, { result: 'viewed', personnel: CARD }] });
+    await store.dispatch(loadSession());
+    expect(await loadPersonnelList(store.dispatch)).toEqual(LIST);
+    expect(await loadPersonnelCard(store.dispatch, '3')).toEqual(CARD);
+    serve(person(ADMIN), { '/api/admin/personnel': [403, { reason: 'permission-denied' }], '/api/admin/personnel/3': [404, { result: 'not-found' }] });
+    await expect(loadPersonnelList(store.dispatch)).rejects.toMatchObject({ init: { status: 403 } });
+    await expect(loadPersonnelCard(store.dispatch, '3')).rejects.toMatchObject({ init: { status: 404 } });
+    serve(person(ADMIN), { '/api/admin/personnel': [500, {}] });
+    await expect(loadPersonnelList(store.dispatch)).rejects.toThrow('人员名单读取失败：HTTP 500');
+  });
+});
+
+describe('人员页路由', () => {
+  it('监督打开人员名单：无权限卡片带「去看留痕」，不取名单', async () => {
+    const calls = serve(person(SUPERVISE));
+    const { html } = await renderRoute(fresh(), '/admin/personnel');
+    expect(html).toContain('你没有查看人员名单的权限');
+    expect(html).toContain('监督可以在「管理台留痕」里查阅人员维护的留痕，但不能打开人员名单和人员详情。');
+    expect(html).toContain('去看留痕');
+    expect(calls.map((call) => call.url)).not.toContain('/api/admin/personnel');
+  });
+
+  it('监督打开人员卡片：无权限卡片，不取卡片（不留痕）', async () => {
+    const calls = serve(person(SUPERVISE));
+    const { html } = await renderRoute(fresh(), '/admin/personnel/3');
+    expect(html).toContain('你没有查看人员详情的权限');
+    expect(html).toContain('去看留痕');
+    expect(calls.map((call) => call.url)).not.toContain('/api/admin/personnel/3');
+  });
+
+  it('没有留痕码的人员（经办）：通用无权限卡片，没有「去看留痕」', async () => {
+    serve(person(CLERK));
+    const { html } = await renderRoute(fresh(), '/admin/personnel');
+    expect(html).toContain('你没有查看人员名单的权限');
+    expect(html).not.toContain('去看留痕');
+  });
+
+  it('系统管理打开名单：首屏先出骨架并取名单，「人员」菜单高亮，有新建按钮', async () => {
+    const calls = serve(person(ADMIN), { '/api/admin/personnel': [200, { result: 'listed', ...LIST }] });
+    const { html } = await renderRoute(fresh(), '/admin/personnel');
+    expect(html).toContain('天河区分局及下级机构的人员。打开人员详情会留痕。');
+    expect(html).toContain('aria-busy="true"');
+    expect(html).toContain('nav-item active" data-menu="person"');
+    expect(html).toContain('href="/admin/personnel/new"');
+    expect(calls.map((call) => call.url)).toContain('/api/admin/personnel');
+  });
+
+  it('新建页与卡片页都高亮「人员」菜单；新建页取机构树', async () => {
+    const calls = serve(person(ADMIN), { '/api/org-units': [200, { rootId: 'th', orgUnits: [] }] });
+    const created = await renderRoute(fresh(), '/admin/personnel/new');
+    expect(created.html).toContain('nav-item active" data-menu="person"');
+    expect(created.html).toContain('<h1>新建人员</h1>');
+    expect(calls.map((call) => call.url)).toContain('/api/org-units');
+    serve(person(ADMIN), { '/api/admin/personnel/3': [200, { result: 'viewed', personnel: CARD }] });
+    const viewed = await renderRoute(fresh(), '/admin/personnel/3');
+    expect(viewed.html).toContain('nav-item active" data-menu="person"');
+  });
+
+  it('只有读码没有登记码：新建页显示无权限卡片', async () => {
+    serve(person(['personnel.profile.read']));
+    const { html } = await renderRoute(fresh(), '/admin/personnel/new');
+    expect(html).toContain('你没有查看新建人员的权限');
+  });
+
+  it('岗位标记不影响菜单：菜单只由会话操作码决定，会话里没有岗位标记', async () => {
+    const store = fresh();
+    serve({ ...person(ADMIN), posts: ['legal-review-lead', 'legal-affairs-leader'] });
+    await store.dispatch(loadSession());
+    const operator = store.getState().login.operator as unknown as Json;
+    expect(operator.posts).toBeUndefined();
+    expect(visibleMenu(store.getState().login.operator?.opcodes ?? []).map((item) => item.id))
+      .toEqual(visibleMenu(ADMIN).map((item) => item.id));
+    expect(visibleMenu(ADMIN).map((item) => item.id)).toContain('person');
+  });
+});
