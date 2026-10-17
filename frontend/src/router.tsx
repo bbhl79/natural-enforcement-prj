@@ -10,10 +10,10 @@ import LoginPage from './login/LoginPage';
 import PasswordPage from './login/PasswordPage';
 import WorkbenchPage, { workbenchLoader } from './pages/WorkbenchPage';
 import { authRedirect } from './routing';
-import AppShell from './shell/AppShell';
+import AppShell, { AppShellError } from './shell/AppShell';
 import RootLayout from './shell/RootLayout';
 import { ensureSession, type SessionStore } from './session';
-import { LoadingShell, NotFoundPage, SessionErrorPage, ShellRouteError } from './shell/StatusPages';
+import { LoadingShell, NotFoundPage, SessionErrorPage } from './shell/StatusPages';
 import './shell/console.css';
 
 export type RouterStore = SessionStore;
@@ -45,11 +45,11 @@ export function appRoutes(store: RouterStore): RouteObject[] {
         { id: 'password', path: 'auth/password', element: <PasswordPage /> },
         {
           id: 'shell',
-          element: <AppShell />,
           children: [
             {
               id: 'shell-pages',
-              errorElement: <ShellRouteError />,
+              element: <AppShell />,
+              errorElement: <AppShellError />,
               children: [
                 { id: 'workbench', index: true, loader: workbenchLoader(store), element: <WorkbenchPage /> },
                 { id: 'admin-home', path: 'admin', loader: adminHomeLoader(store), element: <AdminHomePage /> },

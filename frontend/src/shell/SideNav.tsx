@@ -2,11 +2,14 @@ import { Link, useLocation } from 'react-router';
 
 import { activeMenuId, visibleMenu, type MenuSection } from './menu';
 
-/** 左导（P1）：按会话清单裁剪，兼任多角色时是并集。分区下没有可见项时不显示分区名。 */
-export default function SideNav({ opcodes }: { opcodes: readonly string[] }) {
+/**
+ * 左导（P1）：按会话清单裁剪，兼任多角色时是并集。分区下没有可见项时不显示分区名。
+ * highlight 为 false 时不高亮任何项（无权限页，原型 P2-forbidden）。
+ */
+export default function SideNav({ opcodes, highlight = true }: { opcodes: readonly string[]; highlight?: boolean }) {
   const { pathname } = useLocation();
   const items = visibleMenu(opcodes);
-  const active = activeMenuId(pathname, items);
+  const active = highlight ? activeMenuId(pathname, items) : null;
   let section: MenuSection | null = null;
   const rows = [];
   for (const item of items) {
