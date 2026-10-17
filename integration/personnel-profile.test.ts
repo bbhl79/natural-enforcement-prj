@@ -687,6 +687,41 @@ describe('POST /api/admin/personnel（登记）', () => {
   });
 });
 
+describe('接 #126（PR #143）：监督调用人员名单、人员卡片一律 403', () => {
+  it('监督调人员名单 → 403 permission-denied，写 authz.denied 失败留痕，人员各表不变，不写 personnel.viewed', async () => {
+    const rowsBefore = await personnelRows();
+    const before = await audits();
+    const response = await list(PHONES.supervisor);
+    expect(response.status).toBe(403);
+    expect(await response.json()).toEqual({ reason: 'permission-denied' });
+    expect(await personnelRows()).toEqual(rowsBefore);
+    expect(added(before, await audits())).toEqual([
+      expect.objectContaining({
+        action: 'authz.denied', outcome: 'failed', reason: 'permission-denied',
+        actor_id: people.supervisor, actor_code: 'P-128-SUPER', opcode: 'personnel.profile.read',
+      }),
+    ]);
+  });
+
+  it('监督调人员卡片 → 403 permission-denied，写 authz.denied 失败留痕，人员各表不变，不写 personnel.viewed，不返回手机号', async () => {
+    const rowsBefore = await personnelRows();
+    const before = await audits();
+    const response = await card(PHONES.supervisor, people.clerk);
+    expect(response.status).toBe(403);
+    const text = await response.text();
+    expect(JSON.parse(text)).toEqual({ reason: 'permission-denied' });
+    expect(text.includes(PHONES.clerk)).toBe(false);
+    expect(await personnelRows()).toEqual(rowsBefore);
+    expect(added(before, await audits())).toEqual([
+      expect.objectContaining({
+        action: 'authz.denied', outcome: 'failed', reason: 'permission-denied',
+        actor_id: people.supervisor, opcode: 'personnel.profile.read',
+        resource_type: 'personnel', resource_id: people.clerk,
+      }),
+    ]);
+  });
+});
+
 describe('接缝①：留痕工厂覆写为「业务写完后抛错」', () => {
   it('登记：请求失败，人员各表与留痕不变', async () => {
     const rowsBefore = await personnelRows();
