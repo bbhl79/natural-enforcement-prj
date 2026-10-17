@@ -441,13 +441,33 @@ export function DeactivateDialog({
     setBusy(false);
     if (!result.ok) setMessage(result.message);
   };
+  return <DeactivateConfirm unit={unit} message={message} busy={busy} onCancel={onCancel} onConfirm={() => void submit()} />;
+}
+
+/**
+ * 停用确认（P4 confirm）。失败原因显示在顶部；只在请求进行中禁用「确认停用」，
+ * 网络或服务失败后可以直接再点一次重试。
+ */
+export function DeactivateConfirm({
+  unit,
+  message,
+  busy,
+  onCancel,
+  onConfirm,
+}: {
+  unit: OrgUnit;
+  message: string | null;
+  busy: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
   return (
     <Modal
       title={`停用「${unit.name}」？`}
       foot={(
         <>
           <button type="button" className="btn" onClick={onCancel}>取消</button>
-          <button type="button" className="btn btn-danger" disabled={busy || message !== null} onClick={() => void submit()}>确认停用</button>
+          <button type="button" className="btn btn-danger" disabled={busy} onClick={onConfirm}>确认停用</button>
         </>
       )}
     >

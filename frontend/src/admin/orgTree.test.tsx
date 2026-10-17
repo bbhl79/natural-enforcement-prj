@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import reducer, { loadSession } from '../login/loginSlice';
 import { renderRoute } from '../test-utils';
-import { CreateDialog, DeactivateDialog, INITIAL_UI, OrgTreeView, RenameDialog, type OrgTreeUi } from './OrgTreePage';
+import { CreateDialog, DeactivateConfirm, DeactivateDialog, INITIAL_UI, OrgTreeView, RenameDialog, type OrgTreeUi } from './OrgTreePage';
 import {
   activeOrgUnits,
   buildTree,
@@ -320,6 +320,21 @@ describe('机构停用（P4 blocked/confirm，#124）', () => {
     expect(html).toContain('<li>一期不提供恢复，请确认后再操作。</li>');
     expect(html).toContain('已核对：没有在职人员，没有未停用的下级机构。');
     expect(html).toContain('<button type="button" class="btn btn-danger">确认停用</button>');
+  });
+
+  it('确认弹窗失败后：顶部显示原因（含服务端的未办结句），「确认停用」仍可点、可重试；只在请求进行中禁用', () => {
+    const confirm = (message: string | null, busy: boolean) => renderToStaticMarkup(
+      <DeactivateConfirm unit={byId('sp')} message={message} busy={busy} onCancel={() => undefined} onConfirm={() => undefined} />,
+    );
+    const ENABLED = '<button type="button" class="btn btn-danger">确认停用</button>';
+    const DISABLED = '<button type="button" class="btn btn-danger" disabled="">确认停用</button>';
+    const failed = confirm('网络或服务暂时不可用，请稍后重试。问题持续时请联系本单位的系统管理人员。', false);
+    expect(failed).toContain('<div class="banner danger">网络或服务暂时不可用，请稍后重试。问题持续时请联系本单位的系统管理人员。</div>');
+    expect(failed).toContain(ENABLED);
+    const openItems = confirm('本机构还有 3 条未办结的线索或案件（线索 1 条、案件 2 条），全部办结后才能停用。', false);
+    expect(openItems).toContain('<div class="banner danger">本机构还有 3 条未办结的线索或案件（线索 1 条、案件 2 条），全部办结后才能停用。</div>');
+    expect(confirm(null, true)).toContain(DISABLED);
+    expect(confirm(null, false)).not.toContain('banner danger');
   });
 
   it('确认停用：POST 停用接口；409 显示服务端可读原因（含未办结），403 与网络失败给固定说明', async () => {
