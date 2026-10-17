@@ -42,6 +42,8 @@ export {
 export { AccessControlService } from './services/access-control.service.ts';
 export { CredentialService } from './services/credential.service.ts';
 export type {
+  DeactivateOrgUnitResult,
+  DeactivationBlocker,
   OrgTree,
   OrgTreeUnit,
   RegisterOrgUnitInput,
@@ -50,6 +52,7 @@ export type {
 } from './services/org-unit.service.ts';
 export {
   ORG_TREE_READ_OPCODE,
+  ORG_UNIT_DEACTIVATE_OPCODE,
   ORG_UNIT_LEVELS,
   ORG_UNIT_NAME_MAX_LENGTH,
   ORG_UNIT_REGISTER_OPCODE,
@@ -60,6 +63,8 @@ export {
 } from './domain/org-unit.ts';
 export type { OrgUnitLevel, OrgUnitRuleCode } from './domain/org-unit.ts';
 export { OrgUnitService } from './services/org-unit.service.ts';
+export { NO_OPEN_ITEMS, OPEN_ITEMS_COUNTER } from './domain/open-items.ts';
+export type { OpenItems, OpenItemsCounter } from './domain/open-items.ts';
 export type {
   ExportResult,
   PersonnelDetail,

@@ -214,3 +214,39 @@ describe('机构树动作（#123）', () => {
     expect(written).toHaveLength(0);
   });
 });
+
+describe('机构停用（#124）', () => {
+  it('停用记成功，不带原因；被拒记失败，原因取四个封闭取值之一', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    await trail.append({ ...parties, action: 'org.unit.deactivated', opcode: 'org.unit.deactivate' });
+    for (const reason of ['org-unit-root', 'org-has-active-children', 'org-has-assignments', 'org-has-open-items'] as const) {
+      await trail.append({ ...parties, action: 'org.unit.deactivated', outcome: 'failed', reason });
+    }
+    expect(written.map((row) => [row.action, row.outcome, row.reason])).toEqual([
+      ['org.unit.deactivated', 'succeeded', null],
+      ['org.unit.deactivated', 'failed', 'org-unit-root'],
+      ['org.unit.deactivated', 'failed', 'org-has-active-children'],
+      ['org.unit.deactivated', 'failed', 'org-has-assignments'],
+      ['org.unit.deactivated', 'failed', 'org-has-open-items'],
+    ]);
+  });
+
+  it('停用失败缺原因、原因表外、成功带原因，一律拒绝且不写库', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    const cases: Array<Record<string, unknown>> = [
+      { action: 'org.unit.deactivated', outcome: 'failed' },
+      { action: 'org.unit.deactivated', outcome: 'failed', reason: 'org-unit-deactivated' },
+      { action: 'org.unit.deactivated', reason: 'org-has-open-items' },
+      { action: 'org.unit.registered', outcome: 'failed', reason: 'org-unit-root' },
+    ];
+    for (const item of cases) {
+      await expect(
+        trail.append({ ...parties, ...item } as unknown as Parameters<typeof trail.append>[0]),
+        JSON.stringify(item),
+      ).rejects.toBeInstanceOf(AuditVocabularyError);
+    }
+    expect(written).toHaveLength(0);
+  });
+});

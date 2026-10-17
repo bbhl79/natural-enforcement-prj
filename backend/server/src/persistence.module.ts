@@ -16,7 +16,7 @@ import {
   type AuditTrailFactory,
   type Rejected,
 } from '@natural-enforcement/audit';
-import { IDENTITY_STORE } from '@natural-enforcement/identity';
+import { IDENTITY_STORE, NO_OPEN_ITEMS, OPEN_ITEMS_COUNTER, type OpenItemsCounter } from '@natural-enforcement/identity';
 import { PrismaIdentityStore } from '../../identity/src/persistence/prisma-identity-store.ts';
 import { PrismaClient, type Prisma } from '../../prisma/generated/prisma/client.ts';
 
@@ -402,6 +402,8 @@ class PrismaUnitOfWork implements UnitOfWork {
 export interface ApplicationOverrides {
   /** 接缝①：覆写留痕工厂，例如「业务写完后抛错」。 */
   auditTrailFactory?: AuditTrailFactory;
+  /** 接缝③：承办中事项计数。默认恒为 0（#124）。 */
+  openItemsCounter?: OpenItemsCounter;
 }
 
 class DisconnectPrisma implements OnModuleDestroy {
@@ -438,6 +440,7 @@ class PersistenceModule {
         { provide: SESSION_STORE, useValue: new PrismaSessionStore(prisma) },
         { provide: REMEMBER_ME_STORE, useValue: new PrismaRememberMeStore(prisma, prisma) },
         { provide: UNIT_OF_WORK, useValue: new PrismaUnitOfWork(prisma, auditTrailFactory) },
+        { provide: OPEN_ITEMS_COUNTER, useValue: overrides.openItemsCounter ?? NO_OPEN_ITEMS },
         {
           provide: DisconnectPrisma,
           useFactory: (client: PrismaClient) => new DisconnectPrisma(client),
@@ -449,6 +452,7 @@ class PersistenceModule {
         AUDIT_TRAIL_FACTORY,
         AUDIT_TRAIL_PORT,
         UNIT_OF_WORK,
+        OPEN_ITEMS_COUNTER,
         LOGIN_DIRECTORY,
         SESSION_STORE,
         REMEMBER_ME_STORE,

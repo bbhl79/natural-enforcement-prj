@@ -4,6 +4,7 @@ import {
   OrgUnitService,
   isAccessDenied,
   type ActorRef,
+  type DeactivationBlocker,
   type DenyReason,
   type OrgTreeUnit,
   type OrgUnitLevel,
@@ -41,6 +42,46 @@ export type RenameOutcome =
   | { status: 200; body: { result: 'renamed' | 'unchanged'; orgUnit: { id: string; name: string } } }
   | NonCompliant
   | Denial;
+
+export type DeactivateOutcome =
+  | { status: 200; body: { result: 'deactivated' | 'unchanged'; orgUnit: { id: string; deactivatedAt: string } } }
+  | {
+    status: 409;
+    body:
+      | { result: 'invalid-state'; message: string }
+      | { result: 'invalid-state'; reason: 'org-has-open-items'; openItems: { clues: number; cases: number }; message: string };
+  }
+  | Denial;
+
+/**
+ * 停用被拒的可读原因（#105「409 可读原因」：码＋一句原因，用词遵守 GLOSSARY）。
+ * 未办结一句照 #105「未办结前提怎么落」原文。只有未办结在返回体里另带 reason（#105 错误码表）。
+ */
+export function deactivationRefusal(blocker: DeactivationBlocker): Extract<DeactivateOutcome, { status: 409 }>['body'] {
+  switch (blocker.reason) {
+    case 'org-unit-root':
+      return { result: 'invalid-state', message: '根机构不能停用。' };
+    case 'org-has-active-children':
+      return {
+        result: 'invalid-state',
+        message: `本机构还有 ${blocker.children} 个未停用的下级机构，请先停用下级机构，再停用本机构。`,
+      };
+    case 'org-has-assignments':
+      return {
+        result: 'invalid-state',
+        message: `本机构还有 ${blocker.assignments} 条生效任职（含已停用人员未结束的任职），请先把人员调岗到其他机构，再停用本机构。`,
+      };
+    case 'org-has-open-items': {
+      const { clues, cases } = blocker.openItems;
+      return {
+        result: 'invalid-state',
+        reason: 'org-has-open-items',
+        openItems: { clues, cases },
+        message: `本机构还有 ${clues + cases} 条未办结的线索或案件（线索 ${clues} 条、案件 ${cases} 条），全部办结后才能停用。`,
+      };
+    }
+  }
+}
 
 function toView(unit: OrgTreeUnit): OrgUnitView {
   return {
@@ -120,6 +161,29 @@ export class OrgUnitsService {
         if (!isAccessDenied(error)) throw error;
         const denial: Denial = { status: 403, body: { reason: error.reason } };
         return error.denial ? rejected<RenameOutcome>(denial, error.denial) : denial;
+      }
+    });
+  }
+
+  async deactivate(actor: ActorRef, orgUnitId: string, sourceIp: string | null): Promise<DeactivateOutcome> {
+    return this.uow.run<DeactivateOutcome>(async (tx) => {
+      try {
+        const outcome = await this.orgUnits.deactivateOrgUnit(actor, orgUnitId, tx, tx.audit, sourceIp);
+        if (outcome.result === 'invalid-state') {
+          return rejected<DeactivateOutcome>({ status: 409, body: deactivationRefusal(outcome.blocker) }, outcome.failure);
+        }
+        return {
+          status: 200,
+          body: {
+            result: outcome.result,
+            orgUnit: { id: outcome.orgUnit.id, deactivatedAt: (outcome.orgUnit.deactivatedAt as Date).toISOString() },
+          },
+        };
+      } catch (error) {
+        if (!isAccessDenied(error)) throw error;
+        // 越权一律 403，响应只带拒绝原因，不暴露任何条数（#105）。
+        const denial: Denial = { status: 403, body: { reason: error.reason } };
+        return error.denial ? rejected<DeactivateOutcome>(denial, error.denial) : denial;
       }
     });
   }

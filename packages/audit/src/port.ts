@@ -2,6 +2,7 @@ import type {
   AuditTargetOrgBasis,
   AuthzDeniedReason,
   LoginFailedReason,
+  OrgUnitDeactivateFailedReason,
   OrgUnitRegisterFailedReason,
   PasswordChangedReason,
   SessionEndReason,
@@ -51,7 +52,9 @@ export type AuditAppend =
   })
   | (AuditParties & { action: 'org.unit.registered' })
   | (AuditParties & { action: 'org.unit.registered'; outcome: 'failed'; reason: OrgUnitRegisterFailedReason })
-  | (AuditParties & { action: 'org.unit.renamed' });
+  | (AuditParties & { action: 'org.unit.renamed' })
+  | (AuditParties & { action: 'org.unit.deactivated' })
+  | (AuditParties & { action: 'org.unit.deactivated'; outcome: 'failed'; reason: OrgUnitDeactivateFailedReason });
 
 /**
  * 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。
