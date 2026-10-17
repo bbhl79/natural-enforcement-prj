@@ -146,7 +146,8 @@ bootstrap "bs-first-$$" "$URL" "${ARGS[@]}" >"$work/first.out" 2>"$work/first.er
 grep -q '引导完成' "$work/first.out" || fail "空库引导未输出「引导完成」：$(cat "$work/first.out")"
 [ "$(count_rows "$BS_DB")" = "1/1/1/1/2" ] || fail "空库引导后的行数不对：$(count_rows "$BS_DB")"
 level="$(psql_db "$BS_DB" -tA -c "SELECT level || '/' || (parent_id IS NULL) FROM org_unit WHERE code = 'ORG-E2E-131'")"
-[ "$level" = "city/t" ] || fail "根机构层级不是市或不是根：${level}"
+# 布尔值经 || 拼成文本是 true/false，不是 psql 显示用的 t/f。
+[ "$level" = "city/true" ] || fail "根机构层级不是市或不是根：${level}"
 audit="$(psql_db "$BS_DB" -tA -c "SELECT string_agg(a.action || ':' || a.outcome || ':' || (a.org_unit_id = o.id) || ':' || (a.actor_id IS NULL), ',' ORDER BY a.created_at, a.id)
   FROM audit_trail a CROSS JOIN org_unit o WHERE o.code = 'ORG-E2E-131'")"
 [ "$audit" = "bootstrap.root-registered:succeeded:true:true,bootstrap.admin-registered:succeeded:true:true" ] \
@@ -170,6 +171,8 @@ grep -q 'SJ0002' "$work/partial.err" || fail "两键不全时未输出差异：$
 echo "[e2e] 引导：场景 5 两个进程并发…"
 prepare_database "$BS_DB_C"
 URL_C="$(db_url "$BS_DB_C")"
+# 后台任务在子 shell 里执行，子 shell 里追加的容器名传不回来。先由本进程登记，供 inspect 核对与清理。
+containers+=("bs-conc-a-$$" "bs-conc-b-$$")
 bootstrap "bs-conc-a-$$" "$URL_C" "${ARGS[@]}" >"$work/conc-a.out" 2>"$work/conc-a.err" &
 pid_a=$!
 bootstrap "bs-conc-b-$$" "$URL_C" "${ARGS[@]}" >"$work/conc-b.out" 2>"$work/conc-b.err" &
