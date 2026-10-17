@@ -32,12 +32,15 @@ Git worktree 只放在与项目目录平级的 `../natural-enforcement-prj-wts/`
 删除前，代理逐项核对：
 
 - PR 状态为已合并。分支名以 PR 的 head.ref 为准。
-- 用 `git merge-base --is-ancestor <分支尖> origin/dev` 确认分支已合入 `dev`。本地分支和远端分支分别核对。
+- PR 的 head.repo 必须是 origin 仓库 `bbhl79/natural-enforcement-prj`。head.ref 只在所属仓库内唯一，fork PR 可能与 origin 有同名分支。head.repo 不一致或无法确认时，跳过该分支，不清理。
+- 用 `git merge-base --is-ancestor <分支尖> origin/dev` 确认分支已合入 `dev`。本地分支和远端分支分别核对。代理记下核验通过的远端分支 SHA。
 
 删除时，代理按下列方式执行：
 
 - 本地分支用 `git branch -d` 删除。不用 `-D`。
-- 远端分支用 `git push origin --delete <分支>` 删除。
+- 删除远端分支前，先运行 `git fetch origin --prune`。`origin/<分支>` 的 SHA 与之前核验已合入 `dev` 的 SHA 相同时，才用 `git push origin --delete <分支>` 删除。
+- SHA 不一致时，跳过该分支，报告用户。
+- 不用 `--force-with-lease`。团队规矩禁止任何带 force 的命令。复核与删除之间残留秒级窗口，这个风险可以接受。
 - 分支被 worktree 检出时，先在该 worktree 里运行 `git status --porcelain --ignored`。
 - worktree 没有改动、没有未跟踪文件时，用 `git worktree remove <路径>` 移除。不加 `--force`。
 - worktree 有改动或未跟踪文件时，保留该 worktree 和分支，报告用户。
