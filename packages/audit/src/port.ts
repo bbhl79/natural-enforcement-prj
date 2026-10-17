@@ -1,6 +1,7 @@
 import type {
   AuthzDeniedReason,
   LoginFailedReason,
+  OrgUnitRegisterFailedReason,
   PasswordChangedReason,
   SessionEndReason,
 } from './vocabulary.ts';
@@ -40,7 +41,10 @@ export type AuditAppend =
   | (AuditParties & { action: 'account.unlocked' })
   | (AuditParties & { action: 'account.password-reset' })
   | (AuditParties & { action: 'account.password-changed'; reason: PasswordChangedReason })
-  | (AuditParties & { action: 'authz.denied'; reason: AuthzDeniedReason });
+  | (AuditParties & { action: 'authz.denied'; reason: AuthzDeniedReason })
+  | (AuditParties & { action: 'org.unit.registered' })
+  | (AuditParties & { action: 'org.unit.registered'; outcome: 'failed'; reason: OrgUnitRegisterFailedReason })
+  | (AuditParties & { action: 'org.unit.renamed' });
 
 /** 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。 */
 export interface AuthzDeniedEntry {
