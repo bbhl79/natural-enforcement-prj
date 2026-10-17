@@ -119,28 +119,31 @@ const ROLE_ALLOWANCES = {
   ],
 };
 
+// 参照种子按「存在即已初始化」判断，含已失效的行（#103 评审）。
+// 管理员撤销的角色、操作码或允许行，再次播种不恢复；重新授权只能经显式管理动作。
 async function seedRole(name) {
-  const found = await prisma.role.findFirst({ where: { name, deactivatedAt: null } });
-  if (found) return found.id;
+  const found = await prisma.role.findFirst({ where: { name }, orderBy: { deactivatedAt: { sort: "asc", nulls: "first" } } });
+  if (found) return { id: found.id, active: found.deactivatedAt == null };
   const id = newUlid();
   await prisma.role.create({ data: { id, name } });
-  return id;
+  return { id, active: true };
 }
 
 async function seedPermission(code) {
-  const found = await prisma.permission.findFirst({ where: { code, deactivatedAt: null } });
-  if (found) return found.id;
+  const found = await prisma.permission.findFirst({ where: { code }, orderBy: { deactivatedAt: { sort: "asc", nulls: "first" } } });
+  if (found) return { id: found.id, active: found.deactivatedAt == null };
   const id = newUlid();
   await prisma.permission.create({ data: { id, code } });
-  return id;
+  return { id, active: true };
 }
 
-async function seedAllow(roleId, permissionId) {
+async function seedAllow(role, permission) {
+  if (!role.active || !permission.active) return;
   const found = await prisma.rolePermission.findFirst({
-    where: { roleId, permissionId, deactivatedAt: null },
+    where: { roleId: role.id, permissionId: permission.id },
   });
   if (found) return;
-  await prisma.rolePermission.create({ data: { id: newUlid(), roleId, permissionId } });
+  await prisma.rolePermission.create({ data: { id: newUlid(), roleId: role.id, permissionId: permission.id } });
 }
 
 const roleIds = new Map();
@@ -152,9 +155,9 @@ for (const code of new Set(Object.values(ROLE_ALLOWANCES).flat())) {
   permissionIds.set(code, await seedPermission(code));
 }
 for (const [name, codes] of Object.entries(ROLE_ALLOWANCES)) {
-  const roleId = roleIds.get(name);
+  const role = roleIds.get(name);
   for (const code of codes) {
-    await seedAllow(roleId, permissionIds.get(code));
+    await seedAllow(role, permissionIds.get(code));
   }
 }
 console.log("参照种子已写入或已存在。");
@@ -177,9 +180,12 @@ async function seedOrgUnit(code, name, parentId = null) {
 }
 
 async function seedPersonnelRole(personnelId, roleName) {
-  const roleId = roleIds.get(roleName);
+  const role = roleIds.get(roleName);
+  if (!role.active) return;
+  const roleId = role.id;
+  // 含已失效行：撤销过的人员—角色，再次播种不恢复。
   const found = await prisma.personnelRole.findFirst({
-    where: { personnelId, roleId, deactivatedAt: null },
+    where: { personnelId, roleId },
   });
   if (found) return;
   await prisma.personnelRole.create({ data: { id: newUlid(), personnelId, roleId } });

@@ -360,3 +360,68 @@ describe('生产环境不写入夹具人员', () => {
     }
   }, 180_000);
 });
+
+describe('再次播种不恢复已撤销的授权', () => {
+  it('允许行、操作码或人员—角色失效后再跑种子，仍保持失效且不新建替代行', async () => {
+    const databaseUrl = process.env.DATABASE_URL;
+    if (!databaseUrl || !adminPrisma) throw new Error('DATABASE_URL 未注入');
+    const dbName = `auth92_reseed_${Date.now()}`;
+    const url = new URL(databaseUrl);
+    url.pathname = `/${dbName}`;
+    const env = { ...process.env, DATABASE_URL: url.toString() };
+    const prismaDir = `${process.cwd()}/backend/prisma`;
+    const seed = () =>
+      execFileAsync(
+        'node',
+        [
+          '--experimental-transform-types',
+          '--disable-warning=ExperimentalWarning',
+          '--disable-warning=MODULE_TYPELESS_PACKAGE_JSON',
+          'seed.mjs',
+        ],
+        { cwd: prismaDir, env, timeout: 120_000 },
+      );
+    await adminPrisma.$executeRawUnsafe(`CREATE DATABASE ${quoteIdent(dbName)}`);
+    let client: PrismaClient | undefined;
+    try {
+      await execFileAsync('pnpm', ['exec', 'prisma', 'migrate', 'deploy'], {
+        cwd: prismaDir,
+        env,
+        timeout: 120_000,
+      });
+      await seed();
+      client = new PrismaClient({ adapter: new PrismaPg({ connectionString: url.toString() }) });
+      const admin = await client.role.findFirstOrThrow({ where: { name: '系统管理' } });
+      const unlock = await client.permission.findFirstOrThrow({ where: { code: 'personnel.locked.release' } });
+      const reset = await client.permission.findFirstOrThrow({ where: { code: 'personnel.password.reset' } });
+      const unlockAllow = await client.rolePermission.findFirstOrThrow({
+        where: { roleId: admin.id, permissionId: unlock.id },
+      });
+      const person = await client.personnel.findUniqueOrThrow({ where: { code: 'P-SUP-A' } });
+      const binding = await client.personnelRole.findFirstOrThrow({
+        where: { personnelId: person.id, roleId: admin.id },
+      });
+      await client.rolePermission.update({ where: { id: unlockAllow.id }, data: { deactivatedAt: new Date() } });
+      await client.permission.update({ where: { id: reset.id }, data: { deactivatedAt: new Date() } });
+      await client.personnelRole.update({ where: { id: binding.id }, data: { deactivatedAt: new Date() } });
+
+      await seed();
+
+      expect(
+        await client.rolePermission.count({
+          where: { roleId: admin.id, permissionId: unlock.id, deactivatedAt: null },
+        }),
+      ).toBe(0);
+      expect(await client.permission.count({ where: { code: 'personnel.password.reset', deactivatedAt: null } })).toBe(0);
+      expect(await client.rolePermission.count({ where: { permissionId: reset.id, deactivatedAt: null } })).toBe(1);
+      expect(
+        await client.personnelRole.count({
+          where: { personnelId: person.id, roleId: admin.id, deactivatedAt: null },
+        }),
+      ).toBe(0);
+    } finally {
+      await client?.$disconnect();
+      await adminPrisma.$executeRawUnsafe(`DROP DATABASE IF EXISTS ${quoteIdent(dbName)} WITH (FORCE)`);
+    }
+  }, 180_000);
+});
