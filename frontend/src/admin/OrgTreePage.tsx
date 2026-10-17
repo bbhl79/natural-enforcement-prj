@@ -424,7 +424,7 @@ export function DeactivateDialog({
         <ul>
           {blockers.map((blocker) => (blocker.kind === 'personnel' ? (
             <li key="personnel">
-              还有 <b>{`${blocker.count} 名`}</b>在职人员：请先把他们调岗到其他机构，或停用相应人员。
+              还有 <b>{`${blocker.count} 名`}</b>在职人员：请先把他们调岗到其他机构。
             </li>
           ) : (
             <li key="children">

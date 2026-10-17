@@ -303,7 +303,9 @@ describe('机构停用（P4 blocked/confirm，#124）', () => {
     const html = deactivateDialog('th');
     expect(html).toContain('暂时不能停用「天河区分局」');
     expect(html).toContain('<div class="banner amber" style="margin-bottom:8px">停用机构前，需要先满足以下条件：</div>');
-    expect(html).toContain('<li>还有 <b>46 名</b>在职人员：请先把他们调岗到其他机构，或停用相应人员。</li>');
+    // 停用人员不结束任职（#105 D4：已停用人员未结束的任职也拦停用），所以只提示调岗，不提示「停用相应人员」。
+    expect(html).toContain('<li>还有 <b>46 名</b>在职人员：请先把他们调岗到其他机构。</li>');
+    expect(html).not.toContain('停用相应人员');
     expect(html).toContain('<li>还有 <b>1 个</b>未停用的下级机构（石牌自然资源所）：请先停用下级机构。</li>');
     expect(html).toContain('<button type="button" class="btn btn-primary">知道了</button>');
     expect(html).not.toContain('确认停用');
