@@ -1,6 +1,13 @@
 // 留痕表适配器（ADR 0012）。本文件是包内唯一引用 auditTrail 委托的地方。
+// 追加（PrismaAuditTrail）与查阅（PrismaAuditTrailReader，#126）都在这里。
 // 调用方传入带 auditTrail.create 的客户端。不在这里 import 生成客户端。
 import type { AuditAppend, AuditTrailPort, AuthzDeniedEntry } from './port.ts';
+import {
+  auditCategoryOf,
+  type AuditTrailQuery,
+  type AuditTrailReader,
+  type AuditTrailRecord,
+} from './query.ts';
 import type { AuditTrailFactory } from './transaction.ts';
 import { newAuditId } from './ulid.ts';
 import {
@@ -99,3 +106,69 @@ export class PrismaAuditTrail implements AuditTrailPort {
 export const prismaAuditTrailFactory: AuditTrailFactory = {
   forClient: (client) => new PrismaAuditTrail(client as AuditTrailCreateClient),
 };
+
+/** 查阅用到的 auditTrail.findMany 形状。调用方传 Prisma 根客户端或交互式事务客户端。 */
+export interface AuditTrailReadClient {
+  auditTrail: {
+    findMany(args: {
+      where: Record<string, unknown>;
+      include: { orgUnit: { select: { name: true } } };
+      orderBy: Array<Record<string, 'asc' | 'desc'>>;
+    }): Promise<Array<{
+      id: string;
+      createdAt: Date;
+      action: string;
+      outcome: string;
+      reason: string | null;
+      actorCode: string | null;
+      subjectCode: string | null;
+      orgUnitId: string | null;
+      opcode: string | null;
+      resourceType: string | null;
+      resourceId: string | null;
+      itemCount: number | null;
+      orgUnit: { name: string } | null;
+    }>>;
+  };
+}
+
+/**
+ * 管理台留痕查阅（#126）。范围、时间、操作人、结果在库里筛；类别按 auditCategoryOf 在内存里筛，
+ * 与页面上的类别口径同一份代码。
+ */
+export class PrismaAuditTrailReader implements AuditTrailReader {
+  constructor(private readonly db: AuditTrailReadClient) {}
+
+  async list(query: AuditTrailQuery): Promise<AuditTrailRecord[]> {
+    const anchors: Array<Record<string, unknown>> = [{ orgUnitId: { in: [...query.orgUnitIds] } }];
+    if (query.includeUnanchored) anchors.push({ orgUnitId: null });
+    const where: Record<string, unknown> = {
+      createdAt: { gte: query.from, lt: query.to },
+      OR: anchors,
+    };
+    if (query.actorCode) where.actorCode = query.actorCode;
+    if (query.outcome) where.outcome = query.outcome;
+    const rows = await this.db.auditTrail.findMany({
+      where,
+      include: { orgUnit: { select: { name: true } } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+    return rows
+      .filter((row) => !query.category || auditCategoryOf(row.action, row.opcode) === query.category)
+      .map((row) => ({
+        id: row.id,
+        createdAt: row.createdAt,
+        action: row.action,
+        outcome: row.outcome,
+        reason: row.reason,
+        actorCode: row.actorCode,
+        subjectCode: row.subjectCode,
+        orgUnitId: row.orgUnitId,
+        orgUnitName: row.orgUnit?.name ?? null,
+        opcode: row.opcode,
+        resourceType: row.resourceType,
+        resourceId: row.resourceId,
+        itemCount: row.itemCount,
+      }));
+  }
+}
