@@ -10,3 +10,5 @@ e2e/results/
 .env
 .env.local
 *.log
+# 管理台原型的状态截图（95 张）只供评审查看，不进编译上下文。
+frontend/prototype/admin-console/screens/
