@@ -68,6 +68,56 @@ export function buildTree(tree: OrgTreeData, showDeactivated = true): OrgTreeNod
   return grow(root);
 }
 
+/** 当前看得见的节点，按树上从上到下的顺序；折叠起来的节点不展开它的下级（根节点始终展开）。 */
+export function visibleOrder(root: OrgTreeNode, collapsed: ReadonlySet<string>): string[] {
+  const order: string[] = [];
+  const walk = (node: OrgTreeNode, depth: number) => {
+    order.push(node.unit.id);
+    if (depth > 0 && collapsed.has(node.unit.id)) return;
+    for (const child of node.children) walk(child, depth + 1);
+  };
+  walk(root, 0);
+  return order;
+}
+
+export type TreeKeyAction = { kind: 'select'; id: string } | { kind: 'toggle'; id: string } | null;
+
+/**
+ * 树的键盘操作（WAI-ARIA treeview 的常用键）：上下键移到上一个、下一个看得见的节点；Home、End 到首尾；
+ * 右键展开折叠的节点，已展开时移到第一个下级；左键折叠展开的节点，否则移到上级；回车、空格选中当前节点。
+ */
+export function treeKeyAction(
+  key: string,
+  order: readonly string[],
+  current: string,
+  node: { parentId: string | null; hasChildren: boolean; open: boolean; collapsible: boolean },
+): TreeKeyAction {
+  const at = order.indexOf(current);
+  if (at < 0) return null;
+  const select = (id: string | undefined): TreeKeyAction => (id === undefined ? null : { kind: 'select', id });
+  switch (key) {
+    case 'ArrowDown':
+      return select(order[at + 1]);
+    case 'ArrowUp':
+      return select(order[at - 1]);
+    case 'Home':
+      return select(order[0]);
+    case 'End':
+      return select(order[order.length - 1]);
+    case 'ArrowRight':
+      if (!node.hasChildren) return null;
+      return node.open ? select(order[at + 1]) : { kind: 'toggle', id: current };
+    case 'ArrowLeft':
+      if (node.hasChildren && node.open && node.collapsible) return { kind: 'toggle', id: current };
+      return node.parentId !== null && order.includes(node.parentId) ? select(node.parentId) : null;
+    case 'Enter':
+    case ' ':
+      return { kind: 'select', id: current };
+    default:
+      return null;
+  }
+}
+
 export function childrenOf(tree: OrgTreeData, id: string): OrgUnit[] {
   return tree.orgUnits.filter((unit) => unit.parentId === id);
 }

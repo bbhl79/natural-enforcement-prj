@@ -16,6 +16,8 @@ import {
   onlyRootOrgUnit,
   registerOrgUnit,
   treeCountHint,
+  treeKeyAction,
+  visibleOrder,
   type OrgTreeData,
   type OrgUnit,
 } from './orgTree';
@@ -124,6 +126,49 @@ describe('机构树纯函数', () => {
       { name: '天河区国土资源和规划分局', period: '2015-06-01 至 2019-02-28' },
     ]);
     expect(formerNames(names)).toEqual([{ name: '天河区国土资源和规划分局', until: '2019-03-01 前使用' }]);
+  });
+});
+
+describe('机构树键盘操作（PR #142 Copilot 意见 3）', () => {
+  const root = buildTree(TREE)!;
+  const order = visibleOrder(root, new Set());
+  const at = (id: string, open = true) => {
+    const node = TREE.orgUnits.find((item) => item.id === id)!;
+    const hasChildren = TREE.orgUnits.some((item) => item.parentId === id);
+    return { parentId: node.parentId, hasChildren, open: hasChildren && open, collapsible: node.parentId !== null };
+  };
+
+  it('看得见的节点顺序：折叠的节点不展开下级，根节点始终展开', () => {
+    expect(order).toEqual(['gz', 'th', 'sp', 'ws', 'hz', 'py']);
+    expect(visibleOrder(root, new Set(['th', 'gz']))).toEqual(['gz', 'th', 'hz', 'py']);
+  });
+
+  it('上下、首尾键移动选中；回车、空格选中当前节点', () => {
+    expect(treeKeyAction('ArrowDown', order, 'th', at('th'))).toEqual({ kind: 'select', id: 'sp' });
+    expect(treeKeyAction('ArrowUp', order, 'th', at('th'))).toEqual({ kind: 'select', id: 'gz' });
+    expect(treeKeyAction('ArrowUp', order, 'gz', at('gz'))).toBeNull();
+    expect(treeKeyAction('ArrowDown', order, 'py', at('py'))).toBeNull();
+    expect(treeKeyAction('Home', order, 'hz', at('hz'))).toEqual({ kind: 'select', id: 'gz' });
+    expect(treeKeyAction('End', order, 'th', at('th'))).toEqual({ kind: 'select', id: 'py' });
+    expect(treeKeyAction('Enter', order, 'hz', at('hz'))).toEqual({ kind: 'select', id: 'hz' });
+    expect(treeKeyAction(' ', order, 'hz', at('hz'))).toEqual({ kind: 'select', id: 'hz' });
+    expect(treeKeyAction('a', order, 'hz', at('hz'))).toBeNull();
+  });
+
+  it('右键展开或进入第一个下级，左键折叠或回到上级；根节点不折叠', () => {
+    expect(treeKeyAction('ArrowRight', order, 'th', at('th', false))).toEqual({ kind: 'toggle', id: 'th' });
+    expect(treeKeyAction('ArrowRight', order, 'th', at('th'))).toEqual({ kind: 'select', id: 'sp' });
+    expect(treeKeyAction('ArrowRight', order, 'sp', at('sp'))).toBeNull();
+    expect(treeKeyAction('ArrowLeft', order, 'th', at('th'))).toEqual({ kind: 'toggle', id: 'th' });
+    expect(treeKeyAction('ArrowLeft', order, 'sp', at('sp'))).toEqual({ kind: 'select', id: 'th' });
+    expect(treeKeyAction('ArrowLeft', order, 'gz', at('gz'))).toBeNull();
+  });
+
+  it('节点可以获得焦点：只有选中的节点在 Tab 序列里', () => {
+    const html = view(ADMIN, { selectedId: 'th' });
+    expect(html).toContain('role="tree" aria-label="机构树"');
+    expect(html).toMatch(/data-org-unit="th" role="treeitem" aria-selected="true" aria-expanded="true" tabindex="0"/);
+    expect(html).toMatch(/data-org-unit="gz" role="treeitem" aria-selected="false" aria-expanded="true" tabindex="-1"/);
   });
 });
 
