@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AuditTrailPort } from '@natural-enforcement/audit';
 
 import { IDENTITY_MAINTENANCE_OPCODE, AccessDeniedError } from '../src/domain/access.ts';
+import { AlreadyExistsError } from '../src/domain/already-exists.ts';
 import type { ActorRef } from '../src/domain/actor.ts';
 import type {
   AssignmentTransfer,
@@ -63,7 +64,8 @@ function people(): Record<string, PersonnelRow> {
 
 function store(extra: Partial<IdentityStore> = {}): IdentityStore {
   const known = people();
-  return {
+  const backing: IdentityStore = {
+    inTransaction: async (work) => work({ store: backing, client: null }),
     findPersonnelById: async (id) => known[id] ?? null,
     findCurrentAssignment: async (personnelId) =>
       ({
@@ -93,6 +95,7 @@ function store(extra: Partial<IdentityStore> = {}): IdentityStore {
     }),
     ...extra,
   } as IdentityStore;
+  return backing;
 }
 
 const authed = (personnelId: string): ActorRef => ({ personnelId, authenticated: true });
@@ -174,5 +177,85 @@ describe('调岗写入', () => {
     expect(closeAssignment).not.toHaveBeenCalled();
     expect(insertAssignment).not.toHaveBeenCalled();
     expect(updatePersonnelOrgUnit).not.toHaveBeenCalled();
+  });
+
+  it('不传事务时自开一个事务，写入经事务里的存储', async () => {
+    const outside = vi.fn(async () => undefined);
+    const inside = vi.fn<(transfer: AssignmentTransfer) => Promise<void>>(async () => undefined);
+    const bound = store({ transferAssignment: inside });
+    const opened = vi.fn();
+    const backing = store({
+      transferAssignment: outside,
+      inTransaction: async (work) => {
+        opened();
+        return work({ store: bound, client: 'tx' });
+      },
+    });
+    const personnel = new PersonnelService(backing, accessFor(backing), new CredentialService(backing));
+
+    await personnel.transferPersonnel(authed('sys-admin'), 'handler', 'dept-b');
+
+    expect(opened).toHaveBeenCalledOnce();
+    expect(inside).toHaveBeenCalledOnce();
+    expect(outside).not.toHaveBeenCalled();
+  });
+
+  it('传入调用方事务时并入该事务，不另开事务', async () => {
+    const inside = vi.fn<(transfer: AssignmentTransfer) => Promise<void>>(async () => undefined);
+    const bound = store({ transferAssignment: inside });
+    const opened = vi.fn();
+    const backing = store({
+      inTransaction: async (work) => {
+        opened();
+        return work({ store: bound, client: 'tx' });
+      },
+    });
+    const personnel = new PersonnelService(backing, accessFor(backing), new CredentialService(backing));
+
+    await personnel.transferPersonnel(authed('sys-admin'), 'handler', 'dept-b', { store: bound, client: 'caller-tx' });
+
+    expect(opened).not.toHaveBeenCalled();
+    expect(inside).toHaveBeenCalledOnce();
+  });
+
+  it('未授权时不开事务、不写入', async () => {
+    const inside = vi.fn(async () => undefined);
+    const opened = vi.fn();
+    const backing = store({
+      transferAssignment: inside,
+      inTransaction: async (work) => {
+        opened();
+        return work({ store: backing, client: 'tx' });
+      },
+    });
+    const personnel = new PersonnelService(backing, accessFor(backing), new CredentialService(backing));
+
+    await expect(personnel.transferPersonnel(authed('intake'), 'handler', 'dept-b'))
+      .rejects.toMatchObject({ reason: 'permission-denied' });
+    expect(opened).not.toHaveBeenCalled();
+    expect(inside).not.toHaveBeenCalled();
+  });
+});
+
+describe('业务唯一冲突', () => {
+  it('登记时工号已存在，抛 AlreadyExistsError（personnel-code），不再写名称版本与任职', async () => {
+    const insertPersonnelNameVersion = vi.fn();
+    const insertAssignment = vi.fn();
+    const backing = store({
+      insertPersonnel: async () => ({ result: 'already-exists', conflict: 'personnel-code' }),
+      insertPersonnelNameVersion,
+      insertAssignment,
+    });
+    const personnel = new PersonnelService(backing, accessFor(backing), new CredentialService(backing));
+
+    const attempt = personnel.registerPersonnel(authed('sys-admin'), {
+      code: 'P-DUP',
+      name: '重复工号',
+      orgUnitId: 'dept-a',
+    });
+    await expect(attempt).rejects.toBeInstanceOf(AlreadyExistsError);
+    await expect(attempt).rejects.toMatchObject({ conflict: 'personnel-code' });
+    expect(insertPersonnelNameVersion).not.toHaveBeenCalled();
+    expect(insertAssignment).not.toHaveBeenCalled();
   });
 });

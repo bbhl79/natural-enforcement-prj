@@ -90,9 +90,45 @@ export interface PersonnelToCreate {
   name: string;
   orgUnitId: string;
   passwordHash: string | null;
+  /** 登录标识。有值时全库唯一。不传即为空。 */
+  mobilePhone?: string | null;
+}
+
+/** 人员—角色新行。授予 = 插入新行；摘除 = 给旧行置失效时间。 */
+export interface PersonnelRoleToCreate {
+  id: string;
+  personnelId: string;
+  roleId: string;
+}
+
+/** 业务唯一冲突的种类：工号、手机号、重复授予同一角色。 */
+export type IdentityUniqueConflict = 'personnel-code' | 'mobile-phone' | 'personnel-role';
+
+/**
+ * 受业务唯一约束的写入结果（#119）。
+ * 冲突不抛异常，统一映射为「已存在」。接口层据此返回 409 already-exists 或按幂等处理。
+ * 在交互式事务里发生冲突时，只撤销这一笔写入，事务仍可继续使用。
+ */
+export type UniqueWriteResult =
+  | { result: 'written' }
+  | { result: 'already-exists'; conflict: IdentityUniqueConflict };
+
+/**
+ * 绑定到一个交互式事务的身份存储。
+ * client 是事务客户端，交给留痕工厂（AUDIT_TRAIL_FACTORY）取同一事务里的留痕写入接口。
+ */
+export interface IdentityTransaction {
+  store: IdentityStore;
+  client: unknown;
 }
 
 export interface IdentityStore {
+  /**
+   * 在一个交互式事务里执行 work（#119）。work 抛错则整体回滚。
+   * 本存储已绑定事务时不另开事务，直接在当前事务里执行。
+   */
+  inTransaction<T>(work: (tx: IdentityTransaction) => Promise<T>): Promise<T>;
+
   // 查询
   findPersonnelById(id: string): Promise<PersonnelRow | null>;
   findOrgUnitById(id: string): Promise<OrgUnitRow | null>;
@@ -119,7 +155,12 @@ export interface IdentityStore {
   /** 仅更新机构当前名（历史在版本行，版本行不可改） */
   updateOrgUnitCurrentName(orgUnitId: string, name: string): Promise<void>;
   deactivateOrgUnit(orgUnitId: string, deactivatedAt: Date): Promise<void>;
-  insertPersonnel(input: PersonnelToCreate): Promise<void>;
+  /** 工号或手机号已被占用时返回 already-exists（personnel-code / mobile-phone）。 */
+  insertPersonnel(input: PersonnelToCreate): Promise<UniqueWriteResult>;
+  /** 手机号已被他人占用时返回 already-exists（mobile-phone）。 */
+  updatePersonnelMobilePhone(personnelId: string, mobilePhone: string | null): Promise<UniqueWriteResult>;
+  /** 同一人员已持有该角色的未失效行时返回 already-exists（personnel-role）。 */
+  insertPersonnelRole(row: PersonnelRoleToCreate): Promise<UniqueWriteResult>;
   insertPersonnelNameVersion(row: PersonnelNameVersionRow): Promise<void>;
   updatePersonnelCurrentName(personnelId: string, name: string): Promise<void>;
   /** 调岗后同步人员当前归属机构（任职记录为权威史，此处为读模型冗余） */
@@ -136,7 +177,7 @@ export interface IdentityStore {
   insertAssignment(row: PersonnelAssignmentRow): Promise<void>;
   /** 结束当前任职（调岗旧权限失效的数据层载体） */
   closeAssignment(assignmentId: string, endedAt: Date): Promise<void>;
-  /** 调岗三笔写入的唯一入口；实现必须放在同一数据库事务中 */
+  /** 调岗三笔写入的唯一入口；实现必须放在同一数据库事务中（已绑定事务时用当前事务） */
   transferAssignment(transfer: AssignmentTransfer): Promise<void>;
   insertExportAudit(row: ExportAuditRow): Promise<void>;
 }
