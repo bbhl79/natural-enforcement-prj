@@ -6,7 +6,7 @@ import { data } from 'react-router';
 
 import { apiFetch, type ApiDispatch } from '../api';
 import { sessionOpcodes, type SessionStore } from '../session';
-import { ADMIN_HOME_OPCODES, hasAny } from '../shell/menu';
+import { ADMIN_HOME_OPCODES, hasAny, ORG_MAINTENANCE_OPCODE } from '../shell/menu';
 
 export interface AdminHomeSummary {
   /** 数据范围内的机构数 */
@@ -30,7 +30,7 @@ export const EMPTY_SUMMARY: AdminHomeSummary = {
 };
 
 /** 维护类入口码。只有留痕入口、没有维护入口的是监督视角。 */
-const MAINTENANCE_OPCODES = ['org.tree.read', 'personnel.profile.read', 'personnel.locked.read'] as const;
+const MAINTENANCE_OPCODES = [ORG_MAINTENANCE_OPCODE, 'personnel.profile.read', 'personnel.locked.read'] as const;
 
 export type AdminHomeView = 'admin' | 'supervise' | 'denied';
 
@@ -63,7 +63,7 @@ function counted(value: number | null, unit: string, prefix = ''): string | null
 }
 
 export const ADMIN_TILES: readonly AdminTile[] = [
-  { id: 'org', title: '机构', desc: '建下级机构、改名、停用', path: '/admin/org-units', opcode: 'org.tree.read', count: (s) => counted(s.orgUnits, '个') },
+  { id: 'org', title: '机构', desc: '建下级机构、改名、停用', path: '/admin/org-units', opcode: ORG_MAINTENANCE_OPCODE, count: (s) => counted(s.orgUnits, '个') },
   { id: 'person', title: '人员', desc: '建人员、分配角色、调岗、停用与恢复', path: '/admin/personnel', opcode: 'personnel.profile.read', count: (s) => counted(s.personnel, '人') },
   { id: 'locked', title: '被锁人员', desc: '连续输错口令被锁的人员', path: '/admin/locked-personnel', opcode: 'personnel.locked.read', count: (s) => counted(s.lockedPersonnel, '人') },
   { id: 'audit', title: '管理台留痕', desc: '查阅与导出维护记录', path: '/admin/audit', opcode: 'audit.admin.read', count: (s) => counted(s.auditToday, '条', '今日 ') },
