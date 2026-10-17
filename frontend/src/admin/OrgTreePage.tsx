@@ -7,6 +7,8 @@ import {
   buildTree,
   childCountText,
   childLevelOf,
+  deactivateOrgUnit,
+  deactivationBlockers,
   formerNames,
   LEVEL_LABEL,
   LEVELS,
@@ -25,6 +27,7 @@ import {
 
 const REGISTER = 'org.unit.register';
 const RENAME = 'org.unit.rename';
+const DEACTIVATE = 'org.unit.deactivate';
 
 function Crumb() {
   return <div className="crumb">管理台 / <b>机构</b></div>;
@@ -71,7 +74,11 @@ function TreeError() {
   return <ErrorCard what="机构树" onRetry={() => void revalidator.revalidate()} />;
 }
 
-type Dialog = { kind: 'create'; parent: OrgUnit } | { kind: 'rename'; unit: OrgUnit } | null;
+type Dialog =
+  | { kind: 'create'; parent: OrgUnit }
+  | { kind: 'rename'; unit: OrgUnit }
+  | { kind: 'deactivate'; unit: OrgUnit }
+  | null;
 
 export interface OrgTreeUi {
   selectedId: string | null;
@@ -141,12 +148,14 @@ function Detail({
   opcodes,
   onCreate,
   onRename,
+  onDeactivate,
 }: {
   tree: OrgTreeData;
   unit: OrgUnit;
   opcodes: readonly string[];
   onCreate: () => void;
   onRename: () => void;
+  onDeactivate: () => void;
 }) {
   const parent = tree.orgUnits.find((item) => item.id === unit.parentId) ?? null;
   const isRoot = unit.parentId === null;
@@ -203,7 +212,9 @@ function Detail({
         {opcodes.includes(RENAME) ? (
           <button type="button" className="btn" data-requires={RENAME} onClick={onRename}>改名</button>
         ) : null}
-        {/* 停用入口由停用票（#124）放在这里。 */}
+        {opcodes.includes(DEACTIVATE) && !isRoot && !unit.deactivatedAt ? (
+          <button type="button" className="btn btn-ghost-danger" data-requires={DEACTIVATE} onClick={onDeactivate}>停用</button>
+        ) : null}
       </div>
       {createBlocked && opcodes.includes(REGISTER) ? <div className="help" style={{ marginTop: 10 }}>{createBlocked}</div> : null}
       {isRoot ? <div className="help" style={{ marginTop: 10 }}>根机构不能停用。</div> : null}
@@ -345,6 +356,74 @@ export function RenameDialog({
   );
 }
 
+/**
+ * 停用弹窗（P4 blocked/confirm）。树数据上看得出的条件（在职人员、未停用的下级）不满足时直接列出，不发请求；
+ * 都满足时请确认，确认后由服务端再按根机构、下级、生效任职、未办结事项核对，409 显示服务端的可读原因。
+ */
+export function DeactivateDialog({
+  tree,
+  unit,
+  onCancel,
+  onSubmit,
+}: {
+  tree: OrgTreeData;
+  unit: OrgUnit;
+  onCancel: () => void;
+  onSubmit: () => Promise<OrgWriteResult>;
+}) {
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const blockers = deactivationBlockers(tree, unit);
+  if (blockers.length > 0) {
+    return (
+      <Modal
+        title={`暂时不能停用「${unit.name}」`}
+        foot={<button type="button" className="btn btn-primary" onClick={onCancel}>知道了</button>}
+      >
+        <div className="banner amber" style={{ marginBottom: 8 }}>停用机构前，需要先满足以下条件：</div>
+        <ul>
+          {blockers.map((blocker) => (blocker.kind === 'personnel' ? (
+            <li key="personnel">
+              还有 <b>{`${blocker.count} 名`}</b>在职人员：请先把他们调岗到其他机构，或停用相应人员。
+            </li>
+          ) : (
+            <li key="children">
+              还有 <b>{`${blocker.names.length} 个`}</b>{`未停用的下级机构（${blocker.names.join('、')}）：请先停用下级机构。`}
+            </li>
+          )))}
+        </ul>
+      </Modal>
+    );
+  }
+  const submit = async () => {
+    setBusy(true);
+    const result = await onSubmit();
+    setBusy(false);
+    if (!result.ok) setMessage(result.message);
+  };
+  return (
+    <Modal
+      title={`停用「${unit.name}」？`}
+      foot={(
+        <>
+          <button type="button" className="btn" onClick={onCancel}>取消</button>
+          <button type="button" className="btn btn-danger" disabled={busy || message !== null} onClick={() => void submit()}>确认停用</button>
+        </>
+      )}
+    >
+      {message ? <div className="banner danger">{message}</div> : null}
+      <p>停用后：</p>
+      <ul>
+        <li>不能再在这个机构下建人员或下级机构；</li>
+        <li>业务办理时不能再选它作为承办机构；</li>
+        <li>历史记录照常保留，仍显示这个机构名称；</li>
+        <li>一期不提供恢复，请确认后再操作。</li>
+      </ul>
+      <div className="banner gray" style={{ marginTop: 10, marginBottom: 0 }}>已核对：没有在职人员，没有未停用的下级机构。</div>
+    </Modal>
+  );
+}
+
 /** 有下级的非根节点：全部折叠时收起它们。根节点始终展开。 */
 function collapsibleIds(tree: OrgTreeData): Set<string> {
   const parents = new Set(tree.orgUnits.map((unit) => unit.parentId).filter((id): id is string => id !== null));
@@ -353,7 +432,7 @@ function collapsibleIds(tree: OrgTreeData): Set<string> {
 }
 
 /**
- * 机构树主体（P4 expanded/collapsed/onlyroot 与新建、改名弹窗）。
+ * 机构树主体（P4 expanded/collapsed/onlyroot 与新建、改名、停用弹窗）。
  * 界面没有移动、合并、恢复机构的入口。按钮按会话清单显示，真正的授权由服务端每次校验。
  */
 export function OrgTreeView({
@@ -365,6 +444,7 @@ export function OrgTreeView({
   onDialog,
   onCreate,
   onRename,
+  onDeactivate,
 }: {
   tree: OrgTreeData;
   opcodes: readonly string[];
@@ -374,6 +454,7 @@ export function OrgTreeView({
   onDialog: (dialog: Dialog) => void;
   onCreate: (parent: OrgUnit, input: { name: string; level: OrgUnitLevel }) => Promise<OrgWriteResult>;
   onRename: (unit: OrgUnit, name: string) => Promise<OrgWriteResult>;
+  onDeactivate: (unit: OrgUnit) => Promise<OrgWriteResult>;
 }) {
   const root = buildTree(tree, ui.showDeactivated);
   if (!root) return <ErrorCard what="机构树" onRetry={() => window.location.reload()} />;
@@ -421,6 +502,7 @@ export function OrgTreeView({
           opcodes={opcodes}
           onCreate={() => onDialog({ kind: 'create', parent: selected })}
           onRename={() => onDialog({ kind: 'rename', unit: selected })}
+          onDeactivate={() => onDialog({ kind: 'deactivate', unit: selected })}
         />
       </div>
       {dialog?.kind === 'create' ? (
@@ -429,11 +511,14 @@ export function OrgTreeView({
       {dialog?.kind === 'rename' ? (
         <RenameDialog unit={dialog.unit} onCancel={() => onDialog(null)} onSubmit={(name) => onRename(dialog.unit, name)} />
       ) : null}
+      {dialog?.kind === 'deactivate' ? (
+        <DeactivateDialog tree={tree} unit={dialog.unit} onCancel={() => onDialog(null)} onSubmit={() => onDeactivate(dialog.unit)} />
+      ) : null}
     </>
   );
 }
 
-/** 机构（P4）：系统管理看树、新建下级、改名；内勤只读看树；没有树读码的人员看到无权限卡片。 */
+/** 机构（P4）：系统管理看树、新建下级、改名、停用；内勤只读看树；没有树读码的人员看到无权限卡片。 */
 export default function OrgTreePage() {
   const { tree } = useLoaderData() as { tree: Promise<OrgTreeData | null> };
   const opcodes = useAppSelector((root) => root.login.operator?.opcodes ?? []);
@@ -472,6 +557,7 @@ export default function OrgTreePage() {
               onDialog={setDialog}
               onCreate={async (parent, input) => done(await registerOrgUnit(dispatch, { parentId: parent.id, ...input }))}
               onRename={async (unit, name) => done(await renameOrgUnit(dispatch, unit.id, name))}
+              onDeactivate={async (unit) => done(await deactivateOrgUnit(dispatch, unit.id))}
             />
           ) : null)}
         </Await>

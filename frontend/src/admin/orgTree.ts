@@ -1,5 +1,5 @@
 // 机构树（P4，#123）的数据与纯函数。树查询放在 /api/org-units，业务侧选承办机构复用同一接口，只取未停用节点。
-// 新建下级与改名放在 /api/admin/org-units。是否有权由服务端决定，前端按会话清单只决定显示什么。
+// 新建下级、改名、停用放在 /api/admin/org-units。是否有权由服务端决定，前端按会话清单只决定显示什么。
 
 import { data } from 'react-router';
 
@@ -132,7 +132,15 @@ export type OrgWriteResult =
 
 const FAILED = '操作没有完成，网络或服务暂时不可用，请稍后重试。';
 
-async function write(dispatch: ApiDispatch, url: string, body: unknown, idOf: (json: Record<string, unknown>) => string): Promise<OrgWriteResult> {
+const REGISTER_CONFLICT = '上级机构已停用，不能在它下面新建机构。';
+
+async function write(
+  dispatch: ApiDispatch,
+  url: string,
+  body: unknown,
+  idOf: (json: Record<string, unknown>) => string,
+  conflict: (json: Record<string, unknown>) => string = () => REGISTER_CONFLICT,
+): Promise<OrgWriteResult> {
   let response: Response;
   try {
     response = await apiFetch(dispatch, url, {
@@ -149,7 +157,7 @@ async function write(dispatch: ApiDispatch, url: string, body: unknown, idOf: (j
   if (response.status === 400 && Array.isArray(json.rules)) {
     return { ok: false, rules: json.rules.filter((rule): rule is OrgRuleCode => rule in RULE_TEXT), message: null };
   }
-  if (response.status === 409) return { ok: false, rules: [], message: '上级机构已停用，不能在它下面新建机构。' };
+  if (response.status === 409) return { ok: false, rules: [], message: conflict(json) };
   if (response.status === 403) return { ok: false, rules: [], message: '你没有权限执行这个操作，或这个机构不在你的范围内。' };
   return { ok: false, rules: [], message: FAILED };
 }
@@ -163,6 +171,32 @@ export function registerOrgUnit(
 
 export function renameOrgUnit(dispatch: ApiDispatch, id: string, name: string): Promise<OrgWriteResult> {
   return write(dispatch, `/api/admin/org-units/${encodeURIComponent(id)}/rename`, { name }, () => id);
+}
+
+/** 停用前在前端能核对的条件（按树数据）：在职人员、未停用的下级。服务端还会核对生效任职与未办结事项。 */
+export type DeactivationBlocker =
+  | { kind: 'personnel'; count: number }
+  | { kind: 'children'; names: string[] };
+
+export function deactivationBlockers(tree: OrgTreeData, unit: OrgUnit): DeactivationBlocker[] {
+  const blockers: DeactivationBlocker[] = [];
+  if (unit.activePersonnel > 0) blockers.push({ kind: 'personnel', count: unit.activePersonnel });
+  const active = childrenOf(tree, unit.id).filter((child) => !child.deactivatedAt);
+  if (active.length > 0) blockers.push({ kind: 'children', names: active.map((child) => child.name) });
+  return blockers;
+}
+
+const DEACTIVATE_CONFLICT = '这个机构暂时不能停用，请刷新后查看原因。';
+
+/** 停用。409 显示服务端给的可读原因（根机构、下级、生效任职、未办结的线索或案件）。 */
+export function deactivateOrgUnit(dispatch: ApiDispatch, id: string): Promise<OrgWriteResult> {
+  return write(
+    dispatch,
+    `/api/admin/org-units/${encodeURIComponent(id)}/deactivate`,
+    {},
+    () => id,
+    (json) => (typeof json.message === 'string' && json.message ? json.message : DEACTIVATE_CONFLICT),
+  );
 }
 
 /** 取树。403：重新拉会话（apiFetch）后显示无权限卡片；401 交给会话已结束页处理。 */
