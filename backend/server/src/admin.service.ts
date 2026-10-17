@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { AUDIT_TRAIL_PORT, type AuditTrailPort } from '@natural-enforcement/audit';
+import { rejected, type Rejected } from '@natural-enforcement/audit';
 import {
   AccessControlService,
   CredentialService,
@@ -12,14 +12,17 @@ import {
 
 import { AuthService } from './auth.service.ts';
 import { CLOCK, type Clock } from './clock.ts';
-import { LOGIN_DIRECTORY, type LoginDirectory } from './login-directory.ts';
-import { REMEMBER_ME_STORE, type RememberMeStore } from './remember-me-store.ts';
+import { LOGIN_DIRECTORY, type LoginAccount, type LoginDirectory } from './login-directory.ts';
+import { UNIT_OF_WORK, type TxScope, type UnitOfWork } from './unit-of-work.ts';
 
 const LOCKED_READ = 'personnel.locked.read';
 const LOCKED_RELEASE = 'personnel.locked.release';
 const PASSWORD_RESET = 'personnel.password.reset';
 
 export type AdminDenial = { status: 403; body: { reason: DenyReason } };
+type NotFound = { status: 404; body: { result: 'not-found' } };
+/** 动作的前置判断：通过则交出目标人员，否则是要直接返回的结果。 */
+type Guarded = { target: LoginAccount } | NotFound | AdminDenial | Rejected<AdminDenial>;
 
 export type ResetOutcome =
   | { status: 200; body: { result: 'reset' } }
@@ -48,12 +51,16 @@ export type LockedListOutcome = {
     | { reason: DenyReason };
 };
 
+/**
+ * A10 管理动作：被锁列表、解锁、重设初始口令（含结束会话与记住我）。
+ * 每个写动作在一个交互式事务里完成，业务行与留痕同成同败（#119）。
+ * 被拒绝的动作经 rejected(...) 回滚，拒绝留痕在回滚后另起事务写入。
+ */
 @Injectable()
 export class AdminService {
   constructor(
     @Inject(LOGIN_DIRECTORY) private readonly directory: LoginDirectory,
-    @Inject(AUDIT_TRAIL_PORT) private readonly audit: AuditTrailPort,
-    @Inject(REMEMBER_ME_STORE) private readonly remember: RememberMeStore,
+    @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     private readonly access: AccessControlService,
     private readonly credentials: CredentialService,
     private readonly auth: AuthService,
@@ -84,23 +91,23 @@ export class AdminService {
   }
 
   async unlock(actor: ActorRef, personnelId: string, sourceIp: string | null): Promise<UnlockOutcome> {
-    const target = await this.directory.findById(personnelId);
-    if (!target) return { status: 404, body: { result: 'not-found' } };
-    const allowed = await this.allow(actor, LOCKED_RELEASE, target);
-    if (allowed) return allowed;
-    if (target.id === actor.personnelId) return this.denySelf(actor, LOCKED_RELEASE, target.id);
-    const admin = await this.directory.findById(actor.personnelId);
-    await this.directory.clearFailure(target.id);
-    await this.audit.append({
-      action: 'account.unlocked',
-      actorId: actor.personnelId,
-      actorCode: admin?.code ?? null,
-      subjectPersonnelId: target.id,
-      subjectCode: target.code,
-      orgUnitId: target.orgUnitId,
-      sourceIp,
+    return this.uow.run<UnlockOutcome>(async (tx) => {
+      const guarded = await this.guard(tx, actor, LOCKED_RELEASE, personnelId);
+      if (!('target' in guarded)) return guarded;
+      const { target } = guarded;
+      const admin = await tx.directory.findById(actor.personnelId);
+      await tx.directory.clearFailure(target.id);
+      await tx.audit.append({
+        action: 'account.unlocked',
+        actorId: actor.personnelId,
+        actorCode: admin?.code ?? null,
+        subjectPersonnelId: target.id,
+        subjectCode: target.code,
+        orgUnitId: target.orgUnitId,
+        sourceIp,
+      });
+      return { status: 200, body: { result: 'unlocked' } };
     });
-    return { status: 200, body: { result: 'unlocked' } };
   }
 
   async resetPassword(
@@ -109,40 +116,82 @@ export class AdminService {
     password: string,
     sourceIp: string | null,
   ): Promise<ResetOutcome> {
-    const target = await this.directory.findById(personnelId);
-    if (!target) return { status: 404, body: { result: 'not-found' } };
-    const allowed = await this.allow(actor, PASSWORD_RESET, target);
-    if (allowed) return allowed;
-    if (target.id === actor.personnelId) return this.denySelf(actor, PASSWORD_RESET, target.id);
-    const rules = rejectedPasswordRules({ password, personnelCode: target.code });
-    if (rules.length > 0) return { status: 400, body: { result: 'non-compliant', rules } };
-    const now = this.clock.now();
-    const wasLocked = target.lockedUntil != null && now.getTime() < target.lockedUntil.getTime();
-    const admin = await this.directory.findById(actor.personnelId);
-    await this.directory.applyInitialPassword(target.id, await this.credentials.hashPassword(password));
-    const parties = {
-      actorId: actor.personnelId,
-      actorCode: admin?.code ?? null,
-      subjectPersonnelId: target.id,
-      subjectCode: target.code,
-      orgUnitId: target.orgUnitId,
-      sourceIp,
-    };
-    await this.audit.append({ action: 'account.password-reset', ...parties });
-    if (wasLocked) await this.audit.append({ action: 'account.unlocked', ...parties });
-    await this.auth.endPersonnelSessions({
-      personnelId: target.id,
-      actorId: actor.personnelId,
-      actorCode: admin?.code ?? '',
-      sourceIp,
+    // 第一步：判断能否重设。口令不合规时直接返回，不散列。
+    const checked = await this.uow.run<ResetOutcome | { ready: true }>(async (tx) => {
+      const guarded = await this.guard(tx, actor, PASSWORD_RESET, personnelId);
+      if (!('target' in guarded)) return guarded;
+      const rules = rejectedPasswordRules({ password, personnelCode: guarded.target.code });
+      if (rules.length > 0) return { status: 400, body: { result: 'non-compliant', rules } };
+      return { ready: true };
     });
-    await this.remember.endActiveForPersonnel(target.id, now, 'admin-ended');
-    return { status: 200, body: { result: 'reset' } };
+    if (!('ready' in checked)) return checked;
+    // 口令散列在事务之外计算（#119）。
+    const passwordHash = await this.credentials.hashPassword(password);
+    // 第二步：重设、解除锁定、结束会话和记住我，与各自的留痕同一事务。
+    return this.uow.run<ResetOutcome>(async (tx) => {
+      const guarded = await this.guard(tx, actor, PASSWORD_RESET, personnelId);
+      if (!('target' in guarded)) return guarded;
+      const { target } = guarded;
+      const now = this.clock.now();
+      const wasLocked = target.lockedUntil != null && now.getTime() < target.lockedUntil.getTime();
+      const admin = await tx.directory.findById(actor.personnelId);
+      await tx.directory.applyInitialPassword(target.id, passwordHash);
+      const parties = {
+        actorId: actor.personnelId,
+        actorCode: admin?.code ?? null,
+        subjectPersonnelId: target.id,
+        subjectCode: target.code,
+        orgUnitId: target.orgUnitId,
+        sourceIp,
+      };
+      await tx.audit.append({ action: 'account.password-reset', ...parties });
+      if (wasLocked) await tx.audit.append({ action: 'account.unlocked', ...parties });
+      await this.auth.endPersonnelSessions({
+        personnelId: target.id,
+        actorId: actor.personnelId,
+        actorCode: admin?.code ?? '',
+        sourceIp,
+      }, tx);
+      await tx.remember.endActiveForPersonnel(target.id, now, 'admin-ended');
+      return { status: 200, body: { result: 'reset' } };
+    });
   }
 
-  private async denySelf(actor: ActorRef, opcode: string, targetId: string): Promise<AdminDenial> {
-    const admin = await this.directory.findById(actor.personnelId);
-    await this.audit.append({
+  /**
+   * 目标存在 → 按操作码和数据范围判断 → 目标不是本人。
+   * 拒绝时交出 rejected(...)，authz.denied 在业务事务回滚后写入。
+   */
+  private async guard(
+    tx: TxScope,
+    actor: ActorRef,
+    opcode: string,
+    personnelId: string,
+  ): Promise<Guarded> {
+    const target = await tx.directory.findById(personnelId);
+    if (!target) return { status: 404, body: { result: 'not-found' } };
+    const targetOrg = target.orgUnitId ?? await tx.directory.rootOrgId();
+    if (!targetOrg) return { status: 403, body: { reason: 'scope-denied' } };
+    // 授权读取经 tx.store，复用本事务连接（#119）。
+    const decision = await this.access.check(actor, opcode, targetOrg, {
+      resourceType: 'personnel',
+      resourceId: target.id,
+    }, tx.store);
+    if (!decision.allowed) {
+      return rejected<AdminDenial>({ status: 403, body: { reason: decision.reason } }, decision.denial);
+    }
+    if (target.id === actor.personnelId) return this.denySelf(tx, actor, opcode, target.id, targetOrg);
+    return { target };
+  }
+
+  private async denySelf(
+    tx: TxScope,
+    actor: ActorRef,
+    opcode: string,
+    targetId: string,
+    targetOrg: string,
+  ): Promise<Rejected<AdminDenial>> {
+    const admin = await tx.directory.findById(actor.personnelId);
+    return rejected<AdminDenial>({ status: 403, body: { reason: 'permission-denied' } }, {
       action: 'authz.denied',
       outcome: 'failed',
       actorId: actor.personnelId,
@@ -156,27 +205,9 @@ export class AdminService {
       resourceType: 'personnel',
       resourceId: targetId,
       previousValue: null,
+      // 对象就是本人，目标机构取对象机构（#105；ADR 0011 修正）。
+      targetOrgUnitId: targetOrg,
+      targetOrgUnitBasis: 'object',
     });
-    return { status: 403, body: { reason: 'permission-denied' } };
-  }
-
-  /** 先按操作码和数据范围判断。通过且目标是本人时，调用方再拒绝。 */
-  private async allow(
-    actor: ActorRef,
-    opcode: string,
-    target: { id: string; orgUnitId: string | null },
-  ): Promise<AdminDenial | null> {
-    const targetOrg = target.orgUnitId ?? await this.directory.rootOrgId();
-    if (!targetOrg) return { status: 403, body: { reason: 'scope-denied' } };
-    try {
-      await this.access.authorize(actor, opcode, targetOrg, {
-        resourceType: 'personnel',
-        resourceId: target.id,
-      });
-      return null;
-    } catch (error) {
-      if (!isAccessDenied(error)) throw error;
-      return { status: 403, body: { reason: error.reason } };
-    }
   }
 }

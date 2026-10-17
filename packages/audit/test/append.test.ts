@@ -25,6 +25,8 @@ const entry: AuthzDeniedEntry = {
   resourceType: 'case',
   resourceId: 'case-1',
   previousValue: null,
+  targetOrgUnitId: '01ARZ3NDEKTSV4RRFFQ69G5FAC',
+  targetOrgUnitBasis: 'object',
 };
 
 describe('授权拒绝追加', () => {
@@ -52,8 +54,53 @@ describe('授权拒绝追加', () => {
       subjectPersonnelId: null,
       sourceIp: null,
       previousValue: null,
+      targetOrgUnitId: '01ARZ3NDEKTSV4RRFFQ69G5FAC',
+      targetOrgUnitBasis: 'object',
     });
     expect(written[0]?.id).toMatch(ULID);
+  });
+
+  it('拒绝行没给目标机构时按操作者机构兜底，并标 actor-fallback（ADR 0011 修正）', async () => {
+    const { db, written } = recorder();
+    await new PrismaAuditTrail(db).append({
+      action: 'authz.denied',
+      reason: 'not-authenticated',
+      actorId: null,
+      actorCode: null,
+      subjectPersonnelId: null,
+      subjectCode: null,
+      orgUnitId: 'org-actor',
+      sourceIp: null,
+    });
+    expect(written[0]).toMatchObject({ targetOrgUnitId: 'org-actor', targetOrgUnitBasis: 'actor-fallback' });
+  });
+
+  it('其他动作两列都空；表外来源或非拒绝动作带目标机构都拒绝写', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    await trail.append({
+      action: 'login.succeeded',
+      actorId: 'p',
+      actorCode: 'P',
+      subjectPersonnelId: 'p',
+      subjectCode: 'P',
+      orgUnitId: 'org-actor',
+      sourceIp: null,
+    });
+    expect(written[0]).toMatchObject({ targetOrgUnitId: null, targetOrgUnitBasis: null });
+    await expect(trail.append({ ...entry, targetOrgUnitBasis: 'guess' } as unknown as AuthzDeniedEntry))
+      .rejects.toBeInstanceOf(AuditVocabularyError);
+    await expect(trail.append({
+      action: 'login.succeeded',
+      actorId: 'p',
+      actorCode: 'P',
+      subjectPersonnelId: 'p',
+      subjectCode: 'P',
+      orgUnitId: 'org-actor',
+      sourceIp: null,
+      targetOrgUnitId: 'x',
+    } as unknown as AuthzDeniedEntry)).rejects.toBeInstanceOf(AuditVocabularyError);
+    expect(written).toHaveLength(1);
   });
 });
 
@@ -125,5 +172,45 @@ describe('封闭取值表', () => {
       ['login.capacity-reached', null],
     ]);
     expect(AUDIT_ACTIONS).toContain('login.capacity-reached');
+  });
+});
+
+describe('机构树动作（#123）', () => {
+  it('新建下级、改名记成功，不带原因；新建下级被拒记失败，原因取 org-unit-deactivated', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    await trail.append({ ...parties, action: 'org.unit.registered', opcode: 'org.unit.register' });
+    await trail.append({ ...parties, action: 'org.unit.renamed', previousValue: '旧名' });
+    await trail.append({
+      ...parties,
+      action: 'org.unit.registered',
+      outcome: 'failed',
+      reason: 'org-unit-deactivated',
+    });
+    expect(written.map((row) => [row.action, row.outcome, row.reason, row.previousValue])).toEqual([
+      ['org.unit.registered', 'succeeded', null, null],
+      ['org.unit.renamed', 'succeeded', null, '旧名'],
+      ['org.unit.registered', 'failed', 'org-unit-deactivated', null],
+    ]);
+  });
+
+  it('失败原因表外、缺原因、无失败取值的动作记失败、只记失败的动作记成功，一律拒绝且不写库', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    const cases: Array<Record<string, unknown>> = [
+      { action: 'org.unit.registered', outcome: 'failed', reason: 'org-has-open-items' },
+      { action: 'org.unit.registered', outcome: 'failed' },
+      { action: 'org.unit.registered', reason: 'org-unit-deactivated' },
+      { action: 'org.unit.renamed', outcome: 'failed', reason: 'org-unit-deactivated' },
+      { action: 'login.failed', outcome: 'succeeded', reason: 'bad-credential' },
+      { action: 'org.unit.renamed', outcome: 'maybe' },
+    ];
+    for (const item of cases) {
+      await expect(
+        trail.append({ ...parties, ...item } as unknown as Parameters<typeof trail.append>[0]),
+        JSON.stringify(item),
+      ).rejects.toBeInstanceOf(AuditVocabularyError);
+    }
+    expect(written).toHaveLength(0);
   });
 });

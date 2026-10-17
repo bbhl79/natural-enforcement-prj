@@ -9,7 +9,9 @@ export type {
   DenyReason,
   IdentityContext,
 } from './domain/access.ts';
+export type { AuthorizationDecision } from './services/access-control.service.ts';
 export type { ActorRef } from './domain/actor.ts';
+export { AlreadyExistsError, isAlreadyExists } from './domain/already-exists.ts';
 export { newUlid } from './domain/ulid.ts';
 export {
   PASSWORD_RULES,
@@ -24,20 +26,39 @@ export {
   type AssignmentTransfer,
   type ExportAuditRow,
   type IdentityStore,
+  type IdentityTransaction,
+  type IdentityUniqueConflict,
   type OpcodeGrant,
   type OrgUnitNameVersionRow,
   type OrgUnitRow,
   type OrgUnitToCreate,
   type PersonnelAssignmentRow,
   type PersonnelNameVersionRow,
+  type PersonnelRoleToCreate,
   type PersonnelRow,
   type PersonnelToCreate,
+  type UniqueWriteResult,
 } from './persistence/identity-store.ts';
 export { AccessControlService } from './services/access-control.service.ts';
 export { CredentialService } from './services/credential.service.ts';
 export type {
+  OrgTree,
+  OrgTreeUnit,
   RegisterOrgUnitInput,
+  RegisterOrgUnitResult,
+  RenameOrgUnitResult,
 } from './services/org-unit.service.ts';
+export {
+  ORG_TREE_READ_OPCODE,
+  ORG_UNIT_LEVELS,
+  ORG_UNIT_NAME_MAX_LENGTH,
+  ORG_UNIT_REGISTER_OPCODE,
+  ORG_UNIT_RENAME_OPCODE,
+  ROOT_ORG_UNIT_LEVEL,
+  childLevelOf,
+  isOrgUnitLevel,
+} from './domain/org-unit.ts';
+export type { OrgUnitLevel, OrgUnitRuleCode } from './domain/org-unit.ts';
 export { OrgUnitService } from './services/org-unit.service.ts';
 export type {
   ExportResult,

@@ -5,11 +5,13 @@ import {
   HttpStatus,
   Injectable,
 } from '@nestjs/common';
+import { GUARDS_METADATA } from '@nestjs/common/constants.js';
 import { Reflector } from '@nestjs/core';
 import type { ActorRef } from '@natural-enforcement/identity';
 
 import { AuthService, type AuthResolution } from './auth.service.ts';
 import { IS_PUBLIC } from './public.decorator.ts';
+import { isCrossSiteRequest, SameOriginReadGuard } from './same-origin-read.guard.ts';
 import { clearRememberCookie, clearSessionCookie, sourceAddress } from './session-cookie.ts';
 
 export interface AuthenticatedRequest {
@@ -44,6 +46,12 @@ export class SessionGuard implements CanActivate {
       context.getClass(),
     ]);
     const req = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    // 声明了 SameOriginReadGuard 的读接口：跨站请求在识别身份之前就拒绝。
+    // 全局守卫先于方法守卫执行，等到方法守卫再拒，openRequest 已经写了拒绝留痕、推进了活动时间或换发了记住我凭据。
+    const guards = this.reflector.getAllAndMerge<unknown[]>(GUARDS_METADATA, [context.getHandler(), context.getClass()]);
+    if (guards.includes(SameOriginReadGuard) && isCrossSiteRequest(req.headers as Record<string, string | string[] | undefined>)) {
+      throw new HttpException({ result: 'cross-site' }, HttpStatus.FORBIDDEN);
+    }
     const method = (req.method ?? '').toUpperCase();
     const path = (req.path ?? req.url ?? '').split('?')[0];
     const skipEntry = method === 'POST' && (path === '/api/auth/login' || path === '/api/auth/logout');
