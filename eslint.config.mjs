@@ -2,6 +2,6 @@
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['**/*.md', '**/dist/**'] },
+  { ignores: ['**/*.md', '**/dist/**', 'frontend/prototype/**'] },
   tseslint.configs.recommended,
 );
