@@ -110,14 +110,16 @@ export const CERT_EXPIRING_DAYS = 30;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+/** 北京时间日期格式器，模块级复用（名单逐人调用 certStatusOf）。 */
+const SHANGHAI_DAY = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Shanghai',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
 function shanghaiDay(now: Date): number {
-  const text = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(now);
-  return Date.parse(`${text}T00:00:00.000Z`);
+  return Date.parse(`${SHANGHAI_DAY.format(now)}T00:00:00.000Z`);
 }
 
 /** expiresOn 是日历日（UTC 午夜）。 */
