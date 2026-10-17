@@ -35,6 +35,7 @@ const ADMIN_OPCODES = [
   'org.tree.read',
   'org.unit.register',
   'org.unit.rename',
+  'org.unit.deactivate',
   'personnel.locked.read',
   'personnel.locked.release',
   'personnel.password.reset',
@@ -81,8 +82,8 @@ describe('操作码名册', () => {
     });
   });
 
-  it('机构树三码（#123）不要求执法资格，不必是主办人，不改变主状态', () => {
-    for (const opcode of ['org.tree.read', 'org.unit.register', 'org.unit.rename']) {
+  it('机构树四码（#123、#124）不要求执法资格，不必是主办人，不改变主状态', () => {
+    for (const opcode of ['org.tree.read', 'org.unit.register', 'org.unit.rename', 'org.unit.deactivate']) {
       expect(opcodeRequirements(opcode), opcode).toEqual({
         qualification: 'none',
         mustBeCaseHandler: false,

@@ -167,15 +167,16 @@ describe('#122 会话查询返回本人允许的操作码清单', () => {
     expect(await sessionOpcodes(await personByCode('P-SUP-A'))).toContain('personnel.locked.read');
   });
 
-  it('机构树读码（#123）：内勤和系统管理有，其余种子角色没有；维护码只有系统管理有', async () => {
+  it('机构树读码（#123）：内勤和系统管理有，其余种子角色没有；维护码（含 #124 停用码）只有系统管理有', async () => {
     const intake = await sessionOpcodes(await personByCode('P-INTAKE-HQ'));
     expect(intake).toContain('org.tree.read');
     expect(intake).not.toContain('org.unit.register');
     expect(intake).not.toContain('org.unit.rename');
+    expect(intake).not.toContain('org.unit.deactivate');
     for (const code of ['P-SUP-A', 'P-ADMIN-HQ']) {
       const listed = await sessionOpcodes(await personByCode(code));
-      expect({ code, listed: ['org.tree.read', 'org.unit.register', 'org.unit.rename'].filter((item) => listed.includes(item)) })
-        .toEqual({ code, listed: ['org.tree.read', 'org.unit.register', 'org.unit.rename'] });
+      const orgCodes = ['org.tree.read', 'org.unit.register', 'org.unit.rename', 'org.unit.deactivate'];
+      expect({ code, listed: orgCodes.filter((item) => listed.includes(item)) }).toEqual({ code, listed: orgCodes });
     }
     for (const code of ['P-CLERK-A', 'P-LEGAL-ST', 'P-REVIEW-A', 'P-APPROVE-HQ', 'P-SUPER-B']) {
       expect({ code, read: (await sessionOpcodes(await personByCode(code))).includes('org.tree.read') })

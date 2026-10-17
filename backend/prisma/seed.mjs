@@ -42,7 +42,7 @@ if (existing) {
 
 // ---- 参照种子（#92；允许行 = GitHub issue #71 决议）----
 // 系统管理不持有办案表任何一行。authz.binding 两条只给系统管理。
-// 机构树（#105，#123）：org.tree.read 给系统管理和内勤（内勤选承办机构要用），新建下级、改名只给系统管理。
+// 机构树（#105，#123、#124）：org.tree.read 给系统管理和内勤（内勤选承办机构要用），新建下级、改名、停用只给系统管理。
 const ROLE_ALLOWANCES = {
   内勤: [
     "org.tree.read",
@@ -114,6 +114,7 @@ const ROLE_ALLOWANCES = {
     "org.tree.read",
     "org.unit.register",
     "org.unit.rename",
+    "org.unit.deactivate",
     "personnel.locked.read",
     "personnel.locked.release",
     "personnel.password.reset",
