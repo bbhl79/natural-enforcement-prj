@@ -52,18 +52,41 @@ services:
     image: nginx:1.29.8@sha256:1881968aff6f7cdcc4b888c00a11f4ce241ad7ec957e0cb4a9e19e93a3ff87ea
     pull_policy: never
     ports:
-      - "${NGINX_PORT:-8080}:80"
+      - "${NGINX_PORT:-8080}:443"
+    volumes:
+      - ${NE_DEV_CERT_DIR}:/etc/nginx/certs:ro
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      frontend:
+        condition: service_started
+      server:
+        condition: service_healthy
 
-  # 前端工作台（#56 切片09）：本地镜像（dev build 构建，Dockerfile 入库），
-  # nginx 服务构建产物；面板数据 = health 快照命名卷（dev health/dev up 写入，
-  # 与 dev health 同源），前端不直连库。宿主端口默认 8899（现有 nginx 服务占 8080）。
+  # 前端工作台：本地镜像（dev build 构建）。浏览器不直连本容器。
+  # 宿主 nginx 把 / 转到这里。8899 不再给浏览器使用。
+  # health 快照命名卷仍由 dev health/dev up 写入。
   frontend:
     image: natural-enforcement/frontend:dev
     pull_policy: never
-    ports:
-      - "${FRONTEND_PORT:-8899}:80"
     volumes:
       - frontend-health:/usr/share/nginx/html/health:ro
+
+  # HTTP 进程（ADR 0004）。本地镜像 natural-enforcement/server:dev，dev build 构建。
+  # 容器内监听 3000。该端口不映射到宿主机。宿主 nginx 把 /api/ 转到这里。
+  server:
+    image: natural-enforcement/server:dev
+    pull_policy: never
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 15s
 
 volumes:
   # 数据卷只由 dev db reset 允许删除（全系统唯一毁数入口）；dev down 永不触碰

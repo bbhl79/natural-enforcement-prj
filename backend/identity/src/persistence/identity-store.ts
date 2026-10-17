@@ -23,8 +23,9 @@ export interface PersonnelRow {
   code: string;
   name: string;
   orgUnitId: string;
-  role: string;
   passwordHash: string | null;
+  enforcementCertNo: string | null;
+  enforcementCertExpiresOn: Date | null;
   deactivatedAt: Date | null;
 }
 
@@ -88,7 +89,6 @@ export interface PersonnelToCreate {
   code: string;
   name: string;
   orgUnitId: string;
-  role: string;
   passwordHash: string | null;
 }
 
@@ -100,6 +100,12 @@ export interface IdentityStore {
   findCurrentAssignment(personnelId: string): Promise<PersonnelAssignmentRow | null>;
   /** 目标机构的祖先链（含自身），自根向叶排列；用于数据范围判定 */
   findOrgUnitPathToRoot(orgUnitId: string): Promise<string[]>;
+  /** 某机构及其全部下级机构的 id，含自身 */
+  listOrgUnitSubtreeIds(orgUnitId: string): Promise<string[]>;
+  /** 人员当前未失效的角色名 */
+  listActiveRoleNames(personnelId: string): Promise<string[]>;
+  /** 人员当前仍能放行该操作码的角色名。只含未失效的人员—角色、角色、允许行和权限。 */
+  listGrantingRoleNames(personnelId: string, opcode: string): Promise<string[]>;
   /** 机构全部历史名称版本，按版本号升序 */
   listOrgUnitNameVersions(orgUnitId: string): Promise<OrgUnitNameVersionRow[]>;
   listPersonnelNameVersions(personnelId: string): Promise<PersonnelNameVersionRow[]>;
@@ -119,6 +125,14 @@ export interface IdentityStore {
   /** 调岗后同步人员当前归属机构（任职记录为权威史，此处为读模型冗余） */
   updatePersonnelOrgUnit(personnelId: string, orgUnitId: string): Promise<void>;
   deactivatePersonnel(personnelId: string, deactivatedAt: Date): Promise<void>;
+  /**
+   * 只更换口令散列，不改上次改密时间。
+   * 仅当库中散列仍等于 expectedHash 时写入；返回是否命中。
+   * 并发重设或改密已换掉散列时不命中，旧口令不会因重散列复活。
+   */
+  replacePasswordHash(personnelId: string, expectedHash: string, passwordHash: string): Promise<boolean>;
+  /** 写入新口令散列，并记下这次改密时间。 */
+  changePassword(personnelId: string, passwordHash: string, passwordChangedAt: Date): Promise<void>;
   insertAssignment(row: PersonnelAssignmentRow): Promise<void>;
   /** 结束当前任职（调岗旧权限失效的数据层载体） */
   closeAssignment(assignmentId: string, endedAt: Date): Promise<void>;

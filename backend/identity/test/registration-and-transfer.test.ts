@@ -3,7 +3,9 @@
 // 不能拆成关止、插入、改归属三次独立提交。
 import { describe, expect, it, vi } from 'vitest';
 
-import { AccessDeniedError } from '../src/domain/access.ts';
+import type { AuditTrailPort } from '@natural-enforcement/audit';
+
+import { IDENTITY_MAINTENANCE_OPCODE, AccessDeniedError } from '../src/domain/access.ts';
 import type { ActorRef } from '../src/domain/actor.ts';
 import type {
   AssignmentTransfer,
@@ -16,38 +18,47 @@ import { CredentialService } from '../src/services/credential.service.ts';
 import { OrgUnitService } from '../src/services/org-unit.service.ts';
 import { PersonnelService } from '../src/services/personnel.service.ts';
 
-const supervisor: PersonnelRow = {
-  id: 'sup',
-  code: 'P-SUP',
-  name: '主管',
+const blankCert = { enforcementCertNo: null, enforcementCertExpiresOn: null };
+
+// 角色按 ADR 0009 的七个角色命名：系统管理持有维护允许行，内勤与经办没有。
+const sysAdmin: PersonnelRow = {
+  id: 'sys-admin',
+  code: 'P-SYS',
+  name: '系统管理',
   orgUnitId: 'dept-a',
-  role: 'supervisor',
   passwordHash: null,
   deactivatedAt: null,
+  ...blankCert,
 };
 
-const viewer: PersonnelRow = {
-  id: 'viewer',
-  code: 'P-VIEW',
-  name: '查看',
+const intake: PersonnelRow = {
+  id: 'intake',
+  code: 'P-INTAKE',
+  name: '内勤',
   orgUnitId: 'dept-a',
-  role: 'viewer',
   passwordHash: null,
   deactivatedAt: null,
+  ...blankCert,
 };
 
-const clerk: PersonnelRow = {
-  id: 'clerk',
-  code: 'P-CLERK',
+const handler: PersonnelRow = {
+  id: 'handler',
+  code: 'P-HANDLER',
   name: '经办',
   orgUnitId: 'dept-a',
-  role: 'clerk',
   passwordHash: null,
   deactivatedAt: null,
+  ...blankCert,
 };
 
+const audit: AuditTrailPort = { append: async () => undefined };
+
+function accessFor(backing: IdentityStore): AccessControlService {
+  return new AccessControlService(backing, audit);
+}
+
 function people(): Record<string, PersonnelRow> {
-  return { sup: supervisor, viewer, clerk };
+  return { 'sys-admin': sysAdmin, intake, handler };
 }
 
 function store(extra: Partial<IdentityStore> = {}): IdentityStore {
@@ -63,6 +74,14 @@ function store(extra: Partial<IdentityStore> = {}): IdentityStore {
         endedAt: null,
       }) satisfies PersonnelAssignmentRow,
     findOrgUnitPathToRoot: async (orgUnitId) => ['hq', orgUnitId],
+    listOrgUnitSubtreeIds: async (orgUnitId) => [orgUnitId],
+    listActiveRoleNames: async (personnelId) => ({
+      'sys-admin': ['系统管理'],
+      intake: ['内勤'],
+      handler: ['经办'],
+    })[personnelId] ?? [],
+    listGrantingRoleNames: async (personnelId, opcode) =>
+      personnelId === 'sys-admin' && opcode === IDENTITY_MAINTENANCE_OPCODE ? ['系统管理'] : [],
     insertOrgUnit: async () => undefined,
     insertOrgUnitNameVersion: async () => undefined,
     findOrgUnitById: async () => ({
@@ -81,39 +100,39 @@ const authed = (personnelId: string): ActorRef => ({ personnelId, authenticated:
 describe('根机构登记', () => {
   it('未认证被拒（not-authenticated），且不写库', async () => {
     const insertOrgUnit = vi.fn();
-    const orgUnits = new OrgUnitService(store({ insertOrgUnit }), new AccessControlService(store()));
+    const orgUnits = new OrgUnitService(store({ insertOrgUnit }), accessFor(store()));
     await expect(
       orgUnits.registerOrgUnit(
-        { personnelId: 'sup', authenticated: false },
+        { personnelId: 'sys-admin', authenticated: false },
         { code: 'ROOT', name: '根', parentId: null },
       ),
     ).rejects.toMatchObject({ reason: 'not-authenticated' });
     expect(insertOrgUnit).not.toHaveBeenCalled();
   });
 
-  it('viewer 被拒（permission-denied）', async () => {
-    const orgUnits = new OrgUnitService(store(), new AccessControlService(store()));
+  it('内勤没有维护允许行，被拒（permission-denied）', async () => {
+    const orgUnits = new OrgUnitService(store(), accessFor(store()));
     await expect(
-      orgUnits.registerOrgUnit(authed('viewer'), { code: 'ROOT', name: '根', parentId: null }),
+      orgUnits.registerOrgUnit(authed('intake'), { code: 'ROOT', name: '根', parentId: null }),
     ).rejects.toMatchObject({ reason: 'permission-denied' });
   });
 
-  it('有改权限的主管仍被拒（scope-denied）', async () => {
+  it('有维护允许行的系统管理登记根机构仍被拒（scope-denied）', async () => {
     const insertOrgUnit = vi.fn();
-    const orgUnits = new OrgUnitService(store({ insertOrgUnit }), new AccessControlService(store()));
+    const orgUnits = new OrgUnitService(store({ insertOrgUnit }), accessFor(store()));
     await expect(
-      orgUnits.registerOrgUnit(authed('sup'), { code: 'ROOT', name: '根', parentId: null }),
+      orgUnits.registerOrgUnit(authed('sys-admin'), { code: 'ROOT', name: '根', parentId: null }),
     ).rejects.toBeInstanceOf(AccessDeniedError);
     await expect(
-      orgUnits.registerOrgUnit(authed('sup'), { code: 'ROOT', name: '根', parentId: null }),
+      orgUnits.registerOrgUnit(authed('sys-admin'), { code: 'ROOT', name: '根', parentId: null }),
     ).rejects.toMatchObject({ reason: 'scope-denied' });
     expect(insertOrgUnit).not.toHaveBeenCalled();
   });
 
   it('上级机构在数据范围内时放行并写入', async () => {
     const insertOrgUnit = vi.fn();
-    const orgUnits = new OrgUnitService(store({ insertOrgUnit }), new AccessControlService(store()));
-    const created = await orgUnits.registerOrgUnit(authed('sup'), {
+    const orgUnits = new OrgUnitService(store({ insertOrgUnit }), accessFor(store()));
+    const created = await orgUnits.registerOrgUnit(authed('sys-admin'), {
       code: 'CHILD',
       name: '子机构',
       parentId: 'dept-a',
@@ -139,16 +158,16 @@ describe('调岗写入', () => {
     });
     const personnel = new PersonnelService(
       backing,
-      new AccessControlService(backing),
+      accessFor(backing),
       new CredentialService(backing),
     );
 
-    await personnel.transferPersonnel(authed('sup'), 'clerk', 'dept-b');
+    await personnel.transferPersonnel(authed('sys-admin'), 'handler', 'dept-b');
 
     expect(transferAssignment).toHaveBeenCalledOnce();
     const transfer = transferAssignment.mock.calls[0][0];
-    expect(transfer.closedAssignmentId).toBe('asg-clerk');
-    expect(transfer.personnelId).toBe('clerk');
+    expect(transfer.closedAssignmentId).toBe('asg-handler');
+    expect(transfer.personnelId).toBe('handler');
     expect(transfer.toOrgUnitId).toBe('dept-b');
     expect(transfer.next.orgUnitId).toBe('dept-b');
     expect(transfer.next.endedAt).toBeNull();

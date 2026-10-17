@@ -27,7 +27,7 @@
 # 规则清单（矩阵每行一条；「依赖漏入库」由 dev lint 既有检查承载，此处不重复）：
 #   shield-single-entry     shield 公共出口仅 packages/shield/src/index.ts
 #   shield-no-business-dep  shield 不依赖任何业务模块
-#   identity-deps           identity 不依赖任何业务模块
+#   identity-deps           identity 不依赖任何业务模块；可依赖 shield 与留痕设施包 audit（ADR 0012）
 #   geo-dict-deps           geo-dict 不依赖任何业务模块
 #   case-deps               case 只许 → shield、identity、geo-dict
 #   approval-deps           approval 只许 → shield、identity、case
@@ -40,7 +40,8 @@
 #   weak-reference-entry    跨域弱引用只许经 shield 的 requireCrossDomainReference 入口
 #   g1-model-allowlist      schema.prisma 的 model 名白名单（#47 G1「地基不含业务实体」的
 #                           机检形态，承接 #52 AC4「G1 由结构测试兜底」；新增表即失败。
-#                           #69 定案列入 AuthSession、AuthRememberMe）
+#                           #69 定案列入 AuthSession、AuthRememberMe。
+#                           #92 定案列入 Role、Permission、RolePermission、PersonnelRole、AuditTrail）
 #   queue-facility-entry    队列设施唯一入口（#55）：bullmq/ioredis 只许出现在
 #                           packages/queue（设施包）；backend/frontend/e2e/integration/shield
 #                           出现裸队列依赖 = 业务 worker 绕过队列接口（G5 不可扩大条件的
@@ -49,6 +50,8 @@
 #                           @smithy/*、minio、rustfs）只许出现在 packages/storage
 #                           （设施包）；其余位置出现 = 绕过 StoragePort 追加式抽象
 #                           直连存储（append-only 最保守语义的机器兜底，强于注释级约定）
+#   audit-facility-entry    留痕设施唯一入口（ADR 0012）：auditTrail 这个 Prisma 委托
+#                           只许出现在 packages/audit。包外引用即失败
 #   spatial-no-orm-mutation 空间纪律机器兜底（评审必修扩口径）：backend/、packages/、
 #                           integration/、e2e/ 全源码
 #                           （SCAN_CODE 形态：ts/tsx/mts/cts + mjs/cjs/sh）不得对
@@ -66,6 +69,11 @@ SHIELD_DIR="$ROOT/packages/shield"
 QUEUE_DIR="$ROOT/packages/queue"
 # 存储设施包（#53）：S3/RustFS SDK 的唯一合法出现位置
 STORAGE_DIR="$ROOT/packages/storage"
+# 留痕设施包（ADR 0012）：auditTrail 委托的唯一合法出现位置
+AUDIT_DIR="$ROOT/packages/audit"
+# ADR 0004：启动包里只有这一个文件可以直接引用身份模块的数据库适配器
+SERVER_ADAPTER_FILE="backend/server/src/persistence.module.ts"
+SERVER_ADAPTER_SPEC="../../identity/src/persistence/prisma-identity-store.ts"
 
 # 业务模块清单（定案命名，#47/#51）：模块名 → 源码目录（相对 ROOT）
 MODULES=(identity geo-dict case approval supervision deadline)
@@ -79,7 +87,7 @@ declare -A MOD_DIR=(
 )
 # 依赖矩阵允许列（#47 原文，含 #45 补丁 1；元素 = 模块名或 shield）
 declare -A ALLOW=(
-  [identity]="shield"
+  [identity]="shield audit"
   [geo-dict]="shield"
   [case]="shield identity geo-dict"
   [approval]="shield identity case"
@@ -103,6 +111,7 @@ RULES=(
   g1-model-allowlist
   queue-facility-entry
   storage-facility-entry
+  audit-facility-entry
   spatial-no-orm-mutation
 )
 FAIL=0
@@ -146,6 +155,7 @@ home_of() {
     backend/approval/*)          echo approval ;;
     backend/supervision/*)       echo supervision ;;
     backend/deadline/*)          echo deadline ;;
+    backend/server/*)            echo server ;;
     frontend/*)                  echo frontend ;;
     integration/*)               echo integration ;;
     e2e/*)                       echo e2e ;;
@@ -286,11 +296,13 @@ check_deadline-deps()    { check_row deadline; }
 # 规则 i：矩阵行「监督统计（只读，单向，无人依赖它）」的反向断言
 # 扫描范围含 e2e（评审必修 C5）：本规则断言的是「无人」，范围漏一处即断言不成立；
 # e2e 用例形态是 .sh/.cjs，故用 SCAN_CODE 而非 SCAN_TS。
+# ADR 0004：server 启动包不是业务模块，允许经公共出口引用全部六个模块，包括监督统计。
 check_supervision-sink() {
   local file spec target home fails=0
   while IFS= read -r file; do
     home="$(home_of "$file")"
     [ "$home" = "supervision" ] && continue
+    [ "$home" = "server" ] && continue
     while IFS= read -r spec; do
       target="$(target_of_spec "$file" "$spec")"
       if [ "$target" = "supervision" ]; then
@@ -300,7 +312,7 @@ check_supervision-sink() {
     done < <(specifiers_of "$file")
   done < <(find "$BACKEND" "$ROOT/frontend" "$ROOT/e2e" "${SCAN_CODE[@]}")
   if [ "$fails" -eq 0 ]; then
-    note_ok "supervision-sink：无人依赖 supervision（单向成立）"
+    note_ok "supervision-sink：业务模块无人依赖 supervision（server 启动包除外，ADR 0004）"
   fi
 }
 
@@ -315,6 +327,9 @@ check_module-public-entry() {
     [ -z "$home" ] && continue
     while IFS= read -r spec; do
       is_assembly_exempt "${file#"$ROOT"/}" "$spec" && continue
+      if [ "${file#"$ROOT"/}" = "$SERVER_ADAPTER_FILE" ] && [ "$spec" = "$SERVER_ADAPTER_SPEC" ]; then
+        continue
+      fi
       case "$spec" in
         @natural-enforcement/*/*)
           note_fail "module-public-entry：内部路径导入 ${file#"$ROOT"/} → $spec（只许 @natural-enforcement/<module> 公共出口）"
@@ -387,6 +402,8 @@ check_weak-reference-entry() {
 # 白名单内实体缺席同样即红——名单与实际模型必须逐字相等，防止名单腐化成摆设。
 # #69 定案追加 AuthSession、AuthRememberMe。分表理由与字段见 schema.prisma 与
 # backend/README.md「认证记录」。寿命、Cookie、并发与结束条件以 #63 为准，不在此重开。
+# #92 定案追加 Role、Permission、RolePermission、PersonnelRole、AuditTrail。
+# #96 去掉人员表旧 role 列。字段见 schema.prisma 与 backend/README.md「权限与留痕」。
 G1_MODELS=(
   MigrationProbe
   OrgUnit
@@ -397,6 +414,11 @@ G1_MODELS=(
   ExportAudit
   AuthSession
   AuthRememberMe
+  Role
+  Permission
+  RolePermission
+  PersonnelRole
+  AuditTrail
   GeoDictLandBoundary
   GeoDictSurveyPoint
 )
@@ -478,6 +500,24 @@ check_storage-facility-entry() {
   done < <(find "$BACKEND" "$ROOT/frontend" "$ROOT/e2e" "$ROOT/integration" "$SHIELD_DIR" "$QUEUE_DIR" "${SCAN_CODE[@]}")
   if [ "$fails" -eq 0 ]; then
     note_ok "storage-facility-entry：S3/RustFS SDK 仅在存储设施包内（业务侧无裸存储依赖，append-only 机器兜底）"
+  fi
+}
+
+# 规则：留痕设施唯一入口。auditTrail 委托只许出现在 packages/audit。
+# 包外任何引用都判红，包括读取。测试观察留痕行时走表名，不走这个委托。
+check_audit-facility-entry() {
+  local hits=0 file
+  while IFS= read -r file; do
+    case "$file" in
+      "$AUDIT_DIR"/*) continue ;;
+    esac
+    if grep -qE '(^|[^A-Za-z0-9_])auditTrail([^A-Za-z0-9_]|$)' "$file"; then
+      note_fail "audit-facility-entry：${file#"$ROOT"/} 引用了 auditTrail Prisma 委托（留痕只许经 @natural-enforcement/audit 追加）"
+      hits=$((hits + 1))
+    fi
+  done < <(find "$BACKEND" "$ROOT/packages" "$ROOT/frontend" "$ROOT/e2e" "$ROOT/integration" "${SCAN_CODE[@]}")
+  if [ "$hits" -eq 0 ]; then
+    note_ok "audit-facility-entry：auditTrail 委托仅在留痕设施包内（包外无直接引用）"
   fi
 }
 

@@ -2,9 +2,20 @@
 // 预编译 linux x64/arm64 容器免编译）。身份校验的「已认证」证据链：
 // authenticate = 取 personnel 口令散列验真；人员未失效判定在 AccessControlService。
 import { Inject, Injectable } from '@nestjs/common';
-import { hash, verify } from 'argon2';
+import { argon2id, hash, needsRehash, verify, type HashOptions } from 'argon2';
 
 import { IDENTITY_STORE, type IdentityStore } from '../persistence/identity-store.ts';
+
+/**
+ * 定版散列参数。下限为 argon2id、内存 19 MiB、迭代 2 次、并行度 1。
+ * 记入 infra/VERSIONS.md。memoryCost 单位是 KiB。
+ */
+export const ARGON2_OPTIONS: HashOptions = {
+  type: argon2id,
+  memoryCost: 19 * 1024,
+  timeCost: 2,
+  parallelism: 1,
+};
 
 @Injectable()
 export class CredentialService {
@@ -14,7 +25,7 @@ export class CredentialService {
 
   /** 口令散列为 PHC 形制 argon2id 串（随机盐，同口令两次结果不同） */
   async hashPassword(plain: string): Promise<string> {
-    return hash(plain);
+    return hash(plain, ARGON2_OPTIONS);
   }
 
   /** 散列验真（不触库；authenticate 的下半段） */
@@ -26,6 +37,26 @@ export class CredentialService {
   async authenticate(personnelId: string, plain: string): Promise<boolean> {
     const personnel = await this.store.findPersonnelById(personnelId);
     if (!personnel || !personnel.passwordHash) return false;
-    return this.verifyHash(personnel.passwordHash, plain);
+    const accepted = await this.verifyHash(personnel.passwordHash, plain);
+    if (!accepted) return false;
+    if (!personnel.passwordHash.startsWith('$argon2id$') || needsRehash(personnel.passwordHash, {
+      memoryCost: ARGON2_OPTIONS.memoryCost,
+      timeCost: ARGON2_OPTIONS.timeCost,
+      parallelism: ARGON2_OPTIONS.parallelism,
+    })) {
+      const replaced = await this.store.replacePasswordHash(
+        personnelId,
+        personnel.passwordHash,
+        await this.hashPassword(plain),
+      );
+      // 散列已被并发的重设或改密换掉：本次验真针对的是旧口令，拒绝。
+      if (!replaced) return false;
+    }
+    return true;
+  }
+
+  /** 改密或重设：按定版参数写入新散列，并记下改密时间。 */
+  async changePassword(personnelId: string, plain: string, passwordChangedAt: Date): Promise<void> {
+    await this.store.changePassword(personnelId, await this.hashPassword(plain), passwordChangedAt);
   }
 }

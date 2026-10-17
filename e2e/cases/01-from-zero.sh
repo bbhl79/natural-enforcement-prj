@@ -31,4 +31,21 @@ echo "[e2e] E1 种子进：断言种子数据可查询…"
 echo "[e2e] E1 health 绿：四依赖逐行检查…"
 "$DEV" health
 
+HTTPS_PORT="${NGINX_PORT:-8080}"
+CERT="${HOME}/.local/share/natural-enforcement/dev-certs/localhost.crt"
+PAGE_URL="https://localhost:${HTTPS_PORT}/"
+API_URL="https://localhost:${HTTPS_PORT}/api/health"
+echo "[e2e] E1 经入口访问 ${PAGE_URL} 并校验证书…"
+[ -s "$CERT" ] || { echo "[FAIL] 缺少 localhost 证书 ${CERT}" >&2; exit 1; }
+curl -fsS --max-time 10 --cacert "$CERT" "$PAGE_URL" | grep -q 'id="root"' \
+  || { echo "[FAIL] 页面未通过证书校验或不可访问（${PAGE_URL}）" >&2; exit 1; }
+curl -fsS --max-time 10 --cacert "$CERT" "$API_URL" | grep -q '"status":"ok"' \
+  || { echo "[FAIL] /api/health 未通过证书校验或不可访问（${API_URL}）" >&2; exit 1; }
+if curl -fsS --max-time 10 -o /dev/null "$PAGE_URL" 2>/tmp/e2e-01-cert-err; then
+  echo "[FAIL] 未携带开发证书时请求不应成功（${PAGE_URL}）" >&2
+  exit 1
+fi
+grep -qi 'certificate\|SSL' /tmp/e2e-01-cert-err \
+  || { echo "[FAIL] 未携带开发证书时的失败原因不是证书校验" >&2; exit 1; }
+
 echo "[e2e] E1 用例通过：毁卷重建 → 容器起 → 迁移完 → 种子进 → health 绿，从零环境一次就绪。"

@@ -1,6 +1,8 @@
 // 口令散列单测（#52，unit 层无库）：argon2 0.45.1 预编译二进制免编译可用性的实测腿
 //（工具链容器 alpine x86_64 musl；--ignore-scripts 安装下直接加载包内 prebuilds）。
 // 期望值为 PHC 串形制的独立字面编码（$argon2id 前缀），一旦退化为明文或不符即红。
+// #97：定版参数与「参数不符则重写且不改上次改密时间」。
+import { hash as hashWithDefaults } from 'argon2';
 import { describe, expect, it } from 'vitest';
 
 import { CredentialService } from '../src/services/credential.service.ts';
@@ -38,6 +40,69 @@ describe('口令散列（argon2 0.45.1，#52）', () => {
     await expect(service.authenticate('known', 's3cret-pass')).resolves.toBe(true);
     await expect(service.authenticate('known', 'wrong-pass')).resolves.toBe(false);
     await expect(service.authenticate('missing', 's3cret-pass')).resolves.toBe(false);
+  });
+
+  it('验真成功且已存参数与定版不符时按定版重写，上次改密时间不变', async () => {
+    const changedAt = new Date('2026-01-15T00:00:00.000Z');
+    const row = {
+      passwordHash: await hashWithDefaults('s3cret-pass'),
+      passwordChangedAt: changedAt,
+    };
+    const store = {
+      findPersonnelById: async (id: string) => (
+        id === 'known' ? { id, passwordHash: row.passwordHash } : null
+      ),
+      replacePasswordHash: async (_id: string, expected: string, passwordHash: string) => {
+        if (row.passwordHash !== expected) return false;
+        row.passwordHash = passwordHash;
+        return true;
+      },
+    } as unknown as IdentityStore;
+    const service = new CredentialService(store);
+    await expect(service.authenticate('known', 's3cret-pass')).resolves.toBe(true);
+    expect(row.passwordHash).toMatch(/^\$argon2id\$v=19\$m=19456,p=1,t=2\$/);
+    expect(row.passwordChangedAt).toEqual(new Date('2026-01-15T00:00:00.000Z'));
+    await expect(service.verifyHash(row.passwordHash, 's3cret-pass')).resolves.toBe(true);
+  });
+
+  it('重散列期间散列被并发重设换掉时不覆盖新散列，并拒绝本次认证', async () => {
+    const legacy = await hashWithDefaults('old-pass-1A!');
+    const resetHash = await new CredentialService(noopStore()).hashPassword('New-reset-9x');
+    const row = { passwordHash: legacy };
+    const store = {
+      findPersonnelById: async () => {
+        const snapshot = { id: 'known', passwordHash: row.passwordHash };
+        // 读出旧散列之后、写回之前，管理员重设了口令
+        row.passwordHash = resetHash;
+        return snapshot;
+      },
+      replacePasswordHash: async (_id: string, expected: string, passwordHash: string) => {
+        if (row.passwordHash !== expected) return false;
+        row.passwordHash = passwordHash;
+        return true;
+      },
+    } as unknown as IdentityStore;
+    const service = new CredentialService(store);
+    await expect(service.authenticate('known', 'old-pass-1A!')).resolves.toBe(false);
+    expect(row.passwordHash).toBe(resetHash);
+  });
+
+  it('已存参数已是定版时验真成功不重写散列', async () => {
+    const pinned = await new CredentialService(noopStore()).hashPassword('s3cret-pass');
+    const changedAt = new Date('2026-02-01T00:00:00.000Z');
+    const row = { passwordHash: pinned, passwordChangedAt: changedAt };
+    const store = {
+      findPersonnelById: async () => ({ id: 'known', passwordHash: row.passwordHash }),
+      replacePasswordHash: async (_id: string, expected: string, passwordHash: string) => {
+        if (row.passwordHash !== expected) return false;
+        row.passwordHash = passwordHash;
+        return true;
+      },
+    } as unknown as IdentityStore;
+    const service = new CredentialService(store);
+    await expect(service.authenticate('known', 's3cret-pass')).resolves.toBe(true);
+    expect(row.passwordHash).toBe(pinned);
+    expect(row.passwordChangedAt).toEqual(changedAt);
   });
 });
 

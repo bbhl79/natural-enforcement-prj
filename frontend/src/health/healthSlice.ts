@@ -1,5 +1,12 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 
+import {
+  enterPasswordChange,
+  loadSession,
+  passwordChangeKindFromDenial,
+  waitForStartupSession,
+} from '../login/loginSlice';
+
 /**
  * health 面板数据契约（#56）。
  * 快照唯一生产者 = dev 脚本（dev health / dev up 写入命名卷，经 nginx 同域静态端点
@@ -35,9 +42,23 @@ export const fetchHealthSnapshot = createAsyncThunk<
   HealthSnapshot,
   void,
   { rejectValue: string }
->('health/fetchSnapshot', async (_, { rejectWithValue }) => {
+>('health/fetchSnapshot', async (_, { dispatch, rejectWithValue }) => {
+  await waitForStartupSession();
   try {
     const response = await fetch('/health/health.json', { cache: 'no-store' });
+    if (response.status === 401) {
+      void dispatch(loadSession());
+      return rejectWithValue('未登录');
+    }
+    if (response.status === 403) {
+      const denied = (await response.json()) as { result?: string };
+      const kind = passwordChangeKindFromDenial(response.status, denied.result);
+      if (kind) {
+        dispatch(enterPasswordChange(kind));
+        return rejectWithValue('必须改口令');
+      }
+      return rejectWithValue(`health 快照请求失败：HTTP ${response.status}`);
+    }
     if (!response.ok) {
       return rejectWithValue(`health 快照请求失败：HTTP ${response.status}`);
     }

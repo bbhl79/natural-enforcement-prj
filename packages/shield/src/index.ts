@@ -10,3 +10,10 @@ export {
   requireCrossDomainReference,
 } from './contract/identity.js';
 export type { TechnicalPrimaryKey } from './contract/identity.js';
+export {
+  OPCODES,
+  SUPERVISION_ROLE,
+  effectiveOpcodeRequirements,
+  opcodeRequirements,
+} from './contract/opcode.js';
+export type { OpcodeRequirements, QualificationDemand } from './contract/opcode.js';

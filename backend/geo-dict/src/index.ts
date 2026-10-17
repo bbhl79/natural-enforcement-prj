@@ -16,3 +16,4 @@ export {
   deleteSurveyPointById,
 } from './spatial/survey-point.ts';
 export type { SurveyPointDomain, SurveyPointInput, SurveyPointRow } from './spatial/survey-point.ts';
+export { GeoDictModule } from './geo-dict.module.ts';
