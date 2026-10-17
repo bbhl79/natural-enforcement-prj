@@ -5,6 +5,7 @@ import {
   rejected,
   type AuditCategory,
   type Rejected,
+  type AuditTrailQuery,
   type AuditTrailRecord,
 } from '@natural-enforcement/audit';
 import { AccessControlService, type ActorRef, type DenyReason } from '@natural-enforcement/identity';
@@ -57,6 +58,14 @@ export interface AuditRowBody extends AuditRowView {
 
 type Denial = { status: 403; body: { reason: DenyReason } };
 type Invalid = { status: 400; body: { result: 'non-compliant'; rules: ['invalid-filter'] } };
+
+/** 授权与筛选都通过后的范围与库里的查阅条件。 */
+interface Authorized {
+  scope: AuditScope;
+  filter: AuditFilter;
+  query: AuditTrailQuery;
+  actorCode: string | null;
+}
 
 /** 授权与筛选都通过后取到的行。 */
 interface Prepared {
@@ -175,25 +184,27 @@ export class AuditBrowseService {
     });
   }
 
-  /** 管理台首页「今日 N 条」（P3）：只给条数，不交出行，不写 audit.viewed。 */
+  /** 管理台首页「今日 N 条」（P3）：同一套授权与范围，库里只数条数，不取行、不写 audit.viewed。 */
   async summary(actor: ActorRef): Promise<AuditSummaryOutcome> {
     return this.uow.run<AuditSummaryOutcome>(async (tx) => {
       const today = shanghaiDate(this.clock.now());
-      const ready = await this.prepare(tx, actor, AUDIT_READ, { from: today, to: today });
+      const ready = await this.authorize(tx, actor, AUDIT_READ, { from: today, to: today });
       if (!('scope' in ready)) {
         if ('outcome' in ready) return ready;
         throw new Error('今日条数的筛选条件不合法');
       }
-      return { status: 200, body: { result: 'counted', today: ready.rows.length } };
+      // 首页条数不按类别筛（筛选条件里本来也没有类别），count 忽略 category
+      return { status: 200, body: { result: 'counted', today: await tx.auditReader.count(ready.query) } };
     });
   }
 
-  private async prepare(
+  /** 授权、校验筛选、算出范围；通过后得到库里的查阅条件。 */
+  private async authorize(
     tx: TxScope,
     actor: ActorRef,
     opcode: string,
     input: AuditFilterInput,
-  ): Promise<Prepared | Rejected<Denial> | Invalid> {
+  ): Promise<Authorized | Rejected<Denial> | Invalid> {
     const me = await tx.directory.findById(actor.personnelId);
     const requested = typeof input.orgUnitId === 'string' && input.orgUnitId !== '' ? input.orgUnitId : null;
     const target = requested ?? me?.orgUnitId ?? '';
@@ -212,7 +223,7 @@ export class AuditBrowseService {
       orgName: org?.name ?? '',
       includesUnanchored: org != null && org.parentId == null,
     };
-    const records = await tx.auditReader.list({
+    const query: AuditTrailQuery = {
       from: shanghaiMidnight(filter.from) as Date,
       to: new Date((shanghaiMidnight(filter.to) as Date).getTime() + DAY_MS),
       orgUnitIds: await tx.store.listOrgUnitSubtreeIds(target),
@@ -220,7 +231,19 @@ export class AuditBrowseService {
       category: filter.category,
       actorCode: filter.actorCode,
       outcome: filter.outcome,
-    });
+    };
+    return { scope, filter, query, actorCode: me?.code ?? null };
+  }
+
+  private async prepare(
+    tx: TxScope,
+    actor: ActorRef,
+    opcode: string,
+    input: AuditFilterInput,
+  ): Promise<Prepared | Rejected<Denial> | Invalid> {
+    const ready = await this.authorize(tx, actor, opcode, input);
+    if (!('scope' in ready)) return ready;
+    const records = await tx.auditReader.list(ready.query);
     const codes = await this.resourceCodes(tx, records);
     const rows: AuditRowBody[] = records.map((record) => ({
       id: record.id,
@@ -229,7 +252,7 @@ export class AuditBrowseService {
       category: auditCategoryOf(record.action, record.opcode),
       ...describeAuditRow(record, codes),
     }));
-    return { scope, filter, rows, actorCode: me?.code ?? null };
+    return { scope: ready.scope, filter: ready.filter, rows, actorCode: ready.actorCode };
   }
 
   /** 授权拒绝行只写资源标识，不写被作用人员；资源为人员时查出工号用于展示。 */
