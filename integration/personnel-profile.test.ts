@@ -86,12 +86,15 @@ type AuditRecord = {
   previous_value: string | null;
   next_value: string | null;
   source_ip: string | null;
+  target_org_unit_id: string | null;
+  target_org_unit_basis: string | null;
 };
 
 async function audits(): Promise<AuditRecord[]> {
   return cloned.prisma.$queryRaw<AuditRecord[]>`
     SELECT id, action, outcome, reason, actor_id, actor_code, subject_personnel_id, subject_code, org_unit_id,
-           opcode, resource_type, resource_id, previous_value, next_value, source_ip
+           opcode, resource_type, resource_id, previous_value, next_value, source_ip,
+           target_org_unit_id, target_org_unit_basis
     FROM audit_trail
     ORDER BY created_at, id
   `;
@@ -441,7 +444,10 @@ describe('GET /api/admin/personnel/:id（人员卡片）', () => {
     expect(response.status).toBe(403);
     expect(await response.json()).toEqual({ reason: 'scope-denied' });
     expect(added(before, await audits())).toEqual([
-      expect.objectContaining({ action: 'authz.denied', reason: 'scope-denied', resource_id: people.loose }),
+      expect.objectContaining({
+        action: 'authz.denied', reason: 'scope-denied', resource_id: people.loose,
+        target_org_unit_id: org.hq, target_org_unit_basis: 'object',
+      }),
     ]);
   });
 
@@ -454,6 +460,8 @@ describe('GET /api/admin/personnel/:id（人员卡片）', () => {
       expect.objectContaining({
         action: 'authz.denied', reason: 'scope-denied', actor_id: people.adminA,
         opcode: 'personnel.profile.read', resource_type: 'personnel', resource_id: people.memberB,
+        // 接 #119（34fa3cc）：被拒留痕的数据范围按目标人员所在机构判断
+        target_org_unit_id: org.deptB, target_org_unit_basis: 'object',
       }),
     ]);
   });
@@ -629,6 +637,8 @@ describe('POST /api/admin/personnel（登记）', () => {
       expect.objectContaining({
         action: 'authz.denied', reason: 'scope-denied', actor_id: people.adminA,
         opcode: 'personnel.profile.register', resource_type: 'org-unit', resource_id: org.deptB,
+        // 接 #119（34fa3cc）：被拒留痕的数据范围按登记目标机构判断
+        target_org_unit_id: org.deptB, target_org_unit_basis: 'object',
       }),
     ]);
   });
