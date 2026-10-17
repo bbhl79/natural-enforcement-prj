@@ -84,12 +84,19 @@ for (const code of [
   ADMIN_OPCODES[code] = entry('none', false, false);
 }
 
-const CATALOG: Readonly<Record<string, OpcodeEntry>> = { ...CASE_OPCODES, ...ADMIN_OPCODES };
+// 无原型字典：constructor、toString、__proto__ 等继承属性不会命中名册（#103 评审）。
+const CATALOG: Readonly<Record<string, OpcodeEntry>> = Object.freeze(
+  Object.assign(Object.create(null) as Record<string, OpcodeEntry>, CASE_OPCODES, ADMIN_OPCODES),
+);
+
+function lookup(opcode: string): OpcodeEntry | null {
+  return Object.hasOwn(CATALOG, opcode) ? (CATALOG[opcode] ?? null) : null;
+}
 
 export const OPCODES = Object.freeze(Object.keys(CATALOG)) as readonly string[];
 
 export function opcodeRequirements(opcode: string): OpcodeRequirements | null {
-  const found = CATALOG[opcode];
+  const found = lookup(opcode);
   if (!found) return null;
   return found.requirements;
 }
@@ -99,13 +106,15 @@ export function effectiveOpcodeRequirements(
   opcode: string,
   grantingRoleNames: readonly string[],
 ): OpcodeRequirements | null {
-  const found = CATALOG[opcode];
+  const found = lookup(opcode);
   if (!found) return null;
   let qualification = found.requirements.qualification;
   let mustBeCaseHandler = found.requirements.mustBeCaseHandler;
   let applied = false;
   for (const role of grantingRoleNames) {
-    const override = found.roleOverrides?.[role];
+    const override = found.roleOverrides && Object.hasOwn(found.roleOverrides, role)
+      ? found.roleOverrides[role]
+      : undefined;
     const nextQualification = override?.qualification ?? found.requirements.qualification;
     const nextHandler = override?.mustBeCaseHandler ?? found.requirements.mustBeCaseHandler;
     if (!applied) {

@@ -51,6 +51,17 @@ describe('操作码名册', () => {
     expect(effectiveOpcodeRequirements('menu.visible', ['经办'])).toBeNull();
   });
 
+  it('继承属性名不算名册内操作码', () => {
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf']) {
+      expect(opcodeRequirements(name)).toBeNull();
+      expect(effectiveOpcodeRequirements(name, ['经办'])).toBeNull();
+      expect(OPCODES).not.toContain(name);
+    }
+    expect(effectiveOpcodeRequirements('case.read', ['constructor', 'toString'])).toEqual(
+      opcodeRequirements('case.read'),
+    );
+  });
+
   it('启动核查查操作的人，并且必须是主办人或协办人，并且改变主状态', () => {
     expect(opcodeRequirements('clue.verify.start')).toEqual({
       qualification: 'operator',
