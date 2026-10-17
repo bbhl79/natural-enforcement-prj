@@ -27,6 +27,7 @@ import reducer, {
   type LoginState,
 } from './loginSlice';
 import { store } from '../store';
+import { createHealthOnAuthMiddleware } from '../healthOnAuth';
 
 function loginHtml(): string {
   return renderToStaticMarkup(
@@ -505,4 +506,44 @@ describe('登录页', () => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('认证后的健康快照', () => {
+  it('认证完成后自动读取一次健康快照，未登录时不读', async () => {
+    const calls: string[] = [];
+    let sessionBody: unknown = { result: 'anonymous' };
+    vi.stubGlobal('fetch', (url: string) => {
+      calls.push(url);
+      if (url === '/api/auth/session') {
+        return Promise.resolve(new Response(JSON.stringify(sessionBody), { status: 200 }));
+      }
+      return Promise.resolve(new Response(JSON.stringify({ generatedAt: '2026-10-17T00:00:00.000Z', checks: [] }), { status: 200 }));
+    });
+    const anonymousView = configureStore({
+      reducer: { login: reducer, health: healthReducer },
+      middleware: (getDefault) => getDefault().prepend(createHealthOnAuthMiddleware()),
+    });
+    await anonymousView.dispatch(loadSession());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls).toEqual(['/api/auth/session']);
+
+    calls.length = 0;
+    sessionBody = {
+      result: 'authenticated',
+      name: '张三',
+      code: 'P-1',
+      orgName: '一区',
+      roles: ['经办'],
+      passwordChangeRequired: false,
+      passwordChangeKind: null,
+    };
+    const view = configureStore({
+      reducer: { login: reducer, health: healthReducer },
+      middleware: (getDefault) => getDefault().prepend(createHealthOnAuthMiddleware()),
+    });
+    await view.dispatch(loadSession());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(calls).toEqual(['/api/auth/session', '/health/health.json']);
+    expect(view.getState().health.snapshot).not.toBeNull();
+  });
 });
