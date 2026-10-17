@@ -11,11 +11,15 @@ import {
   filterFromSearch,
   filterHint,
   filterPersonnel,
+  listHint,
   orgUnitsInTreeOrder,
+  pageFromSearch,
+  paginate,
   PERSONNEL_READ,
   PERSONNEL_REGISTER,
   ROLES,
   searchFromFilter,
+  searchWithPage,
   type CertFilter,
   type PersonnelFilter,
   type PersonnelList,
@@ -112,15 +116,20 @@ export function PersonnelListView({
   filter,
   opcodes,
   onFilter,
+  page = 1,
+  onPage = () => undefined,
 }: {
   list: PersonnelList;
   filter: PersonnelFilter;
   opcodes: readonly string[];
   onFilter: (next: PersonnelFilter) => void;
+  page?: number;
+  onPage?: (page: number) => void;
 }) {
   const rows = filterPersonnel(list, filter);
-  const hint = filterHint(list, filter);
   const off = rows.filter((row) => row.deactivatedAt).length;
+  const shown = paginate(rows, page);
+  const hint = listHint(filterHint(list, filter), off, shown.page, shown.pages);
   return (
     <>
       <Filters list={list} filter={filter} onChange={onFilter} />
@@ -144,16 +153,22 @@ export function PersonnelListView({
         <div className="card">
           <div className="card-h">
             {`共 ${rows.length} 人`}
-            <span className="hint">{hint ?? (off > 0 ? `其中 ${off} 人已停用` : '')}</span>
+            <span className="hint">{hint}</span>
           </div>
           <table className="table">
             <thead>
               <tr><th>工号</th><th>姓名</th><th>当前机构</th><th>角色</th><th>执法证</th><th>状态</th><th /></tr>
             </thead>
             <tbody>
-              {rows.map((row) => <Row key={row.id} row={row} />)}
+              {shown.rows.map((row) => <Row key={row.id} row={row} />)}
             </tbody>
           </table>
+          {shown.pages > 1 ? (
+            <div className="actions" data-pager style={{ marginTop: 12 }}>
+              <button type="button" className="btn btn-sm" disabled={shown.page <= 1} onClick={() => onPage(shown.page - 1)}>上一页</button>
+              <button type="button" className="btn btn-sm" disabled={shown.page >= shown.pages} onClick={() => onPage(shown.page + 1)}>下一页</button>
+            </div>
+          ) : null}
         </div>
       )}
     </>
@@ -180,7 +195,10 @@ export default function PersonnelListPage() {
   const orgName = useAppSelector((root) => root.login.operator?.orgName ?? null);
   const [search, setSearch] = useSearchParams();
   const filter = filterFromSearch(search);
+  const page = pageFromSearch(search);
+  // 改筛选回到第 1 页（searchFromFilter 不带 page）；翻页保留筛选。
   const onFilter = (next: PersonnelFilter) => setSearch(searchFromFilter(next), { replace: true });
+  const onPage = (next: number) => setSearch(searchWithPage(search, next));
   if (!opcodes.includes(PERSONNEL_READ)) {
     return (
       <>
@@ -202,7 +220,7 @@ export default function PersonnelListPage() {
       >
         <Await resolve={list} errorElement={<ListError filter={filter} />}>
           {(resolved: PersonnelList | null) => (resolved
-            ? <PersonnelListView list={resolved} filter={filter} opcodes={opcodes} onFilter={onFilter} />
+            ? <PersonnelListView list={resolved} filter={filter} opcodes={opcodes} onFilter={onFilter} page={page} onPage={onPage} />
             : null)}
         </Await>
       </Suspense>

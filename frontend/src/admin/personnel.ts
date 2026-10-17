@@ -125,6 +125,38 @@ export function isFiltered(filter: PersonnelFilter): boolean {
   return searchFromFilter(filter).toString() !== '';
 }
 
+// ---------- 分页（原型 P5:37「第 1 页」） ----------
+
+/** 每页人数（工程定）。名单接口一次返回全部，分页与筛选都在前端做。 */
+export const PAGE_SIZE = 20;
+
+/** 页码写在地址栏 page=N（从 1 起）；改筛选时回到第 1 页。 */
+export function pageFromSearch(search: URLSearchParams): number {
+  const page = Number(search.get('page') ?? '1');
+  return Number.isInteger(page) && page >= 1 ? page : 1;
+}
+
+export function searchWithPage(search: URLSearchParams, page: number): URLSearchParams {
+  const next = new URLSearchParams(search);
+  if (page <= 1) next.delete('page');
+  else next.set('page', String(page));
+  return next;
+}
+
+/** 取第 page 页；页码超出时落到最后一页。 */
+export function paginate<T>(rows: readonly T[], page: number): { rows: T[]; page: number; pages: number } {
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const current = Math.min(Math.max(1, page), pages);
+  return { rows: rows.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE), page: current, pages };
+}
+
+/** 名单头部的提示：有机构、角色、证件筛选时写筛选（多页时另加页码），否则写已停用人数与页码。 */
+export function listHint(filterText: string | null, off: number, page: number, pages: number): string {
+  const pageText = `第 ${page} 页`;
+  if (filterText) return pages > 1 ? `${filterText} · ${pageText}` : filterText;
+  return [off > 0 ? `其中 ${off} 人已停用` : null, pageText].filter(Boolean).join(' · ');
+}
+
 /** 机构及其全部下级的 id。 */
 export function subtreeIds(units: readonly ScopeOrgUnit[], rootId: string): Set<string> {
   const ids = new Set<string>([rootId]);

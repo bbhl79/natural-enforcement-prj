@@ -17,12 +17,17 @@ import {
   filterPersonnel,
   loadPersonnelCard,
   loadPersonnelList,
+  listHint,
   maskPhone,
   orgText,
+  PAGE_SIZE,
+  pageFromSearch,
+  paginate,
   passwordText,
   problemCount,
   registerPersonnel,
   searchFromFilter,
+  searchWithPage,
   shouldRevalidatePersonnelList,
   type PersonnelCard,
   type PersonnelFilter,
@@ -164,7 +169,7 @@ describe('人员名单界面（P5）', () => {
   it('district：共 N 人、已停用行置灰、执法证情况标签，没有手机号和证号列', () => {
     const html = listHtml();
     expect(html).toContain('共 7 人');
-    expect(html).toContain('其中 1 人已停用');
+    expect(html).toContain('其中 1 人已停用 · 第 1 页');
     expect(html).toContain('<th>工号</th><th>姓名</th><th>当前机构</th><th>角色</th><th>执法证</th><th>状态</th>');
     expect(html).toContain('<tr class="off" data-personnel="7">');
     expect(html).toContain('<span class="tag red">已过期</span>');
@@ -187,6 +192,49 @@ describe('人员名单界面（P5）', () => {
     expect(html).toContain('清空筛选');
     expect(html).toContain('data-requires="personnel.profile.register"');
     expect(listHtml({ keyword: '张三丰' }, ['personnel.profile.read'])).not.toContain('data-requires="personnel.profile.register"');
+  });
+});
+
+describe('人员名单分页（原型 P5:37「第 1 页」）', () => {
+  const many: PersonnelList = {
+    ...LIST,
+    personnel: Array.from({ length: PAGE_SIZE + 5 }, (_, i) => row({ id: `m${i}`, code: `TH${String(1000 + i)}`, name: `人员${i}` })),
+  };
+  const pageHtml = (page: number, filter: Partial<PersonnelFilter> = {}) => renderToStaticMarkup(
+    <MemoryRouter>
+      <PersonnelListView list={many} filter={{ ...DEFAULT_FILTER, ...filter }} opcodes={ADMIN} onFilter={() => undefined} page={page} />
+    </MemoryRouter>,
+  );
+
+  it('每页 20 人；共 N 人按筛选后的全部人数；第 2 页显示其余，翻页按钮按页码禁用', () => {
+    const first = pageHtml(1);
+    expect(first).toContain(`共 ${PAGE_SIZE + 5} 人`);
+    expect(first).toContain('第 1 页');
+    expect(first.match(/data-personnel=/g)).toHaveLength(PAGE_SIZE);
+    expect(first).toContain('data-pager');
+    expect(first).toMatch(/<button type="button" class="btn btn-sm" disabled="">上一页<\/button>/);
+    const second = pageHtml(2);
+    expect(second).toContain('第 2 页');
+    expect(second.match(/data-personnel=/g)).toHaveLength(5);
+    expect(second).toMatch(/disabled="">下一页<\/button>/);
+    expect(pageHtml(9)).toContain('第 2 页');
+  });
+
+  it('只有一页时不显示翻页按钮；有机构、角色、证件筛选且只有一页时只写筛选（原型 P5 filtered）', () => {
+    expect(listHtml()).not.toContain('data-pager');
+    expect(listHtml({ orgUnitId: 'ld' })).toMatch(/<span class="hint">筛选：龙洞自然资源所<\/span>/);
+    expect(pageHtml(2, { role: '经办' })).toContain('筛选：经办 · 第 2 页');
+  });
+
+  it('页码写在地址栏，改筛选回到第 1 页，翻页保留筛选', () => {
+    expect(pageFromSearch(new URLSearchParams('page=3'))).toBe(3);
+    expect(pageFromSearch(new URLSearchParams('page=0'))).toBe(1);
+    expect(pageFromSearch(new URLSearchParams('page=x'))).toBe(1);
+    expect(searchWithPage(new URLSearchParams('q=何&role=经办'), 2).toString()).toBe('q=%E4%BD%95&role=%E7%BB%8F%E5%8A%9E&page=2');
+    expect(searchWithPage(new URLSearchParams('q=a&page=2'), 1).toString()).toBe('q=a');
+    expect(searchFromFilter({ ...DEFAULT_FILTER, keyword: 'a' }).has('page')).toBe(false);
+    expect(paginate([], 1)).toEqual({ rows: [], page: 1, pages: 1 });
+    expect(listHint(null, 0, 1, 1)).toBe('第 1 页');
   });
 });
 
