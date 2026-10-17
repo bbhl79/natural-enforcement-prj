@@ -29,6 +29,16 @@ normalize_exit_code() {
 trap normalize_exit_code EXIT
 
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+# 运行参数清单（ADR 0008、#80）：变量名与开发夹具值只在 infra/runtime.env。
+# 环境里已有的非空值优先（CI secrets、并行工作区错开端口、部署环境覆盖）。
+# 清单只解析不 source，值不当 shell 代码执行。
+RUNTIME_ENV_FILE="$ROOT/infra/runtime.env"
+# shellcheck source=tools/runtime-env-lib.sh
+. "$ROOT/tools/runtime-env-lib.sh"
+if ! runtime_env_load; then
+  echo "[FAIL] 运行参数清单格式错误：$RUNTIME_ENV_FILE" >&2
+  exit 1
+fi
 COMPOSE_FILE="$ROOT/infra/docker-compose.yml"
 # 项目名：默认 natural-enforcement；并行工作区（多 worktree 共用宿主 daemon）可
 # 用 COMPOSE_PROJECT_NAME 隔离容器/卷/网络，宿主端口偏移用 POSTGRES_PORT 等环境变量。
@@ -46,14 +56,14 @@ SERVER_IMAGE='natural-enforcement/server:dev'
 # localhost 证书在仓库外（#94 / #80 开发侧）。dev up 生成，nginx 只读挂载，不入库。
 DEV_CERT_DIR="${HOME}/.local/share/natural-enforcement/dev-certs"
 export NE_DEV_CERT_DIR="$DEV_CERT_DIR"
-HTTPS_PORT="${NGINX_PORT:-8080}"
+HTTPS_PORT="$NGINX_PORT"
 PAGE_URL="https://localhost:${HTTPS_PORT}/"
 API_HEALTH_URL="https://localhost:${HTTPS_PORT}/api/health"
-# dev db 容器网络内连接串（凭据从环境变量读，本地缺省用开发默认值并在输出里标注；
+# dev db 容器网络内连接串（分项来自 infra/runtime.env 或环境注入；
 # CI 模式凭据必须来自环境注入——见 cmd_check 的 --ci 语义）
-DB_USER="${POSTGRES_USER:-postgres}"
-DB_PASS="${POSTGRES_PASSWORD:-postgres}"
-DB_NAME="${POSTGRES_DB:-postgres}"
+DB_USER="$POSTGRES_USER"
+DB_PASS="$POSTGRES_PASSWORD"
+DB_NAME="$POSTGRES_DB"
 # 集成测试复制源（#93）。开发库仍是 DB_NAME，测试不复制它。
 IT_TEMPLATE_DB="it_template"
 # 用户名、密码、库名按 URI 组件编码后再拼进连接串。CI secret 里的 @ : / # 不能当分隔符。
@@ -68,7 +78,9 @@ percent_encode() {
     }
   }'
 }
-export DATABASE_URL="postgresql://$(percent_encode "$DB_USER"):$(percent_encode "$DB_PASS")@db:5432/$(percent_encode "$DB_NAME")"
+export DATABASE_URL="postgresql://$(percent_encode "$DB_USER"):$(percent_encode "$DB_PASS")@${POSTGRES_HOST}:5432/$(percent_encode "$DB_NAME")"
+# 队列连接串：compose 网络内经服务名访问（ADR 0008：由 dev 从清单分项算出）
+export REDIS_URL="redis://${REDIS_HOST}:6379"
 
 # 容器内工具链缓存（命名卷，依赖只进容器/卷，不入库）：
 # - corepack 卷：缓存 pnpm 二进制（/root/.cache/node/corepack），免去每次容器现下载；
@@ -110,7 +122,7 @@ usage() {
            build 前置是因为镜像与产物是 lint/测试层的运行前提（非改集合语义）。
            --ci：检查范围/参数/链路与本地严格一致，唯一差异是凭据注入回收——
            CI 凭据必须来自环境变量（POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB）；
-           本地缺省时用开发默认值并在输出里标注。
+           本地缺省时用 infra/runtime.env 的开发夹具值并在输出里标注。
   db       数据语义：裸 db = 建库（缺则建）+ 迁移 + 种子，各自幂等（已做则跳过）。
            db migrate 只迁移；db seed 只种子；
            db reset 毁库重建——全系统唯一允许删除数据的入口，其余命令只增不改。
@@ -250,8 +262,8 @@ check_db() {
 }
 
 # 队列连通（#55）：经队列接口真实投递健康检查任务并确认消费（非裸 redis ping）。
-# 探测容器借用 redis 容器的网络命名空间直达 127.0.0.1:6379；redis 停服时
-# 容器不存在/不可达，探测失败即红。
+# 探测容器接入 compose 项目网络，经 REDIS_URL（dev 从清单分项算出）访问 redis；
+# redis 停服时先由容器存活判定立刻标红，不进探测。
 check_queue() {
   local cid="$("${COMPOSE[@]}" ps -q redis 2>/dev/null || true)" probe_out="" attempt
   if [ -z "$cid" ] || [ "$(docker inspect -f '{{.State.Status}}' "$cid" 2>/dev/null)" != "running" ]; then
@@ -262,7 +274,7 @@ check_queue() {
   # 探测要另起容器再确认消费。宿主刚跑完构建时，单次可能赶不上。
   # 连试 3 次。redis 未运行时不重试，停服仍然立刻标红。
   for attempt in 1 2 3; do
-    if probe_out="$(run_queue_probe "$cid" 2>&1)"; then
+    if probe_out="$(run_queue_probe 2>&1)"; then
       QUEUE_STATUS=ok
       echo "[OK]   queue 队列连通（${probe_out}）"
       return 0
@@ -383,13 +395,13 @@ cmd_health() {
 # 队列探测（#55）：容器内安装依赖后运行 packages/queue 探测入口。
 # 挂载形态与 lint/test 一致：仓库只读，依赖只进容器/命名卷（防 root 属主泄漏入库）。
 # --pull=never：工具链镜像缺失时失败并提示先 dev build，不借健康检查隐式拉取（US13）。
-run_queue_probe() { # $1 = redis 容器 id（--network container: 借用其网络命名空间）
+run_queue_probe() {
   if ! docker image inspect "$LINT_IMAGE" >/dev/null 2>&1; then
     echo "工具链镜像缺失：$LINT_IMAGE。请先执行 dev build。队列探测不会隐式拉取。"
     return 1
   fi
-  docker run --rm --pull=never --network "container:$1" \
-    -e REDIS_URL="${REDIS_URL:-redis://127.0.0.1:6379}" \
+  docker run --rm --pull=never --network "${PROJECT}_default" \
+    -e REDIS_URL="$REDIS_URL" \
     -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
     -v "$ROOT:/repo:ro" \
     -v "${PROJECT}-queue-node-modules:/work/node_modules" \
@@ -690,9 +702,10 @@ psql_dev_db() {
 }
 
 it_template_database_url() {
-  printf 'postgresql://%s:%s@db:5432/%s\n' \
+  printf 'postgresql://%s:%s@%s:5432/%s\n' \
     "$(percent_encode "$DB_USER")" \
     "$(percent_encode "$DB_PASS")" \
+    "$POSTGRES_HOST" \
     "$(percent_encode "$IT_TEMPLATE_DB")"
 }
 
@@ -841,16 +854,25 @@ cmd_check() {
         ;;
     esac
   done
+  # 凭据是否来自环境注入：以 runtime_env_load 记下的 RUNTIME_ENV_INJECTED 为准
+  #（清单里的夹具值在脚本开头已导出，不能再用「变量非空」判断）。
+  local injected=1 name
+  for name in POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB; do
+    case "$RUNTIME_ENV_INJECTED" in
+      *" $name "*) ;;
+      *) injected=0 ;;
+    esac
+  done
   if [ "$ci" -eq 1 ]; then
-    if [ -z "${POSTGRES_USER:-}" ] || [ -z "${POSTGRES_PASSWORD:-}" ] || [ -z "${POSTGRES_DB:-}" ]; then
+    if [ "$injected" -eq 0 ]; then
       echo "[FAIL] check --ci：凭据注入回收——CI 模式要求 POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB 全部来自环境变量注入。" >&2
-      echo "  本地复现某次 CI run 请显式导出同一组凭据（如开发默认值）后再 --ci 重跑。" >&2
+      echo "  本地复现某次 CI run 请显式导出同一组凭据（如 infra/runtime.env 的夹具值）后再 --ci 重跑。" >&2
       exit 1
     fi
     echo "check --ci：凭据来自环境变量注入（与本地唯一差异）；检查范围/参数/链路与本地严格一致。"
   else
-    if [ -z "${POSTGRES_USER:-}" ] || [ -z "${POSTGRES_PASSWORD:-}" ] || [ -z "${POSTGRES_DB:-}" ]; then
-      echo "check：凭据未注入，使用开发默认值 postgres/postgres/postgres（仅本地缺省时允许；CI 用 --ci 从环境变量回收）。"
+    if [ "$injected" -eq 0 ]; then
+      echo "check：凭据未全部注入，缺的项使用 infra/runtime.env 的开发夹具值（仅本地缺省时允许；CI 用 --ci 从环境变量回收）。"
     fi
   fi
   # 时序（评审必修）：build 前置——镜像与编译产物是 lint/测试层的运行前提

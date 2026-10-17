@@ -3,24 +3,26 @@
 # pull_policy=never：镜像缺失由 dev up 显式拦截并提示，绝不隐式拉取/构建。
 # 项目名不入库：默认由 dev 脚本以 -p natural-enforcement 注入；
 # 并行工作区可用 COMPOSE_PROJECT_NAME 隔离（容器/卷/网络各自独立）。
+# 变量名与开发夹具值只在 infra/runtime.env（ADR 0008、#80），由 dev 导出。
+# 本文件不写字面量密钥，不写默认值；缺变量时 compose 报错并说明缺哪一项。
 
 services:
   db:
     image: postgis/postgis:18-3.6@sha256:60f6ad1d21ea86a67d47780b9a0d1e1d200500f62b19293fa834d0dea80b8677
     pull_policy: never
     environment:
-      # 凭据从环境注入（#57 --ci 凭据回收）；本地缺省回落开发默认值
-      POSTGRES_USER: "${POSTGRES_USER:-postgres}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-postgres}"
-      POSTGRES_DB: "${POSTGRES_DB:-postgres}"
+      # 凭据从环境注入（#57 --ci 凭据回收）；本地由 dev 从 infra/runtime.env 导出夹具值
+      POSTGRES_USER: "${POSTGRES_USER:?缺少 POSTGRES_USER，见 infra/runtime.env}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?缺少 POSTGRES_PASSWORD，见 infra/runtime.env}"
+      POSTGRES_DB: "${POSTGRES_DB:?缺少 POSTGRES_DB，见 infra/runtime.env}"
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT:?缺少 POSTGRES_PORT，见 infra/runtime.env}:5432"
     volumes:
       # PG18 镜像采用 major 版本子目录布局（pg_ctlcluster），卷挂 /var/lib/postgresql，
       # 数据实际落 /var/lib/postgresql/18/docker；严禁挂 /var/lib/postgresql/data（镜像直接报错）
       - pgdata:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 12
@@ -29,7 +31,7 @@ services:
     image: redis:8.10.2@sha256:2c2dff791878316e3b083188be0d578423b24813cdda5de0e80ea4f7b3e6bfd6
     pull_policy: never
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${REDIS_PORT:?缺少 REDIS_PORT，见 infra/runtime.env}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -40,11 +42,11 @@ services:
     image: rustfs/rustfs:1.0.1@sha256:1803faef57627e2d9c2e7d89d655d712ddded5389040054987163043fecb6a3c
     pull_policy: never
     environment:
-      RUSTFS_ACCESS_KEY: rustfsdev
-      RUSTFS_SECRET_KEY: rustfsdev-secret
+      RUSTFS_ACCESS_KEY: "${RUSTFS_ACCESS_KEY:?缺少 RUSTFS_ACCESS_KEY，见 infra/runtime.env}"
+      RUSTFS_SECRET_KEY: "${RUSTFS_SECRET_KEY:?缺少 RUSTFS_SECRET_KEY，见 infra/runtime.env}"
     ports:
-      - "${RUSTFS_PORT:-9000}:9000"
-      - "${RUSTFS_CONSOLE_PORT:-9001}:9001"
+      - "${RUSTFS_PORT:?缺少 RUSTFS_PORT，见 infra/runtime.env}:9000"
+      - "${RUSTFS_CONSOLE_PORT:?缺少 RUSTFS_CONSOLE_PORT，见 infra/runtime.env}:9001"
     volumes:
       - rustfs-data:/data
 
@@ -52,9 +54,9 @@ services:
     image: nginx:1.29.8@sha256:1881968aff6f7cdcc4b888c00a11f4ce241ad7ec957e0cb4a9e19e93a3ff87ea
     pull_policy: never
     ports:
-      - "${NGINX_PORT:-8080}:443"
+      - "${NGINX_PORT:?缺少 NGINX_PORT，见 infra/runtime.env}:443"
     volumes:
-      - ${NE_DEV_CERT_DIR}:/etc/nginx/certs:ro
+      - "${NE_DEV_CERT_DIR:?缺少 NE_DEV_CERT_DIR，见 infra/runtime.env}:/etc/nginx/certs:ro"
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       frontend:
@@ -77,7 +79,7 @@ services:
     image: natural-enforcement/server:dev
     pull_policy: never
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: "${DATABASE_URL:?缺少 DATABASE_URL，见 infra/runtime.env}"
     depends_on:
       db:
         condition: service_healthy
