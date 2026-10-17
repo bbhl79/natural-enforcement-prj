@@ -29,6 +29,21 @@ export type IdentityDb = PrismaClient | Prisma.TransactionClient;
 
 const WRITTEN: UniqueWriteResult = { result: 'written' };
 
+/**
+ * 同一事务客户端上的受唯一约束写入排队执行（#119）。
+ * 保存点、写入、回到保存点、释放必须连成一段，不能与同一事务里的另一笔唯一写入交错，
+ * 否则冲突后、回滚前插进来的语句会被 PostgreSQL 以 25P02 拒绝。
+ * 按客户端对象排队，绑定同一事务的多个存储实例共享同一队列。
+ */
+const uniqueQueues = new WeakMap<object, Promise<unknown>>();
+
+function enqueue<T>(client: object, task: () => Promise<T>): Promise<T> {
+  const previous = uniqueQueues.get(client) ?? Promise.resolve();
+  const next = previous.then(task, task);
+  uniqueQueues.set(client, next.catch(() => undefined));
+  return next;
+}
+
 /** 唯一约束冲突（P2002，即 PostgreSQL 23505）。 */
 function isUniqueViolation(error: unknown): boolean {
   if (typeof error !== 'object' || error == null) return false;
@@ -59,12 +74,21 @@ export class PrismaIdentityStore implements IdentityStore {
   /**
    * 执行一笔受唯一约束的写入。冲突时交给 classify 判定种类，返回 already-exists。
    * 事务里先设保存点，冲突只回到保存点，事务仍可继续。根客户端每条语句自成事务，无需保存点。
+   * 同一事务里的唯一写入排队执行（见 enqueue）。同一事务里与其他写入并发仍不受支持。
    */
-  private async unique(
+  private unique(
     write: () => Promise<unknown>,
     classify: () => Promise<IdentityUniqueConflict | null>,
   ): Promise<UniqueWriteResult> {
-    const inTx = this.root == null;
+    if (this.root) return this.uniqueNow(write, classify, false);
+    return enqueue(this.prisma, () => this.uniqueNow(write, classify, true));
+  }
+
+  private async uniqueNow(
+    write: () => Promise<unknown>,
+    classify: () => Promise<IdentityUniqueConflict | null>,
+    inTx: boolean,
+  ): Promise<UniqueWriteResult> {
     if (inTx) await this.prisma.$executeRawUnsafe('SAVEPOINT identity_unique_write');
     try {
       await write();

@@ -92,6 +92,27 @@ describe('业务唯一冲突映射为「已存在」', () => {
     expect(await cloned.prisma.personnelRole.count({ where: { personnelId: existing.id } })).toBe(1);
   });
 
+  it('同一事务里并发的唯一写入排队执行，冲突不会中止事务', async () => {
+    const existing = person('P-119-U9', '13800011991');
+    await store.insertPersonnel(existing);
+    const freshA = person('P-119-U10', '13800011992');
+    const freshB = person('P-119-U11', '13800011993');
+    const outcome = await store.inTransaction(({ store: tx }) => Promise.all([
+      tx.insertPersonnel(person('P-119-U9', null)),
+      tx.insertPersonnel(freshA),
+      tx.insertPersonnel(person('P-119-U12', '13800011991')),
+      tx.insertPersonnel(freshB),
+    ]));
+    expect(outcome).toEqual([
+      { result: 'already-exists', conflict: 'personnel-code' },
+      { result: 'written' },
+      { result: 'already-exists', conflict: 'mobile-phone' },
+      { result: 'written' },
+    ]);
+    expect(await cloned.prisma.personnel.count({ where: { code: { in: ['P-119-U10', 'P-119-U11'] } } })).toBe(2);
+    expect(await cloned.prisma.personnel.count({ where: { code: 'P-119-U12' } })).toBe(0);
+  });
+
   it('事务里抛错时整体回滚', async () => {
     const lost = person('P-119-U8', '13800011981');
     await expect(store.inTransaction(async ({ store: tx }) => {
