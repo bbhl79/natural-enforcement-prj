@@ -48,3 +48,10 @@ export const AUTHZ_DENIED_REASONS = [
   'scope-denied',
 ] as const;
 export type AuthzDeniedReason = (typeof AUTHZ_DENIED_REASONS)[number];
+
+/**
+ * 授权拒绝行的目标机构从哪来（#119 修正，ADR 0011）。
+ * object：对象所属机构；actor-fallback：对象机构解析不出（如对象不存在），取操作者当时任职机构。
+ */
+export const AUDIT_TARGET_ORG_BASES = ['object', 'actor-fallback'] as const;
+export type AuditTargetOrgBasis = (typeof AUDIT_TARGET_ORG_BASES)[number];

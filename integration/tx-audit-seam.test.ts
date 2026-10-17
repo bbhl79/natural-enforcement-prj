@@ -283,7 +283,15 @@ describe('拒绝留痕在业务回滚后另起事务写入', () => {
     const added = after.audit_trail.filter((line) => !before.audit_trail.includes(line))
       .map((line) => JSON.parse(line) as Record<string, unknown>);
     expect(added).toEqual([
-      expect.objectContaining({ action: 'authz.denied', outcome: 'failed', reason: 'scope-denied', actor_id: adminId }),
+      expect.objectContaining({
+        action: 'authz.denied',
+        outcome: 'failed',
+        reason: 'scope-denied',
+        actor_id: adminId,
+        org_unit_id: deptAId,
+        target_org_unit_id: deptBId,
+        target_org_unit_basis: 'object',
+      }),
     ]);
   });
 
@@ -305,6 +313,9 @@ describe('拒绝留痕在业务回滚后另起事务写入', () => {
         actor_id: adminId,
         opcode: 'personnel.locked.release',
         resource_id: adminId,
+        org_unit_id: deptAId,
+        target_org_unit_id: deptAId,
+        target_org_unit_basis: 'object',
       }),
     ]);
   });
@@ -332,9 +343,47 @@ describe('拒绝留痕在业务回滚后另起事务写入', () => {
         reason: 'scope-denied',
         opcode: 'personnel.password.reset',
         resource_id: otherId,
+        org_unit_id: deptAId,
+        target_org_unit_id: deptBId,
+        target_org_unit_basis: 'object',
       }),
     ]);
     const still = await fetch(`${baseUrl}/api/auth/session`, { headers: { cookie: holder } });
     expect(await still.json()).toMatchObject({ result: 'authenticated', code: 'P-119-OTHER' });
+  });
+});
+
+describe('拒绝行归对象机构（#105；ADR 0011 修正）', () => {
+  it('对象机构不存在：写入的行归操作者机构，target_org_unit_basis 记 actor-fallback', async () => {
+    const store = new PrismaIdentityStore(cloned.prisma);
+    const access = new AccessControlService(store, prismaAuditTrailFactory.forClient(cloned.prisma));
+    const before = await snapshot();
+    const missingOrg = newUlid();
+    await expect(access.authorize({ personnelId: adminId, authenticated: true }, 'personnel.locked.release', missingOrg, {
+      resourceType: 'personnel',
+      resourceId: missingOrg,
+    })).rejects.toMatchObject({ reason: 'scope-denied' });
+    const after = await snapshot();
+    const added = after.audit_trail.filter((line) => !before.audit_trail.includes(line))
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(added).toEqual([
+      expect.objectContaining({
+        action: 'authz.denied',
+        reason: 'scope-denied',
+        actor_id: adminId,
+        org_unit_id: deptAId,
+        target_org_unit_id: deptAId,
+        target_org_unit_basis: 'actor-fallback',
+      }),
+    ]);
+  });
+
+  it('库约束：来源只收两个取值，非拒绝动作不许带来源', async () => {
+    await expect(cloned.prisma.$executeRaw`
+      INSERT INTO audit_trail (id, action, outcome, target_org_unit_id, target_org_unit_basis)
+      VALUES (${newUlid()}, 'authz.denied', 'failed', ${deptAId}, 'guess')`).rejects.toThrow();
+    await expect(cloned.prisma.$executeRaw`
+      INSERT INTO audit_trail (id, action, outcome, target_org_unit_id, target_org_unit_basis)
+      VALUES (${newUlid()}, 'login.succeeded', 'succeeded', ${deptAId}, 'object')`).rejects.toThrow();
   });
 });

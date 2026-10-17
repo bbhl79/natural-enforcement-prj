@@ -2,6 +2,8 @@
 // 通用授权不因执法资格拒绝。资格事实放进身份上下文，执法证号不进入上下文。
 // 改变主状态的操作码不采用监督角色贡献的允许行。
 // 每次拒绝经留痕设施包追加一行 authz.denied。
+// 拒绝行按对象所属机构归属（#105；ADR 0011 修正）：目标机构解析得出记 object，
+// 解析不出（如对象不存在）取操作者当时任职机构，记 actor-fallback。
 
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import {
@@ -13,6 +15,7 @@ import {
   AUDIT_ACTION_AUTHZ_DENIED,
   AUDIT_TRAIL_PORT,
   type AuditTrailPort,
+  type AuditTargetOrgBasis,
   type AuthzDeniedEntry,
   type AuthzDenyReason,
 } from '@natural-enforcement/audit';
@@ -46,13 +49,26 @@ export type AuthorizationDecision =
     readonly denial: AuthzDeniedEntry;
   };
 
+/** 拒绝行的目标机构及来源（#119 修正，ADR 0011）。 */
+type DenialTarget = {
+  targetOrgUnitId: string | null;
+  targetOrgUnitBasis: AuditTargetOrgBasis;
+};
+
 type DenialInput = {
   actorId: string | null;
   actorCode: string | null;
+  /** 操作者当时任职机构。照记，不用来套范围。 */
   orgUnitId: string | null;
   opcode: string;
   resource?: AuthorizationResource;
+  target: DenialTarget;
 };
+
+/** 对象机构解析不出时，取操作者当时任职机构并标明。 */
+function actorFallback(actorOrgId: string | null): DenialTarget {
+  return { targetOrgUnitId: actorOrgId, targetOrgUnitBasis: 'actor-fallback' };
+}
 
 @Injectable()
 export class AccessControlService {
@@ -94,6 +110,16 @@ export class AccessControlService {
     resource?: AuthorizationResource,
     store: IdentityStore = this.store,
   ): Promise<AuthorizationDecision> {
+    let targetPath: readonly string[] | undefined;
+    const pathOfTarget = async (): Promise<readonly string[]> => {
+      targetPath ??= targetOrgUnitId ? await store.findOrgUnitPathToRoot(targetOrgUnitId) : [];
+      return targetPath;
+    };
+    // 目标机构在组织树里找得到才算对象机构；否则按操作者机构兜底。
+    const targetOf = async (actorOrgId: string | null): Promise<DenialTarget> =>
+      (await pathOfTarget()).length > 0
+        ? { targetOrgUnitId, targetOrgUnitBasis: 'object' }
+        : actorFallback(actorOrgId);
     const personnel = await store.findPersonnelById(actor.personnelId);
     if (!personnel) {
       return denied('identity-unknown', `人员 ${actor.personnelId} 不存在`, {
@@ -102,6 +128,7 @@ export class AccessControlService {
         orgUnitId: null,
         opcode,
         resource,
+        target: await targetOf(null),
       });
     }
     const assignment = await store.findCurrentAssignment(personnel.id);
@@ -113,6 +140,7 @@ export class AccessControlService {
         orgUnitId: actorOrgId,
         opcode,
         resource,
+        target: await targetOf(actorOrgId),
       });
     }
     if (personnel.deactivatedAt) {
@@ -122,6 +150,7 @@ export class AccessControlService {
         orgUnitId: actorOrgId,
         opcode,
         resource,
+        target: await targetOf(actorOrgId),
       });
     }
     const granting = opcodeRequirements(opcode)
@@ -137,6 +166,7 @@ export class AccessControlService {
           orgUnitId: actorOrgId,
           opcode,
           resource,
+          target: await targetOf(actorOrgId),
         },
       );
     }
@@ -147,9 +177,10 @@ export class AccessControlService {
         orgUnitId: null,
         opcode,
         resource,
+        target: await targetOf(null),
       });
     }
-    const path = await store.findOrgUnitPathToRoot(targetOrgUnitId);
+    const path = await pathOfTarget();
     if (!path.includes(assignment.orgUnitId)) {
       return denied(
         'scope-denied',
@@ -160,6 +191,7 @@ export class AccessControlService {
           orgUnitId: assignment.orgUnitId,
           opcode,
           resource,
+          target: await targetOf(assignment.orgUnitId),
         },
       );
     }
@@ -224,6 +256,8 @@ export class AccessControlService {
         actorCode: personnel?.code ?? null,
         orgUnitId: context.orgUnitId,
         opcode: IDENTITY_MAINTENANCE_OPCODE,
+        // 新根机构还不存在，对象机构解析不出。
+        target: actorFallback(context.orgUnitId),
       },
     ));
   }
@@ -266,6 +300,8 @@ function denied(
       resourceType: input.resource?.resourceType ?? null,
       resourceId: input.resource?.resourceId ?? null,
       previousValue: null,
+      targetOrgUnitId: input.target.targetOrgUnitId,
+      targetOrgUnitBasis: input.target.targetOrgUnitBasis,
     },
   };
 }

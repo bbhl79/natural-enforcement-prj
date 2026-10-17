@@ -18,6 +18,7 @@ export type {
 export {
   AUDIT_ACTIONS,
   AUDIT_SUCCEEDED_ACTIONS,
+  AUDIT_TARGET_ORG_BASES,
   AUTHZ_DENIED_REASONS,
   LOGIN_FAILED_REASONS,
   PASSWORD_CHANGED_REASONS,
@@ -25,6 +26,7 @@ export {
 } from './vocabulary.ts';
 export type {
   AuditAction,
+  AuditTargetOrgBasis,
   AuthzDeniedReason,
   LoginFailedReason,
   PasswordChangedReason,
