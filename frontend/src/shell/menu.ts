@@ -14,14 +14,16 @@ export interface MenuItem {
 }
 
 /**
- * 机构菜单按维护码出现（#123）。org.tree.read 也给内勤（业务侧选承办机构复用机构树），
- * 不能据此给内勤开出管理台区（故事 12）。停用码 org.unit.deactivate 由停用票（#124）加入。
+ * 机构维护的入口码。#105:178：`org.tree.read` 也给内勤（选承办机构用），
+ * `org.unit.register` 等三码只给系统管理。凭 `org.tree.read` 判定会让内勤看到「管理台」一区，
+ * 与原型 P1 noadmin 相反，所以「机构」菜单、管理台入口和维护视角都按 `org.unit.register` 判定。
+ * 该码由 #123 入名册；入册前「机构」菜单对所有人都不显示。
  */
-export const ORG_ADMIN_OPCODES = ['org.unit.register', 'org.unit.rename'] as const;
+export const ORG_MAINTENANCE_OPCODE = 'org.unit.register';
 
-/** 管理台首页的入口码：持有任一即可进入管理台区。 */
+/** 管理台首页的入口码：持有任一即可进入管理台区。只收系统管理或监督才有的码，不收内勤也有的码。 */
 export const ADMIN_HOME_OPCODES = [
-  ...ORG_ADMIN_OPCODES,
+  ORG_MAINTENANCE_OPCODE,
   'personnel.profile.read',
   'personnel.locked.read',
   'audit.admin.read',
@@ -35,7 +37,7 @@ export const MENU: readonly MenuItem[] = [
   { id: 'clue', label: '线索', path: '/clues', section: '业务办理', anyOf: ['clue.read'] },
   { id: 'case', label: '案件', path: '/cases', section: '业务办理', anyOf: ['case.read'] },
   { id: 'admin', label: '管理台首页', path: '/admin', section: '管理台', anyOf: ADMIN_HOME_OPCODES },
-  { id: 'org', label: '机构', path: '/admin/org-units', section: '管理台', anyOf: ORG_ADMIN_OPCODES },
+  { id: 'org', label: '机构', path: '/admin/org-units', section: '管理台', anyOf: [ORG_MAINTENANCE_OPCODE] },
   { id: 'person', label: '人员', path: '/admin/personnel', section: '管理台', anyOf: ['personnel.profile.read'] },
   { id: 'locked', label: '被锁人员', path: '/admin/locked-personnel', section: '管理台', anyOf: ['personnel.locked.read'] },
   { id: 'audit', label: '管理台留痕', path: '/admin/audit', section: '管理台', anyOf: ['audit.admin.read'] },

@@ -2,7 +2,6 @@ import { Suspense } from 'react';
 import { Await, Link, useAsyncError, useLoaderData, useRevalidator } from 'react-router';
 
 import { useAppSelector } from '../hooks';
-import { hasAny } from '../shell/menu';
 import { DeniedCard, ErrorCard, errorStatus } from '../shell/StatusPages';
 import {
   ADMIN_TILES,
@@ -38,7 +37,7 @@ function Head({ desc }: { desc: string }) {
 function Tile({ tile, summary, desc }: { tile: AdminTile; summary: AdminHomeSummary; desc?: string }) {
   const count = tile.count(summary);
   return (
-    <Link className="tile" to={tile.path} data-requires={tile.anyOf.join(' ')}>
+    <Link className="tile" to={tile.path} data-requires={tile.opcode}>
       <div className="t">{tile.title}</div>
       <div className="d">{desc ?? tile.desc}</div>
       {count ? <div className="n">{count}</div> : null}
@@ -94,7 +93,7 @@ export function AdminHomeContent({ opcodes, summary }: { opcodes: readonly strin
       </>
     );
   }
-  const tiles = ADMIN_TILES.filter((tile) => hasAny(opcodes, tile.anyOf));
+  const tiles = ADMIN_TILES.filter((tile) => opcodes.includes(tile.opcode));
   const firstDay = firstDayPending(summary);
   return (
     <>

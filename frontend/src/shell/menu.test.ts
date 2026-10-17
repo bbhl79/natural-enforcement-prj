@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { activeMenuId, MENU, visibleMenu, visibleSections } from './menu';
+import { activeMenuId, ADMIN_HOME_OPCODES, MENU, visibleMenu, visibleSections } from './menu';
 
 const ids = (opcodes: string[]) => visibleMenu(opcodes).map((item) => item.id);
 
@@ -29,14 +29,17 @@ describe('按操作码裁剪菜单（#105「菜单来源」）', () => {
     expect(visibleSections(['audit.admin.read', 'clue.read'])).toEqual(['业务办理', '管理台']);
   });
 
-  it('内勤持机构树读码（业务侧选承办机构用）：不出管理台区（#123）', () => {
-    expect(ids(['clue.read', 'case.read', 'org.tree.read'])).toEqual(['home', 'clue', 'case']);
-    expect(visibleSections(['clue.read', 'org.tree.read'])).toEqual(['业务办理']);
+  it('内勤反例：持有 org.tree.read 也没有「管理台」一区（#105:178）', () => {
+    const clerk = ['clue.read', 'case.read', 'org.tree.read'];
+    expect(ids(clerk)).toEqual(['home', 'clue', 'case']);
+    expect(visibleSections(clerk)).toEqual(['业务办理']);
   });
 
-  it('机构菜单按维护码出现：新建或改名任一', () => {
+  it('「机构」菜单和管理台入口按只给系统管理的 org.unit.register 判定，不认 org.tree.read', () => {
+    expect(MENU.find((item) => item.id === 'org')?.anyOf).toEqual(['org.unit.register']);
+    expect(ADMIN_HOME_OPCODES).toContain('org.unit.register');
+    for (const item of MENU) expect(item.anyOf).not.toContain('org.tree.read');
     expect(ids(['org.unit.register'])).toEqual(['admin', 'org']);
-    expect(ids(['org.unit.rename'])).toEqual(['admin', 'org']);
   });
 
   it('不认识的码不影响菜单', () => {
