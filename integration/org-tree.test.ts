@@ -270,6 +270,11 @@ describe('机构层级（迁移与库层兜底）', () => {
 });
 
 describe('GET /api/org-units', () => {
+  // 先登录：登录本身写 login.succeeded，各用例的「新增留痕」只看取树这一步。
+  beforeAll(async () => {
+    for (const phone of Object.values(PHONES)) await signIn(phone);
+  });
+
   it('根机构系统管理拿到整棵树，含已停用节点并标出，字段齐全', async () => {
     const response = await getTree(PHONES.root);
     expect(response.status).toBe(200);
