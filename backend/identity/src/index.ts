@@ -9,7 +9,9 @@ export type {
   DenyReason,
   IdentityContext,
 } from './domain/access.ts';
+export type { AuthorizationDecision } from './services/access-control.service.ts';
 export type { ActorRef } from './domain/actor.ts';
+export { AlreadyExistsError, isAlreadyExists } from './domain/already-exists.ts';
 export { newUlid } from './domain/ulid.ts';
 export {
   PASSWORD_RULES,
@@ -24,14 +26,18 @@ export {
   type AssignmentTransfer,
   type ExportAuditRow,
   type IdentityStore,
+  type IdentityTransaction,
+  type IdentityUniqueConflict,
   type OpcodeGrant,
   type OrgUnitNameVersionRow,
   type OrgUnitRow,
   type OrgUnitToCreate,
   type PersonnelAssignmentRow,
   type PersonnelNameVersionRow,
+  type PersonnelRoleToCreate,
   type PersonnelRow,
   type PersonnelToCreate,
+  type UniqueWriteResult,
 } from './persistence/identity-store.ts';
 export { AccessControlService } from './services/access-control.service.ts';
 export { CredentialService } from './services/credential.service.ts';
