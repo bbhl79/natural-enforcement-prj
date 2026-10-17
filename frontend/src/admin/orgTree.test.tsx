@@ -350,9 +350,11 @@ describe('机构停用（P4 blocked/confirm，#124）', () => {
       [url]: [409, { result: 'invalid-state', reason: 'org-has-open-items', openItems: { clues: 1, cases: 2 }, message: openItems }],
     });
     expect(await deactivateOrgUnit(store.dispatch, 'sp')).toEqual({ ok: false, rules: [], message: openItems });
-    serve(person(ADMIN), { [url]: [409, { result: 'invalid-state' }] });
-    expect(await deactivateOrgUnit(store.dispatch, 'sp'))
-      .toEqual({ ok: false, rules: [], message: '这个机构暂时不能停用，请刷新后查看原因。' });
+    // 界面不露原始原因码（SCREENS.md 通用检查：用户可见文本无工程词）：没有可读原因时给固定句，不回落到 reason。
+    serve(person(ADMIN), { [url]: [409, { result: 'invalid-state', reason: 'org-has-open-items' }] });
+    const bare = await deactivateOrgUnit(store.dispatch, 'sp');
+    expect(bare).toEqual({ ok: false, rules: [], message: '这个机构暂时不能停用，请刷新后查看原因。' });
+    expect(bare.ok ? '' : bare.message).not.toMatch(/org-|org\.unit|invalid-state/);
     serve(person(ADMIN), { [url]: [403, { reason: 'scope-denied' }] });
     expect(await deactivateOrgUnit(store.dispatch, 'sp'))
       .toEqual({ ok: false, rules: [], message: '你没有权限执行这个操作，或这个机构不在你的范围内。' });
