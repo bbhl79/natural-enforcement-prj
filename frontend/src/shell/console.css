@@ -86,7 +86,7 @@
 .console .dialog{width:520px;background:#fff;border-radius:12px;padding:20px 22px;box-shadow:0 20px 40px rgba(0,0,0,.18)}
 .console .dialog h3{font-size:16px;margin-bottom:10px}
 .console .dialog .foot{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
-.console .dialog ul{margin:6px 0 0 18px}
+.console .dialog ul{margin:6px 0 0 18px;list-style:disc}
 .console .tree{list-style:none}
 .console .tree ul{list-style:none;margin-left:22px;border-left:1px dashed #d6d3d1;padding-left:10px}
 .console .node{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px}
