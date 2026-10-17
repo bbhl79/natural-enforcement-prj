@@ -174,6 +174,8 @@ describe('按操作码授权', () => {
         resourceType: 'menu',
         resourceId: 'button-1',
         previousValue: null,
+        targetOrgUnitId: 'dept-a',
+        targetOrgUnitBasis: 'object',
       },
     ]);
   });
@@ -221,7 +223,50 @@ describe('按操作码授权', () => {
       resourceType: 'clue',
       resourceId: 'c1',
       orgUnitId: 'dept-a',
+      targetOrgUnitId: 'dept-b',
+      targetOrgUnitBasis: 'object',
     });
+  });
+
+  it('越区被拒的行归对象机构，操作者任职照记（#105；ADR 0011 修正）', async () => {
+    const recorded = recorder();
+    const access = new AccessControlService(store(), recorded.port);
+    await expectDenied(
+      access.authorize(auth('handler'), 'clue.read', 'dept-b', { resourceType: 'clue', resourceId: 'c1' }),
+      'scope-denied',
+    );
+    await expectDenied(
+      access.authorize(auth('handler'), 'menu.visible', 'dept-b'),
+      'permission-denied',
+    );
+    expect(recorded.rows.map((row) => [row.reason, row.orgUnitId, row.targetOrgUnitId, row.targetOrgUnitBasis]))
+      .toEqual([
+        ['scope-denied', 'dept-a', 'dept-b', 'object'],
+        ['permission-denied', 'dept-a', 'dept-b', 'object'],
+      ]);
+  });
+
+  it('对象机构解析不出时归操作者机构，并标 actor-fallback', async () => {
+    const recorded = recorder();
+    const access = new AccessControlService(store(), recorded.port);
+    await expectDenied(access.authorize(auth('handler'), 'clue.read', 'no-such-org'), 'scope-denied');
+    await expectDenied(access.authorize(auth('handler'), 'clue.read', ''), 'scope-denied');
+    await expectDenied(access.authorize(auth('noorg'), 'clue.read', 'no-such-org'), 'scope-denied');
+    await expectDenied(access.authorize(auth('missing'), 'clue.read', 'no-such-org'), 'identity-unknown');
+    expect(recorded.rows.map((row) => [row.reason, row.orgUnitId, row.targetOrgUnitId, row.targetOrgUnitBasis]))
+      .toEqual([
+        ['scope-denied', 'dept-a', 'dept-a', 'actor-fallback'],
+        ['scope-denied', 'dept-a', 'dept-a', 'actor-fallback'],
+        ['scope-denied', null, null, 'actor-fallback'],
+        ['identity-unknown', null, null, 'actor-fallback'],
+      ]);
+  });
+
+  it('未知人员拒绝时对象机构解析得出，仍归对象机构', async () => {
+    const recorded = recorder();
+    const access = new AccessControlService(store(), recorded.port);
+    await expectDenied(access.authorize(auth('missing'), 'clue.read', 'dept-b'), 'identity-unknown');
+    expect(recorded.rows[0]).toMatchObject({ orgUnitId: null, targetOrgUnitId: 'dept-b', targetOrgUnitBasis: 'object' });
   });
 
   it('没有当前任职时数据范围为空，授权按 scope-denied 拒绝', async () => {
@@ -253,6 +298,8 @@ describe('按操作码授权', () => {
         resourceType: 'clue',
         resourceId: 'c1',
         orgUnitId: 'dept-a',
+        targetOrgUnitId: 'dept-b',
+        targetOrgUnitBasis: 'object',
       },
     });
     expect(recorded.rows).toEqual([]);
