@@ -208,6 +208,8 @@ target_of_spec() { # $1=文件绝对路径 $2=specifier
 # 名单 = 文件 → 允许的 specifier 前缀（空格分隔）；名单外的深路径导入照样判红。
 declare -A ASSEMBLY_EXEMPT=(
   ["integration/e2-access-matrix.test.ts"]="../backend/identity/src/"
+  # #122：会话操作码清单与授权判定的等价性断言，同样直接装配 AccessControlService
+  ["integration/session-opcodes.test.ts"]="../backend/identity/src/"
 )
 
 is_assembly_exempt() { # $1 = 相对 ROOT 路径, $2 = specifier
