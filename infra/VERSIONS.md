@@ -11,7 +11,7 @@
 | 后端 | NestJS 12 | 12.1.2 | — | — |
 | ORM/迁移 | Prisma 7 | 7.10.0（stable=prev 标签；8.0 为 rc 已排除） | — | — |
 | 身份 | argon2 0.4x | 0.45.1（预编译覆盖 linux x64/arm64，容器免编译） | — | — |
-| 前端 | React 19 / Redux Toolkit 2 / Tailwind CSS 4 / Vite 8 | 19.3.0 / 2.13.0 / 4.3.3 / 8.3.4 | — | — |
+| 前端 | React 19 / Redux Toolkit 2 / Tailwind CSS 4 / Vite 8 / React Router 8 | 19.3.0 / 2.13.0 / 4.3.3 / 8.3.4 / 8.4.0（只用 data 模式，不引 `@react-router/dev`；2026-10-18 落表） | — | — |
 | 测试 | Vitest 5 / Playwright 1.64 | 5.0.3（peer vite 含 ^8.0.0 配对成立；弃 Node 20 不影响）/ 1.64.0 | `mcr.microsoft.com/playwright:v1.64.0@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f`（2026-10-10 补录；走 MCR 非 Docker Hub，境内渠道复测不适用） | amd64 `…bc72a8df…` / arm64 `…4109b399…` |
 | Lint | ESLint 10 / typescript-eslint 8 | 10.12.0 / 8.71.1（与 TS 6.0.2 配对） | — | — |
 | 队列 | BullMQ 6 / ioredis 6 / Redis server 8 | 6.3.12（peer ioredis>=5）/ 6.0.0 / 镜像 8 | `redis:8.10.2@sha256:2c2dff791878316e3b083188be0d578423b24813cdda5de0e80ea4f7b3e6bfd6`（2026-10-10 落表） | multi-arch index |
@@ -47,3 +47,4 @@
 - 2026-10-16（#94 HTTPS 登录页）：HTTP 启动包增加已定案 NestJS 12 的运行时包，版本与本表「后端 NestJS 12 / 12.1.2」逐字一致——`@nestjs/core@12.1.2`、`@nestjs/platform-express@12.1.2`。同 major 内配套（纪律 6）：`reflect-metadata@0.2.2`（Nest 装饰器元数据）、`rxjs@7.8.2`（`@nestjs/core` 的 peer）。不新增会话、令牌或跨站请求伪造相关包。本地镜像 `natural-enforcement/server:dev` 由 `dev build` 构建，compose `pull_policy: never`，与 frontend 本地镜像同一纪律，不另占 digest 行。
 - 2026-10-16（#95 登录与会话）：留痕设施包 `@natural-enforcement/audit` 落地，**零新增第三方包**。写入经注入令牌 `AUDIT_TRAIL_PORT`。数据库适配器只做生成客户端的类型导入，根类型检查排除。结构测试 `audit-facility-entry` 禁止包外引用 `auditTrail` 委托。会话 Cookie 与 CSRF 沿用 NestJS 12.1 已有能力，不引入 cookie 解析包或 CSRF 第三方包。
 - 2026-10-16（#97 口令散列参数）：argon2 仍为 **0.45.1**，不新增包。参数显式写在 `backend/identity/src/services/credential.service.ts` 的 `ARGON2_OPTIONS`：argon2id、内存 19 MiB（`memoryCost` 19456 KiB）、迭代 2 次（`timeCost` 2）、并行度 1。这是下限。验真成功后，已存散列参数与此不符则按此重写，不改 `passwordChangedAt`。
+- 2026-10-18（#122 管理台路由与应用壳）：前端新增 `react-router` **8.4.0**（精确版本），按 #105「前端：路由与应用壳」只用 data 模式（`createBrowserRouter` + `RouterProvider`，`RouterProvider` 取自 `react-router/dom`），不引框架模式开发插件 `@react-router/dev`；结构测试 `frontend-router-mode` 兜底。peer 为 React/React-DOM ≥19.2.7，与上表 19.3.0 配对成立；`engines` 要求 Node ≥22.22.0，与运行时 Node 24.21.x 一致。随包进锁的传递依赖：`cookie-es@3.1.1`、`@remix-run/route-pattern@0.22.1`。锁文件经最小发布龄策略校验通过，无新增豁免。

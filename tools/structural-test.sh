@@ -60,6 +60,17 @@
 #                           （create/createMany/upsert/update/updateMany/delete/deleteMany，
 #                           含换行链式）——含必填空间字段的模型禁用 ORM 写
 #                           （infra/VERSIONS.md 执行纪律 2），写一律走 $queryRaw/ST_ 函数
+#   runtime-manifest        运行参数清单（ADR 0008、#80、#120）：infra/docker-compose.yml 与
+#                           .github/workflows/ci.yml 里的变量名必须登记在 infra/runtime.env；
+#                           密钥只许引用变量（compose）或 secrets（CI），不许字面量、默认值、
+#                           回落值，也不许出现清单里密钥的夹具值
+#   user-lock-assertions    锁清单断言（#105「锁清单」、#111、#120）：docs/user-lock.md 每节
+#                           带一个断言编号；测试代码里必须有标题以该编号开头的 it/test
+#                           （含 it.todo「待实现」登记）；测试里出现清单外编号同样判红
+#   frontend-router-mode    前端路由模式（#105「前端：路由与应用壳」、#122）：react-router 只用
+#                           data 模式（createBrowserRouter + RouterProvider）。前端源码出现
+#                           声明式 <BrowserRouter>/<HashRouter>，或任何 package.json、源码、
+#                           vite 配置引用框架模式开发插件 @react-router/dev 即失败
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
@@ -113,6 +124,9 @@ RULES=(
   storage-facility-entry
   audit-facility-entry
   spatial-no-orm-mutation
+  runtime-manifest
+  user-lock-assertions
+  frontend-router-mode
 )
 FAIL=0
 
@@ -202,6 +216,8 @@ declare -A ASSEMBLY_EXEMPT=(
   # #119：身份存储层唯一冲突与事务接缝①，同样在 integration 层装配 PrismaIdentityStore。
   ["integration/identity-store-unique.test.ts"]="../backend/identity/src/"
   ["integration/tx-audit-seam.test.ts"]="../backend/identity/src/"
+  # #122：会话操作码清单与授权判定的等价性断言，同样直接装配 AccessControlService
+  ["integration/session-opcodes.test.ts"]="../backend/identity/src/"
 )
 
 is_assembly_exempt() { # $1 = 相对 ROOT 路径, $2 = specifier
@@ -552,6 +568,236 @@ check_spatial-no-orm-mutation() {
   done < <(find "$BACKEND" "$ROOT/packages" "$ROOT/integration" "$ROOT/e2e" "${SCAN_CODE[@]}")
   if [ "$hits" -eq 0 ]; then
     note_ok "spatial-no-orm-mutation：backend + packages + integration + e2e 全源码无空间模型 ORM 写调用（执行纪律 2 机器兜底）"
+  fi
+}
+
+# 规则（#120，ADR 0008、#80）：运行参数清单。compose 与 CI 只引用 infra/runtime.env 登记的名字，
+# 不写字面量密钥。清单解析与 dev、tools/ci-inject-env.sh 共用 tools/runtime-env-lib.sh。
+RUNTIME_ENV_FILE="$ROOT/infra/runtime.env"
+# shellcheck source=tools/runtime-env-lib.sh
+. "$ROOT/tools/runtime-env-lib.sh"
+MANIFEST_SCAN_FILES=(infra/docker-compose.yml .github/workflows/ci.yml)
+# CI 平台自带变量：由 GitHub Actions 提供，不是运行参数，不进清单
+CI_PLATFORM_VARS=" GITHUB_OUTPUT GITHUB_ENV GITHUB_STEP_SUMMARY GITHUB_PATH "
+# 名字里带这些词的变量一律按密钥处理，清单漏标 secret 也拦得住。
+# DATABASE_URL 是 derived 项，但连接串里含数据库口令，同样只许引用。
+SECRET_NAME_PATTERN='(PASSWORD|SECRET|TOKEN|ACCESS_KEY|PRIVATE_KEY|^DATABASE_URL$)'
+MANIFEST_NAMES=" "
+MANIFEST_SECRETS=" "
+
+manifest_has() { case "$MANIFEST_NAMES" in *" $1 "*) return 0 ;; esac; return 1; }
+manifest_secret_name() {
+  case "$MANIFEST_SECRETS" in *" $1 "*) return 0 ;; esac
+  [[ "$1" =~ $SECRET_NAME_PATTERN ]]
+}
+
+check_runtime-manifest() {
+  local table fails=0 rel file nr line key value name kind secret_value line_assign
+  if ! table="$(runtime_env_table 2>&1)"; then
+    note_fail "runtime-manifest：清单 infra/runtime.env 格式错误：$table"
+    return
+  fi
+  MANIFEST_NAMES=" $(cut -f1 <<< "$table" | xargs) "
+  MANIFEST_SECRETS=" $(awk -F'\t' '$2 == "secret" { print $1 }' <<< "$table" | xargs) "
+  for rel in "${MANIFEST_SCAN_FILES[@]}"; do
+    file="$ROOT/$rel"
+    if [ ! -f "$file" ]; then
+      note_fail "runtime-manifest：缺少被核对的文件 $rel"
+      fails=$((fails + 1))
+      continue
+    fi
+    case "$rel" in .github/*) kind=ci ;; *) kind=compose ;; esac
+    nr=0
+    while IFS= read -r line || [ -n "$line" ]; do
+      nr=$((nr + 1))
+      [[ "$line" =~ ^[[:space:]]*# ]] && continue
+      # ① 变量引用：$NAME / ${NAME…}。compose 的 $$ 转义交给容器内 shell 展开，不在此列。
+      while IFS= read -r name; do
+        [ -z "$name" ] && continue
+        manifest_has "$name" && continue
+        [ "$kind" = ci ] && case "$CI_PLATFORM_VARS" in *" $name "*) continue ;; esac
+        note_fail "runtime-manifest：$rel:$nr 引用清单外变量名 $name（先登记到 infra/runtime.env）"
+        fails=$((fails + 1))
+      done < <(sed -E 's/\$\$\{?[A-Za-z_][A-Za-z0-9_]*//g' <<< "$line" \
+                 | grep -oE '\$\{?[A-Za-z_][A-Za-z0-9_]*' | sed -E 's/^\$\{?//')
+      # ② 带默认值或回落值的密钥引用：${SECRET:-x}、${SECRET-x}
+      while IFS= read -r name; do
+        [ -z "$name" ] && continue
+        if manifest_secret_name "$name"; then
+          note_fail "runtime-manifest：$rel:$nr 密钥 $name 带默认值（字面量密钥；值只来自 infra/runtime.env 或部署环境）"
+          fails=$((fails + 1))
+        fi
+      done < <(grep -oE '\$\{[A-Za-z_][A-Za-z0-9_]*:?-' <<< "$line" | sed -E 's/^\$\{//; s/:?-$//')
+      # ①b CI 的 env 上下文引用：${{ env.NAME }}、env['NAME']、env["NAME"]
+      if [ "$kind" = ci ]; then
+        while IFS= read -r name; do
+          [ -z "$name" ] && continue
+          manifest_has "$name" && continue
+          case "$CI_PLATFORM_VARS" in *" $name "*) continue ;; esac
+          note_fail "runtime-manifest：$rel:$nr 引用清单外变量名 env.$name（先登记到 infra/runtime.env）"
+          fails=$((fails + 1))
+        done < <(grep -oE "(^|[^A-Za-z0-9_./-])env(\.[A-Za-z_][A-Za-z0-9_]*|\[['\"][A-Za-z_][A-Za-z0-9_]*['\"]\])" <<< "$line" \
+                   | sed -E "s/^[^e]?env\.?//; s/^\[['\"]//; s/['\"]\]$//")
+      fi
+      # ③ CI 的 secrets 引用：名字必须是 DEV_<清单名>，且不许 || 回落字面量
+      if [ "$kind" = ci ]; then
+        while IFS= read -r name; do
+          [ -z "$name" ] && continue
+          manifest_has "${name#DEV_}" && [ "${name#DEV_}" != "$name" ] && continue
+          note_fail "runtime-manifest：$rel:$nr secrets.$name 不对应清单名（只许 secrets.DEV_<infra/runtime.env 里的名字>）"
+          fails=$((fails + 1))
+        done < <(grep -oE 'secrets\.[A-Za-z0-9_]+' <<< "$line" | sed 's/^secrets\.//')
+        if grep -qE 'secrets\.[A-Za-z0-9_]+[[:space:]]*\|\|' <<< "$line"; then
+          note_fail "runtime-manifest：$rel:$nr secrets 带 || 回落值（字面量密钥；未配置时由 tools/ci-inject-env.sh 取清单夹具值）"
+          fails=$((fails + 1))
+        fi
+      fi
+      # ④ 变量赋值：大写键（compose environment、CI env）。键名必须在清单里；密钥键的值只许引用。
+      key=""; value=""
+      if [[ "$line" =~ ^[[:space:]]+([A-Z][A-Z0-9_]*):[[:space:]]*(.*)$ ]]; then
+        key="${BASH_REMATCH[1]}"; value="${BASH_REMATCH[2]}"
+      elif [[ "$line" =~ ^[[:space:]]+-[[:space:]]+[\"\']?([A-Z][A-Z0-9_]*)=(.*)$ ]]; then
+        # compose 环境列表项，含带引号的 - "NAME=value" / - 'NAME=value'
+        key="${BASH_REMATCH[1]}"; value="${BASH_REMATCH[2]}"
+        value="${value%\"}"; value="${value%\'}"
+      fi
+      if [ -n "$key" ]; then
+        if ! manifest_has "$key"; then
+          if [ "$kind" != ci ] || [[ "$CI_PLATFORM_VARS" != *" $key "* ]]; then
+            note_fail "runtime-manifest：$rel:$nr 出现清单外变量名 $key（先登记到 infra/runtime.env）"
+            fails=$((fails + 1))
+          fi
+        fi
+        if manifest_secret_name "$key"; then
+          value="${value%\"}"; value="${value#\"}"; value="${value%\'}"; value="${value#\'}"
+          if [ "$kind" = compose ] && ! [[ "$value" =~ ^\$\{[A-Z][A-Z0-9_]*(:\?[^}]*)?\}$ ]]; then
+            note_fail "runtime-manifest：$rel:$nr 密钥 $key 写了字面量（只许 \${$key:?…} 引用）"
+            fails=$((fails + 1))
+          elif [ "$kind" = ci ] && ! [[ "$value" =~ ^\$\{\{[[:space:]]*secrets\.[A-Za-z0-9_]+[[:space:]]*\}\}$ ]]; then
+            note_fail "runtime-manifest：$rel:$nr 密钥 $key 写了字面量（只许 \${{ secrets.DEV_$key }}）"
+            fails=$((fails + 1))
+          fi
+        fi
+      fi
+      # ④b 行内 shell 环境赋值：NAME=value（如 CI run: 里的 NAME=x cmd）。
+      # 名字必须在清单里；密钥只许 $NAME / ${NAME} / ${{ secrets.… }} 形式的引用。
+      while IFS= read -r line_assign; do
+        [ -z "$line_assign" ] && continue
+        key="${line_assign%%=*}"; value="${line_assign#*=}"
+        if ! manifest_has "$key" && [[ "$CI_PLATFORM_VARS" != *" $key "* ]]; then
+          note_fail "runtime-manifest：$rel:$nr 行内赋值出现清单外变量名 $key（先登记到 infra/runtime.env）"
+          fails=$((fails + 1))
+        fi
+        value="${value#\"}"; value="${value#\'}"
+        if manifest_secret_name "$key" && [[ "$value" != \$* ]]; then
+          note_fail "runtime-manifest：$rel:$nr 行内赋值给密钥 $key 写了字面量（只许引用变量）"
+          fails=$((fails + 1))
+        fi
+      done < <(grep -oE "(^|[[:space:];&|(])[A-Z][A-Z0-9_]*=[^[:space:]]*" <<< "$line" \
+                 | sed -E 's/^[[:space:];&|(]//' \
+                 | grep -vE "^[A-Z][A-Z0-9_]*=$" || true)
+      # ⑤ 清单里密钥的夹具值不许原样出现
+      for name in $MANIFEST_SECRETS; do
+        secret_value="$(awk -F'\t' -v n="$name" '$1 == n { print $4 }' <<< "$table")"
+        [ -z "$secret_value" ] && continue
+        if grep -qwF -- "$secret_value" <<< "$line"; then
+          note_fail "runtime-manifest：$rel:$nr 出现密钥 $name 的夹具值（字面量密钥；改为引用变量）"
+          fails=$((fails + 1))
+        fi
+      done
+    done < "$file"
+  done
+  if [ "$fails" -eq 0 ]; then
+    note_ok "runtime-manifest：compose 与 CI 只引用清单内变量名，无字面量密钥（清单 $(wc -w <<< "$MANIFEST_NAMES" | xargs) 项）"
+  fi
+}
+
+# 规则（#120，#105「锁清单」、#111）：锁清单断言。docs/user-lock.md 的每节 L<n> 带且只带一个
+# 断言编号 USER-LOCK-L<n>。测试代码里必须有标题以该编号开头的 it/test（尚无承载模块的用
+# it.todo 登记「待实现」）。测试里出现清单外编号同样判红，防止删条后断言残留。
+USER_LOCK_FILE="$ROOT/docs/user-lock.md"
+USER_LOCK_ID_RE='USER-LOCK-L[0-9]+'
+check_user-lock-assertions() {
+  local fails=0 sections declared tested id n count
+  if [ ! -f "$USER_LOCK_FILE" ]; then
+    note_fail "user-lock-assertions：缺少锁清单 docs/user-lock.md"
+    return
+  fi
+  sections="$(grep -oE '^## L[0-9]+ ' "$USER_LOCK_FILE" | awk '{ print $2 }')"
+  declared="$(grep -E '^- \*\*断言编号\*\*：`'"$USER_LOCK_ID_RE"'`$' "$USER_LOCK_FILE" | grep -oE "$USER_LOCK_ID_RE")"
+  if [ -z "$sections" ]; then
+    note_fail "user-lock-assertions：docs/user-lock.md 里没有 L<n> 条目"
+    return
+  fi
+  while IFS= read -r n; do
+    count="$(grep -cx -- "USER-LOCK-$n" <<< "$declared")"
+    if [ "$count" -ne 1 ]; then
+      note_fail "user-lock-assertions：锁清单 $n 应带且只带一个断言编号 USER-LOCK-$n（实际 $count 个）"
+      fails=$((fails + 1))
+    fi
+  done <<< "$sections"
+  while IFS= read -r id; do
+    [ -z "$id" ] && continue
+    grep -qx -- "${id#USER-LOCK-}" <<< "$sections" && continue
+    note_fail "user-lock-assertions：断言编号 $id 没有对应的锁清单条目"
+    fails=$((fails + 1))
+  done <<< "$declared"
+  tested="$(find "$BACKEND" "$ROOT/packages" "$ROOT/frontend" "$ROOT/integration" "$ROOT/e2e" \
+      -path '*/node_modules' -prune -o -path "$ROOT/frontend/prototype" -prune -o \
+      -type f \( -name '*.test.ts' -o -name '*.test.tsx' -o -name '*.test.mts' \) -print 2>/dev/null \
+    | while IFS= read -r file; do
+        # 只认行首的实际调用：去掉 /* … */ 块注释里的行；// 注释和字符串里的调用不在行首，不计
+        awk '
+          inblock { if (index($0, "*/")) inblock = 0; next }
+          /^[[:space:]]*\/\*/ { if (!index($0, "*/")) inblock = 1; next }
+          { print }
+        ' "$file" | grep -oE "^[[:space:]]*(it|test)(\.todo)?\([[:space:]]*['\"\`]$USER_LOCK_ID_RE\b"
+      done | grep -oE "$USER_LOCK_ID_RE" | sort -u)"
+  while IFS= read -r id; do
+    [ -z "$id" ] && continue
+    if ! grep -qx -- "$id" <<< "$tested"; then
+      note_fail "user-lock-assertions：断言编号 $id 在测试代码里找不到对应断言或「待实现」登记"
+      fails=$((fails + 1))
+    fi
+  done <<< "$declared"
+  while IFS= read -r id; do
+    [ -z "$id" ] && continue
+    if ! grep -qx -- "$id" <<< "$declared"; then
+      note_fail "user-lock-assertions：测试代码里的断言编号 $id 不在 docs/user-lock.md"
+      fails=$((fails + 1))
+    fi
+  done <<< "$tested"
+  if [ "$fails" -eq 0 ]; then
+    note_ok "user-lock-assertions：锁清单 $(wc -l <<< "$sections" | xargs) 条，每条断言编号在测试代码里都有断言或「待实现」登记"
+  fi
+}
+
+# 规则（#122，#105「前端：路由与应用壳」）：前端路由只用 data 模式。
+# ① 前端源码（不含 node_modules、原型、构建产物）不得出现声明式路由组件 BrowserRouter /
+#    HashRouter（createBrowserRouter、createHashRouter 不受影响：按整词匹配，前缀 create 不算）。
+# ② 前端的 package.json、源码与配置不得引用框架模式开发插件 @react-router/dev。
+FRONTEND_DIR="$ROOT/frontend"
+check_frontend-router-mode() {
+  local fails=0 file
+  while IFS= read -r file; do
+    note_fail "frontend-router-mode：${file#"$ROOT"/} 使用了声明式路由组件（只许 createBrowserRouter + RouterProvider）"
+    fails=$((fails + 1))
+  done < <(find "$FRONTEND_DIR" -path '*/node_modules' -prune -o -path "$FRONTEND_DIR/prototype" -prune \
+      -o -path "$FRONTEND_DIR/dist" -prune -o "${SCAN_TS[@]}" -print 2>/dev/null \
+    | while IFS= read -r file; do
+        grep -qE '(^|[^A-Za-z0-9_$])(BrowserRouter|HashRouter)([^A-Za-z0-9_$]|$)' "$file" && echo "$file"
+      done)
+  while IFS= read -r file; do
+    note_fail "frontend-router-mode：${file#"$ROOT"/} 引用了框架模式插件 @react-router/dev"
+    fails=$((fails + 1))
+  done < <(find "$FRONTEND_DIR" -path '*/node_modules' -prune -o -path "$FRONTEND_DIR/prototype" -prune \
+      -o -path "$FRONTEND_DIR/dist" -prune -o -type f \( "${SCAN_TS_NAMES[@]}" -o -name 'package.json' \
+      -o -name '*.mjs' -o -name '*.cjs' -o -name '*.js' \) -print 2>/dev/null \
+    | while IFS= read -r file; do
+        grep -qF '@react-router/dev' "$file" && echo "$file"
+      done)
+  if [ "$fails" -eq 0 ]; then
+    note_ok "frontend-router-mode：前端只用 data 模式路由，无声明式路由组件、无 @react-router/dev"
   fi
 }
 

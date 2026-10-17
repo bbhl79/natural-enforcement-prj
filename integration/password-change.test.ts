@@ -298,7 +298,8 @@ describe('90 天与到期提醒', () => {
     const withinSession = await fetch(`${baseUrl}/api/auth/session`, {
       headers: { cookie: cookiePair(within) },
     });
-    expect(await withinSession.json()).toEqual({
+    const withinBody = await withinSession.json() as { noticeTag?: string };
+    expect(withinBody).toEqual({
       result: 'authenticated',
       name: 'P-97-D7',
       code: 'P-97-D7',
@@ -307,7 +308,18 @@ describe('90 天与到期提醒', () => {
       passwordChangeRequired: false,
       passwordChangeKind: null,
       daysRemaining: 7,
+      noticeTag: expect.stringMatching(/^[0-9a-f]{16}$/),
+      opcodes: [],
     });
+    // 到期横幅的会话标记：同一会话再查不变，换一个会话即变（#105 X1「同一会话关闭后不再出现」）
+    const again = await fetch(`${baseUrl}/api/auth/session`, { headers: { cookie: cookiePair(within) } });
+    expect((await again.json() as { noticeTag?: string }).noticeTag).toBe(withinBody.noticeTag);
+    const relogin = await postLogin('13800009705', OLD_PASSWORD);
+    expect(await relogin.json()).toEqual({ result: 'established', daysRemaining: 7 });
+    const other = await fetch(`${baseUrl}/api/auth/session`, { headers: { cookie: cookiePair(relogin) } });
+    const otherTag = (await other.json() as { noticeTag?: string }).noticeTag;
+    expect(otherTag).toMatch(/^[0-9a-f]{16}$/);
+    expect(otherTag).not.toBe(withinBody.noticeTag);
     const eighth = await postLogin('13800009706', OLD_PASSWORD);
     expect(await eighth.json()).toEqual({ result: 'established' });
     const eighthSession = await fetch(`${baseUrl}/api/auth/session`, {
@@ -321,6 +333,7 @@ describe('90 天与到期提醒', () => {
       roles: [],
       passwordChangeRequired: false,
       passwordChangeKind: null,
+      opcodes: [],
     });
   });
 

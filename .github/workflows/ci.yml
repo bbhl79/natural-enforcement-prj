@@ -22,14 +22,18 @@ jobs:
         id: run
         run: echo "run_id=$(date -u +%Y%m%d-%H%M%S)-$(head -c 4 /dev/urandom | od -An -tx1 | tr -d ' \n')" >> "$GITHUB_OUTPUT"
 
-      - name: check（build 自举镜像 → lint 全量 → test all，本地同一命令；E1 在 e2e 层内）
+      # 凭据注入回收：值来自环境，不写进 dev，也不写进本文件（ADR 0008、#80）。
+      # 已配置 secrets 时用 secrets；未配置时 GitHub 传入空字符串，
+      # 由 tools/ci-inject-env.sh 改取 infra/runtime.env 的开发夹具值，写入 GITHUB_ENV。
+      # 本文件只出现清单里的变量名；结构测试 runtime-manifest 对字面量密钥与清单外变量名判红。
+      - name: 凭据注入（secrets 优先，未配置时取 infra/runtime.env 夹具值）
         env:
-          # 凭据注入回收：值来自环境，不写进 dev。已配置 secrets 时用 secrets；
-          # 未配置时 GitHub 传入空字符串，dev check --ci 会在 build/E1 之前退出。
-          # 空 runner 回落到与 dev 本地缺省相同的开发默认值，使 --ci 的非空门得以通过。
-          POSTGRES_USER: ${{ secrets.DEV_POSTGRES_USER || 'postgres' }}
-          POSTGRES_PASSWORD: ${{ secrets.DEV_POSTGRES_PASSWORD || 'postgres' }}
-          POSTGRES_DB: ${{ secrets.DEV_POSTGRES_DB || 'postgres' }}
+          POSTGRES_USER: ${{ secrets.DEV_POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.DEV_POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.DEV_POSTGRES_DB }}
+        run: bash tools/ci-inject-env.sh POSTGRES_USER POSTGRES_PASSWORD POSTGRES_DB
+
+      - name: check（build 自举镜像 → lint 全量 → test all，本地同一命令；E1 在 e2e 层内）
         run: ./dev check --ci --run-id "${{ steps.run.outputs.run_id }}"
 
       - name: 上传 run 产物（日志与关键产物；失败现场用同一 run-id 本地复现）

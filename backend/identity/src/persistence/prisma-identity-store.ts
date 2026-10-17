@@ -10,6 +10,7 @@ import type { Prisma, PrismaClient } from '../../../prisma/generated/prisma/clie
 import type {
   ExportAuditRow,
   IdentityStore,
+  OpcodeGrant,
   OrgUnitNameVersionRow,
   OrgUnitRow,
   OrgUnitToCreate,
@@ -172,6 +173,25 @@ export class PrismaIdentityStore implements IdentityStore {
       include: { role: true },
     });
     return rows.map((row) => row.role.name);
+  }
+
+  async listGrantedOpcodes(personnelId: string): Promise<OpcodeGrant[]> {
+    const rows = await this.prisma.personnelRole.findMany({
+      where: { personnelId, deactivatedAt: null, role: { deactivatedAt: null } },
+      include: {
+        role: {
+          include: {
+            rolePermissions: {
+              where: { deactivatedAt: null, permission: { deactivatedAt: null } },
+              include: { permission: true },
+            },
+          },
+        },
+      },
+    });
+    return rows.flatMap((row) =>
+      row.role.rolePermissions.map((grant) => ({ opcode: grant.permission.code, roleName: row.role.name })),
+    );
   }
 
   listOrgUnitNameVersions(orgUnitId: string): Promise<OrgUnitNameVersionRow[]> {

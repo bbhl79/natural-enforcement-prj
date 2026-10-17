@@ -28,6 +28,7 @@ export {
   type IdentityStore,
   type IdentityTransaction,
   type IdentityUniqueConflict,
+  type OpcodeGrant,
   type OrgUnitNameVersionRow,
   type OrgUnitRow,
   type OrgUnitToCreate,

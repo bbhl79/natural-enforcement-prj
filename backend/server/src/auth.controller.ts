@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
+import { AccessControlService } from '@natural-enforcement/identity';
 
 import { AuthService, type LoginOutcome } from './auth.service.ts';
 import { Public } from './public.decorator.ts';
@@ -24,7 +25,10 @@ interface PasswordBody {
 
 @Controller('api/auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    private readonly access: AccessControlService,
+  ) {}
 
   @Public()
   @Post('login')
@@ -49,8 +53,12 @@ export class AuthController {
   @Public()
   @Get('session')
   async session(@Req() req: AuthenticatedRequest, @Res() res: HttpReply): Promise<void> {
-    const view = this.auth.describe(req.resolution?.active ?? null);
-    res.status(200).json(view);
+    const active = req.resolution?.active ?? null;
+    // 强制改密期间其余接口一律 403，清单为空；不另查。
+    const opcodes = active && !this.auth.passwordChangeState(active.account)
+      ? await this.access.listPermittedOpcodes(active.account.id)
+      : [];
+    res.status(200).json(await this.auth.describe(active, opcodes));
   }
 
   @Post('password')
