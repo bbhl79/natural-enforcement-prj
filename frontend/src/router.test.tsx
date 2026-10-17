@@ -115,7 +115,9 @@ describe('应用壳与菜单（P1）', () => {
     }
     expect(html).toContain('你同时担任「经办」和「系统管理」');
     expect(html).toContain('天河区分局 · 经办、系统管理');
-    expect(html).toContain('暂无待办');
+    expect(html).toContain('我的待办<span class="hint">业务区内容不在本样板范围，仅占位</span>');
+    expect(html).toContain('业务工作台由线索、案件等切片提供');
+    expect(html).not.toContain('暂无待办');
   });
 
   it('无管理权：没有管理台一区', async () => {
