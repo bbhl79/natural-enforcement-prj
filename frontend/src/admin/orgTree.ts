@@ -87,6 +87,16 @@ export function childCountText(tree: OrgTreeData, id: string): string {
   return off > 0 ? `${children.length} 个（其中 ${off} 个已停用）` : `${children.length} 个`;
 }
 
+/**
+ * P4「只有根」：树根是根机构（没有上级），并且没有任何下级（SCREENS.md:48，P4-org-tree.html:31-33）。
+ * 区分局、所的人员看到的子树即使只有一个节点，也不是这个状态：区下只能建所（#105:182），不该提示先建区分局。
+ */
+export function onlyRootOrgUnit(tree: OrgTreeData): boolean {
+  const root = tree.orgUnits.find((unit) => unit.id === tree.rootId);
+  if (!root || root.parentId !== null) return false;
+  return !tree.orgUnits.some((unit) => unit.parentId === root.id);
+}
+
 /** 业务侧选承办机构：只取未停用节点（#105 故事 26）。 */
 export function activeOrgUnits(tree: OrgTreeData): OrgUnit[] {
   return tree.orgUnits.filter((unit) => !unit.deactivatedAt);

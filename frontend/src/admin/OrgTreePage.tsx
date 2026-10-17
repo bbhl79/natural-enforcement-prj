@@ -11,6 +11,7 @@ import {
   LEVEL_LABEL,
   LEVELS,
   namePeriods,
+  onlyRootOrgUnit,
   registerOrgUnit,
   renameOrgUnit,
   RULE_TEXT,
@@ -150,7 +151,7 @@ function Detail({
 }) {
   const parent = tree.orgUnits.find((item) => item.id === unit.parentId) ?? null;
   const isRoot = unit.parentId === null;
-  const onlyRoot = tree.orgUnits.length === 1;
+  const onlyRoot = onlyRootOrgUnit(tree);
   const former = formerNames(unit.names);
   const childLevel = childLevelOf(unit.level);
   const createBlocked = unit.deactivatedAt
@@ -377,7 +378,7 @@ export function OrgTreeView({
 }) {
   const root = buildTree(tree, ui.showDeactivated);
   if (!root) return <ErrorCard what="机构树" onRetry={() => window.location.reload()} />;
-  const onlyRoot = tree.orgUnits.length === 1;
+  const onlyRoot = onlyRootOrgUnit(tree);
   const selected = tree.orgUnits.find((unit) => unit.id === ui.selectedId) ?? root.unit;
   const toggle = (id: string) => {
     const next = new Set(ui.collapsed);

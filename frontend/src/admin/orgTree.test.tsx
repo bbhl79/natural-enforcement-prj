@@ -13,6 +13,7 @@ import {
   formerNames,
   loadOrgTree,
   namePeriods,
+  onlyRootOrgUnit,
   registerOrgUnit,
   treeCountHint,
   type OrgTreeData,
@@ -163,6 +164,22 @@ describe('机构树界面（P4）', () => {
     expect(html).toContain('根机构不能停用。');
     expect(html).toContain('无（根机构）');
     expect(html).not.toContain('全部展开');
+  });
+
+  it('区分局管理员反例：树里有根和区分局但还没有所时，不显示「请先建区分局」', () => {
+    const district = unit({ id: 'th', name: '天河区分局', level: 'district', parentId: 'gz' });
+    // 区分局管理员的子树：根是区分局（上级不在范围内），还没有所。
+    const ownSubtree: OrgTreeData = { rootId: 'th', orgUnits: [district] };
+    // 树里有根机构和区分局，区分局下还没有所。
+    const rootAndDistrict: OrgTreeData = { rootId: 'gz', orgUnits: [TREE.orgUnits[0]!, district] };
+    expect(onlyRootOrgUnit(ownSubtree)).toBe(false);
+    expect(onlyRootOrgUnit(rootAndDistrict)).toBe(false);
+    expect(onlyRootOrgUnit({ rootId: 'gz', orgUnits: [TREE.orgUnits[0]!] })).toBe(true);
+    for (const html of [view(ADMIN, {}, ownSubtree), view(ADMIN, { selectedId: 'th' }, rootAndDistrict)]) {
+      expect(html).toContain('天河区分局');
+      expect(html).not.toContain('请先建区分局');
+      expect(html).toContain('机构不能移动到其他上级下面。');
+    }
   });
 
   it('所节点不能新建下级；已停用机构不能新建下级', () => {
