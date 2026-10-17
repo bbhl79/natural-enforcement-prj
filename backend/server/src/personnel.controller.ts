@@ -19,6 +19,8 @@ interface RegisterBody {
   initialPassword?: unknown;
   roles?: unknown;
   posts?: unknown;
+  certNo?: unknown;
+  certExpiresOn?: unknown;
 }
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
@@ -63,6 +65,8 @@ export class PersonnelController {
         initialPassword: text(body?.initialPassword),
         roles: texts(body?.roles),
         posts: texts(body?.posts),
+        certNo: text(body?.certNo),
+        certExpiresOn: text(body?.certExpiresOn),
       },
       sourceAddress(req),
     );

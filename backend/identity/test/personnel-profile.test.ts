@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import {
   PERSONNEL_POSTS,
   certStatusOf,
+  parseCalendarDay,
   registrationRules,
 } from '../src/index.ts';
 import { sortRoleNames } from '../src/domain/personnel-profile.ts';
@@ -47,6 +48,18 @@ describe('登记规则（#105 故事 28、29）', () => {
     expect(registrationRules({ ...valid, code: 'X'.repeat(33) })).toEqual(['personnel-code-too-long']);
     expect(registrationRules({ ...valid, name: '甲'.repeat(101) })).toEqual(['personnel-name-too-long']);
     expect(registrationRules({ ...valid, posts: ['法制审核负责人'] })).toEqual(['post-unknown']);
+  });
+
+  it('执法证可留空；要填须证号和有效期都填，有效期是真实日历日，证号最长 64', () => {
+    expect(registrationRules({ ...valid, certNo: '', certExpiresOn: '' })).toEqual([]);
+    expect(registrationRules({ ...valid, certNo: ' GD-0001 ', certExpiresOn: '2027-06-30' })).toEqual([]);
+    expect(registrationRules({ ...valid, certNo: 'GD-0001' })).toEqual(['cert-expires-on-required']);
+    expect(registrationRules({ ...valid, certExpiresOn: '2027-06-30' })).toEqual(['cert-no-required']);
+    expect(registrationRules({ ...valid, certNo: 'X'.repeat(65), certExpiresOn: '2027-06-30' })).toEqual(['cert-no-too-long']);
+    expect(registrationRules({ ...valid, certNo: 'GD-0001', certExpiresOn: '2027-02-29' })).toEqual(['cert-expires-on-invalid']);
+    expect(registrationRules({ ...valid, certNo: 'GD-0001', certExpiresOn: '2028-02-29' })).toEqual([]);
+    expect(parseCalendarDay('2027-13-01')).toBeNull();
+    expect(parseCalendarDay('2027-06-30')?.toISOString()).toBe('2027-06-30T00:00:00.000Z');
   });
 
   it('初始口令过口令策略，含工号按本次填写的工号判断，不比口令历史', () => {

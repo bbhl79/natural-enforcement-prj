@@ -98,6 +98,9 @@ export interface PersonnelToCreate {
   passwordHash: string | null;
   /** 登录标识。有值时全库唯一。不传即为空。 */
   mobilePhone?: string | null;
+  /** 执法证号与有效期（日历日，UTC 午夜）。登记时可空，空即无执法资格（#105:218）。不传即为空。 */
+  enforcementCertNo?: string | null;
+  enforcementCertExpiresOn?: Date | null;
 }
 
 /** 人员—岗位标记新行（#128）。加标记 = 插入新行；摘标记 = 给旧行置失效时间。 */

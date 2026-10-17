@@ -201,6 +201,8 @@ interface RegisterBody {
   initialPassword: string;
   roles: string[];
   posts: string[];
+  certNo?: string;
+  certExpiresOn?: string;
 }
 
 let serial = 0;
@@ -535,6 +537,42 @@ describe('POST /api/admin/personnel（登记）', () => {
     const text = JSON.stringify(rows);
     expect(text.includes(payload.mobilePhone)).toBe(false);
     expect(text.includes(INITIAL)).toBe(false);
+  });
+
+  it('登记时填执法证：写入人员行的证号和有效期，卡片能看到；留痕里没有证号（#105:232）', async () => {
+    const certNo = 'GD-128-CERT-0001';
+    const payload = body({ certNo: ` ${certNo} `, certExpiresOn: '2027-06-30' });
+    const before = await audits();
+    const response = await register(PHONES.root, payload);
+    expect(response.status).toBe(200);
+    const { personnel } = await response.json() as { personnel: { id: string } };
+    expect(await cloned.prisma.personnel.findUniqueOrThrow({ where: { id: personnel.id } })).toMatchObject({
+      enforcementCertNo: certNo, enforcementCertExpiresOn: new Date('2027-06-30T00:00:00.000Z'),
+    });
+    const rows = added(before, await audits());
+    expect(rows.map((row) => row.action)).toEqual(['personnel.registered']);
+    expect(JSON.stringify(rows).includes(certNo)).toBe(false);
+    const opened = await (await card(PHONES.root, personnel.id)).json() as { personnel: { cert: unknown } };
+    expect(opened.personnel.cert).toEqual({ no: certNo, expiresOn: '2027-06-30', status: 'valid' });
+  });
+
+  it('执法证只填一项、证号超长、有效期不是真实日期 → 400，人员各表不变，不写留痕', async () => {
+    const cases: Array<[Partial<RegisterBody>, string[]]> = [
+      [{ certNo: 'GD-128-ONLY' }, ['cert-expires-on-required']],
+      [{ certExpiresOn: '2027-06-30' }, ['cert-no-required']],
+      [{ certNo: 'X'.repeat(65), certExpiresOn: '2027-06-30' }, ['cert-no-too-long']],
+      [{ certNo: 'GD-128-BAD', certExpiresOn: '2027-02-30' }, ['cert-expires-on-invalid']],
+      [{ certNo: 'GD-128-BAD', certExpiresOn: '2027/06/30' }, ['cert-expires-on-invalid']],
+    ];
+    for (const [overrides, rules] of cases) {
+      const rowsBefore = await personnelRows();
+      const before = await audits();
+      const response = await register(PHONES.root, body(overrides));
+      expect(response.status).toBe(400);
+      expect(await response.json()).toEqual({ result: 'non-compliant', rules });
+      expect(await personnelRows()).toEqual(rowsBefore);
+      expect(added(before, await audits())).toEqual([]);
+    }
   });
 
   it('新人员用初始口令登录被强制改密', async () => {

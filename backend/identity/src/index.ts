@@ -79,6 +79,7 @@ export {
   ROLE_ORDER,
   certStatusOf,
   isPersonnelPost,
+  parseCalendarDay,
   registrationRules,
 } from './domain/personnel-profile.ts';
 export type {

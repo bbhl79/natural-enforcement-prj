@@ -21,6 +21,9 @@ export function isPersonnelPost(value: unknown): value is PersonnelPost {
 export const PERSONNEL_CODE_MAX_LENGTH = 32;
 export const PERSONNEL_NAME_MAX_LENGTH = 100;
 
+/** 执法证号最长字数（工程定，#128；证号格式由 #133 定稿前只限长度）。 */
+export const CERT_NO_MAX_LENGTH = 64;
+
 /** 手机号：11 位数字，以 1 开头（工程定，#128）。 */
 const MOBILE_PHONE = /^1\d{10}$/;
 
@@ -39,7 +42,11 @@ export type PersonnelRuleCode =
   | 'password-required'
   | 'roles-required'
   | 'role-unknown'
-  | 'post-unknown';
+  | 'post-unknown'
+  | 'cert-no-required'
+  | 'cert-no-too-long'
+  | 'cert-expires-on-required'
+  | 'cert-expires-on-invalid';
 
 export type RegisterRuleCode = PersonnelRuleCode | PasswordRuleCode;
 
@@ -52,6 +59,9 @@ export interface RegisterPersonnelProfileInput {
   initialPassword: string;
   roles: readonly string[];
   posts: readonly string[];
+  /** 执法证号、有效期至（YYYY-MM-DD），可留空；要填须两项都填（原型 P6:51）。 */
+  certNo?: string;
+  certExpiresOn?: string;
 }
 
 /** 去掉首尾空白、去重后的登记输入。口令原样保留。 */
@@ -63,6 +73,8 @@ export interface NormalizedRegistration {
   initialPassword: string;
   roles: string[];
   posts: PersonnelPost[];
+  certNo: string;
+  certExpiresOn: string;
 }
 
 export function normalizeRegistration(input: RegisterPersonnelProfileInput): NormalizedRegistration {
@@ -74,7 +86,16 @@ export function normalizeRegistration(input: RegisterPersonnelProfileInput): Nor
     initialPassword: input.initialPassword,
     roles: [...new Set(input.roles.map((role) => role.trim()).filter((role) => role !== ''))],
     posts: [...new Set(input.posts)].filter(isPersonnelPost),
+    certNo: (input.certNo ?? '').trim(),
+    certExpiresOn: (input.certExpiresOn ?? '').trim(),
   };
+}
+
+/** YYYY-MM-DD 且是真实日历日时返回 UTC 午夜，否则 null。 */
+export function parseCalendarDay(value: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value ? null : date;
 }
 
 /**
@@ -94,6 +115,10 @@ export function registrationRules(input: RegisterPersonnelProfileInput): Registe
   else if (!MOBILE_PHONE.test(value.mobilePhone)) rules.push('mobile-phone-invalid');
   if (value.roles.length === 0) rules.push('roles-required');
   if (input.posts.some((post) => !isPersonnelPost(post))) rules.push('post-unknown');
+  if (value.certNo === '' && value.certExpiresOn !== '') rules.push('cert-no-required');
+  else if ([...value.certNo].length > CERT_NO_MAX_LENGTH) rules.push('cert-no-too-long');
+  if (value.certNo !== '' && value.certExpiresOn === '') rules.push('cert-expires-on-required');
+  else if (value.certExpiresOn !== '' && !parseCalendarDay(value.certExpiresOn)) rules.push('cert-expires-on-invalid');
   if (value.initialPassword === '') rules.push('password-required');
   else rules.push(...rejectedPasswordRules({ password: value.initialPassword, personnelCode: value.code }));
   return rules;
