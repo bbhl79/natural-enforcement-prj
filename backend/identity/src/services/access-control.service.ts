@@ -22,7 +22,6 @@ import {
 
 import {
   AccessDeniedError,
-  IDENTITY_MAINTENANCE_OPCODE,
   type AuthorizationResource,
   type IdentityContext,
 } from '../domain/access.ts';
@@ -238,28 +237,31 @@ export class AccessControlService {
   }
 
   /**
-   * 新建根机构：先走完身份与权限校验（锚点 = 操作者自己的当前任职机构），
-   * 再以数据范围拒绝。新根不落在任何任职子树内；根机构只经种子通道建立。
+   * 新建根机构（#123）：先走完身份与权限校验（锚点 = 操作者自己的当前任职机构），
+   * 再以数据范围拒绝。新根不落在任何任职子树内；根机构只经引导或种子通道建立。
+   * 只判断，不写留痕。拒绝行交给调用方在业务事务回滚后写入。store 同 check。
    */
-  async rejectRootRegistration(actor: ActorRef): Promise<never> {
-    const context = await this.authorize(
-      actor,
-      IDENTITY_MAINTENANCE_OPCODE,
-      await this.currentOrgOf(actor.personnelId),
-    );
-    const personnel = await this.store.findPersonnelById(context.personnelId);
-    return this.raise(denied(
+  async checkRootRegistration(
+    actor: ActorRef,
+    opcode: string,
+    store: IdentityStore = this.store,
+  ): Promise<Extract<AuthorizationDecision, { allowed: false }>> {
+    const anchor = await store.findCurrentAssignment(actor.personnelId);
+    const decision = await this.check(actor, opcode, anchor?.orgUnitId ?? '', undefined, store);
+    if (!decision.allowed) return decision;
+    const personnel = await store.findPersonnelById(decision.context.personnelId);
+    return denied(
       'scope-denied',
-      '新建根机构不在任何任职子树内；根机构只经种子通道建立',
+      '新建根机构不在任何任职子树内；根机构只经引导或种子通道建立',
       {
-        actorId: context.personnelId,
+        actorId: decision.context.personnelId,
         actorCode: personnel?.code ?? null,
-        orgUnitId: context.orgUnitId,
-        opcode: IDENTITY_MAINTENANCE_OPCODE,
+        orgUnitId: decision.context.orgUnitId,
+        opcode,
         // 新根机构还不存在，对象机构解析不出。
-        target: actorFallback(context.orgUnitId),
+        target: actorFallback(decision.context.orgUnitId),
       },
-    ));
+    );
   }
 
   /** 人员的当前任职机构（数据范围锚点）；无生效任职按越权处理。store 同 check。 */

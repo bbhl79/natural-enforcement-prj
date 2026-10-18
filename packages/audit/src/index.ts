@@ -29,6 +29,7 @@ export {
   AUDIT_TARGET_ORG_BASES,
   AUTHZ_DENIED_REASONS,
   LOGIN_FAILED_REASONS,
+  ORG_UNIT_REGISTER_FAILED_REASONS,
   PASSWORD_CHANGED_REASONS,
   SESSION_END_REASONS,
 } from './vocabulary.ts';
@@ -38,6 +39,7 @@ export type {
   AuditTargetOrgBasis,
   AuthzDeniedReason,
   LoginFailedReason,
+  OrgUnitRegisterFailedReason,
   PasswordChangedReason,
   SessionEndReason,
 } from './vocabulary.ts';

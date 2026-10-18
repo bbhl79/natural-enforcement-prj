@@ -17,7 +17,11 @@ function person(roles: string[], opcodes: string[], extra: Json = {}): Json {
 }
 
 const CLERK = ['clue.read', 'case.read', 'case.open'];
-const ADMIN = ['org.unit.register', 'personnel.profile.read', 'personnel.locked.read', 'personnel.locked.release', 'audit.admin.read'];
+const ADMIN = [
+  'org.tree.read', 'org.unit.register', 'org.unit.rename',
+  'personnel.profile.read', 'personnel.locked.read', 'personnel.locked.release', 'audit.admin.read',
+];
+const TREE: [number, Json] = [200, { result: 'listed', rootId: 'hq', orgUnits: [{ id: 'hq' }, { id: 'a' }, { id: 'b' }] }];
 const SUPERVISE = ['audit.admin.read', 'audit.admin.export'];
 const SUMMARY: [number, Json] = [200, { result: 'counted', today: 7 }];
 const ADMIN_ROUTES: Record<string, [number, Json]> = {
@@ -37,7 +41,7 @@ function serve(session: Json | number, routes: Record<string, [number, Json]> = 
         ? new Response('{}', { status: session })
         : new Response(JSON.stringify(session), { status: 200 }));
     }
-    const [status, body] = routes[url] ?? [404, {}];
+    const [status, body] = routes[url] ?? (url === '/api/org-units' ? TREE : [404, {}]);
     return Promise.resolve(new Response(JSON.stringify(body), { status }));
   });
   return calls;
@@ -252,7 +256,10 @@ describe('管理台首页（P3）', () => {
       '/api/admin/audit/summary': SUMMARY,
     });
     await store.dispatch(loadSession());
-    expect(await loadAdminHomeSummary(store.dispatch, ADMIN)).toEqual({ ...EMPTY_SUMMARY, lockedPersonnel: 2, auditToday: 7 });
+    // 系统管理：机构数、被锁人员数、今日留痕条数三项都取
+    expect(await loadAdminHomeSummary(store.dispatch, ADMIN)).toEqual({ ...EMPTY_SUMMARY, orgUnits: 3, lockedPersonnel: 2, auditToday: 7 });
+    // 只有树读码（内勤）不取机构数：机构入口按维护码出现
+    expect((await loadAdminHomeSummary(store.dispatch, ['org.tree.read', 'personnel.locked.read'])).orgUnits).toBeNull();
     expect(await loadAdminHomeSummary(store.dispatch, SUPERVISE)).toEqual({ ...EMPTY_SUMMARY, auditToday: 7 });
     expect(await loadAdminHomeSummary(store.dispatch, ['personnel.locked.read'])).toEqual({ ...EMPTY_SUMMARY, lockedPersonnel: 2 });
     expect(calls.filter((url) => url === '/api/admin/audit/summary')).toHaveLength(2);

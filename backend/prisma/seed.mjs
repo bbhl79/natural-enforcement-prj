@@ -42,9 +42,11 @@ if (existing) {
 
 // ---- 参照种子（#92；允许行 = GitHub issue #71 决议）----
 // 系统管理不持有办案表任何一行。authz.binding 两条只给系统管理。
+// 机构树（#105，#123）：org.tree.read 给系统管理和内勤（内勤选承办机构要用），新建下级、改名只给系统管理。
 // 人员导出 personnel.profile.export 只给系统管理（#125，ADR 0013）。已初始化的库再次播种时补写这一条允许行。
 const ROLE_ALLOWANCES = {
   内勤: [
+    "org.tree.read",
     "clue.org.assign",
     "clue.handler.assign",
     "case.reassign.submit",
@@ -110,6 +112,9 @@ const ROLE_ALLOWANCES = {
     ...["template", "rule", "calendar", "metric"].flatMap((object) =>
       ["submit", "approve", "void", "withdraw", "read"].map((action) => `cfg.${object}.${action}`),
     ),
+    "org.tree.read",
+    "org.unit.register",
+    "org.unit.rename",
     "personnel.locked.read",
     "personnel.locked.release",
     "personnel.password.reset",
@@ -168,12 +173,12 @@ console.log("参照种子已写入或已存在。");
 // NODE_ENV=production 时不写入。夹具不进入生产库。
 const SEED_PASSWORD = "Seed-pass-52"; // 长度 12，含大写、小写、数字、特殊字符。上次改密时间留空。
 
-/** 机构：存在即复用（返回 id），否则建当前行 + v1 名称版本行 */
-async function seedOrgUnit(code, name, parentId = null) {
+/** 机构：存在即复用（返回 id），否则建当前行 + v1 名称版本行。level 取 city / district / station（#123）。 */
+async function seedOrgUnit(code, name, level, parentId = null) {
   const found = await prisma.orgUnit.findUnique({ where: { code } });
   if (found) return found.id;
   const id = newUlid();
-  await prisma.orgUnit.create({ data: { id, code, name, parentId } });
+  await prisma.orgUnit.create({ data: { id, code, name, level, parentId } });
   await prisma.orgUnitNameVersion.create({
     data: { id: newUlid(), orgUnitId: id, name, version: 1 },
   });
@@ -239,17 +244,19 @@ async function seedPersonnel(code, name, orgUnitId, roleNames, passwordHash, mob
 if (process.env.NODE_ENV === "production") {
   console.log("生产环境跳过开发测试夹具。");
 } else {
-  const hqId = await seedOrgUnit("ORG-HQ", "自然执法总队", null);
-  const deptAId = await seedOrgUnit("ORG-DEPT-A", "第一执法支队", hqId);
-  const deptBId = await seedOrgUnit("ORG-DEPT-B", "第二执法支队", hqId);
+  const hqId = await seedOrgUnit("ORG-HQ", "自然执法总队", "city", null);
+  const deptAId = await seedOrgUnit("ORG-DEPT-A", "第一执法支队", "district", hqId);
+  const deptBId = await seedOrgUnit("ORG-DEPT-B", "第二执法支队", "district", hqId);
   // 所挂在甲区之下。市局 = ORG-HQ，两个区 = 两个支队，所 = ORG-STATION-A。
-  const stationAId = await seedOrgUnit("ORG-STATION-A", "甲区执法所", deptAId);
+  const stationAId = await seedOrgUnit("ORG-STATION-A", "甲区执法所", "station", deptAId);
 
   const passwordHash = await hash(SEED_PASSWORD);
   const validCert = { no: "CERT-VALID-A", expiresOn: new Date("2099-12-31T00:00:00.000Z") };
   const expiredCert = { no: "CERT-EXPIRED-B", expiresOn: new Date("2020-01-01T00:00:00.000Z") };
   const bothCert = { no: "CERT-VALID-BOTH", expiresOn: new Date("2099-12-31T00:00:00.000Z") };
   await seedPersonnel("P-SUP-A", "甲主管", deptAId, ["系统管理"], passwordHash, "13800001001", null);
+  // #105 M2（#123）：当前任职在根机构的系统管理。根机构守卫和故事 65 要用。
+  await seedPersonnel("P-ADMIN-HQ", "市局管理", hqId, ["系统管理"], passwordHash, "13800001231", null);
   await seedPersonnel("P-CLERK-A", "乙经办", deptAId, ["经办"], passwordHash, "13800001002", validCert);
   await seedPersonnel("P-CLERK-B", "丙经办", deptBId, ["经办"], passwordHash, "13800001003", expiredCert);
   await seedPersonnel("P-INTAKE-HQ", "市局内勤", hqId, ["内勤"], passwordHash, "13800001004", null);

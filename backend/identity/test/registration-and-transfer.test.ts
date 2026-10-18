@@ -1,4 +1,4 @@
-// 根机构登记与调岗写入形态（unit 层无库）。
+// 根机构登记与调岗写入形态（unit 层无库）。新建下级、改名的规则见 org-unit.test.ts。
 // 外部可观察：拒绝必须是 AccessDeniedError 且 reason 精确；调岗必须是一次 transferAssignment，
 // 不能拆成关止、插入、改归属三次独立提交。
 import { describe, expect, it, vi } from 'vitest';
@@ -7,6 +7,7 @@ import type { AuditTrailPort } from '@natural-enforcement/audit';
 
 import { IDENTITY_MAINTENANCE_OPCODE, AccessDeniedError } from '../src/domain/access.ts';
 import { AlreadyExistsError } from '../src/domain/already-exists.ts';
+import { ORG_UNIT_REGISTER_OPCODE } from '../src/domain/org-unit.ts';
 import type { ActorRef } from '../src/domain/actor.ts';
 import type {
   AssignmentTransfer,
@@ -83,13 +84,16 @@ function store(extra: Partial<IdentityStore> = {}): IdentityStore {
       handler: ['经办'],
     })[personnelId] ?? [],
     listGrantingRoleNames: async (personnelId, opcode) =>
-      personnelId === 'sys-admin' && opcode === IDENTITY_MAINTENANCE_OPCODE ? ['系统管理'] : [],
+      personnelId === 'sys-admin' && [IDENTITY_MAINTENANCE_OPCODE, ORG_UNIT_REGISTER_OPCODE].includes(opcode)
+        ? ['系统管理']
+        : [],
     insertOrgUnit: async () => undefined,
     insertOrgUnitNameVersion: async () => undefined,
     findOrgUnitById: async () => ({
       id: 'child',
       code: 'child',
       name: '子机构',
+      level: 'station',
       parentId: 'dept-a',
       deactivatedAt: null,
     }),
@@ -101,47 +105,49 @@ function store(extra: Partial<IdentityStore> = {}): IdentityStore {
 const authed = (personnelId: string): ActorRef => ({ personnelId, authenticated: true });
 
 describe('根机构登记', () => {
+  const tx = (backing: IdentityStore) => ({ store: backing, client: null });
+
   it('未认证被拒（not-authenticated），且不写库', async () => {
     const insertOrgUnit = vi.fn();
-    const orgUnits = new OrgUnitService(store({ insertOrgUnit }), accessFor(store()));
+    const backing = store({ insertOrgUnit });
+    const orgUnits = new OrgUnitService(backing, accessFor(backing));
     await expect(
       orgUnits.registerOrgUnit(
         { personnelId: 'sys-admin', authenticated: false },
-        { code: 'ROOT', name: '根', parentId: null },
+        { name: '根', level: 'city', parentId: null },
+        tx(backing),
+        audit,
       ),
     ).rejects.toMatchObject({ reason: 'not-authenticated' });
     expect(insertOrgUnit).not.toHaveBeenCalled();
   });
 
-  it('内勤没有维护允许行，被拒（permission-denied）', async () => {
-    const orgUnits = new OrgUnitService(store(), accessFor(store()));
+  it('内勤没有新建允许行，被拒（permission-denied）', async () => {
+    const backing = store();
+    const orgUnits = new OrgUnitService(backing, accessFor(backing));
     await expect(
-      orgUnits.registerOrgUnit(authed('intake'), { code: 'ROOT', name: '根', parentId: null }),
+      orgUnits.registerOrgUnit(authed('intake'), { name: '根', level: 'city', parentId: null }, tx(backing), audit),
     ).rejects.toMatchObject({ reason: 'permission-denied' });
   });
 
-  it('有维护允许行的系统管理登记根机构仍被拒（scope-denied）', async () => {
+  it('有新建允许行的系统管理登记根机构仍被拒（scope-denied），错误带上待写的 authz.denied', async () => {
     const insertOrgUnit = vi.fn();
-    const orgUnits = new OrgUnitService(store({ insertOrgUnit }), accessFor(store()));
-    await expect(
-      orgUnits.registerOrgUnit(authed('sys-admin'), { code: 'ROOT', name: '根', parentId: null }),
-    ).rejects.toBeInstanceOf(AccessDeniedError);
-    await expect(
-      orgUnits.registerOrgUnit(authed('sys-admin'), { code: 'ROOT', name: '根', parentId: null }),
-    ).rejects.toMatchObject({ reason: 'scope-denied' });
-    expect(insertOrgUnit).not.toHaveBeenCalled();
-  });
-
-  it('上级机构在数据范围内时放行并写入', async () => {
-    const insertOrgUnit = vi.fn();
-    const orgUnits = new OrgUnitService(store({ insertOrgUnit }), accessFor(store()));
-    const created = await orgUnits.registerOrgUnit(authed('sys-admin'), {
-      code: 'CHILD',
-      name: '子机构',
-      parentId: 'dept-a',
+    const appended = vi.fn(async () => undefined);
+    const backing = store({ insertOrgUnit });
+    const orgUnits = new OrgUnitService(backing, new AccessControlService(backing, { append: appended }));
+    const attempt = orgUnits.registerOrgUnit(
+      authed('sys-admin'),
+      { name: '根', level: 'city', parentId: null },
+      tx(backing),
+      { append: appended },
+    );
+    await expect(attempt).rejects.toBeInstanceOf(AccessDeniedError);
+    await expect(attempt).rejects.toMatchObject({
+      reason: 'scope-denied',
+      denial: { action: 'authz.denied', reason: 'scope-denied', opcode: ORG_UNIT_REGISTER_OPCODE },
     });
-    expect(insertOrgUnit).toHaveBeenCalledOnce();
-    expect(created.parentId).toBe('dept-a');
+    expect(insertOrgUnit).not.toHaveBeenCalled();
+    expect(appended).not.toHaveBeenCalled();
   });
 });
 

@@ -2,6 +2,7 @@ import type {
   AuditTargetOrgBasis,
   AuthzDeniedReason,
   LoginFailedReason,
+  OrgUnitRegisterFailedReason,
   PasswordChangedReason,
   SessionEndReason,
 } from './vocabulary.ts';
@@ -50,6 +51,9 @@ export type AuditAppend =
     targetOrgUnitId?: string | null;
     targetOrgUnitBasis?: AuditTargetOrgBasis;
   })
+  | (AuditParties & { action: 'org.unit.registered' })
+  | (AuditParties & { action: 'org.unit.registered'; outcome: 'failed'; reason: OrgUnitRegisterFailedReason })
+  | (AuditParties & { action: 'org.unit.renamed' })
   | (AuditParties & { action: 'personnel.exported'; itemCount: number })
   | (AuditParties & { action: 'audit.viewed' })
   | (AuditParties & { action: 'audit.exported'; itemCount: number });

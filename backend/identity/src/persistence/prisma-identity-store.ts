@@ -7,6 +7,8 @@
 
 import type { Prisma, PrismaClient } from '../../../prisma/generated/prisma/client.ts';
 
+import { isOrgUnitLevel } from '../domain/org-unit.ts';
+
 import type {
   ExportAuditRow,
   IdentityStore,
@@ -29,6 +31,28 @@ import type {
 export type IdentityDb = PrismaClient | Prisma.TransactionClient;
 
 const WRITTEN: UniqueWriteResult = { result: 'written' };
+
+type OrgUnitRecord = {
+  id: string;
+  code: string;
+  name: string;
+  level: string;
+  parentId: string | null;
+  deactivatedAt: Date | null;
+};
+
+/** 库行转端口行。层级取值不认识时报错（库层 CHECK 已兜底，这里不静默放过）。 */
+function toOrgUnitRow(row: OrgUnitRecord): OrgUnitRow {
+  if (!isOrgUnitLevel(row.level)) throw new Error(`机构 ${row.id} 的层级取值不认识：${row.level}`);
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    level: row.level,
+    parentId: row.parentId,
+    deactivatedAt: row.deactivatedAt,
+  };
+}
 
 /**
  * 同一事务客户端上的受唯一约束写入排队执行（#119）。
@@ -108,8 +132,9 @@ export class PrismaIdentityStore implements IdentityStore {
     return this.prisma.personnel.findUnique({ where: { id } });
   }
 
-  findOrgUnitById(id: string): Promise<OrgUnitRow | null> {
-    return this.prisma.orgUnit.findUnique({ where: { id } });
+  async findOrgUnitById(id: string): Promise<OrgUnitRow | null> {
+    const row = await this.prisma.orgUnit.findUnique({ where: { id } });
+    return row ? toOrgUnitRow(row) : null;
   }
 
   async findCurrentAssignment(personnelId: string): Promise<PersonnelAssignmentRow | null> {
@@ -199,6 +224,48 @@ export class PrismaIdentityStore implements IdentityStore {
       where: { orgUnitId },
       orderBy: { version: 'asc' },
     });
+  }
+
+  async listOrgUnitSubtree(orgUnitId: string): Promise<OrgUnitRow[]> {
+    const ids = await this.listOrgUnitSubtreeIds(orgUnitId);
+    if (ids.length === 0) return [];
+    const rows = await this.prisma.orgUnit.findMany({
+      where: { id: { in: ids } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map(toOrgUnitRow);
+  }
+
+  listOrgUnitNameVersionsOf(orgUnitIds: readonly string[]): Promise<OrgUnitNameVersionRow[]> {
+    if (orgUnitIds.length === 0) return Promise.resolve([]);
+    return this.prisma.orgUnitNameVersion.findMany({
+      where: { orgUnitId: { in: [...orgUnitIds] } },
+      orderBy: [{ orgUnitId: 'asc' }, { version: 'asc' }],
+    });
+  }
+
+  async countActivePersonnelByOrgUnit(orgUnitIds: readonly string[]): Promise<Map<string, number>> {
+    const counts = new Map<string, number>();
+    if (orgUnitIds.length === 0) return counts;
+    const rows = await this.prisma.personnelAssignment.groupBy({
+      by: ['orgUnitId'],
+      where: { orgUnitId: { in: [...orgUnitIds] }, endedAt: null, personnel: { deactivatedAt: null } },
+      _count: { _all: true },
+    });
+    for (const row of rows) counts.set(row.orgUnitId, row._count._all);
+    return counts;
+  }
+
+  async lockOrgUnit(orgUnitId: string, mode: 'share' | 'update'): Promise<OrgUnitRow | null> {
+    const rows = mode === 'update'
+      ? await this.prisma.$queryRaw<OrgUnitRecord[]>`
+          SELECT id, code, name, level, parent_id AS "parentId", deactivated_at AS "deactivatedAt"
+          FROM org_unit WHERE id = ${orgUnitId} FOR UPDATE`
+      : await this.prisma.$queryRaw<OrgUnitRecord[]>`
+          SELECT id, code, name, level, parent_id AS "parentId", deactivated_at AS "deactivatedAt"
+          FROM org_unit WHERE id = ${orgUnitId} FOR SHARE`;
+    const row = rows[0];
+    return row ? toOrgUnitRow(row) : null;
   }
 
   listPersonnelNameVersions(personnelId: string): Promise<PersonnelNameVersionRow[]> {

@@ -18,6 +18,7 @@ import {
   AUDIT_SUCCEEDED_ACTIONS,
   AUTHZ_DENIED_REASONS,
   LOGIN_FAILED_REASONS,
+  ORG_UNIT_REGISTER_FAILED_REASONS,
   PASSWORD_CHANGED_REASONS,
   SESSION_END_REASONS,
 } from './vocabulary.ts';
@@ -35,6 +36,11 @@ const REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['authz.denied', new Set<string>(AUTHZ_DENIED_REASONS)],
 ]);
 
+/** 记成功的动作被拒绝（outcome=failed）时的封闭原因表。不在表里的成功动作不能记失败。 */
+const FAILED_REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ['org.unit.registered', new Set<string>(ORG_UNIT_REGISTER_FAILED_REASONS)],
+]);
+
 /** 封闭取值表的运行时把关：类型之外（如 as 断言、JS 调用方）传入的表外取值一律拒绝，不写库。 */
 export class AuditVocabularyError extends Error {
   constructor(message: string) {
@@ -43,8 +49,22 @@ export class AuditVocabularyError extends Error {
   }
 }
 
-function assertVocabulary(action: string, reason: unknown): void {
+function assertVocabulary(action: string, outcome: unknown, reason: unknown): void {
   if (!ACTIONS.has(action)) throw new AuditVocabularyError(`表外留痕动作：${action}`);
+  if (outcome !== 'succeeded' && outcome !== 'failed') {
+    throw new AuditVocabularyError(`动作 ${action} 的表外成败：${String(outcome)}`);
+  }
+  if (SUCCEEDED.has(action) && outcome === 'failed') {
+    const failed = FAILED_REASONS.get(action);
+    if (!failed) throw new AuditVocabularyError(`动作 ${action} 只记成功`);
+    if (typeof reason !== 'string' || !failed.has(reason)) {
+      throw new AuditVocabularyError(`动作 ${action} 的表外失败原因：${String(reason)}`);
+    }
+    return;
+  }
+  if (!SUCCEEDED.has(action) && outcome === 'succeeded') {
+    throw new AuditVocabularyError(`动作 ${action} 只记失败`);
+  }
   const allowed = REASONS.get(action);
   if (!allowed) {
     if (reason != null) throw new AuditVocabularyError(`动作 ${action} 不带原因，收到：${String(reason)}`);
@@ -101,7 +121,7 @@ export class PrismaAuditTrail implements AuditTrailPort {
       : SUCCEEDED.has(entry.action) ? 'succeeded' : 'failed';
     const reason = 'reason' in entry ? entry.reason : null;
     const itemCount = 'itemCount' in entry ? (entry.itemCount ?? null) : null;
-    assertVocabulary(entry.action, reason);
+    assertVocabulary(entry.action, outcome, reason);
     assertItemCount(entry.action, itemCount);
     const target = targetOf(entry);
     await this.db.auditTrail.create({

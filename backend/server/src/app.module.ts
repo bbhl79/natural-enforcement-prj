@@ -15,6 +15,8 @@ import { AuditController } from './audit.controller.ts';
 import { AuthController } from './auth.controller.ts';
 import { AuthService } from './auth.service.ts';
 import { HealthController } from './health.controller.ts';
+import { OrgUnitsController } from './org-units.controller.ts';
+import { OrgUnitsService } from './org-units.service.ts';
 import { SessionGuard } from './session.guard.ts';
 import { SourceGate } from './source-gate.ts';
 
@@ -28,7 +30,14 @@ import { SourceGate } from './source-gate.ts';
     DeadlineModule,
     GeoDictModule,
   ],
-  controllers: [HealthController, AuthController, AdminController, AuditController],
-  providers: [AuthService, AdminService, AuditBrowseService, SourceGate, { provide: APP_GUARD, useClass: SessionGuard }],
+  controllers: [HealthController, AuthController, AdminController, OrgUnitsController, AuditController],
+  providers: [
+    AuthService,
+    AdminService,
+    OrgUnitsService,
+    AuditBrowseService,
+    SourceGate,
+    { provide: APP_GUARD, useClass: SessionGuard },
+  ],
 })
 export class AppModule {}

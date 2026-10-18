@@ -29,6 +29,7 @@ function newUlid(): string {
 /** #71 决议表。键是角色名。值是该角色的操作码。 */
 const EXPECTED_ALLOWANCES: Record<string, readonly string[]> = {
   内勤: [
+    'org.tree.read',
     'clue.org.assign',
     'clue.handler.assign',
     'case.reassign.submit',
@@ -94,6 +95,9 @@ const EXPECTED_ALLOWANCES: Record<string, readonly string[]> = {
     ...['template', 'rule', 'calendar', 'metric'].flatMap((object) =>
       ['submit', 'approve', 'void', 'withdraw', 'read'].map((action) => `cfg.${object}.${action}`),
     ),
+    'org.tree.read',
+    'org.unit.register',
+    'org.unit.rename',
     'personnel.locked.read',
     'personnel.locked.release',
     'personnel.password.reset',

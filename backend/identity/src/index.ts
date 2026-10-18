@@ -42,8 +42,23 @@ export {
 export { AccessControlService } from './services/access-control.service.ts';
 export { CredentialService } from './services/credential.service.ts';
 export type {
+  OrgTree,
+  OrgTreeUnit,
   RegisterOrgUnitInput,
+  RegisterOrgUnitResult,
+  RenameOrgUnitResult,
 } from './services/org-unit.service.ts';
+export {
+  ORG_TREE_READ_OPCODE,
+  ORG_UNIT_LEVELS,
+  ORG_UNIT_NAME_MAX_LENGTH,
+  ORG_UNIT_REGISTER_OPCODE,
+  ORG_UNIT_RENAME_OPCODE,
+  ROOT_ORG_UNIT_LEVEL,
+  childLevelOf,
+  isOrgUnitLevel,
+} from './domain/org-unit.ts';
+export type { OrgUnitLevel, OrgUnitRuleCode } from './domain/org-unit.ts';
 export { OrgUnitService } from './services/org-unit.service.ts';
 export type {
   PersonnelDetail,

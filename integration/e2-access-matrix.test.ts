@@ -22,6 +22,7 @@ import {
   newUlid,
   type ActorRef,
   type DenyReason,
+  type RegisterOrgUnitInput,
 } from '../backend/identity/src/index.ts';
 import { PrismaIdentityStore } from '../backend/identity/src/persistence/prisma-identity-store.ts';
 
@@ -29,7 +30,7 @@ const SEED_PASSWORD = 'Seed-pass-52';
 
 /** #71 决议允许行。不从种子源码推导。 */
 const ALLOWED: Record<string, readonly string[]> = {
-  内勤: ['clue.org.assign', 'clue.handler.assign', 'case.reassign.submit', 'clue.read', 'case.read', 'doc.read'],
+  内勤: ['org.tree.read', 'clue.org.assign', 'clue.handler.assign', 'case.reassign.submit', 'clue.read', 'case.read', 'doc.read'],
   经办: [
     'clue.verify.start', 'case.open', 'doc.draft', 'doc.submit', 'case.reassign.submit',
     'legal.review.request', 'clue.read', 'case.read', 'doc.read', 'clue.export', 'case.export', 'doc.export',
@@ -54,6 +55,7 @@ const ALLOWED: Record<string, readonly string[]> = {
     ...['template', 'rule', 'calendar', 'metric'].flatMap((object) =>
       ['submit', 'approve', 'void', 'withdraw', 'read'].map((action) => `cfg.${object}.${action}`),
     ),
+    'org.tree.read', 'org.unit.register', 'org.unit.rename',
     'personnel.locked.read', 'personnel.locked.release', 'personnel.password.reset', 'personnel.profile.export',
     'audit.admin.read', 'audit.admin.export', 'authz.binding.submit', 'authz.binding.approve',
   ],
@@ -65,6 +67,7 @@ let access: AccessControlService;
 let orgUnits: OrgUnitService;
 let personnel: PersonnelService;
 let credential: CredentialService;
+let identityStore: PrismaIdentityStore;
 
 let hqId: string;
 let deptAId: string;
@@ -121,6 +124,17 @@ async function denialsFor(resourceId: string): Promise<DenialRow[]> {
   `;
 }
 
+/** 机构新建与改名在调用方事务里执行（#123）：业务行与留痕同一事务。 */
+function registerOrgUnit(actor: ActorRef, input: RegisterOrgUnitInput) {
+  return identityStore.inTransaction((tx) =>
+    orgUnits.registerOrgUnit(actor, input, tx, new PrismaAuditTrail(tx.client as PrismaClient)));
+}
+
+function renameOrgUnit(actor: ActorRef, orgUnitId: string, name: string) {
+  return identityStore.inTransaction((tx) =>
+    orgUnits.renameOrgUnit(actor, orgUnitId, name, tx, new PrismaAuditTrail(tx.client as PrismaClient)));
+}
+
 async function grantRole(personnelId: string, roleName: string): Promise<void> {
   const role = await prisma.role.findFirstOrThrow({ where: { name: roleName, deactivatedAt: null } });
   await prisma.personnelRole.create({
@@ -132,6 +146,7 @@ beforeAll(async () => {
   cloned = await openClonedDatabase();
   prisma = cloned.prisma;
   const store = new PrismaIdentityStore(prisma);
+  identityStore = store;
   const audit = new PrismaAuditTrail(prisma);
   access = new AccessControlService(store, audit);
   credential = new CredentialService(store);
@@ -398,44 +413,33 @@ describe('操作码授权', () => {
 
 describe('E2 根机构登记', () => {
   it('未认证登记根机构被拒，且不写库', async () => {
-    const code = uniqueCode('e2-root-na');
+    const before = await prisma.orgUnit.count();
     await expectDenied(
-      orgUnits.registerOrgUnit(
-        { personnelId: clerkAId, authenticated: false },
-        { code, name: '未认证根机构', parentId: null },
-      ),
+      registerOrgUnit({ personnelId: clerkAId, authenticated: false }, { name: '未认证根机构', level: 'city', parentId: null }),
       'not-authenticated',
     );
-    expect(await prisma.orgUnit.findUnique({ where: { code } })).toBeNull();
+    expect(await prisma.orgUnit.count()).toBe(before);
   });
 
-  it('没有维护允许行的人员登记根机构被拒', async () => {
+  it('没有新建允许行的人员登记根机构被拒', async () => {
     await expectDenied(
-      orgUnits.registerOrgUnit(auth(clerkAId), {
-        code: uniqueCode('e2-root-v'),
-        name: '经办根机构',
-        parentId: null,
-      }),
+      registerOrgUnit(auth(clerkAId), { name: '经办根机构', level: 'city', parentId: null }),
       'permission-denied',
     );
   });
 
-  it('有维护允许行的系统管理登记根机构仍被拒', async () => {
-    const code = uniqueCode('e2-root-sup');
+  it('有新建允许行的系统管理登记根机构仍被拒', async () => {
+    const before = await prisma.orgUnit.count();
     await expectDenied(
-      orgUnits.registerOrgUnit(auth(supAId), { code, name: '系统管理根机构', parentId: null }),
+      registerOrgUnit(auth(supAId), { name: '系统管理根机构', level: 'city', parentId: null }),
       'scope-denied',
     );
-    expect(await prisma.orgUnit.findUnique({ where: { code } })).toBeNull();
+    expect(await prisma.orgUnit.count()).toBe(before);
   });
 
-  it('系统管理在本机构下登记子机构', async () => {
-    const created = await orgUnits.registerOrgUnit(auth(supAId), {
-      code: uniqueCode('e2-child'),
-      name: '支队下属机构',
-      parentId: deptAId,
-    });
-    expect(created.parentId).toBe(deptAId);
+  it('系统管理在本区下登记所', async () => {
+    const created = await registerOrgUnit(auth(supAId), { name: '支队下属所', level: 'station', parentId: deptAId });
+    expect(created).toMatchObject({ result: 'registered', orgUnit: { parentId: deptAId, level: 'station' } });
   });
 });
 
@@ -474,7 +478,7 @@ describe('E2 机构与人员维护', () => {
       orderBy: { version: 'asc' },
     });
     const newName = `第一执法支队（更名${newUlid().slice(0, 4)}）`;
-    await orgUnits.renameOrgUnit(auth(supAId), deptAId, newName);
+    await renameOrgUnit(auth(supAId), deptAId, newName);
     const after = await prisma.orgUnitNameVersion.findMany({
       where: { orgUnitId: deptAId },
       orderBy: { version: 'asc' },
@@ -488,7 +492,7 @@ describe('E2 机构与人员维护', () => {
 
   it('其他区人员改本区机构被拒', async () => {
     await expectDenied(
-      orgUnits.renameOrgUnit(auth(clerkBId), deptAId, `越权${newUlid().slice(0, 4)}`),
+      renameOrgUnit(auth(clerkBId), deptAId, `越权${newUlid().slice(0, 4)}`),
       'permission-denied',
     );
   });

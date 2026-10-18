@@ -5,6 +5,8 @@
 // 首个真实调用方 = integration/e2-access-matrix.test.ts（PrismaIdentityStore 适配）。
 // 主键形制约定（#16 §1.1）：ULID，由领域层 newUlid 生成；端口内以 string 承载。
 
+import type { OrgUnitLevel } from '../domain/org-unit.ts';
+
 /** 注入令牌：宿主/调用方绑定 store 实现（模块自身不直连具体存储） */
 export const IDENTITY_STORE = Symbol('IDENTITY_STORE');
 
@@ -13,6 +15,8 @@ export interface OrgUnitRow {
   id: string;
   code: string;
   name: string;
+  /** 层级（#123）：city 市、district 区、station 所 */
+  level: OrgUnitLevel;
   parentId: string | null;
   deactivatedAt: Date | null;
 }
@@ -84,6 +88,7 @@ export interface OrgUnitToCreate {
   id: string;
   code: string;
   name: string;
+  level: OrgUnitLevel;
   parentId: string | null;
 }
 
@@ -158,6 +163,20 @@ export interface IdentityStore {
   listGrantedOpcodes(personnelId: string): Promise<OpcodeGrant[]>;
   /** 机构全部历史名称版本，按版本号升序 */
   listOrgUnitNameVersions(orgUnitId: string): Promise<OrgUnitNameVersionRow[]>;
+  /**
+   * 某机构及其全部下级机构（含已停用），按建立时间、id 升序（#123 机构树）。
+   * 机构不存在时返回空数组。
+   */
+  listOrgUnitSubtree(orgUnitId: string): Promise<OrgUnitRow[]>;
+  /** 这些机构的全部名称版本，按机构、版本号升序。 */
+  listOrgUnitNameVersionsOf(orgUnitIds: readonly string[]): Promise<OrgUnitNameVersionRow[]>;
+  /** 这些机构上的在职人员数：当前任职（endedAt 为空）且人员未停用。没有人员的机构不出现。 */
+  countActivePersonnelByOrgUnit(orgUnitIds: readonly string[]): Promise<Map<string, number>>;
+  /**
+   * 在当前事务里给机构行加锁并读出当前值（#123）。share = 新建下级时锁上级，
+   * update = 改名、停用时锁本机构。机构不存在时返回 null。根客户端上锁随语句结束释放。
+   */
+  lockOrgUnit(orgUnitId: string, mode: 'share' | 'update'): Promise<OrgUnitRow | null>;
   listPersonnelNameVersions(personnelId: string): Promise<PersonnelNameVersionRow[]>;
   /** 某机构（不含下级）全部未失效人员 */
   listActivePersonnelOfOrgUnit(orgUnitId: string): Promise<PersonnelRow[]>;
