@@ -81,6 +81,7 @@ export function FirstDayGuide() {
 
 /**
  * 首屏「需要留意的执法证」统计（P3，#133）：临期、已过期、失效、未登记四行，各带一个进名单的筛选链接。
+ * 链接带 off=0：统计数不含已停用的人（certAttentionOf），落点名单口径一致（v0.4 P5 filtered 态「含已停用人员」未勾选）。
  * 数字未知（没有名单读码，或名单还没到）时只占位，不出空表。
  */
 export function CertAttentionCard({ counts }: { counts: Record<CertAttentionKey, number> | null }) {
@@ -100,7 +101,7 @@ export function CertAttentionCard({ counts }: { counts: Record<CertAttentionKey,
             <tr key={key} data-cert={key}>
               <td>{CERT_ATTENTION_LABEL[key]}</td>
               <td>{counts[key]}</td>
-              <td><Link className="btn btn-sm" to={`/admin/personnel?cert=${key}`}>查看</Link></td>
+              <td><Link className="btn btn-sm" to={`/admin/personnel?cert=${key}&off=0`}>查看</Link></td>
             </tr>
           ))}
         </tbody>

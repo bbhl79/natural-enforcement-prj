@@ -246,7 +246,7 @@ describe('管理台首页（P3）', () => {
     expect(html).not.toContain('还不能开始核查和立案');
   });
 
-  it('「需要留意的执法证」四行按人数出，查看链接带证件筛选（#133，原型 P3:29）', () => {
+  it('「需要留意的执法证」四行按人数出，查看链接带证件筛选且不含停用人员（#133，原型 P3:29、P5 filtered）', () => {
     const html = render(ADMIN, {
       ...EMPTY_SUMMARY,
       certAttention: { expiring: 5, expired: 2, invalid: 1, none: 9 },
@@ -261,7 +261,8 @@ describe('管理台首页（P3）', () => {
     ];
     for (const [label, count, cert] of rows) {
       expect(html).toContain(`<td>${label}</td><td>${count}</td>`);
-      expect(html).toContain(`href="/admin/personnel?cert=${cert}"`);
+      // off=0：统计数不含已停用的人，落点名单同口径；静态标记里 & 转义为 &amp;
+      expect(html).toContain(`href="/admin/personnel?cert=${cert}&amp;off=0"`);
     }
     // 数字未知时只占位，不出空表
     const unknown = render(ADMIN);
