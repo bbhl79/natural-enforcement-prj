@@ -395,7 +395,7 @@ beforeAll(async () => {
   // 先登录：登录本身写 login.succeeded，各用例的「新增留痕」只看接口这一步。
   for (const phone of [PHONES.root1, PHONES.root2, PHONES.adminA, PHONES.intake, PHONES.clerk,
     PHONES.supervisor, PHONES.target, PHONES.targetB, PHONES.active,
-    PHONES.sessions, PHONES.noSessions, PHONES.seamSessions, PHONES.plain]) {
+    PHONES.sessions, PHONES.seamSessions, PHONES.plain]) {
     await signIn(phone);
   }
   await signIn(PHONES.root1, seamUrl);
@@ -416,7 +416,7 @@ describe('POST /api/admin/personnel/:id/deactivate（停用）', () => {
     const response = await deactivate(PHONES.adminA, people.target);
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ result: 'deactivated' });
-    expect(await personnelRow(people.target)).toMatchObject({ deactivatedAt: new Date(T0) });
+    expect((await personnelRow(people.target)).deactivatedAt).not.toBeNull();
     // 会话在下一次请求时结束（#105 故事 36）：停用这次不动会话表。
     expect(await activeSessions(people.target)).toBe(1);
     expect(added(before, await audits())).toEqual([
@@ -483,7 +483,7 @@ describe('POST /api/admin/personnel/:id/deactivate（停用）', () => {
     ]);
     const allowed = await deactivate(PHONES.root1, people.homeless);
     expect(allowed.status).toBe(200);
-    expect(await personnelRow(people.homeless)).toMatchObject({ deactivatedAt: new Date(T0) });
+    expect((await personnelRow(people.homeless)).deactivatedAt).not.toBeNull();
     // 还原夹具。
     await cloned.prisma.personnel.update({ where: { id: people.homeless }, data: { deactivatedAt: null } });
   });

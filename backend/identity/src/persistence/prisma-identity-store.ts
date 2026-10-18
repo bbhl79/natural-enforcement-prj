@@ -508,6 +508,11 @@ export class PrismaIdentityStore implements IdentityStore {
     await this.prisma.personnel.update({ where: { id: personnelId }, data: { deactivatedAt } });
   }
 
+  async restorePersonnel(personnelId: string): Promise<void> {
+    // 恢复（#130）：清失效标记与失效时间。口令散列、上次改密时间与锁定由调用方在同一事务里另行写入。
+    await this.prisma.personnel.update({ where: { id: personnelId }, data: { deactivatedAt: null } });
+  }
+
   async replacePasswordHash(
     personnelId: string,
     expectedHash: string,

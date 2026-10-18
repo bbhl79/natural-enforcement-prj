@@ -5,8 +5,14 @@ import type {
   OrgUnitDeactivateFailedReason,
   OrgUnitRegisterFailedReason,
   PasswordChangedReason,
+  PersonnelDeactivateFailedReason,
   PersonnelMobileChangeFailedReason,
+  PersonnelPostGrantFailedReason,
+  PersonnelPostRevokeFailedReason,
   PersonnelRegisterFailedReason,
+  PersonnelRenameFailedReason,
+  PersonnelRestoreFailedReason,
+  PersonnelRoleGrantFailedReason,
   PersonnelRoleRevokeFailedReason,
   PersonnelTransferFailedReason,
   SessionEndReason,
@@ -72,11 +78,25 @@ export type AuditAppend =
   | (AuditParties & { action: 'personnel.registered'; outcome: 'failed'; reason: PersonnelRegisterFailedReason })
   | (AuditParties & { action: 'personnel.viewed' })
   | (AuditParties & { action: 'personnel.post-granted'; nextValue: string })
+  | (AuditParties & {
+    action: 'personnel.post-granted';
+    outcome: 'failed';
+    reason: PersonnelPostGrantFailedReason;
+    nextValue: string;
+  })
   // 人员编辑与调岗（#129，ADR 0014）。改名前值写旧名；改手机号前值留空（#105:219）。
+  // 对方已停用时编辑与调岗一律被拒（#130 定口径），失败行的动作词与成功时相同。
   | (AuditParties & { action: 'personnel.renamed' })
+  | (AuditParties & { action: 'personnel.renamed'; outcome: 'failed'; reason: PersonnelRenameFailedReason })
   | (AuditParties & { action: 'personnel.mobile-changed' })
   | (AuditParties & { action: 'personnel.mobile-changed'; outcome: 'failed'; reason: PersonnelMobileChangeFailedReason })
   | (AuditParties & { action: 'personnel.role-granted'; nextValue: string })
+  | (AuditParties & {
+    action: 'personnel.role-granted';
+    outcome: 'failed';
+    reason: PersonnelRoleGrantFailedReason;
+    nextValue: string;
+  })
   | (AuditParties & { action: 'personnel.role-revoked'; nextValue: string })
   | (AuditParties & {
     action: 'personnel.role-revoked';
@@ -85,13 +105,29 @@ export type AuditAppend =
     nextValue: string;
   })
   | (AuditParties & { action: 'personnel.post-revoked'; nextValue: string })
+  | (AuditParties & {
+    action: 'personnel.post-revoked';
+    outcome: 'failed';
+    reason: PersonnelPostRevokeFailedReason;
+    nextValue: string;
+  })
   | (AuditParties & { action: 'personnel.transferred'; nextValue: string })
   | (AuditParties & {
     action: 'personnel.transferred';
     outcome: 'failed';
     reason: PersonnelTransferFailedReason;
     nextValue: string;
-  });
+  })
+  // 人员停用、恢复与结束全部会话（#130）。结束全部会话只记成功，被拒走 authz.denied。
+  | (AuditParties & { action: 'personnel.deactivated' })
+  | (AuditParties & {
+    action: 'personnel.deactivated';
+    outcome: 'failed';
+    reason: PersonnelDeactivateFailedReason;
+  })
+  | (AuditParties & { action: 'personnel.restored' })
+  | (AuditParties & { action: 'personnel.restored'; outcome: 'failed'; reason: PersonnelRestoreFailedReason })
+  | (AuditParties & { action: 'personnel.sessions-ended' });
 
 /**
  * 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。

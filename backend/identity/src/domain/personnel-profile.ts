@@ -7,6 +7,10 @@ export const PERSONNEL_PROFILE_READ_OPCODE = 'personnel.profile.read';
 export const PERSONNEL_PROFILE_REGISTER_OPCODE = 'personnel.profile.register';
 /** 编辑与调岗共用一个操作码（#105:216：调岗和改角色并入，只给系统管理；岗位标记的维护也用它）。 */
 export const PERSONNEL_PROFILE_UPDATE_OPCODE = 'personnel.profile.update';
+/** 停用、恢复、结束全部会话各自一个操作码（#105:216，#130），都只给系统管理。 */
+export const PERSONNEL_PROFILE_DEACTIVATE_OPCODE = 'personnel.profile.deactivate';
+export const PERSONNEL_PROFILE_RESTORE_OPCODE = 'personnel.profile.restore';
+export const PERSONNEL_SESSIONS_END_OPCODE = 'personnel.sessions.end';
 
 /**
  * 岗位标记（Lei Hu 2026-10-17 22:14，A1）。取值清单是代码常量，管理台不提供维护入口。
@@ -184,6 +188,51 @@ export type TransferRuleCode = 'org-unit-required';
 export function transferRules(orgUnitId: string): TransferRuleCode[] {
   return orgUnitId.trim() === '' ? ['org-unit-required'] : [];
 }
+
+/**
+ * 停用态人员禁止编辑与调岗（#130 定口径，PR #148 复核遗留①）。
+ * 返回 409 invalid-state，reason 与留痕失败原因同词（#105 错误码表「409 可读原因」）。
+ * 停用只挡改动作：卡片照旧能打开，恢复照旧能做。
+ */
+export const PERSONNEL_DEACTIVATED_REASON = 'personnel-deactivated';
+
+/** 编辑已停用人员时给人看的一句原因。 */
+export const DEACTIVATED_EDIT_MESSAGE = '这个人员已停用，不能编辑。请先恢复，再改姓名、手机号、角色或岗位标记。';
+
+/** 调岗已停用人员时给人看的一句原因。 */
+export const DEACTIVATED_TRANSFER_MESSAGE = '这个人员已停用，不能调岗。请先恢复，恢复时可以同时选一个新的任职机构。';
+
+/** 恢复的输入（#130，#105 故事 37、38）。原任职机构已停用时必须带新任职机构。 */
+export interface RestorePersonnelProfileInput {
+  initialPassword: string;
+  /** 新任职机构。原任职机构已停用时必填；其余情况一并调岗到它。 */
+  orgUnitId?: string;
+}
+
+/** 恢复的库外规则码：只有初始口令一项（工号、姓名、机构都不在恢复里改）。 */
+export type RestoreRuleCode = 'password-required' | PasswordRuleCode;
+
+/**
+ * 恢复时新初始口令的规则（#105:227、ADR 0015）。口令历史比对留给口令历史票（#132）。
+ * 口令为空只返回 password-required，不再列口令策略（同登记）。「不能包含本人工号」按对方的工号判断。
+ */
+export function restoreRules(input: RestorePersonnelProfileInput, personnelCode: string): RestoreRuleCode[] {
+  if (input.initialPassword === '') return ['password-required'];
+  return rejectedPasswordRules({ password: input.initialPassword, personnelCode });
+}
+
+/**
+ * 恢复被拒（409 invalid-state）的原因与可读句（#105 故事 38、39，错误码表）。
+ * not-deactivated 对方没有停用；org-unit-required 原任职机构已停用且没有带新任职机构；
+ * org-unit-deactivated 所选新任职机构已停用。
+ */
+export type RestoreInvalidReason = 'not-deactivated' | 'org-unit-required' | 'org-unit-deactivated';
+
+export const RESTORE_INVALID_MESSAGE: Record<RestoreInvalidReason, string> = {
+  'not-deactivated': '这个人员没有停用，不需要恢复。',
+  'org-unit-required': '原任职机构已停用，恢复时必须同时选一个在用的新任职机构。',
+  'org-unit-deactivated': '所选机构已停用，请选择在用的机构。',
+};
 
 /** 对方当前态里编辑差异要用到的四项。 */
 export interface PersonnelCurrentEdit {

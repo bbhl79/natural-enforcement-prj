@@ -30,6 +30,10 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'personnel.role-revoked',
   'personnel.post-revoked',
   'personnel.transferred',
+  // 人员停用、恢复与结束全部会话（#105「人员与登录凭据」，#130）。
+  'personnel.deactivated',
+  'personnel.restored',
+  'personnel.sessions-ended',
 ] as const;
 
 export const AUDIT_ACTIONS = [
@@ -110,17 +114,66 @@ export type PersonnelRegisterFailedReason = (typeof PERSONNEL_REGISTER_FAILED_RE
 export const ROOT_GUARD_FAILED_REASON = 'root-admin-required';
 export type RootGuardFailedReason = typeof ROOT_GUARD_FAILED_REASON;
 
-/** 改手机号被拒（outcome=failed）的原因（#129）：手机号已被他人占用。 */
-export const PERSONNEL_MOBILE_CHANGE_FAILED_REASONS = ['already-exists'] as const;
+/**
+ * 停用态人员禁止编辑与调岗（#130 定口径，PR #148 复核遗留①）。
+ * 请求要改的每一项各记一行失败留痕，动作词与成功时相同，原因都是这个词。
+ * 同一个词也作为 409 返回体的 reason（#105 错误码表「409 可读原因」：留痕的失败原因取同一个词）。
+ */
+export const PERSONNEL_DEACTIVATED_REASON = 'personnel-deactivated';
+export type PersonnelDeactivatedReason = typeof PERSONNEL_DEACTIVATED_REASON;
+
+/** 改手机号被拒（outcome=failed）的原因（#129、#130）：手机号已被他人占用；对方已停用。 */
+export const PERSONNEL_MOBILE_CHANGE_FAILED_REASONS = ['already-exists', PERSONNEL_DEACTIVATED_REASON] as const;
 export type PersonnelMobileChangeFailedReason = (typeof PERSONNEL_MOBILE_CHANGE_FAILED_REASONS)[number];
 
-/** 摘除角色被拒（outcome=failed）的原因（#129）：只有根机构守卫一条。 */
-export const PERSONNEL_ROLE_REVOKE_FAILED_REASONS = [ROOT_GUARD_FAILED_REASON] as const;
+/** 摘除角色被拒（outcome=failed）的原因（#129、#130）：根机构守卫；对方已停用。 */
+export const PERSONNEL_ROLE_REVOKE_FAILED_REASONS = [ROOT_GUARD_FAILED_REASON, PERSONNEL_DEACTIVATED_REASON] as const;
 export type PersonnelRoleRevokeFailedReason = (typeof PERSONNEL_ROLE_REVOKE_FAILED_REASONS)[number];
 
-/** 调岗被拒（outcome=failed）的原因（#129）：调入机构已停用；根机构守卫。 */
-export const PERSONNEL_TRANSFER_FAILED_REASONS = ['org-unit-deactivated', ROOT_GUARD_FAILED_REASON] as const;
+/** 调岗被拒（outcome=failed）的原因（#129、#130）：调入机构已停用；根机构守卫；对方已停用。 */
+export const PERSONNEL_TRANSFER_FAILED_REASONS = [
+  'org-unit-deactivated',
+  ROOT_GUARD_FAILED_REASON,
+  PERSONNEL_DEACTIVATED_REASON,
+] as const;
 export type PersonnelTransferFailedReason = (typeof PERSONNEL_TRANSFER_FAILED_REASONS)[number];
+
+/**
+ * 停用态人员禁止编辑与调岗（#130 定口径，PR #148 复核遗留①）的原因词见上文
+ * PERSONNEL_DEACTIVATED_REASON。下面四张表是它落到的动作。
+ */
+
+/** 改名被拒（outcome=failed）的原因（#130）：只有对方已停用一条。 */
+export const PERSONNEL_RENAME_FAILED_REASONS = [PERSONNEL_DEACTIVATED_REASON] as const;
+export type PersonnelRenameFailedReason = (typeof PERSONNEL_RENAME_FAILED_REASONS)[number];
+
+/** 授予角色被拒（outcome=failed）的原因（#130）：只有对方已停用一条。 */
+export const PERSONNEL_ROLE_GRANT_FAILED_REASONS = [PERSONNEL_DEACTIVATED_REASON] as const;
+export type PersonnelRoleGrantFailedReason = (typeof PERSONNEL_ROLE_GRANT_FAILED_REASONS)[number];
+
+/** 加岗位标记被拒（outcome=failed）的原因（#130）：只有对方已停用一条。 */
+export const PERSONNEL_POST_GRANT_FAILED_REASONS = [PERSONNEL_DEACTIVATED_REASON] as const;
+export type PersonnelPostGrantFailedReason = (typeof PERSONNEL_POST_GRANT_FAILED_REASONS)[number];
+
+/** 摘岗位标记被拒（outcome=failed）的原因（#130）：只有对方已停用一条。 */
+export const PERSONNEL_POST_REVOKE_FAILED_REASONS = [PERSONNEL_DEACTIVATED_REASON] as const;
+export type PersonnelPostRevokeFailedReason = (typeof PERSONNEL_POST_REVOKE_FAILED_REASONS)[number];
+
+/** 停用人员被拒（outcome=failed）的原因（#130，ADR 0014）：只有根机构守卫一条。 */
+export const PERSONNEL_DEACTIVATE_FAILED_REASONS = [ROOT_GUARD_FAILED_REASON] as const;
+export type PersonnelDeactivateFailedReason = (typeof PERSONNEL_DEACTIVATE_FAILED_REASONS)[number];
+
+/**
+ * 恢复人员被拒（outcome=failed）的原因（#130，#105 故事 37–39）。判定顺序同表序，只记第一条：
+ * not-deactivated 对方没有停用；org-unit-required 原任职机构已停用且没有带新任职机构；
+ * org-unit-deactivated 所选新任职机构已停用。口令不合规是 400，不写留痕。
+ */
+export const PERSONNEL_RESTORE_FAILED_REASONS = [
+  'not-deactivated',
+  'org-unit-required',
+  'org-unit-deactivated',
+] as const;
+export type PersonnelRestoreFailedReason = (typeof PERSONNEL_RESTORE_FAILED_REASONS)[number];
 
 /**
  * 带「后值」的动作（#128、#129）。后值写这次动作把对象改成了什么：

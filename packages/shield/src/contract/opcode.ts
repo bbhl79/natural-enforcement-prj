@@ -78,11 +78,15 @@ for (const code of [
   'org.unit.register',
   'org.unit.rename',
   'org.unit.deactivate',
-  // 人员登记、列表与卡片（#105「人员与登录凭据」，#128）。其余 personnel.profile.* 随 #130、#133 入册。
+  // 人员登记、列表与卡片（#105「人员与登录凭据」，#128）。其余 personnel.profile.* 随 #133 入册。
   'personnel.profile.read',
   'personnel.profile.register',
   // 人员编辑与调岗（#105「人员与登录凭据」，#129）。调岗和改角色并入本码，岗位标记的维护也用它。
   'personnel.profile.update',
+  // 人员停用、恢复与结束全部会话（#105「人员与登录凭据」，#130）。只给系统管理。
+  'personnel.profile.deactivate',
+  'personnel.profile.restore',
+  'personnel.sessions.end',
   'personnel.locked.read',
   'personnel.locked.release',
   'personnel.password.reset',
