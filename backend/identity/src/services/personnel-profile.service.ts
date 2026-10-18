@@ -39,7 +39,6 @@ import type {
   IdentityTransaction,
   PersonnelAssignmentRow,
   PersonnelProfileRow,
-  PersonnelRoleBindingRow,
 } from '../persistence/identity-store.ts';
 import { IDENTITY_STORE } from '../persistence/identity-store.ts';
 import { AccessControlService, type AuthorizationDecision } from './access-control.service.ts';
