@@ -170,13 +170,13 @@ echo "[e2e] 首日：首屏三步引导的三个数字（机构 1、人员 1、�
 # 前端 firstDayPending 按这三个数判引导（frontend/src/admin/adminHome.ts）；引导画面由前端单测覆盖。
 code="$(request "$work/orgs.body" "$work/orgs.hdr" /api/org-units "" "$admin_cookie")"
 [ "$code" = "200" ] || fail "机构树读取状态码是 ${code}：$(cat "$work/orgs.body")"
-[ "$(count_of "$work/orgs.body" '"id"')" = "1" ] || fail "首日机构数不是 1：$(cat "$work/orgs.body")"
+[ "$(count_of "$work/orgs.body" id)" = "1" ] || fail "首日机构数不是 1：$(cat "$work/orgs.body")"
 root_id="$(grep -oE '"rootId":"[^"]+"' "$work/orgs.body" | head -1 | cut -d'"' -f4)"
 [ -n "$root_id" ] || fail "机构树没有交出根机构标识：$(cat "$work/orgs.body")"
 
 code="$(request "$work/persons0.body" "$work/persons0.hdr" /api/admin/personnel "" "$admin_cookie")"
 [ "$code" = "200" ] || fail "人员名单读取状态码是 ${code}：$(cat "$work/persons0.body")"
-[ "$(count_of "$work/persons0.body" '"code"')" = "1" ] || fail "首日人员数不是 1：$(cat "$work/persons0.body")"
+[ "$(count_of "$work/persons0.body" code)" = "1" ] || fail "首日人员数不是 1：$(cat "$work/persons0.body")"
 grep -q '"certStatus":"none"' "$work/persons0.body" || fail "首日唯一人员的执法证不是未登记：$(cat "$work/persons0.body")"
 
 code="$(request "$work/locked0.body" "$work/locked0.hdr" /api/admin/locked-personnel "" "$admin_cookie")"
@@ -213,7 +213,7 @@ grep -q '"result":"updated"' "$work/cert.body" || fail "登记执法证未成功
 echo "[e2e] 首日：引导条件解除——名单两人、经办证件状态有效…"
 code="$(request "$work/persons1.body" "$work/persons1.hdr" /api/admin/personnel "" "$admin_cookie")"
 [ "$code" = "200" ] || fail "登记后名单读取状态码是 ${code}：$(cat "$work/persons1.body")"
-[ "$(count_of "$work/persons1.body" '"code"')" = "2" ] || fail "登记后人员数不是 2：$(cat "$work/persons1.body")"
+[ "$(count_of "$work/persons1.body" code)" = "2" ] || fail "登记后人员数不是 2：$(cat "$work/persons1.body")"
 clerk_row="$(grep -oE "\{[^{}]*\"code\":\"${CLERK_CODE}\"[^{}]*\}" "$work/persons1.body" || true)"
 [ -n "$clerk_row" ] || fail "名单里没有经办的行：$(cat "$work/persons1.body")"
 grep -q '"certStatus":"valid"' <<<"$clerk_row" || fail "经办的执法证情况不是有效：${clerk_row}"
