@@ -120,6 +120,10 @@ export type {
   ReadProfileResult,
   RegisterPersonnelProfileResult,
   ScreenRegistrationResult,
+  TransferDestination,
+  TransferDestinationsResult,
+  TransferPersonnelProfileResult,
+  UpdatePersonnelProfileResult,
 } from './services/personnel-profile.service.ts';
 export {
   BOOTSTRAP_ADMIN_ROLE,

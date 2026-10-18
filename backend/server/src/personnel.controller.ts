@@ -23,12 +23,23 @@ interface RegisterBody {
   certExpiresOn?: unknown;
 }
 
+interface EditBody {
+  name?: unknown;
+  mobilePhone?: unknown;
+  roles?: unknown;
+  posts?: unknown;
+}
+
+interface TransferBody {
+  orgUnitId?: unknown;
+}
+
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
 const texts = (value: unknown): string[] =>
   (Array.isArray(value) ? value.map((item) => (typeof item === 'string' ? item : '')) : []);
 
 /**
- * 管理台人员（#128）：列表、卡片、登记。
+ * 管理台人员（#128）：列表、卡片、登记。编辑与调岗（#129）。
  * 跨站写请求由框架 CSRF 拒绝，跨站读请求由 SameOriginReadGuard 拒绝。
  */
 @Controller('api/admin')
@@ -70,6 +81,52 @@ export class PersonnelController {
       },
       sourceAddress(req),
     );
+    res.status(outcome.status).json(outcome.body);
+  }
+
+  /** 编辑（#129）：姓名、手机号、角色、岗位标记。什么都没改也是 200，不写留痕。 */
+  @Post('personnel/:id/edit')
+  async edit(
+    @Req() req: AuthenticatedRequest,
+    @Res() res: HttpReply,
+    @Param('id') id: string,
+    @Body() body: EditBody,
+  ): Promise<void> {
+    const outcome = await this.personnel.edit(
+      req.actor as ActorRef,
+      id,
+      {
+        name: text(body?.name),
+        mobilePhone: text(body?.mobilePhone),
+        roles: texts(body?.roles),
+        posts: texts(body?.posts),
+      },
+      sourceAddress(req),
+    );
+    res.status(outcome.status).json(outcome.body);
+  }
+
+  /** 调岗（#129）：目的地不限数据范围，但必须是未停用机构。 */
+  @Post('personnel/:id/transfer')
+  async transfer(
+    @Req() req: AuthenticatedRequest,
+    @Res() res: HttpReply,
+    @Param('id') id: string,
+    @Body() body: TransferBody,
+  ): Promise<void> {
+    const outcome = await this.personnel.transfer(req.actor as ActorRef, id, text(body?.orgUnitId), sourceAddress(req));
+    res.status(outcome.status).json(outcome.body);
+  }
+
+  /** 调岗目的地清单（#129）：全树未停用的机构。读取不写留痕。 */
+  @Get('personnel/:id/transfer-destinations')
+  @UseGuards(SameOriginReadGuard)
+  async transferDestinations(
+    @Req() req: AuthenticatedRequest,
+    @Res() res: HttpReply,
+    @Param('id') id: string,
+  ): Promise<void> {
+    const outcome = await this.personnel.transferDestinations(req.actor as ActorRef, id);
     res.status(outcome.status).json(outcome.body);
   }
 }
