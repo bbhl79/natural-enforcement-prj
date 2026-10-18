@@ -107,6 +107,16 @@ describe('#126 留痕展示文字（P8）', () => {
     expect(denied('personnel.profile.register').operation).toBe('新建人员');
   });
 
+  it('执法证登记一行与它被拒的行，操作名都写「登记执法证」（#133）', () => {
+    expect(describeAuditRow(record({
+      action: 'cert.updated', subjectCode: 'TH0331', opcode: 'personnel.cert.update',
+    }))).toMatchObject({ operation: '登记执法证', object: '人员 TH0331', result: '成功', tone: 'ok' });
+    expect(describeAuditRow(record({
+      action: 'authz.denied', outcome: 'failed', reason: 'permission-denied', subjectCode: null,
+      opcode: 'personnel.cert.update',
+    })).operation).toBe('登记执法证');
+  });
+
   it('拒绝行的「所属机构」是目标机构，「对象」按资源标识取机构名（#105；ADR 0011 修正）', () => {
     const crossDistrict = record({
       action: 'authz.denied', outcome: 'failed', reason: 'scope-denied', actorCode: 'TH0102', subjectCode: null,

@@ -78,9 +78,11 @@ for (const code of [
   'org.unit.register',
   'org.unit.rename',
   'org.unit.deactivate',
-  // 人员登记、列表与卡片（#105「人员与登录凭据」，#128）。其余 personnel.profile.* 随 #129、#130、#133 入册。
+  // 人员登记、列表与卡片（#105「人员与登录凭据」，#128）。其余 personnel.profile.* 随 #129、#130 入册。
   'personnel.profile.read',
   'personnel.profile.register',
+  // 执法证登记（#105「执法证（#85）」，#133）：只给系统管理。通用授权不因执法资格拒绝。
+  'personnel.cert.update',
   'personnel.locked.read',
   'personnel.locked.release',
   'personnel.password.reset',

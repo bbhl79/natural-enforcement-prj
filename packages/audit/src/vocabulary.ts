@@ -23,6 +23,8 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'personnel.registered',
   'personnel.viewed',
   'personnel.post-granted',
+  // 执法证登记（#105「执法证（#85）」，#133）。前值只写旧有效期和旧状态，不写证号。
+  'cert.updated',
 ] as const;
 
 export const AUDIT_ACTIONS = [

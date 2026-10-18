@@ -68,7 +68,9 @@ export type AuditAppend =
   | (AuditParties & { action: 'personnel.registered' })
   | (AuditParties & { action: 'personnel.registered'; outcome: 'failed'; reason: PersonnelRegisterFailedReason })
   | (AuditParties & { action: 'personnel.viewed' })
-  | (AuditParties & { action: 'personnel.post-granted'; nextValue: string });
+  | (AuditParties & { action: 'personnel.post-granted'; nextValue: string })
+  /** 执法证登记（#133）。前值只写旧有效期和旧状态，不写证号（#105:232、ADR 0011）。 */
+  | (AuditParties & { action: 'cert.updated' });
 
 /**
  * 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。

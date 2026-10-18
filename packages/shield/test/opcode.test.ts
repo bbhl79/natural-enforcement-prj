@@ -38,6 +38,7 @@ const ADMIN_OPCODES = [
   'org.unit.deactivate',
   'personnel.profile.read',
   'personnel.profile.register',
+  'personnel.cert.update',
   'personnel.locked.read',
   'personnel.locked.release',
   'personnel.password.reset',
@@ -111,6 +112,14 @@ describe('操作码名册', () => {
         changesPrimaryState: false,
       });
     }
+  });
+
+  it('执法证登记码（#133）不要求执法资格，不必是主办人，不改变主状态', () => {
+    expect(opcodeRequirements('personnel.cert.update')).toEqual({
+      qualification: 'none',
+      mustBeCaseHandler: false,
+      changesPrimaryState: false,
+    });
   });
 
   it('管理台操作码一律三段「域.对象.动作」（GLOSSARY:77，#105）', () => {
