@@ -23,6 +23,8 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'personnel.registered',
   'personnel.viewed',
   'personnel.post-granted',
+  // 执法证登记（#105「执法证（#85）」，#133）。前值只写旧有效期和旧状态，不写证号。
+  'cert.updated',
   // 人员编辑与调岗（#105「人员与登录凭据」，#129，ADR 0014）。
   'personnel.renamed',
   'personnel.mobile-changed',

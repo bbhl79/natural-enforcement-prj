@@ -1,10 +1,15 @@
 // #128 人员登记规则、执法证情况、角色顺序（纯函数）。期望按 #105 与原型 v0.4 独立写出。
+// #133 执法证登记：证件状态、资格判定、登记规则与前值。
 // #129 人员编辑与调岗规则、编辑差异（纯函数）。
 import { describe, expect, it } from 'vitest';
 
 import {
   PERSONNEL_POSTS,
+  certPreviousValue,
   certStatusOf,
+  certUpdateRules,
+  hasEnforcementQualification,
+  normalizeCertUpdate,
   parseCalendarDay,
   registrationRules,
   transferRules,
@@ -77,21 +82,81 @@ describe('执法证情况（北京时间日界，30 天内到期）', () => {
   const day = (text: string) => new Date(`${text}T00:00:00.000Z`);
 
   it('证号或有效期为空即未登记', () => {
-    expect(certStatusOf(null, day('2030-01-01'), now)).toBe('none');
-    expect(certStatusOf('  ', day('2030-01-01'), now)).toBe('none');
-    expect(certStatusOf('C-1', null, now)).toBe('none');
+    expect(certStatusOf(null, day('2030-01-01'), 'valid', now)).toBe('none');
+    expect(certStatusOf('  ', day('2030-01-01'), 'valid', now)).toBe('none');
+    expect(certStatusOf('C-1', null, 'valid', now)).toBe('none');
   });
 
   it('有效期等于今天仍有效（临期）；早于今天已过期；30 天内为临期；更远为有效', () => {
-    expect(certStatusOf('C-1', day('2026-10-17'), now)).toBe('expiring');
-    expect(certStatusOf('C-1', day('2026-10-16'), now)).toBe('expired');
-    expect(certStatusOf('C-1', day('2026-11-16'), now)).toBe('expiring');
-    expect(certStatusOf('C-1', day('2026-11-17'), now)).toBe('valid');
+    expect(certStatusOf('C-1', day('2026-10-17'), 'valid', now)).toBe('expiring');
+    expect(certStatusOf('C-1', day('2026-10-16'), 'valid', now)).toBe('expired');
+    expect(certStatusOf('C-1', day('2026-11-16'), 'valid', now)).toBe('expiring');
+    expect(certStatusOf('C-1', day('2026-11-17'), 'valid', now)).toBe('valid');
   });
 
   it('跨过北京时间零点即按次日算', () => {
     const next = new Date('2026-10-17T16:00:00.000Z'); // 北京时间 2026-10-18 00:00
-    expect(certStatusOf('C-1', day('2026-10-17'), next)).toBe('expired');
+    expect(certStatusOf('C-1', day('2026-10-17'), 'valid', next)).toBe('expired');
+  });
+
+  it('证件状态为「失效」即失效，不再按有效期推导（#133，Lei Hu 7-3）', () => {
+    expect(certStatusOf('C-1', day('2030-01-01'), 'invalid', now)).toBe('invalid');
+    expect(certStatusOf('C-1', day('2026-10-16'), 'invalid', now)).toBe('invalid');
+    expect(certStatusOf(null, null, 'invalid', now)).toBe('none');
+  });
+});
+
+describe('执法资格判定（#133 fail-closed）', () => {
+  const day = (text: string) => new Date(`${text}T00:00:00.000Z`);
+  const beforeMidnight = new Date('2026-10-17T15:59:00.000Z'); // 北京时间 2026-10-17 23:59
+  const afterMidnight = new Date('2026-10-17T16:00:00.000Z'); // 北京时间 2026-10-18 00:00
+
+  it('状态为「有效」且在有效期内才有资格；到期当天仍有效，次日零点起失效', () => {
+    expect(hasEnforcementQualification('C-1', day('2026-10-17'), 'valid', beforeMidnight)).toBe(true);
+    expect(hasEnforcementQualification('C-1', day('2026-10-17'), 'valid', afterMidnight)).toBe(false);
+    expect(hasEnforcementQualification('C-1', day('2030-01-01'), 'valid', beforeMidnight)).toBe(true);
+  });
+
+  it('状态为「失效」，或证号、有效期缺一项，一律没有资格', () => {
+    expect(hasEnforcementQualification('C-1', day('2030-01-01'), 'invalid', beforeMidnight)).toBe(false);
+    expect(hasEnforcementQualification(null, day('2030-01-01'), 'valid', beforeMidnight)).toBe(false);
+    expect(hasEnforcementQualification('  ', day('2030-01-01'), 'valid', beforeMidnight)).toBe(false);
+    expect(hasEnforcementQualification('C-1', null, 'valid', beforeMidnight)).toBe(false);
+  });
+});
+
+describe('执法证登记规则（#133）', () => {
+  const filled = { certNo: ' GD-0001 ', certExpiresOn: '2031-09-16', certStatus: 'valid' };
+
+  it('三项齐全时没有规则码；证号去掉首尾空白，有效期按日历日解析', () => {
+    expect(certUpdateRules(filled)).toEqual([]);
+    expect(normalizeCertUpdate(filled)).toEqual({
+      certNo: 'GD-0001',
+      certExpiresOn: new Date('2031-09-16T00:00:00.000Z'),
+      certStatus: 'valid',
+    });
+  });
+
+  it('三项各必填；证号最长 64；有效期须是真实日历日；状态只取有效、失效', () => {
+    expect(certUpdateRules({ ...filled, certNo: '  ' })).toEqual(['cert-no-required']);
+    expect(certUpdateRules({ ...filled, certNo: 'X'.repeat(65) })).toEqual(['cert-no-too-long']);
+    expect(certUpdateRules({ ...filled, certExpiresOn: '' })).toEqual(['cert-expires-on-required']);
+    expect(certUpdateRules({ ...filled, certExpiresOn: '2031-02-30' })).toEqual(['cert-expires-on-invalid']);
+    expect(certUpdateRules({ ...filled, certStatus: '' })).toEqual(['cert-status-unknown']);
+    expect(certUpdateRules({ ...filled, certStatus: '有效' })).toEqual(['cert-status-unknown']);
+    expect(certUpdateRules({ certNo: '', certExpiresOn: '', certStatus: '暂扣' })).toEqual([
+      'cert-no-required',
+      'cert-expires-on-required',
+      'cert-status-unknown',
+    ]);
+    expect(certUpdateRules({ ...filled, certStatus: 'invalid' })).toEqual([]);
+    expect(normalizeCertUpdate({ ...filled, certStatus: '' })).toBeNull();
+  });
+
+  it('前值只写旧有效期和旧状态，不写证号；没有旧证时前值为空', () => {
+    expect(certPreviousValue(new Date('2027-06-30T00:00:00.000Z'), 'valid')).toBe('expiresOn=2027-06-30;status=valid');
+    expect(certPreviousValue(new Date('2027-06-30T00:00:00.000Z'), 'invalid')).toBe('expiresOn=2027-06-30;status=invalid');
+    expect(certPreviousValue(null, 'valid')).toBeNull();
   });
 });
 

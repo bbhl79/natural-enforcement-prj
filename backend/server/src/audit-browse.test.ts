@@ -107,6 +107,16 @@ describe('#126 留痕展示文字（P8）', () => {
     expect(denied('personnel.profile.register').operation).toBe('新建人员');
   });
 
+  it('执法证登记一行与它被拒的行，操作名都写「登记执法证」（#133）', () => {
+    expect(describeAuditRow(record({
+      action: 'cert.updated', subjectCode: 'TH0331', opcode: 'personnel.cert.update',
+    }))).toMatchObject({ operation: '登记执法证', object: '人员 TH0331', result: '成功', tone: 'ok' });
+    expect(describeAuditRow(record({
+      action: 'authz.denied', outcome: 'failed', reason: 'permission-denied', subjectCode: null,
+      opcode: 'personnel.cert.update',
+    })).operation).toBe('登记执法证');
+  });
+
   it('人员编辑与调岗被拒的行按操作码写中文，编辑各动作按动作词写中文（#129）', () => {
     const denied = describeAuditRow(
       record({
