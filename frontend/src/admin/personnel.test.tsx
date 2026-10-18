@@ -38,6 +38,7 @@ import {
   shouldRevalidatePersonnelList,
   updateCert,
   type CertUpdateInput,
+  type CertUpdateResult,
   type PersonnelCard,
   type PersonnelFilter,
   type PersonnelList,
@@ -478,15 +479,16 @@ describe('执法证登记接口（#133）', () => {
 
   it('越权、人员不存在、服务失败各写一句人能读的话', async () => {
     const store = fresh();
+    const messageOf = (result: CertUpdateResult) => (result.ok ? null : result.message);
     serve(person(ADMIN), { [url]: [403, { reason: 'scope-denied' }] });
     await store.dispatch(loadSession());
     expect(await updateCert(store.dispatch, '3', INPUT)).toEqual({
       ok: false, fields: {}, message: '你没有权限执行这个操作，或这个人员不在你的范围内。',
     });
     serve(person(ADMIN), { [url]: [404, { result: 'not-found' }] });
-    expect((await updateCert(store.dispatch, '3', INPUT)).message).toContain('没有找到这个人员');
+    expect(messageOf(await updateCert(store.dispatch, '3', INPUT))).toContain('没有找到这个人员');
     serve(person(ADMIN), { [url]: [500, {}] });
-    expect((await updateCert(store.dispatch, '3', INPUT)).message)
+    expect(messageOf(await updateCert(store.dispatch, '3', INPUT)))
       .toBe('网络或服务暂时不可用，请稍后重试。问题持续时请联系本单位的系统管理人员。');
   });
 });
