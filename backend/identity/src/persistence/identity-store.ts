@@ -143,6 +143,19 @@ export interface PersonnelRoleToCreate {
   roleId: string;
 }
 
+/** 人员当前持有的一条人员—角色（#129 摘除角色用）。 */
+export interface PersonnelRoleBindingRow {
+  id: string;
+  roleId: string;
+  roleName: string;
+}
+
+/** 人员当前持有的一条人员—岗位标记（#129 摘标记用）。 */
+export interface PersonnelPostBindingRow {
+  id: string;
+  post: PersonnelPost;
+}
+
 /** 业务唯一冲突的种类：工号、手机号、重复授予同一角色。 */
 export type IdentityUniqueConflict = 'personnel-code' | 'mobile-phone' | 'personnel-role' | 'personnel-post';
 
@@ -233,6 +246,22 @@ export interface IdentityStore {
   /** 这些角色名里未失效的角色：角色名 → 角色 id。不认识或已失效的名字不出现。 */
   findActiveRoleIds(names: readonly string[]): Promise<Map<string, string>>;
 
+  // 人员编辑与调岗（#129）
+  /** 人员当前未失效的人员—角色行（含角色名）。摘除角色给这些行置失效时间。 */
+  listActivePersonnelRoles(personnelId: string): Promise<PersonnelRoleBindingRow[]>;
+  /** 人员当前未失效的人员—岗位标记行。摘标记给这些行置失效时间。 */
+  listActivePersonnelPosts(personnelId: string): Promise<PersonnelPostBindingRow[]>;
+  /**
+   * 根机构守卫的事务级咨询锁（ADR 0014）。必须在交互式事务里调用，事务结束时释放，
+   * 且作为守卫判断的第一条语句。与引导咨询锁不同键。根客户端上调用抛错。
+   */
+  lockRootGuard(): Promise<void>;
+  /**
+   * 根机构守卫计数（ADR 0014）：当前任职在 rootOrgUnitId、未停用、持有未停用系统管理角色的人员数。
+   * excludePersonnelId 非空时不计该人员（判断「摘除或调出之后还剩几名」）。
+   */
+  countRootGuardAdmins(rootOrgUnitId: string, excludePersonnelId: string | null): Promise<number>;
+
   // 生产引导（#131）
   /**
    * 取引导的事务级咨询锁，事务结束时释放。必须在交互式事务里调用（已绑定事务的存储），
@@ -262,6 +291,10 @@ export interface IdentityStore {
   insertPersonnelRole(row: PersonnelRoleToCreate): Promise<UniqueWriteResult>;
   /** 同一人员已持有该标记的未失效行时返回 already-exists（personnel-post）。 */
   insertPersonnelPost(row: PersonnelPostToCreate): Promise<UniqueWriteResult>;
+  /** 摘除角色：给人员—角色行置失效时间（#129）。只允许第一次失效，库层触发器兜底。 */
+  deactivatePersonnelRole(rowId: string, deactivatedAt: Date): Promise<void>;
+  /** 摘除岗位标记：给人员—岗位标记行置失效时间（#129）。只允许第一次失效，库层触发器兜底。 */
+  deactivatePersonnelPost(rowId: string, deactivatedAt: Date): Promise<void>;
   insertPersonnelNameVersion(row: PersonnelNameVersionRow): Promise<void>;
   updatePersonnelCurrentName(personnelId: string, name: string): Promise<void>;
   /** 调岗后同步人员当前归属机构（任职记录为权威史，此处为读模型冗余） */

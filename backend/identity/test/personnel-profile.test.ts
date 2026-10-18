@@ -1,4 +1,5 @@
 // #128 人员登记规则、执法证情况、角色顺序（纯函数）。期望按 #105 与原型 v0.4 独立写出。
+// #129 人员编辑与调岗规则、编辑差异（纯函数）。
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -6,6 +7,9 @@ import {
   certStatusOf,
   parseCalendarDay,
   registrationRules,
+  transferRules,
+  updateDiff,
+  updateRules,
 } from '../src/index.ts';
 import { sortRoleNames } from '../src/domain/personnel-profile.ts';
 
@@ -94,5 +98,86 @@ describe('执法证情况（北京时间日界，30 天内到期）', () => {
 describe('角色顺序', () => {
   it('按七个角色的固定顺序，去重', () => {
     expect(sortRoleNames(['系统管理', '经办', '内勤', '经办'])).toEqual(['内勤', '经办', '系统管理']);
+  });
+});
+
+const editing = {
+  name: '陈晓宁',
+  mobilePhone: '13800005521',
+  roles: ['经办', '法制审核'],
+  posts: [] as string[],
+};
+
+describe('编辑规则（#105 故事 33，#129）', () => {
+  it('姓名、手机号、角色齐全时没有规则码；岗位标记可多选也可不选', () => {
+    expect(updateRules(editing)).toEqual([]);
+    expect(updateRules({ ...editing, posts: ['legal-review-lead', 'legal-affairs-leader'] })).toEqual([]);
+  });
+
+  it('不比口令策略：编辑不收口令', () => {
+    expect(updateRules({ ...editing, name: 'Th0360abc' })).toEqual([]);
+  });
+
+  it('姓名为空或超长、手机号为空或格式不对、角色为空、标记不认识各报各的码', () => {
+    expect(updateRules({ ...editing, name: '  ' })).toEqual(['personnel-name-required']);
+    expect(updateRules({ ...editing, name: '甲'.repeat(101) })).toEqual(['personnel-name-too-long']);
+    expect(updateRules({ ...editing, mobilePhone: '' })).toEqual(['mobile-phone-required']);
+    expect(updateRules({ ...editing, mobilePhone: '1380000552' })).toEqual(['mobile-phone-invalid']);
+    expect(updateRules({ ...editing, roles: [] })).toEqual(['roles-required']);
+    expect(updateRules({ ...editing, posts: ['法制审核负责人'] })).toEqual(['post-unknown']);
+    expect(updateRules({ ...editing, name: '', mobilePhone: '', roles: [''], posts: ['x'] })).toEqual([
+      'personnel-name-required', 'mobile-phone-required', 'roles-required', 'post-unknown',
+    ]);
+  });
+
+  it('角色认识与否要查库：库外规则不报 role-unknown（同登记，由服务追加）', () => {
+    expect(updateRules({ ...editing, roles: ['经办', '管理员'] })).toEqual([]);
+  });
+
+  it('调岗目的地必填', () => {
+    expect(transferRules('org-1')).toEqual([]);
+    expect(transferRules('  ')).toEqual(['org-unit-required']);
+  });
+});
+
+describe('编辑差异（#105:219 重复授予或摘除返回 200 不写留痕）', () => {
+  const current = {
+    name: '陈晓宁',
+    mobilePhone: '13800005521',
+    roles: ['经办', '法制审核'],
+    posts: ['legal-review-lead'] as const,
+  };
+
+  it('什么都没改时差异全空', () => {
+    expect(updateDiff({ ...editing, roles: ['法制审核', '经办'], posts: ['legal-review-lead'] }, current)).toEqual({
+      name: '', mobilePhone: '', rolesToGrant: [], rolesToRevoke: [], postsToGrant: [], postsToRevoke: [],
+    });
+  });
+
+  it('改名与改手机号各自成为一处差异；手机号现值为空时按改动算', () => {
+    expect(updateDiff({ ...editing, name: ' 邓雅 ' }, current)).toMatchObject({ name: '邓雅', mobilePhone: '' });
+    expect(updateDiff({ ...editing, mobilePhone: '13900007788' }, current)).toMatchObject({ name: '', mobilePhone: '13900007788' });
+    expect(updateDiff(editing, { ...current, mobilePhone: null })).toMatchObject({ mobilePhone: '13800005521' });
+  });
+
+  it('加角色只列新加的，摘角色只列被摘的，都按七角色顺序', () => {
+    expect(updateDiff({ ...editing, roles: ['法制审核', '系统管理', '内勤'] }, current)).toMatchObject({
+      rolesToGrant: ['内勤', '系统管理'], rolesToRevoke: ['经办'],
+    });
+  });
+
+  it('加标记只列新加的，摘标记只列被摘的，都按名册顺序', () => {
+    expect(updateDiff({ ...editing, posts: ['legal-affairs-leader'] }, current)).toMatchObject({
+      postsToGrant: ['legal-affairs-leader'], postsToRevoke: ['legal-review-lead'],
+    });
+    expect(updateDiff({ ...editing, posts: [] }, current)).toMatchObject({
+      postsToGrant: [], postsToRevoke: ['legal-review-lead'],
+    });
+  });
+
+  it('本次填写里重复的角色只算一处差异，不会插入两行', () => {
+    const diff = updateDiff({ ...editing, roles: ['经办', '法制审核', '系统管理', '系统管理'] }, current);
+    expect(diff.rolesToGrant).toEqual(['系统管理']);
+    expect(diff.rolesToRevoke).toEqual([]);
   });
 });
