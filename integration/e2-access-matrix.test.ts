@@ -82,6 +82,7 @@ let reviewId: string;
 let approveId: string;
 let superBId: string;
 let bothAId: string;
+let superHqId: string;
 
 const auth = (personnelId: string): ActorRef => ({ personnelId, authenticated: true });
 const uniqueCode = (prefix: string) => `${prefix}-${newUlid().slice(0, 8).toLowerCase()}`;
@@ -165,6 +166,7 @@ beforeAll(async () => {
   approveId = (await prisma.personnel.findUniqueOrThrow({ where: { code: 'P-APPROVE-HQ' } })).id;
   superBId = (await prisma.personnel.findUniqueOrThrow({ where: { code: 'P-SUPER-B' } })).id;
   bothAId = (await prisma.personnel.findUniqueOrThrow({ where: { code: 'P-BOTH-A' } })).id;
+  superHqId = (await prisma.personnel.findUniqueOrThrow({ where: { code: 'P-SUPER-HQ' } })).id;
 });
 
 afterAll(async () => {
@@ -217,6 +219,23 @@ describe('操作码授权', () => {
   it('A1：区人员对其他区的阅读操作码得 scope-denied', async () => {
     await expectDenied(access.authorize(auth(clerkAId), 'clue.read', deptBId), 'scope-denied');
   });
+
+  it('M4（#126）：根机构监督按监督的允许行放行，范围覆盖各区；区监督越出本区得 scope-denied', async () => {
+    const codes = ALLOWED['监督']!;
+    for (const target of [hqId, deptAId, deptBId, stationAId]) {
+      for (const opcode of codes) {
+        const context = await access.authorize(auth(superHqId), opcode, target);
+        expect(context.orgUnitId, `${opcode} ${target}`).toBe(hqId);
+      }
+    }
+    for (const opcode of OPCODES) {
+      if (codes.includes(opcode)) continue;
+      await expectDenied(access.authorize(auth(superHqId), opcode, hqId), 'permission-denied');
+    }
+    for (const target of [hqId, deptAId]) {
+      await expectDenied(access.authorize(auth(superBId), 'audit.admin.read', target), 'scope-denied');
+    }
+  }, 60_000);
 
   it('放行不写授权拒绝', async () => {
     const resourceId = uniqueCode('allow');

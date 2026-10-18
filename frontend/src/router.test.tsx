@@ -23,6 +23,11 @@ const ADMIN = [
 ];
 const TREE: [number, Json] = [200, { result: 'listed', rootId: 'hq', orgUnits: [{ id: 'hq' }, { id: 'a' }, { id: 'b' }] }];
 const SUPERVISE = ['audit.admin.read', 'audit.admin.export'];
+const SUMMARY: [number, Json] = [200, { result: 'counted', today: 7 }];
+const ADMIN_ROUTES: Record<string, [number, Json]> = {
+  '/api/admin/locked-personnel': [200, { personnel: [] }],
+  '/api/admin/audit/summary': SUMMARY,
+};
 /** 内勤：业务读码，外加选承办机构用的 org.tree.read（#105:178）。 */
 const INTAKE = ['clue.read', 'case.read', 'org.tree.read'];
 
@@ -76,7 +81,7 @@ describe('路由守卫（#91 页面路径约定）', () => {
   });
 
   it('已登录打开登录页 → 回到 next', async () => {
-    serve(person(['系统管理'], ADMIN), { '/api/admin/locked-personnel': [200, { personnel: [] }] });
+    serve(person(['系统管理'], ADMIN), ADMIN_ROUTES);
     const { router } = await renderRoute(fresh(), '/auth/login?next=%2Fadmin');
     expect(router.state.location.pathname).toBe('/admin');
   });
@@ -143,7 +148,7 @@ describe('应用壳与菜单（P1）', () => {
   });
 
   it('只有管理码：打开首页直接进管理台首页', async () => {
-    serve(person(['系统管理'], ADMIN), { '/api/admin/locked-personnel': [200, { personnel: [] }] });
+    serve(person(['系统管理'], ADMIN), ADMIN_ROUTES);
     const { router, html } = await renderRoute(fresh(), '/');
     expect(router.state.location.pathname).toBe('/admin');
     expect(html).not.toContain('>业务办理</div>');
@@ -244,16 +249,29 @@ describe('管理台首页（P3）', () => {
     expect(html).not.toContain('后续开放');
   });
 
-  it('取数：被锁人员数来自被锁人员接口；403 交给无权限页', async () => {
+  it('取数：被锁人员数来自被锁人员接口，今日留痕来自留痕条数接口（GET）；403 交给无权限页', async () => {
     const store = fresh();
-    serve(person(['系统管理'], ADMIN), { '/api/admin/locked-personnel': [200, { result: 'listed', personnel: [{}, {}] }] });
+    const calls = serve(person(['系统管理'], ADMIN), {
+      '/api/admin/locked-personnel': [200, { result: 'listed', personnel: [{}, {}] }],
+      '/api/admin/audit/summary': SUMMARY,
+    });
     await store.dispatch(loadSession());
-    expect(await loadAdminHomeSummary(store.dispatch, ADMIN)).toMatchObject({ lockedPersonnel: 2, orgUnits: 3 });
+    // 系统管理：机构数、被锁人员数、今日留痕条数三项都取
+    expect(await loadAdminHomeSummary(store.dispatch, ADMIN)).toEqual({ ...EMPTY_SUMMARY, orgUnits: 3, lockedPersonnel: 2, auditToday: 7 });
     // 只有树读码（内勤）不取机构数：机构入口按维护码出现
     expect((await loadAdminHomeSummary(store.dispatch, ['org.tree.read', 'personnel.locked.read'])).orgUnits).toBeNull();
-    expect(await loadAdminHomeSummary(store.dispatch, SUPERVISE)).toEqual(EMPTY_SUMMARY);
+    expect(await loadAdminHomeSummary(store.dispatch, SUPERVISE)).toEqual({ ...EMPTY_SUMMARY, auditToday: 7 });
+    expect(await loadAdminHomeSummary(store.dispatch, ['personnel.locked.read'])).toEqual({ ...EMPTY_SUMMARY, lockedPersonnel: 2 });
+    expect(calls.filter((url) => url === '/api/admin/audit/summary')).toHaveLength(2);
     serve(person(['系统管理'], ADMIN), { '/api/admin/locked-personnel': [403, { reason: 'permission-denied' }] });
     await expect(loadAdminHomeSummary(store.dispatch, ADMIN)).rejects.toMatchObject({ init: { status: 403 } });
+    serve(person(['监督'], SUPERVISE), { '/api/admin/audit/summary': [403, { reason: 'permission-denied' }] });
+    await expect(loadAdminHomeSummary(store.dispatch, SUPERVISE)).rejects.toMatchObject({ init: { status: 403 } });
+  });
+
+  it('留痕入口显示今日条数', () => {
+    const html = render(SUPERVISE, { ...EMPTY_SUMMARY, auditToday: 12 });
+    expect(html).toContain('<div class="n">今日 12 条</div>');
   });
 
   it('无权限页：左侧导航没有任何项高亮（原型 P2-forbidden、P3-denied）', async () => {

@@ -113,6 +113,8 @@ const FIXTURES = [
   { code: 'P-SUP-A', roles: ['系统管理'], mobilePhone: '13800001001' },
   { code: 'P-CLERK-A', roles: ['经办'], mobilePhone: '13800001002' },
   { code: 'P-CLERK-B', roles: ['经办'], mobilePhone: '13800001003' },
+  // #126（M4）：当前任职在根机构的监督。
+  { code: 'P-SUPER-HQ', roles: ['监督'], mobilePhone: '13800001011' },
 ] as const;
 
 let prisma = undefined as unknown as PrismaClient;

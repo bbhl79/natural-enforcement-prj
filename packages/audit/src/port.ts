@@ -56,7 +56,9 @@ export type AuditAppend =
   | (AuditParties & { action: 'org.unit.renamed' })
   | (AuditParties & { action: 'personnel.exported'; itemCount: number })
   | (AuditParties & { action: 'bootstrap.root-registered' })
-  | (AuditParties & { action: 'bootstrap.admin-registered' });
+  | (AuditParties & { action: 'bootstrap.admin-registered' })
+  | (AuditParties & { action: 'audit.viewed' })
+  | (AuditParties & { action: 'audit.exported'; itemCount: number });
 
 /**
  * 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。
