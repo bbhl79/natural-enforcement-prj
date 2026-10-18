@@ -4,6 +4,8 @@ import { createBrowserRouter, redirect, type LoaderFunctionArgs, type RouteObjec
 
 import AdminHomePage from './admin/AdminHomePage';
 import { adminHomeLoader } from './admin/adminHome';
+import AuditPage from './admin/AuditPage';
+import { auditLoader } from './admin/audit';
 import OrgTreePage from './admin/OrgTreePage';
 import { orgTreeLoader } from './admin/orgTree';
 import LoginPage from './login/LoginPage';
@@ -54,6 +56,7 @@ export function appRoutes(store: RouterStore): RouteObject[] {
                 { id: 'workbench', index: true, loader: workbenchLoader(store), element: <WorkbenchPage /> },
                 { id: 'admin-home', path: 'admin', loader: adminHomeLoader(store), element: <AdminHomePage /> },
                 { id: 'org-tree', path: 'admin/org-units', loader: orgTreeLoader(store), element: <OrgTreePage /> },
+                { id: 'admin-audit', path: 'admin/audit', loader: auditLoader(store), element: <AuditPage /> },
                 { id: 'not-found', path: '*', element: <NotFoundPage /> },
               ],
             },

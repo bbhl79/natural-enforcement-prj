@@ -1,4 +1,7 @@
-/** 记成功的动作。其余动作记失败。取值来自 ADR 0011，并追加 login.capacity-reached。 */
+/**
+ * 记成功的动作。其余动作记失败。取值来自 ADR 0011，并追加 login.capacity-reached、personnel.exported（ADR 0013），
+ * 以及管理台留痕的查阅 audit.viewed、导出 audit.exported（#126）。
+ */
 export const AUDIT_SUCCEEDED_ACTIONS = [
   'login.succeeded',
   'session.ended',
@@ -8,6 +11,9 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   // 机构树（#105「机构树」，#123）。
   'org.unit.registered',
   'org.unit.renamed',
+  'personnel.exported',
+  'audit.viewed',
+  'audit.exported',
 ] as const;
 
 export const AUDIT_ACTIONS = [
@@ -24,6 +30,10 @@ export const AUDIT_ACTIONS = [
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+/** 带条数的动作（ADR 0013）：itemCount 必填，记导出条数，非负整数。其余动作的 itemCount 一律为空。 */
+export const AUDIT_COUNTED_ACTIONS = ['personnel.exported', 'audit.exported'] as const;
+export type AuditCountedAction = (typeof AUDIT_COUNTED_ACTIONS)[number];
 
 export const LOGIN_FAILED_REASONS = ['unknown-identifier', 'bad-credential'] as const;
 export type LoginFailedReason = (typeof LOGIN_FAILED_REASONS)[number];
