@@ -130,7 +130,9 @@ model PersonnelAssignment {
   @@map("personnel_assignment")
 }
 
-/// 导出留痕（append-only：触发器拒 UPDATE/DELETE）——谁在何时导出了什么范围、多少行
+/// 导出留痕（append-only：触发器拒 UPDATE/DELETE）——谁在何时导出了什么范围、多少行。
+/// 冻结（ADR 0013，#125）：不再写入，应用里没有写入路径。人员导出改写 AuditTrail 的 personnel.exported。
+/// 表、追加式触发器 export_audit_append_only、G1 白名单条目都保留，已有行永久可查。不删表（#49、#37）。
 model ExportAudit {
   id               String   @id
   actorId          String   @map("actor_id")
@@ -264,7 +266,6 @@ model PersonnelRole {
   @@map("personnel_role")
 }
 
-/// 留痕。除主键、时间、动作、成败外都可空。写入后不可改、不可删。
 // 人员—岗位标记（#128，#105 A1）。取值 legal-review-lead / legal-affairs-leader（库内 CHECK）。
 // 只失效不删除；未失效行的「人员 + 标记」唯一由迁移里的部分唯一索引保证。不进允许行，不授予操作码。
 model PersonnelPost {
@@ -278,6 +279,7 @@ model PersonnelPost {
   @@map("personnel_post")
 }
 
+/// 留痕。除主键、时间、动作、成败外都可空。写入后不可改、不可删。
 model AuditTrail {
   id                 String    @id
   createdAt          DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
@@ -297,6 +299,8 @@ model AuditTrail {
   resourceType       String?   @map("resource_type")
   resourceId         String?   @map("resource_id")
   previousValue      String?   @map("previous_value")
+  /// 导出条数（ADR 0013）。只有带条数的动作写值，其余为空。库层 CHECK 不得为负。
+  itemCount          Int?      @map("item_count")
   // 后值（#128）：personnel.post-granted 写标记取值。其余动作为空。
   nextValue          String?   @map("next_value")
   /// 授权拒绝行的目标机构（#119 修正，ADR 0011）：查阅范围按它套。其他动作为空。

@@ -8,7 +8,11 @@ import type { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { PrismaPg } from '@prisma/adapter-pg';
 
-import { prismaAuditTrailFactory } from '../../../packages/audit/src/prisma-audit-trail.ts';
+import {
+  PrismaAuditTrailReader,
+  prismaAuditTrailFactory,
+  type AuditTrailReadClient,
+} from '../../../packages/audit/src/prisma-audit-trail.ts';
 import {
   AUDIT_TRAIL_FACTORY,
   AUDIT_TRAIL_PORT,
@@ -16,7 +20,17 @@ import {
   type AuditTrailFactory,
   type Rejected,
 } from '@natural-enforcement/audit';
-import { IDENTITY_STORE } from '@natural-enforcement/identity';
+import {
+  BootstrapService,
+  CredentialService,
+  IDENTITY_STORE,
+  NO_OPEN_ITEMS,
+  OPEN_ITEMS_COUNTER,
+  type BootstrapHooks,
+  type BootstrapOutcome,
+  type BootstrapRequest,
+  type OpenItemsCounter,
+} from '@natural-enforcement/identity';
 import { PrismaIdentityStore } from '../../identity/src/persistence/prisma-identity-store.ts';
 import { PrismaClient, type Prisma } from '../../prisma/generated/prisma/client.ts';
 
@@ -394,6 +408,7 @@ class PrismaUnitOfWork implements UnitOfWork {
       sessions: new PrismaSessionStore(client),
       remember: new PrismaRememberMeStore(client, null),
       audit: this.factory.forClient(client),
+      auditReader: new PrismaAuditTrailReader(client as unknown as AuditTrailReadClient),
     };
   }
 }
@@ -402,6 +417,8 @@ class PrismaUnitOfWork implements UnitOfWork {
 export interface ApplicationOverrides {
   /** 接缝①：覆写留痕工厂，例如「业务写完后抛错」。 */
   auditTrailFactory?: AuditTrailFactory;
+  /** 接缝③：承办中事项计数。默认恒为 0（#124）。 */
+  openItemsCounter?: OpenItemsCounter;
 }
 
 class DisconnectPrisma implements OnModuleDestroy {
@@ -438,6 +455,7 @@ class PersistenceModule {
         { provide: SESSION_STORE, useValue: new PrismaSessionStore(prisma) },
         { provide: REMEMBER_ME_STORE, useValue: new PrismaRememberMeStore(prisma, prisma) },
         { provide: UNIT_OF_WORK, useValue: new PrismaUnitOfWork(prisma, auditTrailFactory) },
+        { provide: OPEN_ITEMS_COUNTER, useValue: overrides.openItemsCounter ?? NO_OPEN_ITEMS },
         {
           provide: DisconnectPrisma,
           useFactory: (client: PrismaClient) => new DisconnectPrisma(client),
@@ -449,6 +467,7 @@ class PersistenceModule {
         AUDIT_TRAIL_FACTORY,
         AUDIT_TRAIL_PORT,
         UNIT_OF_WORK,
+        OPEN_ITEMS_COUNTER,
         LOGIN_DIRECTORY,
         SESSION_STORE,
         REMEMBER_ME_STORE,
@@ -490,4 +509,29 @@ export async function createApplication(
   }
   withCsrf.enableCsrfProtection();
   return app;
+}
+
+/** 生产引导命令（#131）用的装配：一个 Prisma 根客户端、身份存储和留痕工厂。没有 HTTP 入口。 */
+export interface BootstrapRunner {
+  /** 按定版 argon2id 参数散列初始口令（在事务之外计算）。 */
+  hashPassword(plain: string): Promise<string>;
+  run(request: BootstrapRequest, hooks?: BootstrapHooks): Promise<BootstrapOutcome>;
+  close(): Promise<void>;
+}
+
+export function openBootstrapRunner(
+  databaseUrl: string,
+  overrides: ApplicationOverrides = {},
+): BootstrapRunner {
+  const prisma = new PrismaClient({
+    adapter: new PrismaPg({ connectionString: databaseUrl }),
+  });
+  const store = new PrismaIdentityStore(prisma);
+  const service = new BootstrapService(store, overrides.auditTrailFactory ?? prismaAuditTrailFactory);
+  const credentials = new CredentialService(store);
+  return {
+    hashPassword: (plain) => credentials.hashPassword(plain),
+    run: (request, hooks) => service.run(request, hooks),
+    close: () => prisma.$disconnect(),
+  };
 }

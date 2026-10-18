@@ -73,16 +73,19 @@ for (const object of ADMIN_OBJECTS) {
   }
 }
 for (const code of [
-  // 机构树（#105「机构树」，#123）。停用码 org.unit.deactivate 随停用票（#124）入册。
+  // 机构树（#105「机构树」，#123）与机构停用（#124）。
   'org.tree.read',
   'org.unit.register',
   'org.unit.rename',
+  'org.unit.deactivate',
   // 人员登记、列表与卡片（#105「人员与登录凭据」，#128）。其余 personnel.profile.* 随 #129、#130、#133 入册。
   'personnel.profile.read',
   'personnel.profile.register',
   'personnel.locked.read',
   'personnel.locked.release',
   'personnel.password.reset',
+  // #125（ADR 0013）：人员导出，只给系统管理。导出写共用留痕表的 personnel.exported。
+  'personnel.profile.export',
   'audit.admin.read',
   'audit.admin.export',
   'authz.binding.submit',

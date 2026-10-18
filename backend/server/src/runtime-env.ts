@@ -7,6 +7,12 @@ export const SERVER_REQUIRED_ENV = ['DATABASE_URL'] as const;
 
 export type ServerEnvName = (typeof SERVER_REQUIRED_ENV)[number];
 
+/**
+ * 生产引导命令（#131）必须读到的环境变量。BOOTSTRAP_PASSWORD_FILE 只给口令文件的路径，
+ * 口令只从该挂载文件或 secret 读入，不经命令行或环境变量传值。
+ */
+export const BOOTSTRAP_REQUIRED_ENV = ['DATABASE_URL', 'BOOTSTRAP_PASSWORD_FILE'] as const;
+
 /** 缺必填环境变量。missing 按登记顺序列出全部缺项。 */
 export class MissingRuntimeEnvError extends Error {
   readonly missing: readonly string[];

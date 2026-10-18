@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AUDIT_ACTION_AUTHZ_DENIED,
   AUDIT_ACTIONS,
+  AUDIT_COUNTED_ACTIONS,
   AuditVocabularyError,
   PrismaAuditTrail,
   type AuditTrailCreateClient,
@@ -204,6 +205,143 @@ describe('机构树动作（#123）', () => {
       { action: 'org.unit.renamed', outcome: 'failed', reason: 'org-unit-deactivated' },
       { action: 'login.failed', outcome: 'succeeded', reason: 'bad-credential' },
       { action: 'org.unit.renamed', outcome: 'maybe' },
+    ];
+    for (const item of cases) {
+      await expect(
+        trail.append({ ...parties, ...item } as unknown as Parameters<typeof trail.append>[0]),
+        JSON.stringify(item),
+      ).rejects.toBeInstanceOf(AuditVocabularyError);
+    }
+    expect(written).toHaveLength(0);
+  });
+});
+
+describe('机构停用（#124）', () => {
+  it('停用记成功，不带原因；被拒记失败，原因取四个封闭取值之一', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    await trail.append({ ...parties, action: 'org.unit.deactivated', opcode: 'org.unit.deactivate' });
+    for (const reason of ['org-unit-root', 'org-has-active-children', 'org-has-assignments', 'org-has-open-items'] as const) {
+      await trail.append({ ...parties, action: 'org.unit.deactivated', outcome: 'failed', reason });
+    }
+    expect(written.map((row) => [row.action, row.outcome, row.reason])).toEqual([
+      ['org.unit.deactivated', 'succeeded', null],
+      ['org.unit.deactivated', 'failed', 'org-unit-root'],
+      ['org.unit.deactivated', 'failed', 'org-has-active-children'],
+      ['org.unit.deactivated', 'failed', 'org-has-assignments'],
+      ['org.unit.deactivated', 'failed', 'org-has-open-items'],
+    ]);
+  });
+
+  it('停用失败缺原因、原因表外、成功带原因，一律拒绝且不写库', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    const cases: Array<Record<string, unknown>> = [
+      { action: 'org.unit.deactivated', outcome: 'failed' },
+      { action: 'org.unit.deactivated', outcome: 'failed', reason: 'org-unit-deactivated' },
+      { action: 'org.unit.deactivated', reason: 'org-has-open-items' },
+      { action: 'org.unit.registered', outcome: 'failed', reason: 'org-unit-root' },
+    ];
+    for (const item of cases) {
+      await expect(
+        trail.append({ ...parties, ...item } as unknown as Parameters<typeof trail.append>[0]),
+        JSON.stringify(item),
+      ).rejects.toBeInstanceOf(AuditVocabularyError);
+    }
+    expect(written).toHaveLength(0);
+  });
+});
+
+describe('导出条数（ADR 0013）', () => {
+  it('personnel.exported 带条数写入，记成功；条数 0 同样写入', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    await trail.append({ ...parties, action: 'personnel.exported', itemCount: 3 });
+    await trail.append({ ...parties, action: 'personnel.exported', itemCount: 0 });
+    expect(written.map((row) => [row.action, row.outcome, row.itemCount, row.reason])).toEqual([
+      ['personnel.exported', 'succeeded', 3, null],
+      ['personnel.exported', 'succeeded', 0, null],
+    ]);
+    expect(AUDIT_COUNTED_ACTIONS).toEqual(['personnel.exported', 'audit.exported']);
+  });
+
+  it('#126：audit.exported 带条数写入、audit.viewed 不带条数，都记成功', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    await trail.append({ ...parties, action: 'audit.exported', itemCount: 46 });
+    await trail.append({ ...parties, action: 'audit.viewed' });
+    expect(written.map((row) => [row.action, row.outcome, row.itemCount])).toEqual([
+      ['audit.exported', 'succeeded', 46],
+      ['audit.viewed', 'succeeded', null],
+    ]);
+  });
+
+  it('#126：audit.exported 缺条数、audit.viewed 带条数都被拒绝，不写库', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    await expect(
+      trail.append({ ...parties, action: 'audit.exported' } as unknown as Parameters<typeof trail.append>[0]),
+    ).rejects.toBeInstanceOf(AuditVocabularyError);
+    await expect(
+      trail.append({ ...parties, action: 'audit.viewed', itemCount: 1 } as unknown as Parameters<typeof trail.append>[0]),
+    ).rejects.toBeInstanceOf(AuditVocabularyError);
+    expect(written).toHaveLength(0);
+  });
+
+  it('不带条数的动作写入时条数为空', async () => {
+    const { db, written } = recorder();
+    await new PrismaAuditTrail(db).append({ ...parties, action: 'login.succeeded' });
+    await new PrismaAuditTrail(db).append(entry);
+    expect(written.map((row) => row.itemCount)).toEqual([null, null]);
+  });
+
+  it('带条数的动作缺条数或条数不是非负整数被拒绝，不写库', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    for (const itemCount of [undefined, null, -1, 1.5, Number.NaN, '3']) {
+      await expect(
+        trail.append({ ...parties, action: 'personnel.exported', itemCount } as unknown as Parameters<typeof trail.append>[0]),
+      ).rejects.toBeInstanceOf(AuditVocabularyError);
+    }
+    expect(written).toHaveLength(0);
+  });
+
+  it('别的动作带条数被拒绝，不写库', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    await expect(
+      trail.append({ ...parties, action: 'login.succeeded', itemCount: 1 } as unknown as Parameters<typeof trail.append>[0]),
+    ).rejects.toBeInstanceOf(AuditVocabularyError);
+    expect(written).toHaveLength(0);
+  });
+});
+
+describe('引导动作（#131，ADR 0013 第 3 条）', () => {
+  it('根机构与首个系统管理人员两行都记成功，不带原因和条数', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    const boot = { ...parties, sourceIp: null, orgUnitId: 'ROOT-ID' };
+    await trail.append({ ...boot, action: 'bootstrap.root-registered', resourceType: 'org-unit', resourceId: 'ROOT-ID' });
+    await trail.append({
+      ...boot,
+      action: 'bootstrap.admin-registered',
+      subjectPersonnelId: 'ADMIN-ID',
+      subjectCode: 'P-0001',
+    });
+    expect(written.map((row) => [row.action, row.outcome, row.reason, row.itemCount, row.orgUnitId, row.actorId]))
+      .toEqual([
+        ['bootstrap.root-registered', 'succeeded', null, null, 'ROOT-ID', null],
+        ['bootstrap.admin-registered', 'succeeded', null, null, 'ROOT-ID', null],
+      ]);
+  });
+
+  it('引导动作记失败、带原因或带条数，一律拒绝且不写库', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    const cases: Array<Record<string, unknown>> = [
+      { action: 'bootstrap.root-registered', outcome: 'failed', reason: 'org-unit-deactivated' },
+      { action: 'bootstrap.admin-registered', reason: 'bad-credential' },
+      { action: 'bootstrap.admin-registered', itemCount: 1 },
     ];
     for (const item of cases) {
       await expect(

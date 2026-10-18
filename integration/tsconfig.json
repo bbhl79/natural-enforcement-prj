@@ -5,10 +5,14 @@
   "compilerOptions": {
     "noEmit": true
   },
+  // 根配置的 exclude 会被继承，且优先于下面的 include。这里重置为空，
+  // 让根配置排除的 main.ts、bootstrap-command.ts 在本层确实参与类型检查。
+  "exclude": [],
   "include": [
     "./**/*.ts",
     "../backend/prisma/**/*.ts",
     "../backend/server/src/main.ts",
-    "../backend/server/src/persistence.module.ts"
+    "../backend/server/src/persistence.module.ts",
+    "../backend/server/src/bootstrap-command.ts"
   ]
 }

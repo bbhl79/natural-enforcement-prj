@@ -2,6 +2,7 @@ import type {
   AuditTargetOrgBasis,
   AuthzDeniedReason,
   LoginFailedReason,
+  OrgUnitDeactivateFailedReason,
   OrgUnitRegisterFailedReason,
   PasswordChangedReason,
   PersonnelRegisterFailedReason,
@@ -27,6 +28,8 @@ export interface AuditParties {
   resourceType?: string | null;
   resourceId?: string | null;
   previousValue?: string | null;
+  /** 导出条数（ADR 0013）。只有带条数的动作（AUDIT_COUNTED_ACTIONS）写值，其余为空。 */
+  itemCount?: number | null;
   /** 后值（#128）。只有 AUDIT_NEXT_VALUE_ACTIONS 里的动作带，其余为空。 */
   nextValue?: string | null;
 }
@@ -55,6 +58,13 @@ export type AuditAppend =
   | (AuditParties & { action: 'org.unit.registered' })
   | (AuditParties & { action: 'org.unit.registered'; outcome: 'failed'; reason: OrgUnitRegisterFailedReason })
   | (AuditParties & { action: 'org.unit.renamed' })
+  | (AuditParties & { action: 'org.unit.deactivated' })
+  | (AuditParties & { action: 'org.unit.deactivated'; outcome: 'failed'; reason: OrgUnitDeactivateFailedReason })
+  | (AuditParties & { action: 'personnel.exported'; itemCount: number })
+  | (AuditParties & { action: 'bootstrap.root-registered' })
+  | (AuditParties & { action: 'bootstrap.admin-registered' })
+  | (AuditParties & { action: 'audit.viewed' })
+  | (AuditParties & { action: 'audit.exported'; itemCount: number })
   | (AuditParties & { action: 'personnel.registered' })
   | (AuditParties & { action: 'personnel.registered'; outcome: 'failed'; reason: PersonnelRegisterFailedReason })
   | (AuditParties & { action: 'personnel.viewed' })

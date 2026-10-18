@@ -42,7 +42,8 @@ if (existing) {
 
 // ---- 参照种子（#92；允许行 = GitHub issue #71 决议）----
 // 系统管理不持有办案表任何一行。authz.binding 两条只给系统管理。
-// 机构树（#105，#123）：org.tree.read 给系统管理和内勤（内勤选承办机构要用），新建下级、改名只给系统管理。
+// 机构树（#105，#123、#124）：org.tree.read 给系统管理和内勤（内勤选承办机构要用），新建下级、改名、停用只给系统管理。
+// 人员导出 personnel.profile.export 只给系统管理（#125，ADR 0013）。已初始化的库再次播种时补写这一条允许行。
 // 人员登记与查看（#105，#128）：personnel.profile.read、personnel.profile.register 只给系统管理。
 const ROLE_ALLOWANCES = {
   内勤: [
@@ -115,11 +116,13 @@ const ROLE_ALLOWANCES = {
     "org.tree.read",
     "org.unit.register",
     "org.unit.rename",
+    "org.unit.deactivate",
     "personnel.profile.read",
     "personnel.profile.register",
     "personnel.locked.read",
     "personnel.locked.release",
     "personnel.password.reset",
+    "personnel.profile.export",
     "audit.admin.read",
     "audit.admin.export",
     "authz.binding.submit",
@@ -274,6 +277,8 @@ if (process.env.NODE_ENV === "production") {
     "13800001009",
     bothCert,
   );
+  // 当前任职在根机构的监督（#105 M4、#126）：看得到没有所属机构的留痕，区监督看不到（Lei Hu 7-8）。
+  await seedPersonnel("P-SUPER-HQ", "市局监督", hqId, ["监督"], passwordHash, "13800001011", null);
   // 只给 e2e 首登使用。上次改密时间留空。口令与其余夹具相同，符合口令策略。
   await seedPersonnel("P-E2E-99", "首登冒烟", deptAId, ["经办"], passwordHash, "13800001010", null);
 }
