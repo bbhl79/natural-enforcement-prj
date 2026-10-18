@@ -177,6 +177,10 @@ export interface IdentityStore {
    * update = 改名、停用时锁本机构。机构不存在时返回 null。根客户端上锁随语句结束释放。
    */
   lockOrgUnit(orgUnitId: string, mode: 'share' | 'update'): Promise<OrgUnitRow | null>;
+  /** 某机构直接下级中未停用的个数（#124 停用前提）。 */
+  countActiveChildOrgUnits(orgUnitId: string): Promise<number>;
+  /** 某机构上的生效任职条数：endedAt 为空，含已停用人员挂着的未结束任职（#124 停用前提）。 */
+  countOpenAssignmentsOfOrgUnit(orgUnitId: string): Promise<number>;
   listPersonnelNameVersions(personnelId: string): Promise<PersonnelNameVersionRow[]>;
   /** 某机构（不含下级）全部未失效人员 */
   listActivePersonnelOfOrgUnit(orgUnitId: string): Promise<PersonnelRow[]>;
