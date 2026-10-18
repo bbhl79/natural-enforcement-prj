@@ -115,6 +115,8 @@ describe('#126 留痕展示文字（P8）', () => {
       action: 'authz.denied', outcome: 'failed', reason: 'permission-denied', subjectCode: null,
       opcode: 'personnel.cert.update',
     })).operation).toBe('登记执法证');
+  });
+
   it('人员编辑与调岗被拒的行按操作码写中文，编辑各动作按动作词写中文（#129）', () => {
     const denied = describeAuditRow(
       record({

@@ -73,7 +73,7 @@ export type AuditAppend =
   | (AuditParties & { action: 'personnel.viewed' })
   | (AuditParties & { action: 'personnel.post-granted'; nextValue: string })
   /** 执法证登记（#133）。前值只写旧有效期和旧状态，不写证号（#105:232、ADR 0011）。 */
-  | (AuditParties & { action: 'cert.updated' });
+  | (AuditParties & { action: 'cert.updated' })
   // 人员编辑与调岗（#129，ADR 0014）。改名前值写旧名；改手机号前值留空（#105:219）。
   | (AuditParties & { action: 'personnel.renamed' })
   | (AuditParties & { action: 'personnel.mobile-changed' })

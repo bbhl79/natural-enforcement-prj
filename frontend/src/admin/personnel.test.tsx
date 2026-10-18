@@ -6,8 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import reducer, { loadSession } from '../login/loginSlice';
 import { visibleMenu } from '../shell/menu';
 import { renderRoute, renderRouter, settled } from '../test-utils';
-import { PersonnelCardView, CertForm } from './PersonnelCardPage';
-import { PersonnelCardView, TransferDialog, type EditState, type TransferState } from './PersonnelCardPage';
+import { CertForm, PersonnelCardView, TransferDialog, type EditState, type TransferState } from './PersonnelCardPage';
 import { EMPTY_INPUT, PersonnelCreateForm } from './PersonnelCreatePage';
 import { PersonnelListView } from './PersonnelListPage';
 import {
@@ -42,11 +41,11 @@ import {
   searchFromFilter,
   searchWithPage,
   shouldRevalidatePersonnelList,
+  transferPersonnel,
   updateCert,
+  updatePersonnel,
   type CertUpdateInput,
   type CertUpdateResult,
-  transferPersonnel,
-  updatePersonnel,
   type EditInput,
   type PersonnelCard,
   type PersonnelFilter,
