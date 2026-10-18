@@ -5,20 +5,25 @@
 // 口令散列在事务之外计算：先 screenRegistration 判断能否登记，再散列，再 registerPersonnel。
 
 import { Inject, Injectable } from '@nestjs/common';
-import type { AuditAppend, AuditTrailPort } from '@natural-enforcement/audit';
+import type { AuditAppend, AuditParties, AuditTrailPort } from '@natural-enforcement/audit';
 
 import { AccessDeniedError } from '../domain/access.ts';
 import type { ActorRef } from '../domain/actor.ts';
 import {
+  PERSONNEL_DEACTIVATED_REASON,
+  PERSONNEL_PROFILE_DEACTIVATE_OPCODE,
   PERSONNEL_PROFILE_READ_OPCODE,
   PERSONNEL_PROFILE_REGISTER_OPCODE,
+  PERSONNEL_PROFILE_RESTORE_OPCODE,
   PERSONNEL_PROFILE_UPDATE_OPCODE,
+  PERSONNEL_SESSIONS_END_OPCODE,
   certStatusOf,
   isEmptyDiff,
   normalizeRegistration,
   normalizeUpdate,
   parseCalendarDay,
   registrationRules,
+  restoreRules,
   sortRoleNames,
   transferRules,
   updateDiff,
@@ -28,6 +33,9 @@ import {
   type PersonnelPost,
   type RegisterPersonnelProfileInput,
   type RegisterRuleCode,
+  type RestoreInvalidReason,
+  type RestorePersonnelProfileInput,
+  type RestoreRuleCode,
   type TransferRuleCode,
   type UpdatePersonnelProfileInput,
   type UpdateRuleCode,
@@ -37,6 +45,7 @@ import { newUlid } from '../domain/ulid.ts';
 import type {
   IdentityStore,
   IdentityTransaction,
+  OrgUnitRow,
   PersonnelAssignmentRow,
   PersonnelProfileRow,
 } from '../persistence/identity-store.ts';
@@ -73,6 +82,8 @@ export interface PersonnelProfile {
   orgName: string | null;
   /** 当前机构的上级名（原型 P6:30「天河区分局石牌自然资源所」）；本机构是根机构、上级是根机构或没有当前任职时为 null。 */
   orgParentName: string | null;
+  /** 当前任职机构已停用（#130）：恢复时必须在同一步选一个新的任职机构（#105 故事 38）。 */
+  orgDeactivated: boolean;
   roles: string[];
   posts: PersonnelPost[];
   passwordChangedAt: Date | null;
@@ -100,17 +111,21 @@ export type RegisterPersonnelProfileResult =
 /**
  * 编辑的结果（#129）。updated 涵盖「什么都没改」：重复授予或摘除返回 200，不写留痕（#105:219、:223）。
  * root-guard = 违反根机构守卫（409 invalid-state，ADR 0014），failure 是 personnel.role-revoked 的失败留痕行。
+ * personnel-deactivated = 对方已停用，禁止编辑（409 invalid-state，#130 定口径），
+ * failures 按这次要改的每一项各一行，动作词与成功时相同。
  */
 export type UpdatePersonnelProfileResult =
   | { result: 'updated' }
   | { result: 'not-found' }
   | { result: 'non-compliant'; rules: UpdateRuleCode[] }
   | { result: 'already-exists'; conflict: 'mobile-phone'; failure: AuditAppend }
+  | { result: 'personnel-deactivated'; failures: AuditAppend[] }
   | { result: 'root-guard'; failure: AuditAppend };
 
 /**
  * 调岗的结果（#129）。unchanged = 目的地就是对方当前任职机构，返回 200，不写行、不写留痕。
- * invalid-state = 目的地已停用（409）；root-guard = 调出根机构违反守卫（409，ADR 0014）。
+ * invalid-state = 目的地已停用（409）；root-guard = 调出根机构违反守卫（409，ADR 0014）；
+ * personnel-deactivated = 对方已停用，禁止调岗（409，#130 定口径）。
  */
 export type TransferPersonnelProfileResult =
   | { result: 'transferred'; orgUnitId: string }
@@ -118,6 +133,7 @@ export type TransferPersonnelProfileResult =
   | { result: 'not-found' }
   | { result: 'non-compliant'; rules: TransferRuleCode[] }
   | { result: 'invalid-state'; failure: AuditAppend }
+  | { result: 'personnel-deactivated'; failure: AuditAppend }
   | { result: 'root-guard'; failure: AuditAppend };
 
 /** 调岗目的地：全树未停用的机构，按树的先序（#105:219 目的地不限数据范围）。 */
@@ -131,12 +147,51 @@ export type TransferDestinationsResult =
   | { result: 'listed'; orgUnits: TransferDestination[] }
   | { result: 'not-found' };
 
+/**
+ * 停用的结果（#130）。unchanged = 对方已经停用，返回 200，不写行、不写留痕，不改首次停用时间（照机构停用，#124）。
+ * root-guard = 违反根机构守卫（409 invalid-state，ADR 0014），failure 是 personnel.deactivated 的失败留痕行。
+ */
+export type DeactivatePersonnelProfileResult =
+  | { result: 'deactivated' }
+  | { result: 'unchanged' }
+  | { result: 'not-found' }
+  | { result: 'root-guard'; failure: AuditAppend };
+
+/** 恢复的前置结果（#130）。ready 带上锁内读到的对方当前态与已通过校验的新任职机构。 */
+export type RestoreScreenResult =
+  | { result: 'ready'; target: PersonnelMaintenanceTarget; dest: OrgUnitRow | null }
+  | { result: 'not-found' }
+  | { result: 'non-compliant'; rules: RestoreRuleCode[] }
+  | { result: 'invalid-state'; reason: RestoreInvalidReason; failure: AuditAppend };
+
+/**
+ * 恢复的结果（#130，#105 故事 37–39）。orgUnitId 是恢复后的当前任职机构。
+ * root-guard = 恢复时同时调出根机构违反守卫（409，ADR 0014）。
+ */
+export type RestorePersonnelProfileResult =
+  | { result: 'restored'; orgUnitId: string | null }
+  | { result: 'not-found' }
+  | { result: 'non-compliant'; rules: RestoreRuleCode[] }
+  | { result: 'invalid-state'; reason: RestoreInvalidReason; failure: AuditAppend }
+  | { result: 'root-guard'; failure: AuditAppend };
+
+/**
+ * 结束全部会话的前置结果（#130）。parties 是 personnel.sessions-ended 那一行除动作以外的全部取值，
+ * 会话与「记住我」的结束由调用方在同一事务里做（它们不在身份组织模块里）。
+ */
+export type SessionsEndAuthorization =
+  | { result: 'authorized'; parties: AuditParties }
+  | { result: 'not-found' };
+
 function raiseDenied(decision: Extract<AuthorizationDecision, { allowed: false }>): never {
   throw new AccessDeniedError(decision.reason, decision.detail, decision.denial);
 }
 
-/** 编辑与调岗的前置结果（#129）：对方当前态、当前任职、数据范围锚点、操作者工号。 */
-interface EditTarget {
+/**
+ * 人员维护动作的前置结果（#129 编辑与调岗，#130 停用、恢复、结束全部会话）：
+ * 对方当前态、当前任职、数据范围锚点、操作者工号。
+ */
+export interface PersonnelMaintenanceTarget {
   profile: PersonnelProfileRow;
   current: PersonnelAssignmentRow | null;
   /** 数据范围锚点：对方当前任职机构；没有当前任职时视同根机构（A10 口径）。 */
@@ -237,6 +292,7 @@ export class PersonnelProfileService {
         orgUnitId: current?.orgUnitId ?? null,
         orgName: org?.name ?? null,
         orgParentName,
+        orgDeactivated: Boolean(org?.deactivatedAt),
         roles: sortRoleNames(roles),
         posts,
         passwordChangedAt: target.passwordChangedAt,
@@ -386,7 +442,7 @@ export class PersonnelProfileService {
   }
 
   /**
-   * 编辑与调岗的公共前置（#129）：对方存在 → 按 personnel.profile.update 过授权。
+   * 编辑、调岗、停用、恢复、结束全部会话的公共前置（#129、#130）：对方存在 → 按操作码过授权。
    * 数据范围锚点 = 对方当前任职机构；没有当前任职视同根机构（A10 口径，#105:230）。
    * 对方不存在返回 null（404，不写留痕）；被拒抛 AccessDeniedError，denial 非空，由调用方回滚后写入。
    * 授权不取人员锁：取锁会推迟授权读取，先手提交后操作者角色已变，授权会误判。
@@ -396,12 +452,13 @@ export class PersonnelProfileService {
     actor: ActorRef,
     personnelId: string,
     tx: IdentityTransaction,
-  ): Promise<EditTarget | null> {
+    opcode: string = PERSONNEL_PROFILE_UPDATE_OPCODE,
+  ): Promise<PersonnelMaintenanceTarget | null> {
     const profile = await tx.store.findPersonnelProfile(personnelId);
     if (!profile) return null;
     const current = await tx.store.findCurrentAssignment(profile.id);
     const anchor = current?.orgUnitId ?? (await tx.store.findRootOrgUnitId()) ?? '';
-    const decision = await this.access.check(actor, PERSONNEL_PROFILE_UPDATE_OPCODE, anchor, {
+    const decision = await this.access.check(actor, opcode, anchor, {
       resourceType: 'personnel',
       resourceId: profile.id,
     }, tx.store);
@@ -427,10 +484,14 @@ export class PersonnelProfileService {
   }
 
   /**
-   * 守卫一（#105:225，G23）：不能给自己改角色、改岗位标记、调岗。
+   * 守卫一（#105:225，G23）：不能给自己改角色、改岗位标记、调岗、停用、恢复、结束会话。
    * 对象就是本人，目标机构取对象机构（ADR 0011 修正）。姓名与手机号可以给自己改（原型 P6 selfEdit）。
    */
-  private raiseSelfDenied(target: EditTarget, what: string): never {
+  private raiseSelfDenied(
+    target: PersonnelMaintenanceTarget,
+    what: string,
+    opcode: string = PERSONNEL_PROFILE_UPDATE_OPCODE,
+  ): never {
     const anchored = target.anchor !== '';
     throw new AccessDeniedError('permission-denied', `人员 ${target.profile.code} 不能给自己${what}`, {
       action: 'authz.denied',
@@ -442,7 +503,7 @@ export class PersonnelProfileService {
       orgUnitId: target.current?.orgUnitId ?? null,
       sourceIp: null,
       reason: 'permission-denied',
-      opcode: PERSONNEL_PROFILE_UPDATE_OPCODE,
+      opcode,
       resourceType: 'personnel',
       resourceId: target.profile.id,
       previousValue: null,
@@ -451,25 +512,30 @@ export class PersonnelProfileService {
     });
   }
 
-  /** 编辑各行的操作者一方（#129）。被作用人员由调用方补上。 */
-  private editor(actor: ActorRef, target: EditTarget, sourceIp: string | null) {
+  /** 维护动作留痕的双方与资源（#129、#130）。机构写对方当时的任职机构；没有当前任职时为空，查阅视同根机构。 */
+  private party(actor: ActorRef, target: PersonnelMaintenanceTarget, sourceIp: string | null, opcode: string): AuditParties {
     return {
       actorId: actor.personnelId,
       actorCode: target.actorCode,
       sourceIp,
-      opcode: PERSONNEL_PROFILE_UPDATE_OPCODE,
+      opcode,
       resourceType: 'personnel',
       resourceId: target.profile.id,
       subjectPersonnelId: target.profile.id,
       subjectCode: target.profile.code,
-      // 机构写对方当时的任职机构（ADR 0011）；没有当前任职时为空，查阅视同根机构。
       orgUnitId: target.current?.orgUnitId ?? null,
     };
+  }
+
+  /** 编辑各行的操作者一方（#129）。被作用人员由调用方补上。 */
+  private editor(actor: ActorRef, target: PersonnelMaintenanceTarget, sourceIp: string | null) {
+    return this.party(actor, target, sourceIp, PERSONNEL_PROFILE_UPDATE_OPCODE);
   }
 
   /**
    * 编辑（#105 故事 33、34、41，#129）。在调用方的交互式事务里执行，业务行与留痕同成同败（#119）。
    * 判定顺序：授权（越权 403）→ 校验（400，不写留痕）→ 差异为空（200，不写行、不写留痕）
+   * → 停用态拒绝（对方已停用 409，按要改的每一项各写一行失败留痕，#130）
    * → 守卫一（给自己改角色或岗位标记 403）→ 守卫二（摘除系统管理角色违反根机构守卫 409，ADR 0014）→ 写入。
    * 改名追加名称版本；改手机号只写 personnel.mobile-changed，前值留空；
    * 摘除角色给旧行置失效时间，授予插入新行；岗位标记同人员—角色。
@@ -494,7 +560,7 @@ export class PersonnelProfileService {
     // 人员级事务锁 + 锁内重读：差异与根机构守卫基于已提交态（#129 复核，ADR 0014）。
     const locked = await this.lockTarget(personnelId, tx);
     if (!locked) return { result: 'not-found' };
-    const target: EditTarget = { ...authorized, profile: locked.profile, current: locked.current };
+    const target: PersonnelMaintenanceTarget = { ...authorized, profile: locked.profile, current: locked.current };
     const [heldRoles, heldPosts] = await Promise.all([
       tx.store.listActivePersonnelRoles(target.profile.id),
       tx.store.listActivePersonnelPosts(target.profile.id),
@@ -507,6 +573,34 @@ export class PersonnelProfileService {
     });
     // 重复授予或摘除、什么都没改：200，不写行、不写留痕（#105:219、:223）。
     if (isEmptyDiff(diff)) return { result: 'updated' };
+    // 停用态人员禁止编辑（#130 定口径，PR #148 复核遗留①）：这次要改的每一项各写一行失败留痕。
+    // 什么都没改时不进这一条：没有改动就没有动作可记，照上面返回 200。
+    if (target.profile.deactivatedAt) {
+      const refused = this.editor(actor, target, sourceIp);
+      const reason = PERSONNEL_DEACTIVATED_REASON;
+      const failures: AuditAppend[] = [];
+      if (diff.name !== '') {
+        failures.push({
+          ...refused, action: 'personnel.renamed', outcome: 'failed', reason, previousValue: target.profile.name,
+        });
+      }
+      if (diff.mobilePhone !== '') {
+        failures.push({ ...refused, action: 'personnel.mobile-changed', outcome: 'failed', reason });
+      }
+      for (const roleName of diff.rolesToRevoke) {
+        failures.push({ ...refused, action: 'personnel.role-revoked', outcome: 'failed', reason, nextValue: roleName });
+      }
+      for (const roleName of diff.rolesToGrant) {
+        failures.push({ ...refused, action: 'personnel.role-granted', outcome: 'failed', reason, nextValue: roleName });
+      }
+      for (const post of diff.postsToRevoke) {
+        failures.push({ ...refused, action: 'personnel.post-revoked', outcome: 'failed', reason, nextValue: post });
+      }
+      for (const post of diff.postsToGrant) {
+        failures.push({ ...refused, action: 'personnel.post-granted', outcome: 'failed', reason, nextValue: post });
+      }
+      return { result: 'personnel-deactivated', failures };
+    }
     const touchesGrants = diff.rolesToGrant.length + diff.rolesToRevoke.length
       + diff.postsToGrant.length + diff.postsToRevoke.length > 0;
     if (touchesGrants && target.profile.id === actor.personnelId) {
@@ -604,7 +698,8 @@ export class PersonnelProfileService {
   /**
    * 调岗（#105 故事 35、41，#129）。在调用方的交互式事务里执行，业务行与留痕同成同败（#119）。
    * 判定顺序：授权（越权 403）→ 目的地必填（400，不写留痕）→ 守卫一（给自己调岗 403）
-   * → 目的地就是当前任职机构（200，不写行、不写留痕）→ 目的地状态（已停用 409）
+   * → 目的地就是当前任职机构（200，不写行、不写留痕）
+   * → 停用态拒绝（对方已停用 409，写一行 personnel.transferred 失败留痕，#130）→ 目的地状态（已停用 409）
    * → 守卫二（调出根机构违反根机构守卫 409，ADR 0014）→ 写入。
    * 目的地不限数据范围，但必须是组织树上未停用的机构；树外的机构按越权拒绝（#105:343）。
    * 目的地先加 FOR SHARE 锁：与停用该机构串行，停用后不再接收新任职（同登记，#124）。
@@ -625,7 +720,7 @@ export class PersonnelProfileService {
     // 人员级事务锁 + 锁内重读：未变判断与根机构守卫基于已提交态（#129 复核，ADR 0014）。
     const locked = await this.lockTarget(personnelId, tx);
     if (!locked) return { result: 'not-found' };
-    const target: EditTarget = { ...authorized, profile: locked.profile, current: locked.current };
+    const target: PersonnelMaintenanceTarget = { ...authorized, profile: locked.profile, current: locked.current };
     if (target.profile.id === actor.personnelId) this.raiseSelfDenied(target, '调岗');
     const toId = orgUnitId.trim();
     if (target.current?.orgUnitId === toId) return { result: 'unchanged' };
@@ -640,6 +735,19 @@ export class PersonnelProfileService {
       throw new Error(`机构 ${toId} 通过授权后读取失败`);
     }
     const parties = this.editor(actor, target, sourceIp);
+    // 停用态人员禁止调岗（#130 定口径，PR #148 复核遗留①）。先于目的地状态判断：对方的状态是本接口自己的前提。
+    if (target.profile.deactivatedAt) {
+      return {
+        result: 'personnel-deactivated',
+        failure: {
+          ...parties,
+          action: 'personnel.transferred',
+          outcome: 'failed',
+          reason: PERSONNEL_DEACTIVATED_REASON,
+          nextValue: dest.name,
+        },
+      };
+    }
     if (dest.deactivatedAt) {
       return {
         result: 'invalid-state',
@@ -718,5 +826,179 @@ export class PersonnelProfileService {
         .filter((unit) => !unit.deactivatedAt)
         .map(({ id, name, parentId }) => ({ id, name, parentId })),
     };
+  }
+
+  /**
+   * 停用（#130，#105 故事 36、41、42）。在调用方的交互式事务里执行，业务行与留痕同成同败（#119）。
+   * 判定顺序：授权（越权 403）→ 守卫一（停用自己 403）→ 人员锁内重读 → 重复停用（200，不写行、不写留痕）
+   * → 守卫二（停用根机构上最后一名系统管理人员 409，ADR 0014）→ 写入。
+   * 对方的全部会话在下一次请求时结束，不在本动作里结束：认证编排发现人员已停用即结束会话与「记住我」，
+   * 写 session.ended（personnel-deactivated）。
+   */
+  async deactivateProfile(
+    actor: ActorRef,
+    personnelId: string,
+    tx: IdentityTransaction,
+    audit: AuditTrailPort,
+    sourceIp: string | null = null,
+  ): Promise<DeactivatePersonnelProfileResult> {
+    const authorized = await this.authorizeTarget(actor, personnelId, tx, PERSONNEL_PROFILE_DEACTIVATE_OPCODE);
+    if (!authorized) return { result: 'not-found' };
+    if (authorized.profile.id === actor.personnelId) {
+      this.raiseSelfDenied(authorized, '停用', PERSONNEL_PROFILE_DEACTIVATE_OPCODE);
+    }
+    const locked = await this.lockTarget(personnelId, tx);
+    if (!locked) return { result: 'not-found' };
+    const target: PersonnelMaintenanceTarget = { ...authorized, profile: locked.profile, current: locked.current };
+    // 重复停用：200，不写行、不写留痕，不改首次停用时间（照机构停用，#124）。
+    if (target.profile.deactivatedAt) return { result: 'unchanged' };
+    const parties = this.party(actor, target, sourceIp, PERSONNEL_PROFILE_DEACTIVATE_OPCODE);
+    const rootId = await tx.store.findRootOrgUnitId();
+    // 只有「根机构任职 + 系统管理角色」的人员受守卫二约束（ADR 0014）。
+    const holdsAdminRole = (await tx.store.listActiveRoleNames(target.profile.id)).includes(ROOT_GUARD_ROLE);
+    if (rootId && target.current?.orgUnitId === rootId && holdsAdminRole) {
+      // 守卫二在事务级咨询锁内判断：两名系统管理并发互相停用时只有一方成功。
+      await tx.store.lockRootGuard();
+      if (await tx.store.countRootGuardAdmins(rootId, target.profile.id) === 0) {
+        return {
+          result: 'root-guard',
+          failure: { ...parties, action: 'personnel.deactivated', outcome: 'failed', reason: ROOT_GUARD_REASON },
+        };
+      }
+    }
+    await tx.store.deactivatePersonnel(target.profile.id, new Date());
+    await audit.append({ ...parties, action: 'personnel.deactivated' });
+    return { result: 'deactivated' };
+  }
+
+  /**
+   * 恢复的前置判断（#130，#105 故事 37–39）。判定顺序：授权（越权 403）→ 守卫一（恢复自己 403）
+   * → 初始口令规则（400，不写留痕）→ 人员锁内重读 → 对方没有停用（409）→ 新任职机构
+   * （越权 403；已停用 409；原任职机构已停用而没带新机构 409）。
+   * 通过时交出锁内读到的当前态与已加共享锁的新任职机构，写入路径直接复用，不再重判。
+   * 口令散列与口令历史比对都在事务之外（#119；历史留给 #132）。
+   */
+  async screenRestore(
+    actor: ActorRef,
+    personnelId: string,
+    input: RestorePersonnelProfileInput,
+    tx: IdentityTransaction,
+    sourceIp: string | null = null,
+  ): Promise<RestoreScreenResult> {
+    const authorized = await this.authorizeTarget(actor, personnelId, tx, PERSONNEL_PROFILE_RESTORE_OPCODE);
+    if (!authorized) return { result: 'not-found' };
+    if (authorized.profile.id === actor.personnelId) {
+      this.raiseSelfDenied(authorized, '恢复', PERSONNEL_PROFILE_RESTORE_OPCODE);
+    }
+    const rules = restoreRules(input, authorized.profile.code);
+    if (rules.length > 0) return { result: 'non-compliant', rules };
+    const locked = await this.lockTarget(personnelId, tx);
+    if (!locked) return { result: 'not-found' };
+    const target: PersonnelMaintenanceTarget = { ...authorized, profile: locked.profile, current: locked.current };
+    const parties = this.party(actor, target, sourceIp, PERSONNEL_PROFILE_RESTORE_OPCODE);
+    const refused = (reason: RestoreInvalidReason): RestoreScreenResult => ({
+      result: 'invalid-state',
+      reason,
+      failure: { ...parties, action: 'personnel.restored', outcome: 'failed', reason },
+    });
+    if (!target.profile.deactivatedAt) return refused('not-deactivated');
+    const wanted = (input.orgUnitId ?? '').trim();
+    const origin = target.current ? await tx.store.findOrgUnitById(target.current.orgUnitId) : null;
+    if (wanted === '') return origin?.deactivatedAt ? refused('org-unit-required') : { result: 'ready', target, dest: null };
+    // 新任职机构必须在操作者数据范围内（#105:228）：越权一律 403，先于状态判断。
+    const decision = await this.access.check(actor, PERSONNEL_PROFILE_RESTORE_OPCODE, wanted, {
+      resourceType: 'org-unit',
+      resourceId: wanted,
+    }, tx.store);
+    if (!decision.allowed) raiseDenied(decision);
+    // 目的地先加 FOR SHARE 锁：与停用该机构串行，停用后不再接收新任职（同登记与调岗）。
+    const dest = await tx.store.lockOrgUnit(wanted, 'share');
+    if (!dest) throw new Error(`机构 ${wanted} 通过授权后读取失败`);
+    if (dest.deactivatedAt) return refused('org-unit-deactivated');
+    return { result: 'ready', target, dest };
+  }
+
+  /**
+   * 恢复（#130，#105 故事 37、38，D7）。在调用方的交互式事务里执行，业务行与留痕同成同败（#119）。
+   * 本方法只写身份组织模块自己的行：清失效标记、按需要调岗，写 personnel.restored 与 personnel.transferred。
+   * 重设初始口令、解除锁定、结束残余会话与「记住我」由调用方在同一事务里做，各自写自己的留痕行。
+   * 带着新任职机构时，调出根机构同样受守卫二约束（ADR 0014）。
+   */
+  async restoreProfile(
+    actor: ActorRef,
+    personnelId: string,
+    input: RestorePersonnelProfileInput,
+    tx: IdentityTransaction,
+    audit: AuditTrailPort,
+    sourceIp: string | null = null,
+  ): Promise<RestorePersonnelProfileResult> {
+    const screened = await this.screenRestore(actor, personnelId, input, tx, sourceIp);
+    if (screened.result !== 'ready') return screened;
+    const { target, dest } = screened;
+    const id = target.profile.id;
+    const parties = this.party(actor, target, sourceIp, PERSONNEL_PROFILE_RESTORE_OPCODE);
+    const fromId = target.current?.orgUnitId ?? null;
+    if (dest) {
+      const rootId = await tx.store.findRootOrgUnitId();
+      const holdsAdminRole = (await tx.store.listActiveRoleNames(id)).includes(ROOT_GUARD_ROLE);
+      if (rootId && fromId === rootId && holdsAdminRole) {
+        await tx.store.lockRootGuard();
+        if (await tx.store.countRootGuardAdmins(rootId, id) === 0) {
+          return {
+            result: 'root-guard',
+            failure: {
+              ...parties, action: 'personnel.transferred', outcome: 'failed',
+              reason: ROOT_GUARD_REASON, nextValue: dest.name,
+            },
+          };
+        }
+      }
+    }
+    await tx.store.restorePersonnel(id);
+    await audit.append({ ...parties, action: 'personnel.restored' });
+    if (!dest) return { result: 'restored', orgUnitId: fromId };
+    const now = new Date();
+    if (target.current) {
+      await tx.store.transferAssignment({
+        closedAssignmentId: target.current.id,
+        endedAt: now,
+        personnelId: id,
+        toOrgUnitId: dest.id,
+        next: { id: newUlid(), personnelId: id, orgUnitId: dest.id, startedAt: now, endedAt: null },
+      });
+    } else {
+      await tx.store.insertAssignment({ id: newUlid(), personnelId: id, orgUnitId: dest.id, startedAt: now, endedAt: null });
+      await tx.store.updatePersonnelOrgUnit(id, dest.id);
+    }
+    const from = fromId ? await tx.store.findOrgUnitById(fromId) : null;
+    await audit.append({
+      ...parties,
+      action: 'personnel.transferred',
+      previousValue: from?.name ?? null,
+      nextValue: dest.name,
+    });
+    return { result: 'restored', orgUnitId: dest.id };
+  }
+
+  /**
+   * 结束全部会话的前置判断（#130，#105 故事 40、41）：授权 → 守卫一 → 人员锁。
+   * 会话与「记住我」不在身份组织模块里：通过后由调用方在同一事务里结束它们，
+   * 并用交出的 parties 写 personnel.sessions-ended 那一行。本动作不改口令。
+   */
+  async authorizeSessionsEnd(
+    actor: ActorRef,
+    personnelId: string,
+    tx: IdentityTransaction,
+    sourceIp: string | null = null,
+  ): Promise<SessionsEndAuthorization> {
+    const authorized = await this.authorizeTarget(actor, personnelId, tx, PERSONNEL_SESSIONS_END_OPCODE);
+    if (!authorized) return { result: 'not-found' };
+    if (authorized.profile.id === actor.personnelId) {
+      this.raiseSelfDenied(authorized, '结束会话', PERSONNEL_SESSIONS_END_OPCODE);
+    }
+    const locked = await this.lockTarget(personnelId, tx);
+    if (!locked) return { result: 'not-found' };
+    const target: PersonnelMaintenanceTarget = { ...authorized, profile: locked.profile, current: locked.current };
+    return { result: 'authorized', parties: this.party(actor, target, sourceIp, PERSONNEL_SESSIONS_END_OPCODE) };
   }
 }

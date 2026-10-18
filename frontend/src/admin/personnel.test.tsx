@@ -6,7 +6,18 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import reducer, { loadSession } from '../login/loginSlice';
 import { visibleMenu } from '../shell/menu';
 import { renderRoute, renderRouter, settled } from '../test-utils';
-import { CertForm, PersonnelCardView, TransferDialog, type EditState, type TransferState } from './PersonnelCardPage';
+import {
+  CertForm,
+  PersonnelCardView,
+  TransferDialog,
+  DeactivateDialog,
+  EndSessionsDialog,
+  RestoreDialog,
+  type ConfirmState,
+  type EditState,
+  type RestoreState,
+  type TransferState,
+} from './PersonnelCardPage';
 import { EMPTY_INPUT, PersonnelCreateForm } from './PersonnelCreatePage';
 import { PersonnelListView } from './PersonnelListPage';
 import {
@@ -17,15 +28,18 @@ import {
   certNote,
   certRecordLabel,
   CERT_TAG,
+  deactivatePersonnel,
   DEFAULT_FILTER,
   DENIED_TARGET,
   destinationsInTreeOrder,
   editInputFromCard,
+  endPersonnelSessions,
   filterFromSearch,
   filterHint,
   filterPersonnel,
   loadPersonnelCard,
   loadPersonnelList,
+  loadRestoreOrgUnits,
   loadTransferDestinations,
   listHint,
   maskPhone,
@@ -34,12 +48,17 @@ import {
   pageFromSearch,
   paginate,
   passwordText,
+  PERSONNEL_DEACTIVATE,
+  PERSONNEL_RESTORE,
+  PERSONNEL_SESSIONS_END,
   PERSONNEL_UPDATE,
   problemCount,
   qualifiedPersonnelCount,
   registerPersonnel,
+  restorePersonnel,
   searchFromFilter,
   searchWithPage,
+  SESSIONS_ENDED_NOTICE,
   shouldRevalidatePersonnelList,
   transferPersonnel,
   updateCert,
@@ -88,12 +107,33 @@ const CARD: PersonnelCard = {
   orgUnitId: 'sp',
   orgName: '石牌自然资源所',
   orgParentName: '天河区分局',
+  orgDeactivated: false,
   roles: ['经办', '法制审核'],
   posts: ['legal-review-lead'],
   passwordChangedAt: '2026-09-02T02:00:00Z',
   deactivatedAt: null,
   cert: { no: '44010020210315', expiresOn: '2028-05-31', status: 'valid' },
 };
+
+/** 已停用、原任职机构在用（原型 P6-restore：冯晨 TH0290，龙洞自然资源所）。 */
+const OFF_CARD: PersonnelCard = {
+  id: '7',
+  code: 'TH0290',
+  name: '冯晨',
+  mobilePhone: null,
+  orgUnitId: 'ld',
+  orgName: '龙洞自然资源所',
+  orgParentName: null,
+  orgDeactivated: false,
+  roles: ['经办'],
+  posts: [],
+  passwordChangedAt: null,
+  deactivatedAt: '2026-09-01T00:00:00Z',
+  cert: { no: null, expiresOn: null, status: 'none' },
+};
+
+/** 已停用、原任职机构已停用（原型 P6-restoreNewOrg：冯晨，五山自然资源所）。 */
+const OFF_CARD_DEAD_ORG: PersonnelCard = { ...OFF_CARD, orgUnitId: 'ws', orgName: '五山自然资源所', orgDeactivated: true };
 
 const ORGS = [
   { id: 'th', name: '天河区分局' },
@@ -261,7 +301,17 @@ describe('人员卡片（P6 view）', () => {
   const card = (
     partial: Partial<PersonnelCard> = {},
     registered = false,
-    props: { self?: boolean; canUpdate?: boolean; canUpdateCert?: boolean; edit?: EditState | null } = {},
+    props: {
+      self?: boolean;
+      canUpdate?: boolean;
+      canUpdateCert?: boolean;
+      canDeactivate?: boolean;
+      canRestore?: boolean;
+      canEndSessions?: boolean;
+      dangerBusy?: boolean;
+      notice?: string | null;
+      edit?: EditState | null;
+    } = {},
   ) => renderToStaticMarkup(
     <MemoryRouter>
       <PersonnelCardView
@@ -328,26 +378,40 @@ describe('人员卡片（P6 view）', () => {
     expect(html).toContain('class="banner danger"');
   });
 
-  it('卡片按钮只挂已入名册的码：编辑与调岗都用 personnel.profile.update，未交付的码不出现', () => {
-    const html = card({}, false, { canUpdate: true });
+  it('卡片按钮只挂已入名册的码：编辑与调岗用 update，结束与停用挂两个新码，#132 的码不出现，没给执法证码时登记按钮不出现', () => {
+    const html = card({}, false, { canUpdate: true, canDeactivate: true, canEndSessions: true });
     expect(html).toContain('需谨慎的操作');
     expect(html.match(/data-requires="[^"]+"/g)).toEqual([
       `data-requires="${PERSONNEL_UPDATE}"`,
       `data-requires="${PERSONNEL_UPDATE}"`,
+      `data-requires="${PERSONNEL_SESSIONS_END}"`,
+      `data-requires="${PERSONNEL_DEACTIVATE}"`,
     ]);
-    expect(html).not.toMatch(/personnel\.cert\.update|personnel\.password\.reset|personnel\.profile\.deactivate|personnel\.profile\.restore|personnel\.sessions\.end/);
-    // 没有编辑码时按钮置灰；已停用卡片编辑按钮置灰、没有调岗入口（v0.4，恢复一行由 #130 补入）。
+    expect(html).not.toMatch(/personnel\.cert\.update|personnel\.password\.reset/);
+    // 没有编辑码时按钮置灰。
     expect(card()).toMatch(/data-requires="personnel\.profile\.update" disabled/);
-    const off = card({ deactivatedAt: '2026-01-01T00:00:00Z' }, false, { canUpdate: true });
-    expect(off).not.toContain('需谨慎的操作');
+  });
+
+  it('已停用卡片：危险操作区只有恢复人员一行，没有调岗、结束、停用入口；编辑按钮置灰（v0.4）', () => {
+    const off = card({ deactivatedAt: '2026-01-01T00:00:00Z' }, false, { canUpdate: true, canRestore: true });
+    expect(off).toContain('需谨慎的操作');
+    expect(off.match(/data-requires="[^"]+"/g)).toEqual([
+      `data-requires="${PERSONNEL_UPDATE}"`,
+      `data-requires="${PERSONNEL_RESTORE}"`,
+    ]);
+    expect(off).not.toContain('data-action="transfer"');
+    expect(off).not.toContain('data-action="endsessions"');
+    expect(off).not.toContain('data-action="deactivate"');
     expect(off).toMatch(/data-requires="personnel\.profile\.update" disabled/);
   });
 
-  it('当前机构带上级名（原型 P6:30）；本机构是根机构或上级是根机构时只写本名（原型 P6:69）；没有当前任职写「—」', () => {
+  it('当前机构带上级名（原型 P6:30）；本机构是根机构或上级是根机构时只写本名（原型 P6:69）；没有当前任职写「—」；机构已停用补「（已停用）」', () => {
     expect(orgText(CARD)).toBe('天河区分局石牌自然资源所');
     expect(orgText({ orgName: '天河区分局', orgParentName: null })).toBe('天河区分局');
     expect(orgText({ orgName: '广州市自然资源局', orgParentName: null })).toBe('广州市自然资源局');
     expect(orgText({ orgName: null, orgParentName: null })).toBe('—');
+    expect(orgText({ ...CARD, orgDeactivated: true })).toBe('天河区分局石牌自然资源所（已停用）');
+    expect(orgText({ orgName: '五山自然资源所', orgParentName: null, orgDeactivated: true })).toBe('五山自然资源所（已停用）');
   });
 
   it('遮挡与执法证说明', () => {
@@ -704,6 +768,215 @@ describe('调岗弹窗（P6 transfer，#129）', () => {
   });
 });
 
+// ---------- 停用、恢复、结束全部会话（#130） ----------
+
+/** 数据范围内在用的机构（原型 P6-restoreNewOrg 的三个选项；五山已停用不在内）。 */
+const RESTORE_ORGS = [
+  { id: 'th', name: '天河区分局', parentId: null },
+  { id: 'sp', name: '石牌自然资源所', parentId: 'th' },
+  { id: 'ld', name: '龙洞自然资源所', parentId: 'th' },
+] as OrgUnit[];
+
+const confirmState = (partial: Partial<ConfirmState> = {}): ConfirmState => ({
+  busy: false,
+  message: null,
+  onCancel: () => undefined,
+  onSubmit: () => undefined,
+  ...partial,
+});
+
+const restoreState = (partial: Partial<RestoreState> = {}): RestoreState => ({
+  orgUnits: [],
+  loadFailed: false,
+  initialPassword: '',
+  orgUnitId: '',
+  failure: null,
+  busy: false,
+  onPassword: () => undefined,
+  onOrg: () => undefined,
+  onCancel: () => undefined,
+  onSubmit: () => undefined,
+  ...partial,
+});
+
+describe('危险操作区（P6，#130）', () => {
+  const view = (
+    partial: Partial<PersonnelCard> = {},
+    props: {
+      self?: boolean;
+      canUpdate?: boolean;
+      canDeactivate?: boolean;
+      canRestore?: boolean;
+      canEndSessions?: boolean;
+      dangerBusy?: boolean;
+      notice?: string | null;
+    } = {},
+  ) => renderToStaticMarkup(
+    <MemoryRouter>
+      <PersonnelCardView card={{ ...CARD, ...partial }} now={new Date('2026-10-17T04:00:00Z')} registered={false} {...props} />
+    </MemoryRouter>,
+  );
+
+  it('在职卡片：调岗、结束全部会话、停用人员三行，标题与提示句照原型，行序照原型', () => {
+    const html = view({}, { canUpdate: true, canDeactivate: true, canEndSessions: true });
+    expect(html).toContain('结束全部会话<div class="help">对方的全部会话在下一次操作时结束</div>');
+    expect(html).toContain('停用人员<div class="help">停用后不能登录，记录照常保留</div>');
+    expect(html).toContain(`data-requires="${PERSONNEL_SESSIONS_END}" data-action="endsessions"`);
+    expect(html).toContain(`data-requires="${PERSONNEL_DEACTIVATE}" data-action="deactivate"`);
+    expect(html).toContain('>结束</button>');
+    expect(html).toContain('>停用</button>');
+    // 重设初始口令一行由 #132 补入；执法证登记/变更由 #133 补入。
+    expect(html).not.toContain('重设初始口令');
+    // 行序照原型：调岗在前，结束在中，停用在后。
+    expect(html.indexOf('data-action="transfer"')).toBeLessThan(html.indexOf('data-action="endsessions"'));
+    expect(html.indexOf('data-action="endsessions"')).toBeLessThan(html.indexOf('data-action="deactivate"'));
+  });
+
+  it('已停用卡片：只有恢复人员一行，提示句照原型；恢复按钮挂恢复码', () => {
+    const html = view({ deactivatedAt: '2026-09-01T00:00:00Z' }, { canRestore: true });
+    expect(html).toContain('恢复人员<div class="help">恢复后需用新的初始口令登录</div>');
+    expect(html).toContain(`data-requires="${PERSONNEL_RESTORE}" data-action="restore"`);
+    expect(html).toContain('>恢复</button>');
+  });
+
+  it('本人卡片：调岗、结束、停用全部置灰并给本人说明横幅；在职卡片没有恢复一行（G23）', () => {
+    const html = view({}, { self: true, canUpdate: true, canDeactivate: true, canEndSessions: true });
+    expect(html).toMatch(/data-action="transfer"[^>]*disabled/);
+    expect(html).toMatch(/data-action="endsessions"[^>]*disabled/);
+    expect(html).toMatch(/data-action="deactivate"[^>]*disabled/);
+    expect(html).toContain('这是你本人。不能给自己调岗、重设口令、结束会话或停用，请找本单位其他系统管理人员办理。');
+    expect(html).not.toContain('恢复人员');
+  });
+
+  it('没有对应码置灰；编辑或危险动作在途（busy）时相关入口置灰', () => {
+    const denied = view({}, { canUpdate: true });
+    expect(denied).toMatch(/data-action="deactivate"[^>]*disabled/);
+    expect(denied).toMatch(/data-action="endsessions"[^>]*disabled/);
+    expect(denied).not.toMatch(/data-action="transfer"[^>]*disabled/);
+    const busy = view({}, { canUpdate: true, canDeactivate: true, canEndSessions: true, dangerBusy: true });
+    expect(busy).toMatch(/data-action="deactivate"[^>]*disabled/);
+    expect(busy).toMatch(/data-action="endsessions"[^>]*disabled/);
+    expect(busy).toMatch(/data-action="transfer"[^>]*disabled/);
+    const restoreBusy = view({ deactivatedAt: '2026-09-01T00:00:00Z' }, { canRestore: true, dangerBusy: true });
+    expect(restoreBusy).toMatch(/data-action="restore"[^>]*disabled/);
+  });
+
+  it('结束全部会话成功后给一句结果横幅，文案取弹窗里的后果句', () => {
+    expect(view({}, { notice: SESSIONS_ENDED_NOTICE })).toContain('data-notice="sessions-ended"');
+    expect(view({}, { notice: SESSIONS_ENDED_NOTICE })).toContain(SESSIONS_ENDED_NOTICE);
+    expect(view()).not.toContain('data-notice="sessions-ended"');
+  });
+});
+
+describe('停用与结束全部会话弹窗（P6 deactivate / endsessions，#130）', () => {
+  const dialog = (kind: 'deactivate' | 'endsessions', partial: Partial<ConfirmState> = {}) => renderToStaticMarkup(
+    <MemoryRouter>
+      {kind === 'deactivate'
+        ? <DeactivateDialog card={CARD} confirm={confirmState(partial)} />
+        : <EndSessionsDialog card={CARD} confirm={confirmState(partial)} />}
+    </MemoryRouter>,
+  );
+
+  it('停用确认：标题带姓名，三条后果照原型，确认停用为危险按钮', () => {
+    const html = dialog('deactivate');
+    expect(html).toContain('停用「陈晓宁」？');
+    expect(html).toContain('<li>对方的全部会话会在下一次操作时结束，之后不能再登录；</li>');
+    expect(html).toContain('<li>对方经手的线索、案件和记录照常保留；</li>');
+    expect(html).toContain('<li>以后可以恢复，恢复时需要重设初始口令。</li>');
+    expect(html).toContain('取消');
+    expect(html).toContain('class="btn btn-danger"');
+    expect(html).toContain('确认停用');
+  });
+
+  it('结束全部会话确认：适用情形一句、两条后果照原型，确认结束为危险按钮', () => {
+    const html = dialog('endsessions');
+    expect(html).toContain('结束「陈晓宁」的全部会话？');
+    expect(html).toContain('适用于怀疑口令泄露、设备丢失等情况。');
+    expect(html).toContain('<li>对方的全部会话和全部「记住我」，会在下一次操作时结束；</li>');
+    expect(html).toContain('<li>对方可以用原口令重新登录。如怀疑口令泄露，请改用「重设初始口令」。</li>');
+    expect(html).toContain('确认结束');
+  });
+
+  it('busy 时取消与确认都置灰；失败一句显示在弹窗里，不露原因码', () => {
+    const busy = dialog('deactivate', { busy: true });
+    expect(busy).toMatch(/class="btn" disabled="">取消/);
+    expect(busy).toMatch(/class="btn btn-danger" disabled="">确认停用/);
+    const failed = dialog('endsessions', { message: ROOT_GUARD });
+    expect(failed).toContain(ROOT_GUARD);
+    expect(visibleText(failed)).not.toMatch(RAW_TEXT);
+  });
+});
+
+describe('恢复弹窗（P6 restore / restoreNewOrg，#130）', () => {
+  const dialog = (card: PersonnelCard, partial: Partial<RestoreState> = {}) => renderToStaticMarkup(
+    <MemoryRouter>
+      <RestoreDialog card={card} restore={restoreState(partial)} />
+    </MemoryRouter>,
+  );
+
+  it('restore：原任职机构在用时只设新的初始口令，不选机构；口令提示句照原型', () => {
+    const html = dialog(OFF_CARD);
+    expect(html).toContain('恢复「冯晨」？');
+    expect(html).toContain('<div class="k">所在机构</div><div>龙洞自然资源所（在用）</div>');
+    expect(html).not.toContain('新任职机构');
+    expect(html).not.toContain('原任职机构已停用');
+    expect(html).toContain('placeholder="请输入新的初始口令"');
+    expect(html).toContain('恢复后对方首次登录必须改掉这个口令。不能与对方最近 5 次使用过的口令相同。');
+    expect(html).toContain('class="btn btn-primary"');
+    expect(html).toContain('确认恢复');
+    expect(html).not.toContain('disabled="">确认恢复');
+  });
+
+  it('restoreNewOrg：原机构已停用时给原任职机构与说明条，新机构只列数据范围内在用的机构', () => {
+    const html = dialog(OFF_CARD_DEAD_ORG, { orgUnits: RESTORE_ORGS });
+    expect(html).toContain('<div class="k">原任职机构</div><div>五山自然资源所（已停用）</div>');
+    expect(html).toContain('data-reason="org-deactivated"');
+    expect(html).toContain('原任职机构已停用，恢复时需同时选一个新任职机构。');
+    expect(html).toContain('新任职机构<span class="req">*</span>');
+    expect(html).toContain('<option value="" selected="">请选择在用机构</option>');
+    expect(html).toContain('<option value="th">天河区分局</option>');
+    expect(html).toContain('<option value="sp">石牌自然资源所</option>');
+    expect(html).toContain('<option value="ld">龙洞自然资源所</option>');
+    expect(html).not.toContain('>五山自然资源所</option>');
+    expect(html).toContain('只能选你数据范围内在用的机构。');
+    expect(html).toContain('确认后，恢复和调到新任职机构一并完成。');
+    // 没选机构时确认恢复置灰；选了才可点；清单还在读取时也置灰。
+    expect(html).toContain('disabled="">确认恢复');
+    expect(dialog(OFF_CARD_DEAD_ORG, { orgUnits: RESTORE_ORGS, orgUnitId: 'ld' })).not.toContain('disabled="">确认恢复');
+    expect(dialog(OFF_CARD_DEAD_ORG, { orgUnits: null })).toContain('disabled="">确认恢复');
+    expect(dialog(OFF_CARD_DEAD_ORG, { orgUnits: null, loadFailed: true })).toContain('无法读取可选机构，请关闭后重试。');
+  });
+
+  it('失败：必填提示落在对应输入下，口令策略未满足项列在口令下，整页句不露原因码', () => {
+    const html = dialog(OFF_CARD_DEAD_ORG, {
+      orgUnits: RESTORE_ORGS,
+      failure: {
+        fields: { initialPassword: '请填写初始口令', orgUnitId: '原任职机构已停用，恢复时必须同时选一个在用的新任职机构。' },
+        passwordRules: ['too-short', 'contains-code'],
+        message: null,
+      },
+    });
+    expect(html).toContain('data-error="initialPassword">请填写初始口令');
+    expect(html).toContain('data-error="orgUnitId">原任职机构已停用，恢复时必须同时选一个在用的新任职机构。');
+    expect(html).toContain('data-reason="non-compliant"');
+    expect(html).toContain('口令至少 10 位');
+    expect(html).toContain('不能包含本人工号');
+    const guarded = dialog(OFF_CARD, { failure: { fields: {}, passwordRules: [], message: ROOT_GUARD } });
+    expect(guarded).toContain(ROOT_GUARD);
+    expect(visibleText(guarded)).not.toMatch(RAW_TEXT);
+    expect(dialog(OFF_CARD, { failure: { fields: {}, passwordRules: [], message: '这个人员没有停用，不需要恢复。' } }))
+      .toContain('这个人员没有停用，不需要恢复。');
+  });
+
+  it('busy 时口令输入、机构下拉与两个按钮都置灰', () => {
+    const html = dialog(OFF_CARD_DEAD_ORG, { orgUnits: RESTORE_ORGS, orgUnitId: 'ld', initialPassword: 'Gz@Field2026', busy: true });
+    expect(html).toMatch(/id="r-password"[^>]*disabled/);
+    expect(html).toMatch(/id="r-org"[^>]*disabled/);
+    expect(html).toMatch(/class="btn" disabled="">取消/);
+    expect(html).toMatch(/disabled="">确认恢复/);
+  });
+});
+
 describe('用户可见文本不露操作码与原始结果码（SCREENS.md:8）', () => {
   const visible = (html: string) => html.replace(/<[^>]*>/g, ' ');
   const RAW = /personnel\.|audit\.|org\.|permission-denied|scope-denied|invalid-state|already-exists|non-compliant|not-found|-required|too-short|contains-code|legal-review-lead|legal-affairs-leader/;
@@ -765,6 +1038,37 @@ describe('用户可见文本不露操作码与原始结果码（SCREENS.md:8）'
       renderToStaticMarkup(
         <MemoryRouter>
           <TransferDialog card={CARD} transfer={transferState({ failure: { fields: {}, message: ROOT_GUARD } })} />
+        </MemoryRouter>,
+      ),
+      // #130：停用、结束全部会话、恢复三个弹窗（含失败句），已停用卡片（含恢复一行）。
+      renderToStaticMarkup(
+        <MemoryRouter>
+          <DeactivateDialog card={CARD} confirm={confirmState({ message: ROOT_GUARD })} />
+        </MemoryRouter>,
+      ),
+      renderToStaticMarkup(
+        <MemoryRouter>
+          <EndSessionsDialog card={CARD} confirm={confirmState({ message: ROOT_GUARD })} />
+        </MemoryRouter>,
+      ),
+      renderToStaticMarkup(
+        <MemoryRouter>
+          <RestoreDialog
+            card={OFF_CARD_DEAD_ORG}
+            restore={restoreState({
+              orgUnits: RESTORE_ORGS,
+              failure: {
+                fields: { initialPassword: '请填写初始口令', orgUnitId: '原任职机构已停用，恢复时必须同时选一个在用的新任职机构。' },
+                passwordRules: ['too-short', 'contains-code'],
+                message: '这个人员没有停用，不需要恢复。',
+              },
+            })}
+          />
+        </MemoryRouter>,
+      ),
+      renderToStaticMarkup(
+        <MemoryRouter>
+          <PersonnelCardView card={OFF_CARD_DEAD_ORG} now={new Date('2026-10-17T04:00:00Z')} registered={false} canRestore />
         </MemoryRouter>,
       ),
     ];
@@ -905,6 +1209,90 @@ describe('编辑与调岗接口（#129）', () => {
     expect(await loadTransferDestinations(store.dispatch, '3')).toBeNull();
     serve(person(ADMIN_UPDATE), { '/api/admin/personnel/3/transfer-destinations': [500, {}] });
     expect(await loadTransferDestinations(store.dispatch, '3')).toBeNull();
+  });
+});
+
+describe('停用、恢复、结束全部会话接口（#130）', () => {
+  const ADMIN_DANGER = [...ADMIN, PERSONNEL_DEACTIVATE, PERSONNEL_RESTORE, PERSONNEL_SESSIONS_END];
+  const RESTORE_INPUT = { initialPassword: 'Gz@Field2026', orgUnitId: 'ld' };
+
+  it('deactivatePersonnel：200；409 守卫句直接用；403 整页提示；500 定稿句', async () => {
+    const store = fresh();
+    const calls = serve(person(ADMIN_DANGER), { '/api/admin/personnel/3/deactivate': [200, { result: 'deactivated' }] });
+    await store.dispatch(loadSession());
+    expect(await deactivatePersonnel(store.dispatch, '3')).toEqual({ ok: true });
+    const post = calls.find((call) => call.url === '/api/admin/personnel/3/deactivate');
+    expect(post?.init?.method).toBe('POST');
+    serve(person(ADMIN_DANGER), { '/api/admin/personnel/3/deactivate': [409, { result: 'invalid-state', reason: 'root-admin-required', message: ROOT_GUARD }] });
+    expect(await deactivatePersonnel(store.dispatch, '3')).toEqual({ ok: false, message: ROOT_GUARD });
+    serve(person(ADMIN_DANGER), { '/api/admin/personnel/3/deactivate': [403, { reason: 'scope-denied' }] });
+    expect(await deactivatePersonnel(store.dispatch, '3')).toEqual({ ok: false, message: DENIED_TARGET });
+    serve(person(ADMIN_DANGER), { '/api/admin/personnel/3/deactivate': [500, {}] });
+    expect(await deactivatePersonnel(store.dispatch, '3')).toEqual({ ok: false, message: FAILED_SENTENCE });
+  });
+
+  it('endPersonnelSessions：200；403 整页提示；500 定稿句', async () => {
+    const store = fresh();
+    const calls = serve(person(ADMIN_DANGER), { '/api/admin/personnel/3/end-sessions': [200, { result: 'ended' }] });
+    await store.dispatch(loadSession());
+    expect(await endPersonnelSessions(store.dispatch, '3')).toEqual({ ok: true });
+    const post = calls.find((call) => call.url === '/api/admin/personnel/3/end-sessions');
+    expect(post?.init?.method).toBe('POST');
+    serve(person(ADMIN_DANGER), { '/api/admin/personnel/3/end-sessions': [403, { reason: 'permission-denied' }] });
+    expect(await endPersonnelSessions(store.dispatch, '3')).toEqual({ ok: false, message: DENIED_TARGET });
+    serve(person(ADMIN_DANGER), { '/api/admin/personnel/3/end-sessions': [500, {}] });
+    expect(await endPersonnelSessions(store.dispatch, '3')).toEqual({ ok: false, message: FAILED_SENTENCE });
+  });
+
+  it('restorePersonnel：200 交回恢复后任职机构且请求体原样；400 规则码落到口令字段与口令策略；409 定稿句；403；500', async () => {
+    const store = fresh();
+    const calls = serve(person(ADMIN_DANGER), { '/api/admin/personnel/7/restore': [200, { result: 'restored', orgUnitId: 'ld' }] });
+    await store.dispatch(loadSession());
+    expect(await restorePersonnel(store.dispatch, '7', RESTORE_INPUT)).toEqual({ ok: true, orgUnitId: 'ld' });
+    const post = calls.find((call) => call.url === '/api/admin/personnel/7/restore');
+    expect(post?.init?.method).toBe('POST');
+    expect(JSON.parse(String(post?.init?.body))).toEqual(RESTORE_INPUT);
+    serve(person(ADMIN_DANGER), { '/api/admin/personnel/7/restore': [400, { result: 'non-compliant', rules: ['password-required'] }] });
+    expect(await restorePersonnel(store.dispatch, '7', { initialPassword: '', orgUnitId: '' })).toEqual({
+      ok: false, fields: { initialPassword: '请填写初始口令' }, passwordRules: [], message: null,
+    });
+    serve(person(ADMIN_DANGER), { '/api/admin/personnel/7/restore': [400, { result: 'non-compliant', rules: ['too-short', 'contains-code'] }] });
+    expect(await restorePersonnel(store.dispatch, '7', RESTORE_INPUT)).toEqual({
+      ok: false, fields: {}, passwordRules: ['too-short', 'contains-code'], message: null,
+    });
+    serve(person(ADMIN_DANGER), { '/api/admin/personnel/7/restore': [409, { result: 'invalid-state', reason: 'not-deactivated', message: '这个人员没有停用，不需要恢复。' }] });
+    expect(await restorePersonnel(store.dispatch, '7', RESTORE_INPUT)).toEqual({
+      ok: false, fields: {}, passwordRules: [], message: '这个人员没有停用，不需要恢复。',
+    });
+    serve(person(ADMIN_DANGER), { '/api/admin/personnel/7/restore': [403, { reason: 'scope-denied' }] });
+    expect(await restorePersonnel(store.dispatch, '7', RESTORE_INPUT)).toEqual({
+      ok: false, fields: {}, passwordRules: [], message: DENIED_TARGET,
+    });
+    serve(person(ADMIN_DANGER), { '/api/admin/personnel/7/restore': [500, {}] });
+    expect(await restorePersonnel(store.dispatch, '7', RESTORE_INPUT)).toEqual({
+      ok: false, fields: {}, passwordRules: [], message: FAILED_SENTENCE,
+    });
+  });
+
+  it('loadRestoreOrgUnits：取数据范围内在用机构按树的先序，已停用不列；失败为 null', async () => {
+    const store = fresh();
+    serve(person(ADMIN_DANGER), {
+      '/api/org-units': [200, {
+        result: 'listed',
+        rootId: 'th',
+        orgUnits: [
+          { id: 'th', name: '天河区分局', parentId: null, deactivatedAt: null },
+          { id: 'sp', name: '石牌自然资源所', parentId: 'th', deactivatedAt: null },
+          { id: 'ld', name: '龙洞自然资源所', parentId: 'th', deactivatedAt: null },
+          { id: 'ws', name: '五山自然资源所', parentId: 'th', deactivatedAt: '2026-09-01T00:00:00Z' },
+        ],
+      }],
+    });
+    await store.dispatch(loadSession());
+    const units = await loadRestoreOrgUnits(store.dispatch);
+    expect(units?.map((unit) => unit.id)).toEqual(['th', 'sp', 'ld']);
+    serve(person(ADMIN_DANGER), { '/api/org-units': [500, {}] });
+    expect(await loadRestoreOrgUnits(store.dispatch)).toBeNull();
   });
 });
 

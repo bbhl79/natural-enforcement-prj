@@ -411,6 +411,7 @@ describe('GET /api/admin/personnel/:id（人员卡片）', () => {
         orgUnitId: org.station,
         orgName: '甲区执法所',
         orgParentName: '第一执法支队',
+        orgDeactivated: false,
         roles: ['经办'],
         posts: [],
         passwordChangedAt: new Date(T0 - 10 * DAY_MS).toISOString(),

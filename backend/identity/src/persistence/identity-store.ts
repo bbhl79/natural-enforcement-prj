@@ -323,6 +323,8 @@ export interface IdentityStore {
   /** 调岗后同步人员当前归属机构（任职记录为权威史，此处为读模型冗余） */
   updatePersonnelOrgUnit(personnelId: string, orgUnitId: string): Promise<void>;
   deactivatePersonnel(personnelId: string, deactivatedAt: Date): Promise<void>;
+  /** 恢复已停用的人员（#130）：只清失效标记与失效时间。口令与锁定由调用方另行处理。 */
+  restorePersonnel(personnelId: string): Promise<void>;
   /**
    * 只更换口令散列，不改上次改密时间。
    * 仅当库中散列仍等于 expectedHash 时写入；返回是否命中。

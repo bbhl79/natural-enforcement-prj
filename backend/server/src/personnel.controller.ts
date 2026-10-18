@@ -34,12 +34,18 @@ interface TransferBody {
   orgUnitId?: unknown;
 }
 
+/** 恢复（#130）：新的初始口令必填；原任职机构已停用时另带新任职机构。 */
+interface RestoreBody {
+  initialPassword?: unknown;
+  orgUnitId?: unknown;
+}
+
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
 const texts = (value: unknown): string[] =>
   (Array.isArray(value) ? value.map((item) => (typeof item === 'string' ? item : '')) : []);
 
 /**
- * 管理台人员（#128）：列表、卡片、登记。编辑与调岗（#129）。
+ * 管理台人员（#128）：列表、卡片、登记。编辑与调岗（#129）。停用、恢复与结束全部会话（#130）。
  * 跨站写请求由框架 CSRF 拒绝，跨站读请求由 SameOriginReadGuard 拒绝。
  */
 @Controller('api/admin')
@@ -127,6 +133,48 @@ export class PersonnelController {
     @Param('id') id: string,
   ): Promise<void> {
     const outcome = await this.personnel.transferDestinations(req.actor as ActorRef, id);
+    res.status(outcome.status).json(outcome.body);
+  }
+
+  /** 停用（#130）：对方的全部会话在下一次请求时结束。重复停用返回 200，不写行。 */
+  @Post('personnel/:id/deactivate')
+  async deactivate(
+    @Req() req: AuthenticatedRequest,
+    @Res() res: HttpReply,
+    @Param('id') id: string,
+  ): Promise<void> {
+    const outcome = await this.personnel.deactivate(req.actor as ActorRef, id, sourceAddress(req));
+    res.status(outcome.status).json(outcome.body);
+  }
+
+  /**
+   * 恢复（#130）：重设初始口令、解除锁定、结束残余会话和「记住我」同事务。
+   * 原任职机构已停用时必须带新任职机构（orgUnitId），恢复与调岗一并完成。
+   */
+  @Post('personnel/:id/restore')
+  async restore(
+    @Req() req: AuthenticatedRequest,
+    @Res() res: HttpReply,
+    @Param('id') id: string,
+    @Body() body: RestoreBody,
+  ): Promise<void> {
+    const outcome = await this.personnel.restore(
+      req.actor as ActorRef,
+      id,
+      { initialPassword: text(body?.initialPassword), orgUnitId: text(body?.orgUnitId) },
+      sourceAddress(req),
+    );
+    res.status(outcome.status).json(outcome.body);
+  }
+
+  /** 结束全部会话（#130）：每段写 session.ended，另写一行 personnel.sessions-ended，不改口令。 */
+  @Post('personnel/:id/end-sessions')
+  async endSessions(
+    @Req() req: AuthenticatedRequest,
+    @Res() res: HttpReply,
+    @Param('id') id: string,
+  ): Promise<void> {
+    const outcome = await this.personnel.endSessions(req.actor as ActorRef, id, sourceAddress(req));
     res.status(outcome.status).json(outcome.body);
   }
 }
