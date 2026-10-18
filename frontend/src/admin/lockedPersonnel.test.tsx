@@ -14,14 +14,17 @@ import {
   formatUnlockTime,
   initialLockedState,
   interpretAction,
+  isDenial,
   lockedReducer,
   NO_ORG_HINT,
+  noticeReason,
   noticeText,
   PAGE_DESC,
   performAction,
   RESET_EFFECT,
   RESET_PLACEHOLDER,
   RESET_RULES,
+  RESET_UNAVAILABLE_TEXT,
   resetDialogTitle,
   resetRulesSentence,
   SELF_DENIED,
@@ -110,10 +113,11 @@ describe('P7 文案与原型 v0.4 逐字一致（35 条定稿、#84 批准的两
     for (const notice of notices) expect(prototype).toContain(noticeText(notice));
   });
 
-  it('口令要求：除口令历史一句（留给 #132）外与原型逐字一致', () => {
-    expect(resetRulesSentence()).toBe('至少 10 位，最多 64 位；大写、小写、数字、特殊字符中至少 3 类；不能包含对方工号；不能有 4 位及以上连续或重复字符；不能用常见弱口令。');
-    expect(prototype).toContain(resetRulesSentence([...RESET_RULES, '不能与对方最近 5 次使用过的口令相同']));
-    expect(resetRulesSentence()).not.toContain('最近 5 次');
+  it('口令要求：六条含口令历史一句（#132），与原型逐字一致', () => {
+    expect(resetRulesSentence()).toBe('至少 10 位，最多 64 位；大写、小写、数字、特殊字符中至少 3 类；不能包含对方工号；不能有 4 位及以上连续或重复字符；不能用常见弱口令；不能与对方最近 5 次使用过的口令相同。');
+    expect(prototype).toContain(resetRulesSentence());
+    expect(RESET_RULES).toHaveLength(6);
+    expect(RESET_RULES[RESET_RULES.length - 1]).toBe('不能与对方最近 5 次使用过的口令相同');
   });
 });
 
@@ -242,6 +246,41 @@ describe('动作：解锁与重设初始口令', () => {
     expect(lockedReducer(state, { type: 'password', value: 'x' }).ruleCodes).toEqual([]);
   });
 
+  it('重设命中口令历史（#132，P7 resetDenied&case=reused）：弹窗不关，输入框下只出「此口令不可用，请换一个。」', () => {
+    const state = lockedReducer(open('reset', WANG), {
+      type: 'settled', kind: 'reset', row: WANG, result: { type: 'non-compliant', rules: ['unavailable'] },
+    });
+    expect(state.dialog?.row).toBe(WANG);
+    expect(state.rows).toHaveLength(4);
+    expect(state.notice).toBeNull();
+    const html = view(state);
+    expect(html).toContain('data-reason="unavailable"');
+    expect(html).toContain(`>${RESET_UNAVAILABLE_TEXT}</div>`);
+    expect(html).not.toContain('data-reason="non-compliant"');
+    // 管理员侧不暴露历史命中原因：不出现 reused，也不说明命中的是第几次。
+    expect(html).not.toContain('reused');
+    expect(html).not.toContain('最近 5 次使用过的口令相同，请换一个');
+    // 口令要求里那一句规则提示仍在（原型 PW-9 保留规则句）。
+    expect(html).toContain('不能与对方最近 5 次使用过的口令相同。');
+    expect(lockedReducer(state, { type: 'password', value: 'x' }).ruleCodes).toEqual([]);
+  });
+
+  it('并发改口令（#132）：409 出横幅，弹窗关闭，行保留', () => {
+    const state = lockedReducer(open('reset', WANG), {
+      type: 'settled',
+      kind: 'reset',
+      row: WANG,
+      result: { type: 'denied', notice: { kind: 'concurrent-change', action: 'reset', row: WANG } },
+    });
+    expect(state.dialog).toBeNull();
+    expect(state.rows).toHaveLength(4);
+    const html = view(state);
+    expect(html).toContain('data-reason="concurrent-change"');
+    expect(html).toContain('没有为「王芳」（TH0331）重设初始口令：对方的口令刚被另一次操作修改。请刷新列表后重试。');
+    expect(noticeReason({ kind: 'concurrent-change', action: 'reset', row: WANG })).toBe('concurrent-change');
+    expect(isDenial({ kind: 'concurrent-change', action: 'reset', row: WANG })).toBe(true);
+  });
+
   it('请求中不换弹窗目标；结算按发请求时的目标，不误删别的行', () => {
     const pending = lockedReducer(open('unlock', WANG), { type: 'submit' });
     expect(lockedReducer(pending, { type: 'open', kind: 'reset', row: ZHANG })).toBe(pending);
@@ -320,11 +359,24 @@ describe('动作请求与结果判定', () => {
   it('400 不合规交回规则码；401 交给会话已结束；其余失败出可重试的横幅', async () => {
     expect(await interpretAction('reset', WANG, reply(400, { result: 'non-compliant', rules: ['too-short'] }), 'SJ0001'))
       .toEqual({ type: 'non-compliant', rules: ['too-short'] });
+    // 命中口令历史（#132）：unavailable 也是规则码，弹窗不关，由界面换成单句提示。
+    expect(await interpretAction('reset', WANG, reply(400, { result: 'non-compliant', rules: ['unavailable'] }), 'SJ0001'))
+      .toEqual({ type: 'non-compliant', rules: ['unavailable'] });
     expect(await interpretAction('unlock', WANG, reply(401, {}), 'SJ0001')).toEqual({ type: 'ended' });
     const failed = await interpretAction('unlock', WANG, reply(500, {}), 'SJ0001');
     expect(failed).toEqual({ type: 'denied', notice: { kind: 'failed', action: 'unlock', row: WANG } });
     expect(noticeText({ kind: 'failed', action: 'unlock', row: WANG }))
       .toBe('没有解锁「王芳」（TH0331）：网络或服务暂时不可用，请稍后重试。问题持续时请联系本单位的系统管理人员。');
+  });
+
+  it('409 concurrent-change（#132）：判为并发冲突横幅，不按网络失败处理', async () => {
+    for (const kind of ['unlock', 'reset'] as const) {
+      expect(await interpretAction(kind, WANG, reply(409, { result: 'concurrent-change' }), 'SJ0001'))
+        .toEqual({ type: 'denied', notice: { kind: 'concurrent-change', action: kind, row: WANG } });
+    }
+    // 其他 409（服务端给可读原因的）仍走失败横幅，不被并发句抢走。
+    expect(await interpretAction('reset', WANG, reply(409, { result: 'invalid-state', message: '这个人员没有停用。' }), 'SJ0001'))
+      .toEqual({ type: 'denied', notice: { kind: 'failed', action: 'reset', row: WANG } });
   });
 
   it('网络错误按失败处理，不抛出', async () => {

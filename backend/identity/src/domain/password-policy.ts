@@ -10,7 +10,25 @@ export const PASSWORD_RULES = [
   'same-as-current',
 ] as const;
 
-export type PasswordRuleCode = (typeof PASSWORD_RULES)[number];
+/**
+ * 命中口令历史的规则码（ADR 0015，#132）。不在 PASSWORD_RULES 里：它们不是可公开规则，
+ * 只在其余口令规则全部通过、历史比对命中后才返回。本人改密回 reused；
+ * 重设、恢复只回 unavailable（不向管理员暴露对方用过哪些口令）。
+ */
+export const PASSWORD_HISTORY_RULES = ['reused', 'unavailable'] as const;
+export type PasswordHistoryRuleCode = (typeof PASSWORD_HISTORY_RULES)[number];
+
+/** 可公开规则码：rejectedPasswordRules 只会返回这些。 */
+export type PublicPasswordRuleCode = (typeof PASSWORD_RULES)[number];
+
+/** 响应体 rules 的全集：可公开规则码 + 命中口令历史的规则码。 */
+export type PasswordRuleCode = PublicPasswordRuleCode | PasswordHistoryRuleCode;
+
+/**
+ * 比对的最近口令数（ADR 0015）：新口令不得与「当前口令 + 最近 4 条历史」中任一个相同，
+ * 共比较 5 个散列。深度经 CredentialService 构造参数注入，测试可传 2。
+ */
+export const PASSWORD_HISTORY_DEPTH = 5;
 
 export interface PasswordCheck {
   password: string;
@@ -116,8 +134,8 @@ function hasRepeated(password: string): boolean {
   return false;
 }
 
-export function rejectedPasswordRules(input: PasswordCheck): PasswordRuleCode[] {
-  const rules: PasswordRuleCode[] = [];
+export function rejectedPasswordRules(input: PasswordCheck): PublicPasswordRuleCode[] {
+  const rules: PublicPasswordRuleCode[] = [];
   if (input.password.length < MIN_LENGTH) rules.push('too-short');
   if (input.password.length > MAX_LENGTH) rules.push('too-long');
   if (classCount(input.password) < MIN_CLASSES) rules.push('insufficient-classes');

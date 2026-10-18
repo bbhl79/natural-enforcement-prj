@@ -92,6 +92,7 @@ model Personnel {
   createdAt                      DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
 
   nameVersions    PersonnelNameVersion[]
+  passwordHistory PersonnelPasswordHistory[]
   assignments     PersonnelAssignment[]
   exportAudits    ExportAudit[]
   authSessions    AuthSession[]
@@ -115,6 +116,20 @@ model PersonnelNameVersion {
 
   @@unique([personnelId, version])
   @@map("personnel_name_version")
+}
+
+/// 口令历史（ADR 0015，#132）：只存被换下来的口令散列，只追加（触发器拒 UPDATE/DELETE）。
+/// 比对取「当前口令 + 最近 4 条历史」：按 (personnelId, retiredAt DESC, id DESC) 读前 N-1 条。
+/// 超出深度的旧散列一直保留；存量人员不回填。
+model PersonnelPasswordHistory {
+  id           String    @id
+  personnelId  String    @map("personnel_id")
+  personnel    Personnel @relation(fields: [personnelId], references: [id])
+  passwordHash String    @map("password_hash")
+  retiredAt    DateTime  @db.Timestamptz(6) @map("retired_at")
+
+  @@index([personnelId, retiredAt])
+  @@map("personnel_password_history")
 }
 
 /// 任职记录：当前任职 = endedAt 为 NULL 的那条（迁移里的部分唯一索引

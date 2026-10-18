@@ -28,7 +28,15 @@ export const PASSWORD_RULE_TEXT: Record<string, string> = {
   common: '不能使用常见弱口令',
   'contains-code': '不能包含本人工号',
   'same-as-current': '不能与当前口令相同',
+  // 命中口令历史（ADR 0015，#132；Lei Hu 2026-10-17 18:56 定稿句）。只在本人改密出现。
+  reused: '新口令不能与你最近 5 次使用过的口令相同，请换一个。',
 };
+
+/** 新口令框下的历史规则提示（原型 v0.4 P2，#132）。 */
+export const PASSWORD_HISTORY_HINT = '不能与最近 5 次使用过的口令相同。';
+
+/** 并发改密被拒（409 concurrent-change，#132）。v0.4 无此状态，工程稿：不露结果码。 */
+export const PASSWORD_CONCURRENT_TEXT = '口令刚被另一次操作修改，本次修改没有生效。请重新填写后再试。';
 
 export interface OperatorSession {
   name: string;
@@ -52,6 +60,8 @@ export interface LoginState {
   newPassword: string;
   ruleCodes: string[];
   currentPasswordRejected: boolean;
+  /** 并发改密被拒（409 concurrent-change，#132）：出红色横幅。 */
+  concurrentChangeRejected: boolean;
   daysRemaining: number | null;
   expiryNoticeDismissed: boolean;
   /** 到期横幅的会话标记（服务端按会话派生）；关闭记录按它保存 */
@@ -81,6 +91,7 @@ const initialState: LoginState = {
   newPassword: '',
   ruleCodes: [],
   currentPasswordRejected: false,
+  concurrentChangeRejected: false,
   daysRemaining: null,
   expiryNoticeDismissed: false,
   noticeTag: null,
@@ -267,6 +278,7 @@ type PasswordFailure =
   | { result: 'invalid-credential' }
   | { result: 'locked' }
   | { result: 'non-compliant'; rules: string[] }
+  | { result: 'concurrent-change' }
   | { result: 'password-change' };
 
 export const submitPassword = createAsyncThunk<
@@ -297,6 +309,7 @@ export const submitPassword = createAsyncThunk<
     if (body.result === 'non-compliant') {
       return rejectWithValue({ result: 'non-compliant', rules: body.rules ?? [] });
     }
+    if (body.result === 'concurrent-change') return rejectWithValue({ result: 'concurrent-change' });
     if (body.result === 'locked') return rejectWithValue({ result: 'locked' });
     return rejectWithValue({ result: 'invalid-credential' });
   },
@@ -334,10 +347,12 @@ const loginSlice = createSlice({
     setCurrentPassword(state, action: PayloadAction<string>) {
       state.currentPassword = action.payload;
       state.currentPasswordRejected = false;
+      state.concurrentChangeRejected = false;
     },
     setNewPassword(state, action: PayloadAction<string>) {
       state.newPassword = action.payload;
       state.ruleCodes = [];
+      state.concurrentChangeRejected = false;
     },
     dismissExpiryNotice(state) {
       state.expiryNoticeDismissed = true;
@@ -459,6 +474,7 @@ const loginSlice = createSlice({
         state.newPassword = '';
         state.ruleCodes = [];
         state.currentPasswordRejected = false;
+        state.concurrentChangeRejected = false;
         state.screen = 'default';
       })
       .addCase(submitPassword.rejected, (state, action) => {
@@ -467,15 +483,24 @@ const loginSlice = createSlice({
         if (action.payload.result === 'non-compliant') {
           state.ruleCodes = action.payload.rules;
           state.currentPasswordRejected = false;
+          state.concurrentChangeRejected = false;
+          return;
+        }
+        if (action.payload.result === 'concurrent-change') {
+          state.concurrentChangeRejected = true;
+          state.currentPasswordRejected = false;
+          state.ruleCodes = [];
           return;
         }
         if (action.payload.result === 'locked') {
           state.screen = 'locked';
           state.currentPasswordRejected = false;
+          state.concurrentChangeRejected = false;
           state.ruleCodes = [];
           return;
         }
         state.currentPasswordRejected = true;
+        state.concurrentChangeRejected = false;
         state.ruleCodes = [];
       })
       .addCase(logout.pending, (state) => {
@@ -492,6 +517,7 @@ const loginSlice = createSlice({
         state.newPassword = '';
         state.ruleCodes = [];
         state.currentPasswordRejected = false;
+        state.concurrentChangeRejected = false;
         state.daysRemaining = null;
         state.expiryNoticeDismissed = false;
         state.noticeTag = null;

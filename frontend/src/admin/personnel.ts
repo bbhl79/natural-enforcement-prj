@@ -10,6 +10,7 @@ import { data } from 'react-router';
 import { apiFetch, type ApiDispatch } from '../api';
 import { PASSWORD_RULE_TEXT } from '../login/loginSlice';
 import { sessionOpcodes, type SessionStore } from '../session';
+import { RESET_RULE_TEXT } from './lockedPersonnel';
 import type { OrgTreeData, OrgUnit } from './orgTree';
 
 export const PERSONNEL_READ = 'personnel.profile.read';
@@ -21,6 +22,8 @@ export const PERSONNEL_UPDATE = 'personnel.profile.update';
 export const PERSONNEL_DEACTIVATE = 'personnel.profile.deactivate';
 export const PERSONNEL_RESTORE = 'personnel.profile.restore';
 export const PERSONNEL_SESSIONS_END = 'personnel.sessions.end';
+/** 重设初始口令（#132，A10 同码）：只给系统管理。 */
+export const PERSONNEL_PASSWORD_RESET = 'personnel.password.reset';
 export const AUDIT_READ = 'audit.admin.read';
 
 /** 七个角色（ADR 0009），按原型 P6 的顺序。 */
@@ -685,13 +688,15 @@ export type RestoreResult =
     fields: Partial<Record<'initialPassword' | 'orgUnitId', string>>;
     /** 没满足的口令策略规则码 */
     passwordRules: string[];
+    /** 初始口令命中口令历史（ADR 0015，#132）：输入框下只显示「此口令不可用，请换一个。」 */
+    unavailable: boolean;
     message: string | null;
   };
 
 /**
  * 恢复：重设初始口令、解除锁定、结束残余会话和「记住我」由服务端在同一事务里做完。
  * 原任职机构已停用时必须同时带一个数据范围内在用的新任职机构，恢复与调岗一并完成。
- * 口令历史比对留给口令历史票（#132）。
+ * 初始口令命中口令历史（含当前口令）只回 unavailable（ADR 0015，#132），人员仍为停用。
  */
 export async function restorePersonnel(dispatch: ApiDispatch, id: string, input: RestoreInput): Promise<RestoreResult> {
   let response: Response;
@@ -702,9 +707,9 @@ export async function restorePersonnel(dispatch: ApiDispatch, id: string, input:
       body: JSON.stringify(input),
     });
   } catch {
-    return { ok: false, fields: {}, passwordRules: [], message: FAILED };
+    return { ok: false, fields: {}, passwordRules: [], unavailable: false, message: FAILED };
   }
-  if (response.status === 401) return { ok: false, fields: {}, passwordRules: [], message: null };
+  if (response.status === 401) return { ok: false, fields: {}, passwordRules: [], unavailable: false, message: null };
   const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
   if (response.ok) {
     const orgUnitId = typeof json.orgUnitId === 'string' ? json.orgUnitId : null;
@@ -713,17 +718,81 @@ export async function restorePersonnel(dispatch: ApiDispatch, id: string, input:
   if (response.status === 400 && Array.isArray(json.rules)) {
     const fields: Partial<Record<'initialPassword', string>> = {};
     const passwordRules: string[] = [];
+    let unavailable = false;
     for (const rule of json.rules as string[]) {
       if (rule === 'password-required') fields.initialPassword ??= FIELD_RULES['password-required'].text;
+      else if (rule === 'unavailable') unavailable = true;
       else if (rule in PASSWORD_RULE_LABEL) passwordRules.push(rule);
     }
-    return { ok: false, fields, passwordRules, message: null };
+    return { ok: false, fields, passwordRules, unavailable, message: null };
+  }
+  if (response.status === 409 && json.result === 'concurrent-change') {
+    return { ok: false, fields: {}, passwordRules: [], unavailable: false, message: CONCURRENT_CHANGE_MESSAGE };
   }
   const failure = dangerFailure(response, json);
   if ('message' in failure) {
-    return { ok: false, fields: {}, passwordRules: [], message: failure.message };
+    return { ok: false, fields: {}, passwordRules: [], unavailable: false, message: failure.message };
   }
-  return { ok: false, fields: {}, passwordRules: [], message: FAILED };
+  return { ok: false, fields: {}, passwordRules: [], unavailable: false, message: FAILED };
+}
+
+// ---------- 重设初始口令（人员卡片危险操作区，#132，P6 resetpw） ----------
+
+/** 并发冲突（409 concurrent-change，#132）。工程稿：不露结果码。 */
+export const CONCURRENT_CHANGE_MESSAGE = '对方的口令刚被另一次操作修改。请重试。';
+
+export type ResetPasswordResult =
+  | { ok: true }
+  | {
+    ok: false;
+    /** 没满足的可公开口令规则码，提示句按 RESET_RULE_TEXT（对方工号口径） */
+    passwordRules: string[];
+    /** 命中口令历史：输入框下只显示「此口令不可用，请换一个。」 */
+    unavailable: boolean;
+    /** 弹窗级提示（越权、并发、网络失败）；null = 只有输入框下提示 */
+    message: string | null;
+  };
+
+/**
+ * 重设初始口令：与 A10 同一接口（POST /api/admin/personnel/:id/password-reset）。
+ * 同时解锁、结束对方全部会话与「记住我」，对方下次登录必须先改口令。
+ * 命中口令历史（含当前口令）只回 unavailable，不说明原因（ADR 0015）。
+ */
+export async function resetPersonnelPassword(
+  dispatch: ApiDispatch,
+  id: string,
+  password: string,
+): Promise<ResetPasswordResult> {
+  let response: Response;
+  try {
+    response = await apiFetch(dispatch, `/api/admin/personnel/${encodeURIComponent(id)}/password-reset`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+  } catch {
+    return { ok: false, passwordRules: [], unavailable: false, message: FAILED };
+  }
+  if (response.status === 401) return { ok: false, passwordRules: [], unavailable: false, message: null };
+  const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  if (response.ok) return { ok: true };
+  if (response.status === 400 && Array.isArray(json.rules)) {
+    const passwordRules: string[] = [];
+    let unavailable = false;
+    for (const rule of json.rules as string[]) {
+      if (rule === 'unavailable') unavailable = true;
+      else if (rule in RESET_RULE_TEXT) passwordRules.push(rule);
+    }
+    return { ok: false, passwordRules, unavailable, message: null };
+  }
+  if (response.status === 409 && json.result === 'concurrent-change') {
+    return { ok: false, passwordRules: [], unavailable: false, message: CONCURRENT_CHANGE_MESSAGE };
+  }
+  const failure = dangerFailure(response, json);
+  if ('message' in failure) {
+    return { ok: false, passwordRules: [], unavailable: false, message: failure.message };
+  }
+  return { ok: false, passwordRules: [], unavailable: false, message: FAILED };
 }
 
 /**

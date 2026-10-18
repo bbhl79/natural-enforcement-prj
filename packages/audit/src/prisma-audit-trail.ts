@@ -22,6 +22,7 @@ import {
   ORG_UNIT_DEACTIVATE_FAILED_REASONS,
   ORG_UNIT_REGISTER_FAILED_REASONS,
   PASSWORD_CHANGED_REASONS,
+  PASSWORD_REJECTED_REASONS,
   PERSONNEL_DEACTIVATE_FAILED_REASONS,
   PERSONNEL_MOBILE_CHANGE_FAILED_REASONS,
   PERSONNEL_POST_GRANT_FAILED_REASONS,
@@ -46,6 +47,7 @@ const REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['login.failed', new Set<string>(LOGIN_FAILED_REASONS)],
   ['session.ended', new Set<string>(SESSION_END_REASONS)],
   ['account.password-changed', new Set<string>(PASSWORD_CHANGED_REASONS)],
+  ['account.password-rejected', new Set<string>(PASSWORD_REJECTED_REASONS)],
   ['authz.denied', new Set<string>(AUTHZ_DENIED_REASONS)],
 ]);
 

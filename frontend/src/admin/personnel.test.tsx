@@ -13,12 +13,19 @@ import {
   DeactivateDialog,
   EndSessionsDialog,
   RestoreDialog,
+  ResetPasswordDialog,
+  RESET_PASSWORD_EFFECTS,
+  RESET_PASSWORD_HELP,
+  resetPasswordNotice,
+  type CardNotice,
   type ConfirmState,
   type EditState,
+  type ResetPasswordState,
   type RestoreState,
   type TransferState,
 } from './PersonnelCardPage';
 import { EMPTY_INPUT, PersonnelCreateForm } from './PersonnelCreatePage';
+import { RESET_UNAVAILABLE_TEXT } from './lockedPersonnel';
 import { PersonnelListView } from './PersonnelListPage';
 import {
   certAttentionOf,
@@ -28,6 +35,7 @@ import {
   certNote,
   certRecordLabel,
   CERT_TAG,
+  CONCURRENT_CHANGE_MESSAGE,
   deactivatePersonnel,
   DEFAULT_FILTER,
   DENIED_TARGET,
@@ -49,12 +57,14 @@ import {
   paginate,
   passwordText,
   PERSONNEL_DEACTIVATE,
+  PERSONNEL_PASSWORD_RESET,
   PERSONNEL_RESTORE,
   PERSONNEL_SESSIONS_END,
   PERSONNEL_UPDATE,
   problemCount,
   qualifiedPersonnelCount,
   registerPersonnel,
+  resetPersonnelPassword,
   restorePersonnel,
   searchFromFilter,
   searchWithPage,
@@ -308,8 +318,9 @@ describe('人员卡片（P6 view）', () => {
       canDeactivate?: boolean;
       canRestore?: boolean;
       canEndSessions?: boolean;
+      canResetPassword?: boolean;
       dangerBusy?: boolean;
-      notice?: string | null;
+      notice?: CardNotice | null;
       edit?: EditState | null;
     } = {},
   ) => renderToStaticMarkup(
@@ -378,16 +389,17 @@ describe('人员卡片（P6 view）', () => {
     expect(html).toContain('class="banner danger"');
   });
 
-  it('卡片按钮只挂已入名册的码：编辑与调岗用 update，结束与停用挂两个新码，#132 的码不出现，没给执法证码时登记按钮不出现', () => {
-    const html = card({}, false, { canUpdate: true, canDeactivate: true, canEndSessions: true });
+  it('卡片按钮只挂已入名册的码：编辑与调岗用 update，重设、结束、停用各挂自己的码，没给执法证码时登记按钮不出现', () => {
+    const html = card({}, false, { canUpdate: true, canDeactivate: true, canEndSessions: true, canResetPassword: true });
     expect(html).toContain('需谨慎的操作');
     expect(html.match(/data-requires="[^"]+"/g)).toEqual([
       `data-requires="${PERSONNEL_UPDATE}"`,
       `data-requires="${PERSONNEL_UPDATE}"`,
+      `data-requires="${PERSONNEL_PASSWORD_RESET}"`,
       `data-requires="${PERSONNEL_SESSIONS_END}"`,
       `data-requires="${PERSONNEL_DEACTIVATE}"`,
     ]);
-    expect(html).not.toMatch(/personnel\.cert\.update|personnel\.password\.reset/);
+    expect(html).not.toContain('personnel.cert.update');
     // 没有编辑码时按钮置灰。
     expect(card()).toMatch(/data-requires="personnel\.profile\.update" disabled/);
   });
@@ -799,6 +811,16 @@ const restoreState = (partial: Partial<RestoreState> = {}): RestoreState => ({
   ...partial,
 });
 
+const resetPasswordState = (partial: Partial<ResetPasswordState> = {}): ResetPasswordState => ({
+  password: '',
+  failure: null,
+  busy: false,
+  onPassword: () => undefined,
+  onCancel: () => undefined,
+  onSubmit: () => undefined,
+  ...partial,
+});
+
 describe('危险操作区（P6，#130）', () => {
   const view = (
     partial: Partial<PersonnelCard> = {},
@@ -808,8 +830,9 @@ describe('危险操作区（P6，#130）', () => {
       canDeactivate?: boolean;
       canRestore?: boolean;
       canEndSessions?: boolean;
+      canResetPassword?: boolean;
       dangerBusy?: boolean;
-      notice?: string | null;
+      notice?: CardNotice | null;
     } = {},
   ) => renderToStaticMarkup(
     <MemoryRouter>
@@ -817,18 +840,22 @@ describe('危险操作区（P6，#130）', () => {
     </MemoryRouter>,
   );
 
-  it('在职卡片：调岗、结束全部会话、停用人员三行，标题与提示句照原型，行序照原型', () => {
-    const html = view({}, { canUpdate: true, canDeactivate: true, canEndSessions: true });
+  it('在职卡片：调岗、重设初始口令、结束全部会话、停用人员四行，标题与提示句照原型，行序照原型', () => {
+    const html = view({}, { canUpdate: true, canDeactivate: true, canEndSessions: true, canResetPassword: true });
+    expect(html).toContain('重设初始口令<div class="help">同时解锁，并结束对方全部会话</div>');
     expect(html).toContain('结束全部会话<div class="help">对方的全部会话在下一次操作时结束</div>');
     expect(html).toContain('停用人员<div class="help">停用后不能登录，记录照常保留</div>');
+    expect(html).toContain(`data-requires="${PERSONNEL_PASSWORD_RESET}" data-action="resetpw"`);
     expect(html).toContain(`data-requires="${PERSONNEL_SESSIONS_END}" data-action="endsessions"`);
     expect(html).toContain(`data-requires="${PERSONNEL_DEACTIVATE}" data-action="deactivate"`);
+    expect(html).toContain('>重设</button>');
     expect(html).toContain('>结束</button>');
     expect(html).toContain('>停用</button>');
-    // 重设初始口令一行由 #132 补入；执法证登记/变更由 #133 补入。
-    expect(html).not.toContain('重设初始口令');
-    // 行序照原型：调岗在前，结束在中，停用在后。
-    expect(html.indexOf('data-action="transfer"')).toBeLessThan(html.indexOf('data-action="endsessions"'));
+    // 执法证登记/变更由 #133 补入。
+    expect(html).not.toContain('personnel.cert.update');
+    // 行序照原型：调岗在前，重设居中，结束在后，停用最后。
+    expect(html.indexOf('data-action="transfer"')).toBeLessThan(html.indexOf('data-action="resetpw"'));
+    expect(html.indexOf('data-action="resetpw"')).toBeLessThan(html.indexOf('data-action="endsessions"'));
     expect(html.indexOf('data-action="endsessions"')).toBeLessThan(html.indexOf('data-action="deactivate"'));
   });
 
@@ -839,9 +866,10 @@ describe('危险操作区（P6，#130）', () => {
     expect(html).toContain('>恢复</button>');
   });
 
-  it('本人卡片：调岗、结束、停用全部置灰并给本人说明横幅；在职卡片没有恢复一行（G23）', () => {
-    const html = view({}, { self: true, canUpdate: true, canDeactivate: true, canEndSessions: true });
+  it('本人卡片：调岗、重设、结束、停用全部置灰并给本人说明横幅；在职卡片没有恢复一行（G23）', () => {
+    const html = view({}, { self: true, canUpdate: true, canDeactivate: true, canEndSessions: true, canResetPassword: true });
     expect(html).toMatch(/data-action="transfer"[^>]*disabled/);
+    expect(html).toMatch(/data-action="resetpw"[^>]*disabled/);
     expect(html).toMatch(/data-action="endsessions"[^>]*disabled/);
     expect(html).toMatch(/data-action="deactivate"[^>]*disabled/);
     expect(html).toContain('这是你本人。不能给自己调岗、重设口令、结束会话或停用，请找本单位其他系统管理人员办理。');
@@ -852,19 +880,26 @@ describe('危险操作区（P6，#130）', () => {
     const denied = view({}, { canUpdate: true });
     expect(denied).toMatch(/data-action="deactivate"[^>]*disabled/);
     expect(denied).toMatch(/data-action="endsessions"[^>]*disabled/);
+    expect(denied).toMatch(/data-action="resetpw"[^>]*disabled/);
     expect(denied).not.toMatch(/data-action="transfer"[^>]*disabled/);
-    const busy = view({}, { canUpdate: true, canDeactivate: true, canEndSessions: true, dangerBusy: true });
+    const busy = view({}, { canUpdate: true, canDeactivate: true, canEndSessions: true, canResetPassword: true, dangerBusy: true });
     expect(busy).toMatch(/data-action="deactivate"[^>]*disabled/);
     expect(busy).toMatch(/data-action="endsessions"[^>]*disabled/);
+    expect(busy).toMatch(/data-action="resetpw"[^>]*disabled/);
     expect(busy).toMatch(/data-action="transfer"[^>]*disabled/);
     const restoreBusy = view({ deactivatedAt: '2026-09-01T00:00:00Z' }, { canRestore: true, dangerBusy: true });
     expect(restoreBusy).toMatch(/data-action="restore"[^>]*disabled/);
   });
 
-  it('结束全部会话成功后给一句结果横幅，文案取弹窗里的后果句', () => {
-    expect(view({}, { notice: SESSIONS_ENDED_NOTICE })).toContain('data-notice="sessions-ended"');
-    expect(view({}, { notice: SESSIONS_ENDED_NOTICE })).toContain(SESSIONS_ENDED_NOTICE);
+  it('结束全部会话、重设初始口令成功后各给一句结果横幅，横幅的 data-notice 分两种', () => {
+    const ended = view({}, { notice: { kind: 'sessions-ended', text: SESSIONS_ENDED_NOTICE } });
+    expect(ended).toContain('data-notice="sessions-ended"');
+    expect(ended).toContain(SESSIONS_ENDED_NOTICE);
+    const reset = view({}, { notice: { kind: 'password-reset', text: resetPasswordNotice(CARD.name) } });
+    expect(reset).toContain('data-notice="password-reset"');
+    expect(reset).toContain(`已为「${CARD.name}」重设初始口令。`);
     expect(view()).not.toContain('data-notice="sessions-ended"');
+    expect(view()).not.toContain('data-notice="password-reset"');
   });
 });
 
@@ -953,6 +988,7 @@ describe('恢复弹窗（P6 restore / restoreNewOrg，#130）', () => {
       failure: {
         fields: { initialPassword: '请填写初始口令', orgUnitId: '原任职机构已停用，恢复时必须同时选一个在用的新任职机构。' },
         passwordRules: ['too-short', 'contains-code'],
+        unavailable: false,
         message: null,
       },
     });
@@ -961,10 +997,10 @@ describe('恢复弹窗（P6 restore / restoreNewOrg，#130）', () => {
     expect(html).toContain('data-reason="non-compliant"');
     expect(html).toContain('口令至少 10 位');
     expect(html).toContain('不能包含本人工号');
-    const guarded = dialog(OFF_CARD, { failure: { fields: {}, passwordRules: [], message: ROOT_GUARD } });
+    const guarded = dialog(OFF_CARD, { failure: { fields: {}, passwordRules: [], unavailable: false, message: ROOT_GUARD } });
     expect(guarded).toContain(ROOT_GUARD);
     expect(visibleText(guarded)).not.toMatch(RAW_TEXT);
-    expect(dialog(OFF_CARD, { failure: { fields: {}, passwordRules: [], message: '这个人员没有停用，不需要恢复。' } }))
+    expect(dialog(OFF_CARD, { failure: { fields: {}, passwordRules: [], unavailable: false, message: '这个人员没有停用，不需要恢复。' } }))
       .toContain('这个人员没有停用，不需要恢复。');
   });
 
@@ -974,6 +1010,89 @@ describe('恢复弹窗（P6 restore / restoreNewOrg，#130）', () => {
     expect(html).toMatch(/id="r-org"[^>]*disabled/);
     expect(html).toMatch(/class="btn" disabled="">取消/);
     expect(html).toMatch(/disabled="">确认恢复/);
+  });
+
+  it('初始口令命中历史（#132）：输入框下只出「此口令不可用，请换一个。」，不列规则，不说明原因', () => {
+    const html = dialog(OFF_CARD, { failure: { fields: {}, passwordRules: [], unavailable: true, message: null } });
+    expect(html).toContain(`data-reason="unavailable">${RESET_UNAVAILABLE_TEXT}`);
+    expect(html).not.toContain('data-reason="non-compliant"');
+    expect(html).not.toContain('最近 5 次使用过的口令相同，请换一个');
+    expect(html).toContain('恢复后对方首次登录必须改掉这个口令。不能与对方最近 5 次使用过的口令相同。');
+    // 同时给规则码时也只出这一句：管理员侧不暴露历史命中原因。
+    const both = dialog(OFF_CARD, { failure: { fields: {}, passwordRules: ['too-short'], unavailable: true, message: null } });
+    expect(both).toContain(`data-reason="unavailable">${RESET_UNAVAILABLE_TEXT}`);
+    expect(both).not.toContain('口令至少 10 位');
+    expect(visibleText(html)).not.toMatch(RAW_TEXT);
+  });
+});
+
+describe('重设初始口令弹窗（P6 resetpw / resetpwReused，#132）', () => {
+  const dialog = (partial: Partial<ResetPasswordState> = {}) => renderToStaticMarkup(
+    <MemoryRouter>
+      <ResetPasswordDialog card={CARD} reset={resetPasswordState(partial)} />
+    </MemoryRouter>,
+  );
+
+  it('resetpw：标题带姓名，提示句与三条后果逐字照原型，确认重设为危险按钮', () => {
+    const html = dialog();
+    expect(html).toContain(`为「${CARD.name}」重设初始口令`);
+    expect(html).toContain('新的初始口令<span class="req">*</span>');
+    expect(html).toContain('placeholder="请输入新的初始口令"');
+    expect(html).toContain(`<div class="help">${RESET_PASSWORD_HELP}</div>`);
+    expect(html).toContain('确认后：');
+    for (const line of RESET_PASSWORD_EFFECTS) expect(html).toContain(`<li>${line}</li>`);
+    expect(html).toContain('class="btn btn-danger"');
+    expect(html).toContain('确认重设');
+    // 口令为空时确认置灰。
+    expect(html).toContain('disabled="">确认重设');
+    expect(dialog({ password: 'Gz@Field2026' })).not.toContain('disabled="">确认重设');
+  });
+
+  it('resetpwReused：命中历史时输入框下只出「此口令不可用，请换一个。」，不列规则，不说明原因', () => {
+    const html = dialog({ password: 'Gz@Field2026', failure: { passwordRules: [], unavailable: true, message: null } });
+    expect(html).toContain(`data-reason="unavailable">${RESET_UNAVAILABLE_TEXT}`);
+    expect(html).not.toContain('data-reason="non-compliant"');
+    expect(html).not.toContain('reused');
+    expect(html).not.toContain('最近 5 次使用过的口令相同，请换一个');
+    expect(visibleText(html)).not.toMatch(RAW_TEXT);
+    // 同时给规则码时也只出这一句。
+    const both = dialog({ failure: { passwordRules: ['too-short'], unavailable: true, message: null } });
+    expect(both).toContain(`data-reason="unavailable">${RESET_UNAVAILABLE_TEXT}`);
+    expect(both).not.toContain('口令至少 10 位');
+  });
+
+  it('可公开规则不合规：输入框下逐条列出，提示句取对方工号口径', () => {
+    const html = dialog({ failure: { passwordRules: ['too-short', 'contains-code'], unavailable: false, message: null } });
+    expect(html).toContain('data-reason="non-compliant"');
+    expect(html).toContain('<li>口令至少 10 位</li>');
+    expect(html).toContain('<li>不能包含对方工号</li>');
+    expect(html).not.toContain('不能包含本人工号');
+    expect(html).not.toContain(`data-reason="unavailable"`);
+    expect(visibleText(html)).not.toMatch(RAW_TEXT);
+  });
+
+  it('越权、并发与网络失败给弹窗级提示，不露操作码与结果码', () => {
+    for (const message of [DENIED_TARGET, CONCURRENT_CHANGE_MESSAGE, FAILED_SENTENCE]) {
+      const html = dialog({ failure: { passwordRules: [], unavailable: false, message } });
+      expect(html).toContain('class="banner danger" data-error="message"');
+      expect(html).toContain(message);
+      expect(visibleText(html)).not.toMatch(RAW_TEXT);
+    }
+    expect(visibleText(dialog({ failure: { passwordRules: [], unavailable: false, message: CONCURRENT_CHANGE_MESSAGE } })))
+      .not.toContain('concurrent-change');
+  });
+
+  it('busy 时口令输入与两个按钮都置灰', () => {
+    const html = dialog({ password: 'Gz@Field2026', busy: true });
+    expect(html).toMatch(/id="rp-password"[^>]*disabled/);
+    expect(html).toMatch(/class="btn" disabled="">取消/);
+    expect(html).toMatch(/disabled="">确认重设/);
+  });
+
+  it('成功横幅一句照 P7 重设成功定稿句去掉解锁分句', () => {
+    expect(resetPasswordNotice(CARD.name)).toBe(
+      `已为「${CARD.name}」重设初始口令。对方的全部会话和全部「记住我」已结束，下次登录须先改口令。`,
+    );
   });
 });
 
@@ -1060,8 +1179,20 @@ describe('用户可见文本不露操作码与原始结果码（SCREENS.md:8）'
               failure: {
                 fields: { initialPassword: '请填写初始口令', orgUnitId: '原任职机构已停用，恢复时必须同时选一个在用的新任职机构。' },
                 passwordRules: ['too-short', 'contains-code'],
+                unavailable: false,
                 message: '这个人员没有停用，不需要恢复。',
               },
+            })}
+          />
+        </MemoryRouter>,
+      ),
+      renderToStaticMarkup(
+        <MemoryRouter>
+          <ResetPasswordDialog
+            card={CARD}
+            reset={resetPasswordState({
+              password: 'Gz@Field2026',
+              failure: { passwordRules: ['too-short', 'contains-code'], unavailable: true, message: CONCURRENT_CHANGE_MESSAGE },
             })}
           />
         </MemoryRouter>,
@@ -1254,23 +1385,76 @@ describe('停用、恢复、结束全部会话接口（#130）', () => {
     expect(JSON.parse(String(post?.init?.body))).toEqual(RESTORE_INPUT);
     serve(person(ADMIN_DANGER), { '/api/admin/personnel/7/restore': [400, { result: 'non-compliant', rules: ['password-required'] }] });
     expect(await restorePersonnel(store.dispatch, '7', { initialPassword: '', orgUnitId: '' })).toEqual({
-      ok: false, fields: { initialPassword: '请填写初始口令' }, passwordRules: [], message: null,
+      ok: false, fields: { initialPassword: '请填写初始口令' }, passwordRules: [], unavailable: false, message: null,
     });
     serve(person(ADMIN_DANGER), { '/api/admin/personnel/7/restore': [400, { result: 'non-compliant', rules: ['too-short', 'contains-code'] }] });
     expect(await restorePersonnel(store.dispatch, '7', RESTORE_INPUT)).toEqual({
-      ok: false, fields: {}, passwordRules: ['too-short', 'contains-code'], message: null,
+      ok: false, fields: {}, passwordRules: ['too-short', 'contains-code'], unavailable: false, message: null,
     });
     serve(person(ADMIN_DANGER), { '/api/admin/personnel/7/restore': [409, { result: 'invalid-state', reason: 'not-deactivated', message: '这个人员没有停用，不需要恢复。' }] });
     expect(await restorePersonnel(store.dispatch, '7', RESTORE_INPUT)).toEqual({
-      ok: false, fields: {}, passwordRules: [], message: '这个人员没有停用，不需要恢复。',
+      ok: false, fields: {}, passwordRules: [], unavailable: false, message: '这个人员没有停用，不需要恢复。',
     });
     serve(person(ADMIN_DANGER), { '/api/admin/personnel/7/restore': [403, { reason: 'scope-denied' }] });
     expect(await restorePersonnel(store.dispatch, '7', RESTORE_INPUT)).toEqual({
-      ok: false, fields: {}, passwordRules: [], message: DENIED_TARGET,
+      ok: false, fields: {}, passwordRules: [], unavailable: false, message: DENIED_TARGET,
     });
     serve(person(ADMIN_DANGER), { '/api/admin/personnel/7/restore': [500, {}] });
     expect(await restorePersonnel(store.dispatch, '7', RESTORE_INPUT)).toEqual({
-      ok: false, fields: {}, passwordRules: [], message: FAILED_SENTENCE,
+      ok: false, fields: {}, passwordRules: [], unavailable: false, message: FAILED_SENTENCE,
+    });
+  });
+
+  it('restorePersonnel（#132）：初始口令命中历史只回 unavailable，不进规则码清单；并发改口令回 409 定稿句', async () => {
+    const store = fresh();
+    serve(person(ADMIN_DANGER), { '/api/admin/personnel/7/restore': [400, { result: 'non-compliant', rules: ['unavailable'] }] });
+    await store.dispatch(loadSession());
+    expect(await restorePersonnel(store.dispatch, '7', RESTORE_INPUT)).toEqual({
+      ok: false, fields: {}, passwordRules: [], unavailable: true, message: null,
+    });
+    // 可公开规则与 unavailable 同时回来时（服务端不会这样回，界面按优先级取 unavailable）也不丢规则码。
+    serve(person(ADMIN_DANGER), { '/api/admin/personnel/7/restore': [400, { result: 'non-compliant', rules: ['unavailable', 'too-short'] }] });
+    expect(await restorePersonnel(store.dispatch, '7', RESTORE_INPUT)).toEqual({
+      ok: false, fields: {}, passwordRules: ['too-short'], unavailable: true, message: null,
+    });
+    serve(person(ADMIN_DANGER), { '/api/admin/personnel/7/restore': [409, { result: 'concurrent-change' }] });
+    expect(await restorePersonnel(store.dispatch, '7', RESTORE_INPUT)).toEqual({
+      ok: false, fields: {}, passwordRules: [], unavailable: false, message: CONCURRENT_CHANGE_MESSAGE,
+    });
+  });
+
+  it('resetPersonnelPassword（#132）：200；400 规则码只收 RESET_RULE_TEXT 里的码；unavailable 单出；409；403；500；401 无提示', async () => {
+    const store = fresh();
+    const calls = serve(person(ADMIN_DANGER), { '/api/admin/personnel/3/password-reset': [200, { result: 'reset' }] });
+    await store.dispatch(loadSession());
+    expect(await resetPersonnelPassword(store.dispatch, '3', 'Gz@Field2026')).toEqual({ ok: true });
+    const post = calls.find((call) => call.url === '/api/admin/personnel/3/password-reset');
+    expect(post?.init?.method).toBe('POST');
+    expect(JSON.parse(String(post?.init?.body))).toEqual({ password: 'Gz@Field2026' });
+    const url = '/api/admin/personnel/3/password-reset';
+    serve(person(ADMIN_DANGER), { [url]: [400, { result: 'non-compliant', rules: ['too-short', 'contains-code'] }] });
+    expect(await resetPersonnelPassword(store.dispatch, '3', 'a')).toEqual({
+      ok: false, passwordRules: ['too-short', 'contains-code'], unavailable: false, message: null,
+    });
+    serve(person(ADMIN_DANGER), { [url]: [400, { result: 'non-compliant', rules: ['unavailable'] }] });
+    expect(await resetPersonnelPassword(store.dispatch, '3', 'Gz@Field2026')).toEqual({
+      ok: false, passwordRules: [], unavailable: true, message: null,
+    });
+    serve(person(ADMIN_DANGER), { [url]: [409, { result: 'concurrent-change' }] });
+    expect(await resetPersonnelPassword(store.dispatch, '3', 'Gz@Field2026')).toEqual({
+      ok: false, passwordRules: [], unavailable: false, message: CONCURRENT_CHANGE_MESSAGE,
+    });
+    serve(person(ADMIN_DANGER), { [url]: [403, { reason: 'scope-denied' }] });
+    expect(await resetPersonnelPassword(store.dispatch, '3', 'Gz@Field2026')).toEqual({
+      ok: false, passwordRules: [], unavailable: false, message: DENIED_TARGET,
+    });
+    serve(person(ADMIN_DANGER), { [url]: [500, {}] });
+    expect(await resetPersonnelPassword(store.dispatch, '3', 'Gz@Field2026')).toEqual({
+      ok: false, passwordRules: [], unavailable: false, message: FAILED_SENTENCE,
+    });
+    serve(person(ADMIN_DANGER), { [url]: [401, {}] });
+    expect(await resetPersonnelPassword(store.dispatch, '3', 'Gz@Field2026')).toEqual({
+      ok: false, passwordRules: [], unavailable: false, message: null,
     });
   });
 

@@ -1,5 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { rejected, type Rejected } from '@natural-enforcement/audit';
+import {
+  rejected,
+  type AuditEntry,
+  type AuditParties,
+  type PasswordRejectedReason,
+  type Rejected,
+} from '@natural-enforcement/audit';
 import {
   AccessControlService,
   CredentialService,
@@ -30,7 +36,12 @@ export type ResetOutcome =
   | { status: 200; body: { result: 'reset' } }
   | { status: 400; body: { result: 'non-compliant'; rules: PasswordRuleCode[] } }
   | { status: 404; body: { result: 'not-found' } }
+  /** 并发改口令（ADR 0015，#132）：期望散列已被换掉，本次不写库。 */
+  | { status: 409; body: { result: 'concurrent-change' } }
   | AdminDenial;
+
+/** 重设判断通过后交出的比对口径（ADR 0015）：期望散列、历史散列与拒绝留痕的一方快照。 */
+type ResetReady = { expectedHash: string | null; historyHashes: string[]; parties: AuditParties };
 
 export type UnlockOutcome =
   | { status: 200; body: { result: 'unlocked' } }
@@ -126,15 +137,48 @@ export class AdminService {
     password: string,
     sourceIp: string | null,
   ): Promise<ResetOutcome> {
-    // 第一步：判断能否重设。口令不合规时直接返回，不散列。
-    const checked = await this.uow.run<ResetOutcome | { ready: true }>(async (tx) => {
+    // 第一步：判断能否重设，并读出当前散列与口令历史。口令不合规时直接返回，不散列。
+    const checked = await this.uow.run<ResetOutcome | { ready: ResetReady }>(async (tx) => {
       const guarded = await this.guard(tx, actor, PASSWORD_RESET, personnelId);
       if (!('target' in guarded)) return guarded;
       const rules = rejectedPasswordRules({ password, personnelCode: guarded.target.code });
       if (rules.length > 0) return { status: 400, body: { result: 'non-compliant', rules } };
-      return { ready: true };
+      const row = await tx.store.findPersonnelById(personnelId);
+      const admin = await tx.directory.findById(actor.personnelId);
+      return {
+        ready: {
+          expectedHash: row?.passwordHash ?? null,
+          historyHashes: await tx.store.listRecentPasswordHashes(personnelId, this.credentials.historyDepth - 1),
+          parties: {
+            actorId: actor.personnelId,
+            actorCode: admin?.code ?? null,
+            subjectPersonnelId: guarded.target.id,
+            subjectCode: guarded.target.code,
+            orgUnitId: guarded.target.orgUnitId,
+            sourceIp,
+          },
+        },
+      };
     });
     if (!('ready' in checked)) return checked;
+    const { expectedHash, historyHashes, parties } = checked.ready;
+    const rejectedEntry = (reason: PasswordRejectedReason): AuditEntry => ({
+      ...parties,
+      action: 'account.password-rejected',
+      outcome: 'failed',
+      reason,
+      opcode: PASSWORD_RESET,
+      resourceType: 'personnel',
+      resourceId: personnelId,
+    });
+    // 历史比对在事务之外（ADR 0015）：命中（含当前口令）只回 unavailable，不暴露 reused；
+    // 拒绝留痕在业务事务回滚后另起事务写入（#105 事务前置）。
+    if (await this.credentials.matchesAny([expectedHash, ...historyHashes], password)) {
+      return this.uow.run(async () => rejected<ResetOutcome>(
+        { status: 400, body: { result: 'non-compliant', rules: ['unavailable'] } },
+        rejectedEntry('reused'),
+      ));
+    }
     // 口令散列在事务之外计算（#119）。
     const passwordHash = await this.credentials.hashPassword(password);
     // 第二步：重设、解除锁定、结束会话和记住我，与各自的留痕同一事务。
@@ -144,9 +188,24 @@ export class AdminService {
       const { target } = guarded;
       const now = this.clock.now();
       const wasLocked = target.lockedUntil != null && now.getTime() < target.lockedUntil.getTime();
+      // 条件更新 + 追加历史同一事务（ADR 0015）：期望散列不成立说明并发已换掉，不写库，回 409。
+      const rotated = await tx.store.rotatePasswordHash({
+        personnelId: target.id,
+        expectedHash,
+        passwordHash,
+        passwordChangedAt: null,
+        retiredAt: now,
+      });
+      if (!rotated) {
+        return rejected<ResetOutcome>(
+          { status: 409, body: { result: 'concurrent-change' } },
+          rejectedEntry('concurrent-change'),
+        );
+      }
+      // 散列与上次改密时间已由条件更新写入（留空即首登强制改密）；这一步只清失败计数与锁定。
+      await tx.directory.clearFailure(target.id);
       const admin = await tx.directory.findById(actor.personnelId);
-      await tx.directory.applyInitialPassword(target.id, passwordHash);
-      const parties = {
+      const successParties = {
         actorId: actor.personnelId,
         actorCode: admin?.code ?? null,
         subjectPersonnelId: target.id,
@@ -154,8 +213,8 @@ export class AdminService {
         orgUnitId: target.orgUnitId,
         sourceIp,
       };
-      await tx.audit.append({ action: 'account.password-reset', ...parties });
-      if (wasLocked) await tx.audit.append({ action: 'account.unlocked', ...parties });
+      await tx.audit.append({ action: 'account.password-reset', ...successParties });
+      if (wasLocked) await tx.audit.append({ action: 'account.unlocked', ...successParties });
       await this.auth.endPersonnelSessions({
         personnelId: target.id,
         actorId: actor.personnelId,

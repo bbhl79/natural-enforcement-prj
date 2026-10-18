@@ -6,6 +6,8 @@ import { safeNext } from '../routing';
 import { BarePage } from '../shell/StatusPages';
 import {
   logout,
+  PASSWORD_CONCURRENT_TEXT,
+  PASSWORD_HISTORY_HINT,
   PASSWORD_RULE_TEXT,
   setCurrentPassword,
   setNewPassword,
@@ -46,6 +48,9 @@ export default function PasswordPage() {
           {state.currentPasswordRejected ? (
             <div className="banner danger" role="status">当前口令不正确。</div>
           ) : null}
+          {state.concurrentChangeRejected ? (
+            <div className="banner danger" role="status" data-reason="concurrent-change">{PASSWORD_CONCURRENT_TEXT}</div>
+          ) : null}
           <form onSubmit={onSubmit}>
             <input
               className="input"
@@ -71,13 +76,20 @@ export default function PasswordPage() {
               disabled={locked}
               onChange={(event) => dispatch(setNewPassword(event.target.value))}
             />
-            {state.ruleCodes.length > 0 ? (
+            {/* 命中口令历史（P2 forcedReused，#132）：单句拒绝提示，替换常驻的历史规则提示。 */}
+            {state.ruleCodes.includes('reused') ? (
+              <div className="err" data-reason="password-reused" style={{ marginBottom: 12 }}>
+                {PASSWORD_RULE_TEXT.reused}
+              </div>
+            ) : state.ruleCodes.length > 0 ? (
               <ul className="err" style={{ margin: '0 0 12px 18px' }}>
                 {state.ruleCodes.map((code) => (
                   <li key={code}>{PASSWORD_RULE_TEXT[code] ?? code}</li>
                 ))}
               </ul>
-            ) : <div style={{ marginBottom: 12 }} />}
+            ) : (
+              <div className="help" style={{ marginBottom: 12 }}>{PASSWORD_HISTORY_HINT}</div>
+            )}
             <button
               className="btn btn-primary"
               type="submit"

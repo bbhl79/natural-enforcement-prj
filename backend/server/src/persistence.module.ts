@@ -26,6 +26,8 @@ import {
   IDENTITY_STORE,
   NO_OPEN_ITEMS,
   OPEN_ITEMS_COUNTER,
+  PASSWORD_HISTORY_DEPTH,
+  PASSWORD_HISTORY_DEPTH_TOKEN,
   type BootstrapHooks,
   type BootstrapOutcome,
   type BootstrapRequest,
@@ -143,19 +145,6 @@ class PrismaLoginDirectory implements LoginDirectory {
       orderBy: { code: 'asc' },
     });
     return org?.id ?? null;
-  }
-
-  async applyInitialPassword(id: string, passwordHash: string): Promise<void> {
-    await this.prisma.personnel.update({
-      where: { id },
-      data: {
-        passwordHash,
-        passwordChangedAt: null,
-        passwordFailureCount: 0,
-        passwordFailureWindowStartedAt: null,
-        lockedUntil: null,
-      },
-    });
   }
 
   private async toAccount(person: {
@@ -419,6 +408,8 @@ export interface ApplicationOverrides {
   auditTrailFactory?: AuditTrailFactory;
   /** 接缝③：承办中事项计数。默认恒为 0（#124）。 */
   openItemsCounter?: OpenItemsCounter;
+  /** 口令历史比对深度（ADR 0015，#132）。默认 5；测试可传 2。 */
+  passwordHistoryDepth?: number;
 }
 
 class DisconnectPrisma implements OnModuleDestroy {
@@ -456,6 +447,7 @@ class PersistenceModule {
         { provide: REMEMBER_ME_STORE, useValue: new PrismaRememberMeStore(prisma, prisma) },
         { provide: UNIT_OF_WORK, useValue: new PrismaUnitOfWork(prisma, auditTrailFactory) },
         { provide: OPEN_ITEMS_COUNTER, useValue: overrides.openItemsCounter ?? NO_OPEN_ITEMS },
+        { provide: PASSWORD_HISTORY_DEPTH_TOKEN, useValue: overrides.passwordHistoryDepth ?? PASSWORD_HISTORY_DEPTH },
         {
           provide: DisconnectPrisma,
           useFactory: (client: PrismaClient) => new DisconnectPrisma(client),
@@ -468,6 +460,7 @@ class PersistenceModule {
         AUDIT_TRAIL_PORT,
         UNIT_OF_WORK,
         OPEN_ITEMS_COUNTER,
+        PASSWORD_HISTORY_DEPTH_TOKEN,
         LOGIN_DIRECTORY,
         SESSION_STORE,
         REMEMBER_ME_STORE,

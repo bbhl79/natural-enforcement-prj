@@ -25,6 +25,7 @@ import {
   RESET_EFFECT,
   RESET_PLACEHOLDER,
   RESET_RULE_TEXT,
+  RESET_UNAVAILABLE_TEXT,
   resetDialogTitle,
   resetRulesSentence,
   UNLOCK_NOTE,
@@ -169,6 +170,8 @@ function UnlockDialog({ row, pending, send, onConfirm }: { row: LockedRow; pendi
 }
 
 function ResetDialog({ row, state, send, onConfirm }: { row: LockedRow; state: LockedState; send: LockedViewProps['send']; onConfirm: () => void }) {
+  // 命中口令历史（#132，原型 P7 resetDenied&case=reused）：只出单句「此口令不可用」，不逐条列规则。
+  const unavailable = state.ruleCodes.includes('unavailable');
   const ruleTexts = state.ruleCodes.map((code) => RESET_RULE_TEXT[code]).filter((text): text is string => Boolean(text));
   return (
     <Dialog
@@ -205,7 +208,9 @@ function ResetDialog({ row, state, send, onConfirm }: { row: LockedRow; state: L
             disabled={state.pending}
             onChange={(event) => send({ type: 'password', value: event.target.value })}
           />
-          {ruleTexts.length > 0 ? (
+          {unavailable ? (
+            <div className="err" data-reason="unavailable" style={{ margin: '4px 0 0' }}>{RESET_UNAVAILABLE_TEXT}</div>
+          ) : ruleTexts.length > 0 ? (
             <ul className="err" data-reason="non-compliant" style={{ margin: '4px 0 0 18px' }}>
               {ruleTexts.map((text) => <li key={text}>{text}</li>)}
             </ul>

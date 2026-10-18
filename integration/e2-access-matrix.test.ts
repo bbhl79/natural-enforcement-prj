@@ -671,7 +671,8 @@ describe('E2 口令散列', () => {
   it('种子人员口令经 argon2 散列存储，验真通过、错口令拒绝', async () => {
     const row = await prisma.personnel.findUniqueOrThrow({ where: { id: supAId } });
     expect(row.passwordHash).toMatch(/^\$argon2id\$/);
-    await expect(credential.authenticate(supAId, SEED_PASSWORD)).resolves.toBe(true);
-    await expect(credential.authenticate(supAId, 'wrong-password')).resolves.toBe(false);
+    // 验真成功交回当前生效的散列（#132：改密拿它作条件更新的期望值）；拒绝交回 null。
+    await expect(credential.authenticate(supAId, SEED_PASSWORD)).resolves.toMatch(/^\$argon2id\$/);
+    await expect(credential.authenticate(supAId, 'wrong-password')).resolves.toBeNull();
   });
 });

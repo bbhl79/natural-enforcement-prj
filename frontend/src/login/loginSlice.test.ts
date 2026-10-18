@@ -14,6 +14,8 @@ import reducer, {
   loadSession,
   loginSubmitEnabled,
   logout,
+  PASSWORD_CONCURRENT_TEXT,
+  PASSWORD_HISTORY_HINT,
   PASSWORD_RULE_TEXT,
   passwordChangeKindFromDenial,
   setCurrentPassword,
@@ -34,6 +36,32 @@ function loginHtml(): string {
     createElement(Provider, { store, children: createElement(LoginPage) }),
   );
 }
+
+/** 渲染强制改密页（P2）：把状态塞进 store 后按 /auth/password 出 HTML。 */
+async function passwordPageHtml(state: LoginState): Promise<string> {
+  const view = configureStore({
+    reducer: { login: reducer },
+    preloadedState: {
+      login: { ...state, phase: 'password-change-required' as const, passwordChangeKind: 'first-login' as const },
+    },
+  });
+  const { html } = await renderRoute(view, '/auth/password');
+  return html;
+}
+
+/** 强制改密被拒后的状态：只给拒绝原因，其余字段取初值。 */
+function passwordRejected(failure: PasswordFailureForTest): LoginState {
+  return reducer(reducer(undefined, setCurrentPassword('Old-pass-97!')), submitPassword.rejected(
+    new Error('rejected'),
+    'req-rejected',
+    undefined,
+    failure,
+  ));
+}
+
+type PasswordFailureForTest =
+  | { result: 'non-compliant'; rules: string[] }
+  | { result: 'concurrent-change' };
 
 describe('登录页', () => {
   it('输入框占位为手机号和密码', () => {
@@ -229,26 +257,74 @@ describe('登录页', () => {
   });
 
   it('规则码一次显示为全部中文提示', async () => {
-    const withRules = reducer(
-      reducer(undefined, setCurrentPassword('Old-pass-97!')),
-      submitPassword.rejected(new Error('rejected'), 'req-rules', undefined, {
-        result: 'non-compliant',
-        rules: ['too-short', 'insufficient-classes', 'sequential', 'repeated', 'common', 'contains-code', 'same-as-current', 'too-long'],
-      }),
-    );
-    const login: LoginState = {
-      ...withRules,
-      phase: 'password-change-required',
-      passwordChangeKind: 'first-login',
-    };
-    const view = configureStore({
-      reducer: { login: reducer },
-      preloadedState: { login },
+    const withRules = passwordRejected({
+      result: 'non-compliant',
+      rules: ['too-short', 'insufficient-classes', 'sequential', 'repeated', 'common', 'contains-code', 'same-as-current', 'too-long'],
     });
-    const { html } = await renderRoute(view, '/auth/password');
-    for (const text of Object.values(PASSWORD_RULE_TEXT)) {
-      expect(html).toContain(text);
+    const html = await passwordPageHtml(withRules);
+    for (const code of withRules.ruleCodes) {
+      expect(html).toContain(PASSWORD_RULE_TEXT[code]);
     }
+    // reused 走单句拒绝提示，不与可公开规则一起列（#132）。
+    expect(withRules.ruleCodes).not.toContain('reused');
+    expect(html).not.toContain(PASSWORD_RULE_TEXT.reused);
+  });
+
+  it('没有拒绝提示时，新口令框下常驻一句口令历史提示（原型 v0.4 P2，#132）', async () => {
+    const html = await passwordPageHtml(reducer(undefined, setCurrentPassword('Old-pass-97!')));
+    expect(html).toContain(`<div class="help" style="margin-bottom:12px">${PASSWORD_HISTORY_HINT}</div>`);
+    expect(html).toContain('不能与最近 5 次使用过的口令相同。');
+    expect(html).not.toContain('class="err"');
+  });
+
+  it('新口令命中历史（P2 forcedReused，#132）：只出单句拒绝提示，写明原因，不说明第几次', async () => {
+    const state = passwordRejected({ result: 'non-compliant', rules: ['reused'] });
+    expect(state.ruleCodes).toEqual(['reused']);
+    expect(state.concurrentChangeRejected).toBe(false);
+    const html = await passwordPageHtml(state);
+    expect(html).toContain(`<div class="err" data-reason="password-reused" style="margin-bottom:12px">${PASSWORD_RULE_TEXT.reused}</div>`);
+    expect(html).toContain('新口令不能与你最近 5 次使用过的口令相同，请换一个。');
+    // 单句替换常驻提示与规则清单，不并列出现。
+    expect(html).not.toContain(PASSWORD_HISTORY_HINT);
+    expect(html).not.toContain('<ul class="err"');
+    // 本人侧写明原因，但不说明命中的是第几次，也不露规则码。
+    expect(html).not.toContain('第 ');
+    expect(html.replace(/<[^>]*>/g, ' ')).not.toMatch(/reused|non-compliant|unavailable/);
+  });
+
+  it('并发改密被拒（409 concurrent-change，#132）：出红色横幅，不出规则清单', async () => {
+    const state = passwordRejected({ result: 'concurrent-change' });
+    expect(state.concurrentChangeRejected).toBe(true);
+    expect(state.ruleCodes).toEqual([]);
+    expect(state.currentPasswordRejected).toBe(false);
+    const html = await passwordPageHtml(state);
+    expect(html).toContain(`<div class="banner danger" role="status" data-reason="concurrent-change">${PASSWORD_CONCURRENT_TEXT}</div>`);
+    expect(html).toContain('口令刚被另一次操作修改，本次修改没有生效。请重新填写后再试。');
+    expect(html).not.toContain('当前口令不正确。');
+    expect(html).not.toContain('<ul class="err"');
+    // 规则提示清空后，新口令框下回到常驻的历史规则提示。
+    expect(html).toContain(PASSWORD_HISTORY_HINT);
+    expect(html.replace(/<[^>]*>/g, ' ')).not.toMatch(/concurrent-change|409/);
+  });
+
+  it('并发横幅在重新填写任一口令后消失', () => {
+    const state = passwordRejected({ result: 'concurrent-change' });
+    expect(reducer(state, setNewPassword('New-pass-98!')).concurrentChangeRejected).toBe(false);
+    expect(reducer(state, setCurrentPassword('Old-pass-98!')).concurrentChangeRejected).toBe(false);
+  });
+
+  it('改口令接口回 409 concurrent-change 时判为并发冲突，不当成当前口令不正确', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ result: 'concurrent-change' }), { status: 409 }),
+    ));
+    const view = configureStore({ reducer: { login: reducer } });
+    view.dispatch(setCurrentPassword('Old-pass-97!'));
+    view.dispatch(setNewPassword('New-pass-97!'));
+    await view.dispatch(submitPassword());
+    const state = view.getState().login;
+    expect(state.concurrentChangeRejected).toBe(true);
+    expect(state.currentPasswordRejected).toBe(false);
+    expect(state.screen).toBe('default');
   });
 
   it('距到期 7 天显示提醒，关闭后同一会话不再出现，第 8 天不出现', async () => {

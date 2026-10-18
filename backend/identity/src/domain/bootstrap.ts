@@ -3,7 +3,7 @@
 // 空库写入；两键都在为「已引导」，不写；两键不全（含库非空而两键都不在）拒绝，说明差在哪里。
 
 import { ORG_UNIT_NAME_MAX_LENGTH } from './org-unit.ts';
-import { rejectedPasswordRules, type PasswordRuleCode } from './password-policy.ts';
+import { rejectedPasswordRules, type PublicPasswordRuleCode } from './password-policy.ts';
 
 /** 首个系统管理人员持有的角色（参照种子写入，GLOSSARY「角色」）。 */
 export const BOOTSTRAP_ADMIN_ROLE = '系统管理';
@@ -36,7 +36,7 @@ export type BootstrapInputRule =
   | 'admin-name-required'
   | 'admin-name-too-long'
   | 'admin-mobile-invalid'
-  | `password-${PasswordRuleCode}`;
+  | `password-${PublicPasswordRuleCode}`;
 
 function lengthRules(
   value: string,
