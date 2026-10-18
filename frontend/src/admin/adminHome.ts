@@ -1,6 +1,6 @@
 // 管理台首页（P3）的数据与视图判定。
-// 各入口的数字来自各自功能的查询；本票只接被锁人员（A10 已有接口）。
-// 机构、人员、留痕、执法证的数字由 #123、#128、#126、#133 接入，未接入时为 null，入口不显示数字。
+// 各入口的数字来自各自功能的查询：被锁人员（A10 已有接口）、今日留痕（#126）。
+// 机构、人员、执法证的数字由 #123、#128、#133 接入，未接入时为 null，入口不显示数字。
 
 import { data } from 'react-router';
 
@@ -82,6 +82,15 @@ export async function loadAdminHomeSummary(dispatch: ApiDispatch, opcodes: reado
     if (!response.ok) throw new Error(`被锁人员数读取失败：HTTP ${response.status}`);
     const body = (await response.json()) as { personnel?: unknown };
     summary.lockedPersonnel = Array.isArray(body.personnel) ? body.personnel.length : null;
+  }
+  if (opcodes.includes('audit.admin.read')) {
+    // 只给条数、不交出行，服务端不写 audit.viewed（#126）
+    const response = await apiFetch(dispatch, '/api/admin/audit/summary');
+    if (response.status === 401) return summary;
+    if (response.status === 403) throw data(null, { status: 403 });
+    if (!response.ok) throw new Error(`今日留痕条数读取失败：HTTP ${response.status}`);
+    const body = (await response.json()) as { today?: unknown };
+    summary.auditToday = typeof body.today === 'number' ? body.today : null;
   }
   return summary;
 }
