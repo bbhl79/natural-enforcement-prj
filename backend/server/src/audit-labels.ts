@@ -64,6 +64,7 @@ const OPERATION_OF_OPCODE: Readonly<Record<string, string>> = {
   'personnel.profile.export': '导出人员',
   'personnel.profile.read': '查看人员',
   'personnel.profile.register': '新建人员',
+  'personnel.profile.update': '编辑人员',
   'audit.admin.read': '查阅管理台留痕',
   'audit.admin.export': '导出管理台留痕',
   'authz.binding.submit': '维护机构或人员',
