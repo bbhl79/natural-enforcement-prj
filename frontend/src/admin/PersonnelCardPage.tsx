@@ -3,19 +3,29 @@ import { Await, Link, useAsyncError, useLoaderData, useRevalidator, useSearchPar
 
 import { useAppDispatch, useAppSelector } from '../hooks';
 import { ErrorCard, errorStatus } from '../shell/StatusPages';
+import type { OrgUnit } from './orgTree';
 import {
   CERT_TAG,
   certNote,
+  deactivatePersonnel,
   editInputFromCard,
+  endPersonnelSessions,
+  loadRestoreOrgUnits,
   loadTransferDestinations,
   maskPhone,
   orgText,
   passwordText,
+  PASSWORD_RULE_LABEL,
+  PERSONNEL_DEACTIVATE,
   PERSONNEL_READ,
+  PERSONNEL_RESTORE,
+  PERSONNEL_SESSIONS_END,
   PERSONNEL_UPDATE,
   POST_LABEL,
   POSTS,
+  restorePersonnel,
   ROLES,
+  SESSIONS_ENDED_NOTICE,
   transferPersonnel,
   updatePersonnel,
   type EditInput,
@@ -304,36 +314,217 @@ export function TransferDialog({ card, transfer }: { card: PersonnelCard; transf
   );
 }
 
+// ---------- 停用与结束全部会话确认弹窗（P6 deactivate / endsessions，#130） ----------
+
+/** 两个确认弹窗共用的状态。message 是 409/403/500 给人看的一句；null = 没有失败。 */
+export interface ConfirmState {
+  busy: boolean;
+  message: string | null;
+  onCancel: () => void;
+  onSubmit: () => void;
+}
+
+/** P6 deactivate（纯渲染，单测直接渲染）。三条后果照原型，确认按钮为危险色。 */
+export function DeactivateDialog({ card, confirm }: { card: PersonnelCard; confirm: ConfirmState }) {
+  return (
+    <Modal
+      title={`停用「${card.name}」？`}
+      foot={(
+        <>
+          <button type="button" className="btn" disabled={confirm.busy} onClick={confirm.onCancel}>取消</button>
+          <button type="button" className="btn btn-danger" disabled={confirm.busy} onClick={confirm.onSubmit}>确认停用</button>
+        </>
+      )}
+    >
+      {confirm.message ? <div className="banner danger" data-error="message">{confirm.message}</div> : null}
+      <ul>
+        <li>对方的全部会话会在下一次操作时结束，之后不能再登录；</li>
+        <li>对方经手的线索、案件和记录照常保留；</li>
+        <li>以后可以恢复，恢复时需要重设初始口令。</li>
+      </ul>
+    </Modal>
+  );
+}
+
+/** P6 endsessions（纯渲染）。适用情形一句与两条后果照原型；不改口令，怀疑泄露请走重设（#132 交付入口）。 */
+export function EndSessionsDialog({ card, confirm }: { card: PersonnelCard; confirm: ConfirmState }) {
+  return (
+    <Modal
+      title={`结束「${card.name}」的全部会话？`}
+      foot={(
+        <>
+          <button type="button" className="btn" disabled={confirm.busy} onClick={confirm.onCancel}>取消</button>
+          <button type="button" className="btn btn-danger" disabled={confirm.busy} onClick={confirm.onSubmit}>确认结束</button>
+        </>
+      )}
+    >
+      {confirm.message ? <div className="banner danger" data-error="message">{confirm.message}</div> : null}
+      <p>适用于怀疑口令泄露、设备丢失等情况。</p>
+      <ul>
+        <li>对方的全部会话和全部「记住我」，会在下一次操作时结束；</li>
+        <li>对方可以用原口令重新登录。如怀疑口令泄露，请改用「重设初始口令」。</li>
+      </ul>
+    </Modal>
+  );
+}
+
+// ---------- 恢复弹窗（P6 restore / restoreNewOrg，#130） ----------
+
+export interface RestoreFailure {
+  fields: Partial<Record<'initialPassword' | 'orgUnitId', string>>;
+  /** 没满足的口令策略规则码对应的提示句 */
+  passwordRules: string[];
+  message: string | null;
+}
+
+export interface RestoreState {
+  /** 数据范围内在用的机构；只在原任职机构已停用时读取，null = 还在读取 */
+  orgUnits: OrgUnit[] | null;
+  loadFailed: boolean;
+  initialPassword: string;
+  orgUnitId: string;
+  failure: RestoreFailure | null;
+  busy: boolean;
+  onPassword: (value: string) => void;
+  onOrg: (value: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}
+
+/** P6 restore / restoreNewOrg（纯渲染）。原机构在用只设新初始口令；已停用则同一步选新任职机构。 */
+export function RestoreDialog({ card, restore }: { card: PersonnelCard; restore: RestoreState }) {
+  const needOrg = card.orgDeactivated;
+  const fields = restore.failure?.fields ?? {};
+  const ruleTexts = (restore.failure?.passwordRules ?? [])
+    .map((rule) => PASSWORD_RULE_LABEL[rule])
+    .filter((text): text is string => Boolean(text));
+  return (
+    <Modal
+      title={`恢复「${card.name}」？`}
+      foot={(
+        <>
+          <button type="button" className="btn" disabled={restore.busy} onClick={restore.onCancel}>取消</button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={restore.busy || restore.loadFailed || (needOrg && (restore.orgUnits === null || restore.orgUnitId === ''))}
+            onClick={restore.onSubmit}
+          >
+            确认恢复
+          </button>
+        </>
+      )}
+    >
+      {restore.failure?.message ? <div className="banner danger" data-error="message">{restore.failure.message}</div> : null}
+      <div className="kv" style={{ marginBottom: 12 }}>
+        <div className="k">{needOrg ? '原任职机构' : '所在机构'}</div>
+        <div>{card.orgName ? (needOrg ? orgText(card) : `${orgText(card)}（在用）`) : '—'}</div>
+      </div>
+      {needOrg ? (
+        <>
+          <div className="banner amber" data-reason="org-deactivated">原任职机构已停用，恢复时需同时选一个新任职机构。</div>
+          <div className="form-row">
+            <label htmlFor="r-org">新任职机构<span className="req">*</span></label>
+            <div>
+              <select
+                id="r-org"
+                className="select"
+                value={restore.orgUnitId}
+                disabled={restore.busy || restore.loadFailed || restore.orgUnits === null}
+                data-autofocus
+                onChange={(event) => restore.onOrg(event.target.value)}
+              >
+                <option value="">请选择在用机构</option>
+                {(restore.orgUnits ?? []).map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}
+              </select>
+              {fields.orgUnitId ? <div className="err" data-error="orgUnitId">{fields.orgUnitId}</div> : null}
+              {restore.loadFailed ? <div className="err" data-error="orgUnits">无法读取可选机构，请关闭后重试。</div> : null}
+              <div className="help">只能选你数据范围内在用的机构。</div>
+            </div>
+          </div>
+        </>
+      ) : null}
+      <div className="form-row">
+        <label htmlFor="r-password">新的初始口令<span className="req">*</span></label>
+        <div>
+          <input
+            id="r-password"
+            className="input"
+            type="text"
+            autoComplete="off"
+            placeholder="请输入新的初始口令"
+            value={restore.initialPassword}
+            disabled={restore.busy}
+            data-autofocus={needOrg ? undefined : 'true'}
+            onChange={(event) => restore.onPassword(event.target.value)}
+          />
+          {fields.initialPassword ? <div className="err" data-error="initialPassword">{fields.initialPassword}</div> : null}
+          {ruleTexts.length > 0 ? (
+            <ul className="err" data-reason="non-compliant" style={{ margin: '4px 0 0 18px' }}>
+              {ruleTexts.map((text) => <li key={text}>{text}</li>)}
+            </ul>
+          ) : null}
+          <div className="help">恢复后对方首次登录必须改掉这个口令。不能与对方最近 5 次使用过的口令相同。</div>
+        </div>
+      </div>
+      {needOrg ? <p>确认后，恢复和调到新任职机构一并完成。</p> : null}
+    </Modal>
+  );
+}
+
 // ---------- 卡片（P6 view） ----------
 
-/** P6 view（纯渲染，单测直接渲染）。停用与恢复（#130）、重设口令与结束会话（#132）随后补入危险操作区。 */
+/** P6 view（纯渲染，单测直接渲染）。重设口令（#132）、执法证登记/变更（#133）随后补入危险操作区。 */
 export function PersonnelCardView({
   card,
   now,
   registered,
   self = false,
   canUpdate = false,
+  canDeactivate = false,
+  canRestore = false,
+  canEndSessions = false,
+  dangerBusy = false,
+  notice = null,
   edit = null,
   onEnterEdit,
   onOpenTransfer,
+  onOpenDeactivate,
+  onOpenEndSessions,
+  onOpenRestore,
 }: {
   card: PersonnelCard;
   now: Date;
   registered: boolean;
-  /** 卡片是不是操作者本人（G23：本人不能改角色、改岗位标记、调岗）。按工号认。 */
+  /** 卡片是不是操作者本人（G23：本人不能改角色、改岗位标记、调岗、结束会话、停用）。按工号认。 */
   self?: boolean;
   /** 会话清单里有 personnel.profile.update。 */
   canUpdate?: boolean;
+  /** 会话清单里有 personnel.profile.deactivate。 */
+  canDeactivate?: boolean;
+  /** 会话清单里有 personnel.profile.restore。 */
+  canRestore?: boolean;
+  /** 会话清单里有 personnel.sessions.end。 */
+  canEndSessions?: boolean;
+  /** 危险操作区有请求在途：四个入口一并置灰，避免回调互相覆盖卡片。 */
+  dangerBusy?: boolean;
+  /** 结束全部会话成功后的结果横幅。 */
+  notice?: string | null;
   /** 编辑态；null = 查看态。 */
   edit?: EditState | null;
   onEnterEdit?: () => void;
   onOpenTransfer?: () => void;
+  onOpenDeactivate?: () => void;
+  onOpenEndSessions?: () => void;
+  onOpenRestore?: () => void;
 }) {
   const [revealed, setRevealed] = useState(false);
   const off = Boolean(card.deactivatedAt);
+  const rowBusy = edit?.busy === true || dangerBusy;
   return (
     <>
       {registered ? <RegisteredBanner name={card.name} /> : null}
+      {notice ? <div className="banner ok" role="status" data-notice="sessions-ended">{notice}</div> : null}
       <div className="grid2">
         <div className="card">
           <div className="card-h">
@@ -374,7 +565,7 @@ export function PersonnelCardView({
                   type="button"
                   className="btn btn-sm"
                   data-requires={PERSONNEL_UPDATE}
-                  disabled={off || !canUpdate}
+                  disabled={off || !canUpdate || dangerBusy}
                   onClick={onEnterEdit}
                 >
                   编辑姓名、手机号、角色
@@ -386,36 +577,87 @@ export function PersonnelCardView({
         </div>
         <div>
           <PostsCard card={card} />
-          {/* 已停用卡片没有调岗入口（v0.4，P6-restoreNewOrg）；「恢复人员」一行由 #130 补入。 */}
-          {!off ? (
-            <div className="card">
-              <div className="card-h">需谨慎的操作</div>
-              <div className="danger-zone">
+          <div className="card">
+            <div className="card-h">需谨慎的操作</div>
+            <div className="danger-zone">
+              {off ? (
+                /* 已停用卡片没有调岗、结束、停用入口（v0.4，P6-restoreNewOrg）；恢复一行照原型。 */
                 <div className="row">
                   <div>
-                    调岗
-                    <div className="help">新机构的数据范围下一次操作即生效</div>
+                    恢复人员
+                    <div className="help">恢复后需用新的初始口令登录</div>
                   </div>
                   <button
                     type="button"
-                    className="btn btn-sm"
-                    data-requires={PERSONNEL_UPDATE}
-                    data-action="transfer"
-                    disabled={self || !canUpdate || edit?.busy === true}
-                    onClick={onOpenTransfer}
+                    className="btn btn-sm btn-primary"
+                    data-requires={PERSONNEL_RESTORE}
+                    data-action="restore"
+                    disabled={!canRestore || dangerBusy}
+                    onClick={onOpenRestore}
                   >
-                    调岗
+                    恢复
                   </button>
                 </div>
-                {/* 重设初始口令、结束全部会话（#132），停用人员（#130）随后补入。 */}
-              </div>
-              {self ? (
-                <div className="banner amber" data-reason="self" style={{ marginTop: 10, marginBottom: 0 }}>
-                  这是你本人。不能给自己调岗、重设口令、结束会话或停用，请找本单位其他系统管理人员办理。
-                </div>
-              ) : null}
+              ) : (
+                <>
+                  <div className="row">
+                    <div>
+                      调岗
+                      <div className="help">新机构的数据范围下一次操作即生效</div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-sm"
+                      data-requires={PERSONNEL_UPDATE}
+                      data-action="transfer"
+                      disabled={self || !canUpdate || rowBusy}
+                      onClick={onOpenTransfer}
+                    >
+                      调岗
+                    </button>
+                  </div>
+                  {/* 重设初始口令一行由 #132 补入。 */}
+                  <div className="row">
+                    <div>
+                      结束全部会话
+                      <div className="help">对方的全部会话在下一次操作时结束</div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-ghost-danger"
+                      data-requires={PERSONNEL_SESSIONS_END}
+                      data-action="endsessions"
+                      disabled={self || !canEndSessions || rowBusy}
+                      onClick={onOpenEndSessions}
+                    >
+                      结束
+                    </button>
+                  </div>
+                  <div className="row">
+                    <div>
+                      停用人员
+                      <div className="help">停用后不能登录，记录照常保留</div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-ghost-danger"
+                      data-requires={PERSONNEL_DEACTIVATE}
+                      data-action="deactivate"
+                      disabled={self || !canDeactivate || rowBusy}
+                      onClick={onOpenDeactivate}
+                    >
+                      停用
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
-          ) : null}
+            {self && !off ? (
+              <div className="banner amber" data-reason="self" style={{ marginTop: 10, marginBottom: 0 }}>
+                这是你本人。不能给自己调岗、重设口令、结束会话或停用，请找本单位其他系统管理人员办理。
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     </>
@@ -459,7 +701,7 @@ export function parentNameOf(dest: TransferDestination, units: readonly Transfer
   return parent.name;
 }
 
-/** 卡片工作区：编辑与调岗的状态放这里；成功后就地更新卡片，不重取（重取会多写一行 personnel.viewed）。 */
+/** 卡片工作区：编辑、调岗与危险操作的状态放这里；成功后就地更新卡片，不重取（重取会多写一行 personnel.viewed）。 */
 function CardWorkspace({ loaded, registered }: { loaded: PersonnelCard; registered: boolean }) {
   const dispatch = useAppDispatch();
   const operator = useAppSelector((root) => root.login.operator);
@@ -468,8 +710,13 @@ function CardWorkspace({ loaded, registered }: { loaded: PersonnelCard; register
   const card = override ?? loaded;
   const [edit, setEdit] = useState<{ input: EditInput; failure: EditFailure | null; busy: boolean } | null>(null);
   const [transfer, setTransfer] = useState<Omit<TransferState, 'onChange' | 'onCancel' | 'onSubmit'> | null>(null);
+  const [danger, setDanger] = useState<DangerWorkspace | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const self = operator !== null && operator.code === card.code;
   const canUpdate = opcodes.includes(PERSONNEL_UPDATE);
+  const canDeactivate = opcodes.includes(PERSONNEL_DEACTIVATE);
+  const canRestore = opcodes.includes(PERSONNEL_RESTORE);
+  const canEndSessions = opcodes.includes(PERSONNEL_SESSIONS_END);
 
   const submitEdit = async (input: EditInput) => {
     setEdit({ input, failure: null, busy: true });
@@ -516,6 +763,69 @@ function CardWorkspace({ loaded, registered }: { loaded: PersonnelCard; register
     setTransfer({ ...state, failure: { fields: result.fields, message: result.message }, busy: false });
   };
 
+  const openDeactivate = () => {
+    setNotice(null);
+    setDanger({ kind: 'deactivate', busy: false, message: null });
+  };
+
+  const openEndSessions = () => {
+    setNotice(null);
+    setDanger({ kind: 'endsessions', busy: false, message: null });
+  };
+
+  const openRestore = async () => {
+    setNotice(null);
+    setDanger({ kind: 'restore', busy: false, orgUnits: card.orgDeactivated ? null : [], loadFailed: false, initialPassword: '', orgUnitId: '', failure: null });
+    if (!card.orgDeactivated) return;
+    const orgUnits = await loadRestoreOrgUnits(dispatch);
+    setDanger((prev) => (prev === null || prev.kind !== 'restore' ? prev : { ...prev, orgUnits, loadFailed: orgUnits === null }));
+  };
+
+  const submitConfirm = async (kind: 'deactivate' | 'endsessions') => {
+    setDanger({ kind, busy: true, message: null });
+    const result = kind === 'deactivate'
+      ? await deactivatePersonnel(dispatch, card.id)
+      : await endPersonnelSessions(dispatch, card.id);
+    if (result.ok) {
+      setDanger(null);
+      if (kind === 'deactivate') {
+        // 就地翻成已停用态：标签、口令一栏与危险操作区（恢复一行）随之切换。
+        setOverride((prev) => ({ ...(prev ?? loaded), deactivatedAt: new Date().toISOString() }));
+      } else {
+        setNotice(SESSIONS_ENDED_NOTICE);
+      }
+      return;
+    }
+    if (result.message === null) {
+      setDanger(null);
+      return;
+    }
+    setDanger({ kind, busy: false, message: result.message });
+  };
+
+  const submitRestore = async (state: Extract<DangerWorkspace, { kind: 'restore' }>) => {
+    setDanger({ ...state, busy: true });
+    const result = await restorePersonnel(dispatch, card.id, { initialPassword: state.initialPassword, orgUnitId: state.orgUnitId });
+    if (result.ok) {
+      const dest = state.orgUnits?.find((unit) => unit.id === result.orgUnitId);
+      // 就地翻成在职态：口令回到「尚未改过初始口令」；带新机构时任职一并更新（恢复与调岗同事务）。
+      setOverride((prev) => ({
+        ...(prev ?? loaded),
+        deactivatedAt: null,
+        passwordChangedAt: null,
+        orgDeactivated: false,
+        ...(dest ? { orgUnitId: dest.id, orgName: dest.name, orgParentName: parentNameOf(dest, state.orgUnits ?? []) } : {}),
+      }));
+      setDanger(null);
+      return;
+    }
+    if (result.message === null && Object.keys(result.fields).length === 0 && result.passwordRules.length === 0) {
+      setDanger(null);
+      return;
+    }
+    setDanger({ ...state, busy: false, failure: { fields: result.fields, passwordRules: result.passwordRules, message: result.message } });
+  };
+
   return (
     <>
       <Crumb title={card.name} />
@@ -525,6 +835,11 @@ function CardWorkspace({ loaded, registered }: { loaded: PersonnelCard; register
         registered={registered}
         self={self}
         canUpdate={canUpdate}
+        canDeactivate={canDeactivate}
+        canRestore={canRestore}
+        canEndSessions={canEndSessions}
+        dangerBusy={danger?.busy === true}
+        notice={notice}
         edit={edit === null ? null : {
           ...edit,
           onInput: (next) => setEdit({ ...edit, input: next }),
@@ -533,6 +848,9 @@ function CardWorkspace({ loaded, registered }: { loaded: PersonnelCard; register
         }}
         onEnterEdit={() => setEdit({ input: editInputFromCard(card), failure: null, busy: false })}
         onOpenTransfer={() => void openTransfer()}
+        onOpenDeactivate={openDeactivate}
+        onOpenEndSessions={openEndSessions}
+        onOpenRestore={() => void openRestore()}
       />
       {transfer ? (
         <TransferDialog
@@ -545,9 +863,61 @@ function CardWorkspace({ loaded, registered }: { loaded: PersonnelCard; register
           }}
         />
       ) : null}
+      {danger?.kind === 'deactivate' ? (
+        <DeactivateDialog
+          card={card}
+          confirm={{
+            busy: danger.busy,
+            message: danger.message,
+            onCancel: () => setDanger(null),
+            onSubmit: () => void submitConfirm('deactivate'),
+          }}
+        />
+      ) : null}
+      {danger?.kind === 'endsessions' ? (
+        <EndSessionsDialog
+          card={card}
+          confirm={{
+            busy: danger.busy,
+            message: danger.message,
+            onCancel: () => setDanger(null),
+            onSubmit: () => void submitConfirm('endsessions'),
+          }}
+        />
+      ) : null}
+      {danger?.kind === 'restore' ? (
+        <RestoreDialog
+          card={card}
+          restore={{
+            orgUnits: danger.orgUnits,
+            loadFailed: danger.loadFailed,
+            initialPassword: danger.initialPassword,
+            orgUnitId: danger.orgUnitId,
+            failure: danger.failure,
+            busy: danger.busy,
+            onPassword: (initialPassword) => setDanger({ ...danger, initialPassword }),
+            onOrg: (orgUnitId) => setDanger({ ...danger, orgUnitId }),
+            onCancel: () => setDanger(null),
+            onSubmit: () => void submitRestore(danger),
+          }}
+        />
+      ) : null}
     </>
   );
 }
+
+/** 危险操作区三个弹窗的工作状态；restore 另带新任职机构清单与表单。 */
+type DangerWorkspace =
+  | { kind: 'deactivate' | 'endsessions'; busy: boolean; message: string | null }
+  | {
+    kind: 'restore';
+    busy: boolean;
+    orgUnits: OrgUnit[] | null;
+    loadFailed: boolean;
+    initialPassword: string;
+    orgUnitId: string;
+    failure: RestoreFailure | null;
+  };
 
 /** 人员卡片（P6）：每次打开服务端写 personnel.viewed；手机号默认遮挡，点开只是前端解除遮挡。 */
 export default function PersonnelCardPage() {

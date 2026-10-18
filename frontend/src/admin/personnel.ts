@@ -14,6 +14,10 @@ import type { OrgTreeData, OrgUnit } from './orgTree';
 export const PERSONNEL_READ = 'personnel.profile.read';
 export const PERSONNEL_REGISTER = 'personnel.profile.register';
 export const PERSONNEL_UPDATE = 'personnel.profile.update';
+/** 停用、恢复、结束全部会话（#130）：三个码都只给系统管理。 */
+export const PERSONNEL_DEACTIVATE = 'personnel.profile.deactivate';
+export const PERSONNEL_RESTORE = 'personnel.profile.restore';
+export const PERSONNEL_SESSIONS_END = 'personnel.sessions.end';
 export const AUDIT_READ = 'audit.admin.read';
 
 /** 七个角色（ADR 0009），按原型 P6 的顺序。 */
@@ -70,6 +74,8 @@ export interface PersonnelCard {
   orgName: string | null;
   /** 当前机构的上级名；本机构是根机构、上级是根机构或没有当前任职时为 null */
   orgParentName: string | null;
+  /** 当前任职机构已停用（#130）：恢复时必须同时选一个新的任职机构（原型 P6-restoreNewOrg）。 */
+  orgDeactivated: boolean;
   roles: string[];
   posts: PersonnelPost[];
   passwordChangedAt: string | null;
@@ -237,10 +243,13 @@ export function shanghaiDay(at: Date): string {
   return DATE.format(at);
 }
 
-/** 「当前机构」带上级名，原型 P6:30「天河区分局石牌自然资源所」；上级是根机构时只写本名（原型 P6:69「天河区分局」）。 */
-export function orgText(card: Pick<PersonnelCard, 'orgName' | 'orgParentName'>): string {
+/**
+ * 「当前机构」带上级名，原型 P6:30「天河区分局石牌自然资源所」；上级是根机构时只写本名（原型 P6:69「天河区分局」）。
+ * 机构已停用时补「（已停用）」（原型 P6-restoreNewOrg「五山自然资源所（已停用）」）。
+ */
+export function orgText(card: Pick<PersonnelCard, 'orgName' | 'orgParentName'> & { orgDeactivated?: boolean }): string {
   if (!card.orgName) return '—';
-  return `${card.orgParentName ?? ''}${card.orgName}`;
+  return `${card.orgParentName ?? ''}${card.orgName}${card.orgDeactivated ? '（已停用）' : ''}`;
 }
 
 export function passwordText(card: PersonnelCard): string {
@@ -490,6 +499,117 @@ export function destinationsInTreeOrder(units: readonly TransferDestination[]): 
   if (!root) return [...units];
   return orgUnitsInTreeOrder(units, root.id);
 }
+
+// ---------- 停用、恢复、结束全部会话（#130，P6 危险操作区） ----------
+
+/** 危险操作区三个动作的结果。message 是整页或弹窗里给人看的一句，不露操作码与原因码。 */
+export type DangerResult = { ok: true } | { ok: false; message: string | null };
+
+/** 409 与 403 的公共映射：服务端给的可读原因直接用，其余按定稿句兜底。 */
+function dangerFailure(response: Response, json: Record<string, unknown>): DangerResult {
+  if (response.status === 401) return { ok: false, message: null };
+  if (response.status === 409 && typeof json.message === 'string' && json.message !== '') {
+    return { ok: false, message: json.message };
+  }
+  if (response.status === 403) return { ok: false, message: DENIED_TARGET };
+  return { ok: false, message: FAILED };
+}
+
+async function dangerPost(dispatch: ApiDispatch, path: string, body: unknown = {}): Promise<DangerResult> {
+  let response: Response;
+  try {
+    response = await apiFetch(dispatch, path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch {
+    return { ok: false, message: FAILED };
+  }
+  const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  if (response.ok) return { ok: true };
+  return dangerFailure(response, json);
+}
+
+/** 停用：对方的全部会话在下一次操作时结束。重复停用同样成功。 */
+export function deactivatePersonnel(dispatch: ApiDispatch, id: string): Promise<DangerResult> {
+  return dangerPost(dispatch, `/api/admin/personnel/${encodeURIComponent(id)}/deactivate`);
+}
+
+/** 结束全部会话（含「记住我」），不改口令。 */
+export function endPersonnelSessions(dispatch: ApiDispatch, id: string): Promise<DangerResult> {
+  return dangerPost(dispatch, `/api/admin/personnel/${encodeURIComponent(id)}/end-sessions`);
+}
+
+export interface RestoreInput {
+  initialPassword: string;
+  /** 新任职机构。原任职机构已停用时必填。 */
+  orgUnitId: string;
+}
+
+export type RestoreResult =
+  | { ok: true; orgUnitId: string | null }
+  | {
+    ok: false;
+    fields: Partial<Record<'initialPassword' | 'orgUnitId', string>>;
+    /** 没满足的口令策略规则码 */
+    passwordRules: string[];
+    message: string | null;
+  };
+
+/**
+ * 恢复：重设初始口令、解除锁定、结束残余会话和「记住我」由服务端在同一事务里做完。
+ * 原任职机构已停用时必须同时带一个数据范围内在用的新任职机构，恢复与调岗一并完成。
+ * 口令历史比对留给口令历史票（#132）。
+ */
+export async function restorePersonnel(dispatch: ApiDispatch, id: string, input: RestoreInput): Promise<RestoreResult> {
+  let response: Response;
+  try {
+    response = await apiFetch(dispatch, `/api/admin/personnel/${encodeURIComponent(id)}/restore`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+  } catch {
+    return { ok: false, fields: {}, passwordRules: [], message: FAILED };
+  }
+  if (response.status === 401) return { ok: false, fields: {}, passwordRules: [], message: null };
+  const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  if (response.ok) {
+    const orgUnitId = typeof json.orgUnitId === 'string' ? json.orgUnitId : null;
+    return { ok: true, orgUnitId };
+  }
+  if (response.status === 400 && Array.isArray(json.rules)) {
+    const fields: Partial<Record<'initialPassword', string>> = {};
+    const passwordRules: string[] = [];
+    for (const rule of json.rules as string[]) {
+      if (rule === 'password-required') fields.initialPassword ??= FIELD_RULES['password-required'].text;
+      else if (rule in PASSWORD_RULE_LABEL) passwordRules.push(rule);
+    }
+    return { ok: false, fields, passwordRules, message: null };
+  }
+  const failure = dangerFailure(response, json);
+  if ('message' in failure) {
+    return { ok: false, fields: {}, passwordRules: [], message: failure.message };
+  }
+  return { ok: false, fields: {}, passwordRules: [], message: FAILED };
+}
+
+/**
+ * 恢复时选新任职机构：数据范围内在用的机构，按树的先序（原型 P6-restoreNewOrg）。
+ * 与登记同源（/api/org-units 只回数据范围子树）；读取失败回 null，弹窗里提示关闭后重试，
+ * 不像登记那样抛错——弹窗已打开，失败只影响弹窗内部。
+ */
+export async function loadRestoreOrgUnits(dispatch: ApiDispatch): Promise<OrgUnit[] | null> {
+  try {
+    return await loadRegisterOrgUnits(dispatch);
+  } catch {
+    return null;
+  }
+}
+
+/** 结束全部会话成功后的结果横幅：文案取弹窗里的后果句（原型 P6-endsessions）。 */
+export const SESSIONS_ENDED_NOTICE = '对方的全部会话和全部「记住我」，会在下一次操作时结束。';
 
 // ---------- 取数 ----------
 
