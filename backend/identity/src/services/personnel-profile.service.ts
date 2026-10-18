@@ -232,7 +232,7 @@ export class PersonnelProfileService {
         orgUnitId: row.currentOrgUnitId,
         orgName: row.currentOrgUnitId ? nameOf.get(row.currentOrgUnitId) ?? null : null,
         roles: sortRoleNames(row.roleNames),
-        certStatus: certStatusOf(row.enforcementCertNo, row.enforcementCertExpiresOn, now),
+        certStatus: certStatusOf(row.enforcementCertNo, row.enforcementCertExpiresOn, row.enforcementCertStatus, now),
         deactivatedAt: row.deactivatedAt,
       })),
     };
@@ -300,7 +300,12 @@ export class PersonnelProfileService {
         cert: {
           no: target.enforcementCertNo,
           expiresOn: target.enforcementCertExpiresOn,
-          status: certStatusOf(target.enforcementCertNo, target.enforcementCertExpiresOn, now),
+          status: certStatusOf(
+            target.enforcementCertNo,
+            target.enforcementCertExpiresOn,
+            target.enforcementCertStatus,
+            now,
+          ),
         },
       },
     };
@@ -353,7 +358,8 @@ export class PersonnelProfileService {
 
   /**
    * 登记（#105 故事 28–31）。六项必填，初始口令过口令策略，口令修改时间留空（首登强制改密）。
-   * 执法证可留空；填了就写人员行的证号和有效期（现有两列），留痕不写证号（#105:232）。证件状态列与 cert.updated 归 #133。
+   * 执法证可留空；填了就写人员行的证号和有效期，证件状态取库默认的「有效」（#133），留痕不写证号（#105:232）。
+   * 执法证的变更与证件状态维护在 PersonnelCertService（#133）。
    * 写人员、v1 名称版本、首条任职、人员—角色、岗位标记，以及 personnel.registered 和每个标记一行 personnel.post-granted。
    * 工号或手机号重复返回 already-exists，由调用方回滚后写失败留痕。passwordHash 由调用方在事务外算好。
    */

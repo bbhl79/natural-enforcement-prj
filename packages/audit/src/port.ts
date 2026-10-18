@@ -84,6 +84,8 @@ export type AuditAppend =
     reason: PersonnelPostGrantFailedReason;
     nextValue: string;
   })
+  /** 执法证登记（#133）。前值只写旧有效期和旧状态，不写证号（#105:232、ADR 0011）。 */
+  | (AuditParties & { action: 'cert.updated' })
   // 人员编辑与调岗（#129，ADR 0014）。改名前值写旧名；改手机号前值留空（#105:219）。
   // 对方已停用时编辑与调岗一律被拒（#130 定口径），失败行的动作词与成功时相同。
   | (AuditParties & { action: 'personnel.renamed' })

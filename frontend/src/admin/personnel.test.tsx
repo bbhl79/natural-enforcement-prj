@@ -7,6 +7,7 @@ import reducer, { loadSession } from '../login/loginSlice';
 import { visibleMenu } from '../shell/menu';
 import { renderRoute, renderRouter, settled } from '../test-utils';
 import {
+  CertForm,
   PersonnelCardView,
   TransferDialog,
   DeactivateDialog,
@@ -20,7 +21,13 @@ import {
 import { EMPTY_INPUT, PersonnelCreateForm } from './PersonnelCreatePage';
 import { PersonnelListView } from './PersonnelListPage';
 import {
+  certAttentionOf,
+  certEditFrom,
+  CERT_FILTER_LABEL,
+  CERT_FILTERS,
   certNote,
+  certRecordLabel,
+  CERT_TAG,
   deactivatePersonnel,
   DEFAULT_FILTER,
   DENIED_TARGET,
@@ -46,6 +53,7 @@ import {
   PERSONNEL_SESSIONS_END,
   PERSONNEL_UPDATE,
   problemCount,
+  qualifiedPersonnelCount,
   registerPersonnel,
   restorePersonnel,
   searchFromFilter,
@@ -53,7 +61,10 @@ import {
   SESSIONS_ENDED_NOTICE,
   shouldRevalidatePersonnelList,
   transferPersonnel,
+  updateCert,
   updatePersonnel,
+  type CertUpdateInput,
+  type CertUpdateResult,
   type EditInput,
   type PersonnelCard,
   type PersonnelFilter,
@@ -293,6 +304,7 @@ describe('人员卡片（P6 view）', () => {
     props: {
       self?: boolean;
       canUpdate?: boolean;
+      canUpdateCert?: boolean;
       canDeactivate?: boolean;
       canRestore?: boolean;
       canEndSessions?: boolean;
@@ -336,7 +348,37 @@ describe('人员卡片（P6 view）', () => {
     expect(card()).not.toContain('data-notice="registered"');
   });
 
-  it('卡片按钮只挂已入名册的码：编辑与调岗用 update，结束与停用挂两个新码，#132/#133 的码不出现', () => {
+  it('没有执法证登记码时不出登记按钮（#133）', () => {
+    expect(card()).not.toContain('data-requires="personnel.cert.update"');
+    expect(card({}, false, { canUpdateCert: true })).toContain('data-requires="personnel.cert.update"');
+  });
+
+  it('执法证一段（#133）：证件状态只写「有效」「失效」，未登记写破折号', () => {
+    expect(card()).toContain('<div class="k">证件状态</div><div>有效</div>');
+    expect(card({ cert: { no: '44010020210315', expiresOn: '2028-05-31', status: 'invalid' } }))
+      .toContain('<div class="k">证件状态</div><div>失效</div>');
+    expect(card({ cert: { no: '44010020160412', expiresOn: '2026-09-30', status: 'expired' } }))
+      .toContain('<div class="k">证件状态</div><div>有效</div>');
+    expect(card({ cert: { no: null, expiresOn: null, status: 'none' } }))
+      .toContain('<div class="k">证件状态</div><div>—</div>');
+  });
+
+  it('执法证一段（#133）：按钮按情况写「登记执法证」或「变更执法证」（原型 P6:23）', () => {
+    expect(card({}, false, { canUpdateCert: true })).toContain('>变更执法证</button>');
+    expect(card({ cert: { no: '44010020210315', expiresOn: '2028-05-31', status: 'invalid' } }, false, { canUpdateCert: true }))
+      .toContain('>变更执法证</button>');
+    expect(card({ cert: { no: null, expiresOn: null, status: 'none' } }, false, { canUpdateCert: true })).toContain('>登记执法证</button>');
+  });
+
+  it('执法证失效（#133）：红色「失效」标记与说明句，不再按有效期推导', () => {
+    const html = card({ cert: { no: '44010020210315', expiresOn: '2099-12-31', status: 'invalid' } });
+    expect(html).toContain('<span class="tag red">失效</span>');
+    expect(html).toContain('证件状态为失效。');
+    expect(html).toContain('不能启动核查、不能立案、不能担任主办人或协办人。核对证件后请改回有效，或登记换发的新证。');
+    expect(html).toContain('class="banner danger"');
+  });
+
+  it('卡片按钮只挂已入名册的码：编辑与调岗用 update，结束与停用挂两个新码，#132 的码不出现，没给执法证码时登记按钮不出现', () => {
     const html = card({}, false, { canUpdate: true, canDeactivate: true, canEndSessions: true });
     expect(html).toContain('需谨慎的操作');
     expect(html.match(/data-requires="[^"]+"/g)).toEqual([
@@ -379,6 +421,166 @@ describe('人员卡片（P6 view）', () => {
     expect(certNote({ no: 'x', expiresOn: '2026-11-08', status: 'expiring' }, now).text).toContain('还有 22 天到期');
     expect(certNote({ no: 'x', expiresOn: '2026-09-30', status: 'expired' }, now).text).toContain('已于 2026-09-30 过期');
     expect(certNote({ no: null, expiresOn: null, status: 'none' }, now).text).toContain('尚未登记执法证');
+    expect(certNote({ no: 'x', expiresOn: '2099-12-31', status: 'invalid' }, now).tone).toBe('danger');
+  });
+});
+
+describe('执法证情况与首页统计（#133）', () => {
+  const CERT_LIST: PersonnelList = {
+    rootId: 'th',
+    orgUnits: [{ id: 'th', name: '天河区分局', parentId: null, deactivatedAt: null }],
+    personnel: [
+      row({ id: 'c1', code: 'C1', name: '一', certStatus: 'valid' }),
+      row({ id: 'c2', code: 'C2', name: '二', certStatus: 'expiring' }),
+      row({ id: 'c3', code: 'C3', name: '三', certStatus: 'expired' }),
+      row({ id: 'c4', code: 'C4', name: '四', certStatus: 'invalid' }),
+      row({ id: 'c5', code: 'C5', name: '五', certStatus: 'none' }),
+      row({ id: 'c6', code: 'C6', name: '六', certStatus: 'none', deactivatedAt: '2026-09-01T00:00:00Z' }),
+    ],
+  };
+
+  it('情况多一项「失效」：标记、筛选项与「需处理」都含它', () => {
+    expect(CERT_TAG.invalid).toEqual({ label: '失效', tone: 'red' });
+    expect(CERT_FILTERS).toEqual(['all', 'attention', 'valid', 'expiring', 'expired', 'invalid', 'none']);
+    expect(CERT_FILTER_LABEL.invalid).toBe('失效');
+    expect(filterPersonnel(CERT_LIST, { ...DEFAULT_FILTER, cert: 'invalid' }).map((item) => item.code)).toEqual(['C4']);
+    // 「需处理」= 已过期、失效、未登记、临期；默认含已停用人员
+    expect(filterPersonnel(CERT_LIST, { ...DEFAULT_FILTER, cert: 'attention' }).map((item) => item.code))
+      .toEqual(['C2', 'C3', 'C4', 'C5', 'C6']);
+    expect(filterPersonnel(CERT_LIST, { ...DEFAULT_FILTER, cert: 'attention', includeDeactivated: false }).map((item) => item.code))
+      .toEqual(['C2', 'C3', 'C4', 'C5']);
+    expect(filterFromSearch(new URLSearchParams('cert=invalid')).cert).toBe('invalid');
+  });
+
+  it('「需要留意的执法证」四行人数：已停用的人不计（原型 P3:29）', () => {
+    expect(certAttentionOf(CERT_LIST.personnel)).toEqual({ expiring: 1, expired: 1, invalid: 1, none: 1 });
+  });
+
+  it('有执法资格的人数只算有效与临期：失效、已过期、未登记都不算（#133 fail-closed）', () => {
+    expect(qualifiedPersonnelCount(CERT_LIST.personnel)).toBe(2);
+    expect(qualifiedPersonnelCount(CERT_LIST.personnel.filter((item) => item.certStatus !== 'invalid'))).toBe(2);
+    expect(qualifiedPersonnelCount([])).toBe(0);
+  });
+
+  it('卡片「证件状态」一行只写有效、失效，未登记写破折号', () => {
+    expect(certRecordLabel('invalid')).toBe('失效');
+    expect(certRecordLabel('expired')).toBe('有效');
+    expect(certRecordLabel('expiring')).toBe('有效');
+    expect(certRecordLabel('valid')).toBe('有效');
+    expect(certRecordLabel('none')).toBe('—');
+  });
+
+  it('起表值取卡片当前值；未登记时两项为空、状态默认有效', () => {
+    expect(certEditFrom(CARD)).toEqual({ certNo: '44010020210315', certExpiresOn: '2028-05-31', certStatus: 'valid' });
+    expect(certEditFrom({ cert: { no: null, expiresOn: null, status: 'none' } }))
+      .toEqual({ certNo: '', certExpiresOn: '', certStatus: 'valid' });
+    expect(certEditFrom({ cert: { no: ' 44010020210315 ', expiresOn: '2028-05-31', status: 'invalid' } }))
+      .toEqual({ certNo: '44010020210315', certExpiresOn: '2028-05-31', certStatus: 'invalid' });
+    expect(certEditFrom({ cert: { no: 'x', expiresOn: '2026-09-30', status: 'expired' } }).certStatus).toBe('valid');
+  });
+});
+
+describe('执法证登记表单（P6 certEdit，#133）', () => {
+  const FILLED: CertUpdateInput = { certNo: '44010020260917', certExpiresOn: '2031-09-16', certStatus: 'valid' };
+  const form = (
+    failure: Parameters<typeof CertForm>[0]['failure'] = null,
+    input: CertUpdateInput = FILLED,
+  ) => renderToStaticMarkup(
+    <MemoryRouter>
+      <CertForm
+        input={input}
+        failure={failure}
+        busy={false}
+        onInput={() => undefined}
+        onSubmit={() => undefined}
+        onCancel={() => undefined}
+      />
+    </MemoryRouter>,
+  );
+
+  it('三项都必填，文案取自原型 P6:21', () => {
+    const html = form();
+    expect(html).toContain('<div class="section-title">执法证</div>');
+    expect(html).toContain('<label for="c-no">执法证号<span class="req">*</span></label>');
+    expect(html).toContain('value="44010020260917"');
+    expect(html).toContain('按证件原样填写。一人一证。');
+    expect(html).toContain('<label for="c-expires">有效期至<span class="req">*</span></label>');
+    expect(html).toContain('value="2031-09-16"');
+    expect(html).toContain('<label for="c-status">证件状态<span class="req">*</span></label>');
+    expect(html).toMatch(/<option value="valid"[^>]*>有效<\/option><option value="invalid"[^>]*>失效<\/option>/);
+    expect(html).toContain('换发新证时直接改为新证号和新有效期。只能逐条人工登记，请对照实物证件核对。');
+    expect(html).toContain('>取消</button>');
+    expect(html).toContain('>保存执法证</button>');
+  });
+
+  it('选了「失效」时下拉停在失效', () => {
+    expect(form(null, { ...FILLED, certStatus: 'invalid' })).toMatch(/<option value="invalid" selected[^>]*>失效<\/option>/);
+    expect(form()).toMatch(/<option value="valid" selected[^>]*>有效<\/option>/);
+  });
+
+  it('校验不过：按字段标红，并写还有几处需要修改', () => {
+    const html = form({
+      ok: false,
+      fields: { certNo: '请填写执法证号', certExpiresOn: '请按「年-月-日」填写有效的日期，如 2027-06-30' },
+      message: null,
+    });
+    expect(html).toContain('还有 2 处需要修改，改好后再保存。');
+    expect(html).toContain('<div class="err" data-error="certNo">请填写执法证号</div>');
+    expect(html).toContain('<div class="err" data-error="certExpiresOn">请按「年-月-日」填写有效的日期，如 2027-06-30</div>');
+    expect(html).not.toContain('按证件原样填写。一人一证。');
+  });
+
+  it('越权与服务失败写整页提示，不写字段提示', () => {
+    const denied = form({ ok: false, fields: {}, message: '你没有权限执行这个操作，或这个人员不在你的范围内。' });
+    expect(denied).toContain('你没有权限执行这个操作，或这个人员不在你的范围内。');
+    expect(denied).not.toContain('还有 0 处需要修改');
+  });
+});
+
+describe('执法证登记接口（#133）', () => {
+  const INPUT: CertUpdateInput = { certNo: 'GD-0001', certExpiresOn: '2031-09-16', certStatus: 'valid' };
+  const url = '/api/admin/personnel/3/cert';
+
+  it('成功：POST 到人员卡片的执法证接口，交出三项，返回体不含证号', async () => {
+    const store = fresh();
+    const calls = serve(person([...ADMIN, 'personnel.cert.update']), { [url]: [200, { result: 'updated' }] });
+    await store.dispatch(loadSession());
+    expect(await updateCert(store.dispatch, '3', INPUT)).toEqual({ ok: true });
+    const post = calls.find((call) => call.url === url);
+    expect(post?.init?.method).toBe('POST');
+    expect(JSON.parse(String(post?.init?.body))).toEqual(INPUT);
+  });
+
+  it('校验不过：规则码换成字段提示，不露规则码', async () => {
+    const store = fresh();
+    serve(person(ADMIN), {
+      [url]: [400, { result: 'non-compliant', rules: ['cert-no-required', 'cert-expires-on-invalid', 'cert-status-unknown'] }],
+    });
+    await store.dispatch(loadSession());
+    expect(await updateCert(store.dispatch, '3', INPUT)).toEqual({
+      ok: false,
+      fields: {
+        certNo: '请填写执法证号',
+        certExpiresOn: '请按「年-月-日」填写有效的日期，如 2027-06-30',
+        certStatus: '请选择证件状态：有效或失效',
+      },
+      message: null,
+    });
+  });
+
+  it('越权、人员不存在、服务失败各写一句人能读的话', async () => {
+    const store = fresh();
+    const messageOf = (result: CertUpdateResult) => (result.ok ? null : result.message);
+    serve(person(ADMIN), { [url]: [403, { reason: 'scope-denied' }] });
+    await store.dispatch(loadSession());
+    expect(await updateCert(store.dispatch, '3', INPUT)).toEqual({
+      ok: false, fields: {}, message: '你没有权限执行这个操作，或这个人员不在你的范围内。',
+    });
+    serve(person(ADMIN), { [url]: [404, { result: 'not-found' }] });
+    expect(messageOf(await updateCert(store.dispatch, '3', INPUT))).toContain('没有找到这个人员');
+    serve(person(ADMIN), { [url]: [500, {}] });
+    expect(messageOf(await updateCert(store.dispatch, '3', INPUT)))
+      .toBe('网络或服务暂时不可用，请稍后重试。问题持续时请联系本单位的系统管理人员。');
   });
 });
 
@@ -778,17 +980,39 @@ describe('恢复弹窗（P6 restore / restoreNewOrg，#130）', () => {
 describe('用户可见文本不露操作码与原始结果码（SCREENS.md:8）', () => {
   const visible = (html: string) => html.replace(/<[^>]*>/g, ' ');
   const RAW = /personnel\.|audit\.|org\.|permission-denied|scope-denied|invalid-state|already-exists|non-compliant|not-found|-required|too-short|contains-code|legal-review-lead|legal-affairs-leader/;
-  it('名单、空状态、卡片、新建、填写有误：可见文本里没有操作码和规则码', () => {
+  it('名单、空状态、卡片、执法证表单、新建、填写有误：可见文本里没有操作码和规则码', () => {
     const failure = {
       ok: false as const,
       fields: { name: '请填写姓名', code: '这个工号已被其他人员使用，请核对', orgUnitId: '所选机构已停用，请选择在用的机构' },
       passwordRules: ['too-short', 'contains-code'],
       message: '你没有权限执行这个操作，或所选机构不在你的范围内。',
     };
+    const certFailure = {
+      ok: false as const,
+      fields: { certNo: '请填写执法证号', certStatus: '请选择证件状态：有效或失效' },
+      message: '你没有权限执行这个操作，或这个人员不在你的范围内。',
+    };
     const pages = [
       listHtml(),
       listHtml({ keyword: '张三丰' }),
       renderToStaticMarkup(<MemoryRouter><PersonnelCardView card={CARD} now={new Date('2026-10-17T04:00:00Z')} registered /></MemoryRouter>),
+      renderToStaticMarkup(
+        <MemoryRouter>
+          <PersonnelCardView card={CARD} now={new Date('2026-10-17T04:00:00Z')} registered canUpdateCert />
+        </MemoryRouter>,
+      ),
+      renderToStaticMarkup(
+        <MemoryRouter>
+          <CertForm
+            input={{ certNo: '', certExpiresOn: '', certStatus: 'valid' }}
+            failure={certFailure}
+            busy={false}
+            onInput={() => undefined}
+            onSubmit={() => undefined}
+            onCancel={() => undefined}
+          />
+        </MemoryRouter>,
+      ),
       renderToStaticMarkup(
         <MemoryRouter>
           <PersonnelCreateForm orgUnits={ORGS} input={EMPTY_INPUT} failure={failure} busy={false} onInput={() => undefined} onSubmit={() => undefined} />

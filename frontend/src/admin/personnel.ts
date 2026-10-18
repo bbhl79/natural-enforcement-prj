@@ -1,7 +1,8 @@
-// 管理台人员（P5 列表、P6 卡片与新建，#128；编辑与调岗，#129）的数据与纯函数。
+// 管理台人员（P5 列表、P6 卡片与新建，#128；编辑与调岗，#129；执法证登记与「需要留意的执法证」统计，#133）的数据与纯函数。
 // 列表放在 GET /api/admin/personnel，不含手机号和执法证号；卡片 GET /api/admin/personnel/:id 每次打开都留痕；
 // 登记 POST /api/admin/personnel；编辑 POST /api/admin/personnel/:id/edit；调岗 POST /api/admin/personnel/:id/transfer；
-// 调岗目的地 GET /api/admin/personnel/:id/transfer-destinations（全树未停用机构，不限数据范围）。
+// 调岗目的地 GET /api/admin/personnel/:id/transfer-destinations（全树未停用机构，不限数据范围）；
+// 执法证登记 POST /api/admin/personnel/:id/cert。
 // 是否有权由服务端决定，前端按会话清单只决定显示什么。
 
 import { data } from 'react-router';
@@ -13,6 +14,8 @@ import type { OrgTreeData, OrgUnit } from './orgTree';
 
 export const PERSONNEL_READ = 'personnel.profile.read';
 export const PERSONNEL_REGISTER = 'personnel.profile.register';
+/** 执法证登记（#133）：只给系统管理。 */
+export const PERSONNEL_CERT_UPDATE = 'personnel.cert.update';
 export const PERSONNEL_UPDATE = 'personnel.profile.update';
 /** 停用、恢复、结束全部会话（#130）：三个码都只给系统管理。 */
 export const PERSONNEL_DEACTIVATE = 'personnel.profile.deactivate';
@@ -31,14 +34,24 @@ export const POST_LABEL: Record<PersonnelPost, string> = {
   'legal-affairs-leader': '分管法制的局领导',
 };
 
-/** 执法证情况。「失效」随证件状态列由 #133 接入。 */
-export type CertStatus = 'none' | 'valid' | 'expiring' | 'expired';
+/**
+ * 执法证情况（#133）。none 未登记；valid 有效；expiring 30 天内到期；expired 已过期；invalid 证件状态为「失效」。
+ * 库里只存「有效」「失效」两项，临期与已过期按有效期推导（服务端算好后交下来）。
+ */
+export type CertStatus = 'none' | 'valid' | 'expiring' | 'expired' | 'invalid';
 export const CERT_TAG: Record<CertStatus, { label: string; tone: string }> = {
   valid: { label: '有效', tone: '' },
   none: { label: '未登记', tone: 'gray' },
   expiring: { label: '30 天内到期', tone: 'amber' },
   expired: { label: '已过期', tone: 'red' },
+  invalid: { label: '失效', tone: 'red' },
 };
+
+/** 卡片「证件状态」一行（#133）：只写「有效」「失效」，未登记时写破折号（原型 P6:15）。 */
+export function certRecordLabel(status: CertStatus): string {
+  if (status === 'none') return '—';
+  return status === 'invalid' ? '失效' : '有效';
+}
 
 export interface PersonnelRow {
   id: string;
@@ -92,9 +105,10 @@ export const CERT_FILTER_LABEL: Record<CertFilter, string> = {
   valid: '有效',
   expiring: '30 天内到期',
   expired: '已过期',
+  invalid: '失效',
   none: '未登记',
 };
-export const CERT_FILTERS: readonly CertFilter[] = ['all', 'attention', 'valid', 'expiring', 'expired', 'none'];
+export const CERT_FILTERS: readonly CertFilter[] = ['all', 'attention', 'valid', 'expiring', 'expired', 'invalid', 'none'];
 
 export interface PersonnelFilter {
   keyword: string;
@@ -182,7 +196,33 @@ export function subtreeIds(units: readonly ScopeOrgUnit[], rootId: string): Set<
   return ids;
 }
 
-const NEEDS_ATTENTION: readonly CertStatus[] = ['expired', 'none', 'expiring'];
+/** 「需处理」= 已过期、失效、未登记、临期（顺序同筛选项文案，原型 P5:27）。 */
+const NEEDS_ATTENTION: readonly CertStatus[] = ['expired', 'invalid', 'none', 'expiring'];
+
+/** 首页「需要留意的执法证」统计（#133，原型 P3:29）：临期、已过期、失效、未登记四行。 */
+export const CERT_ATTENTION_ROWS = ['expiring', 'expired', 'invalid', 'none'] as const;
+export type CertAttentionKey = (typeof CERT_ATTENTION_ROWS)[number];
+export const CERT_ATTENTION_LABEL: Record<CertAttentionKey, string> = {
+  expiring: '30 天内到期',
+  expired: '已过期',
+  invalid: '失效',
+  none: '未登记',
+};
+
+/** 按人员行统计四种需要留意的情况。已停用的人不计。 */
+export function certAttentionOf(rows: readonly PersonnelRow[]): Record<CertAttentionKey, number> {
+  const counts: Record<CertAttentionKey, number> = { expiring: 0, expired: 0, invalid: 0, none: 0 };
+  for (const row of rows) {
+    if (row.deactivatedAt) continue;
+    if (row.certStatus in counts) counts[row.certStatus as CertAttentionKey] += 1;
+  }
+  return counts;
+}
+
+/** 有执法资格的人数（#133）：情况为有效或临期，即证件状态是「有效」且还在有效期内。 */
+export function qualifiedPersonnelCount(rows: readonly PersonnelRow[]): number {
+  return rows.filter((row) => !row.deactivatedAt && (row.certStatus === 'valid' || row.certStatus === 'expiring')).length;
+}
 
 export function filterPersonnel(list: PersonnelList, filter: PersonnelFilter): PersonnelRow[] {
   const keyword = filter.keyword.trim().toLowerCase();
@@ -258,10 +298,16 @@ export function passwordText(card: PersonnelCard): string {
   return `已改过初始口令（${shanghaiDay(new Date(card.passwordChangedAt))}）`;
 }
 
-/** 执法证一段的说明句，文案取自原型 P6。 */
+/** 执法证一段的说明句，文案取自原型 P6。「失效」不在 v0.4（#105「后续」），文案按同一段口径写。 */
 export function certNote(cert: PersonnelCard['cert'], now: Date): { tone: string; text: string } {
   if (cert.status === 'none' || !cert.expiresOn) {
     return { tone: 'amber', text: '尚未登记执法证。可以登录和查看材料，但不能启动核查、不能立案、不能担任主办人或协办人。' };
+  }
+  if (cert.status === 'invalid') {
+    return {
+      tone: 'danger',
+      text: '证件状态为失效。可以登录和查看材料，但不能启动核查、不能立案、不能担任主办人或协办人。核对证件后请改回有效，或登记换发的新证。',
+    };
   }
   if (cert.status === 'expired') {
     return {
@@ -382,6 +428,91 @@ export async function registerPersonnel(dispatch: ApiDispatch, input: RegisterIn
     return { ok: false, fields: {}, passwordRules: [], message: '你没有权限执行这个操作，或所选机构不在你的范围内。' };
   }
   return { ok: false, fields: {}, passwordRules: [], message: FAILED };
+}
+
+// ---------- 执法证登记（#133） ----------
+
+/** 证件状态只有两项（Lei Hu 7-3）。临期与已过期不入库，按有效期推导。 */
+export const CERT_RECORD_STATUSES = ['valid', 'invalid'] as const;
+export type CertRecordStatus = (typeof CERT_RECORD_STATUSES)[number];
+export const CERT_RECORD_STATUS_LABEL: Record<CertRecordStatus, string> = { valid: '有效', invalid: '失效' };
+
+export interface CertUpdateInput {
+  certNo: string;
+  /** 有效期至（YYYY-MM-DD） */
+  certExpiresOn: string;
+  certStatus: CertRecordStatus;
+}
+
+export type CertUpdateField = 'certNo' | 'certExpiresOn' | 'certStatus';
+
+/**
+ * 打开执法证表单时的初值：照卡片上的当前值起表（原型 P6:21 的表单带当前值）。
+ * 未登记时证号和有效期为空，证件状态默认「有效」。
+ */
+export function certEditFrom(card: Pick<PersonnelCard, 'cert'>): CertUpdateInput {
+  return {
+    certNo: card.cert.no?.trim() ?? '',
+    certExpiresOn: card.cert.expiresOn ?? '',
+    certStatus: card.cert.status === 'invalid' ? 'invalid' : 'valid',
+  };
+}
+
+/** 执法证表单的规则码 → 字段与提示。三项都必填，文案与新建人员页的「可留空」不同。 */
+export const CERT_FIELD_RULES: Record<string, { field: CertUpdateField; text: string }> = {
+  'cert-no-required': { field: 'certNo', text: '请填写执法证号' },
+  'cert-no-too-long': { field: 'certNo', text: '执法证号不能超过 64 个字符' },
+  'cert-expires-on-required': { field: 'certExpiresOn', text: '请填写有效期至' },
+  'cert-expires-on-invalid': { field: 'certExpiresOn', text: '请按「年-月-日」填写有效的日期，如 2027-06-30' },
+  'cert-status-unknown': { field: 'certStatus', text: '请选择证件状态：有效或失效' },
+};
+
+export type CertUpdateResult =
+  | { ok: true }
+  | { ok: false; fields: Partial<Record<CertUpdateField, string>>; message: string | null };
+
+/** 「还有 N 处需要修改」按字段计（原型 P6:45 的口径）。 */
+export function certProblemCount(result: Extract<CertUpdateResult, { ok: false }>): number {
+  return new Set(Object.keys(result.fields)).size;
+}
+
+/**
+ * 登记执法证（POST /api/admin/personnel/:id/cert）。
+ * 返回体不回显证号；保存成功后由调用方重取卡片。401 交给会话已结束页处理，这里只回空提示。
+ */
+export async function updateCert(
+  dispatch: ApiDispatch,
+  personnelId: string,
+  input: CertUpdateInput,
+): Promise<CertUpdateResult> {
+  let response: Response;
+  try {
+    response = await apiFetch(dispatch, `/api/admin/personnel/${encodeURIComponent(personnelId)}/cert`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+  } catch {
+    return { ok: false, fields: {}, message: FAILED };
+  }
+  if (response.status === 401) return { ok: false, fields: {}, message: null };
+  const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  if (response.ok) return { ok: true };
+  if (response.status === 400 && Array.isArray(json.rules)) {
+    const fields: Partial<Record<CertUpdateField, string>> = {};
+    for (const rule of json.rules as string[]) {
+      const known = CERT_FIELD_RULES[rule];
+      if (known) fields[known.field] ??= known.text;
+    }
+    return { ok: false, fields, message: null };
+  }
+  if (response.status === 404) {
+    return { ok: false, fields: {}, message: '没有找到这个人员。请回到人员名单重新进入。' };
+  }
+  if (response.status === 403) {
+    return { ok: false, fields: {}, message: DENIED_TARGET };
+  }
+  return { ok: false, fields: {}, message: FAILED };
 }
 
 // ---------- 编辑（#129，P6 edit / selfEdit） ----------

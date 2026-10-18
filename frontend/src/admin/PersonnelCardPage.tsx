@@ -5,8 +5,13 @@ import { useAppDispatch, useAppSelector } from '../hooks';
 import { ErrorCard, errorStatus } from '../shell/StatusPages';
 import type { OrgUnit } from './orgTree';
 import {
+  CERT_RECORD_STATUS_LABEL,
+  CERT_RECORD_STATUSES,
   CERT_TAG,
+  certEditFrom,
   certNote,
+  certProblemCount,
+  certRecordLabel,
   deactivatePersonnel,
   editInputFromCard,
   endPersonnelSessions,
@@ -16,6 +21,7 @@ import {
   orgText,
   passwordText,
   PASSWORD_RULE_LABEL,
+  PERSONNEL_CERT_UPDATE,
   PERSONNEL_DEACTIVATE,
   PERSONNEL_READ,
   PERSONNEL_RESTORE,
@@ -27,7 +33,11 @@ import {
   ROLES,
   SESSIONS_ENDED_NOTICE,
   transferPersonnel,
+  updateCert,
   updatePersonnel,
+  type CertRecordStatus,
+  type CertUpdateInput,
+  type CertUpdateResult,
   type EditInput,
   type PersonnelCard,
   type PersonnelPost,
@@ -36,6 +46,8 @@ import {
 import { PersonnelDenied, SkeletonCard } from './PersonnelStatus';
 
 const SUPERVISE = '监督可以在「管理台留痕」里查阅人员维护的留痕。';
+const CERT_HELP = '按证件原样填写。一人一证。';
+const CERT_BANNER = '换发新证时直接改为新证号和新有效期。只能逐条人工登记，请对照实物证件核对。';
 
 function Crumb({ title }: { title: string }) {
   return <div className="crumb">管理台 / <Link to="/admin/personnel">人员</Link> / <b>{title}</b></div>;
@@ -50,10 +62,133 @@ export function RegisteredBanner({ name }: { name: string }) {
   );
 }
 
-function CertSection({ cert, now }: { cert: PersonnelCard['cert']; now: Date }) {
+type CertFailure = Extract<CertUpdateResult, { ok: false }>;
+
+/** P6 certEdit：执法证登记表单（证号、有效期至、证件状态三项都必填）。 */
+export function CertForm({
+  input,
+  failure,
+  busy,
+  onInput,
+  onSubmit,
+  onCancel,
+}: {
+  input: CertUpdateInput;
+  failure: CertFailure | null;
+  busy: boolean;
+  onInput: (next: CertUpdateInput) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+}) {
+  const fields = failure?.fields ?? {};
+  const count = failure ? certProblemCount(failure) : 0;
+  const hint = (field: keyof CertUpdateInput, help: string | null) => {
+    const error = fields[field];
+    if (error) return <div className="err" data-error={field}>{error}</div>;
+    return help ? <div className="help">{help}</div> : null;
+  };
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    onSubmit();
+  };
+  return (
+    <form onSubmit={submit} noValidate data-section="cert-form">
+      <div className="section-title">执法证</div>
+      {failure?.message ? <div className="banner danger">{failure.message}</div> : null}
+      {count > 0 ? <div className="banner danger">{`还有 ${count} 处需要修改，改好后再保存。`}</div> : null}
+      <div className="form-row">
+        <label htmlFor="c-no">执法证号<span className="req">*</span></label>
+        <div>
+          <input id="c-no" className="input" value={input.certNo} onChange={(e) => onInput({ ...input, certNo: e.target.value })} />
+          {hint('certNo', CERT_HELP)}
+        </div>
+      </div>
+      <div className="form-row">
+        <label htmlFor="c-expires">有效期至<span className="req">*</span></label>
+        <div>
+          <input
+            id="c-expires"
+            className="input"
+            placeholder="年-月-日"
+            style={{ width: 200 }}
+            value={input.certExpiresOn}
+            onChange={(e) => onInput({ ...input, certExpiresOn: e.target.value })}
+          />
+          {hint('certExpiresOn', null)}
+        </div>
+      </div>
+      <div className="form-row">
+        <label htmlFor="c-status">证件状态<span className="req">*</span></label>
+        <div>
+          <select
+            id="c-status"
+            className="select"
+            style={{ width: 200 }}
+            value={input.certStatus}
+            onChange={(e) => onInput({ ...input, certStatus: e.target.value as CertRecordStatus })}
+          >
+            {CERT_RECORD_STATUSES.map((status) => (
+              <option key={status} value={status}>{CERT_RECORD_STATUS_LABEL[status]}</option>
+            ))}
+          </select>
+          {hint('certStatus', null)}
+        </div>
+      </div>
+      <div className="banner gray">{CERT_BANNER}</div>
+      <div className="actions">
+        <button type="button" className="btn" onClick={onCancel}>取消</button>
+        <button type="submit" className="btn btn-primary" disabled={busy} data-requires={PERSONNEL_CERT_UPDATE}>保存执法证</button>
+      </div>
+    </form>
+  );
+}
+
+/**
+ * 执法证一段（P6，#133）。只读态显示证号、有效期、证件状态与说明句；
+ * 持 personnel.cert.update 的人多一个「登记执法证 / 变更执法证」按钮，点开是表单。
+ * 保存成功后由页面重取卡片，表单收起。
+ */
+export function CertSection({
+  card,
+  now,
+  canUpdate,
+  onSave,
+}: {
+  card: PersonnelCard;
+  now: Date;
+  canUpdate: boolean;
+  onSave: (input: CertUpdateInput) => Promise<CertUpdateResult>;
+}) {
+  const cert = card.cert;
   const tag = CERT_TAG[cert.status];
   const note = certNote(cert, now);
-  const registered = cert.status !== 'none';
+  const [editing, setEditing] = useState(false);
+  const [input, setInput] = useState<CertUpdateInput>(() => certEditFrom(card));
+  const [failure, setFailure] = useState<CertFailure | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  if (editing) {
+    return (
+      <CertForm
+        input={input}
+        failure={failure}
+        busy={busy}
+        onInput={setInput}
+        onCancel={() => { setEditing(false); setFailure(null); }}
+        onSubmit={() => void (async () => {
+          setBusy(true);
+          const result = await onSave(input);
+          setBusy(false);
+          if (result.ok) {
+            setEditing(false);
+            setFailure(null);
+            return;
+          }
+          setFailure(result);
+        })()}
+      />
+    );
+  }
   return (
     <>
       <div className="section-title">
@@ -66,11 +201,19 @@ function CertSection({ cert, now }: { cert: PersonnelCard['cert']; now: Date }) 
         <div className="k">有效期至</div>
         <div>{cert.expiresOn || '—'}</div>
         <div className="k">证件状态</div>
-        {/* 证件状态列（有效 / 失效）由 #133 接入；接入前已登记的证一律按有效显示。 */}
-        <div>{registered ? '有效' : '—'}</div>
+        <div>{certRecordLabel(cert.status)}</div>
       </div>
       <div className={`banner ${note.tone}`} style={{ marginTop: 10 }}>{note.text}</div>
-      {/* 「登记执法证 / 变更执法证」按钮由 #133（personnel.cert.update）放在这里。 */}
+      {canUpdate ? (
+        <button
+          type="button"
+          className="btn btn-sm"
+          data-requires={PERSONNEL_CERT_UPDATE}
+          onClick={() => { setInput(certEditFrom(card)); setFailure(null); setEditing(true); }}
+        >
+          {cert.status === 'none' ? '登记执法证' : '变更执法证'}
+        </button>
+      ) : null}
     </>
   );
 }
@@ -479,6 +622,8 @@ export function PersonnelCardView({
   card,
   now,
   registered,
+  canUpdateCert = false,
+  onSaveCert,
   self = false,
   canUpdate = false,
   canDeactivate = false,
@@ -496,6 +641,9 @@ export function PersonnelCardView({
   card: PersonnelCard;
   now: Date;
   registered: boolean;
+  /** 会话清单里有 personnel.cert.update 时才显示执法证的登记按钮 */
+  canUpdateCert?: boolean;
+  onSaveCert?: (input: CertUpdateInput) => Promise<CertUpdateResult>;
   /** 卡片是不是操作者本人（G23：本人不能改角色、改岗位标记、调岗、结束会话、停用）。按工号认。 */
   self?: boolean;
   /** 会话清单里有 personnel.profile.update。 */
@@ -521,6 +669,7 @@ export function PersonnelCardView({
   const [revealed, setRevealed] = useState(false);
   const off = Boolean(card.deactivatedAt);
   const rowBusy = edit?.busy === true || dangerBusy;
+  const saveCert = onSaveCert ?? (async () => ({ ok: true } as const));
   return (
     <>
       {registered ? <RegisteredBanner name={card.name} /> : null}
@@ -571,7 +720,7 @@ export function PersonnelCardView({
                   编辑姓名、手机号、角色
                 </button>
               </div>
-              <CertSection cert={card.cert} now={now} />
+              <CertSection card={card} now={now} canUpdate={canUpdateCert} onSave={saveCert} />
             </>
           )}
         </div>
@@ -701,9 +850,14 @@ export function parentNameOf(dest: TransferDestination, units: readonly Transfer
   return parent.name;
 }
 
-/** 卡片工作区：编辑、调岗与危险操作的状态放这里；成功后就地更新卡片，不重取（重取会多写一行 personnel.viewed）。 */
+/**
+ * 卡片工作区：执法证登记（#133）与编辑、调岗（#129）、停用、恢复、结束全部会话（#130）的状态放这里。
+ * 编辑、调岗与危险操作成功后就地更新卡片，不重取（重取会多写一行 personnel.viewed）；
+ * 执法证保存成功后重取卡片——接口返回体不回显证号，界面按库里的当前值重新渲染。
+ */
 function CardWorkspace({ loaded, registered }: { loaded: PersonnelCard; registered: boolean }) {
   const dispatch = useAppDispatch();
+  const revalidator = useRevalidator();
   const operator = useAppSelector((root) => root.login.operator);
   const opcodes = operator?.opcodes ?? [];
   const [override, setOverride] = useState<PersonnelCard | null>(null);
@@ -717,6 +871,17 @@ function CardWorkspace({ loaded, registered }: { loaded: PersonnelCard; register
   const canDeactivate = opcodes.includes(PERSONNEL_DEACTIVATE);
   const canRestore = opcodes.includes(PERSONNEL_RESTORE);
   const canEndSessions = opcodes.includes(PERSONNEL_SESSIONS_END);
+  const canUpdateCert = opcodes.includes(PERSONNEL_CERT_UPDATE);
+
+  const saveCert = async (input: CertUpdateInput): Promise<CertUpdateResult> => {
+    const result = await updateCert(dispatch, card.id, input);
+    if (result.ok) {
+      // 重取回来的卡片是权威值：先丢掉编辑与调岗留下的就地覆盖，否则旧证件情况会盖住新值。
+      setOverride(null);
+      void revalidator.revalidate();
+    }
+    return result;
+  };
 
   const submitEdit = async (input: EditInput) => {
     setEdit({ input, failure: null, busy: true });
@@ -833,6 +998,8 @@ function CardWorkspace({ loaded, registered }: { loaded: PersonnelCard; register
         card={card}
         now={new Date()}
         registered={registered}
+        canUpdateCert={canUpdateCert}
+        onSaveCert={saveCert}
         self={self}
         canUpdate={canUpdate}
         canDeactivate={canDeactivate}

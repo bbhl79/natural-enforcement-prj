@@ -49,7 +49,7 @@ const CATEGORY_OF_ACTION: Readonly<Record<string, AuditCategory>> = {
   'account.unlocked': 'unlock-reset',
   'account.password-reset': 'unlock-reset',
   'account.password-rejected': 'unlock-reset',
-  'personnel.cert.updated': 'cert',
+  'cert.updated': 'cert',
   'personnel.exported': 'export',
   'audit.exported': 'export',
 };

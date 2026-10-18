@@ -99,6 +99,12 @@ describe('#126 留痕类别（P8 筛选）', () => {
     expect(auditCategoryOf('authz.denied', 'case.open')).toBeNull();
     expect(auditCategoryOf('authz.denied', null)).toBeNull();
   });
+
+  it('执法证一类（#133）：动作词 cert.updated，被拒的操作码 personnel.cert.update', () => {
+    expect(auditCategoryOf('cert.updated', 'personnel.cert.update')).toBe('cert');
+    expect(auditCategoryOf('authz.denied', 'personnel.cert.update')).toBe('cert');
+    expect(auditCategoryPrefilter('cert').actions).toEqual(['cert.updated']);
+  });
 });
 
 describe('#126 PrismaAuditTrailReader', () => {

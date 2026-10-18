@@ -392,6 +392,46 @@ describe('人员登记、查看与岗位标记（#128）', () => {
   });
 });
 
+describe('执法证登记（#133）', () => {
+  it('cert.updated 记成功，前值写旧有效期和旧状态，不带原因、后值和条数', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    await trail.append({
+      ...parties,
+      action: 'cert.updated',
+      opcode: 'personnel.cert.update',
+      previousValue: 'expiresOn=2027-06-30;status=valid',
+    });
+    await trail.append({ ...parties, action: 'cert.updated', opcode: 'personnel.cert.update' });
+    expect(written.map((row) => [row.action, row.outcome, row.reason, row.previousValue, row.nextValue, row.itemCount]))
+      .toEqual([
+        ['cert.updated', 'succeeded', null, 'expiresOn=2027-06-30;status=valid', null, null],
+        ['cert.updated', 'succeeded', null, null, null, null],
+      ]);
+    expect(AUDIT_ACTIONS).toContain('cert.updated');
+    expect(AUDIT_COUNTED_ACTIONS).not.toContain('cert.updated');
+  });
+
+  it('cert.updated 记失败、带原因、带后值或带条数，一律拒绝且不写库', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    const cases: Array<Record<string, unknown>> = [
+      { action: 'cert.updated', outcome: 'failed' },
+      { action: 'cert.updated', outcome: 'failed', reason: 'already-exists' },
+      { action: 'cert.updated', reason: 'already-exists' },
+      { action: 'cert.updated', nextValue: 'valid' },
+      { action: 'cert.updated', itemCount: 1 },
+    ];
+    for (const item of cases) {
+      await expect(
+        trail.append({ ...parties, ...item } as unknown as Parameters<typeof trail.append>[0]),
+        JSON.stringify(item),
+      ).rejects.toBeInstanceOf(AuditVocabularyError);
+    }
+    expect(written).toHaveLength(0);
+  });
+});
+
 describe('人员编辑与调岗（#129，ADR 0014）', () => {
   it('改名、改手机号、加减角色、摘岗位标记、调岗都记成功；改名前值写旧名，改手机号前值留空', async () => {
     const { db, written } = recorder();

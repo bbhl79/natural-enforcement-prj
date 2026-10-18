@@ -1,12 +1,13 @@
 // 管理台首页（P3）的数据与视图判定。
 // 各入口的数字来自各自功能的查询：被锁人员（A10）、机构（#123，取机构树节点数）、今日留痕（#126）、
-// 人员（#128，取数据范围内未停用的人数）。执法证的数字由 #133 接入，未接入时为 null，入口不显示数字。
+// 人员（#128，取数据范围内未停用的人数）。「需要留意的执法证」与有执法资格的人数按人员名单的证件情况算（#133）。
 
 import { data } from 'react-router';
 
 import { apiFetch, type ApiDispatch } from '../api';
 import { sessionOpcodes, type SessionStore } from '../session';
 import { ADMIN_HOME_OPCODES, hasAny, ORG_MAINTENANCE_OPCODE } from '../shell/menu';
+import { certAttentionOf, qualifiedPersonnelCount, type CertAttentionKey, type PersonnelRow } from './personnel';
 
 export interface AdminHomeSummary {
   /** 数据范围内的机构数 */
@@ -17,8 +18,10 @@ export interface AdminHomeSummary {
   lockedPersonnel: number | null;
   /** 今日管理台留痕条数 */
   auditToday: number | null;
-  /** 登记了有效执法证的人员数 */
+  /** 有执法资格的人数（#133）：证件状态为「有效」且在有效期内，临期也算 */
   certifiedPersonnel: number | null;
+  /** 需要留意的执法证（#133，原型 P3:29）：临期、已过期、失效、未登记四种情况的人数 */
+  certAttention: Record<CertAttentionKey, number> | null;
 }
 
 export const EMPTY_SUMMARY: AdminHomeSummary = {
@@ -27,6 +30,7 @@ export const EMPTY_SUMMARY: AdminHomeSummary = {
   lockedPersonnel: null,
   auditToday: null,
   certifiedPersonnel: null,
+  certAttention: null,
 };
 
 /** 维护类入口码。只有留痕入口、没有维护入口的是监督视角。 */
@@ -42,7 +46,7 @@ export function adminHomeView(opcodes: readonly string[]): AdminHomeView {
 }
 
 /**
- * 上线首日条件未齐（P3 firstday）：只有一个机构、只有本人、没有人登记执法证。
+ * 上线首日条件未齐（P3 firstday）：只有一个机构、只有本人、没有人有执法资格。
  * 三个数字都已知时才判定；任一未知时不显示引导。
  */
 export function firstDayPending(summary: AdminHomeSummary): boolean {
@@ -88,8 +92,12 @@ export async function loadAdminHomeSummary(dispatch: ApiDispatch, opcodes: reado
     if (response.status === 401) return summary;
     if (response.status === 403) throw data(null, { status: 403 });
     if (!response.ok) throw new Error(`人员数读取失败：HTTP ${response.status}`);
-    const body = (await response.json()) as { personnel?: Array<{ deactivatedAt?: string | null }> };
-    summary.personnel = Array.isArray(body.personnel) ? body.personnel.filter((row) => !row.deactivatedAt).length : null;
+    const body = (await response.json()) as { personnel?: PersonnelRow[] };
+    const rows = Array.isArray(body.personnel) ? body.personnel : null;
+    summary.personnel = rows ? rows.filter((row) => !row.deactivatedAt).length : null;
+    // 执法证的数字来自同一次名单读取：名单交出证件情况，不交出证号（#105:231）。
+    summary.certifiedPersonnel = rows ? qualifiedPersonnelCount(rows) : null;
+    summary.certAttention = rows ? certAttentionOf(rows) : null;
   }
   if (opcodes.includes('personnel.locked.read')) {
     const response = await apiFetch(dispatch, '/api/admin/locked-personnel');

@@ -56,7 +56,7 @@ const ALLOWED: Record<string, readonly string[]> = {
       ['submit', 'approve', 'void', 'withdraw', 'read'].map((action) => `cfg.${object}.${action}`),
     ),
     'org.tree.read', 'org.unit.register', 'org.unit.rename', 'org.unit.deactivate',
-    'personnel.profile.read', 'personnel.profile.register', 'personnel.profile.update',
+    'personnel.profile.read', 'personnel.profile.register', 'personnel.cert.update', 'personnel.profile.update',
     'personnel.profile.deactivate', 'personnel.profile.restore', 'personnel.sessions.end',
     'personnel.locked.read', 'personnel.locked.release', 'personnel.password.reset', 'personnel.profile.export',
     'audit.admin.read', 'audit.admin.export', 'authz.binding.submit', 'authz.binding.approve',
@@ -370,6 +370,56 @@ describe('操作码授权', () => {
     });
     const rolled = await nextDay.authorize(auth(created.id), 'clue.read', deptAId);
     expect(rolled.hasEnforcementQualification).toBe(false);
+  });
+
+  it('A2 反例（#133）：证件状态为「失效」时没有执法资格，证号和有效期都在有效期内也一样', async () => {
+    const created = await personnel.registerPersonnel(auth(supAId), {
+      code: uniqueCode('e2-cert-off'),
+      name: '证件失效',
+      orgUnitId: deptAId,
+    });
+    await grantRole(created.id, '经办');
+    await prisma.personnel.update({
+      where: { id: created.id },
+      data: {
+        enforcementCertNo: 'CERT-REVOKED',
+        enforcementCertExpiresOn: new Date('2099-12-31T00:00:00.000Z'),
+        enforcementCertStatus: 'invalid',
+      },
+    });
+    // 通用授权不因资格拒绝：放行照旧，上下文报告没有资格（#64）。
+    const revoked = await access.authorize(auth(created.id), 'clue.verify.start', deptAId);
+    expect(revoked.hasEnforcementQualification).toBe(false);
+    expect(JSON.stringify(revoked)).not.toContain('CERT-REVOKED');
+    // 资格每次授权时读取（ADR 0003）：状态改回「有效」即恢复资格。
+    await prisma.personnel.update({ where: { id: created.id }, data: { enforcementCertStatus: 'valid' } });
+    const restored = await access.authorize(auth(created.id), 'clue.verify.start', deptAId);
+    expect(restored.hasEnforcementQualification).toBe(true);
+  });
+
+  it('有效期日界（#133）：UTC 15:59 仍有资格，UTC 16:00 起没有（北京时间 23:59 与次日 00:00）', async () => {
+    const created = await personnel.registerPersonnel(auth(supAId), {
+      code: uniqueCode('e2-cert-day'),
+      name: '日界资格',
+      orgUnitId: deptAId,
+    });
+    await grantRole(created.id, '经办');
+    await prisma.personnel.update({
+      where: { id: created.id },
+      data: {
+        enforcementCertNo: 'CERT-DAYEDGE',
+        enforcementCertExpiresOn: new Date('2026-10-17T00:00:00.000Z'),
+      },
+    });
+    const store = new PrismaIdentityStore(prisma);
+    const beforeMidnight = new AccessControlService(store, new PrismaAuditTrail(prisma), {
+      now: () => new Date('2026-10-17T15:59:00.000Z'),
+    });
+    expect((await beforeMidnight.authorize(auth(created.id), 'clue.read', deptAId)).hasEnforcementQualification).toBe(true);
+    const afterMidnight = new AccessControlService(store, new PrismaAuditTrail(prisma), {
+      now: () => new Date('2026-10-17T16:00:00.000Z'),
+    });
+    expect((await afterMidnight.authorize(auth(created.id), 'clue.read', deptAId)).hasEnforcementQualification).toBe(false);
   });
 
   it('A7：数据范围是当前任职及其下级，不含兄弟机构；没有任职则为空集', async () => {

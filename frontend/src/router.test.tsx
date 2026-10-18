@@ -22,10 +22,14 @@ const ADMIN = [
   'personnel.profile.read', 'personnel.locked.read', 'personnel.locked.release', 'audit.admin.read',
 ];
 const TREE: [number, Json] = [200, { result: 'listed', rootId: 'hq', orgUnits: [{ id: 'hq' }, { id: 'a' }, { id: 'b' }] }];
-/** 人员名单（#128）：首页人员数只数未停用的。 */
+/** 人员名单（#128）：首页人员数只数未停用的。证件情况供「需要留意的执法证」统计（#133）。 */
 const PERSONNEL: [number, Json] = [200, {
   result: 'listed', rootId: 'hq', orgUnits: [],
-  personnel: [{ id: 'p1', deactivatedAt: null }, { id: 'p2', deactivatedAt: null }, { id: 'p3', deactivatedAt: '2026-09-01T00:00:00Z' }],
+  personnel: [
+    { id: 'p1', deactivatedAt: null, certStatus: 'expiring' },
+    { id: 'p2', deactivatedAt: null, certStatus: 'none' },
+    { id: 'p3', deactivatedAt: '2026-09-01T00:00:00Z', certStatus: 'valid' },
+  ],
 }];
 const SUPERVISE = ['audit.admin.read', 'audit.admin.export'];
 const SUMMARY: [number, Json] = [200, { result: 'counted', today: 7 }];
@@ -242,6 +246,30 @@ describe('管理台首页（P3）', () => {
     expect(html).not.toContain('还不能开始核查和立案');
   });
 
+  it('「需要留意的执法证」四行按人数出，查看链接带证件筛选且不含停用人员（#133，原型 P3:29、P5 filtered）', () => {
+    const html = render(ADMIN, {
+      ...EMPTY_SUMMARY,
+      certAttention: { expiring: 5, expired: 2, invalid: 1, none: 9 },
+    });
+    expect(html).toContain('需要留意的执法证');
+    expect(html).toContain('本范围内');
+    const rows: Array<[string, number, string]> = [
+      ['30 天内到期', 5, 'expiring'],
+      ['已过期', 2, 'expired'],
+      ['失效', 1, 'invalid'],
+      ['未登记', 9, 'none'],
+    ];
+    for (const [label, count, cert] of rows) {
+      expect(html).toContain(`<td>${label}</td><td>${count}</td>`);
+      // off=0：统计数不含已停用的人，落点名单同口径；静态标记里 & 转义为 &amp;
+      expect(html).toContain(`href="/admin/personnel?cert=${cert}&amp;off=0"`);
+    }
+    // 数字未知时只占位，不出空表
+    const unknown = render(ADMIN);
+    expect(unknown).toContain('data-slot="cert-attention"');
+    expect(unknown).not.toContain('需要留意的执法证');
+  });
+
   it('上线首日：只有一个机构、只有本人、无人登记执法证时显示三步引导', () => {
     const firstDay = { ...EMPTY_SUMMARY, orgUnits: 1, personnel: 1, certifiedPersonnel: 0 };
     expect(firstDayPending(firstDay)).toBe(true);
@@ -261,9 +289,10 @@ describe('管理台首页（P3）', () => {
       '/api/admin/audit/summary': SUMMARY,
     });
     await store.dispatch(loadSession());
-    // 系统管理：机构数、人员数、被锁人员数、今日留痕条数四项都取
+    // 系统管理：机构数、人员数、被锁人员数、今日留痕条数四项都取；执法证的数字同名单一次取回（#133）
     expect(await loadAdminHomeSummary(store.dispatch, ADMIN)).toEqual({
       ...EMPTY_SUMMARY, orgUnits: 3, personnel: 2, lockedPersonnel: 2, auditToday: 7,
+      certifiedPersonnel: 1, certAttention: { expiring: 1, expired: 0, invalid: 0, none: 1 },
     });
     // 只有树读码（内勤）不取机构数：机构入口按维护码出现
     expect((await loadAdminHomeSummary(store.dispatch, ['org.tree.read', 'personnel.locked.read'])).orgUnits).toBeNull();

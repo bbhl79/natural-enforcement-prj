@@ -45,6 +45,7 @@ if (existing) {
 // 机构树（#105，#123、#124）：org.tree.read 给系统管理和内勤（内勤选承办机构要用），新建下级、改名、停用只给系统管理。
 // 人员导出 personnel.profile.export 只给系统管理（#125，ADR 0013）。已初始化的库再次播种时补写这一条允许行。
 // 人员登记与查看（#105，#128）：personnel.profile.read、personnel.profile.register 只给系统管理。
+// 执法证登记（#105「执法证（#85）」，#133）：personnel.cert.update 只给系统管理。
 // 人员编辑与调岗（#105，#129）：personnel.profile.update 只给系统管理，调岗和改角色并入这一条，岗位标记的维护也用它。
 // 人员停用、恢复与结束全部会话（#105，#130）：personnel.profile.deactivate、personnel.profile.restore、personnel.sessions.end 只给系统管理。
 const ROLE_ALLOWANCES = {
@@ -121,6 +122,7 @@ const ROLE_ALLOWANCES = {
     "org.unit.deactivate",
     "personnel.profile.read",
     "personnel.profile.register",
+    "personnel.cert.update",
     "personnel.profile.update",
     "personnel.profile.deactivate",
     "personnel.profile.restore",

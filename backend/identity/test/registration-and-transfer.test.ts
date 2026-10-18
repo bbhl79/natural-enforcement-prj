@@ -20,7 +20,8 @@ import { CredentialService } from '../src/services/credential.service.ts';
 import { OrgUnitService } from '../src/services/org-unit.service.ts';
 import { PersonnelService } from '../src/services/personnel.service.ts';
 
-const blankCert = { enforcementCertNo: null, enforcementCertExpiresOn: null };
+// 证件状态是必填列（#133）：没有证的人员一样有状态取值，资格判定按证号和有效期兜住。
+const blankCert = { enforcementCertNo: null, enforcementCertExpiresOn: null, enforcementCertStatus: 'valid' as const };
 
 // 角色按 ADR 0009 的七个角色命名：系统管理持有维护允许行，内勤与经办没有。
 const sysAdmin: PersonnelRow = {

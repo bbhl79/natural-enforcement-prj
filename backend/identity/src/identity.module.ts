@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 
 import { AccessControlService } from './services/access-control.service.ts';
 import { CredentialService } from './services/credential.service.ts';
+import { PersonnelCertService } from './services/personnel-cert.service.ts';
 import { OrgUnitService } from './services/org-unit.service.ts';
 import { PersonnelProfileService } from './services/personnel-profile.service.ts';
 import { PersonnelService } from './services/personnel.service.ts';
@@ -24,6 +25,7 @@ import { PersonnelService } from './services/personnel.service.ts';
     OrgUnitService,
     PersonnelService,
     PersonnelProfileService,
+    PersonnelCertService,
   ],
   exports: [
     AccessControlService,
@@ -31,6 +33,7 @@ import { PersonnelService } from './services/personnel.service.ts';
     OrgUnitService,
     PersonnelService,
     PersonnelProfileService,
+    PersonnelCertService,
   ],
 })
 export class IdentityModule {}
