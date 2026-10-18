@@ -7,6 +7,7 @@
 
 import { Inject, Injectable, Optional } from '@nestjs/common';
 import {
+  OPCODES,
   SUPERVISION_ROLE,
   opcodeRequirements,
 } from '@natural-enforcement/shield';
@@ -152,12 +153,10 @@ export class AccessControlService {
         target: await targetOf(actorOrgId),
       });
     }
-    const rule = opcodeRequirements(opcode);
-    let granting = rule ? await store.listGrantingRoleNames(personnel.id, opcode) : [];
-    if (rule?.changesPrimaryState) {
-      granting = granting.filter((name) => name !== SUPERVISION_ROLE);
-    }
-    if (!rule || granting.length === 0) {
+    const granting = opcodeRequirements(opcode)
+      ? effectiveGrantingRoles(opcode, await store.listGrantingRoleNames(personnel.id, opcode))
+      : [];
+    if (granting.length === 0) {
       return denied(
         'permission-denied',
         `人员 ${personnel.code} 不能执行操作码 ${opcode}`,
@@ -208,6 +207,27 @@ export class AccessControlService {
         hasEnforcementQualification: hasEnforcementQualification(personnel, this.clock.now()),
       },
     };
+  }
+
+  /**
+   * 本人允许的操作码清单（#105 菜单来源）。一个码在清单里，当且仅当本人对自己任职机构
+   * 执行该码能通过 authorize：人员存在且未停用、有生效任职、有能放行的角色。
+   * 有效条件与 authorize 共用（effectiveGrantingRoles）。不返回数据范围，不写留痕。
+   * 顺序同名册。
+   */
+  async listPermittedOpcodes(personnelId: string): Promise<string[]> {
+    const personnel = await this.store.findPersonnelById(personnelId);
+    if (!personnel || personnel.deactivatedAt) return [];
+    if (!(await this.store.findCurrentAssignment(personnel.id))) return [];
+    const rolesByOpcode = new Map<string, string[]>();
+    for (const grant of await this.store.listGrantedOpcodes(personnel.id)) {
+      const names = rolesByOpcode.get(grant.opcode) ?? [];
+      names.push(grant.roleName);
+      rolesByOpcode.set(grant.opcode, names);
+    }
+    return OPCODES.filter(
+      (opcode) => effectiveGrantingRoles(opcode, rolesByOpcode.get(opcode) ?? []).length > 0,
+    );
   }
 
   /** 某人员当前数据范围内的机构。没有当前任职时返回空集。 */
@@ -284,6 +304,17 @@ function denied(
       targetOrgUnitBasis: input.target.targetOrgUnitBasis,
     },
   };
+}
+
+/**
+ * 能放行该操作码的角色。名册外的码没有。改变主状态的码不采用监督角色贡献的允许行。
+ * authorize 与 listPermittedOpcodes 共用这一条，保证菜单清单与授权等价。
+ */
+function effectiveGrantingRoles(opcode: string, grantingRoleNames: readonly string[]): string[] {
+  const rule = opcodeRequirements(opcode);
+  if (!rule) return [];
+  if (rule.changesPrimaryState) return grantingRoleNames.filter((name) => name !== SUPERVISION_ROLE);
+  return [...grantingRoleNames];
 }
 
 /** 证号为空，或有效期早于 Asia/Shanghai 的今天，即没有执法资格。有效期等于今天仍有效。 */

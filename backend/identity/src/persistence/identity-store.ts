@@ -125,6 +125,12 @@ export interface IdentityTransaction {
   client: unknown;
 }
 
+/** 一条「操作码—角色」对：该角色经未失效的允许行放行该操作码。 */
+export interface OpcodeGrant {
+  opcode: string;
+  roleName: string;
+}
+
 export interface IdentityStore {
   /**
    * 在一个交互式事务里执行 work（#119）。work 抛错则整体回滚。
@@ -145,6 +151,11 @@ export interface IdentityStore {
   listActiveRoleNames(personnelId: string): Promise<string[]>;
   /** 人员当前仍能放行该操作码的角色名。只含未失效的人员—角色、角色、允许行和权限。 */
   listGrantingRoleNames(personnelId: string, opcode: string): Promise<string[]>;
+  /**
+   * 人员当前持有的全部「操作码—角色」对。有效条件与 listGrantingRoleNames 相同：
+   * 只含未失效的人员—角色、角色、允许行和权限。会话的操作码清单由它算出（#105）。
+   */
+  listGrantedOpcodes(personnelId: string): Promise<OpcodeGrant[]>;
   /** 机构全部历史名称版本，按版本号升序 */
   listOrgUnitNameVersions(orgUnitId: string): Promise<OrgUnitNameVersionRow[]>;
   listPersonnelNameVersions(personnelId: string): Promise<PersonnelNameVersionRow[]>;
