@@ -200,7 +200,10 @@ function Modal({ title, children, foot }: { title: string; children: ReactNode; 
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const box = ref.current;
-    (box?.querySelector<HTMLElement>('[data-autofocus]') ?? box?.querySelector<HTMLElement>(FOCUSABLE))?.focus();
+    // autofocus 只认未禁用的元素：调岗弹窗挂载时清单还在读取，调入机构 select 处于禁用，
+    // 命中它则 focus() 无效、焦点留在背景。排除禁用后回退到第一个可聚焦元素（此时是取消按钮），
+    // 保证焦点进弹窗、Tab 陷阱生效（对照 LockedPersonnelPage 的焦点管理）。
+    (box?.querySelector<HTMLElement>('[data-autofocus]:not([disabled])') ?? box?.querySelector<HTMLElement>(FOCUSABLE))?.focus();
     return () => {
       if (opener?.isConnected) opener.focus();
     };
