@@ -71,4 +71,21 @@ export type {
   RegisterPersonnelInput,
 } from './services/personnel.service.ts';
 export { PERSONNEL_EXPORT_OPCODE, PersonnelService } from './services/personnel.service.ts';
+export {
+  BOOTSTRAP_ADMIN_ROLE,
+  BOOTSTRAP_CODE_MAX_LENGTH,
+  BOOTSTRAP_NAME_MAX_LENGTH,
+  BootstrapPrerequisiteError,
+  bootstrapInputRules,
+  judgeBootstrap,
+} from './domain/bootstrap.ts';
+export type {
+  BootstrapDifference,
+  BootstrapInputRule,
+  BootstrapOutcome,
+  BootstrapProfile,
+  BootstrapSnapshot,
+} from './domain/bootstrap.ts';
+export { BootstrapService } from './services/bootstrap.service.ts';
+export type { BootstrapHooks, BootstrapRequest } from './services/bootstrap.service.ts';
 export { IdentityModule } from './identity.module.ts';

@@ -30,6 +30,7 @@
   "exclude": [
     "backend/identity/src/persistence/prisma-identity-store.ts",
     "backend/server/src/persistence.module.ts",
-    "backend/server/src/main.ts"
+    "backend/server/src/main.ts",
+    "backend/server/src/bootstrap-command.ts"
   ]
 }

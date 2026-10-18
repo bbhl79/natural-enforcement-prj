@@ -58,6 +58,8 @@ export type AuditAppend =
   | (AuditParties & { action: 'org.unit.deactivated' })
   | (AuditParties & { action: 'org.unit.deactivated'; outcome: 'failed'; reason: OrgUnitDeactivateFailedReason })
   | (AuditParties & { action: 'personnel.exported'; itemCount: number })
+  | (AuditParties & { action: 'bootstrap.root-registered' })
+  | (AuditParties & { action: 'bootstrap.admin-registered' })
   | (AuditParties & { action: 'audit.viewed' })
   | (AuditParties & { action: 'audit.exported'; itemCount: number });
 

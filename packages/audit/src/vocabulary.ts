@@ -14,6 +14,9 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   // 机构停用（#105「停用（D4）」，#124）。
   'org.unit.deactivated',
   'personnel.exported',
+  // 生产引导命令（#105「生产引导命令（D5）」，ADR 0013 第 3 条，#131）。所属机构写根机构。
+  'bootstrap.root-registered',
+  'bootstrap.admin-registered',
   'audit.viewed',
   'audit.exported',
 ] as const;
