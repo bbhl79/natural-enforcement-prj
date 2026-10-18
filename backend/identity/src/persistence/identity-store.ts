@@ -6,7 +6,7 @@
 // 主键形制约定（#16 §1.1）：ULID，由领域层 newUlid 生成；端口内以 string 承载。
 
 import type { OrgUnitLevel } from '../domain/org-unit.ts';
-import type { PersonnelPost } from '../domain/personnel-profile.ts';
+import type { CertRecordStatus, PersonnelPost } from '../domain/personnel-profile.ts';
 
 /** 注入令牌：宿主/调用方绑定 store 实现（模块自身不直连具体存储） */
 export const IDENTITY_STORE = Symbol('IDENTITY_STORE');
@@ -31,6 +31,8 @@ export interface PersonnelRow {
   passwordHash: string | null;
   enforcementCertNo: string | null;
   enforcementCertExpiresOn: Date | null;
+  /** 证件状态（#133）：valid 有效、invalid 失效。执法资格判定 fail-closed 要读它。 */
+  enforcementCertStatus: CertRecordStatus;
   deactivatedAt: Date | null;
 }
 
@@ -133,7 +135,16 @@ export interface PersonnelDirectoryRow {
   deactivatedAt: Date | null;
   enforcementCertNo: string | null;
   enforcementCertExpiresOn: Date | null;
+  enforcementCertStatus: CertRecordStatus;
   roleNames: string[];
+}
+
+/** 执法证登记的三笔当前态（#133）。证号、有效期、证件状态一起写，不建资格版本表。 */
+export interface PersonnelCertToUpdate {
+  certNo: string;
+  /** 日历日（UTC 午夜） */
+  certExpiresOn: Date;
+  certStatus: CertRecordStatus;
 }
 
 /** 人员—角色新行。授予 = 插入新行；摘除 = 给旧行置失效时间。 */
@@ -258,6 +269,11 @@ export interface IdentityStore {
   insertPersonnel(input: PersonnelToCreate): Promise<UniqueWriteResult>;
   /** 手机号已被他人占用时返回 already-exists（mobile-phone）。 */
   updatePersonnelMobilePhone(personnelId: string, mobilePhone: string | null): Promise<UniqueWriteResult>;
+  /**
+   * 执法证登记（#133）：证号、有效期、证件状态一起写入人员行的当前态。
+   * 换发新证直接改成新证号和新有效期，不建资格版本表；旧值由调用方写进留痕前值。
+   */
+  updatePersonnelCert(personnelId: string, cert: PersonnelCertToUpdate): Promise<void>;
   /** 同一人员已持有该角色的未失效行时返回 already-exists（personnel-role）。 */
   insertPersonnelRole(row: PersonnelRoleToCreate): Promise<UniqueWriteResult>;
   /** 同一人员已持有该标记的未失效行时返回 already-exists（personnel-post）。 */

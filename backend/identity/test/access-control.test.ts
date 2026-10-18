@@ -22,6 +22,7 @@ function person(partial: Partial<PersonnelRow> & Pick<PersonnelRow, 'id' | 'code
     passwordHash: null,
     enforcementCertNo: null,
     enforcementCertExpiresOn: null,
+    enforcementCertStatus: 'valid',
     deactivatedAt: null,
     ...partial,
   };
@@ -53,6 +54,14 @@ const people: Record<string, PersonnelRow> = {
     enforcementCertExpiresOn: new Date('2026-10-17T00:00:00.000Z'),
   }),
   blank: person({ id: 'blank', code: 'P-BLANK', enforcementCertNo: '   ' }),
+  // 证件状态为「失效」：证号和有效期都在将来，仍然没有执法资格（#133 fail-closed）。
+  revoked: person({
+    id: 'revoked',
+    code: 'P-REVOKED',
+    enforcementCertNo: CERT,
+    enforcementCertExpiresOn: new Date('2099-12-31T00:00:00.000Z'),
+    enforcementCertStatus: 'invalid',
+  }),
   supervisor: person({ id: 'supervisor', code: 'P-SUPER' }),
   both: person({ id: 'both', code: 'P-BOTH' }),
   ghost: person({ id: 'ghost', code: 'P-GHOST', deactivatedAt: new Date('2026-01-01T00:00:00.000Z') }),
@@ -65,6 +74,7 @@ const grants: Record<string, Record<string, string[]>> = {
   boundary: { 'clue.read': ['经办'] },
   today: { 'clue.read': ['经办'] },
   blank: { 'clue.read': ['经办'] },
+  revoked: { 'clue.read': ['经办'], 'clue.verify.start': ['经办'] },
   supervisor: { 'clue.read': ['监督'], 'case.open': ['监督'] },
   both: { 'clue.read': ['经办', '监督'], 'case.open': ['经办', '监督'] },
   ghost: { 'clue.read': ['经办'] },
@@ -77,6 +87,7 @@ const roles: Record<string, string[]> = {
   boundary: ['经办'],
   today: ['经办'],
   blank: ['经办'],
+  revoked: ['经办'],
   supervisor: ['监督'],
   both: ['经办', '监督'],
   ghost: ['经办'],
@@ -354,6 +365,24 @@ describe('按操作码授权', () => {
     const access = new AccessControlService(store(), recorder().port);
     const context = await access.authorize(auth('blank'), 'clue.read', 'dept-a');
     expect(context.hasEnforcementQualification).toBe(false);
+  });
+
+  it('证件状态为「失效」时一律没有执法资格，通用授权照常放行（#133 fail-closed）', async () => {
+    const access = new AccessControlService(store(), recorder().port);
+    const context = await access.authorize(auth('revoked'), 'clue.verify.start', 'dept-a');
+    expect(context.hasEnforcementQualification).toBe(false);
+    expect(JSON.stringify(context)).not.toContain(CERT);
+  });
+
+  it('到期当天仍有效，次日零点起失效：UTC 15:59 与 16:00（北京时间 23:59 与次日 00:00，#133）', async () => {
+    const beforeMidnight = new AccessControlService(store(), recorder().port, {
+      now: () => new Date('2026-10-17T15:59:00.000Z'),
+    });
+    expect((await beforeMidnight.authorize(auth('today'), 'clue.read', 'dept-a')).hasEnforcementQualification).toBe(true);
+    const afterMidnight = new AccessControlService(store(), recorder().port, {
+      now: () => new Date('2026-10-17T16:00:00.000Z'),
+    });
+    expect((await afterMidnight.authorize(auth('today'), 'clue.read', 'dept-a')).hasEnforcementQualification).toBe(false);
   });
 
   it('监督角色即使挂上改变主状态的允许行，授权仍得 permission-denied', async () => {

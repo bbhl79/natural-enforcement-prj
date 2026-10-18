@@ -36,6 +36,7 @@ const admin: PersonnelRow = {
   passwordHash: null,
   enforcementCertNo: null,
   enforcementCertExpiresOn: null,
+  enforcementCertStatus: 'valid',
   deactivatedAt: null,
 };
 

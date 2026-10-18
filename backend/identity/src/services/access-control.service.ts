@@ -26,14 +26,13 @@ import {
   type IdentityContext,
 } from '../domain/access.ts';
 import type { ActorRef } from '../domain/actor.ts';
+import { hasEnforcementQualification } from '../domain/personnel-profile.ts';
 import type { PersonnelRow } from '../persistence/identity-store.ts';
 import { IDENTITY_STORE, type IdentityStore } from '../persistence/identity-store.ts';
 
 export interface AuthorizationClock {
   now(): Date;
 }
-
-const SHANGHAI = 'Asia/Shanghai';
 
 /**
  * 一次授权判断的结果（#119）。拒绝时带上应写的 authz.denied 留痕行，由调用方决定何时写。
@@ -203,7 +202,7 @@ export class AccessControlService {
         personnelId: personnel.id,
         orgUnitId: assignment.orgUnitId,
         roles,
-        hasEnforcementQualification: hasEnforcementQualification(personnel, this.clock.now()),
+        hasEnforcementQualification: qualificationOf(personnel, this.clock.now()),
       },
     };
   }
@@ -319,27 +318,15 @@ function effectiveGrantingRoles(opcode: string, grantingRoleNames: readonly stri
   return [...grantingRoleNames];
 }
 
-/** 证号为空，或有效期早于 Asia/Shanghai 的今天，即没有执法资格。有效期等于今天仍有效。 */
-function hasEnforcementQualification(personnel: PersonnelRow, now: Date): boolean {
-  const certNo = personnel.enforcementCertNo?.trim() ?? '';
-  if (!certNo || !personnel.enforcementCertExpiresOn) return false;
-  const today = shanghaiCalendarDate(now);
-  const expiry = expiryCalendarDate(personnel.enforcementCertExpiresOn);
-  return expiry >= today;
-}
-
-function shanghaiCalendarDate(now: Date): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: SHANGHAI,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(now);
-}
-
-function expiryCalendarDate(expiresOn: Date): string {
-  const year = expiresOn.getUTCFullYear();
-  const month = String(expiresOn.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(expiresOn.getUTCDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+/**
+ * 执法资格判定在领域层（#133 fail-closed）：证件状态为「有效」且在有效期内才有资格，
+ * 有效期按北京时间日界，到期当天仍有效。证号不进入身份上下文。
+ */
+function qualificationOf(personnel: PersonnelRow, now: Date): boolean {
+  return hasEnforcementQualification(
+    personnel.enforcementCertNo,
+    personnel.enforcementCertExpiresOn,
+    personnel.enforcementCertStatus,
+    now,
+  );
 }

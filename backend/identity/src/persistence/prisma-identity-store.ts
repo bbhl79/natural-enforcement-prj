@@ -8,7 +8,12 @@
 import type { Prisma, PrismaClient } from '../../../prisma/generated/prisma/client.ts';
 
 import { isOrgUnitLevel } from '../domain/org-unit.ts';
-import { PERSONNEL_POSTS, isPersonnelPost, type PersonnelPost } from '../domain/personnel-profile.ts';
+import {
+  PERSONNEL_POSTS,
+  isCertRecordStatus,
+  isPersonnelPost,
+  type PersonnelPost,
+} from '../domain/personnel-profile.ts';
 
 import type {
   ExportAuditRow,
@@ -23,6 +28,7 @@ import type {
   PersonnelAssignmentRow,
   PersonnelRoleToCreate,
   PersonnelPostToCreate,
+  PersonnelCertToUpdate,
   PersonnelProfileRow,
   PersonnelDirectoryRow,
   PersonnelNameVersionRow,
@@ -55,6 +61,49 @@ function toOrgUnitRow(row: OrgUnitRecord): OrgUnitRow {
     level: row.level,
     parentId: row.parentId,
     deactivatedAt: row.deactivatedAt,
+  };
+}
+
+type PersonnelRecord = {
+  id: string;
+  code: string;
+  name: string;
+  orgUnitId: string;
+  passwordHash: string | null;
+  enforcementCertNo: string | null;
+  enforcementCertExpiresOn: Date | null;
+  enforcementCertStatus: string;
+  deactivatedAt: Date | null;
+};
+
+type PersonnelProfileRecord = PersonnelRecord & {
+  mobilePhone: string | null;
+  passwordChangedAt: Date | null;
+};
+
+/** 库行转端口行。证件状态取值不认识时报错（库层 CHECK 已兜底，这里不静默放过，#133）。 */
+function toPersonnelRow(row: PersonnelRecord): PersonnelRow {
+  if (!isCertRecordStatus(row.enforcementCertStatus)) {
+    throw new Error(`人员 ${row.id} 的证件状态取值不认识：${row.enforcementCertStatus}`);
+  }
+  return {
+    id: row.id,
+    code: row.code,
+    name: row.name,
+    orgUnitId: row.orgUnitId,
+    passwordHash: row.passwordHash,
+    enforcementCertNo: row.enforcementCertNo,
+    enforcementCertExpiresOn: row.enforcementCertExpiresOn,
+    enforcementCertStatus: row.enforcementCertStatus,
+    deactivatedAt: row.deactivatedAt,
+  };
+}
+
+function toPersonnelProfileRow(row: PersonnelProfileRecord): PersonnelProfileRow {
+  return {
+    ...toPersonnelRow(row),
+    mobilePhone: row.mobilePhone,
+    passwordChangedAt: row.passwordChangedAt,
   };
 }
 
@@ -132,8 +181,9 @@ export class PrismaIdentityStore implements IdentityStore {
     return WRITTEN;
   }
 
-  findPersonnelById(id: string): Promise<PersonnelRow | null> {
-    return this.prisma.personnel.findUnique({ where: { id } });
+  async findPersonnelById(id: string): Promise<PersonnelRow | null> {
+    const row = await this.prisma.personnel.findUnique({ where: { id } });
+    return row ? toPersonnelRow(row) : null;
   }
 
   async findOrgUnitById(id: string): Promise<OrgUnitRow | null> {
@@ -287,11 +337,12 @@ export class PrismaIdentityStore implements IdentityStore {
     });
   }
 
-  listActivePersonnelOfOrgUnit(orgUnitId: string): Promise<PersonnelRow[]> {
-    return this.prisma.personnel.findMany({
+  async listActivePersonnelOfOrgUnit(orgUnitId: string): Promise<PersonnelRow[]> {
+    const rows = await this.prisma.personnel.findMany({
       where: { orgUnitId, deactivatedAt: null },
       orderBy: { code: 'asc' },
     });
+    return rows.map((row) => toPersonnelRow(row));
   }
 
   findExportAuditById(id: string): Promise<ExportAuditRow | null> {
@@ -299,7 +350,8 @@ export class PrismaIdentityStore implements IdentityStore {
   }
 
   async findPersonnelProfile(id: string): Promise<PersonnelProfileRow | null> {
-    return this.prisma.personnel.findUnique({ where: { id } });
+    const row = await this.prisma.personnel.findUnique({ where: { id } });
+    return row ? toPersonnelProfileRow(row) : null;
   }
 
   async findRootOrgUnitId(): Promise<string | null> {
@@ -333,6 +385,7 @@ export class PrismaIdentityStore implements IdentityStore {
       deactivatedAt: row.deactivatedAt,
       enforcementCertNo: row.enforcementCertNo,
       enforcementCertExpiresOn: row.enforcementCertExpiresOn,
+      enforcementCertStatus: toPersonnelRow(row).enforcementCertStatus,
       roleNames: row.personnelRoles.map((grant) => grant.role.name),
     }));
   }
@@ -362,8 +415,9 @@ export class PrismaIdentityStore implements IdentityStore {
     return row ? toOrgUnitRow(row) : null;
   }
 
-  findPersonnelByCode(code: string): Promise<PersonnelRow | null> {
-    return this.prisma.personnel.findUnique({ where: { code } });
+  async findPersonnelByCode(code: string): Promise<PersonnelRow | null> {
+    const row = await this.prisma.personnel.findUnique({ where: { code } });
+    return row ? toPersonnelRow(row) : null;
   }
 
   async countOrgUnitsAndPersonnel(): Promise<{ orgUnits: number; personnel: number }> {
@@ -411,6 +465,17 @@ export class PrismaIdentityStore implements IdentityStore {
       () => this.prisma.personnel.update({ where: { id: personnelId }, data: { mobilePhone } }),
       async () => 'mobile-phone',
     );
+  }
+
+  async updatePersonnelCert(personnelId: string, cert: PersonnelCertToUpdate): Promise<void> {
+    await this.prisma.personnel.update({
+      where: { id: personnelId },
+      data: {
+        enforcementCertNo: cert.certNo,
+        enforcementCertExpiresOn: cert.certExpiresOn,
+        enforcementCertStatus: cert.certStatus,
+      },
+    });
   }
 
   insertPersonnelRole(row: PersonnelRoleToCreate): Promise<UniqueWriteResult> {

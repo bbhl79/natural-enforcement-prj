@@ -35,6 +35,7 @@ export {
   type PersonnelAssignmentRow,
   type PersonnelNameVersionRow,
   type PersonnelDirectoryRow,
+  type PersonnelCertToUpdate,
   type PersonnelPostToCreate,
   type PersonnelProfileRow,
   type PersonnelRoleToCreate,
@@ -76,23 +77,34 @@ export type {
 export { PERSONNEL_EXPORT_OPCODE, PersonnelService } from './services/personnel.service.ts';
 export {
   CERT_EXPIRING_DAYS,
+  CERT_RECORD_STATUSES,
+  PERSONNEL_CERT_UPDATE_OPCODE,
   PERSONNEL_CODE_MAX_LENGTH,
   PERSONNEL_NAME_MAX_LENGTH,
   PERSONNEL_POSTS,
   PERSONNEL_PROFILE_READ_OPCODE,
   PERSONNEL_PROFILE_REGISTER_OPCODE,
   ROLE_ORDER,
+  certPreviousValue,
   certStatusOf,
+  certUpdateRules,
+  hasEnforcementQualification,
+  isCertRecordStatus,
   isPersonnelPost,
+  normalizeCertUpdate,
   parseCalendarDay,
   registrationRules,
 } from './domain/personnel-profile.ts';
 export type {
+  CertRecordStatus,
+  CertRuleCode,
   CertStatus,
+  NormalizedCertUpdate,
   PersonnelPost,
   PersonnelRuleCode,
   RegisterPersonnelProfileInput,
   RegisterRuleCode,
+  UpdateCertInput,
 } from './domain/personnel-profile.ts';
 export { PersonnelProfileService } from './services/personnel-profile.service.ts';
 export type {
@@ -103,6 +115,8 @@ export type {
   RegisterPersonnelProfileResult,
   ScreenRegistrationResult,
 } from './services/personnel-profile.service.ts';
+export { PersonnelCertService } from './services/personnel-cert.service.ts';
+export type { UpdateCertResult } from './services/personnel-cert.service.ts';
 export {
   BOOTSTRAP_ADMIN_ROLE,
   BOOTSTRAP_CODE_MAX_LENGTH,
