@@ -1,6 +1,6 @@
 // 管理台首页（P3）的数据与视图判定。
-// 各入口的数字来自各自功能的查询：被锁人员（A10）、机构（#123，取机构树节点数）、今日留痕（#126）。
-// 人员、执法证的数字由 #128、#133 接入，未接入时为 null，入口不显示数字。
+// 各入口的数字来自各自功能的查询：被锁人员（A10）、机构（#123，取机构树节点数）、今日留痕（#126）、
+// 人员（#128，取数据范围内未停用的人数）。执法证的数字由 #133 接入，未接入时为 null，入口不显示数字。
 
 import { data } from 'react-router';
 
@@ -82,6 +82,14 @@ export async function loadAdminHomeSummary(dispatch: ApiDispatch, opcodes: reado
     if (!response.ok) throw new Error(`机构数读取失败：HTTP ${response.status}`);
     const body = (await response.json()) as { orgUnits?: unknown };
     summary.orgUnits = Array.isArray(body.orgUnits) ? body.orgUnits.length : null;
+  }
+  if (opcodes.includes('personnel.profile.read')) {
+    const response = await apiFetch(dispatch, '/api/admin/personnel');
+    if (response.status === 401) return summary;
+    if (response.status === 403) throw data(null, { status: 403 });
+    if (!response.ok) throw new Error(`人员数读取失败：HTTP ${response.status}`);
+    const body = (await response.json()) as { personnel?: Array<{ deactivatedAt?: string | null }> };
+    summary.personnel = Array.isArray(body.personnel) ? body.personnel.filter((row) => !row.deactivatedAt).length : null;
   }
   if (opcodes.includes('personnel.locked.read')) {
     const response = await apiFetch(dispatch, '/api/admin/locked-personnel');

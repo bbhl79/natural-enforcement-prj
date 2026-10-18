@@ -8,6 +8,7 @@
 import type { Prisma, PrismaClient } from '../../../prisma/generated/prisma/client.ts';
 
 import { isOrgUnitLevel } from '../domain/org-unit.ts';
+import { PERSONNEL_POSTS, isPersonnelPost, type PersonnelPost } from '../domain/personnel-profile.ts';
 
 import type {
   ExportAuditRow,
@@ -21,6 +22,9 @@ import type {
   IdentityUniqueConflict,
   PersonnelAssignmentRow,
   PersonnelRoleToCreate,
+  PersonnelPostToCreate,
+  PersonnelProfileRow,
+  PersonnelDirectoryRow,
   PersonnelNameVersionRow,
   PersonnelRow,
   PersonnelToCreate,
@@ -294,6 +298,59 @@ export class PrismaIdentityStore implements IdentityStore {
     return this.prisma.exportAudit.findUnique({ where: { id } });
   }
 
+  async findPersonnelProfile(id: string): Promise<PersonnelProfileRow | null> {
+    return this.prisma.personnel.findUnique({ where: { id } });
+  }
+
+  async findRootOrgUnitId(): Promise<string | null> {
+    const root = await this.prisma.orgUnit.findFirst({
+      where: { parentId: null },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      select: { id: true },
+    });
+    return root?.id ?? null;
+  }
+
+  async listPersonnelDirectory(
+    orgUnitIds: readonly string[],
+    includeUnassigned: boolean,
+  ): Promise<PersonnelDirectoryRow[]> {
+    const assigned = { assignments: { some: { endedAt: null, orgUnitId: { in: [...orgUnitIds] } } } };
+    const unassigned = { assignments: { none: { endedAt: null } } };
+    const rows = await this.prisma.personnel.findMany({
+      where: includeUnassigned ? { OR: [assigned, unassigned] } : assigned,
+      orderBy: [{ code: 'asc' }],
+      include: {
+        assignments: { where: { endedAt: null }, take: 1, orderBy: { startedAt: 'desc' } },
+        personnelRoles: { where: { deactivatedAt: null, role: { deactivatedAt: null } }, include: { role: true } },
+      },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      code: row.code,
+      name: row.name,
+      currentOrgUnitId: row.assignments[0]?.orgUnitId ?? null,
+      deactivatedAt: row.deactivatedAt,
+      enforcementCertNo: row.enforcementCertNo,
+      enforcementCertExpiresOn: row.enforcementCertExpiresOn,
+      roleNames: row.personnelRoles.map((grant) => grant.role.name),
+    }));
+  }
+
+  async listActivePosts(personnelId: string): Promise<PersonnelPost[]> {
+    const rows = await this.prisma.personnelPost.findMany({ where: { personnelId, deactivatedAt: null } });
+    const held = new Set(rows.map((row) => row.post).filter(isPersonnelPost));
+    return PERSONNEL_POSTS.filter((post) => held.has(post));
+  }
+
+  async findActiveRoleIds(names: readonly string[]): Promise<Map<string, string>> {
+    const ids = new Map<string, string>();
+    if (names.length === 0) return ids;
+    const rows = await this.prisma.role.findMany({ where: { name: { in: [...names] }, deactivatedAt: null } });
+    for (const row of rows) ids.set(row.name, row.id);
+    return ids;
+  }
+
   async lockBootstrap(): Promise<void> {
     if (this.root) throw new Error('引导咨询锁须在交互式事务里取得');
     // 事务级咨询锁（#131）。键由固定字符串派生，与其他咨询锁不相撞。
@@ -364,6 +421,18 @@ export class PrismaIdentityStore implements IdentityStore {
           where: { personnelId: row.personnelId, roleId: row.roleId, deactivatedAt: null },
         });
         return active ? 'personnel-role' : null;
+      },
+    );
+  }
+
+  insertPersonnelPost(row: PersonnelPostToCreate): Promise<UniqueWriteResult> {
+    return this.unique(
+      () => this.prisma.personnelPost.create({ data: row }),
+      async () => {
+        const active = await this.prisma.personnelPost.findFirst({
+          where: { personnelId: row.personnelId, post: row.post, deactivatedAt: null },
+        });
+        return active ? 'personnel-post' : null;
       },
     );
   }

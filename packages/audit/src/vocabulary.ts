@@ -19,6 +19,10 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'bootstrap.admin-registered',
   'audit.viewed',
   'audit.exported',
+  // 人员登记与查看、岗位标记（#105「人员与登录凭据」，#128）。
+  'personnel.registered',
+  'personnel.viewed',
+  'personnel.post-granted',
 ] as const;
 
 export const AUDIT_ACTIONS = [
@@ -87,6 +91,14 @@ export const ORG_UNIT_DEACTIVATE_FAILED_REASONS = [
   'org-has-open-items',
 ] as const;
 export type OrgUnitDeactivateFailedReason = (typeof ORG_UNIT_DEACTIVATE_FAILED_REASONS)[number];
+
+/** 登记人员被拒（outcome=failed）的原因（#128）：目标机构已停用；工号或手机号已被占用。 */
+export const PERSONNEL_REGISTER_FAILED_REASONS = ['org-unit-deactivated', 'already-exists'] as const;
+export type PersonnelRegisterFailedReason = (typeof PERSONNEL_REGISTER_FAILED_REASONS)[number];
+
+/** 带「后值」的动作（#128）。后值写标记取值；其余动作不许带后值。 */
+export const AUDIT_NEXT_VALUE_ACTIONS = ['personnel.post-granted'] as const;
+export type AuditNextValueAction = (typeof AUDIT_NEXT_VALUE_ACTIONS)[number];
 
 /**
  * 授权拒绝行的目标机构从哪来（#119 修正，ADR 0011）。

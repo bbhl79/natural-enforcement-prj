@@ -94,6 +94,7 @@ model Personnel {
   authSessions    AuthSession[]
   rememberMeRows  AuthRememberMe[]
   personnelRoles  PersonnelRole[]
+  personnelPosts  PersonnelPost[]
   auditAsActor    AuditTrail[] @relation("AuditActor")
   auditAsSubject  AuditTrail[] @relation("AuditSubject")
 
@@ -265,6 +266,19 @@ model PersonnelRole {
   @@map("personnel_role")
 }
 
+// 人员—岗位标记（#128，#105 A1）。取值 legal-review-lead / legal-affairs-leader（库内 CHECK）。
+// 只失效不删除；未失效行的「人员 + 标记」唯一由迁移里的部分唯一索引保证。不进允许行，不授予操作码。
+model PersonnelPost {
+  id            String    @id
+  personnelId   String    @map("personnel_id")
+  personnel     Personnel @relation(fields: [personnelId], references: [id])
+  post          String
+  deactivatedAt DateTime? @db.Timestamptz(6) @map("deactivated_at")
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@map("personnel_post")
+}
+
 /// 留痕。除主键、时间、动作、成败外都可空。写入后不可改、不可删。
 model AuditTrail {
   id                 String    @id
@@ -287,6 +301,8 @@ model AuditTrail {
   previousValue      String?   @map("previous_value")
   /// 导出条数（ADR 0013）。只有带条数的动作写值，其余为空。库层 CHECK 不得为负。
   itemCount          Int?      @map("item_count")
+  // 后值（#128）：personnel.post-granted 写标记取值。其余动作为空。
+  nextValue          String?   @map("next_value")
   /// 授权拒绝行的目标机构（#119 修正，ADR 0011）：查阅范围按它套。其他动作为空。
   targetOrgUnitId    String?   @map("target_org_unit_id")
   /// 目标机构从哪来：object = 对象所属机构；actor-fallback = 对象机构解析不出，取操作者当时任职机构。

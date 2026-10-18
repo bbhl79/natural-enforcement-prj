@@ -34,6 +34,9 @@ export {
   type OrgUnitToCreate,
   type PersonnelAssignmentRow,
   type PersonnelNameVersionRow,
+  type PersonnelDirectoryRow,
+  type PersonnelPostToCreate,
+  type PersonnelProfileRow,
   type PersonnelRoleToCreate,
   type PersonnelRow,
   type PersonnelToCreate,
@@ -71,6 +74,35 @@ export type {
   RegisterPersonnelInput,
 } from './services/personnel.service.ts';
 export { PERSONNEL_EXPORT_OPCODE, PersonnelService } from './services/personnel.service.ts';
+export {
+  CERT_EXPIRING_DAYS,
+  PERSONNEL_CODE_MAX_LENGTH,
+  PERSONNEL_NAME_MAX_LENGTH,
+  PERSONNEL_POSTS,
+  PERSONNEL_PROFILE_READ_OPCODE,
+  PERSONNEL_PROFILE_REGISTER_OPCODE,
+  ROLE_ORDER,
+  certStatusOf,
+  isPersonnelPost,
+  parseCalendarDay,
+  registrationRules,
+} from './domain/personnel-profile.ts';
+export type {
+  CertStatus,
+  PersonnelPost,
+  PersonnelRuleCode,
+  RegisterPersonnelProfileInput,
+  RegisterRuleCode,
+} from './domain/personnel-profile.ts';
+export { PersonnelProfileService } from './services/personnel-profile.service.ts';
+export type {
+  PersonnelList,
+  PersonnelListItem,
+  PersonnelProfile,
+  ReadProfileResult,
+  RegisterPersonnelProfileResult,
+  ScreenRegistrationResult,
+} from './services/personnel-profile.service.ts';
 export {
   BOOTSTRAP_ADMIN_ROLE,
   BOOTSTRAP_CODE_MAX_LENGTH,

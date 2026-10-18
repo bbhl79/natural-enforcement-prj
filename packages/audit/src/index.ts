@@ -25,6 +25,7 @@ export type {
 export {
   AUDIT_ACTIONS,
   AUDIT_COUNTED_ACTIONS,
+  AUDIT_NEXT_VALUE_ACTIONS,
   AUDIT_SUCCEEDED_ACTIONS,
   AUDIT_TARGET_ORG_BASES,
   AUTHZ_DENIED_REASONS,
@@ -32,6 +33,7 @@ export {
   ORG_UNIT_DEACTIVATE_FAILED_REASONS,
   ORG_UNIT_REGISTER_FAILED_REASONS,
   PASSWORD_CHANGED_REASONS,
+  PERSONNEL_REGISTER_FAILED_REASONS,
   SESSION_END_REASONS,
 } from './vocabulary.ts';
 export type {
@@ -43,5 +45,6 @@ export type {
   OrgUnitDeactivateFailedReason,
   OrgUnitRegisterFailedReason,
   PasswordChangedReason,
+  PersonnelRegisterFailedReason,
   SessionEndReason,
 } from './vocabulary.ts';

@@ -56,6 +56,7 @@ const ALLOWED: Record<string, readonly string[]> = {
       ['submit', 'approve', 'void', 'withdraw', 'read'].map((action) => `cfg.${object}.${action}`),
     ),
     'org.tree.read', 'org.unit.register', 'org.unit.rename', 'org.unit.deactivate',
+    'personnel.profile.read', 'personnel.profile.register',
     'personnel.locked.read', 'personnel.locked.release', 'personnel.password.reset', 'personnel.profile.export',
     'audit.admin.read', 'audit.admin.export', 'authz.binding.submit', 'authz.binding.approve',
   ],

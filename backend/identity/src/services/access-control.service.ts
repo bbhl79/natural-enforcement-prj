@@ -258,7 +258,7 @@ export class AccessControlService {
         actorCode: personnel?.code ?? null,
         orgUnitId: decision.context.orgUnitId,
         opcode,
-        // 新根机构还不存在，对象机构解析不出。
+        // 新根机构还不存在，对象机构解析不出（#119 修正）。
         target: actorFallback(decision.context.orgUnitId),
       },
     );

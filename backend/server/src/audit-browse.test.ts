@@ -99,6 +99,14 @@ describe('#126 留痕展示文字（P8）', () => {
     }))).toMatchObject({ operation: '导出人员', object: '龙洞自然资源所' });
   });
 
+  it('人员查看与人员登记被拒的行，操作名按操作码写中文（#128）', () => {
+    const denied = (opcode: string) => describeAuditRow(
+      record({ action: 'authz.denied', outcome: 'failed', reason: 'permission-denied', subjectCode: null, opcode }),
+    );
+    expect(denied('personnel.profile.read').operation).toBe('查看人员');
+    expect(denied('personnel.profile.register').operation).toBe('新建人员');
+  });
+
   it('拒绝行的「所属机构」是目标机构，「对象」按资源标识取机构名（#105；ADR 0011 修正）', () => {
     const crossDistrict = record({
       action: 'authz.denied', outcome: 'failed', reason: 'scope-denied', actorCode: 'TH0102', subjectCode: null,

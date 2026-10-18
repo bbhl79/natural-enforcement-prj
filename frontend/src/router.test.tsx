@@ -22,6 +22,11 @@ const ADMIN = [
   'personnel.profile.read', 'personnel.locked.read', 'personnel.locked.release', 'audit.admin.read',
 ];
 const TREE: [number, Json] = [200, { result: 'listed', rootId: 'hq', orgUnits: [{ id: 'hq' }, { id: 'a' }, { id: 'b' }] }];
+/** 人员名单（#128）：首页人员数只数未停用的。 */
+const PERSONNEL: [number, Json] = [200, {
+  result: 'listed', rootId: 'hq', orgUnits: [],
+  personnel: [{ id: 'p1', deactivatedAt: null }, { id: 'p2', deactivatedAt: null }, { id: 'p3', deactivatedAt: '2026-09-01T00:00:00Z' }],
+}];
 const SUPERVISE = ['audit.admin.read', 'audit.admin.export'];
 const SUMMARY: [number, Json] = [200, { result: 'counted', today: 7 }];
 const ADMIN_ROUTES: Record<string, [number, Json]> = {
@@ -41,7 +46,7 @@ function serve(session: Json | number, routes: Record<string, [number, Json]> = 
         ? new Response('{}', { status: session })
         : new Response(JSON.stringify(session), { status: 200 }));
     }
-    const [status, body] = routes[url] ?? (url === '/api/org-units' ? TREE : [404, {}]);
+    const [status, body] = routes[url] ?? (url === '/api/org-units' ? TREE : url === '/api/admin/personnel' ? PERSONNEL : [404, {}]);
     return Promise.resolve(new Response(JSON.stringify(body), { status }));
   });
   return calls;
@@ -249,15 +254,17 @@ describe('管理台首页（P3）', () => {
     expect(html).not.toContain('后续开放');
   });
 
-  it('取数：被锁人员数来自被锁人员接口，今日留痕来自留痕条数接口（GET）；403 交给无权限页', async () => {
+  it('取数：被锁人员数来自被锁人员接口，人员数来自人员名单（不数已停用），今日留痕来自留痕条数接口（GET）；403 交给无权限页', async () => {
     const store = fresh();
     const calls = serve(person(['系统管理'], ADMIN), {
       '/api/admin/locked-personnel': [200, { result: 'listed', personnel: [{}, {}] }],
       '/api/admin/audit/summary': SUMMARY,
     });
     await store.dispatch(loadSession());
-    // 系统管理：机构数、被锁人员数、今日留痕条数三项都取
-    expect(await loadAdminHomeSummary(store.dispatch, ADMIN)).toEqual({ ...EMPTY_SUMMARY, orgUnits: 3, lockedPersonnel: 2, auditToday: 7 });
+    // 系统管理：机构数、人员数、被锁人员数、今日留痕条数四项都取
+    expect(await loadAdminHomeSummary(store.dispatch, ADMIN)).toEqual({
+      ...EMPTY_SUMMARY, orgUnits: 3, personnel: 2, lockedPersonnel: 2, auditToday: 7,
+    });
     // 只有树读码（内勤）不取机构数：机构入口按维护码出现
     expect((await loadAdminHomeSummary(store.dispatch, ['org.tree.read', 'personnel.locked.read'])).orgUnits).toBeNull();
     expect(await loadAdminHomeSummary(store.dispatch, SUPERVISE)).toEqual({ ...EMPTY_SUMMARY, auditToday: 7 });

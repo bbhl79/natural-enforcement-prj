@@ -6,6 +6,7 @@
 // 主键形制约定（#16 §1.1）：ULID，由领域层 newUlid 生成；端口内以 string 承载。
 
 import type { OrgUnitLevel } from '../domain/org-unit.ts';
+import type { PersonnelPost } from '../domain/personnel-profile.ts';
 
 /** 注入令牌：宿主/调用方绑定 store 实现（模块自身不直连具体存储） */
 export const IDENTITY_STORE = Symbol('IDENTITY_STORE');
@@ -100,6 +101,39 @@ export interface PersonnelToCreate {
   passwordHash: string | null;
   /** 登录标识。有值时全库唯一。不传即为空。 */
   mobilePhone?: string | null;
+  /** 执法证号与有效期（日历日，UTC 午夜）。登记时可空，空即无执法资格（#105:218）。不传即为空。 */
+  enforcementCertNo?: string | null;
+  enforcementCertExpiresOn?: Date | null;
+}
+
+/** 人员—岗位标记新行（#128）。加标记 = 插入新行；摘标记 = 给旧行置失效时间。 */
+export interface PersonnelPostToCreate {
+  id: string;
+  personnelId: string;
+  post: PersonnelPost;
+}
+
+/**
+ * 人员卡片要读的当前态（#128）。含完整手机号和执法证号，只给卡片用；列表不读这两项。
+ */
+export interface PersonnelProfileRow extends PersonnelRow {
+  mobilePhone: string | null;
+  passwordChangedAt: Date | null;
+}
+
+/**
+ * 人员列表的一行（#128）。currentOrgUnitId = 当前任职机构，没有当前任职时为 null。
+ * 不含手机号。执法证号只用于推导执法证情况，不出接口。
+ */
+export interface PersonnelDirectoryRow {
+  id: string;
+  code: string;
+  name: string;
+  currentOrgUnitId: string | null;
+  deactivatedAt: Date | null;
+  enforcementCertNo: string | null;
+  enforcementCertExpiresOn: Date | null;
+  roleNames: string[];
 }
 
 /** 人员—角色新行。授予 = 插入新行；摘除 = 给旧行置失效时间。 */
@@ -110,7 +144,7 @@ export interface PersonnelRoleToCreate {
 }
 
 /** 业务唯一冲突的种类：工号、手机号、重复授予同一角色。 */
-export type IdentityUniqueConflict = 'personnel-code' | 'mobile-phone' | 'personnel-role';
+export type IdentityUniqueConflict = 'personnel-code' | 'mobile-phone' | 'personnel-role' | 'personnel-post';
 
 /**
  * 受业务唯一约束的写入结果（#119）。
@@ -185,6 +219,19 @@ export interface IdentityStore {
   /** 某机构（不含下级）全部未失效人员 */
   listActivePersonnelOfOrgUnit(orgUnitId: string): Promise<PersonnelRow[]>;
   findExportAuditById(id: string): Promise<ExportAuditRow | null>;
+  /** 人员卡片的当前态（#128）；不存在时为 null。 */
+  findPersonnelProfile(id: string): Promise<PersonnelProfileRow | null>;
+  /** 组织树的根机构（parent 为空）；没有时为 null。没有当前任职的人员视同挂在根机构（A10 口径）。 */
+  findRootOrgUnitId(): Promise<string | null>;
+  /**
+   * 人员列表（#128，含已停用人员）：当前任职在这些机构里的人员；includeUnassigned 为真时另含没有当前任职的人员。
+   * 按工号升序。角色名只含未失效的人员—角色和角色。
+   */
+  listPersonnelDirectory(orgUnitIds: readonly string[], includeUnassigned: boolean): Promise<PersonnelDirectoryRow[]>;
+  /** 人员当前未失效的岗位标记，按名册顺序。 */
+  listActivePosts(personnelId: string): Promise<PersonnelPost[]>;
+  /** 这些角色名里未失效的角色：角色名 → 角色 id。不认识或已失效的名字不出现。 */
+  findActiveRoleIds(names: readonly string[]): Promise<Map<string, string>>;
 
   // 生产引导（#131）
   /**
@@ -213,6 +260,8 @@ export interface IdentityStore {
   updatePersonnelMobilePhone(personnelId: string, mobilePhone: string | null): Promise<UniqueWriteResult>;
   /** 同一人员已持有该角色的未失效行时返回 already-exists（personnel-role）。 */
   insertPersonnelRole(row: PersonnelRoleToCreate): Promise<UniqueWriteResult>;
+  /** 同一人员已持有该标记的未失效行时返回 already-exists（personnel-post）。 */
+  insertPersonnelPost(row: PersonnelPostToCreate): Promise<UniqueWriteResult>;
   insertPersonnelNameVersion(row: PersonnelNameVersionRow): Promise<void>;
   updatePersonnelCurrentName(personnelId: string, name: string): Promise<void>;
   /** 调岗后同步人员当前归属机构（任职记录为权威史，此处为读模型冗余） */

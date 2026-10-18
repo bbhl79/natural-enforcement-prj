@@ -5,6 +5,7 @@ import type {
   OrgUnitDeactivateFailedReason,
   OrgUnitRegisterFailedReason,
   PasswordChangedReason,
+  PersonnelRegisterFailedReason,
   SessionEndReason,
 } from './vocabulary.ts';
 
@@ -29,6 +30,8 @@ export interface AuditParties {
   previousValue?: string | null;
   /** 导出条数（ADR 0013）。只有带条数的动作（AUDIT_COUNTED_ACTIONS）写值，其余为空。 */
   itemCount?: number | null;
+  /** 后值（#128）。只有 AUDIT_NEXT_VALUE_ACTIONS 里的动作带，其余为空。 */
+  nextValue?: string | null;
 }
 
 export type AuditAppend =
@@ -61,7 +64,11 @@ export type AuditAppend =
   | (AuditParties & { action: 'bootstrap.root-registered' })
   | (AuditParties & { action: 'bootstrap.admin-registered' })
   | (AuditParties & { action: 'audit.viewed' })
-  | (AuditParties & { action: 'audit.exported'; itemCount: number });
+  | (AuditParties & { action: 'audit.exported'; itemCount: number })
+  | (AuditParties & { action: 'personnel.registered' })
+  | (AuditParties & { action: 'personnel.registered'; outcome: 'failed'; reason: PersonnelRegisterFailedReason })
+  | (AuditParties & { action: 'personnel.viewed' })
+  | (AuditParties & { action: 'personnel.post-granted'; nextValue: string });
 
 /**
  * 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。

@@ -10,6 +10,15 @@ import LockedPersonnelPage from './admin/LockedPersonnelPage';
 import { lockedPersonnelLoader } from './admin/lockedPersonnel';
 import OrgTreePage from './admin/OrgTreePage';
 import { orgTreeLoader } from './admin/orgTree';
+import PersonnelCardPage from './admin/PersonnelCardPage';
+import PersonnelCreatePage from './admin/PersonnelCreatePage';
+import PersonnelListPage from './admin/PersonnelListPage';
+import {
+  personnelCardLoader,
+  personnelCreateLoader,
+  personnelListLoader,
+  shouldRevalidatePersonnelList,
+} from './admin/personnel';
 import LoginPage from './login/LoginPage';
 import PasswordPage from './login/PasswordPage';
 import WorkbenchPage, { workbenchLoader } from './pages/WorkbenchPage';
@@ -65,6 +74,15 @@ export function appRoutes(store: RouterStore): RouteObject[] {
                   element: <LockedPersonnelPage />,
                 },
                 { id: 'admin-audit', path: 'admin/audit', loader: auditLoader(store), element: <AuditPage /> },
+                {
+                  id: 'personnel',
+                  path: 'admin/personnel',
+                  loader: personnelListLoader(store),
+                  shouldRevalidate: shouldRevalidatePersonnelList,
+                  element: <PersonnelListPage />,
+                },
+                { id: 'personnel-new', path: 'admin/personnel/new', loader: personnelCreateLoader(store), element: <PersonnelCreatePage /> },
+                { id: 'personnel-card', path: 'admin/personnel/:id', loader: personnelCardLoader(store), element: <PersonnelCardPage /> },
                 { id: 'not-found', path: '*', element: <NotFoundPage /> },
               ],
             },
