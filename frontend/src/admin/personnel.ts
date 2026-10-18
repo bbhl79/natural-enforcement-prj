@@ -65,7 +65,7 @@ export interface PersonnelCard {
   mobilePhone: string | null;
   orgUnitId: string | null;
   orgName: string | null;
-  /** 当前机构的上级名；根机构或没有当前任职时为 null */
+  /** 当前机构的上级名；本机构是根机构、上级是根机构或没有当前任职时为 null */
   orgParentName: string | null;
   roles: string[];
   posts: PersonnelPost[];
@@ -234,7 +234,7 @@ export function shanghaiDay(at: Date): string {
   return DATE.format(at);
 }
 
-/** 「当前机构」带上级名，原型 P6:30「天河区分局石牌自然资源所」。 */
+/** 「当前机构」带上级名，原型 P6:30「天河区分局石牌自然资源所」；上级是根机构时只写本名（原型 P6:69「天河区分局」）。 */
 export function orgText(card: Pick<PersonnelCard, 'orgName' | 'orgParentName'>): string {
   if (!card.orgName) return '—';
   return `${card.orgParentName ?? ''}${card.orgName}`;

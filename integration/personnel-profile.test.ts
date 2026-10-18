@@ -440,6 +440,15 @@ describe('GET /api/admin/personnel/:id（人员卡片）', () => {
     expect(added(before, await audits()).map((row) => row.action)).toEqual(['personnel.viewed', 'personnel.viewed']);
   });
 
+  it('当前机构是根机构或上级是根机构时不带上级名（原型 P6:69 分局一级只写本名）', async () => {
+    const dept = await (await card(PHONES.root, people.retired)).json() as { personnel: { orgName: string | null; orgParentName: string | null } };
+    expect(dept.personnel.orgName).toBe('第一执法支队');
+    expect(dept.personnel.orgParentName).toBeNull();
+    const root = await (await card(PHONES.root, people.intake)).json() as { personnel: { orgName: string | null; orgParentName: string | null } };
+    expect(root.personnel.orgName).toBe('自然执法总队');
+    expect(root.personnel.orgParentName).toBeNull();
+  });
+
   it('没有当前任职的人员视同根机构：根机构系统管理能看，区系统管理 403 scope-denied', async () => {
     expect((await card(PHONES.root, people.loose)).status).toBe(200);
     const before = await audits();

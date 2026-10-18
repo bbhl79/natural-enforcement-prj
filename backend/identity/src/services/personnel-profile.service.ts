@@ -56,7 +56,7 @@ export interface PersonnelProfile {
   mobilePhone: string | null;
   orgUnitId: string | null;
   orgName: string | null;
-  /** 当前机构的上级名（原型 P6:30「天河区分局石牌自然资源所」）；根机构或没有当前任职时为 null。 */
+  /** 当前机构的上级名（原型 P6:30「天河区分局石牌自然资源所」）；本机构是根机构、上级是根机构或没有当前任职时为 null。 */
   orgParentName: string | null;
   roles: string[];
   posts: PersonnelPost[];
@@ -155,6 +155,8 @@ export class PersonnelProfileService {
       tx.store.findPersonnelById(actor.personnelId),
     ]);
     const parent = org?.parentId ? await tx.store.findOrgUnitById(org.parentId) : null;
+    // 上级是根机构时不拼上级名（原型 P6:69 分局一级只写「天河区分局」）。
+    const orgParentName = parent?.parentId ? parent.name : null;
     await audit.append({
       action: 'personnel.viewed',
       actorId: actor.personnelId,
@@ -176,7 +178,7 @@ export class PersonnelProfileService {
         mobilePhone: target.mobilePhone,
         orgUnitId: current?.orgUnitId ?? null,
         orgName: org?.name ?? null,
-        orgParentName: parent?.name ?? null,
+        orgParentName,
         roles: sortRoleNames(roles),
         posts,
         passwordChangedAt: target.passwordChangedAt,

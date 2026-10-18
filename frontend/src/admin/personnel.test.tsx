@@ -275,8 +275,9 @@ describe('人员卡片（P6 view）', () => {
     expect(html).not.toMatch(/需谨慎的操作|personnel\.profile\.update|personnel\.cert\.update|personnel\.password\.reset/);
   });
 
-  it('当前机构带上级名（原型 P6:30）；根机构只写本名；没有当前任职写「—」', () => {
+  it('当前机构带上级名（原型 P6:30）；本机构是根机构或上级是根机构时只写本名（原型 P6:69）；没有当前任职写「—」', () => {
     expect(orgText(CARD)).toBe('天河区分局石牌自然资源所');
+    expect(orgText({ orgName: '天河区分局', orgParentName: null })).toBe('天河区分局');
     expect(orgText({ orgName: '广州市自然资源局', orgParentName: null })).toBe('广州市自然资源局');
     expect(orgText({ orgName: null, orgParentName: null })).toBe('—');
   });
