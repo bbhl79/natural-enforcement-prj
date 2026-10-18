@@ -44,7 +44,7 @@ export const RESET_EFFECT = '确认后：同时解锁；对方的全部会话都
 
 /**
  * 重设弹窗的口令要求，逐条以「；」相连，句末「。」。
- * 口令历史一条（「不能与对方最近 5 次使用过的口令相同」）由口令历史票（#132）追加到末尾。
+ * 末句口令历史一条为 18:56 定稿（#132，原型 v0.4 P7 PW-6）。
  */
 export const RESET_RULES: readonly string[] = [
   '至少 10 位，最多 64 位',
@@ -52,13 +52,20 @@ export const RESET_RULES: readonly string[] = [
   '不能包含对方工号',
   '不能有 4 位及以上连续或重复字符',
   '不能用常见弱口令',
+  '不能与对方最近 5 次使用过的口令相同',
 ];
 
 export function resetRulesSentence(rules: readonly string[] = RESET_RULES): string {
   return `${rules.join('；')}。`;
 }
 
-/** 重设被服务端判为不合规时，输入框下逐条显示。口令历史的 unavailable 由 #132 补进来。 */
+/**
+ * 命中口令历史（ADR 0015，#132）：服务端只回 unavailable，界面只显示这一句，
+ * 不说明原因（18:56 定稿，原型 v0.4 P7 resetDenied&case=reused）。
+ */
+export const RESET_UNAVAILABLE_TEXT = '此口令不可用，请换一个。';
+
+/** 重设被服务端判为不合规时，输入框下逐条显示。unavailable 走 RESET_UNAVAILABLE_TEXT 单句。 */
 export const RESET_RULE_TEXT: Readonly<Record<string, string>> = {
   'too-short': '口令至少 10 位',
   'too-long': '口令最多 64 位',
@@ -88,6 +95,7 @@ export type Notice =
   | { kind: 'scope-denied'; action: LockedActionKind; row: LockedRow }
   | { kind: 'self-denied'; action: LockedActionKind; row: LockedRow }
   | { kind: 'permission-denied'; action: LockedActionKind; row: LockedRow }
+  | { kind: 'concurrent-change'; action: LockedActionKind; row: LockedRow }
   | { kind: 'failed'; action: LockedActionKind; row: LockedRow };
 
 export function noticeText(notice: Notice): string {
@@ -100,9 +108,11 @@ export function noticeText(notice: Notice): string {
       return `没有${actionPhrase(notice.action, notice.row)}：对方已不在你的数据范围内，可能刚刚调岗。请刷新列表，或联系对方现在所在单位的系统管理人员。`;
     case 'self-denied':
       return SELF_DENIED;
-    // 以下两句原型 v0.4 没有单独状态：由已定稿的句子拼成（工程决定，见 PR）。
+    // 以下三句原型 v0.4 没有单独状态：由已定稿的句子拼成（工程决定，见 PR）。
     case 'permission-denied':
       return `没有${actionPhrase(notice.action, notice.row)}：这个操作需要的权限不在你当前的角色里。如工作需要，请联系本单位的系统管理人员调整角色。`;
+    case 'concurrent-change':
+      return `没有${actionPhrase(notice.action, notice.row)}：对方的口令刚被另一次操作修改。请刷新列表后重试。`;
     case 'failed':
       return `没有${actionPhrase(notice.action, notice.row)}：网络或服务暂时不可用，请稍后重试。问题持续时请联系本单位的系统管理人员。`;
   }
@@ -116,6 +126,8 @@ export function noticeReason(notice: Notice): string | null {
     case 'self-denied':
     case 'permission-denied':
       return 'permission-denied';
+    case 'concurrent-change':
+      return 'concurrent-change';
     case 'failed':
       return 'failed';
     default:
@@ -223,6 +235,10 @@ export async function interpretAction(
     if (typeof body.reason === 'string') {
       return { type: 'denied', notice: { kind: 'permission-denied', action: kind, row } };
     }
+  }
+  // 并发改口令（ADR 0015，#132）：409 concurrent-change 单出横幅，不按网络失败处理。
+  if (response.status === 409 && body.result === 'concurrent-change') {
+    return { type: 'denied', notice: { kind: 'concurrent-change', action: kind, row } };
   }
   return { type: 'denied', notice: { kind: 'failed', action: kind, row } };
 }

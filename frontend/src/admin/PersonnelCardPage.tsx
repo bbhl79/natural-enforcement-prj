@@ -23,12 +23,14 @@ import {
   PASSWORD_RULE_LABEL,
   PERSONNEL_CERT_UPDATE,
   PERSONNEL_DEACTIVATE,
+  PERSONNEL_PASSWORD_RESET,
   PERSONNEL_READ,
   PERSONNEL_RESTORE,
   PERSONNEL_SESSIONS_END,
   PERSONNEL_UPDATE,
   POST_LABEL,
   POSTS,
+  resetPersonnelPassword,
   restorePersonnel,
   ROLES,
   SESSIONS_ENDED_NOTICE,
@@ -43,6 +45,7 @@ import {
   type PersonnelPost,
   type TransferDestination,
 } from './personnel';
+import { RESET_RULE_TEXT, RESET_UNAVAILABLE_TEXT } from './lockedPersonnel';
 import { PersonnelDenied, SkeletonCard } from './PersonnelStatus';
 
 const SUPERVISE = '监督可以在「管理台留痕」里查阅人员维护的留痕。';
@@ -517,6 +520,8 @@ export interface RestoreFailure {
   fields: Partial<Record<'initialPassword' | 'orgUnitId', string>>;
   /** 没满足的口令策略规则码对应的提示句 */
   passwordRules: string[];
+  /** 初始口令命中口令历史（ADR 0015，#132）：输入框下只出「此口令不可用，请换一个。」 */
+  unavailable: boolean;
   message: string | null;
 }
 
@@ -602,7 +607,9 @@ export function RestoreDialog({ card, restore }: { card: PersonnelCard; restore:
             onChange={(event) => restore.onPassword(event.target.value)}
           />
           {fields.initialPassword ? <div className="err" data-error="initialPassword">{fields.initialPassword}</div> : null}
-          {ruleTexts.length > 0 ? (
+          {restore.failure?.unavailable ? (
+            <div className="err" data-reason="unavailable">{RESET_UNAVAILABLE_TEXT}</div>
+          ) : ruleTexts.length > 0 ? (
             <ul className="err" data-reason="non-compliant" style={{ margin: '4px 0 0 18px' }}>
               {ruleTexts.map((text) => <li key={text}>{text}</li>)}
             </ul>
@@ -615,9 +622,97 @@ export function RestoreDialog({ card, restore }: { card: PersonnelCard; restore:
   );
 }
 
+// ---------- 重设初始口令弹窗（P6 resetpw / resetpwReused，#132） ----------
+
+/** 重设弹窗的失败态：可公开规则码、命中历史、弹窗级提示三者互斥出现。 */
+export interface ResetPasswordFailure {
+  passwordRules: string[];
+  unavailable: boolean;
+  message: string | null;
+}
+
+export interface ResetPasswordState {
+  password: string;
+  failure: ResetPasswordFailure | null;
+  busy: boolean;
+  onPassword: (value: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}
+
+/** 规则句与后果清单逐字取原型 v0.4 P6 resetpw（18:56 定稿，PW-11）。 */
+export const RESET_PASSWORD_HELP = '要求同新建人员，另外不能与对方最近 5 次使用过的口令相同。';
+export const RESET_PASSWORD_EFFECTS = [
+  '如对方正被锁定，会同时解锁；',
+  '对方的全部会话都会结束；',
+  '对方下次登录必须先改口令。',
+] as const;
+
+/** 重设成功后的结果横幅。v0.4 无此状态：取 P7「重设成功」定稿句去掉解锁分句（工程稿，按单测验收）。 */
+export const resetPasswordNotice = (name: string) =>
+  `已为「${name}」重设初始口令。对方的全部会话和全部「记住我」已结束，下次登录须先改口令。`;
+
+/** 卡片顶部的成功横幅：kind 落 data-notice，text 是给人看的一句。 */
+export type CardNotice = { kind: 'sessions-ended' | 'password-reset'; text: string };
+
+/** P6 resetpw / resetpwReused（纯渲染）。命中口令历史只出单句「此口令不可用，请换一个。」 */
+export function ResetPasswordDialog({ card, reset }: { card: PersonnelCard; reset: ResetPasswordState }) {
+  const ruleTexts = (reset.failure?.passwordRules ?? [])
+    .map((rule) => RESET_RULE_TEXT[rule])
+    .filter((text): text is string => Boolean(text));
+  return (
+    <Modal
+      title={`为「${card.name}」重设初始口令`}
+      foot={(
+        <>
+          <button type="button" className="btn" disabled={reset.busy} onClick={reset.onCancel}>取消</button>
+          <button
+            type="button"
+            className="btn btn-danger"
+            disabled={reset.busy || reset.password === ''}
+            onClick={reset.onSubmit}
+          >
+            确认重设
+          </button>
+        </>
+      )}
+    >
+      {reset.failure?.message ? <div className="banner danger" data-error="message">{reset.failure.message}</div> : null}
+      <div className="form-row">
+        <label htmlFor="rp-password">新的初始口令<span className="req">*</span></label>
+        <div>
+          <input
+            id="rp-password"
+            className="input"
+            type="text"
+            autoComplete="off"
+            placeholder="请输入新的初始口令"
+            value={reset.password}
+            disabled={reset.busy}
+            data-autofocus
+            onChange={(event) => reset.onPassword(event.target.value)}
+          />
+          {reset.failure?.unavailable ? (
+            <div className="err" data-reason="unavailable">{RESET_UNAVAILABLE_TEXT}</div>
+          ) : ruleTexts.length > 0 ? (
+            <ul className="err" data-reason="non-compliant" style={{ margin: '4px 0 0 18px' }}>
+              {ruleTexts.map((text) => <li key={text}>{text}</li>)}
+            </ul>
+          ) : null}
+          <div className="help">{RESET_PASSWORD_HELP}</div>
+        </div>
+      </div>
+      <p>确认后：</p>
+      <ul>
+        {RESET_PASSWORD_EFFECTS.map((line) => <li key={line}>{line}</li>)}
+      </ul>
+    </Modal>
+  );
+}
+
 // ---------- 卡片（P6 view） ----------
 
-/** P6 view（纯渲染，单测直接渲染）。重设口令（#132）、执法证登记/变更（#133）随后补入危险操作区。 */
+/** P6 view（纯渲染，单测直接渲染）。重设初始口令（#132）已在危险操作区，执法证登记/变更（#133）随后补入。 */
 export function PersonnelCardView({
   card,
   now,
@@ -629,6 +724,7 @@ export function PersonnelCardView({
   canDeactivate = false,
   canRestore = false,
   canEndSessions = false,
+  canResetPassword = false,
   dangerBusy = false,
   notice = null,
   edit = null,
@@ -637,6 +733,7 @@ export function PersonnelCardView({
   onOpenDeactivate,
   onOpenEndSessions,
   onOpenRestore,
+  onOpenResetPassword,
 }: {
   card: PersonnelCard;
   now: Date;
@@ -654,10 +751,12 @@ export function PersonnelCardView({
   canRestore?: boolean;
   /** 会话清单里有 personnel.sessions.end。 */
   canEndSessions?: boolean;
+  /** 会话清单里有 personnel.password.reset（#132）。 */
+  canResetPassword?: boolean;
   /** 危险操作区有请求在途：四个入口一并置灰，避免回调互相覆盖卡片。 */
   dangerBusy?: boolean;
-  /** 结束全部会话成功后的结果横幅。 */
-  notice?: string | null;
+  /** 结束全部会话、重设初始口令成功后的结果横幅。 */
+  notice?: CardNotice | null;
   /** 编辑态；null = 查看态。 */
   edit?: EditState | null;
   onEnterEdit?: () => void;
@@ -665,6 +764,7 @@ export function PersonnelCardView({
   onOpenDeactivate?: () => void;
   onOpenEndSessions?: () => void;
   onOpenRestore?: () => void;
+  onOpenResetPassword?: () => void;
 }) {
   const [revealed, setRevealed] = useState(false);
   const off = Boolean(card.deactivatedAt);
@@ -673,7 +773,7 @@ export function PersonnelCardView({
   return (
     <>
       {registered ? <RegisteredBanner name={card.name} /> : null}
-      {notice ? <div className="banner ok" role="status" data-notice="sessions-ended">{notice}</div> : null}
+      {notice ? <div className="banner ok" role="status" data-notice={notice.kind}>{notice.text}</div> : null}
       <div className="grid2">
         <div className="card">
           <div className="card-h">
@@ -765,7 +865,22 @@ export function PersonnelCardView({
                       调岗
                     </button>
                   </div>
-                  {/* 重设初始口令一行由 #132 补入。 */}
+                  <div className="row">
+                    <div>
+                      重设初始口令
+                      <div className="help">同时解锁，并结束对方全部会话</div>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-ghost-danger"
+                      data-requires={PERSONNEL_PASSWORD_RESET}
+                      data-action="resetpw"
+                      disabled={self || !canResetPassword || rowBusy}
+                      onClick={onOpenResetPassword}
+                    >
+                      重设
+                    </button>
+                  </div>
                   <div className="row">
                     <div>
                       结束全部会话
@@ -851,7 +966,8 @@ export function parentNameOf(dest: TransferDestination, units: readonly Transfer
 }
 
 /**
- * 卡片工作区：执法证登记（#133）与编辑、调岗（#129）、停用、恢复、结束全部会话（#130）的状态放这里。
+ * 卡片工作区：执法证登记（#133）与编辑、调岗（#129）、停用、恢复、结束全部会话（#130）、
+ * 重设初始口令（#132）的状态放这里。
  * 编辑、调岗与危险操作成功后就地更新卡片，不重取（重取会多写一行 personnel.viewed）；
  * 执法证保存成功后重取卡片——接口返回体不回显证号，界面按库里的当前值重新渲染。
  */
@@ -865,12 +981,13 @@ function CardWorkspace({ loaded, registered }: { loaded: PersonnelCard; register
   const [edit, setEdit] = useState<{ input: EditInput; failure: EditFailure | null; busy: boolean } | null>(null);
   const [transfer, setTransfer] = useState<Omit<TransferState, 'onChange' | 'onCancel' | 'onSubmit'> | null>(null);
   const [danger, setDanger] = useState<DangerWorkspace | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<CardNotice | null>(null);
   const self = operator !== null && operator.code === card.code;
   const canUpdate = opcodes.includes(PERSONNEL_UPDATE);
   const canDeactivate = opcodes.includes(PERSONNEL_DEACTIVATE);
   const canRestore = opcodes.includes(PERSONNEL_RESTORE);
   const canEndSessions = opcodes.includes(PERSONNEL_SESSIONS_END);
+  const canResetPassword = opcodes.includes(PERSONNEL_PASSWORD_RESET);
   const canUpdateCert = opcodes.includes(PERSONNEL_CERT_UPDATE);
 
   const saveCert = async (input: CertUpdateInput): Promise<CertUpdateResult> => {
@@ -938,6 +1055,11 @@ function CardWorkspace({ loaded, registered }: { loaded: PersonnelCard; register
     setDanger({ kind: 'endsessions', busy: false, message: null });
   };
 
+  const openResetPassword = () => {
+    setNotice(null);
+    setDanger({ kind: 'resetpw', busy: false, password: '', failure: null });
+  };
+
   const openRestore = async () => {
     setNotice(null);
     setDanger({ kind: 'restore', busy: false, orgUnits: card.orgDeactivated ? null : [], loadFailed: false, initialPassword: '', orgUnitId: '', failure: null });
@@ -957,7 +1079,7 @@ function CardWorkspace({ loaded, registered }: { loaded: PersonnelCard; register
         // 就地翻成已停用态：标签、口令一栏与危险操作区（恢复一行）随之切换。
         setOverride((prev) => ({ ...(prev ?? loaded), deactivatedAt: new Date().toISOString() }));
       } else {
-        setNotice(SESSIONS_ENDED_NOTICE);
+        setNotice({ kind: 'sessions-ended', text: SESSIONS_ENDED_NOTICE });
       }
       return;
     }
@@ -984,11 +1106,51 @@ function CardWorkspace({ loaded, registered }: { loaded: PersonnelCard; register
       setDanger(null);
       return;
     }
-    if (result.message === null && Object.keys(result.fields).length === 0 && result.passwordRules.length === 0) {
+    if (
+      result.message === null
+      && Object.keys(result.fields).length === 0
+      && result.passwordRules.length === 0
+      && !result.unavailable
+    ) {
       setDanger(null);
       return;
     }
-    setDanger({ ...state, busy: false, failure: { fields: result.fields, passwordRules: result.passwordRules, message: result.message } });
+    setDanger({
+      ...state,
+      busy: false,
+      failure: {
+        fields: result.fields,
+        passwordRules: result.passwordRules,
+        unavailable: result.unavailable,
+        message: result.message,
+      },
+    });
+  };
+
+  /**
+   * 重设初始口令（#132，P6 resetpw）：与 A10 同一接口，成功后就地翻成「尚未改过初始口令」，
+   * 出结果横幅，不重取卡片（重取会多写一行 personnel.viewed）。
+   * 命中口令历史只回 unavailable，输入框下出单句「此口令不可用，请换一个。」，弹窗不关。
+   */
+  const submitResetPassword = async (state: Extract<DangerWorkspace, { kind: 'resetpw' }>) => {
+    setDanger({ ...state, busy: true });
+    const result = await resetPersonnelPassword(dispatch, card.id, state.password);
+    if (result.ok) {
+      setOverride((prev) => ({ ...(prev ?? loaded), passwordChangedAt: null }));
+      setDanger(null);
+      setNotice({ kind: 'password-reset', text: resetPasswordNotice(card.name) });
+      return;
+    }
+    // message 为 null 且没有任何输入框提示，说明会话已结束，交给会话已结束页接手。
+    if (result.message === null && result.passwordRules.length === 0 && !result.unavailable) {
+      setDanger(null);
+      return;
+    }
+    setDanger({
+      ...state,
+      busy: false,
+      failure: { passwordRules: result.passwordRules, unavailable: result.unavailable, message: result.message },
+    });
   };
 
   return (
@@ -1005,6 +1167,7 @@ function CardWorkspace({ loaded, registered }: { loaded: PersonnelCard; register
         canDeactivate={canDeactivate}
         canRestore={canRestore}
         canEndSessions={canEndSessions}
+        canResetPassword={canResetPassword}
         dangerBusy={danger?.busy === true}
         notice={notice}
         edit={edit === null ? null : {
@@ -1018,6 +1181,7 @@ function CardWorkspace({ loaded, registered }: { loaded: PersonnelCard; register
         onOpenDeactivate={openDeactivate}
         onOpenEndSessions={openEndSessions}
         onOpenRestore={() => void openRestore()}
+        onOpenResetPassword={openResetPassword}
       />
       {transfer ? (
         <TransferDialog
@@ -1052,6 +1216,19 @@ function CardWorkspace({ loaded, registered }: { loaded: PersonnelCard; register
           }}
         />
       ) : null}
+      {danger?.kind === 'resetpw' ? (
+        <ResetPasswordDialog
+          card={card}
+          reset={{
+            password: danger.password,
+            failure: danger.failure,
+            busy: danger.busy,
+            onPassword: (password) => setDanger({ ...danger, password, failure: null }),
+            onCancel: () => setDanger(null),
+            onSubmit: () => void submitResetPassword(danger),
+          }}
+        />
+      ) : null}
       {danger?.kind === 'restore' ? (
         <RestoreDialog
           card={card}
@@ -1073,9 +1250,10 @@ function CardWorkspace({ loaded, registered }: { loaded: PersonnelCard; register
   );
 }
 
-/** 危险操作区三个弹窗的工作状态；restore 另带新任职机构清单与表单。 */
+/** 危险操作区四个弹窗的工作状态；resetpw 带口令输入，restore 另带新任职机构清单与表单。 */
 type DangerWorkspace =
   | { kind: 'deactivate' | 'endsessions'; busy: boolean; message: string | null }
+  | { kind: 'resetpw'; busy: boolean; password: string; failure: ResetPasswordFailure | null }
   | {
     kind: 'restore';
     busy: boolean;
