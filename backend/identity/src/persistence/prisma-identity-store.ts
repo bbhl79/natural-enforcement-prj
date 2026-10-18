@@ -14,7 +14,6 @@ import {
   isPersonnelPost,
   type PersonnelPost,
 } from '../domain/personnel-profile.ts';
-import { PERSONNEL_POSTS, isPersonnelPost, type PersonnelPost } from '../domain/personnel-profile.ts';
 import { ROOT_GUARD_ROLE } from '../domain/root-guard.ts';
 
 import type {
@@ -31,8 +30,8 @@ import type {
   PersonnelRoleToCreate,
   PersonnelRoleBindingRow,
   PersonnelPostToCreate,
-  PersonnelCertToUpdate,
   PersonnelPostBindingRow,
+  PersonnelCertToUpdate,
   PersonnelProfileRow,
   PersonnelDirectoryRow,
   PersonnelNameVersionRow,

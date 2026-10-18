@@ -479,6 +479,33 @@ export async function updateCert(
   let response: Response;
   try {
     response = await apiFetch(dispatch, `/api/admin/personnel/${encodeURIComponent(personnelId)}/cert`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+  } catch {
+    return { ok: false, fields: {}, message: FAILED };
+  }
+  if (response.status === 401) return { ok: false, fields: {}, message: null };
+  const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  if (response.ok) return { ok: true };
+  if (response.status === 400 && Array.isArray(json.rules)) {
+    const fields: Partial<Record<CertUpdateField, string>> = {};
+    for (const rule of json.rules as string[]) {
+      const known = CERT_FIELD_RULES[rule];
+      if (known) fields[known.field] ??= known.text;
+    }
+    return { ok: false, fields, message: null };
+  }
+  if (response.status === 404) {
+    return { ok: false, fields: {}, message: '没有找到这个人员。请回到人员名单重新进入。' };
+  }
+  if (response.status === 403) {
+    return { ok: false, fields: {}, message: DENIED_TARGET };
+  }
+  return { ok: false, fields: {}, message: FAILED };
+}
+
 // ---------- 编辑（#129，P6 edit / selfEdit） ----------
 
 export interface EditInput {
@@ -519,22 +546,6 @@ export async function updatePersonnel(dispatch: ApiDispatch, id: string, input: 
   const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
   if (response.ok) return { ok: true };
   if (response.status === 400 && Array.isArray(json.rules)) {
-    const fields: Partial<Record<CertUpdateField, string>> = {};
-    for (const rule of json.rules as string[]) {
-      const known = CERT_FIELD_RULES[rule];
-      if (known) fields[known.field] ??= known.text;
-    }
-    return { ok: false, fields, message: null };
-  }
-  if (response.status === 404) {
-    return { ok: false, fields: {}, message: '没有找到这个人员。请回到人员名单重新进入。' };
-  }
-  if (response.status === 403) {
-    return { ok: false, fields: {}, message: '你没有权限执行这个操作，或这个人员不在你的范围内。' };
-  }
-  return { ok: false, fields: {}, message: FAILED };
-}
-
     const fields: Partial<Record<EditField, string>> = {};
     for (const rule of json.rules as string[]) {
       const known = FIELD_RULES[rule];
