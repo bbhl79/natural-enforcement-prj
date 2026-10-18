@@ -5,6 +5,7 @@ import type {
   OrgUnitDeactivateFailedReason,
   OrgUnitRegisterFailedReason,
   PasswordChangedReason,
+  PasswordRejectedReason,
   PersonnelDeactivateFailedReason,
   PersonnelMobileChangeFailedReason,
   PersonnelPostGrantFailedReason,
@@ -57,6 +58,8 @@ export type AuditAppend =
   | (AuditParties & { action: 'account.unlocked' })
   | (AuditParties & { action: 'account.password-reset' })
   | (AuditParties & { action: 'account.password-changed'; reason: PasswordChangedReason })
+  /** 口令被拒（ADR 0015，#132）：只记失败。口令、散列、前值不进任何一列。 */
+  | (AuditParties & { action: 'account.password-rejected'; outcome: 'failed'; reason: PasswordRejectedReason })
   | (AuditParties & {
     action: 'authz.denied';
     reason: AuthzDeniedReason;

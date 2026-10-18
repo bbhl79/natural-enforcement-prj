@@ -37,9 +37,10 @@ describe('口令散列（argon2 0.45.1，#52）', () => {
       known: { passwordHash: hash },
     });
     const service = new CredentialService(store);
-    await expect(service.authenticate('known', 's3cret-pass')).resolves.toBe(true);
-    await expect(service.authenticate('known', 'wrong-pass')).resolves.toBe(false);
-    await expect(service.authenticate('missing', 's3cret-pass')).resolves.toBe(false);
+    // 成功交回当前散列（#132）：改密拿它作条件更新的期望值。
+    await expect(service.authenticate('known', 's3cret-pass')).resolves.toBe(hash);
+    await expect(service.authenticate('known', 'wrong-pass')).resolves.toBeNull();
+    await expect(service.authenticate('missing', 's3cret-pass')).resolves.toBeNull();
   });
 
   it('验真成功且已存参数与定版不符时按定版重写，上次改密时间不变', async () => {
@@ -59,7 +60,8 @@ describe('口令散列（argon2 0.45.1，#52）', () => {
       },
     } as unknown as IdentityStore;
     const service = new CredentialService(store);
-    await expect(service.authenticate('known', 's3cret-pass')).resolves.toBe(true);
+    const returned = await service.authenticate('known', 's3cret-pass');
+    expect(returned).toBe(row.passwordHash);
     expect(row.passwordHash).toMatch(/^\$argon2id\$v=19\$m=19456,p=1,t=2\$/);
     expect(row.passwordChangedAt).toEqual(new Date('2026-01-15T00:00:00.000Z'));
     await expect(service.verifyHash(row.passwordHash, 's3cret-pass')).resolves.toBe(true);
@@ -83,7 +85,7 @@ describe('口令散列（argon2 0.45.1，#52）', () => {
       },
     } as unknown as IdentityStore;
     const service = new CredentialService(store);
-    await expect(service.authenticate('known', 'old-pass-1A!')).resolves.toBe(false);
+    await expect(service.authenticate('known', 'old-pass-1A!')).resolves.toBeNull();
     expect(row.passwordHash).toBe(resetHash);
   });
 
@@ -100,9 +102,64 @@ describe('口令散列（argon2 0.45.1，#52）', () => {
       },
     } as unknown as IdentityStore;
     const service = new CredentialService(store);
-    await expect(service.authenticate('known', 's3cret-pass')).resolves.toBe(true);
+    await expect(service.authenticate('known', 's3cret-pass')).resolves.toBe(pinned);
     expect(row.passwordHash).toBe(pinned);
     expect(row.passwordChangedAt).toEqual(changedAt);
+  });
+});
+
+describe('口令历史（ADR 0015，#132）', () => {
+  it('历史深度经构造参数注入：默认 5，测试可传 2，读取条数 = 深度 - 1', async () => {
+    const limits: number[] = [];
+    const store = {
+      listRecentPasswordHashes: async (_id: string, limit: number) => {
+        limits.push(limit);
+        return [];
+      },
+    } as unknown as IdentityStore;
+    expect(new CredentialService(store).historyDepth).toBe(5);
+    await new CredentialService(store).isReused('p1', 'Any-pass-1!', null);
+    expect(limits).toEqual([4]);
+    expect(new CredentialService(store, 2).historyDepth).toBe(2);
+    await new CredentialService(store, 2).isReused('p1', 'Any-pass-1!', null);
+    expect(limits).toEqual([4, 1]);
+  });
+
+  it('isReused 命中当前散列或任一历史散列即为真；带旧 argon2 参数的条目照样命中', async () => {
+    const current = await new CredentialService(noopStore()).hashPassword('Current-1!');
+    // 旧参数条目：argon2 默认参数（m=65536,t=3,p=4），与定版不同，参数写在 PHC 串里。
+    const legacy = await hashWithDefaults('Legacy-pass-1!');
+    const store = {
+      listRecentPasswordHashes: async () => [legacy],
+    } as unknown as IdentityStore;
+    const service = new CredentialService(store);
+    await expect(service.isReused('p1', 'Current-1!', current)).resolves.toBe(true);
+    await expect(service.isReused('p1', 'Legacy-pass-1!', current)).resolves.toBe(true);
+    await expect(service.isReused('p1', 'Fresh-pass-1!', current)).resolves.toBe(false);
+  });
+
+  it('changePassword 走条件更新 + 追加历史：期望值不成立返回 false，什么都不写', async () => {
+    const rotations: Array<Record<string, unknown>> = [];
+    let hit = true;
+    const store = {
+      rotatePasswordHash: async (rotation: Record<string, unknown>) => {
+        rotations.push(rotation);
+        return hit;
+      },
+    } as unknown as IdentityStore;
+    const service = new CredentialService(store);
+    const at = new Date('2026-10-19T03:00:00.000Z');
+    await expect(service.changePassword('p1', 'New-pass-1!', at, 'expected-hash')).resolves.toBe(true);
+    expect(rotations).toHaveLength(1);
+    expect(rotations[0]).toMatchObject({
+      personnelId: 'p1',
+      expectedHash: 'expected-hash',
+      passwordChangedAt: at,
+      retiredAt: at,
+    });
+    await expect(service.verifyHash(String(rotations[0]!.passwordHash), 'New-pass-1!')).resolves.toBe(true);
+    hit = false;
+    await expect(service.changePassword('p1', 'New-pass-1!', at, 'stale-hash')).resolves.toBe(false);
   });
 });
 

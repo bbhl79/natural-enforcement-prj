@@ -1,10 +1,17 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { rejected, type AuditEntry, type Rejected } from '@natural-enforcement/audit';
+import {
+  rejected,
+  type AuditEntry,
+  type AuditParties,
+  type PasswordRejectedReason,
+  type Rejected,
+} from '@natural-enforcement/audit';
 import {
   CredentialService,
   PersonnelProfileService,
   isAccessDenied,
   DEACTIVATED_EDIT_MESSAGE,
+  PERSONNEL_PROFILE_RESTORE_OPCODE,
   DEACTIVATED_TRANSFER_MESSAGE,
   PERSONNEL_DEACTIVATED_REASON,
   RESTORE_INVALID_MESSAGE,
@@ -121,14 +128,19 @@ export type DeactivatePersonnelOutcome =
 
 /**
  * 恢复（#130）。orgUnitId 是恢复后的当前任职机构；带新任职机构时恢复与调岗同事务完成。
- * 口令不合规是 400，不写留痕；口令历史比对留给口令历史票（#132）。
+ * 口令不合规是 400，不写留痕；初始口令命中口令历史只回 unavailable（ADR 0015，#132）。
  */
 export type RestorePersonnelOutcome =
   | { status: 200; body: { result: 'restored'; orgUnitId: string | null } }
   | { status: 400; body: { result: 'non-compliant'; rules: RestoreRuleCode[] } }
   | { status: 404; body: { result: 'not-found' } }
+  /** 并发改口令（ADR 0015，#132）：期望散列已被换掉，本次不写库，人员保持停用。 */
+  | { status: 409; body: { result: 'concurrent-change' } }
   | InvalidState
   | Denial;
+
+/** 恢复判断通过后交出的比对口径（ADR 0015，#132）：期望散列、历史散列与拒绝留痕的一方快照。 */
+type RestoreReady = { expectedHash: string | null; historyHashes: string[]; parties: AuditParties };
 
 /** 结束全部会话（#130）：每段写 session.ended，另写一行 personnel.sessions-ended，不改口令。 */
 export type EndSessionsOutcome =
@@ -389,8 +401,8 @@ export class PersonnelProfilesService {
 
   /**
    * 恢复（#130，D7）：恢复、重设初始口令、解除锁定、结束残余会话和「记住我」在一个事务里。
-   * 口令散列在事务之外计算（#119），所以先判断再散列再写入，写法照 A10 的重设初始口令。
-   * 口令历史比对留给口令历史票（#132）。
+   * 口令散列与口令历史比对在事务之外计算（#119、ADR 0015），所以先判断再比对再散列再写入，
+   * 写法照 A10 的重设初始口令。命中历史只回 unavailable，人员仍为停用（#132）。
    */
   async restore(
     actor: ActorRef,
@@ -398,17 +410,52 @@ export class PersonnelProfilesService {
     input: RestorePersonnelProfileInput,
     sourceIp: string | null,
   ): Promise<RestorePersonnelOutcome> {
-    // 第一步：判断能否恢复。不合规、越权、状态不允许时直接返回，不散列。
-    const checked = await this.uow.run<RestorePersonnelOutcome | { ready: true }>(async (tx) => {
+    // 第一步：判断能否恢复，并读出当前散列与口令历史。不合规、越权、状态不允许时直接返回，不散列。
+    const checked = await this.uow.run<RestorePersonnelOutcome | { ready: RestoreReady }>(async (tx) => {
       try {
         const screened = await this.profiles.screenRestore(actor, personnelId, input, tx, sourceIp);
-        return screened.result === 'ready' ? { ready: true } : this.restoreOutcome(screened);
+        if (screened.result !== 'ready') return this.restoreOutcome(screened);
+        // 一方快照取在恢复与调岗之前：留痕的机构写对方当时的任职机构（ADR 0011）。
+        const before = await tx.directory.findById(personnelId);
+        const admin = await tx.directory.findById(actor.personnelId);
+        return {
+          ready: {
+            expectedHash: screened.target.profile.passwordHash,
+            historyHashes: await tx.store.listRecentPasswordHashes(personnelId, this.credentials.historyDepth - 1),
+            parties: {
+              actorId: actor.personnelId,
+              actorCode: admin?.code ?? null,
+              subjectPersonnelId: personnelId,
+              subjectCode: before?.code ?? null,
+              orgUnitId: before?.orgUnitId ?? null,
+              sourceIp,
+            },
+          },
+        };
       } catch (error) {
         const { outcome, entry } = denial(error);
         return entry ? rejected<RestorePersonnelOutcome>(outcome, entry) : outcome;
       }
     });
     if (!('ready' in checked)) return checked;
+    const { expectedHash, historyHashes, parties } = checked.ready;
+    const rejectedEntry = (reason: PasswordRejectedReason): AuditEntry => ({
+      ...parties,
+      action: 'account.password-rejected',
+      outcome: 'failed',
+      reason,
+      opcode: PERSONNEL_PROFILE_RESTORE_OPCODE,
+      resourceType: 'personnel',
+      resourceId: personnelId,
+    });
+    // 历史比对在事务之外（ADR 0015）：初始口令命中历史（含当前口令）只回 unavailable，
+    // 不暴露 reused；拒绝留痕在业务事务回滚后另起事务写入（#105 事务前置）。
+    if (await this.credentials.matchesAny([expectedHash, ...historyHashes], input.initialPassword)) {
+      return this.uow.run(async () => rejected<RestorePersonnelOutcome>(
+        { status: 400, body: { result: 'non-compliant', rules: ['unavailable'] } },
+        rejectedEntry('reused'),
+      ));
+    }
     const passwordHash = await this.credentials.hashPassword(input.initialPassword);
     // 第二步：重新判断后写入。身份组织的行与口令、会话、「记住我」同一事务。
     return this.uow.run<RestorePersonnelOutcome>(async (tx) => {
@@ -420,9 +467,25 @@ export class PersonnelProfilesService {
         const admin = await tx.directory.findById(actor.personnelId);
         const now = this.clock.now();
         const wasLocked = before?.lockedUntil != null && now.getTime() < before.lockedUntil.getTime();
-        // 写入初始口令：上次改密时间留空（首登强制改密），并清零锁定。
-        await tx.directory.applyInitialPassword(personnelId, passwordHash);
-        const parties = {
+        // 写入初始口令：条件更新 + 追加历史同一事务（ADR 0015），上次改密时间留空（首登强制改密）。
+        // 期望散列不成立说明并发已换掉口令，整体回滚不写库，回 409。
+        const rotated = await tx.store.rotatePasswordHash({
+          personnelId,
+          expectedHash,
+          passwordHash,
+          passwordChangedAt: null,
+          retiredAt: now,
+        });
+        if (!rotated) {
+          return rejected<RestorePersonnelOutcome>(
+            { status: 409, body: { result: 'concurrent-change' } },
+            rejectedEntry('concurrent-change'),
+          );
+        }
+        // 失败计数与锁定由这一步清零（散列与改密时间已由条件更新写入）。
+        await tx.directory.clearFailure(personnelId);
+        // 成功行的一方快照用写入事务里读到的值（与拒绝行分开构造，拒绝行取第一步快照）。
+        const successParties = {
           actorId: actor.personnelId,
           actorCode: admin?.code ?? null,
           subjectPersonnelId: personnelId,
@@ -430,9 +493,9 @@ export class PersonnelProfilesService {
           orgUnitId: before?.orgUnitId ?? null,
           sourceIp,
         };
-        await tx.audit.append({ action: 'account.password-reset', ...parties });
+        await tx.audit.append({ action: 'account.password-reset', ...successParties });
         // 同一次请求做成几件不同的事，就各写一行（ADR 0011）：解锁另记一行。
-        if (wasLocked) await tx.audit.append({ action: 'account.unlocked', ...parties });
+        if (wasLocked) await tx.audit.append({ action: 'account.unlocked', ...successParties });
         await this.auth.endPersonnelSessions({
           personnelId,
           actorId: actor.personnelId,

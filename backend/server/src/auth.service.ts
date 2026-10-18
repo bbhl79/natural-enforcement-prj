@@ -126,7 +126,9 @@ export type PasswordChangeOutcome = {
     | { result: 'established' }
     | { result: 'invalid-credential' }
     | { result: 'locked' }
-    | { result: 'non-compliant'; rules: PasswordRuleCode[] };
+    | { result: 'non-compliant'; rules: PasswordRuleCode[] }
+    /** 并发改密（ADR 0015，#132）：期望散列已被换掉，本次不写库。 */
+    | { result: 'concurrent-change' };
 };
 
 export type SessionView =
@@ -333,8 +335,8 @@ export class AuthService {
       });
       return { status: 401, body: { result: 'locked' } };
     }
-    const accepted = await this.credentials.authenticate(active.account.id, input.currentPassword);
-    if (!accepted) {
+    const currentHash = await this.credentials.authenticate(active.account.id, input.currentPassword);
+    if (!currentHash) {
       const snapshot = this.nextFailure(active.account, now);
       await this.directory.saveFailure(active.account.id, snapshot);
       if (snapshot.count >= LOCK_AFTER) {
@@ -358,8 +360,24 @@ export class AuthService {
       currentPassword: input.currentPassword,
     });
     if (rules.length > 0) return { status: 400, body: { result: 'non-compliant', rules } };
+    // 历史比对只在其余口令规则全部通过后做（ADR 0015）。本人命中历史只回 reused，
+    // 不说明命中第几次，也不写留痕（#105 错误码表）。
+    if (await this.credentials.isReused(active.account.id, input.newPassword, currentHash)) {
+      return { status: 400, body: { result: 'non-compliant', rules: ['reused'] } };
+    }
     const gate = passwordGate(active.account.passwordChangedAt, now);
-    await this.credentials.changePassword(active.account.id, input.newPassword, now);
+    // 条件更新 + 追加历史同一事务（ADR 0015）：期望值是认证时读到的散列。
+    const rotated = await this.credentials.changePassword(active.account.id, input.newPassword, now, currentHash);
+    if (!rotated) {
+      // 并发已换掉散列：本次不写库，回 409，拒绝留痕写 account.password-rejected（操作码为空，本人改密）。
+      await this.audit.append({
+        action: 'account.password-rejected',
+        outcome: 'failed',
+        reason: 'concurrent-change',
+        ...partiesOf(active.account, input.sourceIp),
+      });
+      return { status: 409, body: { result: 'concurrent-change' } };
+    }
     await this.audit.append({
       action: 'account.password-changed',
       reason: this.passwordChangedReason(gate),

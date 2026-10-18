@@ -43,8 +43,6 @@ export interface LoginDirectory {
   isRootOrg(orgUnitId: string): Promise<boolean>;
   /** 组织树的根机构。没有根时返回空。 */
   rootOrgId(): Promise<string | null>;
-  /** 写入初始口令。上次改密时间留空，并清零锁定。 */
-  applyInitialPassword(id: string, passwordHash: string): Promise<void>;
 }
 
 export const LOGIN_DIRECTORY = Symbol('LOGIN_DIRECTORY');

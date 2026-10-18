@@ -14,12 +14,16 @@ export type { ActorRef } from './domain/actor.ts';
 export { AlreadyExistsError, isAlreadyExists } from './domain/already-exists.ts';
 export { newUlid } from './domain/ulid.ts';
 export {
+  PASSWORD_HISTORY_DEPTH,
+  PASSWORD_HISTORY_RULES,
   PASSWORD_RULES,
   rejectedPasswordRules,
 } from './domain/password-policy.ts';
 export type {
   PasswordCheck,
+  PasswordHistoryRuleCode,
   PasswordRuleCode,
+  PublicPasswordRuleCode,
 } from './domain/password-policy.ts';
 export {
   IDENTITY_STORE,
@@ -39,12 +43,13 @@ export {
   type PersonnelPostToCreate,
   type PersonnelProfileRow,
   type PersonnelRoleToCreate,
+  type PasswordRotation,
   type PersonnelRow,
   type PersonnelToCreate,
   type UniqueWriteResult,
 } from './persistence/identity-store.ts';
 export { AccessControlService } from './services/access-control.service.ts';
-export { CredentialService } from './services/credential.service.ts';
+export { CredentialService, PASSWORD_HISTORY_DEPTH_TOKEN } from './services/credential.service.ts';
 export type {
   DeactivateOrgUnitResult,
   DeactivationBlocker,

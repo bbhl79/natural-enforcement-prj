@@ -50,7 +50,6 @@ class MemoryDirectory implements LoginDirectory {
   async listLocked() { return []; }
   async isRootOrg() { return false; }
   async rootOrgId() { return null; }
-  async applyInitialPassword() {}
 }
 
 class MemorySessions implements SessionStore {
@@ -109,11 +108,13 @@ let authenticateCalls: number;
 function service(): AuthService {
   const audit: AuditTrailPort = { append: async (entry) => { trail.push(entry); } };
   const credentials = {
+    // 认证成功交回当前散列（#132）：改密拿它作条件更新的期望值。
     authenticate: async (_id: string, plain: string) => {
       authenticateCalls += 1;
-      return plain === GOOD;
+      return plain === GOOD ? 'fake-current-hash' : null;
     },
-    changePassword: async () => undefined,
+    isReused: async () => false,
+    changePassword: async () => true,
   } as unknown as CredentialService;
   return new AuthService(
     directory,

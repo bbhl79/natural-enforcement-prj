@@ -15,6 +15,7 @@ import {
   type PersonnelPost,
 } from '../domain/personnel-profile.ts';
 import { ROOT_GUARD_ROLE } from '../domain/root-guard.ts';
+import { newUlid } from '../domain/ulid.ts';
 
 import type {
   ExportAuditRow,
@@ -37,6 +38,7 @@ import type {
   PersonnelNameVersionRow,
   PersonnelRow,
   PersonnelToCreate,
+  PasswordRotation,
   UniqueWriteResult,
 } from './identity-store.ts';
 
@@ -590,14 +592,39 @@ export class PrismaIdentityStore implements IdentityStore {
     return result.count === 1;
   }
 
-  async changePassword(
-    personnelId: string,
-    passwordHash: string,
-    passwordChangedAt: Date,
-  ): Promise<void> {
-    await this.prisma.personnel.update({
-      where: { id: personnelId },
-      data: { passwordHash, passwordChangedAt },
+  async listRecentPasswordHashes(personnelId: string, limit: number): Promise<string[]> {
+    if (limit <= 0) return [];
+    const rows = await this.prisma.personnelPasswordHistory.findMany({
+      where: { personnelId },
+      orderBy: [{ retiredAt: 'desc' }, { id: 'desc' }],
+      take: limit,
+      select: { passwordHash: true },
+    });
+    return rows.map((row) => row.passwordHash);
+  }
+
+  async rotatePasswordHash(rotation: PasswordRotation): Promise<boolean> {
+    // 条件更新 + 追加历史同一事务（ADR 0015）：期望散列不成立时什么都不写。
+    // 已绑定事务时并入当前事务（#119），与调用方的业务行和留痕同成同败。
+    return this.inTransaction(async ({ client }) => {
+      const tx = client as Prisma.TransactionClient;
+      const updated = await tx.personnel.updateMany({
+        where: { id: rotation.personnelId, passwordHash: rotation.expectedHash },
+        data: { passwordHash: rotation.passwordHash, passwordChangedAt: rotation.passwordChangedAt },
+      });
+      if (updated.count !== 1) return false;
+      // 旧散列为空就不追加（此前没有口令，没有可换下的散列）。
+      if (rotation.expectedHash !== null) {
+        await tx.personnelPasswordHistory.create({
+          data: {
+            id: newUlid(),
+            personnelId: rotation.personnelId,
+            passwordHash: rotation.expectedHash,
+            retiredAt: rotation.retiredAt,
+          },
+        });
+      }
+      return true;
     });
   }
 

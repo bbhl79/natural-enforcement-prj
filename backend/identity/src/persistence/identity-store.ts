@@ -49,6 +49,19 @@ export interface AssignmentTransfer {
   next: PersonnelAssignmentRow;
 }
 
+/**
+ * 一次换口令的写入（ADR 0015，#132）。expectedHash 是调用方在事务外比对时读到的当前散列，
+ * 作为条件更新的期望值；passwordChangedAt 为空即初始口令（重设、恢复：首登强制改密）。
+ * retiredAt 是旧口令被换下的时刻。
+ */
+export interface PasswordRotation {
+  personnelId: string;
+  expectedHash: string | null;
+  passwordHash: string;
+  passwordChangedAt: Date | null;
+  retiredAt: Date;
+}
+
 /** 任职记录（当前 assignment = endedAt 为 null 的那条；库层保证至多一条） */
 export interface PersonnelAssignmentRow {
   id: string;
@@ -329,10 +342,18 @@ export interface IdentityStore {
    * 只更换口令散列，不改上次改密时间。
    * 仅当库中散列仍等于 expectedHash 时写入；返回是否命中。
    * 并发重设或改密已换掉散列时不命中，旧口令不会因重散列复活。
+   * 登录时按新参数重算散列不是换口令：不写历史（ADR 0015）。
    */
   replacePasswordHash(personnelId: string, expectedHash: string, passwordHash: string): Promise<boolean>;
-  /** 写入新口令散列，并记下这次改密时间。 */
-  changePassword(personnelId: string, passwordHash: string, passwordChangedAt: Date): Promise<void>;
+  /** 某人员最近的口令历史散列（ADR 0015）：按 retiredAt DESC, id DESC 取前 limit 条。 */
+  listRecentPasswordHashes(personnelId: string, limit: number): Promise<string[]>;
+  /**
+   * 换口令的唯一写入口（ADR 0015，#132）：以 expectedHash 为期望值条件更新散列与上次改密时间，
+   * 命中时把旧散列追加进口令历史，两笔在同一事务里。期望值不成立（并发已换掉）时什么都不写，
+   * 返回 false，由调用方回 409 concurrent-change。expectedHash 为空（此前没有口令）不追加历史。
+   * 散列与历史比对在事务之外由调用方完成（#119）。
+   */
+  rotatePasswordHash(rotation: PasswordRotation): Promise<boolean>;
   insertAssignment(row: PersonnelAssignmentRow): Promise<void>;
   /** 结束当前任职（调岗旧权限失效的数据层载体） */
   closeAssignment(assignmentId: string, endedAt: Date): Promise<void>;

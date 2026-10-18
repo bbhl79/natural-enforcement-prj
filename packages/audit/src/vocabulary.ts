@@ -38,8 +38,17 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'personnel.sessions-ended',
 ] as const;
 
+/**
+ * 口令被拒的原因（ADR 0015，#132）：reused 重设或恢复的初始口令命中口令历史（含当前口令）；
+ * concurrent-change 任一入口的并发条件更新失败（409）。本人改密命中历史不写留痕。
+ */
+export const PASSWORD_REJECTED_REASONS = ['reused', 'concurrent-change'] as const;
+export type PasswordRejectedReason = (typeof PASSWORD_REJECTED_REASONS)[number];
+
 export const AUDIT_ACTIONS = [
   ...AUDIT_SUCCEEDED_ACTIONS,
+  // 口令被拒（ADR 0015，#132）：只记失败。
+  'account.password-rejected',
   'login.failed',
   'login.locked',
   'login.locked-retry',
