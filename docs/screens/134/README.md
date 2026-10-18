@@ -18,6 +18,7 @@
 
 - 口径：`docs/screens/<票>/` 顶层 `*.png` 的文件名并集，与原型 v0.4 状态键（`frontend/prototype/admin-console/screens/*.png`，除改动总览 `overview.png`）完全相等。自动判定只比文件名集合，由结构测试规则 `screenshot-full-set`（`tools/structural-test.sh`）承载，进 `dev lint` 与 CI。画面是否与 v0.4 一致由前端交互设计工程师逐图自查（各票 README 的逐张差异与 PR 允许差异表），Lei Hu 在 gate② 签收。
 - 结论：并集 78 个文件名与 78 个状态键完全相等。11 个目录顶层 png 共 82 张，其中 4 个键被后续票重截（P3-admin、P5-district、P6-view、P7-resetConfirm），以较新票的图为准；`compare/`、`extra/` 子目录是对照图与单测验收图（口令到期横幅 P1-expiry、根机构守卫 P6-editRootGuard），不进全集。
+- 画面时点：129 的 P6-edit、P6-transfer、P6-selfEdit，130 的六键，133 的 P6-certEdit、P6-certNone、P6-certExpiring、P6-certExpired 共 13 张卡片态图，2026-10-19 由本票按终版代码在原目录重截（PR #156 复核阻塞项：旧图早于危险操作区终版），文件名与逐目录计数不变，以重截后的图为准；差异登记见各票 README。
 
 | 目录 | 票 | 顶层 png 数 | 状态键范围 |
 | --- | --- | --- | --- |
