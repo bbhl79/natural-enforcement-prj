@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import reducer, { loadSession } from '../login/loginSlice';
 import { visibleMenu } from '../shell/menu';
-import { renderRoute, settled } from '../test-utils';
+import { renderRoute, renderRouter, settled } from '../test-utils';
 import { PersonnelCardView } from './PersonnelCardPage';
 import { EMPTY_INPUT, PersonnelCreateForm } from './PersonnelCreatePage';
 import { PersonnelListView } from './PersonnelListPage';
@@ -463,6 +463,41 @@ describe('人员页路由', () => {
     expect(html).toContain('nav-item active" data-menu="person"');
     expect(html).toContain('href="/admin/personnel/new"');
     expect(calls.map((call) => call.url)).toContain('/api/admin/personnel');
+  });
+
+  // 名单接口晚于首屏返回时，Await 的失败分支才会进静态渲染；延迟响应模拟真实网络时序。
+  function serveLate(status: number, body: Json) {
+    const session = person(ADMIN);
+    vi.stubGlobal('fetch', (url: string) => {
+      if (url === '/api/auth/session') return Promise.resolve(new Response(JSON.stringify(session), { status: 200 }));
+      if (url === '/api/admin/personnel') {
+        return new Promise((resolve) => setTimeout(() => resolve(new Response(JSON.stringify(body), { status })), 10));
+      }
+      return Promise.resolve(new Response(JSON.stringify({}), { status: 404 }));
+    });
+  }
+
+  it('名单接口 403：只出面包屑与无权限卡，不出页头（原型 P5:32）', async () => {
+    const store = fresh();
+    serveLate(403, { reason: 'permission-denied' });
+    const { router } = await renderRoute(store, '/admin/personnel');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const html = renderRouter(store, router);
+    expect(html).toContain('<div class="crumb">管理台 / <b>人员</b></div>');
+    expect(html).toContain('你没有查看人员名单的权限');
+    expect(html).not.toContain('新建人员');
+    expect(html).not.toContain('<h1>');
+  });
+
+  it('名单接口其他失败：保留页头、筛选与错误卡（原型 P5:34）', async () => {
+    const store = fresh();
+    serveLate(500, {});
+    const { router } = await renderRoute(store, '/admin/personnel');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const html = renderRouter(store, router);
+    expect(html).toContain('<h1>人员</h1>');
+    expect(html).toContain('人员名单没有加载出来');
+    expect(html).toContain('新建人员');
   });
 
   it('新建页与卡片页都高亮「人员」菜单；新建页取机构树', async () => {

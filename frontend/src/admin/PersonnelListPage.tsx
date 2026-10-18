@@ -33,22 +33,20 @@ function Crumb() {
   return <div className="crumb">管理台 / <b>人员</b></div>;
 }
 
-function Head({ scopeName, opcodes }: { scopeName: string | null; opcodes: readonly string[] }) {
+/** 页头（标题、说明、新建按钮）。P5:32 的 denied 态没有页头，所以页头与面包屑分开渲染。 */
+function PageHead({ scopeName, opcodes }: { scopeName: string | null; opcodes: readonly string[] }) {
   return (
-    <>
-      <Crumb />
-      <div className="page-h">
-        <div>
-          <h1>人员</h1>
-          <div className="desc">{`${scopeName ?? '你任职机构'}及下级机构的人员。打开人员详情会留痕。`}</div>
-        </div>
-        {opcodes.includes(PERSONNEL_REGISTER) ? (
-          <div className="actions">
-            <Link className="btn btn-primary" to="/admin/personnel/new" data-requires={PERSONNEL_REGISTER}>新建人员</Link>
-          </div>
-        ) : null}
+    <div className="page-h">
+      <div>
+        <h1>人员</h1>
+        <div className="desc">{`${scopeName ?? '你任职机构'}及下级机构的人员。打开人员详情会留痕。`}</div>
       </div>
-    </>
+      {opcodes.includes(PERSONNEL_REGISTER) ? (
+        <div className="actions">
+          <Link className="btn btn-primary" to="/admin/personnel/new" data-requires={PERSONNEL_REGISTER}>新建人员</Link>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -175,13 +173,19 @@ export function PersonnelListView({
   );
 }
 
+/**
+ * 名单接口失败的一段。403 只出无权限卡（原型 P5:32 denied 态只有面包屑和无权限卡，页头不渲染）；
+ * 其他失败保留页头、筛选和错误卡（原型 P5:34）。
+ */
 function ListError({ filter }: { filter: PersonnelFilter }) {
   const error = useAsyncError();
   const revalidator = useRevalidator();
   const opcodes = useAppSelector((root) => root.login.operator?.opcodes ?? []);
+  const scopeName = useAppSelector((root) => root.login.operator?.orgName ?? null);
   if (errorStatus(error) === 403) return <PersonnelDenied what="人员名单" opcodes={opcodes} supervise={SUPERVISE} />;
   return (
     <>
+      <PageHead scopeName={scopeName} opcodes={opcodes} />
       <Filters list={null} filter={filter} onChange={() => undefined} />
       <ErrorCard what="人员名单" onRetry={() => void revalidator.revalidate()} />
     </>
@@ -209,19 +213,25 @@ export default function PersonnelListPage() {
   }
   return (
     <>
-      <Head scopeName={orgName} opcodes={opcodes} />
+      <Crumb />
       <Suspense
         fallback={(
-          <div aria-busy="true">
-            <Filters list={null} filter={filter} onChange={() => undefined} />
-            <SkeletonCard rows={9} />
-          </div>
+          <>
+            <PageHead scopeName={orgName} opcodes={opcodes} />
+            <div aria-busy="true">
+              <Filters list={null} filter={filter} onChange={() => undefined} />
+              <SkeletonCard rows={9} />
+            </div>
+          </>
         )}
       >
         <Await resolve={list} errorElement={<ListError filter={filter} />}>
-          {(resolved: PersonnelList | null) => (resolved
-            ? <PersonnelListView list={resolved} filter={filter} opcodes={opcodes} onFilter={onFilter} page={page} onPage={onPage} />
-            : null)}
+          {(resolved: PersonnelList | null) => (resolved ? (
+            <>
+              <PageHead scopeName={orgName} opcodes={opcodes} />
+              <PersonnelListView list={resolved} filter={filter} opcodes={opcodes} onFilter={onFilter} page={page} onPage={onPage} />
+            </>
+          ) : null)}
         </Await>
       </Suspense>
     </>
