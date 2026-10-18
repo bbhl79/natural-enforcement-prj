@@ -18,6 +18,7 @@ import {
   AUDIT_SUCCEEDED_ACTIONS,
   AUTHZ_DENIED_REASONS,
   LOGIN_FAILED_REASONS,
+  ORG_UNIT_DEACTIVATE_FAILED_REASONS,
   ORG_UNIT_REGISTER_FAILED_REASONS,
   PASSWORD_CHANGED_REASONS,
   SESSION_END_REASONS,
@@ -39,6 +40,7 @@ const REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
 /** 记成功的动作被拒绝（outcome=failed）时的封闭原因表。不在表里的成功动作不能记失败。 */
 const FAILED_REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['org.unit.registered', new Set<string>(ORG_UNIT_REGISTER_FAILED_REASONS)],
+  ['org.unit.deactivated', new Set<string>(ORG_UNIT_DEACTIVATE_FAILED_REASONS)],
 ]);
 
 /** 封闭取值表的运行时把关：类型之外（如 as 断言、JS 调用方）传入的表外取值一律拒绝，不写库。 */

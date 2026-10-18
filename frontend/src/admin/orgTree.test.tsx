@@ -4,12 +4,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import reducer, { loadSession } from '../login/loginSlice';
 import { renderRoute } from '../test-utils';
-import { CreateDialog, INITIAL_UI, OrgTreeView, RenameDialog, type OrgTreeUi } from './OrgTreePage';
+import { CreateDialog, DeactivateConfirm, DeactivateDialog, INITIAL_UI, OrgTreeView, RenameDialog, type OrgTreeUi } from './OrgTreePage';
 import {
   activeOrgUnits,
   buildTree,
   childCountText,
   childLevelOf,
+  deactivateOrgUnit,
+  deactivationBlockers,
   formerNames,
   loadOrgTree,
   namePeriods,
@@ -59,7 +61,7 @@ const TREE: OrgTreeData = {
   ],
 };
 
-const ADMIN = ['org.tree.read', 'org.unit.register', 'org.unit.rename'];
+const ADMIN = ['org.tree.read', 'org.unit.register', 'org.unit.rename', 'org.unit.deactivate'];
 const INTAKE = ['clue.read', 'case.read', 'org.tree.read'];
 
 function view(opcodes: string[], ui: Partial<OrgTreeUi> = {}, tree = TREE): string {
@@ -73,7 +75,16 @@ function view(opcodes: string[], ui: Partial<OrgTreeUi> = {}, tree = TREE): stri
       onDialog={() => undefined}
       onCreate={async () => ({ ok: true, id: 'x' })}
       onRename={async () => ({ ok: true, id: 'x' })}
+      onDeactivate={async () => ({ ok: true, id: 'x' })}
     />,
+  );
+}
+
+const byId = (id: string) => TREE.orgUnits.find((item) => item.id === id)!;
+
+function deactivateDialog(id: string): string {
+  return renderToStaticMarkup(
+    <DeactivateDialog tree={TREE} unit={byId(id)} onCancel={() => undefined} onSubmit={async () => ({ ok: true, id })} />,
   );
 }
 
@@ -262,6 +273,91 @@ describe('机构树界面（P4）', () => {
     expect(html).toContain('改名后，此前的案件、卷宗和记录仍显示当时的名称。');
     expect(html).toContain('<td>天河区分局</td><td>2019-03-01 至今</td>');
     expect(html).toContain('<td>天河区国土资源和规划分局</td><td>2015-06-01 至 2019-02-28</td>');
+  });
+});
+
+describe('机构停用（P4 blocked/confirm，#124）', () => {
+  const DEACTIVATE_BUTTON = 'data-requires="org.unit.deactivate"';
+
+  it('有停用码：未停用的非根机构详情里有「停用」按钮', () => {
+    expect(view(ADMIN, { selectedId: 'th' })).toContain(`<button type="button" class="btn btn-ghost-danger" ${DEACTIVATE_BUTTON}>停用</button>`);
+    expect(view(ADMIN, { selectedId: 'sp' })).toContain(DEACTIVATE_BUTTON);
+  });
+
+  it('根机构、已停用机构、没有停用码（内勤，或只有新建改名码）：不显示「停用」按钮', () => {
+    expect(view(ADMIN, { selectedId: 'gz' })).not.toContain(DEACTIVATE_BUTTON);
+    expect(view(ADMIN, { selectedId: 'ws' })).not.toContain(DEACTIVATE_BUTTON);
+    expect(view(INTAKE, { selectedId: 'th' })).not.toContain(DEACTIVATE_BUTTON);
+    expect(view(['org.tree.read', 'org.unit.register', 'org.unit.rename'], { selectedId: 'th' })).not.toContain(DEACTIVATE_BUTTON);
+  });
+
+  it('树数据上的前提：在职人员、未停用的下级（已停用的下级不算）', () => {
+    expect(deactivationBlockers(TREE, byId('th'))).toEqual([
+      { kind: 'personnel', count: 46 },
+      { kind: 'children', names: ['石牌自然资源所'] },
+    ]);
+    expect(deactivationBlockers(TREE, byId('sp'))).toEqual([]);
+  });
+
+  it('blocked：列出不满足的条件和条数、下级名称，只有「知道了」', () => {
+    const html = deactivateDialog('th');
+    expect(html).toContain('暂时不能停用「天河区分局」');
+    expect(html).toContain('<div class="banner amber" style="margin-bottom:8px">停用机构前，需要先满足以下条件：</div>');
+    // 停用人员不结束任职（#105 D4：已停用人员未结束的任职也拦停用），所以只提示调岗，不提示「停用相应人员」。
+    expect(html).toContain('<li>还有 <b>46 名</b>在职人员：请先把他们调岗到其他机构。</li>');
+    expect(html).not.toContain('停用相应人员');
+    expect(html).toContain('<li>还有 <b>1 个</b>未停用的下级机构（石牌自然资源所）：请先停用下级机构。</li>');
+    expect(html).toContain('<button type="button" class="btn btn-primary">知道了</button>');
+    expect(html).not.toContain('确认停用');
+  });
+
+  it('confirm：说明停用后果与已核对，取消 / 确认停用', () => {
+    const html = deactivateDialog('sp');
+    expect(html).toContain('停用「石牌自然资源所」？');
+    expect(html).toContain('<li>不能再在这个机构下建人员或下级机构；</li>');
+    expect(html).toContain('<li>业务办理时不能再选它作为承办机构；</li>');
+    expect(html).toContain('<li>历史记录照常保留，仍显示这个机构名称；</li>');
+    expect(html).toContain('<li>一期不提供恢复，请确认后再操作。</li>');
+    expect(html).toContain('已核对：没有在职人员，没有未停用的下级机构。');
+    expect(html).toContain('<button type="button" class="btn btn-danger">确认停用</button>');
+  });
+
+  it('确认弹窗失败后：顶部显示原因（含服务端的未办结句），「确认停用」仍可点、可重试；只在请求进行中禁用', () => {
+    const confirm = (message: string | null, busy: boolean) => renderToStaticMarkup(
+      <DeactivateConfirm unit={byId('sp')} message={message} busy={busy} onCancel={() => undefined} onConfirm={() => undefined} />,
+    );
+    const ENABLED = '<button type="button" class="btn btn-danger">确认停用</button>';
+    const DISABLED = '<button type="button" class="btn btn-danger" disabled="">确认停用</button>';
+    const failed = confirm('网络或服务暂时不可用，请稍后重试。问题持续时请联系本单位的系统管理人员。', false);
+    expect(failed).toContain('<div class="banner danger">网络或服务暂时不可用，请稍后重试。问题持续时请联系本单位的系统管理人员。</div>');
+    expect(failed).toContain(ENABLED);
+    const openItems = confirm('本机构还有 3 条未办结的线索或案件（线索 1 条、案件 2 条），全部办结后才能停用。', false);
+    expect(openItems).toContain('<div class="banner danger">本机构还有 3 条未办结的线索或案件（线索 1 条、案件 2 条），全部办结后才能停用。</div>');
+    expect(confirm(null, true)).toContain(DISABLED);
+    expect(confirm(null, false)).not.toContain('banner danger');
+  });
+
+  it('确认停用：POST 停用接口；409 显示服务端可读原因（含未办结），403 与网络失败给固定说明', async () => {
+    const store = fresh();
+    serve(person(ADMIN));
+    await store.dispatch(loadSession());
+    const url = '/api/admin/org-units/sp/deactivate';
+    const calls = serve(person(ADMIN), { [url]: [200, { result: 'deactivated', orgUnit: { id: 'sp', deactivatedAt: day('2026-10-18') } }] });
+    expect(await deactivateOrgUnit(store.dispatch, 'sp')).toEqual({ ok: true, id: 'sp' });
+    expect(calls.find((call) => call.url === url)?.init?.method).toBe('POST');
+    const openItems = '本机构还有 3 条未办结的线索或案件（线索 1 条、案件 2 条），全部办结后才能停用。';
+    serve(person(ADMIN), {
+      [url]: [409, { result: 'invalid-state', reason: 'org-has-open-items', openItems: { clues: 1, cases: 2 }, message: openItems }],
+    });
+    expect(await deactivateOrgUnit(store.dispatch, 'sp')).toEqual({ ok: false, rules: [], message: openItems });
+    // 界面不露原始原因码（SCREENS.md 通用检查：用户可见文本无工程词）：没有可读原因时给固定句，不回落到 reason。
+    serve(person(ADMIN), { [url]: [409, { result: 'invalid-state', reason: 'org-has-open-items' }] });
+    const bare = await deactivateOrgUnit(store.dispatch, 'sp');
+    expect(bare).toEqual({ ok: false, rules: [], message: '这个机构暂时不能停用，请刷新后查看原因。' });
+    expect(bare.ok ? '' : bare.message).not.toMatch(/org-|org\.unit|invalid-state/);
+    serve(person(ADMIN), { [url]: [403, { reason: 'scope-denied' }] });
+    expect(await deactivateOrgUnit(store.dispatch, 'sp'))
+      .toEqual({ ok: false, rules: [], message: '你没有权限执行这个操作，或这个机构不在你的范围内。' });
   });
 });
 

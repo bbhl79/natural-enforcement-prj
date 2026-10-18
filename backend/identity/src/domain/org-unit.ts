@@ -10,6 +10,7 @@ export const ROOT_ORG_UNIT_LEVEL: OrgUnitLevel = 'city';
 export const ORG_TREE_READ_OPCODE = 'org.tree.read';
 export const ORG_UNIT_REGISTER_OPCODE = 'org.unit.register';
 export const ORG_UNIT_RENAME_OPCODE = 'org.unit.rename';
+export const ORG_UNIT_DEACTIVATE_OPCODE = 'org.unit.deactivate';
 
 /** 机构名称最长字数（工程定，#123）。 */
 export const ORG_UNIT_NAME_MAX_LENGTH = 100;

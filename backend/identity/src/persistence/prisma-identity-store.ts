@@ -268,6 +268,14 @@ export class PrismaIdentityStore implements IdentityStore {
     return row ? toOrgUnitRow(row) : null;
   }
 
+  countActiveChildOrgUnits(orgUnitId: string): Promise<number> {
+    return this.prisma.orgUnit.count({ where: { parentId: orgUnitId, deactivatedAt: null } });
+  }
+
+  countOpenAssignmentsOfOrgUnit(orgUnitId: string): Promise<number> {
+    return this.prisma.personnelAssignment.count({ where: { orgUnitId, endedAt: null } });
+  }
+
   listPersonnelNameVersions(personnelId: string): Promise<PersonnelNameVersionRow[]> {
     return this.prisma.personnelNameVersion.findMany({
       where: { personnelId },
