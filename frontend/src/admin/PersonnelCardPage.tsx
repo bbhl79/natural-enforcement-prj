@@ -628,7 +628,11 @@ function CardWorkspace({ loaded, registered }: { loaded: PersonnelCard; register
 
   const saveCert = async (input: CertUpdateInput): Promise<CertUpdateResult> => {
     const result = await updateCert(dispatch, card.id, input);
-    if (result.ok) void revalidator.revalidate();
+    if (result.ok) {
+      // 重取回来的卡片是权威值：先丢掉编辑与调岗留下的就地覆盖，否则旧证件情况会盖住新值。
+      setOverride(null);
+      void revalidator.revalidate();
+    }
     return result;
   };
 
