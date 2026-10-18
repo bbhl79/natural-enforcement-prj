@@ -345,8 +345,3 @@ model GeoDictSurveyPoint {
 
   @@map("geo_dict_survey_point")
 }
-// 探针（临时，勿入库）：白名单外业务实体
-model ProbeBusinessCase {
-  id String @id
-  @@map("probe_business_case")
-}
