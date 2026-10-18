@@ -383,19 +383,15 @@ export class PersonnelProfileService {
    * 编辑与调岗的公共前置（#129）：对方存在 → 按 personnel.profile.update 过授权。
    * 数据范围锚点 = 对方当前任职机构；没有当前任职视同根机构（A10 口径，#105:230）。
    * 对方不存在返回 null（404，不写留痕）；被拒抛 AccessDeniedError，denial 非空，由调用方回滚后写入。
-   * forUpdate 为真（编辑、调岗写入路径）时先取人员级事务锁再读当前态：同一人员上的并发编辑、
-   * 调岗由此串行，任职/角色/标记与守卫判断都基于锁内的已提交态（#129 复核，ADR 0014）。
-   * 目的地清单是只读路径，不取锁。统一锁序：人员 → 机构 → 根守卫。
+   * 授权不取人员锁：取锁会推迟授权读取，先手提交后操作者角色已变，授权会误判。
+   * 写入路径在授权之后另经 lockTarget 取人员级事务锁并在锁内重读当前态（#129 复核，ADR 0014）。
    */
   private async authorizeTarget(
     actor: ActorRef,
     personnelId: string,
     tx: IdentityTransaction,
-    forUpdate = false,
   ): Promise<EditTarget | null> {
-    const profile = forUpdate
-      ? await tx.store.lockPersonnelProfile(personnelId)
-      : await tx.store.findPersonnelProfile(personnelId);
+    const profile = await tx.store.findPersonnelProfile(personnelId);
     if (!profile) return null;
     const current = await tx.store.findCurrentAssignment(profile.id);
     const anchor = current?.orgUnitId ?? (await tx.store.findRootOrgUnitId()) ?? '';
@@ -406,6 +402,22 @@ export class PersonnelProfileService {
     if (!decision.allowed) raiseDenied(decision);
     const actorRow = await tx.store.findPersonnelById(actor.personnelId);
     return { profile, current, anchor, actorCode: actorRow?.code ?? null };
+  }
+
+  /**
+   * 人员级事务锁 + 锁内重读（#129 复核，ADR 0014）：编辑与调岗在授权之后、差异与守卫判断之前调用。
+   * FOR UPDATE 锁人员行，使同一人员上的并发编辑、调岗串行；锁内重读任职，
+   * 差异计算与根机构守卫判断都基于已提交态。统一锁序：人员 → 机构 → 根守卫。
+   * 人员不存在返回 null（404）。
+   */
+  private async lockTarget(
+    personnelId: string,
+    tx: IdentityTransaction,
+  ): Promise<{ profile: PersonnelProfileRow; current: PersonnelAssignmentRow | null } | null> {
+    const profile = await tx.store.lockPersonnelProfile(personnelId);
+    if (!profile) return null;
+    const current = await tx.store.findCurrentAssignment(profile.id);
+    return { profile, current };
   }
 
   /**
@@ -465,7 +477,7 @@ export class PersonnelProfileService {
     audit: AuditTrailPort,
     sourceIp: string | null = null,
   ): Promise<UpdatePersonnelProfileResult> {
-    const authorized = await this.authorizeTarget(actor, personnelId, tx, true);
+    const authorized = await this.authorizeTarget(actor, personnelId, tx);
     if (!authorized) return { result: 'not-found' };
     const value = normalizeUpdate(input);
     const rules = updateRules(input);
@@ -473,7 +485,10 @@ export class PersonnelProfileService {
     if (value.roles.some((role) => !roleIds.has(role))) rules.push('role-unknown');
     if (rules.length > 0) return { result: 'non-compliant', rules };
 
-    const target = authorized;
+    // 人员级事务锁 + 锁内重读：差异与根机构守卫基于已提交态（#129 复核，ADR 0014）。
+    const locked = await this.lockTarget(personnelId, tx);
+    if (!locked) return { result: 'not-found' };
+    const target: EditTarget = { ...authorized, profile: locked.profile, current: locked.current };
     const [heldRoles, heldPosts] = await Promise.all([
       tx.store.listActivePersonnelRoles(target.profile.id),
       tx.store.listActivePersonnelPosts(target.profile.id),
@@ -597,10 +612,14 @@ export class PersonnelProfileService {
     audit: AuditTrailPort,
     sourceIp: string | null = null,
   ): Promise<TransferPersonnelProfileResult> {
-    const target = await this.authorizeTarget(actor, personnelId, tx, true);
-    if (!target) return { result: 'not-found' };
+    const authorized = await this.authorizeTarget(actor, personnelId, tx);
+    if (!authorized) return { result: 'not-found' };
     const rules = transferRules(orgUnitId);
     if (rules.length > 0) return { result: 'non-compliant', rules };
+    // 人员级事务锁 + 锁内重读：未变判断与根机构守卫基于已提交态（#129 复核，ADR 0014）。
+    const locked = await this.lockTarget(personnelId, tx);
+    if (!locked) return { result: 'not-found' };
+    const target: EditTarget = { ...authorized, profile: locked.profile, current: locked.current };
     if (target.profile.id === actor.personnelId) this.raiseSelfDenied(target, '调岗');
     const toId = orgUnitId.trim();
     if (target.current?.orgUnitId === toId) return { result: 'unchanged' };

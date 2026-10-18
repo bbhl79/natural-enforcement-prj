@@ -1215,8 +1215,8 @@ describe('接缝②：人员级事务锁（#129 复核，ADR 0014）', () => {
     // 串行后：mover2 已摘「系统管理」，当前任职在乙区（后手在锁内读到已提交态再写）。
     expect(await activeRoles(people.mover2)).toEqual(['经办']);
     expect(await currentOrg(people.mover2)).toBe(org.deptB);
-    // 还原夹具：mover2 调回甲区，恢复「系统管理、经办」。
-    expect((await transfer(PHONES.adminA, people.mover2, org.deptA)).status).toBe(200);
+    // 还原夹具：mover2 现任职乙区，调回甲区须用覆盖乙区的根机构操作者；再恢复「系统管理、经办」。
+    expect((await transfer(PHONES.root, people.mover2, org.deptA)).status).toBe(200);
     expect((await edit(PHONES.adminA, people.mover2, { ...body, roles: ['系统管理', '经办'] })).status).toBe(200);
     expect(await activeRoles(people.mover2)).toEqual(['系统管理', '经办']);
   });
