@@ -85,6 +85,9 @@ model Personnel {
   passwordChangedAt              DateTime? @db.Timestamptz(6) @map("password_changed_at")
   enforcementCertNo              String?   @map("enforcement_cert_no")
   enforcementCertExpiresOn       DateTime? @db.Date @map("enforcement_cert_expires_on")
+  // 证件状态（#133，Lei Hu 7-3）：valid 有效、invalid 失效，只存这两项，库层 CHECK 兜底。
+  // 临期与已过期按有效期推导。默认 valid 用于存量回填与登记人员（新建页没有这一项）。
+  enforcementCertStatus          String    @default("valid") @map("enforcement_cert_status")
   deactivatedAt                  DateTime? @db.Timestamptz(6) @map("deactivated_at")
   createdAt                      DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
 
