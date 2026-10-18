@@ -421,6 +421,17 @@ describe('执法证登记（#133）', () => {
       { action: 'cert.updated', reason: 'already-exists' },
       { action: 'cert.updated', nextValue: 'valid' },
       { action: 'cert.updated', itemCount: 1 },
+    ];
+    for (const item of cases) {
+      await expect(
+        trail.append({ ...parties, ...item } as unknown as Parameters<typeof trail.append>[0]),
+        JSON.stringify(item),
+      ).rejects.toBeInstanceOf(AuditVocabularyError);
+    }
+    expect(written).toHaveLength(0);
+  });
+});
+
 describe('人员编辑与调岗（#129，ADR 0014）', () => {
   it('改名、改手机号、加减角色、摘岗位标记、调岗都记成功；改名前值写旧名，改手机号前值留空', async () => {
     const { db, written } = recorder();
