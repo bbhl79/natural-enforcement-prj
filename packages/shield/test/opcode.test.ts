@@ -39,6 +39,7 @@ const ADMIN_OPCODES = [
   'personnel.profile.read',
   'personnel.profile.register',
   'personnel.cert.update',
+  'personnel.profile.update',
   'personnel.locked.read',
   'personnel.locked.release',
   'personnel.password.reset',
@@ -116,6 +117,8 @@ describe('操作码名册', () => {
 
   it('执法证登记码（#133）不要求执法资格，不必是主办人，不改变主状态', () => {
     expect(opcodeRequirements('personnel.cert.update')).toEqual({
+  it('人员编辑与调岗码（#129）不要求执法资格，不必是主办人，不改变主状态', () => {
+    expect(opcodeRequirements('personnel.profile.update')).toEqual({
       qualification: 'none',
       mustBeCaseHandler: false,
       changesPrimaryState: false,

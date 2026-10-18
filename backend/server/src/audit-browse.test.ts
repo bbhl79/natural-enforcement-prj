@@ -115,6 +115,34 @@ describe('#126 留痕展示文字（P8）', () => {
       action: 'authz.denied', outcome: 'failed', reason: 'permission-denied', subjectCode: null,
       opcode: 'personnel.cert.update',
     })).operation).toBe('登记执法证');
+  it('人员编辑与调岗被拒的行按操作码写中文，编辑各动作按动作词写中文（#129）', () => {
+    const denied = describeAuditRow(
+      record({
+        action: 'authz.denied', outcome: 'failed', reason: 'permission-denied', subjectCode: null,
+        opcode: 'personnel.profile.update',
+      }),
+    );
+    expect(denied.operation).toBe('编辑人员');
+    const rows = [
+      ['personnel.renamed', '人员改名'],
+      ['personnel.mobile-changed', '变更手机号'],
+      ['personnel.role-granted', '授予角色'],
+      ['personnel.role-revoked', '摘除角色'],
+      ['personnel.post-revoked', '摘岗位标记'],
+      ['personnel.transferred', '调岗'],
+    ] as const;
+    for (const [action, operation] of rows) {
+      expect(describeAuditRow(record({ action, subjectCode: 'TH0315' })).operation, action).toBe(operation);
+    }
+    // 界面不露原因码（SCREENS.md 通用检查）：根机构守卫与手机号冲突都只写「失败」。
+    for (const item of [
+      { action: 'personnel.role-revoked', outcome: 'failed', reason: 'root-admin-required' },
+      { action: 'personnel.transferred', outcome: 'failed', reason: 'org-unit-deactivated' },
+      { action: 'personnel.mobile-changed', outcome: 'failed', reason: 'already-exists' },
+    ]) {
+      const described = describeAuditRow(record({ subjectCode: 'TH0315', ...item }));
+      expect(described.result, item.action).toBe('失败');
+    }
   });
 
   it('拒绝行的「所属机构」是目标机构，「对象」按资源标识取机构名（#105；ADR 0011 修正）', () => {

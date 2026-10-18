@@ -84,28 +84,46 @@ export {
   PERSONNEL_POSTS,
   PERSONNEL_PROFILE_READ_OPCODE,
   PERSONNEL_PROFILE_REGISTER_OPCODE,
+  PERSONNEL_PROFILE_UPDATE_OPCODE,
   ROLE_ORDER,
   certPreviousValue,
   certStatusOf,
   certUpdateRules,
   hasEnforcementQualification,
   isCertRecordStatus,
+  isEmptyDiff,
   isPersonnelPost,
   normalizeCertUpdate,
+  normalizeUpdate,
   parseCalendarDay,
   registrationRules,
+  sortRoleNames,
+  transferRules,
+  updateDiff,
+  updateRules,
 } from './domain/personnel-profile.ts';
 export type {
   CertRecordStatus,
   CertRuleCode,
   CertStatus,
   NormalizedCertUpdate,
+  NormalizedUpdate,
+  PersonnelCurrentEdit,
+  PersonnelEditDiff,
   PersonnelPost,
   PersonnelRuleCode,
   RegisterPersonnelProfileInput,
   RegisterRuleCode,
+  TransferRuleCode,
   UpdateCertInput,
+  UpdatePersonnelProfileInput,
+  UpdateRuleCode,
 } from './domain/personnel-profile.ts';
+export {
+  ROOT_GUARD_MESSAGE,
+  ROOT_GUARD_REASON,
+  ROOT_GUARD_ROLE,
+} from './domain/root-guard.ts';
 export { PersonnelProfileService } from './services/personnel-profile.service.ts';
 export type {
   PersonnelList,
@@ -114,6 +132,10 @@ export type {
   ReadProfileResult,
   RegisterPersonnelProfileResult,
   ScreenRegistrationResult,
+  TransferDestination,
+  TransferDestinationsResult,
+  TransferPersonnelProfileResult,
+  UpdatePersonnelProfileResult,
 } from './services/personnel-profile.service.ts';
 export { PersonnelCertService } from './services/personnel-cert.service.ts';
 export type { UpdateCertResult } from './services/personnel-cert.service.ts';

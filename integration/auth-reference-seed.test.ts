@@ -102,6 +102,7 @@ const EXPECTED_ALLOWANCES: Record<string, readonly string[]> = {
     'personnel.profile.read',
     'personnel.profile.register',
     'personnel.cert.update',
+    'personnel.profile.update',
     'personnel.locked.read',
     'personnel.locked.release',
     'personnel.password.reset',

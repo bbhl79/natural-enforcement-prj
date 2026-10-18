@@ -7,6 +7,7 @@ import reducer, { loadSession } from '../login/loginSlice';
 import { visibleMenu } from '../shell/menu';
 import { renderRoute, renderRouter, settled } from '../test-utils';
 import { PersonnelCardView, CertForm } from './PersonnelCardPage';
+import { PersonnelCardView, TransferDialog, type EditState, type TransferState } from './PersonnelCardPage';
 import { EMPTY_INPUT, PersonnelCreateForm } from './PersonnelCreatePage';
 import { PersonnelListView } from './PersonnelListPage';
 import {
@@ -18,11 +19,15 @@ import {
   certRecordLabel,
   CERT_TAG,
   DEFAULT_FILTER,
+  DENIED_TARGET,
+  destinationsInTreeOrder,
+  editInputFromCard,
   filterFromSearch,
   filterHint,
   filterPersonnel,
   loadPersonnelCard,
   loadPersonnelList,
+  loadTransferDestinations,
   listHint,
   maskPhone,
   orgText,
@@ -30,6 +35,7 @@ import {
   pageFromSearch,
   paginate,
   passwordText,
+  PERSONNEL_UPDATE,
   problemCount,
   qualifiedPersonnelCount,
   registerPersonnel,
@@ -39,10 +45,14 @@ import {
   updateCert,
   type CertUpdateInput,
   type CertUpdateResult,
+  transferPersonnel,
+  updatePersonnel,
+  type EditInput,
   type PersonnelCard,
   type PersonnelFilter,
   type PersonnelList,
   type PersonnelRow,
+  type TransferDestination,
 } from './personnel';
 import type { OrgUnit } from './orgTree';
 
@@ -249,13 +259,17 @@ describe('人员名单分页（原型 P5:37「第 1 页」）', () => {
 });
 
 describe('人员卡片（P6 view）', () => {
-  const card = (partial: Partial<PersonnelCard> = {}, registered = false, canUpdate = false) => renderToStaticMarkup(
+  const card = (
+    partial: Partial<PersonnelCard> = {},
+    registered = false,
+    props: { self?: boolean; canUpdate?: boolean; canUpdateCert?: boolean; edit?: EditState | null } = {},
+  ) => renderToStaticMarkup(
     <MemoryRouter>
       <PersonnelCardView
         card={{ ...CARD, ...partial }}
         now={new Date('2026-10-17T04:00:00Z')}
         registered={registered}
-        canUpdate={canUpdate}
+        {...props}
       />
     </MemoryRouter>,
   );
@@ -285,10 +299,9 @@ describe('人员卡片（P6 view）', () => {
     expect(card()).not.toContain('data-notice="registered"');
   });
 
-  it('没有执法证登记码时不出登记按钮；编辑与危险操作区仍不放（随 #129、#130、#132）', () => {
-    const html = card();
-    expect(html).not.toMatch(/需谨慎的操作|personnel\.profile\.update|personnel\.password\.reset|personnel\.cert\.update/);
-    expect(card({}, false, true)).toContain('data-requires="personnel.cert.update"');
+  it('没有执法证登记码时不出登记按钮（#133）', () => {
+    expect(card()).not.toContain('data-requires="personnel.cert.update"');
+    expect(card({}, false, { canUpdateCert: true })).toContain('data-requires="personnel.cert.update"');
   });
 
   it('执法证一段（#133）：证件状态只写「有效」「失效」，未登记写破折号', () => {
@@ -302,10 +315,10 @@ describe('人员卡片（P6 view）', () => {
   });
 
   it('执法证一段（#133）：按钮按情况写「登记执法证」或「变更执法证」（原型 P6:23）', () => {
-    expect(card({}, false, true)).toContain('>变更执法证</button>');
-    expect(card({ cert: { no: '44010020210315', expiresOn: '2028-05-31', status: 'invalid' } }, false, true))
+    expect(card({}, false, { canUpdateCert: true })).toContain('>变更执法证</button>');
+    expect(card({ cert: { no: '44010020210315', expiresOn: '2028-05-31', status: 'invalid' } }, false, { canUpdateCert: true }))
       .toContain('>变更执法证</button>');
-    expect(card({ cert: { no: null, expiresOn: null, status: 'none' } }, false, true)).toContain('>登记执法证</button>');
+    expect(card({ cert: { no: null, expiresOn: null, status: 'none' } }, false, { canUpdateCert: true })).toContain('>登记执法证</button>');
   });
 
   it('执法证失效（#133）：红色「失效」标记与说明句，不再按有效期推导', () => {
@@ -314,6 +327,21 @@ describe('人员卡片（P6 view）', () => {
     expect(html).toContain('证件状态为失效。');
     expect(html).toContain('不能启动核查、不能立案、不能担任主办人或协办人。核对证件后请改回有效，或登记换发的新证。');
     expect(html).toContain('class="banner danger"');
+  });
+
+  it('卡片按钮只挂已入名册的码：编辑与调岗都用 personnel.profile.update，未交付的码不出现', () => {
+    const html = card({}, false, { canUpdate: true });
+    expect(html).toContain('需谨慎的操作');
+    expect(html.match(/data-requires="[^"]+"/g)).toEqual([
+      `data-requires="${PERSONNEL_UPDATE}"`,
+      `data-requires="${PERSONNEL_UPDATE}"`,
+    ]);
+    expect(html).not.toMatch(/personnel\.cert\.update|personnel\.password\.reset|personnel\.profile\.deactivate|personnel\.profile\.restore|personnel\.sessions\.end/);
+    // 没有编辑码时按钮置灰；已停用卡片编辑按钮置灰、没有调岗入口（v0.4，恢复一行由 #130 补入）。
+    expect(card()).toMatch(/data-requires="personnel\.profile\.update" disabled/);
+    const off = card({ deactivatedAt: '2026-01-01T00:00:00Z' }, false, { canUpdate: true });
+    expect(off).not.toContain('需谨慎的操作');
+    expect(off).toMatch(/data-requires="personnel\.profile\.update" disabled/);
   });
 
   it('当前机构带上级名（原型 P6:30）；本机构是根机构或上级是根机构时只写本名（原型 P6:69）；没有当前任职写「—」', () => {
@@ -536,6 +564,147 @@ describe('新建人员（P6 create / createInvalid）', () => {
   });
 });
 
+// ---------- 编辑与调岗（#129） ----------
+
+/** 根机构守卫的一句可读原因（后端 ROOT_GUARD_MESSAGE 同文，来源 #105 错误码表「409 可读原因」）。 */
+const ROOT_GUARD = '根机构上只剩这一名系统管理人员。系统必须始终保留一名在根机构任职、未停用的系统管理人员，请先给根机构补上另一名系统管理人员。';
+const FAILED_SENTENCE = '网络或服务暂时不可用，请稍后重试。问题持续时请联系本单位的系统管理人员。';
+
+const EDIT_INPUT: EditInput = { name: '陈晓宁', mobilePhone: '13800005521', roles: ['经办', '法制审核'], posts: ['legal-review-lead'] };
+
+const editState = (partial: Partial<EditState> = {}): EditState => ({
+  input: EDIT_INPUT,
+  failure: null,
+  busy: false,
+  onInput: () => undefined,
+  onCancel: () => undefined,
+  onSubmit: () => undefined,
+  ...partial,
+});
+
+const DESTS: TransferDestination[] = [
+  { id: 'gz', name: '广州市自然资源局', parentId: null },
+  { id: 'th', name: '天河区分局', parentId: 'gz' },
+  { id: 'sp', name: '石牌自然资源所', parentId: 'th' },
+  { id: 'hz', name: '海珠区分局', parentId: 'gz' },
+  { id: 'nh', name: '海珠区分局南华自然资源所', parentId: 'hz' },
+];
+
+const transferState = (partial: Partial<TransferState> = {}): TransferState => ({
+  destinations: DESTS,
+  loadFailed: false,
+  orgUnitId: '',
+  failure: null,
+  busy: false,
+  onChange: () => undefined,
+  onCancel: () => undefined,
+  onSubmit: () => undefined,
+  ...partial,
+});
+
+const visibleText = (html: string) => html.replace(/<[^>]*>/g, ' ');
+const RAW_TEXT = /personnel\.|audit\.|org\.|permission-denied|scope-denied|invalid-state|already-exists|non-compliant|not-found|root-admin-required|-required|too-short|contains-code|legal-review-lead|legal-affairs-leader/;
+
+describe('人员卡片编辑（P6 edit / selfEdit，#129）', () => {
+  const form = (self: boolean, partial: Partial<EditState> = {}) => renderToStaticMarkup(
+    <MemoryRouter>
+      <PersonnelCardView
+        card={CARD}
+        now={new Date('2026-10-17T04:00:00Z')}
+        registered={false}
+        self={self}
+        canUpdate
+        edit={editState(partial)}
+      />
+    </MemoryRouter>,
+  );
+
+  it('edit：工号只读，姓名手机号可改，七个角色、两个岗位标记，提示句照原型 P6', () => {
+    const html = form(false);
+    expect(html).toContain('<input id="e-code" class="input ro" disabled="" value="TH0315"/>');
+    expect(html).toContain('<input id="e-name" class="input" value="陈晓宁"');
+    expect(html).toContain('value="13800005521"');
+    expect(html.match(/data-role=/g)).toHaveLength(7);
+    expect(html).toContain('data-role="经办" checked');
+    expect(html).toContain('data-role="法制审核" checked');
+    expect(html).not.toMatch(/data-role="系统管理" checked/);
+    expect(html.match(/type="checkbox" data-post=/g)).toHaveLength(2);
+    expect(html).toContain('data-post="legal-review-lead" checked');
+    expect(html).not.toMatch(/data-post="legal-affairs-leader" checked/);
+    expect(html).toContain('至少保留一个角色。角色变化在对方下一次操作时生效，不用重新登录。');
+    expect(html).toContain('手机号用于登录，全系统不能重复。');
+    expect(html).toContain('取消');
+    expect(html).toContain('保存');
+    // 编辑态不出只读 kv 与执法证一段（原型 P6 edit）。
+    expect(html).not.toContain('打开人员详情会留痕</div></div><div class="kv">');
+    expect(html).not.toContain('执法证号');
+  });
+
+  it('selfEdit：角色与岗位标记置灰并说明原因，姓名手机号照改（G23）', () => {
+    const html = form(true);
+    expect(html).toContain('data-role="经办" disabled="" checked=""');
+    expect(html).toContain('data-post="legal-review-lead" disabled="" checked=""');
+    expect(html).toContain('data-reason="self-role"');
+    expect(html).toContain('不能修改自己的角色。如需调整，请找本单位其他系统管理人员办理。');
+    expect(html).toContain('不能修改自己的岗位标记。如需调整，请找本单位其他系统管理人员办理。');
+    expect(html).not.toContain('至少保留一个角色');
+    expect(html).not.toMatch(/id="e-name"[^>]*disabled/);
+    expect(html).not.toMatch(/id="e-phone"[^>]*disabled/);
+  });
+
+  it('编辑失败：字段提示落在对应输入下，根机构守卫一句放整页提示，不露原因码', () => {
+    const html = form(false, {
+      failure: { fields: { name: '请填写姓名', mobilePhone: '这个手机号已被其他人员使用，请核对' }, message: ROOT_GUARD },
+    });
+    expect(html).toContain('data-error="name">请填写姓名');
+    expect(html).toContain('这个手机号已被其他人员使用，请核对');
+    expect(html).toContain(ROOT_GUARD);
+    expect(visibleText(html)).not.toMatch(RAW_TEXT);
+  });
+
+  it('编辑保存中（busy）禁用调岗入口，避免编辑与调岗两回调互相覆盖卡片（#129 复核线程 3）', () => {
+    // busy 时调岗按钮置灰：编辑请求在途时不能再开调岗弹窗提交。
+    expect(form(false, { busy: true })).toMatch(/data-action="transfer"[^>]*disabled/);
+    // 非 busy（可编辑）时调岗按钮照常可点。
+    expect(form(false, { busy: false })).not.toMatch(/data-action="transfer"[^>]*disabled/);
+  });
+});
+
+describe('调岗弹窗（P6 transfer，#129）', () => {
+  const dialog = (partial: Partial<TransferState> = {}) => renderToStaticMarkup(
+    <MemoryRouter>
+      <TransferDialog card={CARD} transfer={transferState(partial)} />
+    </MemoryRouter>,
+  );
+
+  it('标题带姓名，现机构只读，调入机构整棵树、提示不限本区，效果两句照原型', () => {
+    const html = dialog();
+    expect(html).toContain('调岗：陈晓宁');
+    expect(html).toContain('<input id="t-from" class="input ro" disabled="" value="天河区分局石牌自然资源所"/>');
+    expect(html).toContain('调入机构不限于本区。');
+    expect(html).toContain('对方下一次操作起，只能看到新机构范围内的线索和案件；');
+    expect(html).toContain('对方经手的历史记录不变。');
+    expect(html).toContain('<option value="nh">海珠区分局南华自然资源所</option>');
+    // 未选机构时确认调岗置灰，选了才可点。
+    expect(html).toContain('disabled="">确认调岗');
+    expect(dialog({ orgUnitId: 'nh' })).not.toContain('disabled="">确认调岗');
+  });
+
+  it('失败一句显示在弹窗里（根机构守卫），不露原因码；读取失败提示关闭后重试', () => {
+    const html = dialog({ failure: { fields: {}, message: ROOT_GUARD } });
+    expect(html).toContain(ROOT_GUARD);
+    expect(visibleText(html)).not.toMatch(RAW_TEXT);
+    expect(dialog({ destinations: null, loadFailed: true })).toContain('无法读取可选机构，请关闭后重试。');
+  });
+
+  it('目的地按树的先序；编辑表单初值取卡片当前态', () => {
+    const shuffled = [DESTS[2], DESTS[4], DESTS[0], DESTS[3], DESTS[1]];
+    // 先序 = 上级在前，同级按接口给的次序（sp、nh、gz、hz、th → gz 的子级 hz 先于 th 出现）。
+    expect(destinationsInTreeOrder(shuffled).map((unit) => unit.id)).toEqual(['gz', 'hz', 'nh', 'th', 'sp']);
+    expect(editInputFromCard(CARD)).toEqual(EDIT_INPUT);
+  });
+});
+
 describe('用户可见文本不露操作码与原始结果码（SCREENS.md:8）', () => {
   const visible = (html: string) => html.replace(/<[^>]*>/g, ' ');
   const RAW = /personnel\.|audit\.|org\.|permission-denied|scope-denied|invalid-state|already-exists|non-compliant|not-found|-required|too-short|contains-code|legal-review-lead|legal-affairs-leader/;
@@ -557,7 +726,7 @@ describe('用户可见文本不露操作码与原始结果码（SCREENS.md:8）'
       renderToStaticMarkup(<MemoryRouter><PersonnelCardView card={CARD} now={new Date('2026-10-17T04:00:00Z')} registered /></MemoryRouter>),
       renderToStaticMarkup(
         <MemoryRouter>
-          <PersonnelCardView card={CARD} now={new Date('2026-10-17T04:00:00Z')} registered canUpdate />
+          <PersonnelCardView card={CARD} now={new Date('2026-10-17T04:00:00Z')} registered canUpdateCert />
         </MemoryRouter>,
       ),
       renderToStaticMarkup(
@@ -575,6 +744,28 @@ describe('用户可见文本不露操作码与原始结果码（SCREENS.md:8）'
       renderToStaticMarkup(
         <MemoryRouter>
           <PersonnelCreateForm orgUnits={ORGS} input={EMPTY_INPUT} failure={failure} busy={false} onInput={() => undefined} onSubmit={() => undefined} />
+        </MemoryRouter>,
+      ),
+      // #129：卡片（含危险操作区）、编辑表单（含守卫失败句）、调岗弹窗（含守卫失败句）。
+      renderToStaticMarkup(
+        <MemoryRouter>
+          <PersonnelCardView card={CARD} now={new Date('2026-10-17T04:00:00Z')} registered={false} canUpdate />
+        </MemoryRouter>,
+      ),
+      renderToStaticMarkup(
+        <MemoryRouter>
+          <PersonnelCardView
+            card={CARD}
+            now={new Date('2026-10-17T04:00:00Z')}
+            registered={false}
+            canUpdate
+            edit={editState({ failure: { fields: { roles: '请至少选一个角色' }, message: ROOT_GUARD } })}
+          />
+        </MemoryRouter>,
+      ),
+      renderToStaticMarkup(
+        <MemoryRouter>
+          <TransferDialog card={CARD} transfer={transferState({ failure: { fields: {}, message: ROOT_GUARD } })} />
         </MemoryRouter>,
       ),
     ];
@@ -650,6 +841,71 @@ describe('登记接口', () => {
     await expect(loadPersonnelCard(store.dispatch, '3')).rejects.toMatchObject({ init: { status: 404 } });
     serve(person(ADMIN), { '/api/admin/personnel': [500, {}] });
     await expect(loadPersonnelList(store.dispatch)).rejects.toThrow('人员名单读取失败：HTTP 500');
+  });
+});
+
+describe('编辑与调岗接口（#129）', () => {
+  const ADMIN_UPDATE = [...ADMIN, PERSONNEL_UPDATE];
+
+  it('updatePersonnel：200；400 规则码落到字段；409 重复落到手机号字段；409 守卫句整页提示；403 整页提示；500 定稿句', async () => {
+    const store = fresh();
+    const calls = serve(person(ADMIN_UPDATE), { '/api/admin/personnel/3/edit': [200, { result: 'updated' }] });
+    await store.dispatch(loadSession());
+    expect(await updatePersonnel(store.dispatch, '3', EDIT_INPUT)).toEqual({ ok: true });
+    const post = calls.find((call) => call.url === '/api/admin/personnel/3/edit');
+    expect(post?.init?.method).toBe('POST');
+    expect(JSON.parse(String(post?.init?.body))).toEqual(EDIT_INPUT);
+
+    serve(person(ADMIN_UPDATE), { '/api/admin/personnel/3/edit': [400, { result: 'non-compliant', rules: ['personnel-name-required', 'mobile-phone-invalid', 'post-unknown'] }] });
+    expect(await updatePersonnel(store.dispatch, '3', EDIT_INPUT)).toEqual({
+      ok: false,
+      fields: { name: '请填写姓名', mobilePhone: '手机号应为以 1 开头的 11 位数字', posts: '所选岗位标记不在可选范围内，请刷新页面后重选' },
+      message: null,
+    });
+    serve(person(ADMIN_UPDATE), { '/api/admin/personnel/3/edit': [409, { result: 'already-exists', conflict: 'mobile-phone' }] });
+    expect(await updatePersonnel(store.dispatch, '3', EDIT_INPUT)).toEqual({
+      ok: false, fields: { mobilePhone: '这个手机号已被其他人员使用，请核对' }, message: null,
+    });
+    serve(person(ADMIN_UPDATE), { '/api/admin/personnel/3/edit': [409, { result: 'invalid-state', reason: 'root-admin-required', message: ROOT_GUARD }] });
+    expect(await updatePersonnel(store.dispatch, '3', EDIT_INPUT)).toEqual({ ok: false, fields: {}, message: ROOT_GUARD });
+    serve(person(ADMIN_UPDATE), { '/api/admin/personnel/3/edit': [403, { reason: 'scope-denied' }] });
+    expect(await updatePersonnel(store.dispatch, '3', EDIT_INPUT)).toEqual({ ok: false, fields: {}, message: DENIED_TARGET });
+    serve(person(ADMIN_UPDATE), { '/api/admin/personnel/3/edit': [500, {}] });
+    expect(await updatePersonnel(store.dispatch, '3', EDIT_INPUT)).toEqual({ ok: false, fields: {}, message: FAILED_SENTENCE });
+  });
+
+  it('transferPersonnel：200；400 落到调入机构；409 守卫句整页提示；409 无句落到调入机构；403 整页提示', async () => {
+    const store = fresh();
+    const calls = serve(person(ADMIN_UPDATE), { '/api/admin/personnel/3/transfer': [200, { result: 'transferred', orgUnitId: 'sp' }] });
+    await store.dispatch(loadSession());
+    expect(await transferPersonnel(store.dispatch, '3', 'sp')).toEqual({ ok: true });
+    const post = calls.find((call) => call.url === '/api/admin/personnel/3/transfer');
+    expect(JSON.parse(String(post?.init?.body))).toEqual({ orgUnitId: 'sp' });
+
+    serve(person(ADMIN_UPDATE), { '/api/admin/personnel/3/transfer': [400, { result: 'non-compliant', rules: ['org-unit-required'] }] });
+    expect(await transferPersonnel(store.dispatch, '3', '')).toEqual({
+      ok: false, fields: { orgUnitId: '请选择调入机构' }, message: null,
+    });
+    serve(person(ADMIN_UPDATE), { '/api/admin/personnel/3/transfer': [409, { result: 'invalid-state', reason: 'root-admin-required', message: ROOT_GUARD }] });
+    expect(await transferPersonnel(store.dispatch, '3', 'sp')).toEqual({ ok: false, fields: {}, message: ROOT_GUARD });
+    serve(person(ADMIN_UPDATE), { '/api/admin/personnel/3/transfer': [409, { result: 'invalid-state' }] });
+    expect(await transferPersonnel(store.dispatch, '3', 'sp')).toEqual({
+      ok: false, fields: { orgUnitId: '所选机构已停用，请选择在用的机构' }, message: null,
+    });
+    serve(person(ADMIN_UPDATE), { '/api/admin/personnel/3/transfer': [403, { reason: 'permission-denied' }] });
+    expect(await transferPersonnel(store.dispatch, '3', 'sp')).toEqual({ ok: false, fields: {}, message: DENIED_TARGET });
+  });
+
+  it('loadTransferDestinations：200 按树的先序；403 或失败为 null', async () => {
+    const store = fresh();
+    const shuffled = [DESTS[3], DESTS[0], DESTS[4], DESTS[1], DESTS[2]];
+    serve(person(ADMIN_UPDATE), { '/api/admin/personnel/3/transfer-destinations': [200, { result: 'listed', orgUnits: shuffled }] });
+    await store.dispatch(loadSession());
+    expect(await loadTransferDestinations(store.dispatch, '3')).toEqual([DESTS[0], DESTS[3], DESTS[4], DESTS[1], DESTS[2]]);
+    serve(person(ADMIN_UPDATE), { '/api/admin/personnel/3/transfer-destinations': [403, { reason: 'permission-denied' }] });
+    expect(await loadTransferDestinations(store.dispatch, '3')).toBeNull();
+    serve(person(ADMIN_UPDATE), { '/api/admin/personnel/3/transfer-destinations': [500, {}] });
+    expect(await loadTransferDestinations(store.dispatch, '3')).toBeNull();
   });
 });
 

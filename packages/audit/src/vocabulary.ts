@@ -25,6 +25,13 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'personnel.post-granted',
   // 执法证登记（#105「执法证（#85）」，#133）。前值只写旧有效期和旧状态，不写证号。
   'cert.updated',
+  // 人员编辑与调岗（#105「人员与登录凭据」，#129，ADR 0014）。
+  'personnel.renamed',
+  'personnel.mobile-changed',
+  'personnel.role-granted',
+  'personnel.role-revoked',
+  'personnel.post-revoked',
+  'personnel.transferred',
 ] as const;
 
 export const AUDIT_ACTIONS = [
@@ -98,8 +105,36 @@ export type OrgUnitDeactivateFailedReason = (typeof ORG_UNIT_DEACTIVATE_FAILED_R
 export const PERSONNEL_REGISTER_FAILED_REASONS = ['org-unit-deactivated', 'already-exists'] as const;
 export type PersonnelRegisterFailedReason = (typeof PERSONNEL_REGISTER_FAILED_REASONS)[number];
 
-/** 带「后值」的动作（#128）。后值写标记取值；其余动作不许带后值。 */
-export const AUDIT_NEXT_VALUE_ACTIONS = ['personnel.post-granted'] as const;
+/**
+ * 根机构守卫（ADR 0014，#129）：始终保留一名「当前任职在根机构、未停用、持有未停用系统管理角色」的人员。
+ * 摘除系统管理角色、调岗出根机构违反时记这个原因，返回 409 invalid-state。
+ */
+export const ROOT_GUARD_FAILED_REASON = 'root-admin-required';
+export type RootGuardFailedReason = typeof ROOT_GUARD_FAILED_REASON;
+
+/** 改手机号被拒（outcome=failed）的原因（#129）：手机号已被他人占用。 */
+export const PERSONNEL_MOBILE_CHANGE_FAILED_REASONS = ['already-exists'] as const;
+export type PersonnelMobileChangeFailedReason = (typeof PERSONNEL_MOBILE_CHANGE_FAILED_REASONS)[number];
+
+/** 摘除角色被拒（outcome=failed）的原因（#129）：只有根机构守卫一条。 */
+export const PERSONNEL_ROLE_REVOKE_FAILED_REASONS = [ROOT_GUARD_FAILED_REASON] as const;
+export type PersonnelRoleRevokeFailedReason = (typeof PERSONNEL_ROLE_REVOKE_FAILED_REASONS)[number];
+
+/** 调岗被拒（outcome=failed）的原因（#129）：调入机构已停用；根机构守卫。 */
+export const PERSONNEL_TRANSFER_FAILED_REASONS = ['org-unit-deactivated', ROOT_GUARD_FAILED_REASON] as const;
+export type PersonnelTransferFailedReason = (typeof PERSONNEL_TRANSFER_FAILED_REASONS)[number];
+
+/**
+ * 带「后值」的动作（#128、#129）。后值写这次动作把对象改成了什么：
+ * 岗位标记取值、角色名、调入机构名。其余动作不许带后值。
+ */
+export const AUDIT_NEXT_VALUE_ACTIONS = [
+  'personnel.post-granted',
+  'personnel.post-revoked',
+  'personnel.role-granted',
+  'personnel.role-revoked',
+  'personnel.transferred',
+] as const;
 export type AuditNextValueAction = (typeof AUDIT_NEXT_VALUE_ACTIONS)[number];
 
 /**

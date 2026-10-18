@@ -1,6 +1,8 @@
-// 管理台人员（P5 列表、P6 卡片与新建，#128）的数据与纯函数。执法证登记与「需要留意的执法证」统计见 #133。
+// 管理台人员（P5 列表、P6 卡片与新建，#128；编辑与调岗，#129；执法证登记与「需要留意的执法证」统计，#133）的数据与纯函数。
 // 列表放在 GET /api/admin/personnel，不含手机号和执法证号；卡片 GET /api/admin/personnel/:id 每次打开都留痕；
-// 登记 POST /api/admin/personnel；执法证登记 POST /api/admin/personnel/:id/cert。
+// 登记 POST /api/admin/personnel；编辑 POST /api/admin/personnel/:id/edit；调岗 POST /api/admin/personnel/:id/transfer；
+// 调岗目的地 GET /api/admin/personnel/:id/transfer-destinations（全树未停用机构，不限数据范围）；
+// 执法证登记 POST /api/admin/personnel/:id/cert。
 // 是否有权由服务端决定，前端按会话清单只决定显示什么。
 
 import { data } from 'react-router';
@@ -14,6 +16,7 @@ export const PERSONNEL_READ = 'personnel.profile.read';
 export const PERSONNEL_REGISTER = 'personnel.profile.register';
 /** 执法证登记（#133）：只给系统管理。 */
 export const PERSONNEL_CERT_UPDATE = 'personnel.cert.update';
+export const PERSONNEL_UPDATE = 'personnel.profile.update';
 export const AUDIT_READ = 'audit.admin.read';
 
 /** 七个角色（ADR 0009），按原型 P6 的顺序。 */
@@ -476,6 +479,35 @@ export async function updateCert(
   let response: Response;
   try {
     response = await apiFetch(dispatch, `/api/admin/personnel/${encodeURIComponent(personnelId)}/cert`, {
+// ---------- 编辑（#129，P6 edit / selfEdit） ----------
+
+export interface EditInput {
+  name: string;
+  mobilePhone: string;
+  roles: string[];
+  posts: PersonnelPost[];
+}
+
+export type EditField = 'name' | 'mobilePhone' | 'roles' | 'posts';
+
+/** 编辑表单初值：取卡片当前态。工号与机构不可改，不在表单里。 */
+export function editInputFromCard(card: PersonnelCard): EditInput {
+  return { name: card.name, mobilePhone: card.mobilePhone ?? '', roles: [...card.roles], posts: [...card.posts] };
+}
+
+/** 越权或对象不在范围（编辑与调岗共用一句）。不露原因码。 */
+export const DENIED_TARGET = '你没有权限执行这个操作，或这个人员不在你的范围内。';
+
+export type EditResult =
+  | { ok: true }
+  | { ok: false; fields: Partial<Record<EditField, string>>; message: string | null };
+
+const EDIT_FIELDS: readonly string[] = ['name', 'mobilePhone', 'roles', 'posts'];
+
+export async function updatePersonnel(dispatch: ApiDispatch, id: string, input: EditInput): Promise<EditResult> {
+  let response: Response;
+  try {
+    response = await apiFetch(dispatch, `/api/admin/personnel/${encodeURIComponent(id)}/edit`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(input),
@@ -501,6 +533,82 @@ export async function updateCert(
     return { ok: false, fields: {}, message: '你没有权限执行这个操作，或这个人员不在你的范围内。' };
   }
   return { ok: false, fields: {}, message: FAILED };
+}
+
+    const fields: Partial<Record<EditField, string>> = {};
+    for (const rule of json.rules as string[]) {
+      const known = FIELD_RULES[rule];
+      if (known && EDIT_FIELDS.includes(known.field)) fields[known.field as EditField] ??= known.text;
+    }
+    return { ok: false, fields, message: null };
+  }
+  if (response.status === 409 && json.result === 'already-exists') {
+    return { ok: false, fields: { mobilePhone: DUPLICATE_TEXT['mobile-phone'].text }, message: null };
+  }
+  // 409 invalid-state：根机构守卫等，服务端给一句可读原因，直接显示（不露原因码）。
+  if (response.status === 409 && typeof json.message === 'string' && json.message !== '') {
+    return { ok: false, fields: {}, message: json.message };
+  }
+  if (response.status === 403) return { ok: false, fields: {}, message: DENIED_TARGET };
+  return { ok: false, fields: {}, message: FAILED };
+}
+
+// ---------- 调岗（#129，P6 transfer） ----------
+
+export interface TransferDestination {
+  id: string;
+  name: string;
+  parentId: string | null;
+}
+
+export type TransferResult =
+  | { ok: true }
+  | { ok: false; fields: { orgUnitId?: string }; message: string | null };
+
+export async function transferPersonnel(dispatch: ApiDispatch, id: string, orgUnitId: string): Promise<TransferResult> {
+  let response: Response;
+  try {
+    response = await apiFetch(dispatch, `/api/admin/personnel/${encodeURIComponent(id)}/transfer`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ orgUnitId }),
+    });
+  } catch {
+    return { ok: false, fields: {}, message: FAILED };
+  }
+  if (response.status === 401) return { ok: false, fields: {}, message: null };
+  const json = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+  if (response.ok) return { ok: true };
+  if (response.status === 400) return { ok: false, fields: { orgUnitId: '请选择调入机构' }, message: null };
+  if (response.status === 409 && typeof json.message === 'string' && json.message !== '') {
+    return { ok: false, fields: {}, message: json.message };
+  }
+  if (response.status === 409) {
+    return { ok: false, fields: { orgUnitId: '所选机构已停用，请选择在用的机构' }, message: null };
+  }
+  if (response.status === 403) return { ok: false, fields: {}, message: DENIED_TARGET };
+  return { ok: false, fields: {}, message: FAILED };
+}
+
+/** 取调岗目的地：全树未停用的机构，按树的先序。失败为 null（弹窗里显示重试提示）。 */
+export async function loadTransferDestinations(dispatch: ApiDispatch, id: string): Promise<TransferDestination[] | null> {
+  let response: Response;
+  try {
+    response = await apiFetch(dispatch, `/api/admin/personnel/${encodeURIComponent(id)}/transfer-destinations`);
+  } catch {
+    return null;
+  }
+  if (!response.ok) return null;
+  const body = (await response.json().catch(() => ({}))) as { orgUnits?: TransferDestination[] };
+  const units = Array.isArray(body.orgUnits) ? body.orgUnits : [];
+  return destinationsInTreeOrder(units);
+}
+
+/** 目的地按树的先序；根节点取没有上级的那一个。 */
+export function destinationsInTreeOrder(units: readonly TransferDestination[]): TransferDestination[] {
+  const root = units.find((unit) => unit.parentId === null || !units.some((other) => other.id === unit.parentId));
+  if (!root) return [...units];
+  return orgUnitsInTreeOrder(units, root.id);
 }
 
 // ---------- 取数 ----------

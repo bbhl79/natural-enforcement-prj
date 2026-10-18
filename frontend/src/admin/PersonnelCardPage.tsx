@@ -1,4 +1,4 @@
-import { Suspense, useState, type FormEvent } from 'react';
+import { Suspense, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { Await, Link, useAsyncError, useLoaderData, useRevalidator, useSearchParams } from 'react-router';
 
 import { useAppDispatch, useAppSelector } from '../hooks';
@@ -11,17 +11,27 @@ import {
   certNote,
   certProblemCount,
   certRecordLabel,
+  editInputFromCard,
+  loadTransferDestinations,
   maskPhone,
   orgText,
   passwordText,
   PERSONNEL_CERT_UPDATE,
   PERSONNEL_READ,
+  PERSONNEL_UPDATE,
   POST_LABEL,
+  POSTS,
+  ROLES,
+  transferPersonnel,
   updateCert,
+  updatePersonnel,
   type CertRecordStatus,
   type CertUpdateInput,
   type CertUpdateResult,
+  type EditInput,
   type PersonnelCard,
+  type PersonnelPost,
+  type TransferDestination,
 } from './personnel';
 import { PersonnelDenied, SkeletonCard } from './PersonnelStatus';
 
@@ -198,7 +208,7 @@ export function CertSection({
   );
 }
 
-/** 岗位标记（#105 A1，不在 v0.4，按 spec 例外以单测和集成测试验收）。只读；维护入口随编辑票（#129）。 */
+/** 岗位标记（#105 A1，不在 v0.4，按 spec 例外以单测和集成测试验收）。只读；维护入口在编辑表单里（#129）。 */
 export function PostsCard({ card }: { card: PersonnelCard }) {
   return (
     <div className="card" data-section="posts">
@@ -213,20 +223,259 @@ export function PostsCard({ card }: { card: PersonnelCard }) {
   );
 }
 
-/** P6 view（纯渲染，单测直接渲染）。危险操作区随 #129、#130、#132 补入右栏。 */
+// ---------- 编辑（P6 edit / selfEdit，#129） ----------
+
+export interface EditFailure {
+  fields: Partial<Record<'name' | 'mobilePhone' | 'roles' | 'posts', string>>;
+  message: string | null;
+}
+
+export interface EditState {
+  input: EditInput;
+  failure: EditFailure | null;
+  busy: boolean;
+  onInput: (next: EditInput) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}
+
+function toggle<T>(list: readonly T[], item: T, on: boolean): T[] {
+  return on ? [...list.filter((x) => x !== item), item] : list.filter((x) => x !== item);
+}
+
+/** P6 edit / selfEdit 的表单（纯渲染，单测直接渲染）。工号不可改；本人编辑时角色与岗位标记置灰。 */
+export function PersonnelEditForm({ card, self, edit }: { card: PersonnelCard; self: boolean; edit: EditState }) {
+  const { input, failure, busy } = edit;
+  const fields = failure?.fields ?? {};
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    edit.onSubmit();
+  };
+  return (
+    <form onSubmit={submit} noValidate data-mode="edit">
+      {failure?.message ? <div className="banner danger" data-error="message">{failure.message}</div> : null}
+      <div className="form-row">
+        <label htmlFor="e-code">工号</label>
+        <input id="e-code" className="input ro" value={card.code} disabled />
+      </div>
+      <div className="form-row">
+        <label htmlFor="e-name">姓名<span className="req">*</span></label>
+        <div>
+          <input id="e-name" className="input" value={input.name} disabled={busy} onChange={(e) => edit.onInput({ ...input, name: e.target.value })} />
+          {fields.name ? <div className="err" data-error="name">{fields.name}</div> : null}
+        </div>
+      </div>
+      <div className="form-row">
+        <label htmlFor="e-phone">手机号<span className="req">*</span></label>
+        <div>
+          <input id="e-phone" className="input" inputMode="numeric" value={input.mobilePhone} disabled={busy} onChange={(e) => edit.onInput({ ...input, mobilePhone: e.target.value })} />
+          {fields.mobilePhone ? <div className="err" data-error="mobilePhone">{fields.mobilePhone}</div> : null}
+          <div className="help">手机号用于登录，全系统不能重复。</div>
+        </div>
+      </div>
+      <div className="form-row">
+        <label>角色<span className="req">*</span></label>
+        <div data-field="roles">
+          <div className="checks">
+            {ROLES.map((role) => (
+              <label key={role}>
+                <input
+                  type="checkbox"
+                  data-role={role}
+                  checked={input.roles.includes(role)}
+                  disabled={self || busy}
+                  onChange={(e) => edit.onInput({ ...input, roles: toggle(input.roles, role, e.target.checked) })}
+                />
+                {` ${role}`}
+              </label>
+            ))}
+          </div>
+          {fields.roles ? <div className="err" data-error="roles">{fields.roles}</div> : null}
+          {self ? (
+            <div className="help" data-reason="self-role">不能修改自己的角色。如需调整，请找本单位其他系统管理人员办理。</div>
+          ) : (
+            <div className="help">至少保留一个角色。角色变化在对方下一次操作时生效，不用重新登录。</div>
+          )}
+        </div>
+      </div>
+      {/* 岗位标记一段不在 v0.4（#105 写明的例外），交互照角色一段；本人编辑时同样置灰。 */}
+      <div className="form-row" data-section="posts">
+        <label>岗位标记</label>
+        <div data-field="posts">
+          <div className="checks">
+            {POSTS.map((post) => (
+              <label key={post}>
+                <input
+                  type="checkbox"
+                  data-post={post}
+                  checked={input.posts.includes(post)}
+                  disabled={self || busy}
+                  onChange={(e) => edit.onInput({ ...input, posts: toggle<PersonnelPost>(input.posts, post, e.target.checked) })}
+                />
+                {` ${POST_LABEL[post]}`}
+              </label>
+            ))}
+          </div>
+          {fields.posts ? <div className="err" data-error="posts">{fields.posts}</div> : null}
+          {self ? (
+            <div className="help" data-reason="self-post">不能修改自己的岗位标记。如需调整，请找本单位其他系统管理人员办理。</div>
+          ) : (
+            <div className="help">可多选，也可不选。岗位标记用于审批链选人，不是角色，不授予任何权限。</div>
+          )}
+        </div>
+      </div>
+      <div className="actions">
+        <button type="button" className="btn" disabled={busy} onClick={edit.onCancel}>取消</button>
+        <button type="submit" className="btn btn-primary" disabled={busy} data-requires={PERSONNEL_UPDATE}>保存</button>
+      </div>
+    </form>
+  );
+}
+
+// ---------- 调岗弹窗（P6 transfer，#129） ----------
+
+/** 弹窗里能拿到焦点的元素（不含禁用的）。 */
+const FOCUSABLE = 'input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
+
+/** 弹窗（同 P4 的写法）：打开时焦点进弹窗，Tab 在弹窗内循环，关闭时焦点回到触发按钮。 */
+function Modal({ title, children, foot }: { title: string; children: ReactNode; foot: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const box = ref.current;
+    // autofocus 只认未禁用的元素：调岗弹窗挂载时清单还在读取，调入机构 select 处于禁用，
+    // 命中它则 focus() 无效、焦点留在背景。排除禁用后回退到第一个可聚焦元素（此时是取消按钮），
+    // 保证焦点进弹窗、Tab 陷阱生效（对照 LockedPersonnelPage 的焦点管理）。
+    (box?.querySelector<HTMLElement>('[data-autofocus]:not([disabled])') ?? box?.querySelector<HTMLElement>(FOCUSABLE))?.focus();
+    return () => {
+      if (opener?.isConnected) opener.focus();
+    };
+  }, []);
+  const trapTab = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== 'Tab' || !ref.current) return;
+    const items = Array.from(ref.current.querySelectorAll<HTMLElement>(FOCUSABLE));
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (!first || !last) return;
+    const current = document.activeElement;
+    const inside = current instanceof Node && ref.current.contains(current);
+    if (event.shiftKey && (current === first || !inside)) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && (current === last || !inside)) {
+      event.preventDefault();
+      first.focus();
+    }
+  };
+  return (
+    <div className="mask">
+      <div className="dialog" role="dialog" aria-modal="true" aria-label={title} ref={ref} onKeyDown={trapTab}>
+        <h3>{title}</h3>
+        {children}
+        <div className="foot">{foot}</div>
+      </div>
+    </div>
+  );
+}
+
+export interface TransferFailure {
+  fields: { orgUnitId?: string };
+  message: string | null;
+}
+
+export interface TransferState {
+  /** null = 还在读取 */
+  destinations: TransferDestination[] | null;
+  loadFailed: boolean;
+  orgUnitId: string;
+  failure: TransferFailure | null;
+  busy: boolean;
+  onChange: (orgUnitId: string) => void;
+  onCancel: () => void;
+  onSubmit: () => void;
+}
+
+/** P6 transfer（纯渲染，单测直接渲染）。文案照原型：目的地不限本区，效果两条。 */
+export function TransferDialog({ card, transfer }: { card: PersonnelCard; transfer: TransferState }) {
+  const { destinations, loadFailed, orgUnitId, failure, busy } = transfer;
+  return (
+    <Modal
+      title={`调岗：${card.name}`}
+      foot={(
+        <>
+          <button type="button" className="btn" disabled={busy} onClick={transfer.onCancel}>取消</button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={busy || loadFailed || destinations === null || orgUnitId === ''}
+            onClick={transfer.onSubmit}
+          >
+            确认调岗
+          </button>
+        </>
+      )}
+    >
+      {failure?.message ? <div className="banner danger" data-error="message">{failure.message}</div> : null}
+      <div className="form-row">
+        <label htmlFor="t-from">现机构</label>
+        <input id="t-from" className="input ro" value={orgText(card)} disabled />
+      </div>
+      <div className="form-row">
+        <label htmlFor="t-to">调入机构<span className="req">*</span></label>
+        <div>
+          <select
+            id="t-to"
+            className="select"
+            value={orgUnitId}
+            disabled={busy || loadFailed || destinations === null}
+            data-autofocus
+            onChange={(event) => transfer.onChange(event.target.value)}
+          >
+            <option value="">请选择调入机构</option>
+            {(destinations ?? []).map((unit) => <option key={unit.id} value={unit.id}>{unit.name}</option>)}
+          </select>
+          {failure?.fields.orgUnitId ? <div className="err" data-error="orgUnitId">{failure.fields.orgUnitId}</div> : null}
+          {loadFailed ? <div className="err" data-error="destinations">无法读取可选机构，请关闭后重试。</div> : null}
+          <div className="help">调入机构不限于本区。</div>
+        </div>
+      </div>
+      <ul>
+        <li>对方下一次操作起，只能看到新机构范围内的线索和案件；</li>
+        <li>对方经手的历史记录不变。</li>
+      </ul>
+    </Modal>
+  );
+}
+
+// ---------- 卡片（P6 view） ----------
+
+/** P6 view（纯渲染，单测直接渲染）。停用与恢复（#130）、重设口令与结束会话（#132）随后补入危险操作区。 */
 export function PersonnelCardView({
   card,
   now,
   registered,
-  canUpdate = false,
+  canUpdateCert = false,
   onSaveCert,
+  self = false,
+  canUpdate = false,
+  edit = null,
+  onEnterEdit,
+  onOpenTransfer,
 }: {
   card: PersonnelCard;
   now: Date;
   registered: boolean;
   /** 会话清单里有 personnel.cert.update 时才显示执法证的登记按钮 */
-  canUpdate?: boolean;
+  canUpdateCert?: boolean;
   onSaveCert?: (input: CertUpdateInput) => Promise<CertUpdateResult>;
+  /** 卡片是不是操作者本人（G23：本人不能改角色、改岗位标记、调岗）。按工号认。 */
+  self?: boolean;
+  /** 会话清单里有 personnel.profile.update。 */
+  canUpdate?: boolean;
+  /** 编辑态；null = 查看态。 */
+  edit?: EditState | null;
+  onEnterEdit?: () => void;
+  onOpenTransfer?: () => void;
 }) {
   const [revealed, setRevealed] = useState(false);
   const off = Boolean(card.deactivatedAt);
@@ -241,35 +490,81 @@ export function PersonnelCardView({
             {off ? <span className="tag gray">已停用</span> : <span className="tag">在职</span>}
             <span className="hint">打开人员详情会留痕</span>
           </div>
-          <div className="kv">
-            <div className="k">工号</div>
-            <div className="mono">{card.code}</div>
-            <div className="k">姓名</div>
-            <div>{card.name}</div>
-            <div className="k">手机号</div>
-            <div>
-              {revealed ? card.mobilePhone ?? '—' : maskPhone(card.mobilePhone)}
-              {card.mobilePhone ? (
-                <>
-                  {' '}
-                  <button type="button" className="link-btn" style={{ fontSize: 12 }} onClick={() => setRevealed(!revealed)}>
-                    {revealed ? '隐藏号码' : '显示完整号码'}
-                  </button>
-                </>
-              ) : null}
-            </div>
-            <div className="k">当前机构</div>
-            <div>{orgText(card)}</div>
-            <div className="k">角色</div>
-            <div>{card.roles.join('、') || '—'}</div>
-            <div className="k">口令</div>
-            <div>{passwordText(card)}</div>
-          </div>
-          {/* 「编辑姓名、手机号、角色」按钮由 #129（personnel.profile.update）放在这里。 */}
-          <CertSection card={card} now={now} canUpdate={canUpdate} onSave={saveCert} />
+          {edit ? (
+            <PersonnelEditForm card={card} self={self} edit={edit} />
+          ) : (
+            <>
+              <div className="kv">
+                <div className="k">工号</div>
+                <div className="mono">{card.code}</div>
+                <div className="k">姓名</div>
+                <div>{card.name}</div>
+                <div className="k">手机号</div>
+                <div>
+                  {revealed ? card.mobilePhone ?? '—' : maskPhone(card.mobilePhone)}
+                  {card.mobilePhone ? (
+                    <>
+                      {' '}
+                      <button type="button" className="link-btn" style={{ fontSize: 12 }} onClick={() => setRevealed(!revealed)}>
+                        {revealed ? '隐藏号码' : '显示完整号码'}
+                      </button>
+                    </>
+                  ) : null}
+                </div>
+                <div className="k">当前机构</div>
+                <div>{orgText(card)}</div>
+                <div className="k">角色</div>
+                <div>{card.roles.join('、') || '—'}</div>
+                <div className="k">口令</div>
+                <div>{passwordText(card)}</div>
+              </div>
+              <div className="actions" style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  data-requires={PERSONNEL_UPDATE}
+                  disabled={off || !canUpdate}
+                  onClick={onEnterEdit}
+                >
+                  编辑姓名、手机号、角色
+                </button>
+              </div>
+              <CertSection card={card} now={now} canUpdate={canUpdateCert} onSave={saveCert} />
+            </>
+          )}
         </div>
         <div>
           <PostsCard card={card} />
+          {/* 已停用卡片没有调岗入口（v0.4，P6-restoreNewOrg）；「恢复人员」一行由 #130 补入。 */}
+          {!off ? (
+            <div className="card">
+              <div className="card-h">需谨慎的操作</div>
+              <div className="danger-zone">
+                <div className="row">
+                  <div>
+                    调岗
+                    <div className="help">新机构的数据范围下一次操作即生效</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-sm"
+                    data-requires={PERSONNEL_UPDATE}
+                    data-action="transfer"
+                    disabled={self || !canUpdate || edit?.busy === true}
+                    onClick={onOpenTransfer}
+                  >
+                    调岗
+                  </button>
+                </div>
+                {/* 重设初始口令、结束全部会话（#132），停用人员（#130）随后补入。 */}
+              </div>
+              {self ? (
+                <div className="banner amber" data-reason="self" style={{ marginTop: 10, marginBottom: 0 }}>
+                  这是你本人。不能给自己调岗、重设口令、结束会话或停用，请找本单位其他系统管理人员办理。
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
     </>
@@ -306,27 +601,114 @@ function CardError() {
   return <ErrorCard what="人员详情" onRetry={() => void revalidator.revalidate()} />;
 }
 
+/** 调入机构的新「当前机构」上级名：上级是根机构或本机构是根机构时为 null（同卡接口口径）。 */
+export function parentNameOf(dest: TransferDestination, units: readonly TransferDestination[]): string | null {
+  const parent = units.find((unit) => unit.id === dest.parentId);
+  if (!parent || parent.parentId === null) return null;
+  return parent.name;
+}
+
 /**
- * 卡片主体：接上执法证登记的取数与提交（#133）。
- * 保存成功后重取卡片——接口返回体不回显证号，界面按库里的当前值重新渲染。
+ * 卡片工作区：执法证登记（#133）与编辑、调岗（#129）的状态放这里。
+ * 编辑与调岗成功后就地更新卡片，不重取（重取会多写一行 personnel.viewed）；
+ * 执法证保存成功后重取卡片——接口返回体不回显证号，界面按库里的当前值重新渲染。
  */
-function ResolvedCard({ card, registered }: { card: PersonnelCard; registered: boolean }) {
+function CardWorkspace({ loaded, registered }: { loaded: PersonnelCard; registered: boolean }) {
   const dispatch = useAppDispatch();
   const revalidator = useRevalidator();
-  const opcodes = useAppSelector((root) => root.login.operator?.opcodes ?? []);
+  const operator = useAppSelector((root) => root.login.operator);
+  const opcodes = operator?.opcodes ?? [];
+  const [override, setOverride] = useState<PersonnelCard | null>(null);
+  const card = override ?? loaded;
+  const [edit, setEdit] = useState<{ input: EditInput; failure: EditFailure | null; busy: boolean } | null>(null);
+  const [transfer, setTransfer] = useState<Omit<TransferState, 'onChange' | 'onCancel' | 'onSubmit'> | null>(null);
+  const self = operator !== null && operator.code === card.code;
+  const canUpdate = opcodes.includes(PERSONNEL_UPDATE);
+  const canUpdateCert = opcodes.includes(PERSONNEL_CERT_UPDATE);
+
   const saveCert = async (input: CertUpdateInput): Promise<CertUpdateResult> => {
     const result = await updateCert(dispatch, card.id, input);
     if (result.ok) void revalidator.revalidate();
     return result;
   };
+
+  const submitEdit = async (input: EditInput) => {
+    setEdit({ input, failure: null, busy: true });
+    const result = await updatePersonnel(dispatch, card.id, input);
+    if (result.ok) {
+      // 就地更新卡片显示（提交成功的值就是新值），角色与标记按显示顺序归位。
+      // 函数式更新：合并到最新的 override（或 loaded），避免与并发的调岗回调展开同一份旧 card 互相覆盖。
+      setOverride((prev) => ({
+        ...(prev ?? loaded),
+        name: input.name.trim(),
+        mobilePhone: input.mobilePhone.trim(),
+        roles: ROLES.filter((role) => input.roles.includes(role)),
+        posts: POSTS.filter((post) => (input.posts as readonly string[]).includes(post)),
+      }));
+      setEdit(null);
+      return;
+    }
+    setEdit({ input, failure: { fields: result.fields, message: result.message }, busy: false });
+  };
+
+  const openTransfer = async () => {
+    setTransfer({ destinations: null, loadFailed: false, orgUnitId: '', failure: null, busy: false });
+    const destinations = await loadTransferDestinations(dispatch, card.id);
+    setTransfer((prev) => (prev === null ? prev : { ...prev, destinations, loadFailed: destinations === null }));
+  };
+
+  const submitTransfer = async (state: Omit<TransferState, 'onChange' | 'onCancel' | 'onSubmit'>) => {
+    setTransfer({ ...state, busy: true });
+    const result = await transferPersonnel(dispatch, card.id, state.orgUnitId);
+    if (result.ok) {
+      const dest = state.destinations?.find((unit) => unit.id === state.orgUnitId);
+      if (dest) {
+        // 函数式更新：合并到最新的 override（或 loaded），避免与并发的编辑回调展开同一份旧 card 互相覆盖。
+        setOverride((prev) => ({
+          ...(prev ?? loaded),
+          orgUnitId: dest.id,
+          orgName: dest.name,
+          orgParentName: parentNameOf(dest, state.destinations ?? []),
+        }));
+      }
+      setTransfer(null);
+      return;
+    }
+    setTransfer({ ...state, failure: { fields: result.fields, message: result.message }, busy: false });
+  };
+
   return (
-    <PersonnelCardView
-      card={card}
-      now={new Date()}
-      registered={registered}
-      canUpdate={opcodes.includes(PERSONNEL_CERT_UPDATE)}
-      onSaveCert={saveCert}
-    />
+    <>
+      <Crumb title={card.name} />
+      <PersonnelCardView
+        card={card}
+        now={new Date()}
+        registered={registered}
+        canUpdateCert={canUpdateCert}
+        onSaveCert={saveCert}
+        self={self}
+        canUpdate={canUpdate}
+        edit={edit === null ? null : {
+          ...edit,
+          onInput: (next) => setEdit({ ...edit, input: next }),
+          onCancel: () => setEdit(null),
+          onSubmit: () => void submitEdit(edit.input),
+        }}
+        onEnterEdit={() => setEdit({ input: editInputFromCard(card), failure: null, busy: false })}
+        onOpenTransfer={() => void openTransfer()}
+      />
+      {transfer ? (
+        <TransferDialog
+          card={card}
+          transfer={{
+            ...transfer,
+            onChange: (orgUnitId) => setTransfer({ ...transfer, orgUnitId }),
+            onCancel: () => setTransfer(null),
+            onSubmit: () => void submitTransfer(transfer),
+          }}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -348,10 +730,7 @@ export default function PersonnelCardPage() {
     <Suspense fallback={<><Crumb title="人员详情" /><PersonnelCardSkeleton /></>}>
       <Await resolve={card} errorElement={<><Crumb title="人员详情" /><CardError /></>}>
         {(resolved: PersonnelCard | null) => (resolved ? (
-          <>
-            <Crumb title={resolved.name} />
-            <ResolvedCard card={resolved} registered={registered} />
-          </>
+          <CardWorkspace loaded={resolved} registered={registered} />
         ) : null)}
       </Await>
     </Suspense>

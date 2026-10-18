@@ -46,6 +46,7 @@ if (existing) {
 // 人员导出 personnel.profile.export 只给系统管理（#125，ADR 0013）。已初始化的库再次播种时补写这一条允许行。
 // 人员登记与查看（#105，#128）：personnel.profile.read、personnel.profile.register 只给系统管理。
 // 执法证登记（#105「执法证（#85）」，#133）：personnel.cert.update 只给系统管理。
+// 人员编辑与调岗（#105，#129）：personnel.profile.update 只给系统管理，调岗和改角色并入这一条，岗位标记的维护也用它。
 const ROLE_ALLOWANCES = {
   内勤: [
     "org.tree.read",
@@ -121,6 +122,7 @@ const ROLE_ALLOWANCES = {
     "personnel.profile.read",
     "personnel.profile.register",
     "personnel.cert.update",
+    "personnel.profile.update",
     "personnel.locked.read",
     "personnel.locked.release",
     "personnel.password.reset",
