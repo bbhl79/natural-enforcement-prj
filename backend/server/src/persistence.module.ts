@@ -8,7 +8,11 @@ import type { INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { PrismaPg } from '@prisma/adapter-pg';
 
-import { prismaAuditTrailFactory } from '../../../packages/audit/src/prisma-audit-trail.ts';
+import {
+  PrismaAuditTrailReader,
+  prismaAuditTrailFactory,
+  type AuditTrailReadClient,
+} from '../../../packages/audit/src/prisma-audit-trail.ts';
 import {
   AUDIT_TRAIL_FACTORY,
   AUDIT_TRAIL_PORT,
@@ -394,6 +398,7 @@ class PrismaUnitOfWork implements UnitOfWork {
       sessions: new PrismaSessionStore(client),
       remember: new PrismaRememberMeStore(client, null),
       audit: this.factory.forClient(client),
+      auditReader: new PrismaAuditTrailReader(client as unknown as AuditTrailReadClient),
     };
   }
 }
