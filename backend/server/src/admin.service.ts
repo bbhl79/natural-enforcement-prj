@@ -3,11 +3,13 @@ import { rejected, type Rejected } from '@natural-enforcement/audit';
 import {
   AccessControlService,
   CredentialService,
+  PersonnelService,
   isAccessDenied,
   rejectedPasswordRules,
   type ActorRef,
   type DenyReason,
   type PasswordRuleCode,
+  type PersonnelExportItem,
 } from '@natural-enforcement/identity';
 
 import { AuthService } from './auth.service.ts';
@@ -33,6 +35,13 @@ export type ResetOutcome =
 export type UnlockOutcome =
   | { status: 200; body: { result: 'unlocked' } }
   | { status: 404; body: { result: 'not-found' } }
+  | AdminDenial;
+
+export type PersonnelExportOutcome =
+  | {
+      status: 200;
+      body: { result: 'exported'; orgUnitId: string; itemCount: number; personnel: PersonnelExportItem[] };
+    }
   | AdminDenial;
 
 export type LockedListOutcome = {
@@ -63,6 +72,7 @@ export class AdminService {
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     private readonly access: AccessControlService,
     private readonly credentials: CredentialService,
+    private readonly personnel: PersonnelService,
     private readonly auth: AuthService,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
@@ -154,6 +164,32 @@ export class AdminService {
       }, tx);
       await tx.remember.endActiveForPersonnel(target.id, now, 'admin-ended');
       return { status: 200, body: { result: 'reset' } };
+    });
+  }
+
+  /**
+   * 人员导出（#125，ADR 0013）：读取与留痕同一事务，先写 personnel.exported，写成功才返回数据。
+   * 留痕写入失败时整体回滚，请求失败，不返回数据。
+   * 被拒时回滚，authz.denied 在回滚后另起事务写入。
+   */
+  async exportPersonnel(
+    actor: ActorRef,
+    orgUnitId: string,
+    sourceIp: string | null,
+  ): Promise<PersonnelExportOutcome> {
+    return this.uow.run<PersonnelExportOutcome>(async (tx) => {
+      try {
+        const personnel = await this.personnel.exportPersonnel(actor, orgUnitId, tx, tx.audit, sourceIp);
+        return {
+          status: 200,
+          body: { result: 'exported', orgUnitId, itemCount: personnel.length, personnel },
+        };
+      } catch (error) {
+        if (isAccessDenied(error) && error.denial) {
+          return rejected<PersonnelExportOutcome>({ status: 403, body: { reason: error.reason } }, error.denial);
+        }
+        throw error;
+      }
     });
   }
 

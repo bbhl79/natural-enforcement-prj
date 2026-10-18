@@ -39,6 +39,7 @@ const ADMIN_OPCODES = [
   'personnel.locked.read',
   'personnel.locked.release',
   'personnel.password.reset',
+  'personnel.profile.export',
   'audit.admin.read',
   'audit.admin.export',
   'authz.binding.submit',
@@ -48,6 +49,14 @@ const ADMIN_OPCODES = [
 describe('操作码名册', () => {
   it('覆盖决议表里的办案操作码和管理台操作码', () => {
     expect([...OPCODES].sort()).toEqual([...CASE_OPCODES, ...ADMIN_OPCODES].sort());
+  });
+
+  it('人员导出不要求执法资格，不必是主办人，不改变主状态', () => {
+    expect(opcodeRequirements('personnel.profile.export')).toEqual({
+      qualification: 'none',
+      mustBeCaseHandler: false,
+      changesPrimaryState: false,
+    });
   });
 
   it('名册外的字符串没有要求', () => {

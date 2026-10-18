@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AUDIT_ACTION_AUTHZ_DENIED,
   AUDIT_ACTIONS,
+  AUDIT_COUNTED_ACTIONS,
   AuditVocabularyError,
   PrismaAuditTrail,
   type AuditTrailCreateClient,
@@ -247,6 +248,70 @@ describe('机构停用（#124）', () => {
         JSON.stringify(item),
       ).rejects.toBeInstanceOf(AuditVocabularyError);
     }
+    expect(written).toHaveLength(0);
+  });
+});
+
+describe('导出条数（ADR 0013）', () => {
+  it('personnel.exported 带条数写入，记成功；条数 0 同样写入', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    await trail.append({ ...parties, action: 'personnel.exported', itemCount: 3 });
+    await trail.append({ ...parties, action: 'personnel.exported', itemCount: 0 });
+    expect(written.map((row) => [row.action, row.outcome, row.itemCount, row.reason])).toEqual([
+      ['personnel.exported', 'succeeded', 3, null],
+      ['personnel.exported', 'succeeded', 0, null],
+    ]);
+    expect(AUDIT_COUNTED_ACTIONS).toEqual(['personnel.exported', 'audit.exported']);
+  });
+
+  it('#126：audit.exported 带条数写入、audit.viewed 不带条数，都记成功', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    await trail.append({ ...parties, action: 'audit.exported', itemCount: 46 });
+    await trail.append({ ...parties, action: 'audit.viewed' });
+    expect(written.map((row) => [row.action, row.outcome, row.itemCount])).toEqual([
+      ['audit.exported', 'succeeded', 46],
+      ['audit.viewed', 'succeeded', null],
+    ]);
+  });
+
+  it('#126：audit.exported 缺条数、audit.viewed 带条数都被拒绝，不写库', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    await expect(
+      trail.append({ ...parties, action: 'audit.exported' } as unknown as Parameters<typeof trail.append>[0]),
+    ).rejects.toBeInstanceOf(AuditVocabularyError);
+    await expect(
+      trail.append({ ...parties, action: 'audit.viewed', itemCount: 1 } as unknown as Parameters<typeof trail.append>[0]),
+    ).rejects.toBeInstanceOf(AuditVocabularyError);
+    expect(written).toHaveLength(0);
+  });
+
+  it('不带条数的动作写入时条数为空', async () => {
+    const { db, written } = recorder();
+    await new PrismaAuditTrail(db).append({ ...parties, action: 'login.succeeded' });
+    await new PrismaAuditTrail(db).append(entry);
+    expect(written.map((row) => row.itemCount)).toEqual([null, null]);
+  });
+
+  it('带条数的动作缺条数或条数不是非负整数被拒绝，不写库', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    for (const itemCount of [undefined, null, -1, 1.5, Number.NaN, '3']) {
+      await expect(
+        trail.append({ ...parties, action: 'personnel.exported', itemCount } as unknown as Parameters<typeof trail.append>[0]),
+      ).rejects.toBeInstanceOf(AuditVocabularyError);
+    }
+    expect(written).toHaveLength(0);
+  });
+
+  it('别的动作带条数被拒绝，不写库', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    await expect(
+      trail.append({ ...parties, action: 'login.succeeded', itemCount: 1 } as unknown as Parameters<typeof trail.append>[0]),
+    ).rejects.toBeInstanceOf(AuditVocabularyError);
     expect(written).toHaveLength(0);
   });
 });

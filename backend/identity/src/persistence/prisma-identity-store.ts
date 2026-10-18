@@ -409,7 +409,4 @@ export class PrismaIdentityStore implements IdentityStore {
     });
   }
 
-  async insertExportAudit(row: ExportAuditRow): Promise<void> {
-    await this.prisma.exportAudit.create({ data: row });
-  }
 }

@@ -66,9 +66,9 @@ export { OrgUnitService } from './services/org-unit.service.ts';
 export { NO_OPEN_ITEMS, OPEN_ITEMS_COUNTER } from './domain/open-items.ts';
 export type { OpenItems, OpenItemsCounter } from './domain/open-items.ts';
 export type {
-  ExportResult,
   PersonnelDetail,
+  PersonnelExportItem,
   RegisterPersonnelInput,
 } from './services/personnel.service.ts';
-export { PersonnelService } from './services/personnel.service.ts';
+export { PERSONNEL_EXPORT_OPCODE, PersonnelService } from './services/personnel.service.ts';
 export { IdentityModule } from './identity.module.ts';

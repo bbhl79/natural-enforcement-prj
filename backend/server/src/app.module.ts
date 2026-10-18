@@ -10,6 +10,8 @@ import { SupervisionModule } from '@natural-enforcement/supervision';
 
 import { AdminController } from './admin.controller.ts';
 import { AdminService } from './admin.service.ts';
+import { AuditBrowseService } from './audit-browse.service.ts';
+import { AuditController } from './audit.controller.ts';
 import { AuthController } from './auth.controller.ts';
 import { AuthService } from './auth.service.ts';
 import { HealthController } from './health.controller.ts';
@@ -28,11 +30,12 @@ import { SourceGate } from './source-gate.ts';
     DeadlineModule,
     GeoDictModule,
   ],
-  controllers: [HealthController, AuthController, AdminController, OrgUnitsController],
+  controllers: [HealthController, AuthController, AdminController, OrgUnitsController, AuditController],
   providers: [
     AuthService,
     AdminService,
     OrgUnitsService,
+    AuditBrowseService,
     SourceGate,
     { provide: APP_GUARD, useClass: SessionGuard },
   ],

@@ -81,6 +81,8 @@ for (const code of [
   'personnel.locked.read',
   'personnel.locked.release',
   'personnel.password.reset',
+  // #125（ADR 0013）：人员导出，只给系统管理。导出写共用留痕表的 personnel.exported。
+  'personnel.profile.export',
   'audit.admin.read',
   'audit.admin.export',
   'authz.binding.submit',
