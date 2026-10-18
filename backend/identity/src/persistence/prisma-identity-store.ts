@@ -9,6 +9,7 @@ import type { Prisma, PrismaClient } from '../../../prisma/generated/prisma/clie
 
 import { isOrgUnitLevel } from '../domain/org-unit.ts';
 import { PERSONNEL_POSTS, isPersonnelPost, type PersonnelPost } from '../domain/personnel-profile.ts';
+import { ROOT_GUARD_ROLE } from '../domain/root-guard.ts';
 
 import type {
   ExportAuditRow,
@@ -22,7 +23,9 @@ import type {
   IdentityUniqueConflict,
   PersonnelAssignmentRow,
   PersonnelRoleToCreate,
+  PersonnelRoleBindingRow,
   PersonnelPostToCreate,
+  PersonnelPostBindingRow,
   PersonnelProfileRow,
   PersonnelDirectoryRow,
   PersonnelNameVersionRow,
@@ -302,6 +305,15 @@ export class PrismaIdentityStore implements IdentityStore {
     return this.prisma.personnel.findUnique({ where: { id } });
   }
 
+  async lockPersonnelProfile(personnelId: string): Promise<PersonnelProfileRow | null> {
+    // 人员级事务锁（#129 复核，ADR 0014）：FOR UPDATE 锁人员行，使同一人员上的并发编辑、调岗串行。
+    // 与 lockOrgUnit 同为行锁；统一锁序 人员 → 机构 → 根守卫。锁随事务结束释放。
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM personnel WHERE id = ${personnelId} FOR UPDATE`;
+    if (rows.length === 0) return null;
+    return this.findPersonnelProfile(personnelId);
+  }
+
   async findRootOrgUnitId(): Promise<string | null> {
     const root = await this.prisma.orgUnit.findFirst({
       where: { parentId: null },
@@ -349,6 +361,41 @@ export class PrismaIdentityStore implements IdentityStore {
     const rows = await this.prisma.role.findMany({ where: { name: { in: [...names] }, deactivatedAt: null } });
     for (const row of rows) ids.set(row.name, row.id);
     return ids;
+  }
+
+  async listActivePersonnelRoles(personnelId: string): Promise<PersonnelRoleBindingRow[]> {
+    const rows = await this.prisma.personnelRole.findMany({
+      where: { personnelId, deactivatedAt: null, role: { deactivatedAt: null } },
+      include: { role: true },
+      orderBy: { id: 'asc' },
+    });
+    return rows.map((row) => ({ id: row.id, roleId: row.roleId, roleName: row.role.name }));
+  }
+
+  async listActivePersonnelPosts(personnelId: string): Promise<PersonnelPostBindingRow[]> {
+    const rows = await this.prisma.personnelPost.findMany({
+      where: { personnelId, deactivatedAt: null },
+      orderBy: { id: 'asc' },
+    });
+    // 库内 CHECK 已限定取值；不认识的值不静默当成标记（同 listActivePosts）。
+    return rows.flatMap((row) => (isPersonnelPost(row.post) ? [{ id: row.id, post: row.post }] : []));
+  }
+
+  async lockRootGuard(): Promise<void> {
+    if (this.root) throw new Error('根机构守卫咨询锁须在交互式事务里取得');
+    // 事务级咨询锁（ADR 0014）。键与引导咨询锁不同，两者互不阻塞。
+    await this.prisma.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended('natural-enforcement:identity:root-guard', 0))::text AS locked`;
+  }
+
+  countRootGuardAdmins(rootOrgUnitId: string, excludePersonnelId: string | null): Promise<number> {
+    return this.prisma.personnel.count({
+      where: {
+        deactivatedAt: null,
+        ...(excludePersonnelId ? { id: { not: excludePersonnelId } } : {}),
+        assignments: { some: { endedAt: null, orgUnitId: rootOrgUnitId } },
+        personnelRoles: { some: { deactivatedAt: null, role: { deactivatedAt: null, name: ROOT_GUARD_ROLE } } },
+      },
+    });
   }
 
   async lockBootstrap(): Promise<void> {
@@ -439,6 +486,14 @@ export class PrismaIdentityStore implements IdentityStore {
 
   async insertPersonnelNameVersion(row: PersonnelNameVersionRow): Promise<void> {
     await this.prisma.personnelNameVersion.create({ data: row });
+  }
+
+  async deactivatePersonnelRole(rowId: string, deactivatedAt: Date): Promise<void> {
+    await this.prisma.personnelRole.update({ where: { id: rowId }, data: { deactivatedAt } });
+  }
+
+  async deactivatePersonnelPost(rowId: string, deactivatedAt: Date): Promise<void> {
+    await this.prisma.personnelPost.update({ where: { id: rowId }, data: { deactivatedAt } });
   }
 
   async updatePersonnelCurrentName(personnelId: string, name: string): Promise<void> {

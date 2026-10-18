@@ -391,3 +391,71 @@ describe('人员登记、查看与岗位标记（#128）', () => {
     expect(written).toHaveLength(0);
   });
 });
+
+describe('人员编辑与调岗（#129，ADR 0014）', () => {
+  it('改名、改手机号、加减角色、摘岗位标记、调岗都记成功；改名前值写旧名，改手机号前值留空', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    await trail.append({ ...parties, action: 'personnel.renamed', previousValue: '陈晓宁' });
+    await trail.append({ ...parties, action: 'personnel.mobile-changed' });
+    await trail.append({ ...parties, action: 'personnel.role-granted', nextValue: '法制审核' });
+    await trail.append({ ...parties, action: 'personnel.role-revoked', nextValue: '经办' });
+    await trail.append({ ...parties, action: 'personnel.post-revoked', nextValue: 'legal-review-lead' });
+    await trail.append({
+      ...parties, action: 'personnel.transferred', previousValue: '石牌自然资源所', nextValue: '南华自然资源所',
+    });
+    expect(written.map((row) => [row.action, row.outcome, row.reason, row.previousValue, row.nextValue])).toEqual([
+      ['personnel.renamed', 'succeeded', null, '陈晓宁', null],
+      ['personnel.mobile-changed', 'succeeded', null, null, null],
+      ['personnel.role-granted', 'succeeded', null, null, '法制审核'],
+      ['personnel.role-revoked', 'succeeded', null, null, '经办'],
+      ['personnel.post-revoked', 'succeeded', null, null, 'legal-review-lead'],
+      ['personnel.transferred', 'succeeded', null, '石牌自然资源所', '南华自然资源所'],
+    ]);
+  });
+
+  it('手机号已被占用记在改手机号上，违反根机构守卫记在被摘的角色或调岗上', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    await trail.append({ ...parties, action: 'personnel.mobile-changed', outcome: 'failed', reason: 'already-exists' });
+    await trail.append({
+      ...parties, action: 'personnel.role-revoked', outcome: 'failed', reason: 'root-admin-required', nextValue: '系统管理',
+    });
+    await trail.append({
+      ...parties, action: 'personnel.transferred', outcome: 'failed', reason: 'org-unit-deactivated', nextValue: '五山自然资源所',
+    });
+    await trail.append({
+      ...parties, action: 'personnel.transferred', outcome: 'failed', reason: 'root-admin-required', nextValue: '天河区分局',
+    });
+    expect(written.map((row) => [row.action, row.outcome, row.reason])).toEqual([
+      ['personnel.mobile-changed', 'failed', 'already-exists'],
+      ['personnel.role-revoked', 'failed', 'root-admin-required'],
+      ['personnel.transferred', 'failed', 'org-unit-deactivated'],
+      ['personnel.transferred', 'failed', 'root-admin-required'],
+    ]);
+  });
+
+  it('表外失败原因、只记成功的动作记失败、带后值的动作缺后值，一律拒绝且不写库', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    const cases: Array<Record<string, unknown>> = [
+      { action: 'personnel.renamed', outcome: 'failed', reason: 'root-admin-required' },
+      { action: 'personnel.role-granted', outcome: 'failed', reason: 'root-admin-required' },
+      { action: 'personnel.post-revoked', outcome: 'failed', reason: 'already-exists' },
+      { action: 'personnel.mobile-changed', outcome: 'failed', reason: 'root-admin-required' },
+      { action: 'personnel.transferred', outcome: 'failed', reason: 'already-exists' },
+      { action: 'personnel.role-granted' },
+      { action: 'personnel.post-revoked', nextValue: '' },
+      { action: 'personnel.transferred', previousValue: '石牌自然资源所' },
+      { action: 'personnel.renamed', nextValue: '邓雅' },
+      { action: 'personnel.mobile-changed', nextValue: '13900007788' },
+    ];
+    for (const item of cases) {
+      await expect(
+        trail.append({ ...parties, ...item } as unknown as Parameters<typeof trail.append>[0]),
+        JSON.stringify(item),
+      ).rejects.toBeInstanceOf(AuditVocabularyError);
+    }
+    expect(written).toHaveLength(0);
+  });
+});

@@ -5,7 +5,10 @@ import type {
   OrgUnitDeactivateFailedReason,
   OrgUnitRegisterFailedReason,
   PasswordChangedReason,
+  PersonnelMobileChangeFailedReason,
   PersonnelRegisterFailedReason,
+  PersonnelRoleRevokeFailedReason,
+  PersonnelTransferFailedReason,
   SessionEndReason,
 } from './vocabulary.ts';
 
@@ -68,7 +71,27 @@ export type AuditAppend =
   | (AuditParties & { action: 'personnel.registered' })
   | (AuditParties & { action: 'personnel.registered'; outcome: 'failed'; reason: PersonnelRegisterFailedReason })
   | (AuditParties & { action: 'personnel.viewed' })
-  | (AuditParties & { action: 'personnel.post-granted'; nextValue: string });
+  | (AuditParties & { action: 'personnel.post-granted'; nextValue: string })
+  // 人员编辑与调岗（#129，ADR 0014）。改名前值写旧名；改手机号前值留空（#105:219）。
+  | (AuditParties & { action: 'personnel.renamed' })
+  | (AuditParties & { action: 'personnel.mobile-changed' })
+  | (AuditParties & { action: 'personnel.mobile-changed'; outcome: 'failed'; reason: PersonnelMobileChangeFailedReason })
+  | (AuditParties & { action: 'personnel.role-granted'; nextValue: string })
+  | (AuditParties & { action: 'personnel.role-revoked'; nextValue: string })
+  | (AuditParties & {
+    action: 'personnel.role-revoked';
+    outcome: 'failed';
+    reason: PersonnelRoleRevokeFailedReason;
+    nextValue: string;
+  })
+  | (AuditParties & { action: 'personnel.post-revoked'; nextValue: string })
+  | (AuditParties & { action: 'personnel.transferred'; nextValue: string })
+  | (AuditParties & {
+    action: 'personnel.transferred';
+    outcome: 'failed';
+    reason: PersonnelTransferFailedReason;
+    nextValue: string;
+  });
 
 /**
  * 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。

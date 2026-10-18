@@ -1,9 +1,12 @@
 // 人员登记、列表与卡片（#105「人员与登录凭据」，#128）：操作码、岗位标记、登记规则、执法证情况。
+// 人员编辑与调岗（#129）：编辑操作码、编辑规则、编辑差异。
 
 import { rejectedPasswordRules, type PasswordRuleCode } from './password-policy.ts';
 
 export const PERSONNEL_PROFILE_READ_OPCODE = 'personnel.profile.read';
 export const PERSONNEL_PROFILE_REGISTER_OPCODE = 'personnel.profile.register';
+/** 编辑与调岗共用一个操作码（#105:216：调岗和改角色并入，只给系统管理；岗位标记的维护也用它）。 */
+export const PERSONNEL_PROFILE_UPDATE_OPCODE = 'personnel.profile.update';
 
 /**
  * 岗位标记（Lei Hu 2026-10-17 22:14，A1）。取值清单是代码常量，管理台不提供维护入口。
@@ -122,6 +125,110 @@ export function registrationRules(input: RegisterPersonnelProfileInput): Registe
   if (value.initialPassword === '') rules.push('password-required');
   else rules.push(...rejectedPasswordRules({ password: value.initialPassword, personnelCode: value.code }));
   return rules;
+}
+
+/** 编辑输入（#129）。工号、机构不在编辑范围；调岗另经 transferOrgUnitId 走调岗接口。 */
+export interface UpdatePersonnelProfileInput {
+  name: string;
+  mobilePhone: string;
+  roles: readonly string[];
+  posts: readonly string[];
+}
+
+/** 编辑校验失败的规则码。不含口令策略（编辑不收口令），也不含工号与机构（两项不可改）。 */
+export type UpdateRuleCode =
+  | 'personnel-name-required'
+  | 'personnel-name-too-long'
+  | 'mobile-phone-required'
+  | 'mobile-phone-invalid'
+  | 'roles-required'
+  | 'role-unknown'
+  | 'post-unknown';
+
+/** 去掉首尾空白、去重、只留名册内标记后的编辑输入。 */
+export interface NormalizedUpdate {
+  name: string;
+  mobilePhone: string;
+  roles: string[];
+  posts: PersonnelPost[];
+}
+
+export function normalizeUpdate(input: UpdatePersonnelProfileInput): NormalizedUpdate {
+  return {
+    name: input.name.trim(),
+    mobilePhone: input.mobilePhone.trim(),
+    roles: [...new Set(input.roles.map((role) => role.trim()).filter((role) => role !== ''))],
+    posts: [...new Set(input.posts)].filter(isPersonnelPost),
+  };
+}
+
+/**
+ * 不依赖库的编辑规则（#105:219）。角色是否认识要查库，由服务追加 role-unknown。
+ * 至少保留一个角色（原型 P6:29「至少保留一个角色」）。
+ */
+export function updateRules(input: UpdatePersonnelProfileInput): UpdateRuleCode[] {
+  const value = normalizeUpdate(input);
+  const rules: UpdateRuleCode[] = [];
+  if (value.name === '') rules.push('personnel-name-required');
+  else if ([...value.name].length > PERSONNEL_NAME_MAX_LENGTH) rules.push('personnel-name-too-long');
+  if (value.mobilePhone === '') rules.push('mobile-phone-required');
+  else if (!MOBILE_PHONE.test(value.mobilePhone)) rules.push('mobile-phone-invalid');
+  if (value.roles.length === 0) rules.push('roles-required');
+  if (input.posts.some((post) => !isPersonnelPost(post))) rules.push('post-unknown');
+  return rules;
+}
+
+/** 调岗目的地的库外规则码（#105:219：目的地不限数据范围，但必须是未停用机构）。 */
+export type TransferRuleCode = 'org-unit-required';
+
+export function transferRules(orgUnitId: string): TransferRuleCode[] {
+  return orgUnitId.trim() === '' ? ['org-unit-required'] : [];
+}
+
+/** 对方当前态里编辑差异要用到的四项。 */
+export interface PersonnelCurrentEdit {
+  name: string;
+  mobilePhone: string | null;
+  roles: readonly string[];
+  posts: readonly PersonnelPost[];
+}
+
+/**
+ * 编辑差异（#105:219、:223）。差异全空 = 重复授予或摘除，返回 200 且不写留痕。
+ * 角色与标记只列有变化的那几项：加 = 插入新行，摘 = 给旧行置失效时间。
+ */
+export interface PersonnelEditDiff {
+  /** 新姓名；与现名相同时为空串 */
+  name: string;
+  /** 新手机号；与现号相同时为空串 */
+  mobilePhone: string;
+  rolesToGrant: string[];
+  rolesToRevoke: string[];
+  postsToGrant: PersonnelPost[];
+  postsToRevoke: PersonnelPost[];
+}
+
+export function updateDiff(input: UpdatePersonnelProfileInput, current: PersonnelCurrentEdit): PersonnelEditDiff {
+  const value = normalizeUpdate(input);
+  const heldRoles = new Set(current.roles);
+  const wantedRoles = new Set(value.roles);
+  const heldPosts = new Set(current.posts);
+  const wantedPosts = new Set(value.posts);
+  return {
+    name: value.name === current.name.trim() ? '' : value.name,
+    mobilePhone: value.mobilePhone === (current.mobilePhone ?? '') ? '' : value.mobilePhone,
+    rolesToGrant: sortRoleNames(value.roles.filter((role) => !heldRoles.has(role))),
+    rolesToRevoke: sortRoleNames(current.roles.filter((role) => !wantedRoles.has(role))),
+    postsToGrant: PERSONNEL_POSTS.filter((post) => wantedPosts.has(post) && !heldPosts.has(post)),
+    postsToRevoke: PERSONNEL_POSTS.filter((post) => heldPosts.has(post) && !wantedPosts.has(post)),
+  };
+}
+
+/** 差异是否为空：空即「重复授予或摘除」，返回 200 不写留痕。 */
+export function isEmptyDiff(diff: PersonnelEditDiff): boolean {
+  return diff.name === '' && diff.mobilePhone === ''
+    && diff.rolesToGrant.length === 0 && diff.rolesToRevoke.length === 0
+    && diff.postsToGrant.length === 0 && diff.postsToRevoke.length === 0;
 }
 
 /**

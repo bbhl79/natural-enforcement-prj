@@ -22,7 +22,10 @@ import {
   ORG_UNIT_DEACTIVATE_FAILED_REASONS,
   ORG_UNIT_REGISTER_FAILED_REASONS,
   PASSWORD_CHANGED_REASONS,
+  PERSONNEL_MOBILE_CHANGE_FAILED_REASONS,
   PERSONNEL_REGISTER_FAILED_REASONS,
+  PERSONNEL_ROLE_REVOKE_FAILED_REASONS,
+  PERSONNEL_TRANSFER_FAILED_REASONS,
   SESSION_END_REASONS,
 } from './vocabulary.ts';
 
@@ -45,6 +48,9 @@ const FAILED_REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['org.unit.registered', new Set<string>(ORG_UNIT_REGISTER_FAILED_REASONS)],
   ['org.unit.deactivated', new Set<string>(ORG_UNIT_DEACTIVATE_FAILED_REASONS)],
   ['personnel.registered', new Set<string>(PERSONNEL_REGISTER_FAILED_REASONS)],
+  ['personnel.mobile-changed', new Set<string>(PERSONNEL_MOBILE_CHANGE_FAILED_REASONS)],
+  ['personnel.role-revoked', new Set<string>(PERSONNEL_ROLE_REVOKE_FAILED_REASONS)],
+  ['personnel.transferred', new Set<string>(PERSONNEL_TRANSFER_FAILED_REASONS)],
 ]);
 
 /** 后值只许出现在带后值的动作上，且这些动作必须带非空后值（#128）。 */
