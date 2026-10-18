@@ -460,6 +460,13 @@ describe('人员卡片编辑（P6 edit / selfEdit，#129）', () => {
     expect(html).toContain(ROOT_GUARD);
     expect(visibleText(html)).not.toMatch(RAW_TEXT);
   });
+
+  it('编辑保存中（busy）禁用调岗入口，避免编辑与调岗两回调互相覆盖卡片（#129 复核线程 3）', () => {
+    // busy 时调岗按钮置灰：编辑请求在途时不能再开调岗弹窗提交。
+    expect(form(false, { busy: true })).toMatch(/data-action="transfer"[^>]*disabled/);
+    // 非 busy（可编辑）时调岗按钮照常可点。
+    expect(form(false, { busy: false })).not.toMatch(/data-action="transfer"[^>]*disabled/);
+  });
 });
 
 describe('调岗弹窗（P6 transfer，#129）', () => {

@@ -401,7 +401,7 @@ export function PersonnelCardView({
                     className="btn btn-sm"
                     data-requires={PERSONNEL_UPDATE}
                     data-action="transfer"
-                    disabled={self || !canUpdate}
+                    disabled={self || !canUpdate || edit?.busy === true}
                     onClick={onOpenTransfer}
                   >
                     调岗
@@ -476,13 +476,14 @@ function CardWorkspace({ loaded, registered }: { loaded: PersonnelCard; register
     const result = await updatePersonnel(dispatch, card.id, input);
     if (result.ok) {
       // 就地更新卡片显示（提交成功的值就是新值），角色与标记按显示顺序归位。
-      setOverride({
-        ...card,
+      // 函数式更新：合并到最新的 override（或 loaded），避免与并发的调岗回调展开同一份旧 card 互相覆盖。
+      setOverride((prev) => ({
+        ...(prev ?? loaded),
         name: input.name.trim(),
         mobilePhone: input.mobilePhone.trim(),
         roles: ROLES.filter((role) => input.roles.includes(role)),
         posts: POSTS.filter((post) => (input.posts as readonly string[]).includes(post)),
-      });
+      }));
       setEdit(null);
       return;
     }
@@ -501,12 +502,13 @@ function CardWorkspace({ loaded, registered }: { loaded: PersonnelCard; register
     if (result.ok) {
       const dest = state.destinations?.find((unit) => unit.id === state.orgUnitId);
       if (dest) {
-        setOverride({
-          ...card,
+        // 函数式更新：合并到最新的 override（或 loaded），避免与并发的编辑回调展开同一份旧 card 互相覆盖。
+        setOverride((prev) => ({
+          ...(prev ?? loaded),
           orgUnitId: dest.id,
           orgName: dest.name,
           orgParentName: parentNameOf(dest, state.destinations ?? []),
-        });
+        }));
       }
       setTransfer(null);
       return;
