@@ -383,13 +383,19 @@ export class PersonnelProfileService {
    * 编辑与调岗的公共前置（#129）：对方存在 → 按 personnel.profile.update 过授权。
    * 数据范围锚点 = 对方当前任职机构；没有当前任职视同根机构（A10 口径，#105:230）。
    * 对方不存在返回 null（404，不写留痕）；被拒抛 AccessDeniedError，denial 非空，由调用方回滚后写入。
+   * forUpdate 为真（编辑、调岗写入路径）时先取人员级事务锁再读当前态：同一人员上的并发编辑、
+   * 调岗由此串行，任职/角色/标记与守卫判断都基于锁内的已提交态（#129 复核，ADR 0014）。
+   * 目的地清单是只读路径，不取锁。统一锁序：人员 → 机构 → 根守卫。
    */
   private async authorizeTarget(
     actor: ActorRef,
     personnelId: string,
     tx: IdentityTransaction,
+    forUpdate = false,
   ): Promise<EditTarget | null> {
-    const profile = await tx.store.findPersonnelProfile(personnelId);
+    const profile = forUpdate
+      ? await tx.store.lockPersonnelProfile(personnelId)
+      : await tx.store.findPersonnelProfile(personnelId);
     if (!profile) return null;
     const current = await tx.store.findCurrentAssignment(profile.id);
     const anchor = current?.orgUnitId ?? (await tx.store.findRootOrgUnitId()) ?? '';
@@ -459,7 +465,7 @@ export class PersonnelProfileService {
     audit: AuditTrailPort,
     sourceIp: string | null = null,
   ): Promise<UpdatePersonnelProfileResult> {
-    const authorized = await this.authorizeTarget(actor, personnelId, tx);
+    const authorized = await this.authorizeTarget(actor, personnelId, tx, true);
     if (!authorized) return { result: 'not-found' };
     const value = normalizeUpdate(input);
     const rules = updateRules(input);
@@ -591,7 +597,7 @@ export class PersonnelProfileService {
     audit: AuditTrailPort,
     sourceIp: string | null = null,
   ): Promise<TransferPersonnelProfileResult> {
-    const target = await this.authorizeTarget(actor, personnelId, tx);
+    const target = await this.authorizeTarget(actor, personnelId, tx, true);
     if (!target) return { result: 'not-found' };
     const rules = transferRules(orgUnitId);
     if (rules.length > 0) return { result: 'non-compliant', rules };

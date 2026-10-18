@@ -247,6 +247,13 @@ export interface IdentityStore {
   findActiveRoleIds(names: readonly string[]): Promise<Map<string, string>>;
 
   // 人员编辑与调岗（#129）
+  /**
+   * 人员级事务锁（#129 复核，ADR 0014）：给人员行加 FOR UPDATE 并读出卡片当前态。
+   * 编辑与调岗在读任职/角色/标记之前先取本锁，使同一人员上的并发编辑、调岗串行，
+   * 差异计算与根机构守卫判断都基于锁内的已提交态。统一锁序：人员 → 机构 → 根守卫。
+   * 必须在交互式事务里调用，事务结束时释放；人员不存在时返回 null。
+   */
+  lockPersonnelProfile(personnelId: string): Promise<PersonnelProfileRow | null>;
   /** 人员当前未失效的人员—角色行（含角色名）。摘除角色给这些行置失效时间。 */
   listActivePersonnelRoles(personnelId: string): Promise<PersonnelRoleBindingRow[]>;
   /** 人员当前未失效的人员—岗位标记行。摘标记给这些行置失效时间。 */

@@ -36,6 +36,8 @@ const PHONES = {
   pair2a: '13800012913',
   pair2b: '13800012914',
   mover: '13800012915',
+  dual: '13800012916',
+  mover2: '13800012917',
 } as const;
 
 function newUlid(): string {
@@ -100,7 +102,7 @@ let passwordHash = '';
 const org = { hq: '', deptA: '', deptB: '', station: '', deactivated: '' };
 const people = {
   root: '', root2: '', adminA: '', intake: '', clerk: '', supervisor: '', homeless: '',
-  memberB: '', editor: '', roleTarget: '', mover: '',
+  memberB: '', editor: '', roleTarget: '', mover: '', dual: '', mover2: '',
 };
 
 type AuditRecord = {
@@ -362,16 +364,20 @@ beforeAll(async () => {
   });
   people.roleTarget = await addPerson({ code: 'P-129-ROLE', phone: PHONES.roleTarget, orgUnitId: org.deptA, roles: ['经办'] });
   people.mover = await addPerson({ code: 'P-129-MOVER', phone: PHONES.mover, orgUnitId: org.deptA, roles: ['经办'] });
+  people.dual = await addPerson({ code: 'P-129-DUAL', phone: PHONES.dual, orgUnitId: org.deptA, roles: ['经办', '法制审核'] });
+  people.mover2 = await addPerson({ code: 'P-129-MOVER2', phone: PHONES.mover2, orgUnitId: org.deptA, roles: ['系统管理', '经办'] });
   baseUrl = await startApp();
   seamUrl = await startApp(failingFactory);
   barrierUrl = await startApp(barrierFactory);
   // 先登录：登录本身写 login.succeeded，各用例的「新增留痕」只看接口这一步。
   for (const phone of [PHONES.root, PHONES.root2, PHONES.adminA, PHONES.intake, PHONES.clerk,
-    PHONES.supervisor, PHONES.homeless, PHONES.memberB, PHONES.roleTarget, PHONES.mover]) {
+    PHONES.supervisor, PHONES.homeless, PHONES.memberB, PHONES.roleTarget, PHONES.mover,
+    PHONES.dual, PHONES.mover2]) {
     await signIn(phone);
   }
   await signIn(PHONES.root, seamUrl);
   await signIn(PHONES.root, barrierUrl);
+  await signIn(PHONES.adminA, barrierUrl);
 }, 60_000);
 
 afterAll(async () => {
@@ -1165,6 +1171,54 @@ describe('根机构守卫（ADR 0014）：摘除系统管理角色、调岗出�
     expect(await currentOrg(people.mover)).toBe(stationA);
     // 还原夹具：mover 调回甲区。
     expect((await transfer(PHONES.root, people.mover, org.deptA)).status).toBe(200);
+  });
+});
+
+describe('接缝②：人员级事务锁（#129 复核，ADR 0014）', () => {
+  it('两名操作者并发编辑同一人员各摘不同角色，人员级锁串行，人员角色不被清零', async () => {
+    // dual 当前持「经办、法制审核」，在甲区（非根机构，摘角色不进根守卫）。
+    // 先手只留「经办」（摘「法制审核」）停在事务里，人员行锁仍持有；
+    // 后手只留「法制审核」（摘「经办」）被人员行锁挡住，等先手提交后在锁内读到已提交态。
+    // 无锁时两笔都按「经办、法制审核」的旧态各摘一个 → 双 200 → dual 零角色（复核场景 A）。
+    expect(await activeRoles(people.dual)).toEqual(['法制审核', '经办']);
+    armBarrier('personnel.role-revoked');
+    const body = { name: 'P-129-DUAL', mobilePhone: PHONES.dual, posts: [] as string[] };
+    const first = edit(PHONES.adminA, people.dual, { ...body, roles: ['经办'] }, {}, barrierUrl);
+    await barrier.entered.promise;
+    const second = edit(PHONES.adminA, people.dual, { ...body, roles: ['法制审核'] });
+    expect(await settledWithin(second, 400)).toBe(false);
+    barrier.release.resolve();
+    const [r1, r2] = await Promise.all([first, second]);
+    expect(r1.status).toBe(200);
+    expect(r2.status).toBe(200);
+    // 串行后 dual 恰留一个角色（后手在锁内改判为「法制审核」），不是零角色。
+    expect(await activeRoles(people.dual)).toEqual(['法制审核']);
+    // 还原夹具：dual 恢复「经办、法制审核」。
+    expect((await edit(PHONES.adminA, people.dual, { ...body, roles: ['经办', '法制审核'] })).status).toBe(200);
+    expect(await activeRoles(people.dual)).toEqual(['法制审核', '经办']);
+  });
+
+  it('编辑与调岗跨同一人员交错，人员级锁串行，后手在锁内读到已提交的当前态', async () => {
+    // mover2 当前持「系统管理、经办」，在甲区。先手编辑摘「系统管理」停在事务里（人员行锁仍持有）；
+    // 后手调岗 mover2 到乙区被人员行锁挡住。两笔都不进根守卫，只有人员级锁能串行它们（复核线程 1）。
+    expect(await currentOrg(people.mover2)).toBe(org.deptA);
+    armBarrier('personnel.role-revoked');
+    const body = { name: 'P-129-MOVER2', mobilePhone: PHONES.mover2, posts: [] as string[] };
+    const first = edit(PHONES.adminA, people.mover2, { ...body, roles: ['经办'] }, {}, barrierUrl);
+    await barrier.entered.promise;
+    const second = transfer(PHONES.adminA, people.mover2, org.deptB);
+    expect(await settledWithin(second, 400)).toBe(false);
+    barrier.release.resolve();
+    const [r1, r2] = await Promise.all([first, second]);
+    expect(r1.status).toBe(200);
+    expect(r2.status).toBe(200);
+    // 串行后：mover2 已摘「系统管理」，当前任职在乙区（后手在锁内读到已提交态再写）。
+    expect(await activeRoles(people.mover2)).toEqual(['经办']);
+    expect(await currentOrg(people.mover2)).toBe(org.deptB);
+    // 还原夹具：mover2 调回甲区，恢复「系统管理、经办」。
+    expect((await transfer(PHONES.adminA, people.mover2, org.deptA)).status).toBe(200);
+    expect((await edit(PHONES.adminA, people.mover2, { ...body, roles: ['系统管理', '经办'] })).status).toBe(200);
+    expect(await activeRoles(people.mover2)).toEqual(['系统管理', '经办']);
   });
 });
 

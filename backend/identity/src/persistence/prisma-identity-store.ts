@@ -305,6 +305,15 @@ export class PrismaIdentityStore implements IdentityStore {
     return this.prisma.personnel.findUnique({ where: { id } });
   }
 
+  async lockPersonnelProfile(personnelId: string): Promise<PersonnelProfileRow | null> {
+    // 人员级事务锁（#129 复核，ADR 0014）：FOR UPDATE 锁人员行，使同一人员上的并发编辑、调岗串行。
+    // 与 lockOrgUnit 同为行锁；统一锁序 人员 → 机构 → 根守卫。锁随事务结束释放。
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      SELECT id FROM personnel WHERE id = ${personnelId} FOR UPDATE`;
+    if (rows.length === 0) return null;
+    return this.findPersonnelProfile(personnelId);
+  }
+
   async findRootOrgUnitId(): Promise<string | null> {
     const root = await this.prisma.orgUnit.findFirst({
       where: { parentId: null },
