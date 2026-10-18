@@ -682,7 +682,8 @@ describe('POST /api/admin/personnel/:id/restore（恢复）', () => {
     expect(await fresh.json()).toEqual({ result: 'password-change-required' });
     expect(added(before, await audits())).toEqual([
       expect.objectContaining({
-        action: 'login.password-change-required', outcome: 'succeeded',
+        // 除 login.succeeded 与 account.*、session.ended 外，登录各结果都记失败（ADR 0011）。
+        action: 'login.password-change-required', outcome: 'failed',
         subject_personnel_id: people.residual,
       }),
     ]);
@@ -716,14 +717,15 @@ describe('POST /api/admin/personnel/:id/restore（恢复）', () => {
     ]);
     expect(await cloned.prisma.authSession.findFirstOrThrow({
       where: { personnelId: people.residOff },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { authenticatedAt: 'desc' },
     })).toMatchObject({ endReason: 'admin-ended' });
     expect(await cloned.prisma.authRememberMe.findFirstOrThrow({
       where: { personnelId: people.residOff },
       orderBy: { createdAt: 'desc' },
     })).toMatchObject({ endReason: 'admin-ended' });
-    // 旧会话不能再用来发请求。
-    expect((await fetch(`${baseUrl}/api/auth/session`, { headers: { cookie: sid } })).status).toBe(401);
+    // 旧会话不能再用来发请求：会话查询认不出它，回到匿名。
+    const stale = await fetch(`${baseUrl}/api/auth/session`, { headers: { cookie: sid } });
+    expect(await stale.json()).toEqual({ result: 'anonymous' });
   });
 
   it('恢复未停用的人 → 409 invalid-state（not-deactivated），人员行与口令不变', async () => {
@@ -967,8 +969,9 @@ describe('POST /api/admin/personnel/:id/end-sessions（结束全部会话）', (
       org_unit_id: org.deptA, opcode: SESSIONS_OPCODE,
       resource_type: 'personnel', resource_id: people.sessions,
     }));
-    // 对方的会话立刻不可用。
-    expect((await fetch(`${baseUrl}/api/auth/session`, { headers: { cookie: sid } })).status).toBe(401);
+    // 对方的会话立刻不可用：会话查询认不出它，回到匿名。
+    const stale = await fetch(`${baseUrl}/api/auth/session`, { headers: { cookie: sid } });
+    expect(await stale.json()).toEqual({ result: 'anonymous' });
   });
 
   it('没有会话时也返回 200，只写一行 personnel.sessions-ended', async () => {
@@ -1161,6 +1164,5 @@ async function unsuspend(suspended: string[]): Promise<void> {
   for (const id of suspended) {
     await cloned.prisma.personnel.update({ where: { id }, data: { deactivatedAt: null } });
   }
-  // 被临时停用期间发过请求的人，会话已经结束：丢掉缓存的 Cookie，下次用到时重新登录。
-  cookies.clear();
+  // 被临时停用的人在这段里没有发过请求，会话没有结束，缓存的 Cookie 照旧可用。
 }
