@@ -573,6 +573,9 @@ describe('并发改口令（ADR 0015「并发」，接缝②）', () => {
       ['account.password-rejected', 'failed', 'concurrent-change', null],
     ]);
     expect(addedRows[0]!.subject_personnel_id).toBe(targetId);
+    // 本人改密拒绝行的资源列（ADR 0011 追加节）：资源类型 personnel，资源标识为本人。
+    expect(addedRows[2]!.resource_type).toBe('personnel');
+    expect(addedRows[2]!.resource_id).toBe(targetId);
   }, 180000);
 });
 

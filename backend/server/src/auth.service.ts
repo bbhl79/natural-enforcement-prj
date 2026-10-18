@@ -370,11 +370,14 @@ export class AuthService {
     const rotated = await this.credentials.changePassword(active.account.id, input.newPassword, now, currentHash);
     if (!rotated) {
       // 并发已换掉散列：本次不写库，回 409，拒绝留痕写 account.password-rejected（操作码为空，本人改密）。
+      // 资源列照 ADR 0011 追加节：资源类型 personnel，资源标识为对方（本人改密即本人）。
       await this.audit.append({
         action: 'account.password-rejected',
         outcome: 'failed',
         reason: 'concurrent-change',
         ...partiesOf(active.account, input.sourceIp),
+        resourceType: 'personnel',
+        resourceId: active.account.id,
       });
       return { status: 409, body: { result: 'concurrent-change' } };
     }
