@@ -11,6 +11,7 @@ import {
   type AdminHomeSummary,
   type AdminTile,
 } from './adminHome';
+import { CERT_ATTENTION_LABEL, CERT_ATTENTION_ROWS, type CertAttentionKey } from './personnel';
 
 const ADMIN_DESC = '维护机构、人员和执法证，处理被锁人员，查阅管理台留痕。';
 const SUPERVISE_DESC = '你可以查阅和导出管理台留痕。';
@@ -78,6 +79,36 @@ export function FirstDayGuide() {
   );
 }
 
+/**
+ * 首屏「需要留意的执法证」统计（P3，#133）：临期、已过期、失效、未登记四行，各带一个进名单的筛选链接。
+ * 数字未知（没有名单读码，或名单还没到）时只占位，不出空表。
+ */
+export function CertAttentionCard({ counts }: { counts: Record<CertAttentionKey, number> | null }) {
+  if (!counts) return <div data-slot="cert-attention" />;
+  return (
+    <div className="card" data-slot="cert-attention">
+      <div className="card-h">
+        需要留意的执法证
+        <span className="hint">本范围内</span>
+      </div>
+      <table className="table">
+        <thead>
+          <tr><th>情况</th><th>人数</th><th /></tr>
+        </thead>
+        <tbody>
+          {CERT_ATTENTION_ROWS.map((key) => (
+            <tr key={key} data-cert={key}>
+              <td>{CERT_ATTENTION_LABEL[key]}</td>
+              <td>{counts[key]}</td>
+              <td><Link className="btn btn-sm" to={`/admin/personnel?cert=${key}`}>查看</Link></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function AdminHomeContent({ opcodes, summary }: { opcodes: readonly string[]; summary: AdminHomeSummary }) {
   const view = adminHomeView(opcodes);
   if (view === 'supervise') {
@@ -103,8 +134,7 @@ export function AdminHomeContent({ opcodes, summary }: { opcodes: readonly strin
       </div>
       {firstDay ? null : (
         <div className="grid2" style={{ marginTop: 12 }}>
-          {/* 「需要留意的执法证」统计卡片由执法证票（#133）放在这里。 */}
-          <div data-slot="cert-attention" />
+          <CertAttentionCard counts={summary.certAttention} />
           <div className="card">
             <div className="card-h">后续开放</div>
             <div style={{ color: 'var(--muted)', fontSize: 12, lineHeight: 1.8 }}>
