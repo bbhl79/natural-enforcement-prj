@@ -114,6 +114,8 @@ usage() {
   test     三层语义（#46）：unit = 纯单元+契约；integration = 结构+需库用例；
            e2e = 从零拉起（E1）+ 读写通道（E6）+ 十命令冒烟（E7）。
            test unit / test integration / test e2e / 裸 test = all（unit+integration+e2e）。
+           证据分工（ADR 0017）：外层 check 走内部函数，命令契约的 CLI 路径证据在 e2e 层；
+           全量 lint 两层各跑一遍（一次 CI 共 2 遍）。单独跑 test e2e 仍自证门禁。
            注意：e2e 层会销毁本项目数据卷做从零拉起（E1 证据），勿在需保留数据时运行。
   build    全量构建 = 环境自举：拉取工具链与 infra 镜像（按 infra/VERSIONS.md 钉定引用，
            已在场即跳过）+ 前端编译（产物写回宿主 frontend/dist，已 gitignore）+ 后端编译
@@ -870,6 +872,8 @@ cmd_test() {
 # 用例目录约定：e2e/cases/*.sh，按文件名排序逐条执行；用例只测外部可观察行为
 #（命令退出码 + 人类可读输出），自行经 compose 访问服务（隔离环境变量同 integration 层）。
 # 产物目录：默认 e2e/results（gitignore）；带 --run-id 时落 .run/<id>/results（复现同路径）。
+# 证据分工（ADR 0017）：外层 dev check 走内部函数不经 CLI，命令契约（E7）的 CLI 路径
+# 证据在本层的 03 用例；全量 lint 两层各跑一遍（一次 CI 共 2 遍）。单独跑本层仍自证门禁。
 test_e2e() {
   require_compose_file
   require_toolchain_image

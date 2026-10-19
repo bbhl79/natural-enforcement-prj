@@ -18,7 +18,7 @@ datasource db {
 
 // 迁移/种子通道的最小验证探针（#49）：无业务语义，只证「迁移链可从零重放 + 种子可幂等写入」。
 // 原注释称「首个业务模块（#52）落地后由其后迁移取代」未成立：E1（e2e/cases/01-from-zero.sh:26）
-// 与 E7/E6 冒烟（03-command-smoke.sh:110/137）都以 note='seed-probe' 作从零建库的锚点断言，
+// 与 E7/E6 冒烟（03-command-smoke.sh:137/164）都以 note='seed-probe' 作从零建库的锚点断言，
 // 删表即删锚点——故本表作为长期基设探针保留（评审必修 C8 措辞更正）。
 // 主键形制 = #16 §1.1 TEXT/ULID（应用侧生成，无库内默认值）：与 0002_identity_org、
 // geo_dict 两空间表同形制；先例见提交 6f2da16，自增 Int 违反 shield ULID 契约，就地改正。
