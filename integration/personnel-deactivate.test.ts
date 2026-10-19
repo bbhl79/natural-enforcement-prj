@@ -3,6 +3,7 @@
 // 每个接口的四条必测（#105 Testing）：没有该码、跨区、监督、跨站请求。
 // 每个 403/409 用例同时断言失败留痕行存在、业务行不变。
 // 接缝①：留痕工厂「业务写完后抛错」。接缝②：两个应用实例（两套连接池）加屏障的并发。
+import { createHash } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 
 import { hash, type HashOptions } from 'argon2';
@@ -49,6 +50,10 @@ const PHONES = {
   transferOff: '13800013024',
   pairA: '13800013025',
   pairB: '13800013026',
+  districtAdmin: '13800013028',
+  multi: '13800013029',
+  race: '13800013030',
+  rotate: '13800013031',
 } as const;
 
 function newUlid(): string {
@@ -299,6 +304,19 @@ async function settledWithin(promise: Promise<unknown>, ms: number): Promise<boo
   return settled;
 }
 
+/** 等当前克隆库里出现一个处于锁等待的连接（并发用例的确定性屏障）。 */
+async function waitForLockWait(): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const rows = await cloned.prisma.$queryRaw<Array<{ count: bigint }>>`
+      SELECT count(*)::bigint AS count FROM pg_stat_activity
+      WHERE datname = current_database() AND wait_event_type = 'Lock'
+    `;
+    if (Number(rows[0]?.count ?? 0) > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error('等待并发事务进入锁等待超时');
+}
+
 async function personnelRow(id: string) {
   return cloned.prisma.personnel.findUniqueOrThrow({ where: { id } });
 }
@@ -350,6 +368,9 @@ beforeAll(async () => {
   people.root1 = await addPerson({ code: 'P-130-ROOT1', phone: PHONES.root1, orgUnitId: org.hq, roles: ['系统管理', '经办'] });
   people.root2 = await addPerson({ code: 'P-130-ROOT2', phone: PHONES.root2, orgUnitId: org.hq, roles: ['系统管理', '经办'] });
   people.adminA = await addPerson({ code: 'P-130-ADM-A', phone: PHONES.adminA, orgUnitId: org.deptA, roles: ['系统管理'] });
+  people.districtAdmin = await addPerson({
+    code: 'P-130-ADM-D', phone: PHONES.districtAdmin, orgUnitId: org.deptA, roles: ['系统管理'],
+  });
   people.intake = await addPerson({ code: 'P-130-INTAKE', phone: PHONES.intake, orgUnitId: org.hq, roles: ['内勤'] });
   people.clerk = await addPerson({ code: 'P-130-CLERK', phone: PHONES.clerk, orgUnitId: org.station, roles: ['经办'] });
   people.supervisor = await addPerson({ code: 'P-130-SUPER', phone: PHONES.supervisor, orgUnitId: org.deptA, roles: ['监督'] });
@@ -388,6 +409,9 @@ beforeAll(async () => {
   });
   people.pairA = await addPerson({ code: 'P-130-C1A', phone: PHONES.pairA, orgUnitId: org.hq, roles: ['系统管理', '经办'] });
   people.pairB = await addPerson({ code: 'P-130-C1B', phone: PHONES.pairB, orgUnitId: org.hq, roles: ['系统管理', '经办'] });
+  people.multi = await addPerson({ code: 'P-130-MULTI', phone: PHONES.multi, orgUnitId: org.deptA, roles: ['经办'] });
+  people.race = await addPerson({ code: 'P-130-RACE', phone: PHONES.race, orgUnitId: org.deptA, roles: ['经办'] });
+  people.rotate = await addPerson({ code: 'P-130-ROTATE', phone: PHONES.rotate, orgUnitId: org.deptA, roles: ['经办'] });
 
   baseUrl = await startApp();
   seamUrl = await startApp(failingFactory);
@@ -411,48 +435,156 @@ afterAll(async () => {
 });
 
 describe('POST /api/admin/personnel/:id/deactivate（停用）', () => {
-  it('停用成功：人员置失效时间，写 personnel.deactivated；这次请求不结束对方会话', async () => {
+  it('停用成功：同一次请求结束对方全部会话，写 personnel.deactivated 与 session.ended（personnel-deactivated）', async () => {
     const before = await audits();
+    expect(await activeSessions(people.target)).toBe(1);
     const response = await deactivate(PHONES.adminA, people.target);
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ result: 'deactivated' });
     expect((await personnelRow(people.target)).deactivatedAt).not.toBeNull();
-    // 会话在下一次请求时结束（#105 故事 36）：停用这次不动会话表。
-    expect(await activeSessions(people.target)).toBe(1);
-    expect(added(before, await audits())).toEqual([
-      expect.objectContaining({
-        action: 'personnel.deactivated', outcome: 'succeeded', reason: null,
-        actor_id: people.adminA, actor_code: 'P-130-ADM-A',
-        subject_personnel_id: people.target, subject_code: 'P-130-TARGET',
-        org_unit_id: org.deptA, opcode: DEACTIVATED_OPCODE,
-        resource_type: 'personnel', resource_id: people.target,
-        previous_value: null, next_value: null,
-      }),
+    // 停用即离职（#158 业主拍板）：会话在停用这一请求里结束。
+    expect(await activeSessions(people.target)).toBe(0);
+    expect(await activeRemember(people.target)).toBe(0);
+    const rows = added(before, await audits());
+    expect(rows.map((row) => [row.action, row.reason])).toEqual([
+      ['personnel.deactivated', null],
+      ['session.ended', 'personnel-deactivated'],
     ]);
+    expect(rows[0]).toEqual(expect.objectContaining({
+      action: 'personnel.deactivated', outcome: 'succeeded', reason: null,
+      actor_id: people.adminA, actor_code: 'P-130-ADM-A',
+      subject_personnel_id: people.target, subject_code: 'P-130-TARGET',
+      org_unit_id: org.deptA, opcode: DEACTIVATED_OPCODE,
+      resource_type: 'personnel', resource_id: people.target,
+      previous_value: null, next_value: null,
+    }));
+    // 停用导致的结束：操作者空着（ADR 0011）。
+    expect(rows[1]).toEqual(expect.objectContaining({
+      action: 'session.ended', outcome: 'succeeded', reason: 'personnel-deactivated',
+      actor_id: null, actor_code: null,
+      subject_personnel_id: people.target, subject_code: 'P-130-TARGET',
+      org_unit_id: org.deptA,
+    }));
   });
 
-  it('停用后对方下一次请求即被带回登录页：401，会话与记住我结束，写 session.ended（personnel-deactivated）', async () => {
+  it('停用踢下线：「记住我」一并作废，被结束的会话 Cookie 立即失效；登录仍被拒', async () => {
     // residual 先登录并带上「记住我」，再被停用；此后它自己发一次请求。
     const first = await login(PHONES.residual, baseUrl, true);
     expect(first.status).toBe(200);
     const sid = cookieOf(first);
-    expect((await deactivate(PHONES.adminA, people.residual)).status).toBe(200);
-    expect(await activeSessions(people.residual)).toBe(1);
+    expect(await activeRemember(people.residual)).toBe(1);
     const before = await audits();
+    expect((await deactivate(PHONES.adminA, people.residual)).status).toBe(200);
+    expect(await activeSessions(people.residual)).toBe(0);
+    expect(await activeRemember(people.residual)).toBe(0);
+    expect(added(before, await audits()).map((row) => [row.action, row.reason])).toEqual([
+      ['personnel.deactivated', null],
+      ['session.ended', 'personnel-deactivated'],
+    ]);
+    // 会话已在停用时结束，这次请求只写一条未认证的授权拒绝，不再补写 session.ended。
+    const after = await audits();
     const response = await fetch(`${baseUrl}/api/admin/personnel`, { headers: { cookie: sid } });
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({ reason: 'not-authenticated' });
-    expect(await activeSessions(people.residual)).toBe(0);
-    expect(await activeRemember(people.residual)).toBe(0);
-    const rows = added(before, await audits());
-    expect(rows.map((row) => [row.action, row.reason])).toEqual([
-      ['session.ended', 'personnel-deactivated'],
+    expect(added(after, await audits()).map((row) => [row.action, row.reason])).toEqual([
       ['authz.denied', 'not-authenticated'],
     ]);
     // 停用后不能再登录。
     const again = await login(PHONES.residual);
     expect(again.status).toBe(401);
     expect(await again.json()).toEqual({ result: 'deactivated' });
+  });
+
+  it('停用结束两段会话与两条「记住我」链：每段会话各写一行 session.ended', async () => {
+    const first = await login(PHONES.multi, baseUrl, true);
+    const second = await login(PHONES.multi, seamUrl, true);
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(await activeSessions(people.multi)).toBe(2);
+    expect(await activeRemember(people.multi)).toBe(2);
+    const before = await audits();
+    expect((await deactivate(PHONES.adminA, people.multi)).status).toBe(200);
+    expect(await activeSessions(people.multi)).toBe(0);
+    expect(await activeRemember(people.multi)).toBe(0);
+    const rows = added(before, await audits());
+    expect(rows.map((row) => [row.action, row.reason])).toEqual([
+      ['personnel.deactivated', null],
+      ['session.ended', 'personnel-deactivated'],
+      ['session.ended', 'personnel-deactivated'],
+    ]);
+    for (const row of rows.slice(1)) {
+      expect(row).toMatchObject({
+        actor_id: null,
+        actor_code: null,
+        subject_personnel_id: people.multi,
+        subject_code: 'P-130-MULTI',
+        org_unit_id: org.deptA,
+      });
+    }
+  });
+
+  it('停用与本人退出并发：退出先结束的会话保持退出原因，停用照常提交且只留一行 session.ended', async () => {
+    const first = await login(PHONES.race);
+    const second = await login(PHONES.race, seamUrl);
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    const sid = cookieOf(first);
+    const secret = sid.slice(sid.indexOf('=') + 1);
+    const ender = await cloned.prisma.authSession.findUniqueOrThrow({
+      where: { secretHash: createHash('sha256').update(secret).digest('hex') },
+    });
+    // 外部事务先结束并锁住其中一段会话，提交前停用事务读到它仍是未结束。
+    const holding = deferred();
+    const release = deferred();
+    const logout = cloned.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`
+        UPDATE auth_session SET ended_at = ${new Date(T0)}, end_reason = 'logout' WHERE id = ${ender.id}
+      `;
+      holding.resolve();
+      await release.promise;
+    }, { maxWait: 10_000, timeout: 30_000 });
+    await holding.promise;
+    const before = await audits();
+    const pending = deactivate(PHONES.adminA, people.race);
+    await waitForLockWait();
+    release.resolve();
+    const [response] = await Promise.all([pending, logout]);
+    expect(response.status).toBe(200);
+    expect((await personnelRow(people.race)).deactivatedAt).not.toBeNull();
+    // 并发退出先结束的那一段保持 logout；停用只为另一段写 session.ended。
+    expect(await cloned.prisma.authSession.findUniqueOrThrow({ where: { id: ender.id } }))
+      .toMatchObject({ endReason: 'logout' });
+    expect(await activeSessions(people.race)).toBe(0);
+    expect(added(before, await audits()).map((row) => [row.action, row.reason])).toEqual([
+      ['personnel.deactivated', null],
+      ['session.ended', 'personnel-deactivated'],
+    ]);
+  });
+
+  it('停用清「记住我」与记住我轮换并发：锁序一致，不被 PostgreSQL 判死锁', async () => {
+    const entered = await login(PHONES.rotate, baseUrl, true);
+    expect(entered.status).toBe(200);
+    const rm = entered.headers.getSetCookie().find((item) => item.startsWith('__Host-rm='))?.split(';')[0];
+    if (!rm) throw new Error('缺少记住我 Cookie');
+    await signIn(PHONES.adminA, barrierUrl);
+    armBarrier('personnel.deactivated');
+    const pending = deactivate(PHONES.adminA, people.rotate, {}, barrierUrl);
+    await barrier.entered.promise;
+    // 轮换在登录事务里先锁凭据行、再插入后继；人员锁被停用事务持有。
+    const rotate = fetch(`${baseUrl}/api/auth/session`, { headers: { cookie: rm } });
+    await waitForLockWait();
+    const before = await audits();
+    barrier.release.resolve();
+    const [deactivated, rotated] = await Promise.all([pending, rotate]);
+    expect(deactivated.status).toBe(200);
+    expect((await personnelRow(people.rotate)).deactivatedAt).not.toBeNull();
+    // 轮换撞上已作废的记住我：按 lost-race 回未登录，不写死锁错误。
+    expect(rotated.status).toBe(200);
+    expect(await rotated.json()).toEqual({ result: 'anonymous' });
+    expect(added(before, await audits()).map((row) => [row.action, row.reason])).toEqual([
+      ['personnel.deactivated', null],
+      ['session.ended', 'personnel-deactivated'],
+    ]);
   });
 
   it('重复停用：200，不写行，不改首次停用时间', async () => {
@@ -561,9 +693,9 @@ describe('POST /api/admin/personnel/:id/deactivate（停用）', () => {
     // 单次请求碰不到守卫：操作者本人必然就是根机构上另一名未停用的系统管理人员。
     // 守卫拦住的是并发交错，见下面的接缝②用例。
     expect((await deactivate(PHONES.root1, people.plain)).status).toBe(200);
-    expect((await deactivate(PHONES.root1, people.adminA)).status).toBe(200);
+    expect((await deactivate(PHONES.root1, people.districtAdmin)).status).toBe(200);
     await cloned.prisma.personnel.updateMany({
-      where: { id: { in: [people.plain, people.adminA] } },
+      where: { id: { in: [people.plain, people.districtAdmin] } },
       data: { deactivatedAt: null },
     });
   });
@@ -597,6 +729,11 @@ describe('POST /api/admin/personnel/:id/deactivate（停用）', () => {
         expect.objectContaining({
           action: 'personnel.deactivated', outcome: 'succeeded', reason: null,
           actor_id: people.pairA, subject_personnel_id: people.pairB,
+        }),
+        // 停用即离职（#158）：成功那方的全部会话在停用请求里结束。
+        expect.objectContaining({
+          action: 'session.ended', outcome: 'succeeded', reason: 'personnel-deactivated',
+          actor_id: null, subject_personnel_id: people.pairB,
         }),
         expect.objectContaining({
           action: 'personnel.deactivated', outcome: 'failed', reason: 'root-admin-required',
@@ -697,13 +834,26 @@ describe('POST /api/admin/personnel/:id/restore（恢复）', () => {
     expect(await oldPassword.json()).toEqual({ result: 'invalid-credential' });
   });
 
-  it('结束残余会话与「记住我」：停用前登录的会话在恢复时结束，每段写 session.ended（admin-ended）', async () => {
+  it('结束残余会话与「记住我」：停用已踢下线；并发窗口留下的会话在恢复时结束，写 session.ended（admin-ended）', async () => {
     const first = await login('13800013027', baseUrl, true);
     expect(first.status).toBe(200);
     const sid = cookieOf(first);
     expect((await deactivate(PHONES.adminA, people.residOff)).status).toBe(200);
-    expect(await activeSessions(people.residOff)).toBe(1);
-    expect(await activeRemember(people.residOff)).toBe(1);
+    // 停用即离职（#158）：会话与「记住我」已在停用时结束。
+    expect(await activeSessions(people.residOff)).toBe(0);
+    expect(await activeRemember(people.residOff)).toBe(0);
+    // 模拟并发窗口里新建的残余会话（下一个请求会按 personnel-deactivated 结束，此处交给恢复清理）。
+    const residualId = newUlid();
+    await cloned.prisma.authSession.create({
+      data: {
+        id: residualId,
+        personnelId: people.residOff,
+        secretHash: Array.from(crypto.getRandomValues(new Uint8Array(32)), (byte) => byte.toString(16).padStart(2, '0')).join(''),
+        authenticatedAt: new Date(T0),
+        lastSeenAt: new Date(T0),
+        absoluteEndsAt: new Date(T0 + DAY_MS),
+      },
+    });
     const before = await audits();
     const response = await restore(PHONES.adminA, people.residOff, { initialPassword: NEW_PASSWORD });
     expect(response.status).toBe(200);
@@ -715,14 +865,13 @@ describe('POST /api/admin/personnel/:id/restore（恢复）', () => {
       ['account.password-reset', null],
       ['session.ended', 'admin-ended'],
     ]);
-    expect(await cloned.prisma.authSession.findFirstOrThrow({
-      where: { personnelId: people.residOff },
-      orderBy: { authenticatedAt: 'desc' },
-    })).toMatchObject({ endReason: 'admin-ended' });
+    expect(await cloned.prisma.authSession.findUniqueOrThrow({ where: { id: residualId } }))
+      .toMatchObject({ endReason: 'admin-ended' });
+    // 「记住我」在停用时已按 personnel-deactivated 作废；恢复不重写已结束的行。
     expect(await cloned.prisma.authRememberMe.findFirstOrThrow({
       where: { personnelId: people.residOff },
       orderBy: { createdAt: 'desc' },
-    })).toMatchObject({ endReason: 'admin-ended' });
+    })).toMatchObject({ endReason: 'personnel-deactivated' });
     // 旧会话不能再用来发请求：会话查询认不出它，回到匿名。
     const stale = await fetch(`${baseUrl}/api/auth/session`, { headers: { cookie: sid } });
     expect(await stale.json()).toEqual({ result: 'anonymous' });

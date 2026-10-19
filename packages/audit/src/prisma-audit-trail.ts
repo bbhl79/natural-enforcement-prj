@@ -16,8 +16,10 @@ import {
   AUDIT_COUNTED_ACTIONS,
   AUDIT_NEXT_VALUE_ACTIONS,
   AUDIT_TARGET_ORG_BASES,
+  ACCOUNT_MAINTENANCE_FAILED_REASONS,
   AUDIT_SUCCEEDED_ACTIONS,
   AUTHZ_DENIED_REASONS,
+  CERT_UPDATE_FAILED_REASONS,
   LOGIN_FAILED_REASONS,
   ORG_UNIT_DEACTIVATE_FAILED_REASONS,
   ORG_UNIT_REGISTER_FAILED_REASONS,
@@ -65,6 +67,9 @@ const FAILED_REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['personnel.transferred', new Set<string>(PERSONNEL_TRANSFER_FAILED_REASONS)],
   ['personnel.deactivated', new Set<string>(PERSONNEL_DEACTIVATE_FAILED_REASONS)],
   ['personnel.restored', new Set<string>(PERSONNEL_RESTORE_FAILED_REASONS)],
+  ['cert.updated', new Set<string>(CERT_UPDATE_FAILED_REASONS)],
+  ['account.unlocked', new Set<string>(ACCOUNT_MAINTENANCE_FAILED_REASONS)],
+  ['account.password-reset', new Set<string>(ACCOUNT_MAINTENANCE_FAILED_REASONS)],
 ]);
 
 /** 后值只许出现在带后值的动作上，且这些动作必须带非空后值（#128）。 */

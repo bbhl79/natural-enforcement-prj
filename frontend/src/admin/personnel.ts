@@ -470,9 +470,18 @@ export const CERT_FIELD_RULES: Record<string, { field: CertUpdateField; text: st
   'cert-status-unknown': { field: 'certStatus', text: '请选择证件状态：有效或失效' },
 };
 
+/** 对方已停用（#158 定稿）：执法证登记与修改一律拒绝，界面不露服务端原句与结果码。 */
+export const CERT_DEACTIVATED_MESSAGE = '这个人员已停用，不能登记或修改执法证。请先恢复，再办理。';
+
 export type CertUpdateResult =
   | { ok: true }
-  | { ok: false; fields: Partial<Record<CertUpdateField, string>>; message: string | null };
+  | {
+      ok: false;
+      fields: Partial<Record<CertUpdateField, string>>;
+      message: string | null;
+      /** 对方已停用（#158）：关闭旧表单并用定稿拒绝句，不落通用失败句。 */
+      deactivated?: boolean;
+    };
 
 /** 「还有 N 处需要修改」按字段计（原型 P6:45 的口径）。 */
 export function certProblemCount(result: Extract<CertUpdateResult, { ok: false }>): number {
@@ -514,6 +523,10 @@ export async function updateCert(
   }
   if (response.status === 403) {
     return { ok: false, fields: {}, message: DENIED_TARGET };
+  }
+  // 对方已停用（#158）：保存时可能刚被他人停用，出定稿拒绝句，交调用方关闭旧表单。
+  if (response.status === 409 && json.result === 'invalid-state' && json.reason === 'personnel-deactivated') {
+    return { ok: false, fields: {}, message: CERT_DEACTIVATED_MESSAGE, deactivated: true };
   }
   return { ok: false, fields: {}, message: FAILED };
 }

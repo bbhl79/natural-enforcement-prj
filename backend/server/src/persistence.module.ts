@@ -218,11 +218,13 @@ class PrismaSessionStore implements SessionStore {
     await this.prisma.authSession.update({ where: { id }, data: { lastSeenAt } });
   }
 
-  async end(id: string, endedAt: Date, reason: string): Promise<void> {
-    await this.prisma.authSession.update({
-      where: { id },
+  async end(id: string, endedAt: Date, reason: string): Promise<boolean> {
+    // 条件更新（#158 复核）：并发退出/结束会话先提交时，本段不再写，也不触发 auth_session_guard。
+    const ended = await this.prisma.authSession.updateMany({
+      where: { id, endedAt: null },
       data: { endedAt, endReason: reason },
     });
+    return ended.count > 0;
   }
 
   async listActive(personnelId: string): Promise<SessionRow[]> {
@@ -345,6 +347,11 @@ class PrismaRememberMeStore implements RememberMeStore {
       this.root ? this.root.$transaction(body) : body(this.prisma);
     try {
       await inTransaction(async (tx) => {
+        // 统一锁序（#158 复核）：先取人员行锁，再锁记住我行。
+        // 停用/重设清「记住我」与 A10 都按「人员 → 记住我」加锁；反过来（先锁凭据行、插入后继时等人员外键锁）会死锁。
+        await tx.$queryRaw`
+          SELECT id FROM personnel WHERE id = ${next.personnelId} FOR UPDATE
+        `;
         const locked = await tx.$queryRaw<Array<{ ended_at: Date | null }>>`
           SELECT ended_at FROM auth_remember_me WHERE id = ${currentId} FOR UPDATE
         `;

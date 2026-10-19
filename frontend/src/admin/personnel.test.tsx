@@ -16,6 +16,7 @@ import {
   ResetPasswordDialog,
   RESET_PASSWORD_EFFECTS,
   RESET_PASSWORD_HELP,
+  certSaveTransition,
   resetPasswordNotice,
   type CardNotice,
   type ConfirmState,
@@ -30,6 +31,7 @@ import { PersonnelListView } from './PersonnelListPage';
 import {
   certAttentionOf,
   certEditFrom,
+  CERT_DEACTIVATED_MESSAGE,
   CERT_FILTER_LABEL,
   CERT_FILTERS,
   certNote,
@@ -404,8 +406,12 @@ describe('人员卡片（P6 view）', () => {
     expect(card()).toMatch(/data-requires="personnel\.profile\.update" disabled/);
   });
 
-  it('已停用卡片：危险操作区只有恢复人员一行，没有调岗、结束、停用入口；编辑按钮置灰（v0.4）', () => {
-    const off = card({ deactivatedAt: '2026-01-01T00:00:00Z' }, false, { canUpdate: true, canRestore: true });
+  it('已停用卡片：危险操作区只有恢复人员一行，没有调岗、结束、停用入口；编辑与执法证按钮不可达（v0.4、#158）', () => {
+    const off = card({ deactivatedAt: '2026-01-01T00:00:00Z' }, false, {
+      canUpdate: true,
+      canRestore: true,
+      canUpdateCert: true,
+    });
     expect(off).toContain('需谨慎的操作');
     expect(off.match(/data-requires="[^"]+"/g)).toEqual([
       `data-requires="${PERSONNEL_UPDATE}"`,
@@ -414,6 +420,9 @@ describe('人员卡片（P6 view）', () => {
     expect(off).not.toContain('data-action="transfer"');
     expect(off).not.toContain('data-action="endsessions"');
     expect(off).not.toContain('data-action="deactivate"');
+    expect(off).not.toContain('data-requires="personnel.cert.update"');
+    expect(off).not.toContain('>登记执法证</button>');
+    expect(off).not.toContain('>变更执法证</button>');
     expect(off).toMatch(/data-requires="personnel\.profile\.update" disabled/);
   });
 
@@ -593,6 +602,36 @@ describe('执法证登记接口（#133）', () => {
     serve(person(ADMIN), { [url]: [500, {}] });
     expect(messageOf(await updateCert(store.dispatch, '3', INPUT)))
       .toBe('网络或服务暂时不可用，请稍后重试。问题持续时请联系本单位的系统管理人员。');
+  });
+
+  it('对方已停用：409 invalid-state（personnel-deactivated）出定稿拒绝句，不露服务端原句', async () => {
+    const store = fresh();
+    serve(person(ADMIN), {
+      [url]: [409, {
+        result: 'invalid-state',
+        reason: 'personnel-deactivated',
+        message: '服务端原句（界面不应显示）',
+      }],
+    });
+    await store.dispatch(loadSession());
+    expect(await updateCert(store.dispatch, '3', INPUT)).toEqual({
+      ok: false,
+      fields: {},
+      message: CERT_DEACTIVATED_MESSAGE,
+      deactivated: true,
+    });
+    expect(CERT_DEACTIVATED_MESSAGE).toBe('这个人员已停用，不能登记或修改执法证。请先恢复，再办理。');
+  });
+});
+
+describe('执法证表单的保存去向（#158）', () => {
+  it('成功关表单；对方已停用关闭旧表单并出定稿拒绝句；其余失败留在表单里', () => {
+    expect(certSaveTransition({ ok: true })).toEqual({ editing: false, failure: null, denied: null });
+    expect(certSaveTransition({
+      ok: false, fields: {}, message: CERT_DEACTIVATED_MESSAGE, deactivated: true,
+    })).toEqual({ editing: false, failure: null, denied: CERT_DEACTIVATED_MESSAGE });
+    const failure = { ok: false as const, fields: { certNo: '请填写执法证号' }, message: null };
+    expect(certSaveTransition(failure)).toEqual({ editing: true, failure, denied: null });
   });
 });
 

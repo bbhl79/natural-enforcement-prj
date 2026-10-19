@@ -147,6 +147,21 @@ export function CertForm({
 }
 
 /**
+ * 保存执法证后的表单去向（#158）：成功关表单；
+ * 对方已停用（409 personnel-deactivated）关闭旧表单并出定稿拒绝句；
+ * 其余失败留在表单里按字段或整页提示。
+ */
+export function certSaveTransition(result: CertUpdateResult): {
+  editing: boolean;
+  failure: CertFailure | null;
+  denied: string | null;
+} {
+  if (result.ok) return { editing: false, failure: null, denied: null };
+  if (result.deactivated) return { editing: false, failure: null, denied: result.message };
+  return { editing: true, failure: result, denied: null };
+}
+
+/**
  * 执法证一段（P6，#133）。只读态显示证号、有效期、证件状态与说明句；
  * 持 personnel.cert.update 的人多一个「登记执法证 / 变更执法证」按钮，点开是表单。
  * 保存成功后由页面重取卡片，表单收起。
@@ -168,9 +183,11 @@ export function CertSection({
   const [editing, setEditing] = useState(false);
   const [input, setInput] = useState<CertUpdateInput>(() => certEditFrom(card));
   const [failure, setFailure] = useState<CertFailure | null>(null);
+  const [denied, setDenied] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  if (editing) {
+  // 停用态变化（canUpdate 转假）由父级 key 重建本段，旧表单与旧输入一并丢弃（#158 复核）。
+  if (editing && canUpdate) {
     return (
       <CertForm
         input={input}
@@ -182,12 +199,13 @@ export function CertSection({
           setBusy(true);
           const result = await onSave(input);
           setBusy(false);
-          if (result.ok) {
-            setEditing(false);
-            setFailure(null);
-            return;
+          const next = certSaveTransition(result);
+          setEditing(next.editing);
+          setFailure(next.failure);
+          if (next.denied !== null) {
+            setInput(certEditFrom(card));
+            setDenied(next.denied);
           }
-          setFailure(result);
         })()}
       />
     );
@@ -198,6 +216,7 @@ export function CertSection({
         {'执法证 '}
         <span className={tag.tone ? `tag ${tag.tone}` : 'tag'}>{tag.label}</span>
       </div>
+      {denied ? <div className="banner danger" data-reason="personnel-deactivated">{denied}</div> : null}
       <div className="kv">
         <div className="k">执法证号</div>
         <div>{cert.no || '—'}</div>
@@ -212,7 +231,7 @@ export function CertSection({
           type="button"
           className="btn btn-sm"
           data-requires={PERSONNEL_CERT_UPDATE}
-          onClick={() => { setInput(certEditFrom(card)); setFailure(null); setEditing(true); }}
+          onClick={() => { setInput(certEditFrom(card)); setFailure(null); setDenied(null); setEditing(true); }}
         >
           {cert.status === 'none' ? '登记执法证' : '变更执法证'}
         </button>
@@ -820,7 +839,14 @@ export function PersonnelCardView({
                   编辑姓名、手机号、角色
                 </button>
               </div>
-              <CertSection card={card} now={now} canUpdate={canUpdateCert} onSave={saveCert} />
+              {/* key 随可维护态变化（#158 复核）：先开表单再停用时重建本段，关闭并重置旧表单。 */}
+              <CertSection
+                key={canUpdateCert && !off ? 'cert-updatable' : 'cert-readonly'}
+                card={card}
+                now={now}
+                canUpdate={canUpdateCert && !off}
+                onSave={saveCert}
+              />
             </>
           )}
         </div>

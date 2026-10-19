@@ -170,6 +170,14 @@ export type PersonnelPostGrantFailedReason = (typeof PERSONNEL_POST_GRANT_FAILED
 export const PERSONNEL_POST_REVOKE_FAILED_REASONS = [PERSONNEL_DEACTIVATED_REASON] as const;
 export type PersonnelPostRevokeFailedReason = (typeof PERSONNEL_POST_REVOKE_FAILED_REASONS)[number];
 
+/** 执法证登记被拒（outcome=failed）的原因（#158）：只有对方已停用一条。 */
+export const CERT_UPDATE_FAILED_REASONS = [PERSONNEL_DEACTIVATED_REASON] as const;
+export type CertUpdateFailedReason = (typeof CERT_UPDATE_FAILED_REASONS)[number];
+
+/** A10 解锁、重设初始口令被拒（outcome=failed）的原因（#158）：只有对方已停用一条。 */
+export const ACCOUNT_MAINTENANCE_FAILED_REASONS = [PERSONNEL_DEACTIVATED_REASON] as const;
+export type AccountMaintenanceFailedReason = (typeof ACCOUNT_MAINTENANCE_FAILED_REASONS)[number];
+
 /** 停用人员被拒（outcome=failed）的原因（#130，ADR 0014）：只有根机构守卫一条。 */
 export const PERSONNEL_DEACTIVATE_FAILED_REASONS = [ROOT_GUARD_FAILED_REASON] as const;
 export type PersonnelDeactivateFailedReason = (typeof PERSONNEL_DEACTIVATE_FAILED_REASONS)[number];

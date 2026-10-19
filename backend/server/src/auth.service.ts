@@ -658,6 +658,35 @@ export class AuthService {
     return { active: null, setCookies: [clearSessionCookie(), clearRememberCookie()] };
   }
 
+  /**
+   * 停用时把对方踢下线（#158 业主拍板「停用即离职」）：结束全部会话与全部「记住我」，
+   * 每段会话写一行 session.ended（personnel-deactivated），操作者空着（ADR 0011「停用导致的结束」）。
+   * 传入 tx 时与本事务同成同败（#119）；「记住我」一并作废，不单独记。
+   */
+  async endSessionsOnDeactivation(
+    personnelId: string,
+    sourceIp: string | null,
+    tx: Pick<TxScope, 'directory' | 'sessions' | 'audit' | 'remember'>,
+  ): Promise<void> {
+    const now = this.clock.now();
+    const account = await tx.directory.findById(personnelId);
+    for (const session of await tx.sessions.listActive(personnelId)) {
+      // 条件结束（#158 复核）：并发退出/结束会话已提交时本段不写，不为未实际结束的会话补写留痕。
+      if (!(await tx.sessions.end(session.id, now, 'personnel-deactivated'))) continue;
+      await tx.audit.append({
+        action: 'session.ended',
+        reason: 'personnel-deactivated',
+        actorId: null,
+        actorCode: null,
+        subjectPersonnelId: personnelId,
+        subjectCode: account?.code ?? null,
+        orgUnitId: account?.orgUnitId ?? null,
+        sourceIp,
+      });
+    }
+    await tx.remember.endActiveForPersonnel(personnelId, now, 'personnel-deactivated');
+  }
+
   private async endPersonnelAccess(
     personnelId: string,
     now: Date,

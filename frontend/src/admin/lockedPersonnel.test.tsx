@@ -9,6 +9,7 @@ import { renderRoute, renderRouter } from '../test-utils';
 import { LockedPersonnelView } from './LockedPersonnelPage';
 import {
   COLUMNS,
+  DEACTIVATED_DENIED,
   EMPTY_HINT,
   EMPTY_TITLE,
   formatUnlockTime,
@@ -377,6 +378,33 @@ describe('动作请求与结果判定', () => {
     // 其他 409（服务端给可读原因的）仍走失败横幅，不被并发句抢走。
     expect(await interpretAction('reset', WANG, reply(409, { result: 'invalid-state', message: '这个人员没有停用。' }), 'SJ0001'))
       .toEqual({ type: 'denied', notice: { kind: 'failed', action: 'reset', row: WANG } });
+  });
+
+  it('409 personnel-deactivated（#158）：解锁与重设都出定稿拒绝句，不露操作码与原始结果码', async () => {
+    for (const kind of ['unlock', 'reset'] as const) {
+      expect(await interpretAction(
+        kind,
+        WANG,
+        reply(409, { result: 'invalid-state', reason: 'personnel-deactivated', message: '服务端原始句' }),
+        'SJ0001',
+      )).toEqual({ type: 'denied', notice: { kind: 'deactivated', action: kind, row: WANG } });
+    }
+    const notice = { kind: 'deactivated', action: 'unlock', row: WANG } as const;
+    const text = noticeText(notice);
+    expect(text).toBe(`没有解锁「王芳」（TH0331）：${DEACTIVATED_DENIED}`);
+    expect(text).toBe('没有解锁「王芳」（TH0331）：这个人员已停用。请先恢复人员，再办理。');
+    expect(text).not.toContain('服务端原始句');
+    expect(text).not.toContain('personnel-deactivated');
+    expect(text).not.toContain('invalid-state');
+    expect(noticeReason(notice)).toBe('personnel-deactivated');
+    expect(isDenial(notice)).toBe(true);
+    const html = renderToStaticMarkup(
+      <LockedPersonnelView state={{ ...initialLockedState([WANG]), notice }} opcodes={['personnel.locked.release']} send={() => {}} onConfirm={() => {}} />,
+    );
+    expect(html).toContain('data-reason="personnel-deactivated"');
+    expect(html).toContain('这个人员已停用。请先恢复人员，再办理。');
+    expect(html).not.toContain('服务端原始句');
+    expect(html).not.toContain('invalid-state');
   });
 
   it('网络错误按失败处理，不抛出', async () => {

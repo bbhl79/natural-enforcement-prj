@@ -1,5 +1,7 @@
 import type {
+  AccountMaintenanceFailedReason,
   AuditTargetOrgBasis,
+  CertUpdateFailedReason,
   AuthzDeniedReason,
   LoginFailedReason,
   OrgUnitDeactivateFailedReason,
@@ -56,7 +58,9 @@ export type AuditAppend =
   | (AuditParties & { action: 'login.capacity-reached' })
   | (AuditParties & { action: 'session.ended'; reason: SessionEndReason })
   | (AuditParties & { action: 'account.unlocked' })
+  | (AuditParties & { action: 'account.unlocked'; outcome: 'failed'; reason: AccountMaintenanceFailedReason })
   | (AuditParties & { action: 'account.password-reset' })
+  | (AuditParties & { action: 'account.password-reset'; outcome: 'failed'; reason: AccountMaintenanceFailedReason })
   | (AuditParties & { action: 'account.password-changed'; reason: PasswordChangedReason })
   /** 口令被拒（ADR 0015，#132）：只记失败。口令、散列、前值不进任何一列。 */
   | (AuditParties & { action: 'account.password-rejected'; outcome: 'failed'; reason: PasswordRejectedReason })
@@ -89,6 +93,8 @@ export type AuditAppend =
   })
   /** 执法证登记（#133）。前值只写旧有效期和旧状态，不写证号（#105:232、ADR 0011）。 */
   | (AuditParties & { action: 'cert.updated' })
+  /** 对方已停用时拒绝登记与修改（#158）。 */
+  | (AuditParties & { action: 'cert.updated'; outcome: 'failed'; reason: CertUpdateFailedReason })
   // 人员编辑与调岗（#129，ADR 0014）。改名前值写旧名；改手机号前值留空（#105:219）。
   // 对方已停用时编辑与调岗一律被拒（#130 定口径），失败行的动作词与成功时相同。
   | (AuditParties & { action: 'personnel.renamed' })

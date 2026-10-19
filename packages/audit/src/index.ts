@@ -23,12 +23,14 @@ export type {
   AuthzDenyReason,
 } from './port.ts';
 export {
+  ACCOUNT_MAINTENANCE_FAILED_REASONS,
   AUDIT_ACTIONS,
   AUDIT_COUNTED_ACTIONS,
   AUDIT_NEXT_VALUE_ACTIONS,
   AUDIT_SUCCEEDED_ACTIONS,
   AUDIT_TARGET_ORG_BASES,
   AUTHZ_DENIED_REASONS,
+  CERT_UPDATE_FAILED_REASONS,
   LOGIN_FAILED_REASONS,
   ORG_UNIT_DEACTIVATE_FAILED_REASONS,
   ORG_UNIT_REGISTER_FAILED_REASONS,
@@ -49,11 +51,13 @@ export {
   SESSION_END_REASONS,
 } from './vocabulary.ts';
 export type {
+  AccountMaintenanceFailedReason,
   AuditAction,
   AuditCountedAction,
   AuditNextValueAction,
   AuditTargetOrgBasis,
   AuthzDeniedReason,
+  CertUpdateFailedReason,
   LoginFailedReason,
   OrgUnitDeactivateFailedReason,
   OrgUnitRegisterFailedReason,

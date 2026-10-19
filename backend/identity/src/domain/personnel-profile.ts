@@ -205,6 +205,9 @@ export const DEACTIVATED_EDIT_MESSAGE = '这个人员已停用，不能编辑。
 /** 调岗已停用人员时给人看的一句原因。 */
 export const DEACTIVATED_TRANSFER_MESSAGE = '这个人员已停用，不能调岗。请先恢复，恢复时可以同时选一个新的任职机构。';
 
+/** 登记或修改已停用人员的执法证时给人看的一句原因（#158）。 */
+export const DEACTIVATED_CERT_MESSAGE = '这个人员已停用，不能登记或修改执法证。请先恢复，再办理。';
+
 /** 恢复的输入（#130，#105 故事 37、38）。原任职机构已停用时必须带新任职机构。 */
 export interface RestorePersonnelProfileInput {
   initialPassword: string;
