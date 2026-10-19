@@ -190,8 +190,12 @@ fi
 # ---------- 7. 切片10 新命令：logs/exec/test 分层/build（check 见文件头说明，不内嵌防递归） ----------
 echo "[说明] dev check 不内嵌执行：check = lint+test all+build，test all 含 e2e 层即本用例（递归）；"
 echo "       check 可执行性由外层 ./dev check 总闸全绿覆盖（E1/E7 的总证据）。"
-echo "[说明] 证据分工（ADR 0017）：外层 check 走内部函数，命令契约的 CLI 路径证据在本层；"
-echo "       全量 lint 两层各跑一遍（一次 CI 共 2 遍）。单独跑 e2e 层仍自证门禁。"
+echo "[说明] 证据分工（ADR 0017）：命令契约（E7）的 CLI 路径证据唯一出处是本层的 03 冒烟用例，"
+echo "       因为外层 check 直调内部函数、不经 CLI；门禁类检查两层都跑，判红条件相同、证据形态不同。"
+echo "[说明] 单独跑 e2e 层仍自证门禁，不是只做命令冒烟。本层内实际跑的门禁项清单："
+echo "       兜底闸（结构测试，经 dev lint 与 dev test integration）、红探针（经 dev lint）、"
+echo "       ESLint（容器内，经 dev lint）、漏入库（经 dev lint 与 dev lint leak 子项）、"
+echo "       类型检查（经 dev test unit）、前后端编译门（经 dev build）。"
 
 out="$("$DEV" logs db 2>&1)"; rc=$?
 { [ "$rc" -eq 0 ] && [ -n "$out" ]; } \
