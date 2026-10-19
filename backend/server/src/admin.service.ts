@@ -9,6 +9,7 @@ import {
 import {
   AccessControlService,
   CredentialService,
+  PERSONNEL_DEACTIVATED_REASON,
   PersonnelService,
   isAccessDenied,
   rejectedPasswordRules,
@@ -26,11 +27,18 @@ import { UNIT_OF_WORK, type TxScope, type UnitOfWork } from './unit-of-work.ts';
 const LOCKED_READ = 'personnel.locked.read';
 const LOCKED_RELEASE = 'personnel.locked.release';
 const PASSWORD_RESET = 'personnel.password.reset';
+const DEACTIVATED_UNLOCK_MESSAGE = '这个人员已停用，不能解锁。请先恢复人员，再办理。';
+const DEACTIVATED_RESET_MESSAGE = '这个人员已停用，不能重设初始口令。请先恢复人员，再办理。';
 
 export type AdminDenial = { status: 403; body: { reason: DenyReason } };
 type NotFound = { status: 404; body: { result: 'not-found' } };
+/** 对方已停用（#158 业主拍板）：A10 解锁与重设初始口令一律拒绝。 */
+type Deactivated = {
+  status: 409;
+  body: { result: 'invalid-state'; reason: typeof PERSONNEL_DEACTIVATED_REASON; message: string };
+};
 /** 动作的前置判断：通过则交出目标人员，否则是要直接返回的结果。 */
-type Guarded = { target: LoginAccount } | NotFound | AdminDenial | Rejected<AdminDenial>;
+type Guarded = { target: LoginAccount } | NotFound | AdminDenial | Deactivated | Rejected<AdminDenial | Deactivated>;
 
 export type ResetOutcome =
   | { status: 200; body: { result: 'reset' } }
@@ -38,7 +46,8 @@ export type ResetOutcome =
   | { status: 404; body: { result: 'not-found' } }
   /** 并发改口令（ADR 0015，#132）：期望散列已被换掉，本次不写库。 */
   | { status: 409; body: { result: 'concurrent-change' } }
-  | AdminDenial;
+  | AdminDenial
+  | Deactivated;
 
 /** 重设判断通过后交出的比对口径（ADR 0015）：期望散列、历史散列与拒绝留痕的一方快照。 */
 type ResetReady = { expectedHash: string | null; historyHashes: string[]; parties: AuditParties };
@@ -46,7 +55,8 @@ type ResetReady = { expectedHash: string | null; historyHashes: string[]; partie
 export type UnlockOutcome =
   | { status: 200; body: { result: 'unlocked' } }
   | { status: 404; body: { result: 'not-found' } }
-  | AdminDenial;
+  | AdminDenial
+  | Deactivated;
 
 export type PersonnelExportOutcome =
   | {
@@ -113,7 +123,7 @@ export class AdminService {
 
   async unlock(actor: ActorRef, personnelId: string, sourceIp: string | null): Promise<UnlockOutcome> {
     return this.uow.run<UnlockOutcome>(async (tx) => {
-      const guarded = await this.guard(tx, actor, LOCKED_RELEASE, personnelId);
+      const guarded = await this.guard(tx, actor, LOCKED_RELEASE, personnelId, sourceIp, true);
       if (!('target' in guarded)) return guarded;
       const { target } = guarded;
       const admin = await tx.directory.findById(actor.personnelId);
@@ -139,7 +149,7 @@ export class AdminService {
   ): Promise<ResetOutcome> {
     // 第一步：判断能否重设，并读出当前散列与口令历史。口令不合规时直接返回，不散列。
     const checked = await this.uow.run<ResetOutcome | { ready: ResetReady }>(async (tx) => {
-      const guarded = await this.guard(tx, actor, PASSWORD_RESET, personnelId);
+      const guarded = await this.guard(tx, actor, PASSWORD_RESET, personnelId, sourceIp, false);
       if (!('target' in guarded)) return guarded;
       const rules = rejectedPasswordRules({ password, personnelCode: guarded.target.code });
       if (rules.length > 0) return { status: 400, body: { result: 'non-compliant', rules } };
@@ -183,7 +193,7 @@ export class AdminService {
     const passwordHash = await this.credentials.hashPassword(password);
     // 第二步：重设、解除锁定、结束会话和记住我，与各自的留痕同一事务。
     return this.uow.run<ResetOutcome>(async (tx) => {
-      const guarded = await this.guard(tx, actor, PASSWORD_RESET, personnelId);
+      const guarded = await this.guard(tx, actor, PASSWORD_RESET, personnelId, sourceIp, true);
       if (!('target' in guarded)) return guarded;
       const { target } = guarded;
       const now = this.clock.now();
@@ -253,14 +263,19 @@ export class AdminService {
   }
 
   /**
-   * 目标存在 → 按操作码和数据范围判断 → 目标不是本人。
-   * 拒绝时交出 rejected(...)，authz.denied 在业务事务回滚后写入。
+   * 目标存在 → 按操作码和数据范围判断 → 目标不是本人 → 停用态检查。
+   * 停用即离职（#158 业主拍板）：A10 解锁与重设初始口令一律拒绝，写一行本动作的失败留痕。
+   * lockAndRecheck 为真时取人员级事务锁并锁内重读（#129 先例）：与停用该人员串行。
+   * 重设的第一阶段不取锁：期望散列必须在第一阶段读到（ADR 0015），并发由第二阶段的条件更新判定。
+   * 拒绝时交出 rejected(...)，拒绝留痕在业务事务回滚后写入。
    */
   private async guard(
     tx: TxScope,
     actor: ActorRef,
     opcode: string,
     personnelId: string,
+    sourceIp: string | null,
+    lockAndRecheck: boolean,
   ): Promise<Guarded> {
     const target = await tx.directory.findById(personnelId);
     if (!target) return { status: 404, body: { result: 'not-found' } };
@@ -275,7 +290,48 @@ export class AdminService {
       return rejected<AdminDenial>({ status: 403, body: { reason: decision.reason } }, decision.denial);
     }
     if (target.id === actor.personnelId) return this.denySelf(tx, actor, opcode, target.id, targetOrg);
+    if (!lockAndRecheck) {
+      if (target.deactivatedAt) return this.denyDeactivated(tx, actor, opcode, target, sourceIp);
+      return { target };
+    }
+    // 人员级事务锁 + 锁内重读（#129 先例）：与停用该人员串行，停用先提交时本次看到新状态。
+    const locked = await tx.store.lockPersonnelProfile(personnelId);
+    if (!locked) return { status: 404, body: { result: 'not-found' } };
+    if (locked.deactivatedAt) return this.denyDeactivated(tx, actor, opcode, target, sourceIp);
     return { target };
+  }
+
+  /** 对方已停用（#158）：按本动作写一行失败留痕，返回 409 invalid-state。 */
+  private async denyDeactivated(
+    tx: TxScope,
+    actor: ActorRef,
+    opcode: string,
+    target: LoginAccount,
+    sourceIp: string | null,
+  ): Promise<Rejected<Deactivated>> {
+    const admin = await tx.directory.findById(actor.personnelId);
+    const unlock = opcode === LOCKED_RELEASE;
+    return rejected<Deactivated>({
+      status: 409,
+      body: {
+        result: 'invalid-state',
+        reason: PERSONNEL_DEACTIVATED_REASON,
+        message: unlock ? DEACTIVATED_UNLOCK_MESSAGE : DEACTIVATED_RESET_MESSAGE,
+      },
+    }, {
+      action: unlock ? 'account.unlocked' : 'account.password-reset',
+      outcome: 'failed',
+      reason: PERSONNEL_DEACTIVATED_REASON,
+      actorId: actor.personnelId,
+      actorCode: admin?.code ?? null,
+      subjectPersonnelId: target.id,
+      subjectCode: target.code,
+      orgUnitId: target.orgUnitId,
+      sourceIp,
+      opcode,
+      resourceType: 'personnel',
+      resourceId: target.id,
+    });
   }
 
   private async denySelf(

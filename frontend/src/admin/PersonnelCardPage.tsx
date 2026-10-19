@@ -820,7 +820,7 @@ export function PersonnelCardView({
                   编辑姓名、手机号、角色
                 </button>
               </div>
-              <CertSection card={card} now={now} canUpdate={canUpdateCert} onSave={saveCert} />
+              <CertSection card={card} now={now} canUpdate={canUpdateCert && !off} onSave={saveCert} />
             </>
           )}
         </div>

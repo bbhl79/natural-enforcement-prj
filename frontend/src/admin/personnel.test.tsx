@@ -404,8 +404,12 @@ describe('人员卡片（P6 view）', () => {
     expect(card()).toMatch(/data-requires="personnel\.profile\.update" disabled/);
   });
 
-  it('已停用卡片：危险操作区只有恢复人员一行，没有调岗、结束、停用入口；编辑按钮置灰（v0.4）', () => {
-    const off = card({ deactivatedAt: '2026-01-01T00:00:00Z' }, false, { canUpdate: true, canRestore: true });
+  it('已停用卡片：危险操作区只有恢复人员一行，没有调岗、结束、停用入口；编辑与执法证按钮不可达（v0.4、#158）', () => {
+    const off = card({ deactivatedAt: '2026-01-01T00:00:00Z' }, false, {
+      canUpdate: true,
+      canRestore: true,
+      canUpdateCert: true,
+    });
     expect(off).toContain('需谨慎的操作');
     expect(off.match(/data-requires="[^"]+"/g)).toEqual([
       `data-requires="${PERSONNEL_UPDATE}"`,
@@ -414,6 +418,9 @@ describe('人员卡片（P6 view）', () => {
     expect(off).not.toContain('data-action="transfer"');
     expect(off).not.toContain('data-action="endsessions"');
     expect(off).not.toContain('data-action="deactivate"');
+    expect(off).not.toContain('data-requires="personnel.cert.update"');
+    expect(off).not.toContain('>登记执法证</button>');
+    expect(off).not.toContain('>变更执法证</button>');
     expect(off).toMatch(/data-requires="personnel\.profile\.update" disabled/);
   });
 

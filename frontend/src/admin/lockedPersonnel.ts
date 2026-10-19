@@ -78,6 +78,12 @@ export const RESET_RULE_TEXT: Readonly<Record<string, string>> = {
 
 export const SELF_DENIED = '不能解锁自己，也不能给自己重设口令。请联系本单位其他系统管理人员处理。';
 
+/**
+ * 对方已停用（#158 业主拍板「停用即离职」）：解锁与重设一律拒绝。
+ * 工程稿：v0.4 P7 无停用态，句子按 #130 的停用口径写成，留 v0.5 定稿。
+ */
+export const DEACTIVATED_DENIED = '这个人员已停用。请先恢复人员，再办理。';
+
 const who = (row: Pick<LockedRow, 'name' | 'code'>) => `「${row.name}」（${row.code}）`;
 
 /** 「解锁「王芳」（TH0331）」或「为「王芳」（TH0331）重设初始口令」 */
@@ -96,6 +102,7 @@ export type Notice =
   | { kind: 'self-denied'; action: LockedActionKind; row: LockedRow }
   | { kind: 'permission-denied'; action: LockedActionKind; row: LockedRow }
   | { kind: 'concurrent-change'; action: LockedActionKind; row: LockedRow }
+  | { kind: 'deactivated'; action: LockedActionKind; row: LockedRow }
   | { kind: 'failed'; action: LockedActionKind; row: LockedRow };
 
 export function noticeText(notice: Notice): string {
@@ -113,6 +120,8 @@ export function noticeText(notice: Notice): string {
       return `没有${actionPhrase(notice.action, notice.row)}：这个操作需要的权限不在你当前的角色里。如工作需要，请联系本单位的系统管理人员调整角色。`;
     case 'concurrent-change':
       return `没有${actionPhrase(notice.action, notice.row)}：对方的口令刚被另一次操作修改。请刷新列表后重试。`;
+    case 'deactivated':
+      return `没有${actionPhrase(notice.action, notice.row)}：${DEACTIVATED_DENIED}`;
     case 'failed':
       return `没有${actionPhrase(notice.action, notice.row)}：网络或服务暂时不可用，请稍后重试。问题持续时请联系本单位的系统管理人员。`;
   }
@@ -128,6 +137,8 @@ export function noticeReason(notice: Notice): string | null {
       return 'permission-denied';
     case 'concurrent-change':
       return 'concurrent-change';
+    case 'deactivated':
+      return 'personnel-deactivated';
     case 'failed':
       return 'failed';
     default:
@@ -235,6 +246,10 @@ export async function interpretAction(
     if (typeof body.reason === 'string') {
       return { type: 'denied', notice: { kind: 'permission-denied', action: kind, row } };
     }
+  }
+  // 对方已停用（#158）：409 invalid-state 的 reason 是 personnel-deactivated，只出定稿拒绝句。
+  if (response.status === 409 && body.reason === 'personnel-deactivated') {
+    return { type: 'denied', notice: { kind: 'deactivated', action: kind, row } };
   }
   // 并发改口令（ADR 0015，#132）：409 concurrent-change 单出横幅，不按网络失败处理。
   if (response.status === 409 && body.result === 'concurrent-change') {

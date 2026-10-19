@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 
 import { hash, type HashOptions } from 'argon2';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { prismaAuditTrailFactory, type AuditTrailFactory } from '@natural-enforcement/audit';
 
 import { createApplication } from '../backend/server/src/persistence.module.ts';
 import { openClonedDatabase, type ClonedDatabase } from './cloned-database.ts';
@@ -29,9 +30,24 @@ function newUlid(): string {
   return id;
 }
 
+/** 接缝①：先照常写下留痕，再抛错。armed 为假时与默认工厂相同。 */
+const seam = { armed: false };
+const failingFactory: AuditTrailFactory = {
+  forClient(client) {
+    const real = prismaAuditTrailFactory.forClient(client);
+    return {
+      async append(entry) {
+        await real.append(entry);
+        if (seam.armed) throw new Error('接缝①：业务写完后抛错（#158）');
+      },
+    };
+  },
+};
+
 let cloned: ClonedDatabase;
 let baseUrl = '';
-let closeApp: () => Promise<void> = async () => {};
+let seamUrl = '';
+const closers: Array<() => Promise<void>> = [];
 let passwordHash = '';
 let adminRoleId = '';
 let deptAId = '';
@@ -39,6 +55,9 @@ let adminAId = '';
 let lockedAId = '';
 let lockedStationId = '';
 let lockedNoneId = '';
+let deactivatedLockedId = '';
+let deactivatedFreeId = '';
+let seamLockedId = '';
 
 const ADMIN_A_PHONE = '13800010201';
 const ADMIN_ROOT_PHONE = '13800010202';
@@ -49,6 +68,9 @@ const EXPIRED_PHONE = '13800010214';
 const EDGE_PHONE = '13800010215';
 const FREE_PHONE = '13800010216';
 const NONE_PHONE = '13800010219';
+const DEACTIVATED_LOCKED_PHONE = '13800010221';
+const DEACTIVATED_FREE_PHONE = '13800010222';
+const SEAM_LOCKED_PHONE = '13800010223';
 const LOCKED_A_CERT = 'CERT-102-A';
 const LOCKED_STATION_CERT = 'CERT-102-S';
 const NONE_CERT = 'CERT-102-N';
@@ -69,6 +91,10 @@ type AuditRecord = {
   org_unit_id: string | null;
   source_ip: string | null;
   opcode: string | null;
+  resource_type: string | null;
+  resource_id: string | null;
+  previous_value: string | null;
+  next_value: string | null;
   target_org_unit_id: string | null;
   target_org_unit_basis: string | null;
 };
@@ -77,6 +103,7 @@ async function audits(): Promise<AuditRecord[]> {
   return cloned.prisma.$queryRaw<AuditRecord[]>`
     SELECT id, action, outcome, reason, actor_id, actor_code,
            subject_personnel_id, subject_code, org_unit_id, source_ip, opcode,
+           resource_type, resource_id, previous_value, next_value,
            target_org_unit_id, target_org_unit_basis
     FROM audit_trail
     ORDER BY created_at, id
@@ -113,6 +140,7 @@ async function addPerson(input: {
   lockedUntil?: Date | null;
   certNo?: string;
   assign?: boolean;
+  deactivated?: boolean;
 }): Promise<string> {
   const id = newUlid();
   await cloned.prisma.personnel.create({
@@ -127,6 +155,7 @@ async function addPerson(input: {
       passwordFailureCount: input.lockedUntil ? 5 : 0,
       passwordFailureWindowStartedAt: input.lockedUntil ? new Date(T0) : null,
       lockedUntil: input.lockedUntil ?? null,
+      deactivatedAt: input.deactivated ? new Date(T0 - 24 * 60 * MINUTE_MS) : null,
       enforcementCertNo: input.certNo ?? null,
     },
   });
@@ -221,15 +250,47 @@ beforeAll(async () => {
     certNo: NONE_CERT,
     assign: false,
   });
-  const app = await createApplication(cloned.connectionString, { now: () => new Date(clock.millis) });
-  await app.listen(0, '127.0.0.1');
-  const address = app.getHttpServer().address() as AddressInfo;
-  baseUrl = `http://127.0.0.1:${address.port}`;
-  closeApp = () => app.close();
+  deactivatedLockedId = await addPerson({
+    code: 'P-102-OFFLOCK',
+    name: '停用且被锁',
+    phone: DEACTIVATED_LOCKED_PHONE,
+    orgUnitId: deptA.id,
+    lockedUntil: new Date(T0 + 30 * MINUTE_MS),
+    deactivated: true,
+  });
+  deactivatedFreeId = await addPerson({
+    code: 'P-102-OFFFREE',
+    name: '停用未锁定',
+    phone: DEACTIVATED_FREE_PHONE,
+    orgUnitId: deptA.id,
+    deactivated: true,
+  });
+  seamLockedId = await addPerson({
+    code: 'P-102-SEAMLOCK',
+    name: '接缝被锁',
+    phone: SEAM_LOCKED_PHONE,
+    orgUnitId: deptA.id,
+    lockedUntil: new Date(T0 + 30 * MINUTE_MS),
+  });
+  const start = async (factory?: AuditTrailFactory): Promise<string> => {
+    const app = await createApplication(
+      cloned.connectionString,
+      { now: () => new Date(clock.millis) },
+      undefined,
+      factory ? { auditTrailFactory: factory } : undefined,
+    );
+    await app.listen(0, '127.0.0.1');
+    closers.push(() => app.close());
+    const address = app.getHttpServer().address() as AddressInfo;
+    return `http://127.0.0.1:${address.port}`;
+  };
+  baseUrl = await start();
+  seamUrl = await start(failingFactory);
 }, 60_000);
 
 afterAll(async () => {
-  await closeApp();
+  seam.armed = false;
+  for (const close of closers) await close();
   await cloned?.close();
 });
 
@@ -246,7 +307,8 @@ describe('GET /api/admin/locked-personnel', () => {
       personnel: Array<Record<string, unknown>>;
     };
     expect(body.result).toBe('listed');
-    expect(body.personnel).toHaveLength(2);
+    // 停用人员的行保留（#158）：锁定事实仍在，五列不变。
+    expect(body.personnel).toHaveLength(4);
     expect(body.personnel).toEqual(expect.arrayContaining([
       {
         id: lockedAId,
@@ -261,6 +323,20 @@ describe('GET /api/admin/locked-personnel', () => {
         name: '所被锁',
         orgName: '甲区执法所',
         lockedUntil: new Date(T0 + 60 * MINUTE_MS).toISOString(),
+      },
+      {
+        id: deactivatedLockedId,
+        code: 'P-102-OFFLOCK',
+        name: '停用且被锁',
+        orgName: '第一执法支队',
+        lockedUntil: new Date(T0 + 30 * MINUTE_MS).toISOString(),
+      },
+      {
+        id: seamLockedId,
+        code: 'P-102-SEAMLOCK',
+        name: '接缝被锁',
+        orgName: '第一执法支队',
+        lockedUntil: new Date(T0 + 30 * MINUTE_MS).toISOString(),
       },
     ]));
     for (const row of body.personnel) {
@@ -306,6 +382,8 @@ describe('GET /api/admin/locked-personnel', () => {
       'P-102-A',
       'P-102-B',
       'P-102-NONE',
+      'P-102-OFFLOCK',
+      'P-102-SEAMLOCK',
       'P-102-STA',
     ]);
     expect(JSON.stringify(body)).not.toContain(NONE_PHONE);
@@ -783,6 +861,136 @@ describe('POST /api/admin/personnel/:id/password-reset', () => {
         actor_code: 'P-102-CLERK2',
       }),
     ]);
+  });
+});
+
+describe('停用态人员的 A10 解锁与重设初始口令（#158 业主拍板）', () => {
+  const postTo = (
+    path: string,
+    cookie: string,
+    body: unknown = {},
+    url = baseUrl,
+  ): Promise<Response> => fetch(`${url}${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie, 'x-forwarded-for': ADMIN_IP },
+    body: JSON.stringify(body),
+  });
+
+  it('P7 被锁列表保留停用人员的行：列表五列不变，不新增状态列', async () => {
+    const admin = await postLogin(ADMIN_A_PHONE);
+    expect(admin.status).toBe(200);
+    const response = await fetch(`${baseUrl}/api/admin/locked-personnel`, {
+      headers: { cookie: cookiePair(admin) },
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json() as { personnel: Array<Record<string, unknown>> };
+    const row = body.personnel.find((item) => item.id === deactivatedLockedId);
+    expect(row).toEqual({
+      id: deactivatedLockedId,
+      code: 'P-102-OFFLOCK',
+      name: '停用且被锁',
+      orgName: '第一执法支队',
+      lockedUntil: new Date(T0 + 30 * MINUTE_MS).toISOString(),
+    });
+    expect(Object.keys(row ?? {})).toEqual(['id', 'code', 'name', 'orgName', 'lockedUntil']);
+  });
+
+  it('解锁已停用人员（停用前已锁定）→ 409 invalid-state（personnel-deactivated），写失败留痕，业务行不变', async () => {
+    const admin = await postLogin(ADMIN_A_PHONE);
+    const before = await audits();
+    const rowsBefore = await cloned.prisma.personnel.findUniqueOrThrow({ where: { id: deactivatedLockedId } });
+    const response = await postTo(`/api/admin/personnel/${deactivatedLockedId}/unlock`, cookiePair(admin));
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      result: 'invalid-state',
+      reason: 'personnel-deactivated',
+      message: '这个人员已停用，不能解锁。请先恢复人员，再办理。',
+    });
+    const after = await cloned.prisma.personnel.findUniqueOrThrow({ where: { id: deactivatedLockedId } });
+    expect(after).toEqual(rowsBefore);
+    expect(added(before, await audits())).toEqual([
+      expect.objectContaining({
+        action: 'account.unlocked', outcome: 'failed', reason: 'personnel-deactivated',
+        actor_id: adminAId, actor_code: 'P-102-ADM-A',
+        subject_personnel_id: deactivatedLockedId, subject_code: 'P-102-OFFLOCK',
+        org_unit_id: deptAId, source_ip: ADMIN_IP,
+        opcode: 'personnel.locked.release', resource_type: 'personnel', resource_id: deactivatedLockedId,
+      }),
+    ]);
+  });
+
+  it('解锁已停用但未被锁定的人员 → 409（停用前已被解锁的同样拒绝）', async () => {
+    const admin = await postLogin(ADMIN_A_PHONE);
+    const before = await audits();
+    const response = await postTo(`/api/admin/personnel/${deactivatedFreeId}/unlock`, cookiePair(admin));
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ result: 'invalid-state', reason: 'personnel-deactivated' });
+    expect(added(before, await audits())).toEqual([
+      expect.objectContaining({
+        action: 'account.unlocked', outcome: 'failed', reason: 'personnel-deactivated',
+        subject_personnel_id: deactivatedFreeId, opcode: 'personnel.locked.release',
+      }),
+    ]);
+  });
+
+  it('重设已停用人员 → 409 invalid-state（personnel-deactivated），口令、锁定与失败计数不变，写失败留痕', async () => {
+    const admin = await postLogin(ADMIN_A_PHONE);
+    const before = await audits();
+    const rowsBefore = await cloned.prisma.personnel.findUniqueOrThrow({ where: { id: deactivatedLockedId } });
+    const response = await postTo(`/api/admin/personnel/${deactivatedLockedId}/password-reset`, cookiePair(admin), {
+      password: 'Reset-off-158!',
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      result: 'invalid-state',
+      reason: 'personnel-deactivated',
+      message: '这个人员已停用，不能重设初始口令。请先恢复人员，再办理。',
+    });
+    const after = await cloned.prisma.personnel.findUniqueOrThrow({ where: { id: deactivatedLockedId } });
+    expect(after).toEqual(rowsBefore);
+    expect(added(before, await audits())).toEqual([
+      expect.objectContaining({
+        action: 'account.password-reset', outcome: 'failed', reason: 'personnel-deactivated',
+        actor_id: adminAId, actor_code: 'P-102-ADM-A',
+        subject_personnel_id: deactivatedLockedId, subject_code: 'P-102-OFFLOCK',
+        org_unit_id: deptAId, source_ip: ADMIN_IP,
+        opcode: 'personnel.password.reset', resource_type: 'personnel', resource_id: deactivatedLockedId,
+      }),
+    ]);
+  });
+
+  it('接缝①：解锁成功路径留痕写入抛错，请求失败，失败计数与锁定不变', async () => {
+    const admin = await postLogin(ADMIN_A_PHONE);
+    seam.armed = true;
+    const response = await postTo(
+      `/api/admin/personnel/${seamLockedId}/unlock`,
+      cookiePair(admin),
+      {},
+      seamUrl,
+    );
+    seam.armed = false;
+    expect(response.status).toBe(500);
+    expect(await cloned.prisma.personnel.findUniqueOrThrow({ where: { id: seamLockedId } })).toMatchObject({
+      passwordFailureCount: 5,
+      lockedUntil: new Date(T0 + 30 * MINUTE_MS),
+    });
+  });
+
+  it('接缝①：重设成功路径留痕写入抛错，请求失败，口令散列与锁定不变', async () => {
+    const before = await cloned.prisma.personnel.findUniqueOrThrow({ where: { id: seamLockedId } });
+    const admin = await postLogin(ADMIN_A_PHONE);
+    seam.armed = true;
+    const response = await postTo(
+      `/api/admin/personnel/${seamLockedId}/password-reset`,
+      cookiePair(admin),
+      { password: 'Reset-seam-158!' },
+      seamUrl,
+    );
+    seam.armed = false;
+    expect(response.status).toBe(500);
+    const after = await cloned.prisma.personnel.findUniqueOrThrow({ where: { id: seamLockedId } });
+    expect(after.passwordHash).toBe(before.passwordHash);
+    expect(after.lockedUntil).toEqual(before.lockedUntil);
   });
 });
 

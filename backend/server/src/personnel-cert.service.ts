@@ -1,6 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { rejected } from '@natural-enforcement/audit';
 import {
+  DEACTIVATED_CERT_MESSAGE,
+  PERSONNEL_DEACTIVATED_REASON,
   PersonnelCertService,
   isAccessDenied,
   type ActorRef,
@@ -16,11 +18,16 @@ type Denial = { status: 403; body: { reason: DenyReason } };
 /**
  * 执法证登记的返回（#133）。返回体不回显证号：界面保存后重新取卡片。
  * 400 只在校验不过时出现，不写留痕；403 写 authz.denied（回滚后另起事务）。
+ * 409 invalid-state（personnel-deactivated）：对方已停用，拒绝登记与修改（#158）。
  */
 export type UpdateCertOutcome =
   | { status: 200; body: { result: 'updated' } }
   | { status: 404; body: { result: 'not-found' } }
   | { status: 400; body: { result: 'non-compliant'; rules: CertRuleCode[] } }
+  | {
+      status: 409;
+      body: { result: 'invalid-state'; reason: typeof PERSONNEL_DEACTIVATED_REASON; message: string };
+    }
   | Denial;
 
 /**
@@ -47,6 +54,16 @@ export class PersonnelCertsService {
         if (outcome.result === 'not-found') return { status: 404, body: { result: 'not-found' } };
         if (outcome.result === 'non-compliant') {
           return { status: 400, body: { result: 'non-compliant', rules: outcome.rules } };
+        }
+        if (outcome.result === 'personnel-deactivated') {
+          return rejected<UpdateCertOutcome>({
+            status: 409,
+            body: {
+              result: 'invalid-state',
+              reason: PERSONNEL_DEACTIVATED_REASON,
+              message: DEACTIVATED_CERT_MESSAGE,
+            },
+          }, outcome.failure);
         }
         return { status: 200, body: { result: 'updated' } };
       } catch (error) {

@@ -379,8 +379,10 @@ export class PersonnelProfilesService {
   }
 
   /**
-   * 停用（#130）。在交互式事务里完成，业务行与留痕同成同败（#119）。
-   * 对方的全部会话在下一次请求时结束：认证编排发现人员已停用即结束会话与「记住我」，本请求不动会话表。
+   * 停用（#130、#158）。在交互式事务里完成，业务行与留痕同成同败（#119）。
+   * 停用即离职（#158 业主拍板）：同一次请求结束对方全部会话与全部「记住我」，
+   * 每段会话另写一行 session.ended（personnel-deactivated），操作者空着（ADR 0011）。
+   * 并发窗口里新建的残余会话仍在下一次请求时结束。
    * 重复停用返回 200，不写行、不写留痕，不改首次停用时间。
    */
   async deactivate(actor: ActorRef, personnelId: string, sourceIp: string | null): Promise<DeactivatePersonnelOutcome> {
@@ -391,6 +393,7 @@ export class PersonnelProfilesService {
         if (outcome.result === 'root-guard') {
           return rejected<DeactivatePersonnelOutcome>(rootGuardOutcome(), outcome.failure);
         }
+        if (outcome.result === 'deactivated') await this.auth.endSessionsOnDeactivation(personnelId, sourceIp, tx);
         return { status: 200, body: { result: 'deactivated' } };
       } catch (error) {
         const { outcome, entry } = denial(error);

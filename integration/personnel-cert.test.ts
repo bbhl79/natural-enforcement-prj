@@ -34,6 +34,7 @@ const PHONES = {
   homeless: '13800013306',
   memberB: '13800013307',
   loose: '13800013308',
+  off: '13800013309',
 } as const;
 
 function newUlid(): string {
@@ -71,7 +72,7 @@ let passwordHash = '';
 /** 可注入时钟：用例拨动这一处，不真实等待。 */
 const clock = { current: T0, now(): Date { return new Date(clock.current); } };
 const org = { hq: '', deptA: '', deptB: '', station: '' };
-const people = { root: '', adminA: '', intake: '', clerk: '', supervisor: '', homeless: '', memberB: '', loose: '' };
+const people = { root: '', adminA: '', intake: '', clerk: '', supervisor: '', homeless: '', memberB: '', loose: '', off: '' };
 
 type AuditRecord = {
   id: string;
@@ -129,6 +130,7 @@ async function addPerson(input: {
   orgUnitId: string;
   role: string;
   assign?: boolean;
+  deactivated?: boolean;
   cert?: { no: string; expiresOn: Date; status?: 'valid' | 'invalid' };
 }): Promise<string> {
   const id = newUlid();
@@ -141,6 +143,7 @@ async function addPerson(input: {
       passwordHash,
       mobilePhone: input.phone,
       passwordChangedAt: new Date(T0 - 10 * DAY_MS),
+      deactivatedAt: input.deactivated ? new Date(T0 - DAY_MS) : null,
       enforcementCertNo: input.cert?.no ?? null,
       enforcementCertExpiresOn: input.cert?.expiresOn ?? null,
       enforcementCertStatus: input.cert?.status ?? 'valid',
@@ -250,6 +253,10 @@ beforeAll(async () => {
   people.memberB = await addPerson({ code: 'P-133-MEM-B', phone: PHONES.memberB, orgUnitId: org.deptB, role: '经办' });
   // 没有当前任职的目标人员：视同挂在根机构（A10 口径）。
   people.loose = await addPerson({ code: 'P-133-LOOSE', phone: PHONES.loose, orgUnitId: org.hq, role: '经办', assign: false });
+  people.off = await addPerson({
+    code: 'P-133-OFF', phone: PHONES.off, orgUnitId: org.deptA, role: '经办', deactivated: true,
+    cert: { no: OLD_CERT_NO, expiresOn: new Date('2027-06-30T00:00:00.000Z') },
+  });
   baseUrl = await startApp();
   seamUrl = await startApp(failingFactory);
   // 先登录：登录本身写 login.succeeded，各用例的「新增留痕」只看接口这一步。
@@ -390,6 +397,33 @@ describe('POST /api/admin/personnel/:id/cert（执法证登记）', () => {
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ result: 'not-found' });
     expect(added(before, await audits())).toEqual([]);
+  });
+
+  it('已停用人员 → 409 invalid-state（personnel-deactivated），按项写 cert.updated 失败留痕，人员行不变', async () => {
+    const rowsBefore = await certRows();
+    const before = await audits();
+    const response = await updateCert(PHONES.adminA, people.off, certBody());
+    expect(response.status).toBe(409);
+    const body = await response.json();
+    expect(body).toEqual({
+      result: 'invalid-state',
+      reason: 'personnel-deactivated',
+      message: expect.stringContaining('已停用'),
+    });
+    // 界面不露操作码与原始原因码之外的内容：返回体不带证号。
+    expect(JSON.stringify(body).includes(NEW_CERT_NO)).toBe(false);
+    expect(await certRows()).toEqual(rowsBefore);
+    expect(added(before, await audits())).toEqual([
+      expect.objectContaining({
+        action: 'cert.updated', outcome: 'failed', reason: 'personnel-deactivated',
+        actor_id: people.adminA, actor_code: 'P-133-ADM-A',
+        subject_personnel_id: people.off, subject_code: 'P-133-OFF',
+        org_unit_id: org.deptA, opcode: 'personnel.cert.update',
+        resource_type: 'personnel', resource_id: people.off,
+        previous_value: 'expiresOn=2027-06-30;status=valid',
+      }),
+    ]);
+    expect(JSON.stringify(added(before, await audits())).includes(NEW_CERT_NO)).toBe(false);
   });
 
   it('没有当前任职的人员视同根机构：根机构系统管理能登记，区系统管理 403 scope-denied', async () => {
