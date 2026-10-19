@@ -6,7 +6,16 @@
 # 构成「失败即构建失败」的本地 CI 等价闸）。
 #
 # 扩展方式：新增一个 check_<规则名>() 函数（输出 [OK]/[FAIL] 行），并将其名追加到
-# RULES 数组即可；规则函数只读仓库源码，不依赖容器或网络。
+# RULES 数组即可；规则函数只读仓库源码，不依赖容器或网络。共用辅助函数（非规则，
+# 不进 RULES）必须登记进 HELPERS 数组——红探针的接线完整性护栏按
+# 「check_ 函数集 == RULES ∪ HELPERS」核对，未登记的函数会被判成死规则（#171）。
+#
+# 运行参数（#171，仅供 tools/structural-probe.sh 与人工单查；dev 命令面不暴露）：
+#   --rule <名>      只跑 RULES 数组内的一条规则；名不在数组内即 [FAIL] 未知规则名 + 退出 1。
+#                    过滤只落在末尾派发循环体内，循环外不存在第二条按名派发入口。
+#   --list-rules     只读模式：逐行输出 RULES 后退出 0，不跑任何规则。
+#   --list-helpers   只读模式：逐行输出 HELPERS 后退出 0，不跑任何规则。
+#   不带参数时行为与历史版本逐字相同（全量规则 + 同样的输出与退出码）。
 #
 # 依赖矩阵（唯一事实源 = #47；人读副本 = backend/README.md，二者同步维护）：
 #   shield      统一契约，不依赖任何业务模块；公共出口仅 src/index.ts
@@ -132,6 +141,12 @@ RULES=(
   user-lock-assertions
   frontend-router-mode
   screenshot-full-set
+)
+# 共用辅助函数（非规则，不进 RULES，#171 显式声明）：check_row 是 6 条 *-deps 规则
+# 共用的矩阵行实现。红探针的接线完整性护栏按「check_ 函数集 == RULES ∪ HELPERS」核对，
+# 不显式声明会被误判成「写了但从未接线的死规则」。
+HELPERS=(
+  row
 )
 FAIL=0
 
@@ -846,8 +861,46 @@ check_screenshot-full-set() {
   fi
 }
 
+# ---------- 运行参数（#171）：--rule 单规则过滤 + 两个只读清单模式 ----------
+# 向后兼容：不带参数时本段不改变任何行为，输出与退出码与历史版本逐字相同。
+# 只读模式放在派发之前：清单输出后直接退出，不跑任何规则、不打印全量头行。
+RULE_FILTER=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --rule)
+      RULE_FILTER="${2:-}"
+      if [ -z "$RULE_FILTER" ]; then
+        echo "[FAIL] 未知规则名：--rule 缺少取值（可选名见 --list-rules）" >&2
+        exit 1
+      fi
+      # 成员校验先行：名不在 RULES 数组内即报错退出，绝不静默跑零条规则后打印
+      # 「全部规则通过」（该静默通过形态已实测，见 docs/research/probe-single-rule-guardrails.md §3.2）
+      rule_known=0
+      for r in "${RULES[@]}"; do
+        [ "$r" = "$RULE_FILTER" ] && rule_known=1
+      done
+      if [ "$rule_known" -ne 1 ]; then
+        echo "[FAIL] 未知规则名：$RULE_FILTER（不在 RULES 数组内，可选名见 --list-rules）" >&2
+        exit 1
+      fi
+      shift 2 ;;
+    --list-rules)
+      for r in "${RULES[@]}"; do echo "$r"; done
+      exit 0 ;;
+    --list-helpers)
+      for r in "${HELPERS[@]}"; do echo "$r"; done
+      exit 0 ;;
+    *)
+      shift ;;
+  esac
+done
+
 echo "结构测试（#51 全量七模块依赖矩阵，含 #45 补丁 1；规则源头 = #47 Implementation Decisions；#55 队列设施唯一入口、#53 存储设施唯一入口并入）"
+# 派发循环 = 全闸聚合语义的唯一载体（红探针护栏①静态断言本循环形态：循环体内只有
+# 过滤与派发两种行，无 break/exit；任一规则判红 ⇒ FAIL=1 ⇒ 末尾 exit "$FAIL" 非 0）。
+# --rule 过滤只允许落在本循环体内（护栏②），循环外不存在第二条按名派发入口。
 for rule in "${RULES[@]}"; do
+  [ -n "$RULE_FILTER" ] && [ "$rule" != "$RULE_FILTER" ] && continue
   "check_$rule"
 done
 echo
