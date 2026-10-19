@@ -1,0 +1,55 @@
+# 结构测试逐规则判红集合快照（父规格 #168 改造项 3 的等价性判据载体；采集者 tools/structural-snapshot/collect.sh）
+# format: structural-snapshot/1
+# scenario: cross-import-family
+# inject: shield-no-business-dep,identity-deps,geo-dict-deps,case-deps,approval-deps,supervision-deps,deadline-deps,supervision-sink-sh,module-public-entry,weak-reference-entry
+# hide: -
+# gate-exit-code: 1
+# rule-count: 21
+# fail-line-count: 11
+# ok-line-count: 11
+## rule-counts
+approval-deps	1	0
+audit-facility-entry	0	1
+case-deps	2	0
+deadline-deps	1	0
+frontend-boundary	0	1
+frontend-router-mode	0	1
+g1-model-allowlist	0	1
+geo-dict-deps	1	0
+identity-deps	1	0
+module-public-entry	1	0
+queue-facility-entry	0	1
+runtime-manifest	0	1
+screenshot-full-set	0	1
+shield-no-business-dep	1	0
+shield-single-entry	0	1
+spatial-no-orm-mutation	0	1
+storage-facility-entry	0	1
+supervision-deps	1	0
+supervision-sink	1	0
+user-lock-assertions	0	1
+weak-reference-entry	1	0
+## fail-set
+approval-deps	表外依赖 backend/approval/src/_structural-probe-deps.ts → @natural-enforcement/deadline（允许列：shield identity case）
+case-deps	表内依赖形态违规 backend/case/src/_structural-probe.ts → @natural-enforcement/identity/src/persistence/probe-thing.ts（只许公共出口 @natural-enforcement/identity 根导入）
+case-deps	表外依赖 backend/case/src/_structural-probe-deps.ts → @natural-enforcement/approval（允许列：shield identity geo-dict）
+deadline-deps	表外依赖 backend/deadline/src/_structural-probe-deps.ts → @natural-enforcement/identity（允许列：shield case approval geo-dict）
+geo-dict-deps	表外依赖 backend/geo-dict/src/_structural-probe-deps.ts → @natural-enforcement/identity（允许列：shield）
+identity-deps	表外依赖 backend/identity/src/_structural-probe-deps.ts → @natural-enforcement/case（允许列：shield audit）
+module-public-entry	内部路径导入 backend/case/src/_structural-probe.ts → @natural-enforcement/identity/src/persistence/probe-thing.ts（只许 @natural-enforcement/<module> 公共出口）
+shield-no-business-dep	shield 依赖业务模块 packages/shield/src/_structural-probe-business-dep.ts → @natural-enforcement/identity
+supervision-deps	表外依赖 backend/supervision/src/_structural-probe-deps.ts → @natural-enforcement/approval（允许列：shield identity case）
+supervision-sink	e2e/cases/_structural-probe.sh 依赖了单向模块 supervision（→ @natural-enforcement/supervision）
+weak-reference-entry	backend/case/src/_structural-probe-weak-ref.ts 出现跨域弱引用入口名但未从 shield 导入
+## ok-set
+audit-facility-entry	auditTrail 委托仅在留痕设施包内（包外无直接引用）
+frontend-boundary	前端无直连库/后端内部路径引用
+frontend-router-mode	前端只用 data 模式路由，无声明式路由组件、无 @react-router/dev
+g1-model-allowlist	backend/prisma/schema.prisma 的 model 与 G1 白名单逐字相等（18 项，无业务实体越界）
+queue-facility-entry	bullmq/ioredis 仅在队列设施包内（业务侧无裸队列依赖，G5 机器兜底）
+runtime-manifest	compose 与 CI 只引用清单内变量名，无字面量密钥（清单 19 项）
+screenshot-full-set	docs/screens 各票顶层截图并集 78 个文件名，与 v0.4 状态键完全相等
+shield-single-entry	shield 之外无绕过 src/index.ts 的引用
+spatial-no-orm-mutation	backend + packages + integration + e2e 全源码无空间模型 ORM 写调用（执行纪律 2 机器兜底）
+storage-facility-entry	S3/RustFS SDK 仅在存储设施包内（业务侧无裸存储依赖，append-only 机器兜底）
+user-lock-assertions	锁清单 5 条，每条断言编号在测试代码里都有断言或「待实现」登记
