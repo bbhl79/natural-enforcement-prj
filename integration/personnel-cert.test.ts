@@ -35,6 +35,7 @@ const PHONES = {
   memberB: '13800013307',
   loose: '13800013308',
   off: '13800013309',
+  offNew: '13800013310',
 } as const;
 
 function newUlid(): string {
@@ -72,7 +73,7 @@ let passwordHash = '';
 /** 可注入时钟：用例拨动这一处，不真实等待。 */
 const clock = { current: T0, now(): Date { return new Date(clock.current); } };
 const org = { hq: '', deptA: '', deptB: '', station: '' };
-const people = { root: '', adminA: '', intake: '', clerk: '', supervisor: '', homeless: '', memberB: '', loose: '', off: '' };
+const people = { root: '', adminA: '', intake: '', clerk: '', supervisor: '', homeless: '', memberB: '', loose: '', off: '', offNew: '' };
 
 type AuditRecord = {
   id: string;
@@ -257,6 +258,9 @@ beforeAll(async () => {
     code: 'P-133-OFF', phone: PHONES.off, orgUnitId: org.deptA, role: '经办', deactivated: true,
     cert: { no: OLD_CERT_NO, expiresOn: new Date('2027-06-30T00:00:00.000Z') },
   });
+  people.offNew = await addPerson({
+    code: 'P-133-OFFNEW', phone: PHONES.offNew, orgUnitId: org.deptA, role: '经办', deactivated: true,
+  });
   baseUrl = await startApp();
   seamUrl = await startApp(failingFactory);
   // 先登录：登录本身写 login.succeeded，各用例的「新增留痕」只看接口这一步。
@@ -424,6 +428,27 @@ describe('POST /api/admin/personnel/:id/cert（执法证登记）', () => {
       }),
     ]);
     expect(JSON.stringify(added(before, await audits())).includes(NEW_CERT_NO)).toBe(false);
+  });
+
+  it('已停用且尚未登记证的人员 → 409，按项写失败留痕，前值为空（登记态）', async () => {
+    const rowsBefore = await certRows();
+    const before = await audits();
+    const response = await updateCert(PHONES.adminA, people.offNew, certBody());
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      result: 'invalid-state',
+      reason: 'personnel-deactivated',
+      message: expect.stringContaining('已停用'),
+    });
+    expect(await certRows()).toEqual(rowsBefore);
+    expect(added(before, await audits())).toEqual([
+      expect.objectContaining({
+        action: 'cert.updated', outcome: 'failed', reason: 'personnel-deactivated',
+        actor_id: people.adminA, subject_personnel_id: people.offNew, subject_code: 'P-133-OFFNEW',
+        opcode: 'personnel.cert.update', resource_type: 'personnel', resource_id: people.offNew,
+        previous_value: null,
+      }),
+    ]);
   });
 
   it('没有当前任职的人员视同根机构：根机构系统管理能登记，区系统管理 403 scope-denied', async () => {

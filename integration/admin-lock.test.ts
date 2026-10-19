@@ -959,6 +959,22 @@ describe('停用态人员的 A10 解锁与重设初始口令（#158 业主拍板
     ]);
   });
 
+  it('重设已停用人员但口令不合规 → 400 口令规则优先，不写失败留痕', async () => {
+    const admin = await postLogin(ADMIN_A_PHONE);
+    const before = await audits();
+    const rowsBefore = await cloned.prisma.personnel.findUniqueOrThrow({ where: { id: deactivatedLockedId } });
+    const response = await postTo(`/api/admin/personnel/${deactivatedLockedId}/password-reset`, cookiePair(admin), {
+      password: 'short',
+    });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      result: 'non-compliant',
+      rules: ['too-short', 'insufficient-classes'],
+    });
+    expect(await cloned.prisma.personnel.findUniqueOrThrow({ where: { id: deactivatedLockedId } })).toEqual(rowsBefore);
+    expect(added(before, await audits())).toEqual([]);
+  });
+
   it('接缝①：解锁成功路径留痕写入抛错，请求失败，失败计数与锁定不变', async () => {
     const admin = await postLogin(ADMIN_A_PHONE);
     seam.armed = true;

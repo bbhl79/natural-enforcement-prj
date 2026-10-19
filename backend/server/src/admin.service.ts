@@ -265,8 +265,8 @@ export class AdminService {
   /**
    * 目标存在 → 按操作码和数据范围判断 → 目标不是本人 → 停用态检查。
    * 停用即离职（#158 业主拍板）：A10 解锁与重设初始口令一律拒绝，写一行本动作的失败留痕。
-   * lockAndRecheck 为真时取人员级事务锁并锁内重读（#129 先例）：与停用该人员串行。
-   * 重设的第一阶段不取锁：期望散列必须在第一阶段读到（ADR 0015），并发由第二阶段的条件更新判定。
+   * lockedCheck 为真时取人员级事务锁并锁内重读（#129 先例）：与停用该人员串行。
+   * 重设的第一阶段传假：只做授权、本人判断与口令规则（400 先于停用判定），停用判定留给第二阶段锁内（ADR 0011）。
    * 拒绝时交出 rejected(...)，拒绝留痕在业务事务回滚后写入。
    */
   private async guard(
@@ -275,7 +275,7 @@ export class AdminService {
     opcode: string,
     personnelId: string,
     sourceIp: string | null,
-    lockAndRecheck: boolean,
+    lockedCheck: boolean,
   ): Promise<Guarded> {
     const target = await tx.directory.findById(personnelId);
     if (!target) return { status: 404, body: { result: 'not-found' } };
@@ -290,10 +290,8 @@ export class AdminService {
       return rejected<AdminDenial>({ status: 403, body: { reason: decision.reason } }, decision.denial);
     }
     if (target.id === actor.personnelId) return this.denySelf(tx, actor, opcode, target.id, targetOrg);
-    if (!lockAndRecheck) {
-      if (target.deactivatedAt) return this.denyDeactivated(tx, actor, opcode, target, sourceIp);
-      return { target };
-    }
+    // 第一阶段只到授权与口令规则；停用态不在未加锁的读上判定（#158 复核，ADR 0011）。
+    if (!lockedCheck) return { target };
     // 人员级事务锁 + 锁内重读（#129 先例）：与停用该人员串行，停用先提交时本次看到新状态。
     const locked = await tx.store.lockPersonnelProfile(personnelId);
     if (!locked) return { status: 404, body: { result: 'not-found' } };

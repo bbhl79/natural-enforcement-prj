@@ -3,6 +3,7 @@
 // 每个接口的四条必测（#105 Testing）：没有该码、跨区、监督、跨站请求。
 // 每个 403/409 用例同时断言失败留痕行存在、业务行不变。
 // 接缝①：留痕工厂「业务写完后抛错」。接缝②：两个应用实例（两套连接池）加屏障的并发。
+import { createHash } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 
 import { hash, type HashOptions } from 'argon2';
@@ -50,6 +51,9 @@ const PHONES = {
   pairA: '13800013025',
   pairB: '13800013026',
   districtAdmin: '13800013028',
+  multi: '13800013029',
+  race: '13800013030',
+  rotate: '13800013031',
 } as const;
 
 function newUlid(): string {
@@ -300,6 +304,19 @@ async function settledWithin(promise: Promise<unknown>, ms: number): Promise<boo
   return settled;
 }
 
+/** 等当前克隆库里出现一个处于锁等待的连接（并发用例的确定性屏障）。 */
+async function waitForLockWait(): Promise<void> {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const rows = await cloned.prisma.$queryRaw<Array<{ count: bigint }>>`
+      SELECT count(*)::bigint AS count FROM pg_stat_activity
+      WHERE datname = current_database() AND wait_event_type = 'Lock'
+    `;
+    if (Number(rows[0]?.count ?? 0) > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error('等待并发事务进入锁等待超时');
+}
+
 async function personnelRow(id: string) {
   return cloned.prisma.personnel.findUniqueOrThrow({ where: { id } });
 }
@@ -392,6 +409,9 @@ beforeAll(async () => {
   });
   people.pairA = await addPerson({ code: 'P-130-C1A', phone: PHONES.pairA, orgUnitId: org.hq, roles: ['系统管理', '经办'] });
   people.pairB = await addPerson({ code: 'P-130-C1B', phone: PHONES.pairB, orgUnitId: org.hq, roles: ['系统管理', '经办'] });
+  people.multi = await addPerson({ code: 'P-130-MULTI', phone: PHONES.multi, orgUnitId: org.deptA, roles: ['经办'] });
+  people.race = await addPerson({ code: 'P-130-RACE', phone: PHONES.race, orgUnitId: org.deptA, roles: ['经办'] });
+  people.rotate = await addPerson({ code: 'P-130-ROTATE', phone: PHONES.rotate, orgUnitId: org.deptA, roles: ['经办'] });
 
   baseUrl = await startApp();
   seamUrl = await startApp(failingFactory);
@@ -473,6 +493,98 @@ describe('POST /api/admin/personnel/:id/deactivate（停用）', () => {
     const again = await login(PHONES.residual);
     expect(again.status).toBe(401);
     expect(await again.json()).toEqual({ result: 'deactivated' });
+  });
+
+  it('停用结束两段会话与两条「记住我」链：每段会话各写一行 session.ended', async () => {
+    const first = await login(PHONES.multi, baseUrl, true);
+    const second = await login(PHONES.multi, seamUrl, true);
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    expect(await activeSessions(people.multi)).toBe(2);
+    expect(await activeRemember(people.multi)).toBe(2);
+    const before = await audits();
+    expect((await deactivate(PHONES.adminA, people.multi)).status).toBe(200);
+    expect(await activeSessions(people.multi)).toBe(0);
+    expect(await activeRemember(people.multi)).toBe(0);
+    const rows = added(before, await audits());
+    expect(rows.map((row) => [row.action, row.reason])).toEqual([
+      ['personnel.deactivated', null],
+      ['session.ended', 'personnel-deactivated'],
+      ['session.ended', 'personnel-deactivated'],
+    ]);
+    for (const row of rows.slice(1)) {
+      expect(row).toMatchObject({
+        actor_id: null,
+        actor_code: null,
+        subject_personnel_id: people.multi,
+        subject_code: 'P-130-MULTI',
+        org_unit_id: org.deptA,
+      });
+    }
+  });
+
+  it('停用与本人退出并发：退出先结束的会话保持退出原因，停用照常提交且只留一行 session.ended', async () => {
+    const first = await login(PHONES.race);
+    const second = await login(PHONES.race, seamUrl);
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(200);
+    const sid = cookieOf(first);
+    const secret = sid.slice(sid.indexOf('=') + 1);
+    const ender = await cloned.prisma.authSession.findUniqueOrThrow({
+      where: { secretHash: createHash('sha256').update(secret).digest('hex') },
+    });
+    // 外部事务先结束并锁住其中一段会话，提交前停用事务读到它仍是未结束。
+    const holding = deferred();
+    const release = deferred();
+    const logout = cloned.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`
+        UPDATE auth_session SET ended_at = ${new Date(T0)}, end_reason = 'logout' WHERE id = ${ender.id}
+      `;
+      holding.resolve();
+      await release.promise;
+    }, { maxWait: 10_000, timeout: 30_000 });
+    await holding.promise;
+    const before = await audits();
+    const pending = deactivate(PHONES.adminA, people.race);
+    await waitForLockWait();
+    release.resolve();
+    const [response] = await Promise.all([pending, logout]);
+    expect(response.status).toBe(200);
+    expect((await personnelRow(people.race)).deactivatedAt).not.toBeNull();
+    // 并发退出先结束的那一段保持 logout；停用只为另一段写 session.ended。
+    expect(await cloned.prisma.authSession.findUniqueOrThrow({ where: { id: ender.id } }))
+      .toMatchObject({ endReason: 'logout' });
+    expect(await activeSessions(people.race)).toBe(0);
+    expect(added(before, await audits()).map((row) => [row.action, row.reason])).toEqual([
+      ['personnel.deactivated', null],
+      ['session.ended', 'personnel-deactivated'],
+    ]);
+  });
+
+  it('停用清「记住我」与记住我轮换并发：锁序一致，不被 PostgreSQL 判死锁', async () => {
+    const entered = await login(PHONES.rotate, baseUrl, true);
+    expect(entered.status).toBe(200);
+    const rm = entered.headers.getSetCookie().find((item) => item.startsWith('__Host-rm='))?.split(';')[0];
+    if (!rm) throw new Error('缺少记住我 Cookie');
+    await signIn(PHONES.adminA, barrierUrl);
+    armBarrier('personnel.deactivated');
+    const pending = deactivate(PHONES.adminA, people.rotate, {}, barrierUrl);
+    await barrier.entered.promise;
+    // 轮换在登录事务里先锁凭据行、再插入后继；人员锁被停用事务持有。
+    const rotate = fetch(`${baseUrl}/api/auth/session`, { headers: { cookie: rm } });
+    await waitForLockWait();
+    const before = await audits();
+    barrier.release.resolve();
+    const [deactivated, rotated] = await Promise.all([pending, rotate]);
+    expect(deactivated.status).toBe(200);
+    expect((await personnelRow(people.rotate)).deactivatedAt).not.toBeNull();
+    // 轮换撞上已作废的记住我：按 lost-race 回未登录，不写死锁错误。
+    expect(rotated.status).toBe(200);
+    expect(await rotated.json()).toEqual({ result: 'anonymous' });
+    expect(added(before, await audits()).map((row) => [row.action, row.reason])).toEqual([
+      ['personnel.deactivated', null],
+      ['session.ended', 'personnel-deactivated'],
+    ]);
   });
 
   it('重复停用：200，不写行，不改首次停用时间', async () => {

@@ -671,7 +671,8 @@ export class AuthService {
     const now = this.clock.now();
     const account = await tx.directory.findById(personnelId);
     for (const session of await tx.sessions.listActive(personnelId)) {
-      await tx.sessions.end(session.id, now, 'personnel-deactivated');
+      // 条件结束（#158 复核）：并发退出/结束会话已提交时本段不写，不为未实际结束的会话补写留痕。
+      if (!(await tx.sessions.end(session.id, now, 'personnel-deactivated'))) continue;
       await tx.audit.append({
         action: 'session.ended',
         reason: 'personnel-deactivated',

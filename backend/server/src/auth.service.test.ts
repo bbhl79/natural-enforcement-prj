@@ -59,8 +59,10 @@ class MemorySessions implements SessionStore {
   async touch(id: string, lastSeenAt: Date) { this.rows.find((row) => row.id === id)!.lastSeenAt = lastSeenAt; }
   async end(id: string, endedAt: Date, reason: string) {
     const row = this.rows.find((item) => item.id === id)!;
+    if (row.endedAt) return false;
     row.endedAt = endedAt;
     row.endReason = reason;
+    return true;
   }
   async listActive(personnelId: string) {
     return this.rows
