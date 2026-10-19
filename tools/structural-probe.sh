@@ -10,6 +10,10 @@
 # 接入：dev lint 的 structural-probe 子项（全量五项之一，dev:439），随 dev check → CI 一起跑；
 # 宿主侧纯源码扫描，无容器/网络依赖。违例文件写在真实工作树里再删除，故必须顺序执行、
 # 不得与其他检查并行。
+# #171 单规则化：逐条用例改跑 --rule <目标规则>（退出码 1 只可能来自目标规则，断言更强）；
+# 单规则化弱化的「整闸聚合」由三条护栏补回——① 整闸变红（静态聚合语义断言 + 3 次带违例
+# 全量运行）、② 数组内过滤 + 未知规则名报错、③ 接线完整性（RULES ↔ check_ 函数集 ↔
+# 探针覆盖集三处逐字相等）。首尾两次基线保持全量，不得带过滤器。
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
@@ -383,6 +387,177 @@ SPECS=(
   "screenshot-full-set|screenshot-full-set|截图全集多出 v0.4 之外的文件名"
 )
 
+# ---------- 护栏①（#171）动态层：带违例的整闸全量运行，三族各取一条 ----------
+# 逐条用例改单规则跑后，只证明「这条规则自己能红」；「有违例 ⇒ 整闸退出码 1 且点名
+# 失败规则」这一聚合性质由本组补回。复用既有 write_probe_* 函数（同一时刻只有一个违例
+# 在场，与逐条用例互不干扰）：import 形态类 / 清单契约类 / 形态入口类各一条。
+GATE_RED_SPECS=(
+  "module-public-entry|module-public-entry|import 形态类：跨模块深路径导入下整闸变红"
+  "compose-literal-secret|runtime-manifest|清单契约类：compose 字面量密钥下整闸变红"
+  "g1-model-allowlist|g1-model-allowlist|形态入口类：白名单外 model 下整闸变红"
+)
+
+# $1 = 说明，$2 = 期望规则名，$3 = 整闸输出，$4 = 整闸退出码
+assert_gate_red() {
+  local label="$1" rule="$2" out="$3" rc="$4"
+  if [ "$rc" -ne 1 ]; then
+    report_bad "整闸变红/$label：带违例的整闸全量运行退出码 = $rc，期望 1（聚合语义失效）"
+    grep -E '^\[(OK|FAIL)\]' <<< "$out" | sed 's/^/    /' >&2
+    return
+  fi
+  if ! grep -qE "^\[FAIL\] ${rule}[：:]" <<< "$out"; then
+    report_bad "整闸变红/$label：整闸判红了，但输出没点名目标规则 $rule"
+    grep -E '^\[FAIL\]' <<< "$out" | sed 's/^/    /' >&2
+    return
+  fi
+  if ! grep -q '^结构测试：存在失败规则' <<< "$out"; then
+    report_bad "整闸变红/$label：整闸判红了，但收尾行不是「存在失败规则」语义"
+    tail -n 3 <<< "$out" | sed 's/^/    /' >&2
+    return
+  fi
+  report_ok "整闸变红/$label：整闸退出码 1，点名 $rule，收尾行「存在失败规则」"
+}
+
+# 护栏①静态层：核读闸源码的聚合语义。四条件合计 = 「任一规则判红 ⇒ 整闸跑完全部规则、
+# 退出码 1、失败规则被点名」，对 RULES 里全部规则统一成立（毫秒级，每次探针都跑）。
+# 条件：① 派发是 for rule in "${RULES[@]}" 循环形态；② 循环体内无 break/exit（过滤与
+# 派发之外不得有第三种行）；③ note_fail 写全局 FAIL=1（FAIL 初值 0 也在顶层）；
+# ④ 脚本末尾是 exit "$FAIL"。
+assert_gate_aggregation_static() {
+  local src="$STRUCTURAL" block
+  block="$(awk '/^for rule in "\$\{RULES\[@\]\}"; do$/{f=1} f{print} f&&/^done$/{exit}' "$src")"
+  if [ -z "$block" ]; then
+    report_bad "护栏①静态：闸里找不到 for rule in \"\${RULES[@]}\" 派发循环（聚合语义失去唯一载体）"
+    return
+  fi
+  if ! grep -qxF '  "check_$rule"' <<< "$block"; then
+    report_bad "护栏①静态：派发循环体内没有按名派发 \"check_\$rule\""
+    return
+  fi
+  if grep -qE '(^|[[:space:]])(break|exit)([[:space:]]|$)' <<< "$block"; then
+    report_bad "护栏①静态：派发循环体内出现 break/exit（第一条失败即早退，后续规则永远不跑）"
+    grep -nE '(^|[[:space:]])(break|exit)([[:space:]]|$)' <<< "$block" | sed 's/^/    /' >&2
+    return
+  fi
+  # 循环体只许两种行：--rule 过滤行（护栏②要求它只能在这里）与按名派发行。
+  # 注意不能用 grep -qv 判「存在第三种行」：-v 的反选语义下 -q 极易写反，这里按计数判定。
+  local unexpected
+  unexpected="$(awk 'NR>1 && !/^done$/ { print }' <<< "$block" \
+    | grep -vxF -e '  [ -n "$RULE_FILTER" ] && [ "$rule" != "$RULE_FILTER" ] && continue' \
+                -e '  "check_$rule"' | grep -c . || true)"
+  if [ "$unexpected" -ne 0 ]; then
+    report_bad "护栏①静态：派发循环体内出现过滤与派行之外的第三种行（逐行核对该行是否绕过聚合语义）"
+    awk 'NR>1 && !/^done$/ { print }' <<< "$block" \
+      | grep -vxF -e '  [ -n "$RULE_FILTER" ] && [ "$rule" != "$RULE_FILTER" ] && continue' \
+                  -e '  "check_$rule"' | sed 's/^/    /' >&2
+    return
+  fi
+  if ! grep -qE '^note_fail\(\)[[:space:]]*\{.*FAIL=1' "$src"; then
+    report_bad "护栏①静态：note_fail 不再写全局 FAIL=1（判红与退出码脱钩）"
+    return
+  fi
+  if ! grep -qxF 'FAIL=0' "$src"; then
+    report_bad "护栏①静态：顶层找不到 FAIL=0 初值（聚合标志失去初值）"
+    return
+  fi
+  if [ "$(tail -n 1 "$src")" != 'exit "$FAIL"' ]; then
+    report_bad "护栏①静态：脚本末尾不是 exit \"\$FAIL\"（判红不再决定退出码）"
+    return
+  fi
+  report_ok "护栏①静态：派发循环形态、循环体无提前退出、note_fail 写全局 FAIL、末尾 exit \"\$FAIL\" 四条件成立"
+}
+
+# 护栏②静态层：--rule 过滤只许落在 RULES 派发循环体内；循环外不存在第二条按名派发入口。
+# 为什么：若过滤/派发绕开 RULES 数组，探针可能为一个在真实闸里从不执行的死规则出具
+# 「活规则」证明（失败模式 B，见 docs/research/probe-single-rule-guardrails.md §3.2）。
+assert_filter_in_rules_loop_static() {
+  local src="$STRUCTURAL" total in_loop
+  total="$(grep -cF '"check_$rule"' "$src" || true)"
+  in_loop="$(awk '/^for rule in "\$\{RULES\[@\]\}"; do$/{f=1} f{print} f&&/^done$/{exit}' "$src" \
+    | grep -cF '"check_$rule"' || true)"
+  if [ "$total" -ne 1 ] || [ "$in_loop" -ne 1 ]; then
+    report_bad "护栏②静态：按名派发 \"check_\$rule\" 全闸应恰好 1 处且必须在 RULES 循环体内（实际：全闸 $total 处，循环内 $in_loop 处）"
+    return
+  fi
+  if ! awk '/^for rule in "\$\{RULES\[@\]\}"; do$/{f=1} f{print} f&&/^done$/{exit}' "$src" \
+      | grep -qF '[ "$rule" != "$RULE_FILTER" ]'; then
+    report_bad "护栏②静态：RULES 派发循环体内没有 RULE_FILTER 过滤行（过滤落在数组之外 = 绕过 RULES）"
+    return
+  fi
+  report_ok "护栏②静态：按名派发全闸唯一且在 RULES 循环体内，过滤行也在同一循环体内"
+}
+
+# 护栏②动态层：未知规则名必须 [FAIL] 未知规则名 + 非 0 退出，且绝不打印「全部规则通过」。
+# 不报错的失败模式已实测：静默跑 0 条规则、打印「全部规则通过」、退出 0。
+assert_unknown_rule_rejected() {
+  local bogus="no-such-rule-probe" out rc
+  out="$("$STRUCTURAL" --rule "$bogus" 2>&1)"; rc=$?
+  if [ "$rc" -eq 0 ]; then
+    report_bad "护栏②动态：未知规则名 $bogus 未被拒绝（退出码 0）"
+    sed 's/^/    /' <<< "$out" >&2
+    return
+  fi
+  if ! grep -qxF "[FAIL] 未知规则名：$bogus（不在 RULES 数组内，可选名见 --list-rules）" <<< "$out"; then
+    report_bad "护栏②动态：未知规则名 $bogus 退出了非 0，但输出没有点名「[FAIL] 未知规则名」"
+    sed 's/^/    /' <<< "$out" >&2
+    return
+  fi
+  if grep -q '全部规则通过' <<< "$out"; then
+    report_bad "护栏②动态：未知规则名 $bogus 的运行打印了「全部规则通过」（静默通过，误导诊断）"
+    return
+  fi
+  report_ok "护栏②动态：未知规则名 $bogus 被拒绝（退出码 $rc，输出点名未知规则名，未打印全绿）"
+}
+
+# 集合差：$1、$2 = 已排序去重的清单文件；输出「在 $1 不在 $2」的行
+set_diff() { comm -23 "$1" "$2"; }
+
+# 护栏③：接线完整性。三处集合逐字相等：RULES 数组（经闸的只读模式 --list-rules 取得，
+# 单一事实源，不 sed 解析闸源码）↔ 闸内 check_ 函数定义集（减去显式声明的 HELPERS，
+# 经 --list-helpers 取得）↔ 探针 SPECS 的目标规则集。任一处脱节即报红：
+# 删规则 → 死函数；加函数不进 RULES → 死规则；删探针用例 → 规则失去负例证据。
+check_wiring() {
+  local src="$STRUCTURAL" td rules helpers funcs union covered dead dangling overlap missing untested
+  td="$(mktemp -d "${TMPDIR:-/tmp}/structural-probe-wiring-XXXXXX")"
+  "$src" --list-rules | sort -u > "$td/rules"
+  "$src" --list-helpers | sort -u > "$td/helpers"
+  grep -oE '^check_[A-Za-z0-9_-]+\(\)' "$src" | sed -E 's/^check_//; s/\(\)$//' | sort -u > "$td/funcs"
+  cat "$td/rules" "$td/helpers" | sort -u > "$td/union"
+  printf '%s\n' "${SPECS[@]}" | cut -d'|' -f2 | sort -u > "$td/covered"
+  rules="$(wc -l < "$td/rules" | xargs)"
+  helpers="$(wc -l < "$td/helpers" | xargs)"
+  funcs="$(wc -l < "$td/funcs" | xargs)"
+  if [ "$rules" -eq 0 ]; then
+    report_bad "接线完整性：--list-rules 输出为空（规则集取不到，后续断言全部失效）"
+    rm -rf "$td"
+    return
+  fi
+  dead="$(set_diff "$td/funcs" "$td/union" | tr '\n' ' ' | sed 's/ $//')"
+  if [ -n "$dead" ]; then
+    report_bad "接线完整性：存在 check_ 函数但未接入 RULES 数组、也未声明进 HELPERS（写了但从未接线的死规则）：$dead"
+  fi
+  dangling="$(set_diff "$td/rules" "$td/funcs" | tr '\n' ' ' | sed 's/ $//')"
+  if [ -n "$dangling" ]; then
+    report_bad "接线完整性：RULES 数组里的规则名找不到对应 check_ 函数定义（悬空规则名）：$dangling"
+  fi
+  overlap="$(comm -12 "$td/rules" "$td/helpers" | tr '\n' ' ' | sed 's/ $//')"
+  if [ -n "$overlap" ]; then
+    report_bad "接线完整性：同名条目同时出现在 RULES 与 HELPERS（helper 不是规则，不得进 RULES）：$overlap"
+  fi
+  missing="$(set_diff "$td/rules" "$td/covered" | tr '\n' ' ' | sed 's/ $//')"
+  if [ -n "$missing" ]; then
+    report_bad "接线完整性：这些规则没有违例用例（新增规则必须同时补一条探针用例）：$missing"
+  fi
+  untested="$(set_diff "$td/covered" "$td/rules" | tr '\n' ' ' | sed 's/ $//')"
+  if [ -n "$untested" ]; then
+    report_bad "接线完整性：探针用例的目标规则不在 RULES 数组内（用例证明不了任何在跑的规则）：$untested"
+  fi
+  if [ -z "$dead$dangling$overlap$missing$untested" ]; then
+    report_ok "接线完整性：RULES（$rules 条）== check_ 函数集（$funcs 个，减 HELPERS $helpers 个）== 探针目标规则集，三处逐字相等"
+  fi
+  rm -rf "$td"
+}
+
 # $1 = 说明，$2 = 期望规则名，$3 = 结构测试输出，$4 = 结构测试退出码
 assert_rule_red() {
   local label="$1" rule="$2" out="$3" rc="$4"
@@ -403,7 +578,11 @@ main() {
   local spec id rule label out rc got covered
   echo "结构测试红探针（负例证据：逐条违例源码必须能把兜底闸判红）"
 
-  # 0. 基线：干净源码必须全绿，否则后面的「变红」证明不了任何事
+  # 0. 护栏③接线完整性（#171）：三处集合逐字相等。放在最前：接线断了，
+  #    后面的逐条证明全部失真，先大声失败（负例自证也走这条快速路径）。
+  check_wiring
+
+  # 1. 基线：干净源码必须全绿，否则后面的「变红」证明不了任何事（全量，不带过滤器）
   out="$("$STRUCTURAL" 2>&1)"; got=$?
   if [ "$got" -ne 0 ]; then
     report_bad "基线不成立：无违例时结构测试已判红（退出码 $got），探针失去判别力"
@@ -413,16 +592,27 @@ main() {
   fi
   report_ok "基线：无违例时结构测试全绿"
 
-  # 1. 逐条探针：写违例 → 跑结构测试 → 还原 → 判定（还原先于判定，互不污染）
+  # 2. 逐条探针：写违例 → 单规则跑结构测试 → 还原 → 判定（还原先于判定，互不污染）。
+  #    #171 单规则化：只跑目标规则，退出码 1 只可能来自目标规则，逐条断言比全闸跑更强。
   for spec in "${SPECS[@]}"; do
     IFS='|' read -r id rule label <<< "$spec"
     "write_probe_$id"
-    out="$("$STRUCTURAL" 2>&1)"; got=$?
+    out="$("$STRUCTURAL" --rule "$rule" 2>&1)"; got=$?
     cleanup
     assert_rule_red "$label" "$rule" "$out" "$got"
   done
 
-  # 2. 收尾基线：全部还原后必须回到全绿（自清理的最终证据）
+  # 3. 护栏①动态层（#171）：带违例的整闸全量运行（不带过滤器），三族各一条。
+  #    断言整闸退出码 1、输出点名目标规则、收尾行是「存在失败规则」语义。
+  for spec in "${GATE_RED_SPECS[@]}"; do
+    IFS='|' read -r id rule label <<< "$spec"
+    "write_probe_$id"
+    out="$("$STRUCTURAL" 2>&1)"; got=$?
+    cleanup
+    assert_gate_red "$label" "$rule" "$out" "$got"
+  done
+
+  # 4. 收尾基线：全部还原后必须回到全绿（自清理的最终证据；全量，不带过滤器）
   out="$("$STRUCTURAL" 2>&1)"; got=$?
   if [ "$got" -ne 0 ]; then
     report_bad "自清理不成立：探针结束后结构测试仍判红（退出码 $got）"
@@ -431,7 +621,12 @@ main() {
     report_ok "自清理：探针产物已全部移除，结构测试回到全绿"
   fi
 
-  # 3. 覆盖口径：SPECS 的目标规则去重计数。每条兜底闸规则都必须至少有一条违例用例，
+  # 5. 护栏①静态层 + 护栏②（#171）：闸的聚合语义、数组内过滤、未知规则名拒绝
+  assert_gate_aggregation_static
+  assert_filter_in_rules_loop_static
+  assert_unknown_rule_rejected
+
+  # 6. 覆盖口径：SPECS 的目标规则去重计数。每条兜底闸规则都必须至少有一条违例用例，
   #    否则该规则若成了恒绿死规则，探针证明不了（#170：22 用例覆盖 10 条 → 33 用例覆盖 21 条）。
   covered="$(printf '%s\n' "${SPECS[@]}" | cut -d'|' -f2 | sort -u | grep -c .)"
   echo "红探针覆盖：${#SPECS[@]} 条用例，目标规则去重后 $covered 条。"
