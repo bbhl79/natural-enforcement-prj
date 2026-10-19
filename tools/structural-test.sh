@@ -17,6 +17,33 @@
 #   --list-helpers   只读模式：逐行输出 HELPERS 后退出 0，不跑任何规则。
 #   不带参数时行为与历史版本逐字相同（全量规则 + 同样的输出与退出码）。
 #
+# 性能约定（#176，父规格 #168 改造项 3；写在本文件头而不是 dev 的 usage：usage 面向
+# 「命令怎么用」，本段面向「闸怎么维护」）：本闸是纯源码扫描，成本的量纲是「一次全量起了
+# 多少个外部子进程」，不是算法复杂度——子进程数只由闸的形态决定，与机器快慢无关，是确定性的
+# 回归红线；耗时受机器负载影响，只作粗兜底。
+#   子进程预算（一次全闸；实测口径 = tools/structural-snapshot/count-subprocs.sh）：
+#     总数 ≤ 4200；grep + sed 小计 ≤ 3400。超预算即形态退化，按失败处理。
+#     实测：改造前 5910（grep 2330 / sed 1237 / dirname 865 / realpath 864 / awk 408 /
+#     tr 165 / find 19 / 其余 24）→ 改造后 3564（grep 2020 / sed 926 / awk 409 / tr 166 /
+#     find 19 / realpath 1 / dirname 1 / 其余 22）。
+#     import 家族 9 条规则（shield-no-business-dep + 6 条 *-deps + supervision-sink +
+#     module-public-entry）：grep+sed 622 → 1，realpath 864 → 1（一次批量），
+#     dirname 864 → 0（改成参数展开），单条规则最多从 1193 降到 8。
+#   grep + sed 为什么没降到研究文档 §6.2 说的 300 以下：残留 2945 全在本轮范围外——
+#     runtime-manifest 1435（规格明列排除，另开票）、storage 366 / queue 346 / spatial 330 /
+#     audit 195 四条逐文件形态规则（研究文档 §5.1 列为「需独立单遍」，另开票）、
+#     frontend-router-mode 85 / frontend-boundary 84 / user-lock-assertions 83 / 其余 21。
+#     §6.2 的「< 300」以「顺带批量化规则 11/14/15/16」为前提，那部分不属本票范围。
+#   单次全闸墙钟上限：≤ 8 秒。本机（WSL2 / GNU bash 5.3）实测改造后 4.0–4.4 秒、
+#     改造前 10.3 秒；上限取实测的约 1.8 倍，既容机器差异，又能抓住「退回逐文件扫描」。
+#     该秒数待在 CI 机器上实测复核（规格 #168 开放项：具体值由实施票按 CI 机器实测重定）。
+#   守门方式：CI 侧计数，不改本闸一行、不新增 CI 步骤——
+#     tools/structural-snapshot/count-subprocs.sh --max-total 4200 --max-grep-sed 3400 \
+#       tools/structural-test.sh
+#   等价性判据：tools/structural-snapshot/（collect.sh 在 29 个注入违例的场景上采集逐规则
+#     判红集合快照，compare.sh 与入库基线 baseline/ 逐字节比对）。改本闸的取数形态必须重跑
+#     一轮并逐字节相同，否则以基线为准（基线若有误，另开修正票，不在改造票里顺手改）。
+#
 # 依赖矩阵（唯一事实源 = #47；人读副本 = backend/README.md，二者同步维护）：
 #   shield      统一契约，不依赖任何业务模块；公共出口仅 src/index.ts
 #   identity    身份组织，不依赖任何业务模块
@@ -162,63 +189,231 @@ SCAN_CODE_NAMES=("${SCAN_TS_NAMES[@]}" -o -name '*.mjs' -o -name '*.cjs' -o -nam
 SCAN_TS=(-type f \( "${SCAN_TS_NAMES[@]}" \))
 SCAN_CODE=(-type f \( "${SCAN_CODE_NAMES[@]}" \))
 
-# 提取文件中的模块互引 specifier：包名根/深路径导入（@natural-enforcement/<mod>[/<…>]）、
-# 相对路径导入。第三方包（@nestjs/*、node: 等）不在矩阵范围，不提取。
-# require 与 from/import 同权（评审必修 C5）：.cjs 校验器以 node 原生 CJS 运行，只认
-# ESM 语法等于扫而不取。
+# 互引 specifier 的提取正则（唯一一份定义）：包名根/深路径导入
+# （@natural-enforcement/<mod>[/<…>]）、相对路径导入。第三方包（@nestjs/*、node: 等）
+# 不在矩阵范围，不提取。require 与 from/import 同权（评审必修 C5）：.cjs 校验器以 node
+# 原生 CJS 运行，只认 ESM 语法等于扫而不取。
 # shield 定名 @natural-enforcement/shield（评审必修补 scope）：旧裸名 shield 不再是
 # 合法 specifier，不在提取范围；其残留深路径引用由 shield-single-entry 规则单独拦截。
+SPEC_RE="\b(from|import|require)[^'\"]{0,40}['\"](@natural-enforcement/[a-z0-9-]+|\.{1,2}/)[^'\"]*['\"]"
+# 剥掉命中片段两头的关键字与引号（^[a-z]+ 吃掉 from/import/require，[^'"]* 吃到第一个引号）
+SPEC_STRIP_PRE="s/^[a-z]+[^'\"]*['\"]//"
+SPEC_STRIP_POST="s/['\"]\$//"
+
+# 逐文件提取（老形态）。#176 之后 import 家族 9 条规则改走下面的共享导入索引，
+# 本函数只剩 weak-reference-entry 一个调用方（它先用 grep -rlE 定位候选文件，
+# 候选数常年为个位数，不在提速范围；研究文档 §5.1 同口径）。
 specifiers_of() {
-  grep -oE "\b(from|import|require)[^'\"]{0,40}['\"](@natural-enforcement/[a-z0-9-]+|\.{1,2}/)[^'\"]*['\"]" \
-      "$1" 2>/dev/null \
-    | sed -E "s/^[a-z]+[^'\"]*['\"]//; s/['\"]$//"
+  grep -oE "$SPEC_RE" "$1" 2>/dev/null \
+    | sed -E "$SPEC_STRIP_PRE; $SPEC_STRIP_POST"
 }
 
-# 文件归属（相对 ROOT 的路径 → 所在模块名；非源码返回空）
+# ---------- 共享导入索引 + 批量路径解析（#176，父规格 #168 改造项 3） ----------
+# 为什么：改造前 9 条 import 家族规则（shield-no-business-dep + 6 条 *-deps +
+# supervision-sink + module-public-entry）各自逐文件 grep+sed 提 specifier、各自对每个
+# 相对 specifier 起一对 realpath+dirname。一次全闸 5910 个子进程里 1728 个纯属路径解析，
+# 而 864 次 realpath 只有 181 个唯一「源文件目录|specifier」组合
+# （docs/research/structural-test-speedup.md §1.1、§3.2）。
+#
+# 新形态两处，只改「数据从哪来」，不改判定：
+#   ① import 单遍提取：一次整根 grep -rHnoZI + 一次 awk 切分 → 「文件 → specifier 列表」
+#      共享索引 IMPORT_IDX。各规则的 find 调用与 SCAN_TS/SCAN_CODE 掩码定义零改动——
+#      掩码控制权仍在 find 手里，索引只是数据源（研究文档 §3.1 推荐做法 3）。
+#   ② realpath 批量化：相对 specifier 按「dirname(源文件)|specifier」去重（REL_KEYS/
+#      REL_PATHS 同序成对），一片一次 realpath -m，输出行序与参数序一一对应，逐行归成
+#      模块名存进查表 REL_TARGET。不用 awk 词法归一：realpath -m 先解符号链接再处理 ..，
+#      词法归一不等价（当前仓库符号链接数 0 是偶然事实，不是规则保证）。
+#
+# 掩码过滤在取值处再做一遍（mask_allows）：索引按 SCAN_CODE（最宽掩码）存全量，
+# SCAN_TS 规则取值时按自己的掩码过滤，不靠「反正这些根下现在没有 .mjs/.cjs/.sh」
+# 这一偶然事实（研究文档 §2.1：backend/prisma/seed.mjs 里就有一条相对 specifier）。
+# 掩码只有一份定义：扩展名 glob 从 SCAN_TS_NAMES/SCAN_CODE_NAMES 派生，索引的 --include
+# 与取值处的过滤共用它，不允许出现第二份平行清单（会漂移）。
+#
+# 惰性构建：首次取值时才建索引与查表，故 --rule 单规则跑非 import 家族规则时一次都不建
+# （红探针 33 条逐条用例全靠这点保持单规则耗时）。
+#
+# 结果一律写全局变量而不是 echo：命令替换每次 fork 一个子 shell，import 家族一轮要解析
+# 上千次，fork 成本会吃掉批量化省下的时间。
+IMPORT_ROOTS=("$BACKEND" "$ROOT/frontend" "$ROOT/e2e" "$ROOT/integration" "$SHIELD_DIR")
+declare -A IMPORT_IDX=()    # 文件绝对路径 → 该文件的 specifier 列表（换行分隔）
+declare -A REL_TARGET=()    # 「源文件目录|相对 specifier」 → 目标模块名（无归属 = 空串）
+declare -A REL_KEY_SEEN=()  # 去重标记（只为 REL_KEYS 不重复，不承载取值）
+REL_KEYS=()                 # 去重后的查表键，序 = 批量 realpath 的参数序
+REL_PATHS=()                # 与 REL_KEYS 同序：喂给 realpath -m 的「源文件目录/specifier」
+IMPORT_INDEX_READY=0
+# 分片阈值：1000 键 ≈ 130 KB，远低于 ARG_MAX（本机 2 MB）；键数随仓库增长自动多跑几片
+REALPATH_BATCH=1000
+IMPORT_SPECS=""             # import_specs_of 的结果（换行分隔）
+SPEC_TARGET=""              # target_of_spec / target_of_relative 的结果（模块名或空）
+HOME_OF=""                  # home_of 的结果（模块名或空）
+MODULE_HIT=""               # classify_resolved 的结果（模块名或空）
+
+# 从 find 的 -name 表达式里取出扩展名 glob（元素形如 *.ts），派生出掩码的 glob 清单
+SCAN_TS_GLOBS=()
+for _scan_name in "${SCAN_TS_NAMES[@]}"; do
+  case "$_scan_name" in \*.*) SCAN_TS_GLOBS+=("$_scan_name") ;; esac
+done
+SCAN_CODE_GLOBS=()
+for _scan_name in "${SCAN_CODE_NAMES[@]}"; do
+  case "$_scan_name" in \*.*) SCAN_CODE_GLOBS+=("$_scan_name") ;; esac
+done
+unset _scan_name
+
+mask_allows() { # $1 = 掩码名（ts|code），$2 = 文件绝对路径；扩展名在掩码内返回 0
+  local base="${2##*/}" g
+  case "$1" in
+    ts)   for g in "${SCAN_TS_GLOBS[@]}";   do case "$base" in $g) return 0 ;; esac; done ;;
+    code) for g in "${SCAN_CODE_GLOBS[@]}"; do case "$base" in $g) return 0 ;; esac; done ;;
+  esac
+  return 1
+}
+
+# 取某文件的 specifier 列表：结果写进全局 IMPORT_SPECS（换行分隔，无命中即空串）。
+# $1 = 文件绝对路径（由各规则自己的 find 给出），$2 = 该规则的掩码名（ts|code）。
+import_specs_of() {
+  IMPORT_SPECS=""
+  ensure_import_index
+  mask_allows "$2" "$1" || return 0
+  IMPORT_SPECS="${IMPORT_IDX[$1]:-}"
+  return 0
+}
+
+ensure_import_index() {
+  [ "$IMPORT_INDEX_READY" -eq 1 ] && return 0
+  IMPORT_INDEX_READY=1     # 先置位：构建过程中任何取值都不得递归重建
+  local roots=() inc=() r g line file spec dir key
+  for r in "${IMPORT_ROOTS[@]}"; do [ -d "$r" ] && roots+=("$r"); done
+  [ "${#roots[@]}" -gt 0 ] || return 0
+  for g in "${SCAN_CODE_GLOBS[@]}"; do inc+=("--include=$g"); done
+  # -Z 让 grep 在文件名后输出 NUL 而不是冒号：文件名里有冒号也切不错（研究文档 §3.1
+  # 记了这个边界）。-I 跳过二进制文件：改造前逐文件 grep 对二进制文件只吐一句
+  # 「Binary file … matches」，它既不是包名导入也不是相对路径，取不到归属、判不了红；
+  # 改造后一律不提，判定等价，且不会污染下面的奇偶行配对。
+  # tr 把 NUL 换成换行，awk 按「奇数行 = 文件名 / 偶数行 = 行号:命中片段」配对，剥引号
+  # 语义逐字沿用老 sed 的两条表达式（q = sprintf("%c", 39) 是单引号，为的是不把 shell
+  # 的单引号串切断）。文件名里含换行的形态本就不被本闸支持（find 输出按行读，改造前同）。
+  while IFS= read -r line; do
+    file="${line%%$'\t'*}"
+    spec="${line#*$'\t'}"
+    [ -n "$file" ] && [ -n "$spec" ] || continue
+    if [ -n "${IMPORT_IDX[$file]+set}" ]; then
+      IMPORT_IDX[$file]+=$'\n'"$spec"
+    else
+      IMPORT_IDX[$file]="$spec"
+    fi
+    case "$spec" in
+      ./*|../*)
+        dir="${file%/*}"; [ -n "$dir" ] || dir="/"
+        # 键用 | 分隔且不会歧义：dir 是真实目录路径（末段不含 /），spec 必以 ./ 或 ../
+        # 开头，故 dir 里不可能出现「|.」这样的分隔形态。
+        key="$dir|$spec"
+        if [ -z "${REL_KEY_SEEN[$key]+set}" ]; then
+          REL_KEY_SEEN[$key]=1
+          REL_KEYS+=("$key")
+          REL_PATHS+=("$dir/$spec")   # 与老形态 realpath -m "$(dirname "$file")/$spec" 同参
+        fi ;;
+    esac
+  done < <(grep -rHnoZI -E "$SPEC_RE" "${inc[@]}" "${roots[@]}" 2>/dev/null \
+    | tr '\0' '\n' \
+    | LC_ALL=C awk -v OFS='\t' '
+        BEGIN { q = sprintf("%c", 39)
+                PRE = "^[a-z]+[^\"" q "]*[\"" q "]"
+                POST = "[\"" q "]$" }
+        NR % 2 == 1 { file = $0; next }
+        { p = index($0, ":"); m = substr($0, p + 1)
+          sub(PRE, "", m); sub(POST, "", m)
+          if (m != "") print file, m }')
+  resolve_rel_targets
+}
+
+# 解析结果 → 模块名（与改造前 target_of_relative 的 case 分支逐字同口径）
+classify_resolved() { # $1 = realpath -m 的结果；写进全局 MODULE_HIT
+  case "$1" in
+    "$SHIELD_DIR"|"$SHIELD_DIR"/*)                   MODULE_HIT=shield ;;
+    "$BACKEND"/identity|"$BACKEND"/identity/*)       MODULE_HIT=identity ;;
+    "$BACKEND"/geo-dict|"$BACKEND"/geo-dict/*)       MODULE_HIT=geo-dict ;;
+    "$BACKEND"/case|"$BACKEND"/case/*)               MODULE_HIT=case ;;
+    "$BACKEND"/approval|"$BACKEND"/approval/*)       MODULE_HIT=approval ;;
+    "$BACKEND"/supervision|"$BACKEND"/supervision/*) MODULE_HIT=supervision ;;
+    "$BACKEND"/deadline|"$BACKEND"/deadline/*)       MODULE_HIT=deadline ;;
+    *)                                               MODULE_HIT="" ;;
+  esac
+}
+
+# 阶段 B + C：一片一次 realpath -m，输出行序与参数序一一对应，逐行对回键存进查表。
+# 行数校验是跨平台保险：realpath 若不保证「一参数一行」（研究文档 §7 记 macOS 无法确认），
+# 退回逐个解析，绝不静默算错。
+resolve_rel_targets() {
+  local total="${#REL_KEYS[@]}" off=0 want got line key
+  [ "$total" -gt 0 ] || return 0
+  while [ "$off" -lt "$total" ]; do
+    want=$((total - off))
+    [ "$want" -gt "$REALPATH_BATCH" ] && want="$REALPATH_BATCH"
+    got=0
+    while IFS= read -r line; do
+      key="${REL_KEYS[$((off + got))]}"
+      classify_resolved "$line"
+      REL_TARGET["$key"]="$MODULE_HIT"
+      got=$((got + 1))
+    done < <(realpath -m "${REL_PATHS[@]:off:want}" 2>/dev/null)
+    if [ "$got" -ne "$want" ]; then
+      resolve_rel_targets_one_by_one
+      return 0
+    fi
+    off=$((off + want))
+  done
+}
+
+# 回退形态：逐键一次 realpath -m（键已去重，仍远少于改造前的逐次调用）
+resolve_rel_targets_one_by_one() {
+  local i resolved
+  REL_TARGET=()
+  for i in "${!REL_KEYS[@]}"; do
+    resolved="$(realpath -m "${REL_PATHS[$i]}" 2>/dev/null)"
+    classify_resolved "$resolved"
+    REL_TARGET["${REL_KEYS[$i]}"]="$MODULE_HIT"
+  done
+}
+
+# 文件归属（相对 ROOT 的路径 → 所在模块名；非源码返回空）：结果写进全局 HOME_OF。
 # 设施包与测试装配层同列（评审必修 C5）：它们是互引的真实发起方，缺归属即在
-# module-public-entry 里被 `[ -z "$home" ] && continue` 静默跳过——光扩 find 范围不够。
+# module-public-entry 里被 `[ -z "$HOME_OF" ] && continue` 静默跳过——光扩 find 范围不够。
 home_of() {
   local rel="${1#"$ROOT"/}"
   case "$rel" in
-    packages/shield/*)           echo shield ;;
-    packages/queue/*)            echo queue ;;
-    packages/storage/*)          echo storage ;;
-    backend/identity/*)          echo identity ;;
-    backend/geo-dict/*)          echo geo-dict ;;
-    backend/case/*)              echo case ;;
-    backend/approval/*)          echo approval ;;
-    backend/supervision/*)       echo supervision ;;
-    backend/deadline/*)          echo deadline ;;
-    backend/server/*)            echo server ;;
-    frontend/*)                  echo frontend ;;
-    integration/*)               echo integration ;;
-    e2e/*)                       echo e2e ;;
-    *)                           echo "" ;;
+    packages/shield/*)           HOME_OF=shield ;;
+    packages/queue/*)            HOME_OF=queue ;;
+    packages/storage/*)          HOME_OF=storage ;;
+    backend/identity/*)          HOME_OF=identity ;;
+    backend/geo-dict/*)          HOME_OF=geo-dict ;;
+    backend/case/*)              HOME_OF=case ;;
+    backend/approval/*)          HOME_OF=approval ;;
+    backend/supervision/*)       HOME_OF=supervision ;;
+    backend/deadline/*)          HOME_OF=deadline ;;
+    backend/server/*)            HOME_OF=server ;;
+    frontend/*)                  HOME_OF=frontend ;;
+    integration/*)               HOME_OF=integration ;;
+    e2e/*)                       HOME_OF=e2e ;;
+    *)                           HOME_OF="" ;;
   esac
 }
 
-# 相对 specifier 的目标归属：解析后落在哪个模块目录（含 shield；仓库外或不相关返回空）
-target_of_relative() {
-  local resolved
-  resolved="$(realpath -m "$(dirname "$1")/$2")"
-  case "$resolved" in
-    "$SHIELD_DIR"|"$SHIELD_DIR"/*)               echo shield ;;
-    "$BACKEND"/identity|"$BACKEND"/identity/*)   echo identity ;;
-    "$BACKEND"/geo-dict|"$BACKEND"/geo-dict/*)   echo geo-dict ;;
-    "$BACKEND"/case|"$BACKEND"/case/*)           echo case ;;
-    "$BACKEND"/approval|"$BACKEND"/approval/*)   echo approval ;;
-    "$BACKEND"/supervision|"$BACKEND"/supervision/*) echo supervision ;;
-    "$BACKEND"/deadline|"$BACKEND"/deadline/*)   echo deadline ;;
-    *)                                            echo "" ;;
-  esac
+# 相对 specifier 的目标归属：查批量解析表 REL_TARGET（改造前是逐次 realpath -m + dirname）。
+# 结果写进全局 SPEC_TARGET；无归属（仓库外或不相关）= 空串。
+target_of_relative() { # $1=文件绝对路径 $2=相对 specifier
+  local dir="${1%/*}"
+  [ -n "$dir" ] || dir="/"
+  ensure_import_index
+  SPEC_TARGET="${REL_TARGET["$dir|$2"]:-}"
 }
 
-# 将 specifier 归一化为模块名（shield 或六模块之一；无关返回空）
+# 将 specifier 归一化为模块名（shield 或六模块之一；无关返回空）：结果写进全局 SPEC_TARGET
 target_of_spec() { # $1=文件绝对路径 $2=specifier
   case "$2" in
-    @natural-enforcement/*) local rest="${2#@natural-enforcement/}"; echo "${rest%%/*}" ;;
+    @natural-enforcement/*) local rest="${2#@natural-enforcement/}"; SPEC_TARGET="${rest%%/*}" ;;
     ./*|../*)               target_of_relative "$1" "$2" ;;
-    *)                      echo "" ;;
+    *)                      SPEC_TARGET="" ;;
   esac
 }
 
@@ -254,14 +449,21 @@ is_assembly_exempt() { # $1 = 相对 ROOT 路径, $2 = specifier
 
 # 矩阵行规则：某模块的引用不得超出允许列（表外依赖即失败）
 check_row() { # $1=模块名
-  local mod="$1" dir file spec target home fails=0
+  local mod="$1" dir file spec target home fails=0 specs
   local allowed=" ${ALLOW[$mod]} "
   dir="$ROOT/${MOD_DIR[$mod]}"
+  # 模块目录缺失判绿（语义上的空真）：直接 return，不进索引循环——#168 改造项 3 护栏
+  # 要求这条语义与 g1-model-allowlist 的 schema 缺失判绿、runtime-manifest 的清单文件
+  # 缺失判红三者分别保留，不统一化。
   [ -d "$dir" ] || { note_ok "$mod-deps：模块目录尚不存在（空行，无表外依赖）"; return; }
   while IFS= read -r file; do
     home="$mod"
+    import_specs_of "$file" ts      # 掩码 = SCAN_TS（与下面 find 的掩码同源）
+    specs="$IMPORT_SPECS"
+    [ -n "$specs" ] || continue
     while IFS= read -r spec; do
-      target="$(target_of_spec "$file" "$spec")"
+      target_of_spec "$file" "$spec"
+      target="$SPEC_TARGET"
       [ -z "$target" ] && continue
       [ "$target" = "$home" ] && continue
       case "$allowed" in
@@ -276,7 +478,7 @@ check_row() { # $1=模块名
           note_fail "$mod-deps：表外依赖 ${file#"$ROOT"/} → $spec（允许列：$(echo "$allowed" | xargs)）"
           fails=$((fails + 1)) ;;
       esac
-    done < <(specifiers_of "$file")
+    done <<< "$specs"
   done < <(find "$dir" "${SCAN_TS[@]}")
   if [ "$fails" -eq 0 ]; then
     note_ok "$mod-deps：依赖未超出允许列（$(echo "$allowed" | xargs)）"
@@ -310,15 +512,19 @@ check_shield-single-entry() {
 
 # 规则 b：shield 不依赖任何业务模块（矩阵 shield 行）
 check_shield-no-business-dep() {
-  local file spec target fails=0
+  local file spec target fails=0 specs
   while IFS= read -r file; do
+    import_specs_of "$file" ts      # 掩码 = SCAN_TS（与下面 find 的掩码同源）
+    specs="$IMPORT_SPECS"
+    [ -n "$specs" ] || continue
     while IFS= read -r spec; do
-      target="$(target_of_spec "$file" "$spec")"
+      target_of_spec "$file" "$spec"
+      target="$SPEC_TARGET"
       if [ -n "$target" ] && [ "$target" != "shield" ]; then
         note_fail "shield-no-business-dep：shield 依赖业务模块 ${file#"$ROOT"/} → $spec"
         fails=$((fails + 1))
       fi
-    done < <(specifiers_of "$file")
+    done <<< "$specs"
   done < <(find "$SHIELD_DIR" "${SCAN_TS[@]}")
   if [ "$fails" -eq 0 ]; then
     note_ok "shield-no-business-dep：shield 不依赖任何业务模块"
@@ -337,18 +543,23 @@ check_deadline-deps()    { check_row deadline; }
 # e2e 用例形态是 .sh/.cjs，故用 SCAN_CODE 而非 SCAN_TS。
 # ADR 0004：server 启动包不是业务模块，允许经公共出口引用全部六个模块，包括监督统计。
 check_supervision-sink() {
-  local file spec target home fails=0
+  local file spec target home fails=0 specs
   while IFS= read -r file; do
-    home="$(home_of "$file")"
+    home_of "$file"
+    home="$HOME_OF"
     [ "$home" = "supervision" ] && continue
     [ "$home" = "server" ] && continue
+    import_specs_of "$file" code    # 掩码 = SCAN_CODE（与下面 find 的掩码同源）
+    specs="$IMPORT_SPECS"
+    [ -n "$specs" ] || continue
     while IFS= read -r spec; do
-      target="$(target_of_spec "$file" "$spec")"
+      target_of_spec "$file" "$spec"
+      target="$SPEC_TARGET"
       if [ "$target" = "supervision" ]; then
         note_fail "supervision-sink：${file#"$ROOT"/} 依赖了单向模块 supervision（→ $spec）"
         fails=$((fails + 1))
       fi
-    done < <(specifiers_of "$file")
+    done <<< "$specs"
   done < <(find "$BACKEND" "$ROOT/frontend" "$ROOT/e2e" "${SCAN_CODE[@]}")
   if [ "$fails" -eq 0 ]; then
     note_ok "supervision-sink：业务模块无人依赖 supervision（server 启动包除外，ADR 0004）"
@@ -360,10 +571,17 @@ check_supervision-sink() {
 # 评审必修 C7：纳入 integration 层（此前全不在范围内，全仓唯一一处跨模块深路径导入正藏在
 # 那里）+ 脚本形态（.mjs/.cjs/.sh）；测试装配层豁免见 ASSEMBLY_EXEMPT，与扩范围同批落地。
 check_module-public-entry() {
-  local file spec target home fails=0
+  local file spec target home fails=0 specs
   while IFS= read -r file; do
-    home="$(home_of "$file")"
+    home_of "$file"
+    home="$HOME_OF"
+    # home_of 对 backend/prisma/prisma7.config.ts 与 backend/prisma/seed.mjs 返回空串，
+    # 这两个文件完全不参与本规则判定（研究文档 §2.2）：共享索引化后这条「按文件跳过」
+    # 语义必须原样保留，否则 backend/prisma/ 里的导入会变成新违规。
     [ -z "$home" ] && continue
+    import_specs_of "$file" code    # 掩码 = SCAN_CODE（与下面 find 的掩码同源）
+    specs="$IMPORT_SPECS"
+    [ -n "$specs" ] || continue
     while IFS= read -r spec; do
       is_assembly_exempt "${file#"$ROOT"/}" "$spec" && continue
       if [ "${file#"$ROOT"/}" = "$SERVER_ADAPTER_FILE" ] && [ "$spec" = "$SERVER_ADAPTER_SPEC" ]; then
@@ -374,13 +592,14 @@ check_module-public-entry() {
           note_fail "module-public-entry：内部路径导入 ${file#"$ROOT"/} → $spec（只许 @natural-enforcement/<module> 公共出口）"
           fails=$((fails + 1)) ;;
         ./*|../*)
-          target="$(target_of_relative "$file" "$spec")"
+          target_of_relative "$file" "$spec"
+          target="$SPEC_TARGET"
           if [ -n "$target" ] && [ "$target" != "$home" ]; then
             note_fail "module-public-entry：跨模块相对路径 ${file#"$ROOT"/} → $spec（归属 $target；只许经其公共出口）"
             fails=$((fails + 1))
           fi ;;
       esac
-    done < <(specifiers_of "$file")
+    done <<< "$specs"
   done < <(find "$BACKEND" "$ROOT/frontend" "$ROOT/e2e" "$ROOT/integration" "${SCAN_CODE[@]}")
   if [ "$fails" -eq 0 ]; then
     note_ok "module-public-entry：模块互引均经公共出口（无内部路径/跨模块相对路径）"
