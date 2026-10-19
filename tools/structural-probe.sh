@@ -7,7 +7,7 @@
 # 为什么住 tools/ 而不是 integration/：本文件按设计内含各类违例字样（bullmq、深路径导入…），
 # 而规则一律不扫 tools/（见 structural-test.sh 扫描范围注释）——放 integration/ 会被自己要
 # 证明的规则判红。它与 structural-test.sh 同属兜底闸设施，成对维护。
-# 接入：dev lint 的 structural-probe 子项（全量五项之一，dev:360），随 dev check → CI 一起跑；
+# 接入：dev lint 的 structural-probe 子项（全量五项之一，dev:439），随 dev check → CI 一起跑；
 # 宿主侧纯源码扫描，无容器/网络依赖。违例文件写在真实工作树里再删除，故必须顺序执行、
 # 不得与其他检查并行。
 # #171 单规则化：逐条用例改跑 --rule <目标规则>（退出码 1 只可能来自目标规则，断言更强）；
