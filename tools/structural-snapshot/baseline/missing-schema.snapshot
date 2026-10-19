@@ -1,0 +1,54 @@
+# 结构测试逐规则判红集合快照（父规格 #168 改造项 3 的等价性判据载体；采集者 tools/structural-snapshot/collect.sh）
+# format: structural-snapshot/1
+# scenario: missing-schema
+# inject: -
+# hide: backend/prisma/schema.prisma
+# gate-exit-code: 0
+# rule-count: 21
+# fail-line-count: 0
+# ok-line-count: 21
+## rule-counts
+approval-deps	0	1
+audit-facility-entry	0	1
+case-deps	0	1
+deadline-deps	0	1
+frontend-boundary	0	1
+frontend-router-mode	0	1
+g1-model-allowlist	0	1
+geo-dict-deps	0	1
+identity-deps	0	1
+module-public-entry	0	1
+queue-facility-entry	0	1
+runtime-manifest	0	1
+screenshot-full-set	0	1
+shield-no-business-dep	0	1
+shield-single-entry	0	1
+spatial-no-orm-mutation	0	1
+storage-facility-entry	0	1
+supervision-deps	0	1
+supervision-sink	0	1
+user-lock-assertions	0	1
+weak-reference-entry	0	1
+## fail-set
+## ok-set
+approval-deps	依赖未超出允许列（shield identity case）
+audit-facility-entry	auditTrail 委托仅在留痕设施包内（包外无直接引用）
+case-deps	依赖未超出允许列（shield identity geo-dict）
+deadline-deps	依赖未超出允许列（shield case approval geo-dict）
+frontend-boundary	前端无直连库/后端内部路径引用
+frontend-router-mode	前端只用 data 模式路由，无声明式路由组件、无 @react-router/dev
+g1-model-allowlist	schema.prisma 不在场（无模型 = 无 G1 越界）
+geo-dict-deps	依赖未超出允许列（shield）
+identity-deps	依赖未超出允许列（shield audit）
+module-public-entry	模块互引均经公共出口（无内部路径/跨模块相对路径）
+queue-facility-entry	bullmq/ioredis 仅在队列设施包内（业务侧无裸队列依赖，G5 机器兜底）
+runtime-manifest	compose 与 CI 只引用清单内变量名，无字面量密钥（清单 19 项）
+screenshot-full-set	docs/screens 各票顶层截图并集 78 个文件名，与 v0.4 状态键完全相等
+shield-no-business-dep	shield 不依赖任何业务模块
+shield-single-entry	shield 之外无绕过 src/index.ts 的引用
+spatial-no-orm-mutation	backend + packages + integration + e2e 全源码无空间模型 ORM 写调用（执行纪律 2 机器兜底）
+storage-facility-entry	S3/RustFS SDK 仅在存储设施包内（业务侧无裸存储依赖，append-only 机器兜底）
+supervision-deps	依赖未超出允许列（shield identity case）
+supervision-sink	业务模块无人依赖 supervision（server 启动包除外，ADR 0004）
+user-lock-assertions	锁清单 5 条，每条断言编号在测试代码里都有断言或「待实现」登记
+weak-reference-entry	跨域弱引用均经 shield requireCrossDomainReference 入口
