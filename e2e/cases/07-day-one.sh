@@ -60,15 +60,19 @@ psql_db() { # $1 库名，其余为 psql 参数
 restore_server() {
   if [ "$server_switched" -eq 1 ]; then
     echo "[e2e] 首日：server 恢复指向开发库…"
-    DATABASE_URL="$DEV_DATABASE_URL" "${COMPOSE[@]}" up -d --no-deps --wait --wait-timeout 120 server >/dev/null
-    "${COMPOSE[@]}" restart nginx >/dev/null
+    # cleanup 以 if 调用本函数，errexit 被禁用；失败须显式回传，避免清标志后仍删库。
+    DATABASE_URL="$DEV_DATABASE_URL" "${COMPOSE[@]}" up -d --no-deps --wait --wait-timeout 120 server >/dev/null || return
+    "${COMPOSE[@]}" restart nginx >/dev/null || return
     server_switched=0
   fi
 }
 
 cleanup() {
   local status=$?
-  restore_server || status=1
+  if ! restore_server; then
+    echo "[FAIL] 首日：server 恢复流程失败，保留库 ${DAY_DB}、用例容器与产物 ${work} 供排查。" >&2
+    exit 1
+  fi
   for name in "${containers[@]}"; do
     docker rm -f "$name" >/dev/null 2>&1 || true
   done
