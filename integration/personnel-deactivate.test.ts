@@ -411,42 +411,58 @@ afterAll(async () => {
 });
 
 describe('POST /api/admin/personnel/:id/deactivate（停用）', () => {
-  it('停用成功：人员置失效时间，写 personnel.deactivated；这次请求不结束对方会话', async () => {
+  it('停用成功：同一次请求结束对方全部会话，写 personnel.deactivated 与 session.ended（personnel-deactivated）', async () => {
     const before = await audits();
+    expect(await activeSessions(people.target)).toBe(1);
     const response = await deactivate(PHONES.adminA, people.target);
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ result: 'deactivated' });
     expect((await personnelRow(people.target)).deactivatedAt).not.toBeNull();
-    // 会话在下一次请求时结束（#105 故事 36）：停用这次不动会话表。
-    expect(await activeSessions(people.target)).toBe(1);
-    expect(added(before, await audits())).toEqual([
-      expect.objectContaining({
-        action: 'personnel.deactivated', outcome: 'succeeded', reason: null,
-        actor_id: people.adminA, actor_code: 'P-130-ADM-A',
-        subject_personnel_id: people.target, subject_code: 'P-130-TARGET',
-        org_unit_id: org.deptA, opcode: DEACTIVATED_OPCODE,
-        resource_type: 'personnel', resource_id: people.target,
-        previous_value: null, next_value: null,
-      }),
+    // 停用即离职（#158 业主拍板）：会话在停用这一请求里结束。
+    expect(await activeSessions(people.target)).toBe(0);
+    expect(await activeRemember(people.target)).toBe(0);
+    const rows = added(before, await audits());
+    expect(rows.map((row) => [row.action, row.reason])).toEqual([
+      ['personnel.deactivated', null],
+      ['session.ended', 'personnel-deactivated'],
     ]);
+    expect(rows[0]).toEqual(expect.objectContaining({
+      action: 'personnel.deactivated', outcome: 'succeeded', reason: null,
+      actor_id: people.adminA, actor_code: 'P-130-ADM-A',
+      subject_personnel_id: people.target, subject_code: 'P-130-TARGET',
+      org_unit_id: org.deptA, opcode: DEACTIVATED_OPCODE,
+      resource_type: 'personnel', resource_id: people.target,
+      previous_value: null, next_value: null,
+    }));
+    // 停用导致的结束：操作者空着（ADR 0011）。
+    expect(rows[1]).toEqual(expect.objectContaining({
+      action: 'session.ended', outcome: 'succeeded', reason: 'personnel-deactivated',
+      actor_id: null, actor_code: null,
+      subject_personnel_id: people.target, subject_code: 'P-130-TARGET',
+      org_unit_id: org.deptA,
+    }));
   });
 
-  it('停用后对方下一次请求即被带回登录页：401，会话与记住我结束，写 session.ended（personnel-deactivated）', async () => {
+  it('停用踢下线：「记住我」一并作废，被结束的会话 Cookie 立即失效；登录仍被拒', async () => {
     // residual 先登录并带上「记住我」，再被停用；此后它自己发一次请求。
     const first = await login(PHONES.residual, baseUrl, true);
     expect(first.status).toBe(200);
     const sid = cookieOf(first);
-    expect((await deactivate(PHONES.adminA, people.residual)).status).toBe(200);
-    expect(await activeSessions(people.residual)).toBe(1);
+    expect(await activeRemember(people.residual)).toBe(1);
     const before = await audits();
+    expect((await deactivate(PHONES.adminA, people.residual)).status).toBe(200);
+    expect(await activeSessions(people.residual)).toBe(0);
+    expect(await activeRemember(people.residual)).toBe(0);
+    expect(added(before, await audits()).map((row) => [row.action, row.reason])).toEqual([
+      ['personnel.deactivated', null],
+      ['session.ended', 'personnel-deactivated'],
+    ]);
+    // 会话已在停用时结束，这次请求只写一条未认证的授权拒绝，不再补写 session.ended。
+    const after = await audits();
     const response = await fetch(`${baseUrl}/api/admin/personnel`, { headers: { cookie: sid } });
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({ reason: 'not-authenticated' });
-    expect(await activeSessions(people.residual)).toBe(0);
-    expect(await activeRemember(people.residual)).toBe(0);
-    const rows = added(before, await audits());
-    expect(rows.map((row) => [row.action, row.reason])).toEqual([
-      ['session.ended', 'personnel-deactivated'],
+    expect(added(after, await audits()).map((row) => [row.action, row.reason])).toEqual([
       ['authz.denied', 'not-authenticated'],
     ]);
     // 停用后不能再登录。
