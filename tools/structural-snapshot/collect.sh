@@ -210,6 +210,7 @@ on_exit() {
     rm -rf "$WORK"
   elif [ -d "$WORK" ]; then
     echo "[提示] 采集未成功，临时工作区（含闸原始输出与备份）保留在：$WORK" >&2
+    [ "$GATE_SWAPPED" -eq 1 ] && echo "[提示] 在位闸备份：$GATE_BACKUP（还原目标：$TREE_GATE）" >&2
   fi
   exit "$rc"
 }
@@ -263,19 +264,23 @@ if [ -z "$ONLY" ]; then
   fi
 fi
 
+# 还原 trap 必须先于任何换入动作注册：换入 cp 中途失败、或该窗口内收到 INT/TERM，
+# 在位闸也要由 on_exit 自动还原。on_exit 仅在 GATE_SWAPPED=1（备份已就绪）时才动在位闸，
+# 故对不换闸的路径与备份完成前的失败均无副作用。
+trap on_exit EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
 # 需要跑另一个版本的闸时，临时替换在位闸（闸自己从自身位置推导仓库根）
 GATE_ABS="$(readlink -f "$GATE_ARG")"
 if [ "$GATE_ABS" != "$(readlink -f "$TREE_GATE")" ]; then
   cp -a "$TREE_GATE" "$GATE_BACKUP" || die "备份在位闸失败"
-  cp "$GATE_ABS" "$TREE_GATE" || die "装入待测闸失败：$GATE_ABS"
-  chmod +x "$TREE_GATE"
+  # 备份就绪 = 还原责任生效：自此任何一步失败或被打断，on_exit 都逐字节还原在位闸
   GATE_SWAPPED=1
+  cp "$GATE_ABS" "$TREE_GATE" || die "装入待测闸失败：$GATE_ABS（在位闸备份：$GATE_BACKUP）"
+  chmod +x "$TREE_GATE"
   echo "[准备] 在位闸已临时替换为：$GATE_ABS（采完逐字节还原）"
 fi
-
-trap on_exit EXIT
-trap 'exit 130' INT
-trap 'exit 143' TERM
 
 # 基准状态在替换闸之后取：被临时替换的在位闸不算「残留」（还原由 on_exit 的 cmp 校验兜住）
 BASE_STATUS="$(tree_status)"
