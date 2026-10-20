@@ -34,6 +34,7 @@ import {
   serializeSessionCookie,
   SESSION_COOKIE,
 } from './session-cookie.ts';
+import { newSessionId } from './session-id.ts';
 import { SESSION_CAPACITY, SESSION_STORE, type SessionRow, type SessionStore } from './session-store.ts';
 import { SourceGate } from './source-gate.ts';
 import type { TxScope } from './unit-of-work.ts';
@@ -540,7 +541,7 @@ export class AuthService {
       if (voided) cookies.push(clearRememberCookie());
     }
     await this.sessions.insert({
-      id: newUlid(now.getTime()),
+      id: newSessionId(now.getTime()),
       personnelId: account.id,
       secretHash: await sha256Hex(secret),
       rememberMeChainId,
@@ -614,7 +615,7 @@ export class AuthService {
     }, now);
     if (rotated === 'lost-race') return none;
     const sid = newSessionSecret();
-    const sessionId = newUlid(now.getTime());
+    const sessionId = newSessionId(now.getTime());
     const sessionRow: SessionRow = {
       id: sessionId,
       personnelId: account.id,
@@ -795,6 +796,7 @@ export class AuthService {
 
   /** 本人已有 3 段时，结束最旧的一段，并作废那台设备的记住我。 */
   private async displaceOldest(account: LoginAccount, sourceIp: string | null, now: Date): Promise<void> {
+    // listActive 按 (认证时间, 会话 id) 升序，同一毫秒内按 id 定先后（#116），第一段是最旧的。
     const active = await this.sessions.listActive(account.id);
     if (active.length < MAX_SESSIONS_PER_PERSON) return;
     const oldest = active[0];

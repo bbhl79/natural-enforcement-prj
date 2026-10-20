@@ -12,7 +12,8 @@ export type {
 export type { AuthorizationDecision } from './services/access-control.service.ts';
 export type { ActorRef } from './domain/actor.ts';
 export { AlreadyExistsError, isAlreadyExists } from './domain/already-exists.ts';
-export { newUlid } from './domain/ulid.ts';
+export { createMonotonicUlidGenerator, newUlid } from './domain/ulid.ts';
+export type { MonotonicUlidGenerator, MonotonicUlidSources } from './domain/ulid.ts';
 export {
   PASSWORD_HISTORY_DEPTH,
   PASSWORD_HISTORY_RULES,

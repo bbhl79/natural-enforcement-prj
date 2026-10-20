@@ -228,9 +228,11 @@ class PrismaSessionStore implements SessionStore {
   }
 
   async listActive(personnelId: string): Promise<SessionRow[]> {
+    // 排序键两段（#116）：认证时间升序，认证时间相同时按会话 id 升序。认证时间只到毫秒，
+    // 同一毫秒内建立的两段会话靠 id 定先后——id 由进程内单调生成器给出，后建立的更大。
     const rows = await this.prisma.authSession.findMany({
       where: { personnelId, endedAt: null },
-      orderBy: { authenticatedAt: 'asc' },
+      orderBy: [{ authenticatedAt: 'asc' }, { id: 'asc' }],
     });
     return rows.map((row) => ({
       id: row.id,
