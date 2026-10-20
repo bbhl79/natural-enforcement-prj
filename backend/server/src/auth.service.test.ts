@@ -400,7 +400,7 @@ describe('记住我免输口令进入判定顺序（六个分支）', () => {
   });
 });
 
-describe('会话挤占顺序（#116）', () => {
+describe('会话结束的先后（#116）', () => {
   it('测试替身按 (认证时间, 会话 id) 排序：认证时间相同时按 id 升序', async () => {
     const account = addAccount();
     const row = {
@@ -419,7 +419,7 @@ describe('会话挤占顺序（#116）', () => {
     expect(listed.map((item) => item.id)).toEqual(['C', 'A', 'B']);
   });
 
-  it('同一毫秒内连续登录三次，第四次挤掉的是先建立的那一段', async () => {
+  it('同一毫秒内连续登录三次，第四次结束的是先建立的那一段（displaced）', async () => {
     addAccount();
     const created: string[] = [];
     const seen = new Set<string>();

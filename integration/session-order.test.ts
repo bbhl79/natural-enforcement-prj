@@ -1,4 +1,4 @@
-// #116：同一毫秒内登录两次时，被挤下线的那段不确定。
+// #116：同一毫秒内登录两次时，被结束的那段不确定。
 // 断言打在 HTTP 状态码、库里的会话行、会话 id 的先后和留痕行上。
 // 时钟冻结在同一毫秒，制造「认证时间相同」的情形——正是排序键要定先后的场合。
 import { createHash } from 'node:crypto';
@@ -8,6 +8,7 @@ import { hash, type HashOptions } from 'argon2';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createApplication } from '../backend/server/src/persistence.module.ts';
+import { SESSION_STORE, type SessionStore } from '../backend/server/src/session-store.ts';
 import { openClonedDatabase, type ClonedDatabase } from './cloned-database.ts';
 
 const MINUTE_MS = 60 * 1000;
@@ -15,6 +16,7 @@ const T0 = Date.parse('2026-10-20T00:00:00.000Z');
 const PINNED: HashOptions = { type: 2, memoryCost: 19 * 1024, timeCost: 2, parallelism: 1 };
 const PASSWORD = 'Order-pass-116!';
 const PHONE = '13800011601';
+const PHONE_2 = '13800011602';
 const SESSION_CAPACITY = 50;
 const ULID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -44,6 +46,7 @@ let app: Awaited<ReturnType<typeof createApplication>>;
 let baseUrl = '';
 let closeApp: () => Promise<void> = async () => {};
 let personId = '';
+let person2Id = '';
 
 function pairOf(cookies: string[], name: string): string {
   const found = cookies.find((item) => item.startsWith(`${name}=`));
@@ -82,6 +85,21 @@ beforeAll(async () => {
   await cloned.prisma.personnelAssignment.create({
     data: { id: newUlid(), personnelId: personId, orgUnitId: dept.id },
   });
+  person2Id = newUlid();
+  await cloned.prisma.personnel.create({
+    data: {
+      id: person2Id,
+      code: 'P-116-B',
+      name: '乙同毫秒',
+      orgUnitId: dept.id,
+      passwordHash,
+      mobilePhone: PHONE_2,
+      passwordChangedAt: new Date(T0 - 10 * 24 * 60 * MINUTE_MS),
+    },
+  });
+  await cloned.prisma.personnelAssignment.create({
+    data: { id: newUlid(), personnelId: person2Id, orgUnitId: dept.id },
+  });
   // 复制源上不能有别人的会话占名额。
   await cloned.prisma.authSession.updateMany({
     where: { endedAt: null },
@@ -104,9 +122,9 @@ afterAll(async () => {
   await cloned?.close();
 });
 
-describe('同一毫秒内的会话挤占', () => {
-  it('挤下线的是先建立的那一段', async () => {
-    // 前三段占满本人的 3 段上限，第四次登录触发挤占。四次都不带 Cookie，即四台设备。
+describe('同一毫秒内的会话结束先后', () => {
+  it('结束的是先建立的那一段（displaced）', async () => {
+    // 前三段占满本人的 3 段上限，第四次登录触发结束最旧的一段。四次都不带 Cookie，即四台设备。
     const secrets: string[] = [];
     for (let i = 0; i < 4; i += 1) {
       const response = await postLogin();
@@ -121,7 +139,7 @@ describe('同一毫秒内的会话挤占', () => {
     }
     // 四段的认证时间落在同一毫秒——正是排序键要定先后的场合。
     expect(new Set(rows.map((row) => row.authenticatedAt.getTime())).size).toBe(1);
-    // 被挤下线的是先建立的那一段（按建立先后判定，不靠 id 排序）。
+    // 被结束的是先建立的那一段（按建立先后判定，不靠 id 排序）。
     expect(rows[0].endedAt).not.toBeNull();
     expect(rows[0].endReason).toBe('displaced');
     expect(rows[1].endedAt).toBeNull();
@@ -131,12 +149,42 @@ describe('同一毫秒内的会话挤占', () => {
     expect(rows[0].id < rows[1].id).toBe(true);
     expect(rows[1].id < rows[2].id).toBe(true);
     expect(rows[2].id < rows[3].id).toBe(true);
+    // 生产排序键本身：会话存储按 (认证时间, 会话 id) 升序取回未结束的那几段。
+    const store = app.get<SessionStore>(SESSION_STORE);
+    const active = await store.listActive(personId);
+    const ids = active.map((row) => row.id);
+    expect(ids).toEqual([rows[1].id, rows[2].id, rows[3].id]);
+    // 四段的认证时间相同，故返回顺序即会话 id 的升序。
+    expect([...ids].sort()).toEqual(ids);
     const audits = await cloned.prisma.$queryRaw<AuditRecord[]>`
       SELECT action, outcome, reason, subject_personnel_id
       FROM audit_trail
       WHERE action = 'session.ended' AND reason = 'displaced'
+        AND subject_personnel_id = ${personId}
     `;
     expect(audits).toHaveLength(1);
     expect(audits[0]).toMatchObject({ outcome: 'succeeded', subject_personnel_id: personId });
+  });
+
+  it('同一认证时间的多段会话按会话 id 升序取回', async () => {
+    // 直接写入同一毫秒的多段会话，写入顺序与 id 大小相反：排序键的第二段（会话 id）
+    // 必须定先后，不能落在写入顺序上。
+    const ids = ['0', '1', '2', '3'].map((tail) => `01ARZ3NDEK${tail}000000000000000`);
+    for (const id of [ids[2], ids[0], ids[3], ids[1]]) {
+      await cloned.prisma.authSession.create({
+        data: {
+          id,
+          personnelId: person2Id,
+          secretHash: createHash('sha256').update(id).digest('hex'),
+          rememberMeChainId: null,
+          authenticatedAt: new Date(T0),
+          lastSeenAt: new Date(T0),
+          absoluteEndsAt: new Date(T0 + 8 * 60 * MINUTE_MS),
+        },
+      });
+    }
+    const store = app.get<SessionStore>(SESSION_STORE);
+    const active = await store.listActive(person2Id);
+    expect(active.map((row) => row.id)).toEqual(ids);
   });
 });

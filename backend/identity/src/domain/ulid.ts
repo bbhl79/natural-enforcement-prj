@@ -6,6 +6,11 @@
 // - newUlid：无状态。每次调用重新取随机值，同一毫秒内两枚的大小随机。
 // - createMonotonicUlidGenerator：进程内单调（#116）。同一进程内后生成的编号严格大于
 //   先生成的编号，故同毫秒写入的行按 id 取回即按写入先后。
+//
+// 与留痕包的边界：留痕包 packages/audit/src/ulid.ts 有一份同算法的单调生成器（#114）。
+// 留痕包不依赖身份模块（避免与授权写入形成循环），身份模块已依赖留痕包，故两边不能共用
+// 一份实现——与身份模块、地理字典模块各持一份无状态生成器是同一形态。各模块自持技术主键
+// 生成，契约只在 shield（形制断言）。改动单调规则时两边都要改。
 
 import { isTechnicalPrimaryKey } from '@natural-enforcement/shield';
 
@@ -28,14 +33,20 @@ function webcrypto(): CryptoLike {
   return found;
 }
 
+/** 按大端把 value 编成定长 Crockford Base32。定长下编码结果与 value 同序，故加一即变大。 */
+function encodeBase32(value: bigint, length: number): string {
+  let rest = value;
+  let text = '';
+  for (let i = 0; i < length; i += 1) {
+    text = CROCKFORD[Number(rest % 32n)] + text;
+    rest /= 32n;
+  }
+  return text;
+}
+
 /** 生成一枚 ULID 技术主键；now 仅注入测试用时序，默认 Date.now() */
 export function newUlid(now: number = Date.now()): string {
-  let time = BigInt(now);
-  let id = '';
-  for (let i = 0; i < 10; i += 1) {
-    id = CROCKFORD[Number(time % 32n)] + id;
-    time /= 32n;
-  }
+  let id = encodeBase32(BigInt(now), 10);
   // 随机部 16 字符：按字节各映射一字符（256 = 8×32 整除，无偏），16 字节 → 16 字符
   const random = webcrypto().getRandomValues(new Uint8Array(16));
   for (const byte of random) {
@@ -53,17 +64,6 @@ function randomBits80(): bigint {
   let value = 0n;
   for (const byte of bytes) value = (value << 8n) | BigInt(byte);
   return value;
-}
-
-/** 按大端把 value 编成定长 Crockford Base32。定长下编码结果与 value 同序，故加一即变大。 */
-function encodeBase32(value: bigint, length: number): string {
-  let rest = value;
-  let text = '';
-  for (let i = 0; i < length; i += 1) {
-    text = CROCKFORD[Number(rest % 32n)] + text;
-    rest /= 32n;
-  }
-  return text;
 }
 
 /** 单调生成器的随机源。测试注入，生产用默认值。 */
