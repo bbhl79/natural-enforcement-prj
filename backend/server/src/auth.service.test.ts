@@ -65,9 +65,14 @@ class MemorySessions implements SessionStore {
     return true;
   }
   async listActive(personnelId: string) {
+    // 排序键与生产实现一致（#116）：认证时间升序，认证时间相同时按会话 id 升序。
     return this.rows
       .filter((row) => row.personnelId === personnelId && !row.endedAt)
-      .sort((a, b) => a.authenticatedAt.getTime() - b.authenticatedAt.getTime());
+      .sort(
+        (a, b) =>
+          a.authenticatedAt.getTime() - b.authenticatedAt.getTime() ||
+          (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+      );
   }
   async listOpen() { return this.rows.filter((row) => !row.endedAt); }
 }
@@ -392,5 +397,54 @@ describe('记住我免输口令进入判定顺序（六个分支）', () => {
     }
     expect(directory.accounts.get(account.id)!.failureCount).toBe(0);
     expect(gate.blocked(IP, new Date(clock.millis))).toBe(false);
+  });
+});
+
+describe('会话挤占顺序（#116）', () => {
+  it('测试替身按 (认证时间, 会话 id) 排序：认证时间相同时按 id 升序', async () => {
+    const account = addAccount();
+    const row = {
+      personnelId: account.id,
+      secretHash: 'x',
+      rememberMeChainId: null,
+      lastSeenAt: new Date(T0),
+      absoluteEndsAt: new Date(T0 + DAY),
+      endedAt: null,
+      endReason: null,
+    };
+    sessions.rows.push({ ...row, id: 'B', authenticatedAt: new Date(T0) });
+    sessions.rows.push({ ...row, id: 'A', authenticatedAt: new Date(T0) });
+    sessions.rows.push({ ...row, id: 'C', authenticatedAt: new Date(T0 - 1) });
+    const listed = await sessions.listActive(account.id);
+    expect(listed.map((item) => item.id)).toEqual(['C', 'A', 'B']);
+  });
+
+  it('同一毫秒内连续登录三次，第四次挤掉的是先建立的那一段', async () => {
+    addAccount();
+    const created: string[] = [];
+    const seen = new Set<string>();
+    for (let i = 0; i < 3; i += 1) {
+      await login(GOOD);
+      // 替身里的行按写入顺序排，故此处取的是建立先后，不依赖排序键。
+      for (const row of sessions.rows) {
+        if (seen.has(row.id)) continue;
+        seen.add(row.id);
+        created.push(row.id);
+      }
+    }
+    expect(created).toHaveLength(3);
+    const rows = created.map((id) => sessions.rows.find((row) => row.id === id)!);
+    // 三段的认证时间落在同一毫秒——正是排序键要定先后的情形。
+    expect(new Set(rows.map((row) => row.authenticatedAt.getTime())).size).toBe(1);
+    // 会话 id 由进程内单调生成器给出，同一毫秒内后建立的那段更大。
+    expect(created[0] < created[1]).toBe(true);
+    expect(created[1] < created[2]).toBe(true);
+
+    await login(GOOD);
+    const displaced = sessions.rows.find((row) => row.id === created[0])!;
+    expect(displaced.endedAt).not.toBeNull();
+    expect(displaced.endReason).toBe('displaced');
+    expect(sessions.rows.find((row) => row.id === created[1])!.endedAt).toBeNull();
+    expect(sessions.rows.find((row) => row.id === created[2])!.endedAt).toBeNull();
   });
 });
