@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
 # dev 命令行为契约冒烟测试（E7 子集 + E6 前半），#57 切片10 归位为 e2e/cases 用例。
 # 只测外部可观察行为：命令退出码与人类可读输出。不测内部实现。
-# 覆盖九命令（up/down/health/db/lint/test unit/test integration/build/logs/exec）；
+# 覆盖九命令（up/down/health/db/lint/test/build/logs/exec；test 命令内跑 unit 与 integration 两层）。
+# 命令面覆盖不因瘦身而变：lint/test integration/build 仍在本用例内经 CLI 各走一遍。
+# lint 只取一次全量：全量 dev lint 在本用例内跑 1 次（CLI 唯一全绿证据；外层 dev check
+# 走内部函数 cmd_lint，不经 CLI）——一次 CI 完整全量 lint 共 2 遍＝外层 1＋本用例 1。
+# 漏入库走子项：dev lint leak 在本用例内跑 2 次（植入 node_modules 判红、清除后转绿）；
+# 一次 CI 漏入库检查共 4 遍（外层全量内 1＋本用例全量内 1＋子项 2），遍数不因瘦身而变。
+# 兜底闸（结构测试）跑 2 次：全量 dev lint 内 1 次，dev test integration 内 1 次。
 # check 不在此内嵌执行——check = lint+test all+build，test all 含 e2e 层即本用例自身（递归），
 # 其可执行性由外层 ./dev check（本地/CI 总闸）全绿覆盖。
 # 用法：e2e/cases/03-command-smoke.sh            常规冒烟（要求镜像已就绪）
@@ -104,15 +110,15 @@ for attempt in 1 2 3; do
 done
 check "恢复后 health 重新全绿（含探测启动等待，重试 3 次）" "$recovered"
 
-# ---------- 4. dev lint 全量 + 依赖漏入库检查 ----------
+# ---------- 4. dev lint 全量（CLI 唯一全绿证据）+ dev lint leak 子项红绿对照 ----------
 "$DEV" lint >/tmp/smoke-lint.log 2>&1; check "dev lint 全绿" "$?"
 
 mkdir -p "$ROOT/node_modules/.fake" "$ROOT/frontend/node_modules"
-"$DEV" lint >/tmp/smoke-lint-leak.log 2>&1; rc=$?
+"$DEV" lint leak >/tmp/smoke-lint-leak.log 2>&1; rc=$?
 [ "$rc" -ne 0 ] && grep -q 'node_modules' /tmp/smoke-lint-leak.log \
-  && ok "检出 node_modules 漏入库即失败（非 0 + 人类可读输出）" || bad "lint 未检出 node_modules（rc=$rc）"
+  && ok "检出 node_modules 漏入库即失败（非 0 + 人类可读输出）" || bad "lint leak 未检出 node_modules（rc=$rc）"
 rm -rf "$ROOT/node_modules" "$ROOT/frontend/node_modules"
-"$DEV" lint >/dev/null 2>&1; check "清除 node_modules 后 lint 恢复全绿" "$?"
+"$DEV" lint leak >/dev/null 2>&1; check "清除 node_modules 后 lint leak 恢复全绿" "$?"
 
 # ---------- 5. dev db 数据语义（#49：建库/迁移/种子/reset） ----------
 psql_db() { "${COMPOSE[@]}" exec -T db psql -U "$PG_USER" -d "$PG_DB" "$@" 2>/dev/null; }
@@ -184,6 +190,12 @@ fi
 # ---------- 7. 切片10 新命令：logs/exec/test 分层/build（check 见文件头说明，不内嵌防递归） ----------
 echo "[说明] dev check 不内嵌执行：check = lint+test all+build，test all 含 e2e 层即本用例（递归）；"
 echo "       check 可执行性由外层 ./dev check 总闸全绿覆盖（E1/E7 的总证据）。"
+echo "[说明] 证据分工（ADR 0017）：命令契约（E7）的 CLI 路径证据唯一出处是本层的 03 冒烟用例，"
+echo "       因为外层 check 直调内部函数、不经 CLI；门禁类检查两层都跑，判红条件相同、证据形态不同。"
+echo "[说明] 单独跑 e2e 层仍自证门禁，不是只做命令冒烟。本层内实际跑的门禁项清单："
+echo "       兜底闸（结构测试，经 dev lint 与 dev test integration）、红探针（经 dev lint）、"
+echo "       ESLint（容器内，经 dev lint）、漏入库（经 dev lint 与 dev lint leak 子项）、"
+echo "       类型检查（经 dev test unit）、前后端编译门（经 dev build）。"
 
 out="$("$DEV" logs db 2>&1)"; rc=$?
 { [ "$rc" -eq 0 ] && [ -n "$out" ]; } \

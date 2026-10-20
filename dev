@@ -13,8 +13,9 @@
 # 评审必修（#61 合并前，路线 A）：check 时序改 build 前置——镜像与编译产物是 lint 与
 # 测试层的运行前提（test_e2e 需 infra + frontend 本地镜像，二者皆由 build 产出），build
 # 在末位时冷环境结构性跑不到它，dev check --ci 不可能绿；同时 build 承担工具链镜像拉取
-#（LINT_IMAGE 不是 compose 服务镜像，ensure_infra_images 的 compose config --images
-# 遍历覆盖不到，冷环境会死在 require_toolchain_image，CI 加一步 dev build 也救不活）。
+#（LINT_IMAGE 不是 compose 服务镜像，compose config --images 遍历覆盖不到，
+# 冷环境会死在 require_toolchain_image，CI 加一步 dev build 也救不活）。
+# 镜像拉取合并为一次并发批次：工具链镜像与 infra 镜像同批拉取（ensure_images，#174）。
 # 退出码只有 0/1，诊断看输出。
 set -euo pipefail
 
@@ -113,6 +114,11 @@ usage() {
   test     三层语义（#46）：unit = 纯单元+契约；integration = 结构+需库用例；
            e2e = 从零拉起（E1）+ 读写通道（E6）+ 十命令冒烟（E7）。
            test unit / test integration / test e2e / 裸 test = all（unit+integration+e2e）。
+           证据分工（ADR 0017）：命令契约（E7）的 CLI 路径证据唯一出处是 e2e 层的 03 冒烟用例，
+           因为外层 check 直调内部函数、不经 CLI。门禁类检查（兜底闸、红探针、ESLint、漏入库、
+           类型检查、编译门）两层都跑，判红条件相同、证据形态不同（全量 lint 一次 CI 共 2 遍
+           ＝外层 1＋03 内 1）。单独跑 test e2e 仍自证门禁：上述门禁在 e2e 层内仍各自跑，
+           不是只做命令冒烟。
            注意：e2e 层会销毁本项目数据卷做从零拉起（E1 证据），勿在需保留数据时运行。
   build    全量构建 = 环境自举：拉取工具链与 infra 镜像（按 infra/VERSIONS.md 钉定引用，
            已在场即跳过）+ 前端编译（产物写回宿主 frontend/dist，已 gitignore）+ 后端编译
@@ -590,7 +596,7 @@ build_frontend() {
     "$LINT_IMAGE" \
     sh -c "cp -a /repo/. /work/ && corepack enable && pnpm install ${INSTALL_FLAGS[*]} && pnpm --filter frontend build && cp -a /work/frontend/dist/. /out/ && chown -R \"\$(stat -c '%u:%g' /out)\" /out"
   echo "build：构建前端本地镜像 $FRONTEND_IMAGE（多阶段：node 编译 → nginx 运行）…"
-  # 基础镜像已由 ensure_toolchain_images / ensure_infra_images 按 digest 拉到本地。
+  # 基础镜像已由 ensure_images 按 digest 拉到本地（工具链与 infra 镜像同批并发拉取）。
   # 不传 --pull：构建只用本地钉定镜像，不在 build 之外再走一次注册表。
   docker build --tag "$FRONTEND_IMAGE" --file "$ROOT/frontend/Dockerfile" "$ROOT"
 }
@@ -615,35 +621,92 @@ build_backend() {
   echo "build：后端编译通过。"
 }
 
-# 工具链镜像拉取（评审必修）：LINT_IMAGE 不是 compose 服务镜像，ensure_infra_images
-# 按 compose config --images 遍历永远覆盖不到它——冷环境下 dev build 会直接死在
+# 镜像拉取（dev build 语义内；冷环境自举的唯一入口）。
+# 一次批次并发拉齐（#174）：工具链镜像 + compose 清单里的 infra 镜像（剔除本地构建镜像）。
+# 工具链镜像必须在 build 内拉取（评审必修）：LINT_IMAGE 不是 compose 服务镜像，
+# compose config --images 遍历永远覆盖不到它——冷环境下 dev build 会直接死在
 # build_frontend 的 require_toolchain_image 上，CI 无论怎么调顺序都起不来。
-# 拉取只发生在 build 语义内：dev up / dev db 的「不隐式构建或拉取」（US13）语义不变。
-ensure_toolchain_images() {
+# 已在场即跳过（US13）：采集阶段串行 inspect（极快），只对缺失项发起拉取。
+# 定案核对先行：工具链镜像未在 infra/VERSIONS.md 登记即失败，且不发起任何拉取。
+# infra 镜像本地拉取即视为可用（不重复构建）；拉取只发生在 build 语义内：
+# dev up / dev db 的「不隐式构建或拉取」（US13）语义不变。
+# 与改造前的差别（如实记录）：改造前「拉 1 个失败就停」，现在「全部拉完再报全部失败」，
+# 诊断信息更全，判红条件不变（任一镜像缺失即 build 失败，不部分放行）。
+ensure_images() {
+  require_compose_file
   require_image_registered "$LINT_IMAGE"
-  if docker image inspect "$LINT_IMAGE" >/dev/null 2>&1; then
-    echo "build：工具链镜像在场：$LINT_IMAGE"
-  else
-    echo "build：工具链镜像缺失，按 infra/VERSIONS.md 钉定引用拉取：$LINT_IMAGE"
-    docker pull "$LINT_IMAGE"
+  local compose_images
+  compose_images="$("${COMPOSE[@]}" config --images)" || {
+    echo "[FAIL] build：解析 compose 镜像清单失败。" >&2
+    exit 1
+  }
+  local -a imgs=() roles=() missing=()
+  local img role seen=" " i
+  # 工具链镜像先行：LINT_IMAGE 不在 compose 清单里（上方注释已记）
+  imgs+=("$LINT_IMAGE"); roles+=("工具链镜像")
+  while IFS= read -r img; do
+    [ -z "$img" ] && continue
+    [ "$img" = "$FRONTEND_IMAGE" ] && continue   # 本地构建镜像，不拉
+    [ "$img" = "$SERVER_IMAGE" ] && continue     # 本地构建镜像，不拉
+    case "$seen" in *" $img "*) continue ;; esac # 去重：同一镜像不并发拉两次
+    seen="$seen$img "
+    imgs+=("$img"); roles+=("infra 镜像")
+  done <<< "$compose_images"
+  for i in "${!imgs[@]}"; do
+    img="${imgs[$i]}"; role="${roles[$i]}"
+    if docker image inspect "$img" >/dev/null 2>&1; then
+      echo "build：${role}在场：$img"
+    else
+      echo "build：${role}缺失，按 infra/VERSIONS.md 钉定引用拉取：$img"
+      missing+=("$img")
+    fi
+  done
+  # bash 3.2 兼容：空数组的 "${missing[@]}" 在 set -u 下报未绑定，先判个数再展开
+  if [ "${#missing[@]}" -gt 0 ]; then
+    pull_images_concurrent "${missing[@]}"
   fi
 }
 
-# infra 镜像本地拉取即视为可用（不重复构建）：逐个确认 compose 引用的 infra 镜像在场，
-# 缺失则按钉定官方名 + digest 拉取（tag@digest 幂等，已有时秒过）。
-ensure_infra_images() {
-  require_compose_file
-  local img
-  while IFS= read -r img; do
-    [ "$img" = "$FRONTEND_IMAGE" ] && continue
-    [ "$img" = "$SERVER_IMAGE" ] && continue
-    if docker image inspect "$img" >/dev/null 2>&1; then
-      echo "build：infra 镜像在场：$img"
+# 并发拉取（#174）：缺失镜像同批拉取——每个镜像一个后台子进程各自 docker pull，
+# 失败汇总成一次非 0 退出。失败不吞掉的三条硬约束：
+# - 子进程内 set +e：errexit 会让子进程在写状态文件之前退出，失败原因丢失；
+# - 子进程以拉取退出码 exit（写成 printf 收尾，wait 拿到的就是 0，失败被吞）；
+# - 状态文件是权威记录：父进程按状态文件判定成败，状态文件缺失＝失败（子进程被杀）。
+# 父进程逐个 wait "$pid" || true 后汇总（不用 wait -n：需 bash 4.3+，仓库脚本 bash 3.2 兼容）。
+pull_images_concurrent() { # $@ = 缺失的镜像引用
+  local -a todo=("$@") pids=() names=() failed=()
+  [ "${#todo[@]}" -eq 0 ] && return 0
+  local dir img rc pid st i=0
+  dir="$(mktemp -d)" || {
+    echo "[FAIL] build：创建拉取状态临时目录失败。" >&2
+    exit 1
+  }
+  for img in "${todo[@]}"; do
+    (
+      set +e                                   # 失败不能因 errexit 提前退出，状态必须落盘
+      docker pull "$img" >"$dir/$i.log" 2>&1
+      rc=$?
+      printf '%s\n' "$rc" >"$dir/$i.status"
+      exit "$rc"                               # wait 拿到的就是这个码
+    ) &
+    pids+=("$!"); names+=("$img"); i=$((i + 1))
+  done
+  for pid in "${pids[@]}"; do wait "$pid" || true; done
+  for i in "${!names[@]}"; do
+    st="$(cat "$dir/$i.status" 2>/dev/null || echo missing)"   # 状态文件缺失＝失败
+    if [ "$st" = "0" ]; then
+      echo "build：镜像就位：${names[$i]}"
     else
-      echo "build：infra 镜像缺失，按 infra/VERSIONS.md 钉定引用拉取：$img"
-      docker pull "$img"
+      failed+=("${names[$i]}")
+      echo "[FAIL] 镜像拉取失败：${names[$i]}（docker pull 退出码 $st）" >&2
+      tail -3 "$dir/$i.log" 2>/dev/null | sed 's/^/  /' >&2 || true
     fi
-  done < <("${COMPOSE[@]}" config --images)
+  done
+  rm -rf "$dir"
+  if [ "${#failed[@]}" -gt 0 ]; then
+    echo "[FAIL] build：${#failed[@]} 个镜像拉取失败（${failed[*]}）。" >&2
+    exit 1
+  fi
 }
 
 cmd_build() {
@@ -662,8 +725,7 @@ cmd_build() {
   done
   [ "$ci" -eq 1 ] && echo "build --ci：检查范围与本地严格一致（产物不 push 不部署）。"
   # 镜像先就位再编译：冷环境（零本地镜像）下这条顺序是 build 自举的唯一可行序。
-  ensure_toolchain_images
-  ensure_infra_images
+  ensure_images
   build_frontend
   build_backend
   build_server
@@ -813,6 +875,11 @@ cmd_test() {
 # 用例目录约定：e2e/cases/*.sh，按文件名排序逐条执行；用例只测外部可观察行为
 #（命令退出码 + 人类可读输出），自行经 compose 访问服务（隔离环境变量同 integration 层）。
 # 产物目录：默认 e2e/results（gitignore）；带 --run-id 时落 .run/<id>/results（复现同路径）。
+# 证据分工（ADR 0017）：命令契约（E7）的 CLI 路径证据唯一出处是本层的 03 冒烟用例，
+# 因为外层 dev check 直调内部函数（cmd_lint/cmd_build/test_integration）、不经 CLI。
+# 门禁类检查（兜底闸、红探针、ESLint、漏入库、类型检查、编译门）两层都跑，判红条件相同、
+# 证据形态不同（全量 lint 一次 CI 共 2 遍＝外层 1＋03 内 1）。
+# 单独跑本层仍自证门禁：上述门禁在 e2e 层内仍各自跑，不是只做命令冒烟。
 test_e2e() {
   require_compose_file
   require_toolchain_image

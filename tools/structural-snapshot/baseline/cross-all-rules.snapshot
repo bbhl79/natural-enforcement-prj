@@ -1,0 +1,58 @@
+# 结构测试逐规则判红集合快照（父规格 #168 改造项 3 的等价性判据载体；采集者 tools/structural-snapshot/collect.sh）
+# format: structural-snapshot/1
+# scenario: cross-all-rules
+# inject: shield-single-entry,shield-no-business-dep,identity-deps,geo-dict-deps,case-deps,approval-deps,supervision-deps,supervision-sink-sh,deadline-deps,module-public-entry,frontend-boundary,weak-reference-entry,g1-model-allowlist,queue-in-integration,storage-facility-entry,audit-facility-entry,spatial-orm-chain,spatial-in-integration,compose-unlisted-name,ci-env-context,user-lock-assertion-deleted,frontend-browser-router,frontend-router-dev-plugin,screenshot-full-set
+# hide: -
+# gate-exit-code: 1
+# rule-count: 21
+# fail-line-count: 25
+# ok-line-count: 0
+## rule-counts
+approval-deps	1	0
+audit-facility-entry	1	0
+case-deps	2	0
+deadline-deps	1	0
+frontend-boundary	1	0
+frontend-router-mode	2	0
+g1-model-allowlist	1	0
+geo-dict-deps	1	0
+identity-deps	1	0
+module-public-entry	1	0
+queue-facility-entry	1	0
+runtime-manifest	2	0
+screenshot-full-set	1	0
+shield-no-business-dep	1	0
+shield-single-entry	1	0
+spatial-no-orm-mutation	2	0
+storage-facility-entry	1	0
+supervision-deps	1	0
+supervision-sink	1	0
+user-lock-assertions	1	0
+weak-reference-entry	1	0
+## fail-set
+approval-deps	表外依赖 backend/approval/src/_structural-probe-deps.ts → @natural-enforcement/deadline（允许列：shield identity case）
+audit-facility-entry	integration/_structural-probe-audit.ts 引用了 auditTrail Prisma 委托（留痕只许经 @natural-enforcement/audit 追加）
+case-deps	表内依赖形态违规 backend/case/src/_structural-probe.ts → @natural-enforcement/identity/src/persistence/probe-thing.ts（只许公共出口 @natural-enforcement/identity 根导入）
+case-deps	表外依赖 backend/case/src/_structural-probe-deps.ts → @natural-enforcement/approval（允许列：shield identity geo-dict）
+deadline-deps	表外依赖 backend/deadline/src/_structural-probe-deps.ts → @natural-enforcement/identity（允许列：shield case approval geo-dict）
+frontend-boundary	前端直连库/后端内部 frontend/src/_structural-probe.ts → @prisma/client（前端只许 shield + 各模块公共出口的查询接口，数据一律经面板快照）
+frontend-router-mode	frontend/package.json 引用了框架模式插件 @react-router/dev
+frontend-router-mode	frontend/src/__probe_router.tsx 使用了声明式路由组件（只许 createBrowserRouter + RouterProvider）
+g1-model-allowlist	backend/prisma/schema.prisma 出现白名单外 model：ProbeBusinessCase（#47 G1 地基不含业务实体；新增表须回定案票，不得自行放宽）
+geo-dict-deps	表外依赖 backend/geo-dict/src/_structural-probe-deps.ts → @natural-enforcement/identity（允许列：shield）
+identity-deps	表外依赖 backend/identity/src/_structural-probe-deps.ts → @natural-enforcement/case（允许列：shield audit）
+module-public-entry	内部路径导入 backend/case/src/_structural-probe.ts → @natural-enforcement/identity/src/persistence/probe-thing.ts（只许 @natural-enforcement/<module> 公共出口）
+queue-facility-entry	integration/_structural-probe.ts 裸依赖 bullmq（队列设施唯一入口 = packages/queue；业务侧只许经 QUEUE_PORT 注入，G5）
+runtime-manifest	.github/workflows/ci.yml:47 引用清单外变量名 env.PROBE_UNLISTED（先登记到 infra/runtime.env）
+runtime-manifest	infra/docker-compose.yml:100 引用清单外变量名 PROBE_UNLISTED_IMAGE（先登记到 infra/runtime.env）
+screenshot-full-set	全集多出 v0.4 之外的文件名：probe-extra.png 
+shield-no-business-dep	shield 依赖业务模块 packages/shield/src/_structural-probe-business-dep.ts → @natural-enforcement/identity
+shield-single-entry	绕过公共出口的引用  packages/queue/src/_structural-probe-shield-entry.ts:2 → @natural-enforcement/shield/src/internal.ts
+spatial-no-orm-mutation	backend/geo-dict/src/_structural-probe.mjs 折行后检出空间模型 ORM 写（换行链式形态）
+spatial-no-orm-mutation	空间模型 ORM 写调用 integration/_structural-probe-spatial.ts:3（含必填空间字段禁用 ORM 写，执行纪律 2；写一律 $queryRaw/ST_ 函数）
+storage-facility-entry	backend/case/src/_structural-probe-storage.ts 裸依赖 @aws-sdk/client-s3（存储设施唯一入口 = packages/storage；业务侧只许经 STORAGE_PORT 注入）
+supervision-deps	表外依赖 backend/supervision/src/_structural-probe-deps.ts → @natural-enforcement/approval（允许列：shield identity case）
+supervision-sink	e2e/cases/_structural-probe.sh 依赖了单向模块 supervision（→ @natural-enforcement/supervision）
+user-lock-assertions	断言编号 USER-LOCK-L4 在测试代码里找不到对应断言或「待实现」登记
+weak-reference-entry	backend/case/src/_structural-probe-weak-ref.ts 出现跨域弱引用入口名但未从 shield 导入
+## ok-set

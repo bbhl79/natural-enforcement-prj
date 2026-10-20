@@ -1,0 +1,6 @@
+# 快照是机器产物：判红消息逐字保留兜底闸的输出，其中含闸自己写下的尾随空格
+# （tools/structural-test.sh 的 check_screenshot-full-set() 里 note_fail 消息用 tr '\n' ' '
+# 把换行转空格处）。空白检查会把这份忠实记录误报成错误，
+# 且会诱导后人「顺手修掉」空格，从而破坏与闸输出的逐字节相等。故对快照关掉空白检查。
+# 同时关掉行尾转换：#176 的判据是「逐字节相同」，任何换行符改写都会造成假红。
+tools/structural-snapshot/baseline/*.snapshot -text -whitespace
