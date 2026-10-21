@@ -36,14 +36,14 @@
 |---|---|
 | 要件项总数 | 844 |
 | 必填性 | 必填 737、选填 107 |
-| 必填时机 | 核查前补齐 743、登记时 90、只提示 11 |
+| 必填时机 | 核查前补齐 743、录入时 90、只提示 11 |
 | 缺件后果 | 警告 399、阻断 343、提示 102 |
-| 交叉 | 必填＋核查前补齐 647、选填＋核查前补齐 96、必填＋登记时 90、选填＋只提示 11 |
+| 交叉 | 必填＋核查前补齐 647、选填＋核查前补齐 96、必填＋录入时 90、选填＋只提示 11 |
 | 呈现分组 | 违法主体 132、程序环节 130、现场勘验与证据材料 125、违法事实 118、涉案对象 105、金额与裁量 86、资质资格与许可 74、认定与检验结论 74 |
 
 各大类的分项计数如下。顺序是必填数／登记时数／阻断／警告／提示。
 
-| 大类 | 必填 | 登记时 | 阻断 | 警告 | 提示 |
+| 大类 | 必填 | 录入时 | 阻断 | 警告 | 提示 |
 |---|---|---|---|---|---|
 | 一、测绘基准类 | 73 | 8 | 35 | 38 | 7 |
 | 二、测绘资质资格类 | 141 | 16 | 88 | 53 | 15 |
@@ -58,7 +58,7 @@
 ### 三、结论
 
 1. **附录 C 的条目结构与附录 A 不同。** 附录 C 七个大类共 45 个条目。其中 40 个是具体违法行为，5 个是「追究刑事责任规定」。**附录 C 全文没有「查处注意事项」小类。** 附录 A 五个大类里有四个带「查处注意事项」。依据：规程附录 C 全文，四部分逐条核对。
-2. **类型层几乎不阻断线索登记。** 登记时必填只有 90 项，占 844 项的 10.7%。90 项的缺件后果一律取「警告」，四部分无一例外。743 项落在「核查前补齐」。该口径与 #181 一致：登记门槛由公共层承担。依据：本文件统计，#181「二、登记门槛的层次」。
+2. **类型层几乎不阻断线索登记。** 录入时必填只有 90 项，占 844 项的 10.7%。90 项的缺件后果一律取「警告」，四部分无一例外。743 项落在「核查前补齐」。该口径与 #181 一致：登记门槛由公共层承担。依据：本文件统计，#181「二、登记门槛的层次」。
 3. **阻断项是各类型的定性底座。** 阻断共 343 项。判据是「该项是否为本类型能否定性的前提」。构成事实、必备证据材料、必备认定结论、必备批准文件落在这里。依据：本文件「二、缺件后果的判据」，四部分各表说明段。
 4. **类型层与规程 3.2.3.3 的十一项是展开关系，不是叠加关系。** 十一项是测绘类的共同证据底座。类型层是它在 40 个具体违法行为上的展开与增补。两层都在时去重后取并集。依据：规程 3.2.3.3，四部分各大类导言。
 5. **要件键的类型编码段全部是草案。** 40 个编码依赖尚未产出的违法类型编码表。编码确定后 844 个要件键需整体回改。依据：本文件「二、要件键的命名口径」，四部分待定项第 1 条。
@@ -130,7 +130,7 @@ L2 原文逐字照录：
 
 - **公共层是登记门槛。** 类型层不是登记门槛。
 - 类型层是选定初步涉嫌违法类型之后的定向收集清单。缺失在立案前补齐。
-- 类型层「登记时必填」项的缺件后果一律取**警告**，不阻断登记。本文件 90 项登记时必填项全部取警告，四部分无一例外。
+- 类型层「录入时必填」项的缺件后果一律取**警告**，不阻断登记。本文件 90 项录入时必填项全部取警告，四部分无一例外。
 - **「阻断」指阻断进入处罚流程**（立案后的定性、认定与决定环节），不指阻断线索登记。
 - 该口径与 #24「必填项缺失即阻断」的字面读法有出入。分歧尚未拍板。本文件沿用 #181 口径，并把该分歧记入「四、待定项汇总」，不自行拍板。
 
@@ -167,7 +167,7 @@ L2 原文逐字照录：
 
 类型层要件键采用 `type.<类型编码>.<字段英文短名>`。
 
-- `<类型编码>` 是具体违法行为的稳定英文短标识。本票给出 40 个草案值，例如 `survey_qualification_none`、`map_review_missing`、`marker_damage`。
+- `<类型编码>` 是具体违法行为的稳定英文短标识。本票给出 40 个草案值，例如 `survey_qualification_none`、`survey_map_review_missing`、`marker_damage`。
 - **这 40 个编码是草案。** 违法类型的业务编码表尚未产出。编码确定后全部要件键需整体回改。见「六、给后续票的输入」。
 - 同一部分内的要件键不得重复。跨部分也不得重复。本文件 844 个要件键零重复。
 - `<字段英文短名>` 自拟，最终以代码侧契约为准。
@@ -313,7 +313,7 @@ L2 原文逐字照录：
 
 四个类型的要件**并集**构成一条线索登记时的呈现集合（#24 决议：类型要件取所选类型的并集）。
 
-登记门槛口径沿用 #181：公共层是登记门槛，类型层不是登记门槛。类型层「登记时必填」项的缺件后果一律取**警告**，不阻断登记。「阻断」指阻断进入处罚流程，不指阻断线索登记。该口径与 #24「必填项缺失即阻断」的字面读法有出入，分歧记入待定项。
+登记门槛口径沿用 #181：公共层是登记门槛，类型层不是登记门槛。类型层「录入时必填」项的缺件后果一律取**警告**，不阻断登记。「阻断」指阻断进入处罚流程，不指阻断线索登记。该口径与 #24「必填项缺失即阻断」的字面读法有出入，分歧记入待定项。
 
 ---
 
@@ -321,10 +321,10 @@ L2 原文逐字照录：
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.survey_datum_coord_system_unapproved.subject_unit | 建立坐标系统或者建立地理信息系统的单位名称 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《测绘法》第 11 条、第 52 条【法】；规程 2.3(1)【业】 |
+| type.survey_datum_coord_system_unapproved.subject_unit | 建立坐标系统或者建立地理信息系统的单位名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《测绘法》第 11 条、第 52 条【法】；规程 2.3(1)【业】 |
 | type.survey_datum_coord_system_unapproved.party_identity | 当事人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
 | type.survey_datum_coord_system_unapproved.responsible_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 52 条【法】 |
-| type.survey_datum_coord_system_unapproved.act_type | 被质疑的行为类型（建立相对独立的平面坐标系统／采用不符合国家标准的基础地理信息数据建立地理信息系统） | 类型层·违法事实 | 必填 | 登记时 | 警告 | 《测绘法》第 11 条、第 24 条、第 52 条【法】 |
+| type.survey_datum_coord_system_unapproved.act_type | 被质疑的行为类型（建立相对独立的平面坐标系统／采用不符合国家标准的基础地理信息数据建立地理信息系统） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《测绘法》第 11 条、第 24 条、第 52 条【法】 |
 | type.survey_datum_coord_system_unapproved.system_object | 涉案坐标系统或者地理信息系统的名称、覆盖范围与建成时间 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 11 条、第 24 条【法】；规程 3.2.3.3(7)、4.4.2.2(3)【业】 |
 | type.survey_datum_coord_system_unapproved.establishment_purpose | 建立目的与项目性质（建设／城市规划／科学研究；是否属国家重大工程项目或者国务院确定的大城市） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 11 条第 1 款【法】 |
 | type.survey_datum_coord_system_unapproved.approval_document | 建立相对独立的平面坐标系统的批准文件名称、文号、批准机关与日期 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 11 条第 1 款【法】；规程 3.2.3.3(3)【业】 |
@@ -344,7 +344,7 @@ L2 原文逐字照录：
 1. 本类型的事实底座是「批准文件」与「法定批准层级」两项的比对。《测绘法》第 52 条把两种情形并列在同一条罚则里：未经批准擅自建立相对独立的平面坐标系统，以及采用不符合国家标准的基础地理信息数据建立地理信息系统。前者的成立方式是批准层级比对，后者的成立方式是标准符合性判定。因此 `approval_document`、`statutory_approval_level`、`data_standard_conformity` 三项都取阻断。
 2. 与规程 3.2.3.3 的对应关系：`approval_document` 是第 (3) 项「相关行政许可或者审批等材料」的具体化；`system_data_materials` 与 `application_materials` 是第 (7) 项的具体化；`data_standard_conformity` 与 `recognition_opinion` 是第 (10) 项的具体化；`site_survey_materials` 是第 (4) 项的具体化。`statutory_approval_level`、`establishment_purpose`、`national_system_linkage`、`secrecy_level_determination`、`criminal_referral_check`、`fine_tier_fact` 六项在 11 项之外。
 3. 本类型特有的认定要求有两处。第一处是《测绘法》第 11 条第 1 款按项目性质切分批准层级：国家重大工程项目和国务院确定的大城市由国务院测绘地理信息主管部门批准，其他由省级批准。因此 `establishment_purpose` 是决定比对哪一档权限的输入，取阻断。第二处是《测绘法》第 11 条第 2 款的「应当与国家坐标系统相联系」，这是一项独立义务，不以批准为前提，因此 `national_system_linkage` 单列，取警告。
-4. `act_type` 定为登记时必填，因为它决定后续收集哪一套材料。选「建立坐标系统」的要收批准文件与论证报告，选「建立地理信息系统」的要收数据标准符合性结论。登记时必填项的后果取警告，不阻断登记。
+4. `act_type` 定为录入时必填，因为它决定后续收集哪一套材料。选「建立坐标系统」的要收批准文件与论证报告，选「建立地理信息系统」的要收数据标准符合性结论。录入时必填项的后果取警告，不阻断登记。
 5. 附条件适用的表达方式是「条件写进项名」。`approval_document` 与 `national_system_linkage` 只在行为类型为「建立相对独立的平面坐标系统」时适用；`data_standard_conformity` 只在行为类型为「建立地理信息系统」时适用。规程未规定条件要件的表达方式，本票沿用 #181 的处理，该项处理无直接依据，记入待定项。
 6. 广东省裁量基准把本项按「责令改正期限届满后的改正时点」分三档：限期内改正的处 10 万元以下；届满后 1 个月内改正的处 10 万元以上 30 万元以下；届满后 1 个月以上改正或者拒不改正的处 30 万元以上 50 万元以下。因此 `fine_tier_fact` 是罚款档次的唯一分档事实，取警告。
 
@@ -354,13 +354,13 @@ L2 原文逐字照录：
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.survey_gnss_station_no_filing.construction_unit | 卫星导航定位基准站建设单位名称 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《测绘法》第 13 条第 1 款、第 53 条【法】；规程 2.3(1)【业】 |
+| type.survey_gnss_station_no_filing.construction_unit | 卫星导航定位基准站建设单位名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《测绘法》第 13 条第 1 款、第 53 条【法】；规程 2.3(1)【业】 |
 | type.survey_gnss_station_no_filing.party_identity | 当事人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
 | type.survey_gnss_station_no_filing.responsible_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 53 条【法】 |
 | type.survey_gnss_station_no_filing.contractor_operator_units | 承建单位与运行维护单位名称 | 类型层·违法主体 | 选填 | 核查前补齐 | 提示 | 《卫星导航定位基准站管理办法》（自然资源部令第 19 号，2026-01-01 施行）第 8 条、第 21 条【业】 |
 | type.survey_gnss_station_no_filing.station_object | 涉案基准站的站点名称、地址、建设状态与数据中心地址 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 13 条第 2 款【法】；部令第 19 号第 10 条第 1 款第（二）（三）项【业】；规程 3.2.3.3(7)【业】 |
 | type.survey_gnss_station_no_filing.station_count | 未报备案的基准站数量，以及是否跨两个以上省级行政区域 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 部令第 19 号第 9 条【业】；粤自然资规字〔2022〕2 号附件 3 序号 2（基本编码 440212072000）【业】 |
-| type.survey_gnss_station_no_filing.filing_status | 是否已向备案机关提交备案信息以及提交时间 | 类型层·违法事实 | 必填 | 登记时 | 警告 | 《测绘法》第 13 条第 1 款、第 53 条【法】 |
+| type.survey_gnss_station_no_filing.filing_status | 是否已向备案机关提交备案信息以及提交时间 | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《测绘法》第 13 条第 1 款、第 53 条【法】 |
 | type.survey_gnss_station_no_filing.filing_authority | 法定备案机关（基准站所在地省级自然资源主管部门／自然资源部） | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 部令第 19 号第 9 条【业】；《测绘法》第 13 条第 1 款【法】；粤自然资规字〔2021〕5 号第 7 条【业】 |
 | type.survey_gnss_station_no_filing.filing_document | 备案文件或者备案信息补正通知的取得情况 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 部令第 19 号第 10 条、第 11 条【业】；规程 3.2.3.3(3)【业】 |
 | type.survey_gnss_station_no_filing.filing_info_content | 备案信息内容（建设与承建与运维单位基本情况；基准站及数据中心地址、数据传输网络类型、数据中心安全方案；观测墩类型、设备型号、站点用途、数据中心软件） | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 部令第 19 号第 10 条第 1 款【业】 |
@@ -380,7 +380,7 @@ L2 原文逐字照录：
 2. 与规程 3.2.3.3 的对应关系：`filing_document` 与 `station_qualification` 是第 (3) 项的具体化；`site_survey_materials` 是第 (4) 项的具体化；`station_object` 是第 (7) 项的具体化；`station_facilities` 是第 (8) 项的具体化；`recognition_opinion` 是第 (10) 项的具体化。`filing_authority`、`station_count`、`construction_start_date`、`rectification_notice_service`、`overdue_non_correction` 五项在 11 项之外。
 3. 本类型特有的认定要求是备案机关与备案时点。部令第 19 号第 9 条规定：基准站开工建设时向所在地省级自然资源主管部门备案；建设多个基准站且跨两个以上省级行政区域的向自然资源部备案。因此 `filing_authority` 与 `station_count` 必须同时收，否则无法判断「报错了机关」与「根本没有报」这两种情形的区别。
 4. `rectification_notice_service` 与 `overdue_non_correction` 取阻断。理由是《测绘法》第 53 条的罚款以「逾期不改正」为法定前提。缺这两项则罚款无法成立，案件无法进入处罚流程的罚款环节。这两项是**罚款成立前提**，不是定性前提；本票按 #181 的「无法进入处罚流程」判据取阻断，该判据在此处的适用记入待定项。
-5. `filing_status` 定为登记时必填。线索指称本类型时，反映人通常已指明「建了站没有备案」。登记时必填项的后果取警告。
+5. `filing_status` 定为录入时必填。线索指称本类型时，反映人通常已指明「建了站没有备案」。录入时必填项的后果取警告。
 6. 附条件要件的表达方式是「条件写进项名」。`contractor_operator_units` 只在建设单位委托承建或者委托运维时适用，取选填、提示。`filing_info_content` 只在已提交备案信息但内容不完整或者不规范时适用，取选填、提示。
 
 ---
@@ -389,13 +389,13 @@ L2 原文逐字照录：
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.survey_gnss_station_substandard.construction_unit | 卫星导航定位基准站建设单位名称 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《测绘法》第 14 条第 1 款、第 54 条【法】；规程 2.3(1)【业】 |
+| type.survey_gnss_station_substandard.construction_unit | 卫星导航定位基准站建设单位名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《测绘法》第 14 条第 1 款、第 54 条【法】；规程 2.3(1)【业】 |
 | type.survey_gnss_station_substandard.party_identity | 当事人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
 | type.survey_gnss_station_substandard.operator_unit | 运行维护单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 14 条第 2 款【法】；部令第 19 号第 21 条【业】 |
 | type.survey_gnss_station_substandard.responsible_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 54 条【法】 |
 | type.survey_gnss_station_substandard.station_object | 涉案基准站及数据中心的地址、观测墩类型、设备型号、站点用途与数据中心软件 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 部令第 19 号第 10 条第 1 款【业】；规程 3.2.3.3(7)(8)【业】 |
 | type.survey_gnss_station_substandard.station_category | 基准站类别（基准服务站／普通服务站）与服务对象（仅为本单位提供专业监测与科学研究服务／提供测绘基准服务／提供其他社会服务） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 粤自然资规字〔2021〕5 号第 3 条【业】；部令第 19 号第 8 条第 2 款、第 21 条【业】；粤自然资规字〔2022〕2 号附件 3 序号 3（基本编码 440212073000）【业】 |
-| type.survey_gnss_station_substandard.unconformity_fact | 建设或者运行维护不符合国家标准、要求的具体事实 | 类型层·违法事实 | 必填 | 登记时 | 警告 | 《测绘法》第 14 条第 1 款、第 54 条【法】 |
+| type.survey_gnss_station_substandard.unconformity_fact | 建设或者运行维护不符合国家标准、要求的具体事实 | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《测绘法》第 14 条第 1 款、第 54 条【法】 |
 | type.survey_gnss_station_substandard.applicable_standards | 应当执行的国家标准与技术规范清单（标准号与版本） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 5 条、第 14 条第 1 款【法】；部令第 19 号第 4 条、第 7 条第 1 款【业】 |
 | type.survey_gnss_station_substandard.station_qualification | 建设单位与运行维护单位的测绘资质等级（大地测量甲级／大地测量乙级以上） | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 部令第 19 号第 8 条第 2 款【业】；粤自然资规字〔2021〕5 号第 8 条【业】；规程 3.2.3.3(3)【业】 |
 | type.survey_gnss_station_substandard.filing_consistency | 备案文件与备案信息的一致性，以及是否按照备案信息开展建设和运行维护 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 部令第 19 号第 11 条第 4 款、第 12 条第 1 款、第 18 条【业】 |
@@ -429,13 +429,13 @@ L2 原文逐字照录：
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.survey_basic_project_nonstandard_datum.undertaking_unit | 基础测绘项目承担单位名称 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《基础测绘条例》第 17 条、第 31 条【法】；规程 2.3(1)【业】 |
+| type.survey_basic_project_nonstandard_datum.undertaking_unit | 基础测绘项目承担单位名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《基础测绘条例》第 17 条、第 31 条【法】；规程 2.3(1)【业】 |
 | type.survey_basic_project_nonstandard_datum.party_identity | 当事人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
 | type.survey_basic_project_nonstandard_datum.responsible_persons | 负有直接责任的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《基础测绘条例》第 31 条【法】 |
 | type.survey_basic_project_nonstandard_datum.basic_survey_project | 涉案基础测绘项目的名称、内容、承担方式与实施时间 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 《基础测绘条例》第 2 条、第 15 条、第 17 条【法】；规程 4.4.2.2(3)【业】 |
 | type.survey_basic_project_nonstandard_datum.project_determination_basis | 基础测绘项目依法确定承担单位的材料，以及基础测绘规划与年度计划依据 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 《基础测绘条例》第 15 条【法】；规程 3.2.3.3(3)【业】 |
 | type.survey_basic_project_nonstandard_datum.undertaking_qualification | 承担单位的测绘资质等级与专业类别 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 警告 | 《基础测绘条例》第 16 条第 1 款【法】；规程 3.2.3.3(3)【业】 |
-| type.survey_basic_project_nonstandard_datum.nonuse_datum_fact | 不使用全国统一的测绘基准和测绘系统，或者不执行国家规定的测绘技术规范和标准的具体事实 | 类型层·违法事实 | 必填 | 登记时 | 警告 | 《基础测绘条例》第 17 条第 1 款、第 31 条【法】 |
+| type.survey_basic_project_nonstandard_datum.nonuse_datum_fact | 不使用全国统一的测绘基准和测绘系统，或者不执行国家规定的测绘技术规范和标准的具体事实 | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《基础测绘条例》第 17 条第 1 款、第 31 条【法】 |
 | type.survey_basic_project_nonstandard_datum.datum_system_used | 实际使用的基准与系统（大地基准、高程基准、深度基准、重力基准；大地坐标系统、平面坐标系统、高程系统、地心坐标系统、重力测量系统） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《基础测绘条例》第 17 条第 1 款【法】；《测绘法》第 5 条、第 9 条、第 10 条【法】 |
 | type.survey_basic_project_nonstandard_datum.applicable_technical_standards | 应当执行的国家规定的测绘技术规范和标准清单（标准号与版本） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《基础测绘条例》第 17 条第 1 款【法】；《测绘法》第 5 条【法】 |
 | type.survey_basic_project_nonstandard_datum.independent_coord_system_linkage | 确需建立相对独立的平面坐标系统时是否与国家坐标系统相联系 | 类型层·违法事实 | 选填 | 核查前补齐 | 提示 | 《基础测绘条例》第 17 条第 2 款【法】 |
@@ -542,11 +542,11 @@ L2 原文逐字照录：
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.survey_qualification_none.acting_unit | 实施测绘活动的单位名称 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《测绘法》第 27 条、第 55 条第 1 款【法】；规程 2.3(1)【业】 |
+| type.survey_qualification_none.acting_unit | 实施测绘活动的单位名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《测绘法》第 27 条、第 55 条第 1 款【法】；规程 2.3(1)【业】 |
 | type.survey_qualification_none.party_identity | 当事人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
 | type.survey_qualification_none.legal_person_status | 是否具备法人资格 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 27 条第 2 款第（一）项【法】；《测绘资质管理办法》（自然资办发〔2021〕43 号）第五条第（一）项【业】 |
 | type.survey_qualification_none.certificate_status | 是否持有测绘资质证书，以及证书编号、等级、专业类别、发证机关与有效期 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 27 条第 2 款、第 55 条第 1 款【法】；规程 3.2.3.3(3)【业】；《测绘资质管理办法》第十二条【业】 |
-| type.survey_qualification_none.survey_activity_type | 擅自从事的测绘活动所属专业类别（大地测量／测绘航空摄影／摄影测量与遥感／工程测量／海洋测绘／界线与不动产测绘／地理信息系统工程／地图编制／导航电子地图制作／互联网地图服务） | 类型层·违法事实 | 必填 | 登记时 | 警告 | 《测绘资质管理办法》第二条【业】；《测绘资质分类分级标准》【业】 |
+| type.survey_qualification_none.survey_activity_type | 擅自从事的测绘活动所属专业类别（大地测量／测绘航空摄影／摄影测量与遥感／工程测量／海洋测绘／界线与不动产测绘／地理信息系统工程／地图编制／导航电子地图制作／互联网地图服务） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《测绘资质管理办法》第二条【业】；《测绘资质分类分级标准》【业】 |
 | type.survey_qualification_none.survey_project_object | 涉案测绘项目的名称、地点、内容与实施时间 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 55 条第 1 款【法】；规程 4.4.2.2(3)【业】 |
 | type.survey_qualification_none.basic_survey_flag | 是否属基础测绘项目 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 《基础测绘条例》第 2 条、第 16 条第 1 款、第 29 条【法】 |
 | type.survey_qualification_none.map_service_flag | 是否属地图编制活动或者互联网地图服务活动 | 类型层·涉案对象 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》（国务院令第 664 号）第 48 条【法】 |
@@ -578,12 +578,12 @@ L2 原文逐字照录：
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.survey_qualification_fraud.acting_unit | 以欺骗手段取得测绘资质证书的单位名称 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《测绘法》第 55 条第 2 款【法】；规程 2.3(1)【业】 |
+| type.survey_qualification_fraud.acting_unit | 以欺骗手段取得测绘资质证书的单位名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《测绘法》第 55 条第 2 款【法】；规程 2.3(1)【业】 |
 | type.survey_qualification_fraud.party_identity | 当事人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
 | type.survey_qualification_fraud.certificate_info | 涉案测绘资质证书的编号、等级、专业类别、发证机关、发证日期与有效期 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 27 条、第 55 条第 2 款【法】；规程 3.2.3.3(3)【业】；《测绘资质管理办法》第十二条【业】 |
 | type.survey_qualification_fraud.certificate_grade | 以欺骗手段取得的资质等级（甲级／乙级） | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 粤自然资规字〔2022〕2 号附件 3 序号 5（基本编码 440212075000）【业】；《测绘资质管理办法》第二条、第三条【业】 |
 | type.survey_qualification_fraud.application_records | 测绘资质申请时提交的材料，以及审批机关的受理、审查、批准记录 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《测绘资质管理办法》第七条、第八条、第十条、第十一条【业】；规程 3.2.3.3(3)【业】 |
-| type.survey_qualification_fraud.fraud_means | 欺骗手段的具体方式（隐瞒有关情况／提供虚假材料／贿赂／其他不正当手段） | 类型层·违法事实 | 必填 | 登记时 | 警告 | 《测绘法》第 55 条第 2 款【法】；《行政许可法》（2019 修正）第 78 条、第 79 条【法】 |
+| type.survey_qualification_fraud.fraud_means | 欺骗手段的具体方式（隐瞒有关情况／提供虚假材料／贿赂／其他不正当手段） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《测绘法》第 55 条第 2 款【法】；《行政许可法》（2019 修正）第 78 条、第 79 条【法】 |
 | type.survey_qualification_fraud.falsified_materials | 弄虚作假、伪造、欺骗的证明材料（虚假的法人资格材料、专业技术人员身份与职称与社会保险材料、技术装备所有权材料、测绘业绩材料） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(9)【业】；《测绘资质分类分级标准》第二条【业】；《测绘资质管理办法》第五条、第二十二条【业】 |
 | type.survey_qualification_fraud.condition_nonconformity | 申请时实际不符合的资质条件项（法人资格／专业技术人员／技术装备和设施／技术和质量保证体系与安全保障措施与信息安全保密管理制度与测绘成果和资料档案管理制度） | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 27 条第 2 款【法】；《测绘资质管理办法》第五条、第二十三条【业】 |
 | type.survey_qualification_fraud.activity_after_fraud | 取得证书后从事的测绘活动及其专业类别 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 55 条第 2 款【法】 |
@@ -614,11 +614,11 @@ L2 原文逐字照录：
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.survey_qualification_exceed_scope.acting_unit | 测绘单位名称 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《测绘法》第 29 条第 1 款、第 56 条第（一）项【法】；规程 2.3(1)【业】 |
+| type.survey_qualification_exceed_scope.acting_unit | 测绘单位名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《测绘法》第 29 条第 1 款、第 56 条第（一）项【法】；规程 2.3(1)【业】 |
 | type.survey_qualification_exceed_scope.party_identity | 当事人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
 | type.survey_qualification_exceed_scope.certificate_info | 测绘资质证书的编号、等级、专业类别、发证机关与有效期 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(3)【业】；《测绘资质管理办法》第十二条【业】 |
 | type.survey_qualification_exceed_scope.permitted_scope | 资质等级许可的专业类别与作业限制范围 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《测绘资质管理办法》第一条、第二条【业】；《测绘资质分类分级标准》第一条【业】 |
-| type.survey_qualification_exceed_scope.actual_activity_scope | 实际从事的测绘活动的专业类别、作业内容与作业范围 | 类型层·违法事实 | 必填 | 登记时 | 警告 | 《测绘法》第 29 条第 1 款、第 56 条第（一）项【法】 |
+| type.survey_qualification_exceed_scope.actual_activity_scope | 实际从事的测绘活动的专业类别、作业内容与作业范围 | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《测绘法》第 29 条第 1 款、第 56 条第（一）项【法】 |
 | type.survey_qualification_exceed_scope.survey_project_object | 涉案测绘项目的名称、地点、内容与实施时间 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 规程 4.4.2.2(3)【业】 |
 | type.survey_qualification_exceed_scope.basic_survey_flag | 是否属基础测绘项目 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 《基础测绘条例》第 16 条第 1 款、第 30 条【法】 |
 | type.survey_qualification_exceed_scope.project_contract | 测绘项目合同、协议或者人员用工合同 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(5)【业】 |
@@ -650,12 +650,12 @@ L2 原文逐字照录：
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.survey_qualification_borrow_name.acting_unit | 实际从事测绘活动的单位名称 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《测绘法》第 29 条第 1 款、第 56 条第（二）项【法】；规程 2.3(1)【业】 |
+| type.survey_qualification_borrow_name.acting_unit | 实际从事测绘活动的单位名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《测绘法》第 29 条第 1 款、第 56 条第（二）项【法】；规程 2.3(1)【业】 |
 | type.survey_qualification_borrow_name.nominal_unit | 被借用名义的其他测绘单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 29 条第 1 款、第 56 条第（二）项【法】 |
 | type.survey_qualification_borrow_name.party_identity | 当事人身份证明材料（实际实施单位与名义单位双方） | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
 | type.survey_qualification_borrow_name.acting_unit_certificate | 实际实施单位是否持有测绘资质证书及其等级与专业类别 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 27 条、第 29 条第 1 款【法】；规程 3.2.3.3(3)【业】 |
 | type.survey_qualification_borrow_name.nominal_unit_certificate | 名义单位的测绘资质证书编号、等级、专业类别与有效期 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(3)【业】；《测绘资质管理办法》第十二条【业】 |
-| type.survey_qualification_borrow_name.borrow_name_fact | 以其他测绘单位名义从事测绘活动的具体事实 | 类型层·违法事实 | 必填 | 登记时 | 警告 | 《测绘法》第 56 条第（二）项【法】 |
+| type.survey_qualification_borrow_name.borrow_name_fact | 以其他测绘单位名义从事测绘活动的具体事实 | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《测绘法》第 56 条第（二）项【法】 |
 | type.survey_qualification_borrow_name.borrow_name_means | 借用名义的方式（借用资质证书／挂靠／以名义单位印章与合同文本承接项目／以名义单位人员名义执业／其他） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(9)【业】；《测绘法》第 29 条第 1 款【法】 |
 | type.survey_qualification_borrow_name.impersonation_materials | 弄虚作假、伪造、冒用、以其他人名义执业的材料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(9)【业】 |
 | type.survey_qualification_borrow_name.survey_project_object | 涉案测绘项目的名称、地点、内容与实施时间 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 规程 4.4.2.2(3)【业】 |
@@ -685,12 +685,12 @@ L2 原文逐字照录：
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.survey_qualification_lend_name.acting_unit | 允许他人以本单位名义从事测绘活动的测绘单位名称 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《测绘法》第 29 条第 1 款、第 56 条第（三）项【法】；规程 2.3(1)【业】 |
+| type.survey_qualification_lend_name.acting_unit | 允许他人以本单位名义从事测绘活动的测绘单位名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《测绘法》第 29 条第 1 款、第 56 条第（三）项【法】；规程 2.3(1)【业】 |
 | type.survey_qualification_lend_name.borrowing_unit | 以本单位名义从事测绘活动的其他单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 56 条第（三）项【法】 |
 | type.survey_qualification_lend_name.party_identity | 当事人身份证明材料（本单位与借用名义单位双方） | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
 | type.survey_qualification_lend_name.own_certificate | 本单位测绘资质证书的编号、等级、专业类别与有效期 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(3)【业】；《测绘资质管理办法》第十二条【业】 |
 | type.survey_qualification_lend_name.borrowing_unit_certificate | 借用名义单位是否持有测绘资质证书及其等级与专业类别 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 27 条【法】；规程 3.2.3.3(3)【业】 |
-| type.survey_qualification_lend_name.lend_name_fact | 允许其他单位以本单位名义从事测绘活动的具体事实 | 类型层·违法事实 | 必填 | 登记时 | 警告 | 《测绘法》第 56 条第（三）项【法】 |
+| type.survey_qualification_lend_name.lend_name_fact | 允许其他单位以本单位名义从事测绘活动的具体事实 | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《测绘法》第 56 条第（三）项【法】 |
 | type.survey_qualification_lend_name.lend_name_means | 允许使用的方式（出借资质证书／提供印章与合同文本／出具授权委托书／以本单位名义报送成果／其他） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(9)【业】；《测绘法》第 29 条第 1 款【法】 |
 | type.survey_qualification_lend_name.impersonation_materials | 弄虚作假、伪造、冒用、以其他人名义执业的材料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(9)【业】 |
 | type.survey_qualification_lend_name.survey_project_object | 涉案测绘项目的名称、地点、内容与实施时间 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 规程 4.4.2.2(3)【业】 |
@@ -720,14 +720,14 @@ L2 原文逐字照录：
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.survey_tender_unqualified_bidder.tender_unit | 测绘项目的招标单位名称 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《测绘法》第 29 条第 2 款、第 57 条【法】；规程 2.3(1)【业】 |
+| type.survey_tender_unqualified_bidder.tender_unit | 测绘项目的招标单位名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《测绘法》第 29 条第 2 款、第 57 条【法】；规程 2.3(1)【业】 |
 | type.survey_tender_unqualified_bidder.party_identity | 当事人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
 | type.survey_tender_unqualified_bidder.tender_staff | 招标单位中利用职务便利索取或者非法收受他人财物的工作人员 | 类型层·违法主体 | 选填 | 核查前补齐 | 提示 | 《测绘法》第 57 条第 2 句【法】；规程 7.1(7)、11.2.1(2)(3)【业】 |
 | type.survey_tender_unqualified_bidder.winning_unit | 中标的测绘单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 29 条第 2 款【法】 |
 | type.survey_tender_unqualified_bidder.winning_unit_qualification | 中标单位的测绘资质等级与专业类别 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 29 条第 2 款【法】；规程 3.2.3.3(3)【业】 |
 | type.survey_tender_unqualified_bidder.required_qualification | 招标公告或者投标邀请书对测绘单位资质等级作出的要求 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 29 条第 2 款【法】；《招标投标法》（2017 修正）第 18 条第 1 款【法】 |
 | type.survey_tender_unqualified_bidder.tender_project_object | 涉案测绘项目的名称、内容、规模与招标方式 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 29 条第 2 款【法】；规程 4.4.2.2(3)【业】 |
-| type.survey_tender_unqualified_bidder.violation_form | 被质疑的行为形态（让不具有相应资质等级的单位中标／让测绘单位低于测绘成本中标） | 类型层·违法事实 | 必填 | 登记时 | 警告 | 《测绘法》第 29 条第 2 款、第 57 条【法】 |
+| type.survey_tender_unqualified_bidder.violation_form | 被质疑的行为形态（让不具有相应资质等级的单位中标／让测绘单位低于测绘成本中标） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《测绘法》第 29 条第 2 款、第 57 条【法】 |
 | type.survey_tender_unqualified_bidder.tender_documents | 招标公告、投标邀请书、招标文件、评标报告、中标通知书 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(5)(6)(11)【业】；《招标投标法》第 18 条、第 19 条【法】 |
 | type.survey_tender_unqualified_bidder.project_contract | 测绘项目合同 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(5)【业】 |
 | type.survey_tender_unqualified_bidder.site_survey_materials | 现场勘验材料（现场勘验笔录、照片、相关数据、视听资料） | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 规程 3.2.3.3(4)【业】 |
@@ -755,14 +755,14 @@ L2 原文逐字照录：
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.survey_tender_project_transfer.winning_unit | 中标的测绘单位名称 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《测绘法》第 29 条第 3 款、第 58 条【法】；规程 2.3(1)【业】 |
+| type.survey_tender_project_transfer.winning_unit | 中标的测绘单位名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《测绘法》第 29 条第 3 款、第 58 条【法】；规程 2.3(1)【业】 |
 | type.survey_tender_project_transfer.party_identity | 当事人身份证明材料（中标单位与受让方双方） | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
 | type.survey_tender_project_transfer.transferee_unit | 受让测绘项目的他人（单位或者个人）名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 29 条第 3 款、第 58 条【法】 |
 | type.survey_tender_project_transfer.winning_unit_certificate | 中标单位的测绘资质证书编号、等级、专业类别与有效期 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(3)【业】；《测绘资质管理办法》第十二条【业】 |
 | type.survey_tender_project_transfer.transferee_qualification | 受让方是否具备相应测绘资质或者执业资格 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 27 条、第 29 条第 3 款【法】；《广州市测绘地理信息管理办法》（广州市人民政府令第 190 号，2022-10-01 施行）第 17 条第 3 款【业】 |
 | type.survey_tender_project_transfer.transferred_project_object | 被转让的测绘项目的名称、内容与范围 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 29 条第 3 款【法】；规程 4.4.2.2(3)【业】 |
 | type.survey_tender_project_transfer.tender_winning_fact | 该项目经招投标程序中标的事实（中标通知书与招标合同） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 29 条第 3 款【法】；规程 3.2.3.3(5)【业】 |
-| type.survey_tender_project_transfer.transfer_form | 转让的方式（整体转让／肢解后分别转让／以合作或者劳务名义变相转让／转包） | 类型层·违法事实 | 必填 | 登记时 | 警告 | 《测绘法》第 29 条第 3 款、第 58 条【法】；《广州市测绘地理信息管理办法》第 17 条第 3 款【业】 |
+| type.survey_tender_project_transfer.transfer_form | 转让的方式（整体转让／肢解后分别转让／以合作或者劳务名义变相转让／转包） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《测绘法》第 29 条第 3 款、第 58 条【法】；《广州市测绘地理信息管理办法》第 17 条第 3 款【业】 |
 | type.survey_tender_project_transfer.subcontract_fact | 是否存在分包，以及分包的是否为非主体与非关键性工作、是否经合同约定或者招标人同意、接受分包方是否具备相应资格条件、是否再次分包 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《招标投标法》第 48 条【法】；《招标投标法实施条例》第 59 条【法】；《广州市测绘地理信息管理办法》第 17 条第 3 款【业】 |
 | type.survey_tender_project_transfer.transfer_contract | 转让或者分包合同、协议及款项支付凭据 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(5)(6)【业】 |
 | type.survey_tender_project_transfer.actual_performer_evidence | 实际组织实施测绘活动的单位、人员、设备与作业记录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)(8)(9)【业】 |
@@ -791,13 +791,13 @@ L2 原文逐字照录：
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.survey_practitioner_unqualified.practitioner_name | 未取得测绘执业资格擅自从事测绘活动的专业技术人员姓名与身份证明 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《测绘法》第 30 条、第 59 条【法】；规程 3.2.3.3(1)【业】 |
+| type.survey_practitioner_unqualified.practitioner_name | 未取得测绘执业资格擅自从事测绘活动的专业技术人员姓名与身份证明 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《测绘法》第 30 条、第 59 条【法】；规程 3.2.3.3(1)【业】 |
 | type.survey_practitioner_unqualified.employer_unit | 该专业技术人员所在单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 59 条【法】 |
 | type.survey_practitioner_unqualified.party_identity | 当事人身份证明材料（所在单位为处罚对象） | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
 | type.survey_practitioner_unqualified.employer_certificate | 所在单位的测绘资质证书编号、等级、专业类别与有效期 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(3)【业】；《注册测绘师制度暂行规定》（国人部发〔2007〕14 号）第二条【业】 |
 | type.survey_practitioner_unqualified.practitioner_qualification_status | 该人员是否取得注册测绘师资格证书以及是否依法注册 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《测绘法》第 30 条、第 59 条【法】；《注册测绘师制度暂行规定》第三条、第四条【业】；《国家职业资格目录（2021 年版）》【业】 |
 | type.survey_practitioner_unqualified.employment_evidence | 该人员与所在单位的聘用或者劳动关系材料、社会保险缴纳记录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(5)【业】 |
-| type.survey_practitioner_unqualified.practising_activity | 该人员擅自从事的测绘活动内容与执业范围（测绘项目技术设计／技术咨询与技术评估／技术管理与指导监督／成果质量检验审查鉴定） | 类型层·违法事实 | 必填 | 登记时 | 警告 | 《测绘法》第 30 条、第 59 条【法】；《注册测绘师制度暂行规定》第四章执业【业】 |
+| type.survey_practitioner_unqualified.practising_activity | 该人员擅自从事的测绘活动内容与执业范围（测绘项目技术设计／技术咨询与技术评估／技术管理与指导监督／成果质量检验审查鉴定） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《测绘法》第 30 条、第 59 条【法】；《注册测绘师制度暂行规定》第四章执业【业】 |
 | type.survey_practitioner_unqualified.survey_project_object | 涉案测绘项目的名称、地点、内容与实施时间 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 规程 4.4.2.2(3)【业】 |
 | type.survey_practitioner_unqualified.signature_evidence | 该人员在测绘成果、技术设计书、检验报告上的签字与执业印章使用记录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(9)【业】 |
 | type.survey_practitioner_unqualified.project_contract | 测绘项目合同、协议或者人员用工合同 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(5)【业】 |
@@ -881,7 +881,7 @@ L2 原文逐字照录：
 | 待定项 | 分歧点或已查到的边界 | 去向 |
 |---|---|---|
 | 1. 要件键的类型编码段无定案依据 | 12 个编码是本票草案：`survey_datum_coord_system_unapproved`、`survey_gnss_station_no_filing`、`survey_gnss_station_substandard`、`survey_basic_project_nonstandard_datum`、`survey_qualification_none`、`survey_qualification_fraud`、`survey_qualification_exceed_scope`、`survey_qualification_borrow_name`、`survey_qualification_lend_name`、`survey_tender_unqualified_bidder`、`survey_tender_project_transfer`、`survey_practitioner_unqualified`。违法类型编码表尚未产出。 | 依赖 #185 参照数据票。编码确定后 236 条要件键全部回改。 |
-| 2. 「登记时必填项后果取警告」与 #24 的字面读法冲突 | #24 决议三写「必填项缺失即阻断」。#181 与本票都取警告。本部分登记时必填 24 项，后果全部是警告，无一项取阻断。 | 与 #181 共用同一张拍板票。本票沿用 #181 口径，不自行拍板。 |
+| 2. 「录入时必填项后果取警告」与 #24 的字面读法冲突 | #24 决议三写「必填项缺失即阻断」。#181 与本票都取警告。本部分录入时必填 24 项，后果全部是警告，无一项取阻断。 | 与 #181 共用同一张拍板票。本票沿用 #181 口径，不自行拍板。 |
 | 3. `party_identity` 的铺设密度四部分口径不一致 | 本部分在 12 个类型里全设该项，依据是规程 3.2.3.3(1) 与规程 2.3(1)。#181 只在部分类型设（四（一）、四（二）与三（一）至三（四））。 | #183 汇总时统一密度口径。 |
 | 4. 「阻断」判据在罚款成立前提上的适用边界 | #181 的判据表述是「缺失则无法进入处罚流程」。本部分把罚款基数缺失也判为阻断：一（二）的 `rectification_notice_service` 与 `overdue_non_correction`，二（一）至二（七）的 `agreed_remuneration`，二（八）的 `illegal_income`。理由是《测绘法》第 53 条的罚款以「逾期不改正」为法定前提，第 55 条至第 59 条的罚款以约定报酬或者违法所得为唯一基数，无定额兜底。 | #183 汇总时拍板：罚款基数缺失算「无法进入处罚流程」还是算「裁量基数缺失」。若取后者，本部分 9 项需由阻断降为警告。 |
 | 5. 基准站备案依据的央地冲突 | 部令第 19 号第 9 条规定备案时点是「开工建设时」，备案机关是基准站所在地省级自然资源主管部门，跨两个以上省级行政区域的向自然资源部备案。粤自然资规字〔2021〕5 号第 7 条规定「开工建设 30 日前」通过自然资源部系统备案。后者自 2021-12-31 施行，有效期 5 年，至 2026-12-30。两份文件在 2026-01-01 至 2026-12-30 期间并存。 | 无直接依据判定适用顺序。业务方拍板。广东省文件到期后按新文件或换版文件回改 `filing_authority` 与 `construction_start_date` 的口径。 |
@@ -1169,35 +1169,35 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.result_not_submitted.obligor_name | 汇交义务人名称（测绘项目出资人／承担国家投资的测绘项目的单位） | 类型层·违法主体 | 必填 | 登记时 | 警告 | 测绘法第 33 条第 2 款、第 60 条【法】；规程 2.3(1)【业】 |
-| type.result_not_submitted.obligor_kind | 汇交义务人类别（测绘项目出资人／承担国家投资的测绘项目的单位） | 类型层·违法主体 | 必填 | 登记时 | 警告 | 测绘法第 60 条【法】；粤裁量序号 12【业】 |
-| type.result_not_submitted.obligor_identity | 汇交义务人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
-| type.result_not_submitted.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 测绘法第 60 条末句【法】 |
-| type.result_not_submitted.qualification_cert_no | 承担国家投资的测绘项目的单位的测绘资质证书号与等级（义务人类别为出资人且出资人无资质证书的填「不适用」） | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 测绘法第 60 条【法】；规程 3.2.3.3(3)【业】；规程 8.4.1(5)⑥【业】 |
-| type.result_not_submitted.issuing_authority | 颁发该测绘资质证书的部门 | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 测绘法第 66 条第 1 款【法】；规程 10.6(7)【业】 |
-| type.result_not_submitted.submission_receipt | 测绘成果汇交凭证（已取得的填凭证编号与出具机关，未取得的填「未取得」） | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 测绘法第 33 条第 2 款【法】；成果条例第 10 条【法】 |
-| type.result_not_submitted.project_name | 涉案测绘项目名称 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(5)【业】；规程 4.4.2.2(3)【业】 |
-| type.result_not_submitted.is_state_invested | 是否属于国家投资的测绘项目 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 33 条第 2 款、第 60 条【法】 |
-| type.result_not_submitted.is_basic_survey | 是否属于基础测绘项目（决定汇交副本还是汇交目录） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 33 条第 2 款【法】；成果条例第 9 条【法】；粤汇交办法第 5 条、第 6 条【业】 |
-| type.result_not_submitted.submission_content | 应汇交的内容（测绘成果副本／测绘成果目录） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 33 条第 2 款【法】；粤汇交办法第 5 条【业】；穗府令 190 号第 21 条【业】 |
-| type.result_not_submitted.result_materials | 涉案测绘成果资料 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(7)【业】 |
-| type.result_not_submitted.project_contract | 测绘项目合同或者协议性文件 | 类型层·涉案对象 | 选填 | 核查前补齐 | 提示 | 规程 3.2.3.3(5)【业】 |
-| type.result_not_submitted.acceptance_date | 测绘项目验收完成之日（汇交期限的起算点） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 成果条例第 9 条【法】；粤汇交办法第 4 条【业】 |
-| type.result_not_submitted.deadline_expiry | 三个月汇交期限的届满日 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 成果条例第 9 条【法】；粤汇交办法第 4 条【业】 |
-| type.result_not_submitted.overdue_fact | 逾期不汇交的事实 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 测绘法第 60 条【法】 |
-| type.result_not_submitted.overdue_duration | 责令汇交期限届满后的实际汇交时间，或者拒不汇交的状态 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 粤裁量序号 12【业】 |
-| type.result_not_submitted.order_submit | 责令限期汇交的通知书、送达回证与限期届满日 | 类型层·程序环节 | 必填 | 核查前补齐 | 阻断 | 测绘法第 60 条「责令限期汇交」【法】；规程 15.5【业】；规程附录 E 第 26 项【业】 |
-| type.result_not_submitted.suspension_six_months | 自暂扣测绘资质证书之日起六个月内仍不汇交的事实与期间计算 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 测绘法第 60 条【法】；规程 8.4.1(5)⑥「暂扣具体期限」【业】 |
-| type.result_not_submitted.hearing_flag | 是否拟作出暂扣或者吊销测绘资质证书的处罚 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 规程 8.3(5)【业】；规程附录 E 第 23 项【业】 |
-| type.result_not_submitted.inquiry_record | 询问笔录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(2)【业】 |
-| type.result_not_submitted.remeasure_cost | 重测所需费用（义务人类别为出资人时的罚款基数） | 类型层·金额与裁量 | 选填 | 核查前补齐 | 提示 | 测绘法第 60 条【法】；粤裁量序号 12【业】 |
-| type.result_not_submitted.fine_base | 罚款裁量档次 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤裁量序号 12【业】 |
+| type.survey_result_not_submitted.obligor_name | 汇交义务人名称（测绘项目出资人／承担国家投资的测绘项目的单位） | 类型层·违法主体 | 必填 | 录入时 | 警告 | 测绘法第 33 条第 2 款、第 60 条【法】；规程 2.3(1)【业】 |
+| type.survey_result_not_submitted.obligor_kind | 汇交义务人类别（测绘项目出资人／承担国家投资的测绘项目的单位） | 类型层·违法主体 | 必填 | 录入时 | 警告 | 测绘法第 60 条【法】；粤裁量序号 12【业】 |
+| type.survey_result_not_submitted.obligor_identity | 汇交义务人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
+| type.survey_result_not_submitted.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 测绘法第 60 条末句【法】 |
+| type.survey_result_not_submitted.qualification_cert_no | 承担国家投资的测绘项目的单位的测绘资质证书号与等级（义务人类别为出资人且出资人无资质证书的填「不适用」） | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 测绘法第 60 条【法】；规程 3.2.3.3(3)【业】；规程 8.4.1(5)⑥【业】 |
+| type.survey_result_not_submitted.issuing_authority | 颁发该测绘资质证书的部门 | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 测绘法第 66 条第 1 款【法】；规程 10.6(7)【业】 |
+| type.survey_result_not_submitted.submission_receipt | 测绘成果汇交凭证（已取得的填凭证编号与出具机关，未取得的填「未取得」） | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 测绘法第 33 条第 2 款【法】；成果条例第 10 条【法】 |
+| type.survey_result_not_submitted.project_name | 涉案测绘项目名称 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(5)【业】；规程 4.4.2.2(3)【业】 |
+| type.survey_result_not_submitted.is_state_invested | 是否属于国家投资的测绘项目 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 33 条第 2 款、第 60 条【法】 |
+| type.survey_result_not_submitted.is_basic_survey | 是否属于基础测绘项目（决定汇交副本还是汇交目录） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 33 条第 2 款【法】；成果条例第 9 条【法】；粤汇交办法第 5 条、第 6 条【业】 |
+| type.survey_result_not_submitted.submission_content | 应汇交的内容（测绘成果副本／测绘成果目录） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 33 条第 2 款【法】；粤汇交办法第 5 条【业】；穗府令 190 号第 21 条【业】 |
+| type.survey_result_not_submitted.result_materials | 涉案测绘成果资料 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(7)【业】 |
+| type.survey_result_not_submitted.project_contract | 测绘项目合同或者协议性文件 | 类型层·涉案对象 | 选填 | 核查前补齐 | 提示 | 规程 3.2.3.3(5)【业】 |
+| type.survey_result_not_submitted.acceptance_date | 测绘项目验收完成之日（汇交期限的起算点） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 成果条例第 9 条【法】；粤汇交办法第 4 条【业】 |
+| type.survey_result_not_submitted.deadline_expiry | 三个月汇交期限的届满日 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 成果条例第 9 条【法】；粤汇交办法第 4 条【业】 |
+| type.survey_result_not_submitted.overdue_fact | 逾期不汇交的事实 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 测绘法第 60 条【法】 |
+| type.survey_result_not_submitted.overdue_duration | 责令汇交期限届满后的实际汇交时间，或者拒不汇交的状态 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 粤裁量序号 12【业】 |
+| type.survey_result_not_submitted.order_submit | 责令限期汇交的通知书、送达回证与限期届满日 | 类型层·程序环节 | 必填 | 核查前补齐 | 阻断 | 测绘法第 60 条「责令限期汇交」【法】；规程 15.5【业】；规程附录 E 第 26 项【业】 |
+| type.survey_result_not_submitted.suspension_six_months | 自暂扣测绘资质证书之日起六个月内仍不汇交的事实与期间计算 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 测绘法第 60 条【法】；规程 8.4.1(5)⑥「暂扣具体期限」【业】 |
+| type.survey_result_not_submitted.hearing_flag | 是否拟作出暂扣或者吊销测绘资质证书的处罚 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 规程 8.3(5)【业】；规程附录 E 第 23 项【业】 |
+| type.survey_result_not_submitted.inquiry_record | 询问笔录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(2)【业】 |
+| type.survey_result_not_submitted.remeasure_cost | 重测所需费用（义务人类别为出资人时的罚款基数） | 类型层·金额与裁量 | 选填 | 核查前补齐 | 提示 | 测绘法第 60 条【法】；粤裁量序号 12【业】 |
+| type.survey_result_not_submitted.fine_base | 罚款裁量档次 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤裁量序号 12【业】 |
 
 说明：
 
 1. **本类型的事实底座是「期限」与「凭证」两组。** 期限组三项：验收完成之日、三个月届满日、逾期不汇交的事实。凭证组一项：测绘成果汇交凭证。测绘法第 33 条第 2 款把汇交凭证设为接收机关的法定出具义务，因此凭证的有无是「是否已汇交」的直接书证。四组缺任一项则无法认定「不汇交」，一律取阻断。
 2. **与规程 3.2.3.3 的对应关系。** `obligor_identity` 对应第 (1) 项；`inquiry_record` 对应第 (2) 项；`qualification_cert_no` 对应第 (3) 项；`project_contract` 对应第 (5) 项；`result_materials` 对应第 (7) 项。第 (4) 项现场勘验材料、第 (6) 项交易凭据与登记台账、第 (8) 项设施设备、第 (9) 项弄虚作假材料在本类型无适用场合，本票不单列。第 (10) 项审查意见与检验报告在本类型也不适用，理由是不汇交的构成不以质量检验为前提。
-3. **本类型特有的认定要求是按主体分岔的罚款基数。** 测绘法第 60 条给两种主体设两种基数：出资人按重测所需费用一倍以上二倍以下计罚；承担国家投资的测绘项目的单位按 5 万元以上 20 万元以下计罚，并处暂扣测绘资质证书。因此 `obligor_kind` 与 `is_state_invested` 两项是本类型的定性前提，都取阻断。`obligor_kind` 定为登记时必填，理由是线索指称本类型时通常已指明义务人是出资人还是承担单位，该项决定后续收集哪套材料。登记时必填项的后果取警告，不阻断登记。
+3. **本类型特有的认定要求是按主体分岔的罚款基数。** 测绘法第 60 条给两种主体设两种基数：出资人按重测所需费用一倍以上二倍以下计罚；承担国家投资的测绘项目的单位按 5 万元以上 20 万元以下计罚，并处暂扣测绘资质证书。因此 `obligor_kind` 与 `is_state_invested` 两项是本类型的定性前提，都取阻断。`obligor_kind` 定为录入时必填，理由是线索指称本类型时通常已指明义务人是出资人还是承担单位，该项决定后续收集哪套材料。录入时必填项的后果取警告，不阻断登记。
 4. **条件要件的表达方式。** `qualification_cert_no` 是本类型的条件要件。测绘法第 60 条只对「承担国家投资的测绘项目的单位」设暂扣与吊销证书的责任，出资人不必然持有测绘资质证书。本票按 #181 口径取单值必填，条件写进「项」列：义务人类别为出资人且出资人无资质证书的填「不适用」。该项在条件成立时是阻断项，理由是规程 8.4.1(5)⑥ 要求暂扣与吊销证书的决定书必须写明资质证书的证号、等级与暂扣具体期限。`remeasure_cost` 取选填，理由同前。
 5. **两阶段与三阶段的责任递进。** 测绘法第 60 条设三个节点：责令限期汇交、逾期不汇交时罚款并处暂扣证书、自暂扣之日起六个月内仍不汇交时吊销证书。`order_submit` 承载第一个节点，`overdue_duration` 承载第二个节点，`suspension_six_months` 承载第三个节点。第三节点取选填、提示，理由是该节点在登记与核查阶段通常尚未到达，本票不设条件必填。
 6. **成果条例第 27 条的引用已失效，本表未采用。** 成果条例第 27 条原文为「违反本条例规定，未汇交测绘成果资料的，依照《中华人民共和国测绘法》第四十七条的规定进行处罚」。该条指向的是 2002 年测绘法第 47 条。2017 年修订后，不汇交测绘成果资料的责任条款是测绘法第 60 条，第 47 条已改为涉密地理信息的登记保存义务。成果条例自 2006 年施行后无修订记录，第 27 条的交叉引用未随之更新。本表的依据栏一律引测绘法第 60 条，不引成果条例第 27 条。该校正记入本大类末尾的校正表。
@@ -1208,35 +1208,35 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.key_geo_data_unauthorized_release.publisher_name | 发布主体（单位或者个人）名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 测绘法第 61 条【法】；成果条例第 22 条第 2 款「任何单位和个人不得擅自公布重要地理信息数据」【法】 |
-| type.key_geo_data_unauthorized_release.publisher_identity | 发布主体身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
-| type.key_geo_data_unauthorized_release.publisher_kind | 发布主体类别（单位／个人） | 类型层·违法主体 | 选填 | 核查前补齐 | 提示 | 成果条例第 22 条第 2 款【法】；规程 4.2.1【业】 |
-| type.key_geo_data_unauthorized_release.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 测绘法第 61 条【法】 |
-| type.key_geo_data_unauthorized_release.data_category | 被发布数据所属的重要地理信息数据类别（国界与国家海岸线长度／领土领海毗连区专属经济区面积／国家海岸滩涂面积与岛礁数量和面积／国家版图的重要特征点与地势地貌分区位置／国务院测绘主管部门商国务院其他有关部门确定的其他重要自然和人文地理实体数据） | 类型层·涉案对象 | 必填 | 登记时 | 警告 | 成果条例第 23 条【法】；测绘法第 37 条【法】 |
-| type.key_geo_data_unauthorized_release.data_content | 被发布的重要地理信息数据内容与其载体 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 成果条例第 23 条【法】；规程 3.2.3.3(7)【业】 |
-| type.key_geo_data_unauthorized_release.data_source | 该数据的获取来源（自行测绘／引用他人成果／境外来源） | 类型层·涉案对象 | 选填 | 核查前补齐 | 提示 | 规程 3.2.3.3(7)【业】；无直接法条依据，待定 |
-| type.key_geo_data_unauthorized_release.release_act | 发布行为方式（出版／展示／登载／互联网发布／新闻发布／对外交流／教学） | 类型层·违法事实 | 必填 | 登记时 | 警告 | 测绘法第 37 条、第 61 条【法】；成果条例第 25 条第 2 款【法】 |
-| type.key_geo_data_unauthorized_release.release_time | 发布时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 4.4.2.2(3)【业】；规程 2.3(5)【业】 |
-| type.key_geo_data_unauthorized_release.release_scope | 发布所指向的地域范围（是否覆盖中华人民共和国领域和中华人民共和国管辖的其他海域） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 测绘法第 37 条、第 61 条【法】 |
-| type.key_geo_data_unauthorized_release.public_impact | 发布的传播范围与影响面 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 成果条例第 25 条第 2 款「对社会公众有影响的活动」【法】 |
-| type.key_geo_data_unauthorized_release.evidence_materials | 发布载体的原件、截图、视听资料与电子数据 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)(7)【业】 |
-| type.key_geo_data_unauthorized_release.inquiry_record | 询问笔录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(2)【业】 |
-| type.key_geo_data_unauthorized_release.approval_status | 该数据是否已经国务院批准并授权公布（已批准并授权公布／未经国务院批准） | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 测绘法第 37 条【法】；成果条例第 22 条、第 24 条、第 25 条第 1 款【法】；粤裁量序号 13【业】 |
-| type.key_geo_data_unauthorized_release.publish_announcement | 国务院或者国务院授权的部门已公布该数据的公告（有则填公告名称、文号与公布日期） | 类型层·认定与检验结论 | 选填 | 核查前补齐 | 提示 | 成果条例第 25 条第 1 款【法】；2025 通知第五项【业】 |
-| type.key_geo_data_unauthorized_release.review_procedure | 重要地理信息数据的审核与公布程序履行情况（建议材料报送、审核、会商、报国务院批准） | 类型层·程序环节 | 必填 | 核查前补齐 | 阻断 | 成果条例第 24 条【法】；2025 通知第一项至第五项【业】 |
-| type.key_geo_data_unauthorized_release.provincial_data | 是否属于省级审核公布的重要地理信息数据 | 类型层·涉案对象 | 选填 | 核查前补齐 | 提示 | 粤条例第 36 条第 2 款【业】 |
-| type.key_geo_data_unauthorized_release.legal_basis_choice | 适用测绘法第 61 条还是成果条例第 29 条第 2 项 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《中华人民共和国行政处罚法》第 29 条【法】；测绘法第 61 条【法】；成果条例第 29 条第 2 项【法】 |
-| type.key_geo_data_unauthorized_release.order_correction | 责令改正的通知书与改正情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 61 条「责令改正」【法】；规程 15.5【业】；规程附录 E 第 26 项【业】 |
-| type.key_geo_data_unauthorized_release.criminal_referral_check | 是否达到刑事追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 61 条末句「构成犯罪的，依法追究刑事责任」【法】；规程 7.1(8)、11.1【业】 |
-| type.key_geo_data_unauthorized_release.identification_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
-| type.key_geo_data_unauthorized_release.fine_base | 罚款裁量档次 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤裁量序号 13【业】 |
+| type.survey_key_geo_data_unauthorized_release.publisher_name | 发布主体（单位或者个人）名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 测绘法第 61 条【法】；成果条例第 22 条第 2 款「任何单位和个人不得擅自公布重要地理信息数据」【法】 |
+| type.survey_key_geo_data_unauthorized_release.publisher_identity | 发布主体身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
+| type.survey_key_geo_data_unauthorized_release.publisher_kind | 发布主体类别（单位／个人） | 类型层·违法主体 | 选填 | 核查前补齐 | 提示 | 成果条例第 22 条第 2 款【法】；规程 4.2.1【业】 |
+| type.survey_key_geo_data_unauthorized_release.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 测绘法第 61 条【法】 |
+| type.survey_key_geo_data_unauthorized_release.data_category | 被发布数据所属的重要地理信息数据类别（国界与国家海岸线长度／领土领海毗连区专属经济区面积／国家海岸滩涂面积与岛礁数量和面积／国家版图的重要特征点与地势地貌分区位置／国务院测绘主管部门商国务院其他有关部门确定的其他重要自然和人文地理实体数据） | 类型层·涉案对象 | 必填 | 录入时 | 警告 | 成果条例第 23 条【法】；测绘法第 37 条【法】 |
+| type.survey_key_geo_data_unauthorized_release.data_content | 被发布的重要地理信息数据内容与其载体 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 成果条例第 23 条【法】；规程 3.2.3.3(7)【业】 |
+| type.survey_key_geo_data_unauthorized_release.data_source | 该数据的获取来源（自行测绘／引用他人成果／境外来源） | 类型层·涉案对象 | 选填 | 核查前补齐 | 提示 | 规程 3.2.3.3(7)【业】；无直接法条依据，待定 |
+| type.survey_key_geo_data_unauthorized_release.release_act | 发布行为方式（出版／展示／登载／互联网发布／新闻发布／对外交流／教学） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 测绘法第 37 条、第 61 条【法】；成果条例第 25 条第 2 款【法】 |
+| type.survey_key_geo_data_unauthorized_release.release_time | 发布时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 4.4.2.2(3)【业】；规程 2.3(5)【业】 |
+| type.survey_key_geo_data_unauthorized_release.release_scope | 发布所指向的地域范围（是否覆盖中华人民共和国领域和中华人民共和国管辖的其他海域） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 测绘法第 37 条、第 61 条【法】 |
+| type.survey_key_geo_data_unauthorized_release.public_impact | 发布的传播范围与影响面 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 成果条例第 25 条第 2 款「对社会公众有影响的活动」【法】 |
+| type.survey_key_geo_data_unauthorized_release.evidence_materials | 发布载体的原件、截图、视听资料与电子数据 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)(7)【业】 |
+| type.survey_key_geo_data_unauthorized_release.inquiry_record | 询问笔录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(2)【业】 |
+| type.survey_key_geo_data_unauthorized_release.approval_status | 该数据是否已经国务院批准并授权公布（已批准并授权公布／未经国务院批准） | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 测绘法第 37 条【法】；成果条例第 22 条、第 24 条、第 25 条第 1 款【法】；粤裁量序号 13【业】 |
+| type.survey_key_geo_data_unauthorized_release.publish_announcement | 国务院或者国务院授权的部门已公布该数据的公告（有则填公告名称、文号与公布日期） | 类型层·认定与检验结论 | 选填 | 核查前补齐 | 提示 | 成果条例第 25 条第 1 款【法】；2025 通知第五项【业】 |
+| type.survey_key_geo_data_unauthorized_release.review_procedure | 重要地理信息数据的审核与公布程序履行情况（建议材料报送、审核、会商、报国务院批准） | 类型层·程序环节 | 必填 | 核查前补齐 | 阻断 | 成果条例第 24 条【法】；2025 通知第一项至第五项【业】 |
+| type.survey_key_geo_data_unauthorized_release.provincial_data | 是否属于省级审核公布的重要地理信息数据 | 类型层·涉案对象 | 选填 | 核查前补齐 | 提示 | 粤条例第 36 条第 2 款【业】 |
+| type.survey_key_geo_data_unauthorized_release.legal_basis_choice | 适用测绘法第 61 条还是成果条例第 29 条第 2 项 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《中华人民共和国行政处罚法》第 29 条【法】；测绘法第 61 条【法】；成果条例第 29 条第 2 项【法】 |
+| type.survey_key_geo_data_unauthorized_release.order_correction | 责令改正的通知书与改正情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 61 条「责令改正」【法】；规程 15.5【业】；规程附录 E 第 26 项【业】 |
+| type.survey_key_geo_data_unauthorized_release.criminal_referral_check | 是否达到刑事追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 61 条末句「构成犯罪的，依法追究刑事责任」【法】；规程 7.1(8)、11.1【业】 |
+| type.survey_key_geo_data_unauthorized_release.identification_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
+| type.survey_key_geo_data_unauthorized_release.fine_base | 罚款裁量档次 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤裁量序号 13【业】 |
 
 说明：
 
 1. **本类型的事实底座是「数据类别」与「批准状态」的比对。** `data_category` 判定涉案数据是否落入成果条例第 23 条的五类重要地理信息数据。`approval_status` 判定该数据是否已经国务院批准并授权公布。两项比对的结果决定「擅自」是否成立。两项都取阻断。`approval_status` 的两档取值直接来自粤裁量序号 13 的分档判据：擅自发布已经国务院批准并授权国务院有关部门公布的重要地理信息数据的，处 20 万元以下罚款；擅自发布未经国务院批准的重要地理信息数据的，处 20 万元以上 50 万元以下罚款。
 2. **与规程 3.2.3.3 的对应关系。** `publisher_identity` 对应第 (1) 项；`inquiry_record` 对应第 (2) 项；`data_content` 与 `evidence_materials` 对应第 (7) 项；`evidence_materials` 的截图与视听资料部分对应第 (4) 项；`identification_opinion` 对应第 (10) 项。第 (3) 项资质证书在本类型不适用，理由是本类型的主体不限于测绘单位。第 (5) 项合同、第 (6) 项交易凭据、第 (8) 项设施设备、第 (9) 项弄虚作假材料在本类型无适用场合。
 3. **本类型特有的认定要求是审核公布程序的还原。** 成果条例第 24 条规定的程序有五步：建议人向国务院测绘行政主管部门或者省级测绘行政主管部门报送建议材料；国务院测绘行政主管部门提出审核意见；与国务院其他有关部门、军队测绘主管部门会商；报国务院批准；由国务院或者国务院授权的部门以公告形式公布。2025 通知把该程序细化为五项，并规定省级自然资源主管部门收到建议材料的应当提出意见并转报自然资源部。**该程序的履行情况是「擅自」的反面**，因此 `review_procedure` 取阻断。
-4. **`data_category` 与 `release_act` 定为登记时必填。** 理由是线索指称本类型时，举报材料通常已载明发布了什么数据、在哪里发布。两项决定后续收集哪套比对材料。登记时必填项的后果取警告，不阻断登记。
+4. **`data_category` 与 `release_act` 定为录入时必填。** 理由是线索指称本类型时，举报材料通常已载明发布了什么数据、在哪里发布。两项决定后续收集哪套比对材料。录入时必填项的后果取警告，不阻断登记。
 5. **法条竞合的处理。** 成果条例第 29 条第 2 项对「擅自公布重要地理信息数据」设 10 万元以下罚款。测绘法第 61 条对同一行为设 50 万元以下罚款。按行政处罚法第 29 条择一重，本类型的罚款依据取测绘法第 61 条。`legal_basis_choice` 一项承载这一判断，取必填、核查前补齐、警告。粤裁量序号 13 只收录测绘法第 61 条，未收录成果条例第 29 条第 2 项，与本票判断一致。
 6. **依据版本变动。** 附录 C 四（二）只引测绘法第 37 条与成果条例第 22 条、第 23 条，未引部门规章。本票查证：成果条例第 24 条末句授权的「具体办法」原为《重要地理信息数据审核公布管理规定》（国土资源部令第 19 号，2003-03-25 发布，2003-05-01 施行）。该规定已于 2019-07-24 废止，废止依据是自然资源部《关于第一批废止和修改的部门规章的决定》。现行依据是 2025 通知（自然资规〔2025〕3 号），2025-02-12 印发，2025-03-13 起执行，有效期 5 年。本表 `review_procedure` 的依据栏引 2025 通知，不引已废止的部令第 19 号。该校正记入本大类末尾的校正表。
 
@@ -1244,32 +1244,32 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.secret_geo_info_no_register.unit_name | 地理信息生产、保管、利用单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 测绘法第 47 条第 1 款、第 65 条第 1 款【法】；规程 2.3(1)【业】 |
-| type.secret_geo_info_no_register.unit_role | 单位在地理信息链条中的角色（生产／保管／利用） | 类型层·违法主体 | 必填 | 登记时 | 警告 | 测绘法第 47 条第 1 款【法】 |
-| type.secret_geo_info_no_register.unit_identity | 单位身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】 |
-| type.secret_geo_info_no_register.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 保密法第 57 条第 1 款、第 58 条【法】 |
-| type.secret_geo_info_no_register.qualification_cert_no | 测绘资质证书号与等级（拟责令停业整顿并处降低测绘资质等级或者吊销测绘资质证书时填写） | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 测绘法第 65 条第 1 款【法】；规程 3.2.3.3(3)【业】；规程 8.4.1(5)⑥【业】 |
-| type.secret_geo_info_no_register.issuing_authority | 颁发该测绘资质证书的部门 | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 测绘法第 66 条第 1 款【法】；规程 10.6(7)【业】 |
-| type.secret_geo_info_no_register.license_record | 涉密基础测绘成果的使用许可或者审批材料、《涉密基础测绘成果使用安全保密责任书》 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 警告 | 涉密成果办法第（三）项、第（六）项【业】；粤审批规定【业】 |
-| type.secret_geo_info_no_register.secret_data_object | 涉案的属于国家秘密的地理信息（名称、种类、数量、载体形式） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 47 条第 1 款【法】；规程 3.2.3.3(7)【业】 |
-| type.secret_geo_info_no_register.secret_level | 涉案地理信息的密级（绝密／机密／秘密） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 保密法第 14 条【法】；95 号文第 2 条【业】 |
-| type.secret_geo_info_no_register.secret_scope_basis | 该事项属于国家秘密的定密依据（保密事项范围的具体条目） | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 保密法第 13 条、第 15 条【法】；95 号文第 2 条、第 3 条【业】 |
-| type.secret_geo_info_no_register.secret_appraisal | 国家秘密鉴定书（是否属于国家秘密、属于何种密级） | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 保密法第 53 条【法】；鉴定规定第 5 条、第 6 条、第 22 条【业】 |
-| type.secret_geo_info_no_register.identification_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
-| type.secret_geo_info_no_register.register_ledger | 获取、持有、提供、利用情况的登记台账与长期保存记录 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 测绘法第 47 条第 1 款【法】；规程 3.2.3.3(6)【业】；涉密成果办法第（六）项【业】 |
-| type.secret_geo_info_no_register.traceable_management | 可追溯管理的落实情况（保管、使用、复制、销毁的登记记录） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 测绘法第 47 条第 1 款「实行可追溯管理」【法】；涉密成果办法第（六）项【业】 |
-| type.secret_geo_info_no_register.management_system | 本单位的涉密地理信息管理制度与保密措施 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 保密法第 57 条第 1 款【法】；粤保密通知【业】 |
-| type.secret_geo_info_no_register.leak_fact | 是否发生国家秘密泄露，以及泄露的事实材料 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 测绘法第 65 条第 1 款「泄露国家秘密的」【法】；粤裁量序号 20【业】 |
-| type.secret_geo_info_no_register.leak_level | 泄露的国家秘密密级与项（件）数 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 粤裁量序号 20【业】；高检发释字〔2006〕2 号（三）（四）【法】 |
-| type.secret_geo_info_no_register.leak_channel | 泄露的渠道与方式 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 保密法第 57 条第 1 款第 (三) 项至第 (十) 项【法】 |
-| type.secret_geo_info_no_register.site_survey | 现场勘验材料（现场勘验笔录、照片、相关数据、视听资料） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(4)【业】；测绘法第 49 条第 1 款【法】 |
-| type.secret_geo_info_no_register.seizure_materials | 查封、扣押的涉密载体清单与处理决定 | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 测绘法第 49 条第 1 款第 (二) 项【法】；规程 3.2.5【业】；规程附录 E 第 8 项、第 9 项【业】 |
-| type.secret_geo_info_no_register.inquiry_record | 询问笔录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(2)【业】 |
-| type.secret_geo_info_no_register.order_correction | 责令改正的通知书与改正情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 65 条第 1 款「责令改正」【法】；规程 15.5【业】 |
-| type.secret_geo_info_no_register.secrecy_dept_referral | 向保密行政管理部门通报或者移送的情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 保密法第 57 条第 2 款、第 58 条【法】；规程 2.1.4、11.3【业】 |
-| type.secret_geo_info_no_register.criminal_referral_check | 是否达到刑事追诉标准，以及移送出口（公安机关／国家安全机关／监察机关） | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 111 条、第 282 条、第 398 条【法】；保密法第 62 条【法】；规程 7.1(8)、11.1、11.2【业】 |
-| type.secret_geo_info_no_register.hearing_flag | 是否拟作出责令停业整顿、降低测绘资质等级或者吊销测绘资质证书 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 规程 8.3(5)(6)【业】 |
-| type.secret_geo_info_no_register.fine_base | 罚款裁量档次（按是否泄露及泄露密级分档） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤裁量序号 20【业】 |
+| type.survey_secret_geo_info_no_register.unit_name | 地理信息生产、保管、利用单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 测绘法第 47 条第 1 款、第 65 条第 1 款【法】；规程 2.3(1)【业】 |
+| type.survey_secret_geo_info_no_register.unit_role | 单位在地理信息链条中的角色（生产／保管／利用） | 类型层·违法主体 | 必填 | 录入时 | 警告 | 测绘法第 47 条第 1 款【法】 |
+| type.survey_secret_geo_info_no_register.unit_identity | 单位身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】 |
+| type.survey_secret_geo_info_no_register.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 保密法第 57 条第 1 款、第 58 条【法】 |
+| type.survey_secret_geo_info_no_register.qualification_cert_no | 测绘资质证书号与等级（拟责令停业整顿并处降低测绘资质等级或者吊销测绘资质证书时填写） | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 测绘法第 65 条第 1 款【法】；规程 3.2.3.3(3)【业】；规程 8.4.1(5)⑥【业】 |
+| type.survey_secret_geo_info_no_register.issuing_authority | 颁发该测绘资质证书的部门 | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 测绘法第 66 条第 1 款【法】；规程 10.6(7)【业】 |
+| type.survey_secret_geo_info_no_register.license_record | 涉密基础测绘成果的使用许可或者审批材料、《涉密基础测绘成果使用安全保密责任书》 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 警告 | 涉密成果办法第（三）项、第（六）项【业】；粤审批规定【业】 |
+| type.survey_secret_geo_info_no_register.secret_data_object | 涉案的属于国家秘密的地理信息（名称、种类、数量、载体形式） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 47 条第 1 款【法】；规程 3.2.3.3(7)【业】 |
+| type.survey_secret_geo_info_no_register.secret_level | 涉案地理信息的密级（绝密／机密／秘密） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 保密法第 14 条【法】；95 号文第 2 条【业】 |
+| type.survey_secret_geo_info_no_register.secret_scope_basis | 该事项属于国家秘密的定密依据（保密事项范围的具体条目） | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 保密法第 13 条、第 15 条【法】；95 号文第 2 条、第 3 条【业】 |
+| type.survey_secret_geo_info_no_register.secret_appraisal | 国家秘密鉴定书（是否属于国家秘密、属于何种密级） | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 保密法第 53 条【法】；鉴定规定第 5 条、第 6 条、第 22 条【业】 |
+| type.survey_secret_geo_info_no_register.identification_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
+| type.survey_secret_geo_info_no_register.register_ledger | 获取、持有、提供、利用情况的登记台账与长期保存记录 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 测绘法第 47 条第 1 款【法】；规程 3.2.3.3(6)【业】；涉密成果办法第（六）项【业】 |
+| type.survey_secret_geo_info_no_register.traceable_management | 可追溯管理的落实情况（保管、使用、复制、销毁的登记记录） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 测绘法第 47 条第 1 款「实行可追溯管理」【法】；涉密成果办法第（六）项【业】 |
+| type.survey_secret_geo_info_no_register.management_system | 本单位的涉密地理信息管理制度与保密措施 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 保密法第 57 条第 1 款【法】；粤保密通知【业】 |
+| type.survey_secret_geo_info_no_register.leak_fact | 是否发生国家秘密泄露，以及泄露的事实材料 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 测绘法第 65 条第 1 款「泄露国家秘密的」【法】；粤裁量序号 20【业】 |
+| type.survey_secret_geo_info_no_register.leak_level | 泄露的国家秘密密级与项（件）数 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 粤裁量序号 20【业】；高检发释字〔2006〕2 号（三）（四）【法】 |
+| type.survey_secret_geo_info_no_register.leak_channel | 泄露的渠道与方式 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 保密法第 57 条第 1 款第 (三) 项至第 (十) 项【法】 |
+| type.survey_secret_geo_info_no_register.site_survey | 现场勘验材料（现场勘验笔录、照片、相关数据、视听资料） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(4)【业】；测绘法第 49 条第 1 款【法】 |
+| type.survey_secret_geo_info_no_register.seizure_materials | 查封、扣押的涉密载体清单与处理决定 | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 测绘法第 49 条第 1 款第 (二) 项【法】；规程 3.2.5【业】；规程附录 E 第 8 项、第 9 项【业】 |
+| type.survey_secret_geo_info_no_register.inquiry_record | 询问笔录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(2)【业】 |
+| type.survey_secret_geo_info_no_register.order_correction | 责令改正的通知书与改正情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 65 条第 1 款「责令改正」【法】；规程 15.5【业】 |
+| type.survey_secret_geo_info_no_register.secrecy_dept_referral | 向保密行政管理部门通报或者移送的情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 保密法第 57 条第 2 款、第 58 条【法】；规程 2.1.4、11.3【业】 |
+| type.survey_secret_geo_info_no_register.criminal_referral_check | 是否达到刑事追诉标准，以及移送出口（公安机关／国家安全机关／监察机关） | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 111 条、第 282 条、第 398 条【法】；保密法第 62 条【法】；规程 7.1(8)、11.1、11.2【业】 |
+| type.survey_secret_geo_info_no_register.hearing_flag | 是否拟作出责令停业整顿、降低测绘资质等级或者吊销测绘资质证书 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 规程 8.3(5)(6)【业】 |
+| type.survey_secret_geo_info_no_register.fine_base | 罚款裁量档次（按是否泄露及泄露密级分档） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤裁量序号 20【业】 |
 
 说明：
 
@@ -1286,32 +1286,32 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.secret_geo_info_illegal_handling.subject_name | 违法主体名称（单位或者个人） | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 测绘法第 65 条第 2 款【法】；规程 2.3(1)【业】 |
-| type.secret_geo_info_illegal_handling.subject_kind | 违法主体类别（单位／个人） | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(1)【业】；规程 4.2.1【业】 |
-| type.secret_geo_info_illegal_handling.subject_identity | 违法主体身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】 |
-| type.secret_geo_info_illegal_handling.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 测绘法第 65 条第 2 款【法】 |
-| type.secret_geo_info_illegal_handling.act_type | 行为方式（获取／持有／提供／利用） | 类型层·违法事实 | 必填 | 登记时 | 警告 | 测绘法第 47 条第 2 款、第 65 条第 2 款【法】 |
-| type.secret_geo_info_illegal_handling.act_detail | 行为的具体手段与经过 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 保密法第 57 条第 1 款第 (一) 项至第 (十三) 项【法】；规程 3.2.3.3(2)【业】 |
-| type.secret_geo_info_illegal_handling.act_time | 行为发生时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 4.4.2.2(3)【业】；规程 2.3(5)【业】 |
-| type.secret_geo_info_illegal_handling.leak_fact | 是否造成国家秘密泄露 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 粤裁量序号 21【业】；测绘法第 65 条第 2 款【法】 |
-| type.secret_geo_info_illegal_handling.leak_level | 泄露的国家秘密密级 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 粤裁量序号 21【业】 |
-| type.secret_geo_info_illegal_handling.secret_data_object | 涉案的属于国家秘密的地理信息（名称、种类、数量、载体形式） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 47 条第 2 款【法】；规程 3.2.3.3(7)【业】 |
-| type.secret_geo_info_illegal_handling.secret_level | 涉案地理信息的密级与项（件）数 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 保密法第 14 条【法】；95 号文第 2 条【业】 |
-| type.secret_geo_info_illegal_handling.legality_basis | 有无合法依据（涉密成果使用许可、对外提供审批文件、安全保密责任书；未取得的填「未取得」） | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 涉密成果办法【业】；对外提供办法第二条、第五条【业】；成果条例第 4 条【法】 |
-| type.secret_geo_info_illegal_handling.secret_appraisal | 国家秘密鉴定书（是否属于国家秘密、属于何种密级） | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 保密法第 53 条【法】；鉴定规定第 5 条、第 22 条【业】 |
-| type.secret_geo_info_illegal_handling.identification_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
-| type.secret_geo_info_illegal_handling.foreign_element | 是否涉及境外机构、组织、人员或者外商投资企业 | 类型层·程序环节 | 必填 | 核查前补齐 | 阻断 | 对外提供办法第二条、第三条、第五条【业】；刑法第 111 条【法】；测绘法第 8 条【法】 |
-| type.secret_geo_info_illegal_handling.site_survey | 现场勘验材料（现场勘验笔录、照片、相关数据、视听资料） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(4)【业】；测绘法第 49 条第 1 款【法】 |
-| type.secret_geo_info_illegal_handling.transaction_records | 相关交易凭据、账簿、登记台账 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(6)【业】；测绘法第 49 条第 1 款第 (一) 项【法】 |
-| type.secret_geo_info_illegal_handling.fraud_materials | 弄虚作假、伪造、欺骗、冒用的材料 | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 规程 3.2.3.3(9)【业】 |
-| type.secret_geo_info_illegal_handling.inquiry_record | 询问笔录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(2)【业】 |
-| type.secret_geo_info_illegal_handling.order_stop | 责令停止违法行为的通知书与送达回证 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 65 条第 2 款「责令停止违法行为」【法】；规程附录 E 第 1 项【业】 |
-| type.secret_geo_info_illegal_handling.confiscation_list | 没收违法所得的执行材料与涉案载体处置清单 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 65 条第 2 款「没收违法所得」【法】；保密法第 57 条第 1 款「有违法所得的，没收违法所得」【法】；规程附录 E 第 27 项【业】 |
-| type.secret_geo_info_illegal_handling.secrecy_dept_referral | 向保密行政管理部门通报或者移送的情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 保密法第 57 条第 2 款、第 58 条【法】；规程 11.3【业】 |
-| type.secret_geo_info_illegal_handling.criminal_referral_check | 是否达到刑事追诉标准，以及移送出口（公安机关／国家安全机关／监察机关） | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 111 条、第 282 条、第 398 条【法】；法释〔2001〕4 号第 2 条、第 3 条、第 4 条【法】；高检发释字〔2006〕2 号（三）（四）【法】；监察法第 11 条第 2 项【法】；规程 7.1(8)、11.1、11.2【业】 |
-| type.secret_geo_info_illegal_handling.illegal_income | 违法所得金额 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 测绘法第 65 条第 2 款「可以并处违法所得二倍以下的罚款」【法】 |
-| type.secret_geo_info_illegal_handling.fine_base | 罚款裁量档次（违法所得倍数） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤裁量序号 21【业】 |
-| type.secret_geo_info_illegal_handling.loss_amount | 造成损失的金额 | 类型层·金额与裁量 | 选填 | 核查前补齐 | 提示 | 测绘法第 65 条第 2 款「造成损失的，依法承担赔偿责任」【法】 |
+| type.survey_secret_geo_info_illegal_handling.subject_name | 违法主体名称（单位或者个人） | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 测绘法第 65 条第 2 款【法】；规程 2.3(1)【业】 |
+| type.survey_secret_geo_info_illegal_handling.subject_kind | 违法主体类别（单位／个人） | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(1)【业】；规程 4.2.1【业】 |
+| type.survey_secret_geo_info_illegal_handling.subject_identity | 违法主体身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】 |
+| type.survey_secret_geo_info_illegal_handling.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 测绘法第 65 条第 2 款【法】 |
+| type.survey_secret_geo_info_illegal_handling.act_type | 行为方式（获取／持有／提供／利用） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 测绘法第 47 条第 2 款、第 65 条第 2 款【法】 |
+| type.survey_secret_geo_info_illegal_handling.act_detail | 行为的具体手段与经过 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 保密法第 57 条第 1 款第 (一) 项至第 (十三) 项【法】；规程 3.2.3.3(2)【业】 |
+| type.survey_secret_geo_info_illegal_handling.act_time | 行为发生时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 4.4.2.2(3)【业】；规程 2.3(5)【业】 |
+| type.survey_secret_geo_info_illegal_handling.leak_fact | 是否造成国家秘密泄露 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 粤裁量序号 21【业】；测绘法第 65 条第 2 款【法】 |
+| type.survey_secret_geo_info_illegal_handling.leak_level | 泄露的国家秘密密级 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 粤裁量序号 21【业】 |
+| type.survey_secret_geo_info_illegal_handling.secret_data_object | 涉案的属于国家秘密的地理信息（名称、种类、数量、载体形式） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 47 条第 2 款【法】；规程 3.2.3.3(7)【业】 |
+| type.survey_secret_geo_info_illegal_handling.secret_level | 涉案地理信息的密级与项（件）数 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 保密法第 14 条【法】；95 号文第 2 条【业】 |
+| type.survey_secret_geo_info_illegal_handling.legality_basis | 有无合法依据（涉密成果使用许可、对外提供审批文件、安全保密责任书；未取得的填「未取得」） | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 涉密成果办法【业】；对外提供办法第二条、第五条【业】；成果条例第 4 条【法】 |
+| type.survey_secret_geo_info_illegal_handling.secret_appraisal | 国家秘密鉴定书（是否属于国家秘密、属于何种密级） | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 保密法第 53 条【法】；鉴定规定第 5 条、第 22 条【业】 |
+| type.survey_secret_geo_info_illegal_handling.identification_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
+| type.survey_secret_geo_info_illegal_handling.foreign_element | 是否涉及境外机构、组织、人员或者外商投资企业 | 类型层·程序环节 | 必填 | 核查前补齐 | 阻断 | 对外提供办法第二条、第三条、第五条【业】；刑法第 111 条【法】；测绘法第 8 条【法】 |
+| type.survey_secret_geo_info_illegal_handling.site_survey | 现场勘验材料（现场勘验笔录、照片、相关数据、视听资料） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(4)【业】；测绘法第 49 条第 1 款【法】 |
+| type.survey_secret_geo_info_illegal_handling.transaction_records | 相关交易凭据、账簿、登记台账 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(6)【业】；测绘法第 49 条第 1 款第 (一) 项【法】 |
+| type.survey_secret_geo_info_illegal_handling.fraud_materials | 弄虚作假、伪造、欺骗、冒用的材料 | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 规程 3.2.3.3(9)【业】 |
+| type.survey_secret_geo_info_illegal_handling.inquiry_record | 询问笔录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(2)【业】 |
+| type.survey_secret_geo_info_illegal_handling.order_stop | 责令停止违法行为的通知书与送达回证 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 65 条第 2 款「责令停止违法行为」【法】；规程附录 E 第 1 项【业】 |
+| type.survey_secret_geo_info_illegal_handling.confiscation_list | 没收违法所得的执行材料与涉案载体处置清单 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 65 条第 2 款「没收违法所得」【法】；保密法第 57 条第 1 款「有违法所得的，没收违法所得」【法】；规程附录 E 第 27 项【业】 |
+| type.survey_secret_geo_info_illegal_handling.secrecy_dept_referral | 向保密行政管理部门通报或者移送的情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 保密法第 57 条第 2 款、第 58 条【法】；规程 11.3【业】 |
+| type.survey_secret_geo_info_illegal_handling.criminal_referral_check | 是否达到刑事追诉标准，以及移送出口（公安机关／国家安全机关／监察机关） | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 111 条、第 282 条、第 398 条【法】；法释〔2001〕4 号第 2 条、第 3 条、第 4 条【法】；高检发释字〔2006〕2 号（三）（四）【法】；监察法第 11 条第 2 项【法】；规程 7.1(8)、11.1、11.2【业】 |
+| type.survey_secret_geo_info_illegal_handling.illegal_income | 违法所得金额 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 测绘法第 65 条第 2 款「可以并处违法所得二倍以下的罚款」【法】 |
+| type.survey_secret_geo_info_illegal_handling.fine_base | 罚款裁量档次（违法所得倍数） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤裁量序号 21【业】 |
+| type.survey_secret_geo_info_illegal_handling.loss_amount | 造成损失的金额 | 类型层·金额与裁量 | 选填 | 核查前补齐 | 提示 | 测绘法第 65 条第 2 款「造成损失的，依法承担赔偿责任」【法】 |
 
 说明：
 
@@ -1326,24 +1326,24 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.custodian_damage_loss.custodian_name | 测绘成果保管单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 成果条例第 12 条、第 28 条第 1 项【法】；规程 2.3(1)【业】 |
-| type.custodian_damage_loss.custodian_identity | 保管单位身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】 |
-| type.custodian_damage_loss.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 成果条例第 28 条【法】 |
-| type.custodian_damage_loss.custodian_designation | 保管单位的指定或者授权文件，以及接收移交的记录 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 警告 | 成果条例第 10 条【法】；穗府办规〔2018〕12 号第 4 条【业】；穗府令 190 号第 23 条【业】 |
-| type.custodian_damage_loss.result_object | 涉案测绘成果资料（名称、种类、数量、载体形式） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(7)【业】；成果条例第 12 条【法】 |
-| type.custodian_damage_loss.secret_involved | 涉案成果资料是否属于国家秘密 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 成果条例第 4 条【法】；95 号文第 2 条【业】 |
-| type.custodian_damage_loss.custody_system | 该单位应当执行的测绘成果资料保管制度（含设施配备要求与基础测绘成果资料异地备份存放制度） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 成果条例第 11 条、第 12 条【法】；测绘法第 34 条第 2 款【法】 |
-| type.custodian_damage_loss.breach_fact | 未按照保管制度管理测绘成果资料的具体行为 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 成果条例第 28 条第 1 项【法】；规程 3.2.3.3(2)(4)【业】 |
-| type.custodian_damage_loss.damage_loss_result | 造成测绘成果资料损毁、散失的结果（损毁或者散失的成果名称、数量、范围） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 成果条例第 28 条第 1 项「造成测绘成果资料损毁、散失的」【法】 |
-| type.custodian_damage_loss.occurrence_time | 损毁、散失发生的时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 4.4.2.2(3)【业】；规程 2.3(5)【业】 |
-| type.custodian_damage_loss.site_survey | 现场勘验材料（现场勘验笔录、照片、相关数据、视听资料） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.1.1(2)【业】 |
-| type.custodian_damage_loss.ledger_records | 成果接收、整理、统计、保管的登记台账与交接记录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(6)【业】；穗府令 190 号第 23 条【业】 |
-| type.custodian_damage_loss.inquiry_record | 询问笔录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(2)【业】 |
-| type.custodian_damage_loss.identification_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
-| type.custodian_damage_loss.loss_amount | 造成的损失金额 | 类型层·金额与裁量 | 选填 | 核查前补齐 | 提示 | 成果条例第 28 条「造成损失的，依法承担赔偿责任」【法】 |
-| type.custodian_damage_loss.illegal_income | 违法所得（有则填，无则填「无」） | 类型层·金额与裁量 | 选填 | 核查前补齐 | 提示 | 成果条例第 28 条「有违法所得的，没收违法所得」【法】 |
-| type.custodian_damage_loss.order_correction | 责令改正的通知书与改正情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 成果条例第 28 条「给予警告，责令改正」【法】；规程 15.5【业】 |
-| type.custodian_damage_loss.secrecy_referral | 涉案成果属于国家秘密时向保密行政管理部门通报的情况 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 保密法第 57 条第 1 款、第 58 条【法】；规程 11.3【业】 |
+| type.survey_custodian_damage_loss.custodian_name | 测绘成果保管单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 成果条例第 12 条、第 28 条第 1 项【法】；规程 2.3(1)【业】 |
+| type.survey_custodian_damage_loss.custodian_identity | 保管单位身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】 |
+| type.survey_custodian_damage_loss.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 成果条例第 28 条【法】 |
+| type.survey_custodian_damage_loss.custodian_designation | 保管单位的指定或者授权文件，以及接收移交的记录 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 警告 | 成果条例第 10 条【法】；穗府办规〔2018〕12 号第 4 条【业】；穗府令 190 号第 23 条【业】 |
+| type.survey_custodian_damage_loss.result_object | 涉案测绘成果资料（名称、种类、数量、载体形式） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(7)【业】；成果条例第 12 条【法】 |
+| type.survey_custodian_damage_loss.secret_involved | 涉案成果资料是否属于国家秘密 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 成果条例第 4 条【法】；95 号文第 2 条【业】 |
+| type.survey_custodian_damage_loss.custody_system | 该单位应当执行的测绘成果资料保管制度（含设施配备要求与基础测绘成果资料异地备份存放制度） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 成果条例第 11 条、第 12 条【法】；测绘法第 34 条第 2 款【法】 |
+| type.survey_custodian_damage_loss.breach_fact | 未按照保管制度管理测绘成果资料的具体行为 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 成果条例第 28 条第 1 项【法】；规程 3.2.3.3(2)(4)【业】 |
+| type.survey_custodian_damage_loss.damage_loss_result | 造成测绘成果资料损毁、散失的结果（损毁或者散失的成果名称、数量、范围） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 成果条例第 28 条第 1 项「造成测绘成果资料损毁、散失的」【法】 |
+| type.survey_custodian_damage_loss.occurrence_time | 损毁、散失发生的时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 4.4.2.2(3)【业】；规程 2.3(5)【业】 |
+| type.survey_custodian_damage_loss.site_survey | 现场勘验材料（现场勘验笔录、照片、相关数据、视听资料） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.1.1(2)【业】 |
+| type.survey_custodian_damage_loss.ledger_records | 成果接收、整理、统计、保管的登记台账与交接记录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(6)【业】；穗府令 190 号第 23 条【业】 |
+| type.survey_custodian_damage_loss.inquiry_record | 询问笔录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(2)【业】 |
+| type.survey_custodian_damage_loss.identification_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
+| type.survey_custodian_damage_loss.loss_amount | 造成的损失金额 | 类型层·金额与裁量 | 选填 | 核查前补齐 | 提示 | 成果条例第 28 条「造成损失的，依法承担赔偿责任」【法】 |
+| type.survey_custodian_damage_loss.illegal_income | 违法所得（有则填，无则填「无」） | 类型层·金额与裁量 | 选填 | 核查前补齐 | 提示 | 成果条例第 28 条「有违法所得的，没收违法所得」【法】 |
+| type.survey_custodian_damage_loss.order_correction | 责令改正的通知书与改正情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 成果条例第 28 条「给予警告，责令改正」【法】；规程 15.5【业】 |
+| type.survey_custodian_damage_loss.secrecy_referral | 涉案成果属于国家秘密时向保密行政管理部门通报的情况 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 保密法第 57 条第 1 款、第 58 条【法】；规程 11.3【业】 |
 
 说明：
 
@@ -1360,28 +1360,28 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.custodian_unauthorized_transfer.custodian_name | 测绘成果保管单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 成果条例第 12 条、第 28 条第 2 项【法】；规程 2.3(1)【业】 |
-| type.custodian_unauthorized_transfer.custodian_identity | 保管单位身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】 |
-| type.custodian_unauthorized_transfer.transferee_name | 受让方名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 成果条例第 28 条第 2 项「擅自转让」【法】；规程 3.2.3.3(1)【业】 |
-| type.custodian_unauthorized_transfer.transferee_identity | 受让方身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】 |
-| type.custodian_unauthorized_transfer.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 成果条例第 28 条【法】 |
-| type.custodian_unauthorized_transfer.submission_source | 该成果系依法汇交取得的证明（汇交凭证、移交记录） | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 测绘法第 33 条第 2 款【法】；成果条例第 10 条【法】 |
-| type.custodian_unauthorized_transfer.transfer_approval | 有无经测绘成果所有权人同意或者依法审批 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 粤条例第 34 条【业】；涉密成果办法【业】；对外提供办法第二条、第五条【业】 |
-| type.custodian_unauthorized_transfer.result_object | 被转让的测绘成果资料（名称、种类、数量、载体形式） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(7)【业】 |
-| type.custodian_unauthorized_transfer.secret_involved | 被转让的成果资料是否属于国家秘密 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 成果条例第 4 条【法】；95 号文第 2 条【业】；对外提供办法第三条【业】 |
-| type.custodian_unauthorized_transfer.secret_level | 属于国家秘密时的密级与项（件）数 | 类型层·涉案对象 | 选填 | 核查前补齐 | 提示 | 保密法第 14 条【法】 |
-| type.custodian_unauthorized_transfer.transfer_act | 转让行为方式与时间（转让、转借、复制、以其他方式向第三方提供） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 成果条例第 12 条、第 28 条第 2 项【法】；粤条例第 34 条【业】 |
-| type.custodian_unauthorized_transfer.transfer_contract | 转让协议、合同或者协议性文件 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(5)【业】 |
-| type.custodian_unauthorized_transfer.transaction_records | 交易凭据、账簿、登记台账 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(6)【业】；测绘法第 49 条第 1 款第 (一) 项【法】 |
-| type.custodian_unauthorized_transfer.inquiry_record | 询问笔录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(2)【业】 |
-| type.custodian_unauthorized_transfer.secret_appraisal | 国家秘密鉴定书（被转让成果属于国家秘密时填写） | 类型层·认定与检验结论 | 选填 | 核查前补齐 | 提示 | 保密法第 53 条【法】；鉴定规定第 5 条、第 22 条【业】 |
-| type.custodian_unauthorized_transfer.identification_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
-| type.custodian_unauthorized_transfer.illegal_income | 违法所得金额 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 成果条例第 28 条「有违法所得的，没收违法所得」【法】 |
-| type.custodian_unauthorized_transfer.loss_amount | 造成的损失金额 | 类型层·金额与裁量 | 选填 | 核查前补齐 | 提示 | 成果条例第 28 条「造成损失的，依法承担赔偿责任」【法】 |
-| type.custodian_unauthorized_transfer.order_correction | 责令改正的通知书与改正情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 成果条例第 28 条「给予警告，责令改正」【法】；规程 15.5【业】 |
-| type.custodian_unauthorized_transfer.confiscation | 没收违法所得的执行材料 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 成果条例第 28 条【法】；规程附录 E 第 27 项【业】 |
-| type.custodian_unauthorized_transfer.secrecy_referral | 被转让成果属于国家秘密时向保密行政管理部门通报的情况 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 保密法第 57 条第 1 款、第 58 条【法】；规程 11.3【业】 |
-| type.custodian_unauthorized_transfer.criminal_referral_check | 是否达到刑事追诉标准，以及移送出口（公安机关／国家安全机关／监察机关） | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 刑法第 111 条、第 282 条、第 398 条【法】；规程 7.1(8)、11.1、11.2【业】 |
+| type.survey_custodian_unauthorized_transfer.custodian_name | 测绘成果保管单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 成果条例第 12 条、第 28 条第 2 项【法】；规程 2.3(1)【业】 |
+| type.survey_custodian_unauthorized_transfer.custodian_identity | 保管单位身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】 |
+| type.survey_custodian_unauthorized_transfer.transferee_name | 受让方名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 成果条例第 28 条第 2 项「擅自转让」【法】；规程 3.2.3.3(1)【业】 |
+| type.survey_custodian_unauthorized_transfer.transferee_identity | 受让方身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】 |
+| type.survey_custodian_unauthorized_transfer.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 成果条例第 28 条【法】 |
+| type.survey_custodian_unauthorized_transfer.submission_source | 该成果系依法汇交取得的证明（汇交凭证、移交记录） | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 测绘法第 33 条第 2 款【法】；成果条例第 10 条【法】 |
+| type.survey_custodian_unauthorized_transfer.transfer_approval | 有无经测绘成果所有权人同意或者依法审批 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 粤条例第 34 条【业】；涉密成果办法【业】；对外提供办法第二条、第五条【业】 |
+| type.survey_custodian_unauthorized_transfer.result_object | 被转让的测绘成果资料（名称、种类、数量、载体形式） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(7)【业】 |
+| type.survey_custodian_unauthorized_transfer.secret_involved | 被转让的成果资料是否属于国家秘密 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 成果条例第 4 条【法】；95 号文第 2 条【业】；对外提供办法第三条【业】 |
+| type.survey_custodian_unauthorized_transfer.secret_level | 属于国家秘密时的密级与项（件）数 | 类型层·涉案对象 | 选填 | 核查前补齐 | 提示 | 保密法第 14 条【法】 |
+| type.survey_custodian_unauthorized_transfer.transfer_act | 转让行为方式与时间（转让、转借、复制、以其他方式向第三方提供） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 成果条例第 12 条、第 28 条第 2 项【法】；粤条例第 34 条【业】 |
+| type.survey_custodian_unauthorized_transfer.transfer_contract | 转让协议、合同或者协议性文件 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(5)【业】 |
+| type.survey_custodian_unauthorized_transfer.transaction_records | 交易凭据、账簿、登记台账 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(6)【业】；测绘法第 49 条第 1 款第 (一) 项【法】 |
+| type.survey_custodian_unauthorized_transfer.inquiry_record | 询问笔录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(2)【业】 |
+| type.survey_custodian_unauthorized_transfer.secret_appraisal | 国家秘密鉴定书（被转让成果属于国家秘密时填写） | 类型层·认定与检验结论 | 选填 | 核查前补齐 | 提示 | 保密法第 53 条【法】；鉴定规定第 5 条、第 22 条【业】 |
+| type.survey_custodian_unauthorized_transfer.identification_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
+| type.survey_custodian_unauthorized_transfer.illegal_income | 违法所得金额 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 成果条例第 28 条「有违法所得的，没收违法所得」【法】 |
+| type.survey_custodian_unauthorized_transfer.loss_amount | 造成的损失金额 | 类型层·金额与裁量 | 选填 | 核查前补齐 | 提示 | 成果条例第 28 条「造成损失的，依法承担赔偿责任」【法】 |
+| type.survey_custodian_unauthorized_transfer.order_correction | 责令改正的通知书与改正情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 成果条例第 28 条「给予警告，责令改正」【法】；规程 15.5【业】 |
+| type.survey_custodian_unauthorized_transfer.confiscation | 没收违法所得的执行材料 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 成果条例第 28 条【法】；规程附录 E 第 27 项【业】 |
+| type.survey_custodian_unauthorized_transfer.secrecy_referral | 被转让成果属于国家秘密时向保密行政管理部门通报的情况 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 保密法第 57 条第 1 款、第 58 条【法】；规程 11.3【业】 |
+| type.survey_custodian_unauthorized_transfer.criminal_referral_check | 是否达到刑事追诉标准，以及移送出口（公安机关／国家安全机关／监察机关） | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 刑法第 111 条、第 282 条、第 398 条【法】；规程 7.1(8)、11.1、11.2【业】 |
 
 说明：
 
@@ -1396,30 +1396,30 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.custodian_refuse_provide.custodian_name | 测绘成果保管单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 成果条例第 28 条第 3 项【法】；规程 2.3(1)【业】 |
-| type.custodian_refuse_provide.custodian_identity | 保管单位身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】 |
-| type.custodian_refuse_provide.user_name | 测绘成果使用人名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 成果条例第 28 条第 3 项「向测绘成果的使用人提供」【法】 |
-| type.custodian_refuse_provide.user_identity | 使用人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(1)【业】 |
-| type.custodian_refuse_provide.user_kind | 使用人类别（国家机关／各级人民政府及有关部门／军队／社会公益性事业主体／其他） | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 测绘法第 36 条【法】；成果条例第 19 条【法】 |
-| type.custodian_refuse_provide.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 成果条例第 28 条【法】 |
-| type.custodian_refuse_provide.custodian_designation | 保管单位的指定或者授权文件 | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 成果条例第 10 条【法】；穗府办规〔2018〕12 号第 4 条【业】 |
-| type.custodian_refuse_provide.written_agreement | 有偿使用时使用人与测绘项目出资人签订的书面协议 | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 成果条例第 19 条第 3 款【法】；规程 3.2.3.3(5)【业】 |
-| type.custodian_refuse_provide.secret_approval | 属于国家秘密的成果的使用审批材料（涉密基础测绘成果使用许可） | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 涉密成果办法【业】；粤审批规定【业】；成果条例第 4 条【法】 |
-| type.custodian_refuse_provide.result_object | 被申请提供的测绘成果资料（名称、种类、范围） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(7)【业】 |
-| type.custodian_refuse_provide.result_nature | 该成果属于基础测绘成果还是财政投资完成的其他测绘成果 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 36 条第 1 款【法】；成果条例第 19 条第 1 款【法】 |
-| type.custodian_refuse_provide.use_purpose | 使用人申请的使用目的与范围（政府决策／国防建设／公共服务／防灾减灾／应对突发事件／维护国家安全／社会公益性事业／其他） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 36 条【法】；成果条例第 19 条【法】 |
-| type.custodian_refuse_provide.free_or_paid | 本次提供属无偿提供还是有偿使用 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 36 条第 1 款、第 2 款【法】；成果条例第 19 条第 1 款、第 2 款【法】 |
-| type.custodian_refuse_provide.application_record | 使用人的申请记录与保管单位的答复 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 成果条例第 28 条第 3 项【法】；规程 3.2.3.3(6)【业】 |
-| type.custodian_refuse_provide.refuse_fact | 未依法提供的事实形态（拒绝提供／拖延提供／附加法定外条件） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 成果条例第 28 条第 3 项【法】 |
-| type.custodian_refuse_provide.occurrence_time | 申请时间与拒绝或者拖延的时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 规程 4.4.2.2(3)【业】；规程 2.3(5)【业】 |
-| type.custodian_refuse_provide.public_service_finding | 是否属于政府决策、国防建设、公共服务或者公共利益需要的认定 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 测绘法第 36 条第 1 款、第 2 款后段【法】；成果条例第 19 条【法】；穗府令 190 号第 24 条【业】 |
-| type.custodian_refuse_provide.catalogue_publish | 保管单位或者主管部门是否已依法编制并公布测绘成果目录 | 类型层·认定与检验结论 | 选填 | 核查前补齐 | 提示 | 测绘法第 33 条第 3 款【法】；成果条例第 26 条第 (三) 项【法】 |
-| type.custodian_refuse_provide.identification_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见 | 类型层·认定与检验结论 | 选填 | 核查前补齐 | 提示 | 规程 3.2.4.7【业】 |
-| type.custodian_refuse_provide.ledger_records | 成果提供的登记台账与交接记录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(6)【业】；穗府令 190 号第 23 条【业】 |
-| type.custodian_refuse_provide.inquiry_record | 询问笔录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(2)【业】 |
-| type.custodian_refuse_provide.illegal_income | 违法所得（有则填，无则填「无」） | 类型层·金额与裁量 | 选填 | 核查前补齐 | 提示 | 成果条例第 28 条「有违法所得的，没收违法所得」【法】 |
-| type.custodian_refuse_provide.order_correction | 责令改正的通知书与改正情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 成果条例第 28 条「给予警告，责令改正」【法】；规程 15.5【业】 |
-| type.custodian_refuse_provide.free_provision_duty | 主管部门应当无偿提供的法定情形核对结果 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 36 条第 1 款【法】；成果条例第 19 条第 1 款【法】 |
+| type.survey_custodian_refuse_provide.custodian_name | 测绘成果保管单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 成果条例第 28 条第 3 项【法】；规程 2.3(1)【业】 |
+| type.survey_custodian_refuse_provide.custodian_identity | 保管单位身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】 |
+| type.survey_custodian_refuse_provide.user_name | 测绘成果使用人名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 成果条例第 28 条第 3 项「向测绘成果的使用人提供」【法】 |
+| type.survey_custodian_refuse_provide.user_identity | 使用人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(1)【业】 |
+| type.survey_custodian_refuse_provide.user_kind | 使用人类别（国家机关／各级人民政府及有关部门／军队／社会公益性事业主体／其他） | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 测绘法第 36 条【法】；成果条例第 19 条【法】 |
+| type.survey_custodian_refuse_provide.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 成果条例第 28 条【法】 |
+| type.survey_custodian_refuse_provide.custodian_designation | 保管单位的指定或者授权文件 | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 成果条例第 10 条【法】；穗府办规〔2018〕12 号第 4 条【业】 |
+| type.survey_custodian_refuse_provide.written_agreement | 有偿使用时使用人与测绘项目出资人签订的书面协议 | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 成果条例第 19 条第 3 款【法】；规程 3.2.3.3(5)【业】 |
+| type.survey_custodian_refuse_provide.secret_approval | 属于国家秘密的成果的使用审批材料（涉密基础测绘成果使用许可） | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 涉密成果办法【业】；粤审批规定【业】；成果条例第 4 条【法】 |
+| type.survey_custodian_refuse_provide.result_object | 被申请提供的测绘成果资料（名称、种类、范围） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(7)【业】 |
+| type.survey_custodian_refuse_provide.result_nature | 该成果属于基础测绘成果还是财政投资完成的其他测绘成果 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 36 条第 1 款【法】；成果条例第 19 条第 1 款【法】 |
+| type.survey_custodian_refuse_provide.use_purpose | 使用人申请的使用目的与范围（政府决策／国防建设／公共服务／防灾减灾／应对突发事件／维护国家安全／社会公益性事业／其他） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 36 条【法】；成果条例第 19 条【法】 |
+| type.survey_custodian_refuse_provide.free_or_paid | 本次提供属无偿提供还是有偿使用 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 36 条第 1 款、第 2 款【法】；成果条例第 19 条第 1 款、第 2 款【法】 |
+| type.survey_custodian_refuse_provide.application_record | 使用人的申请记录与保管单位的答复 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 成果条例第 28 条第 3 项【法】；规程 3.2.3.3(6)【业】 |
+| type.survey_custodian_refuse_provide.refuse_fact | 未依法提供的事实形态（拒绝提供／拖延提供／附加法定外条件） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 成果条例第 28 条第 3 项【法】 |
+| type.survey_custodian_refuse_provide.occurrence_time | 申请时间与拒绝或者拖延的时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 规程 4.4.2.2(3)【业】；规程 2.3(5)【业】 |
+| type.survey_custodian_refuse_provide.public_service_finding | 是否属于政府决策、国防建设、公共服务或者公共利益需要的认定 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 测绘法第 36 条第 1 款、第 2 款后段【法】；成果条例第 19 条【法】；穗府令 190 号第 24 条【业】 |
+| type.survey_custodian_refuse_provide.catalogue_publish | 保管单位或者主管部门是否已依法编制并公布测绘成果目录 | 类型层·认定与检验结论 | 选填 | 核查前补齐 | 提示 | 测绘法第 33 条第 3 款【法】；成果条例第 26 条第 (三) 项【法】 |
+| type.survey_custodian_refuse_provide.identification_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见 | 类型层·认定与检验结论 | 选填 | 核查前补齐 | 提示 | 规程 3.2.4.7【业】 |
+| type.survey_custodian_refuse_provide.ledger_records | 成果提供的登记台账与交接记录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(6)【业】；穗府令 190 号第 23 条【业】 |
+| type.survey_custodian_refuse_provide.inquiry_record | 询问笔录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(2)【业】 |
+| type.survey_custodian_refuse_provide.illegal_income | 违法所得（有则填，无则填「无」） | 类型层·金额与裁量 | 选填 | 核查前补齐 | 提示 | 成果条例第 28 条「有违法所得的，没收违法所得」【法】 |
+| type.survey_custodian_refuse_provide.order_correction | 责令改正的通知书与改正情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 成果条例第 28 条「给予警告，责令改正」【法】；规程 15.5【业】 |
+| type.survey_custodian_refuse_provide.free_provision_duty | 主管部门应当无偿提供的法定情形核对结果 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 36 条第 1 款【法】；成果条例第 19 条第 1 款【法】 |
 
 说明：
 
@@ -1436,26 +1436,26 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.key_geo_data_unpublished_use.user_name | 使用主体（单位或者个人）名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 成果条例第 29 条第 3 项【法】；规程 2.3(1)【业】 |
-| type.key_geo_data_unpublished_use.user_identity | 使用主体身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】 |
-| type.key_geo_data_unpublished_use.user_kind | 使用主体类别（单位／个人） | 类型层·违法主体 | 选填 | 核查前补齐 | 提示 | 规程 4.2.1【业】 |
-| type.key_geo_data_unpublished_use.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 成果条例第 29 条第 3 项【法】 |
-| type.key_geo_data_unpublished_use.activity_kind | 活动类别（行政管理／新闻传播／对外交流／教学／其他对社会公众有影响的活动） | 类型层·违法事实 | 必填 | 登记时 | 警告 | 成果条例第 25 条第 2 款【法】 |
-| type.key_geo_data_unpublished_use.use_time | 使用时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 4.4.2.2(3)【业】；规程 2.3(5)【业】 |
-| type.key_geo_data_unpublished_use.public_impact | 对社会公众有影响的范围与程度 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 成果条例第 25 条第 2 款、第 29 条第 3 项【法】 |
-| type.key_geo_data_unpublished_use.data_object | 被使用的重要地理信息数据内容与其载体 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 成果条例第 23 条【法】；规程 3.2.3.3(7)【业】 |
-| type.key_geo_data_unpublished_use.data_category | 数据所属的重要地理信息数据类别 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 成果条例第 23 条【法】；测绘法第 37 条【法】 |
-| type.key_geo_data_unpublished_use.data_source | 被使用数据的来源（自行测算／引用他人成果／境外来源） | 类型层·涉案对象 | 选填 | 核查前补齐 | 提示 | 规程 3.2.3.3(7)【业】；无直接法条依据，待定 |
-| type.key_geo_data_unpublished_use.evidence_materials | 使用载体的原件、截图、视听资料与电子数据 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)(7)【业】 |
-| type.key_geo_data_unpublished_use.inquiry_record | 询问笔录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(2)【业】 |
-| type.key_geo_data_unpublished_use.not_published_finding | 该数据未经依法公布的事实认定（比对国务院或者国务院授权部门的公告） | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 成果条例第 25 条第 1 款、第 2 款【法】；2025 通知第五项【业】 |
-| type.key_geo_data_unpublished_use.publish_announcement | 已依法公布该数据的公告（有则填公告名称、文号与公布日期） | 类型层·认定与检验结论 | 选填 | 核查前补齐 | 提示 | 成果条例第 25 条第 1 款【法】 |
-| type.key_geo_data_unpublished_use.identification_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见 | 类型层·认定与检验结论 | 选填 | 核查前补齐 | 提示 | 规程 3.2.4.7【业】 |
-| type.key_geo_data_unpublished_use.violation_count | 同一主体的违法次数（初次／第二次／三次及以上） | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 粤裁量序号 28【业】 |
-| type.key_geo_data_unpublished_use.prior_penalty_record | 此前因同一事项受行政处罚的记录 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 粤裁量序号 28【业】 |
-| type.key_geo_data_unpublished_use.enforcement_authority | 本事项由哪个部门依据职责查处（自然资源主管部门／其他有关部门） | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 成果条例第 29 条第 3 项「由测绘行政主管部门或者其他有关部门依据职责」【法】；规程 2.1.4、7.1(4)【业】 |
-| type.key_geo_data_unpublished_use.order_correction | 责令改正的通知书与改正情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 成果条例第 29 条第 3 项「责令改正，给予警告」【法】；规程 15.5【业】 |
-| type.key_geo_data_unpublished_use.fine_base | 罚款裁量档次（按违法次数分档） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤裁量序号 28【业】 |
+| type.survey_key_geo_data_unpublished_use.user_name | 使用主体（单位或者个人）名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 成果条例第 29 条第 3 项【法】；规程 2.3(1)【业】 |
+| type.survey_key_geo_data_unpublished_use.user_identity | 使用主体身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(1)【业】 |
+| type.survey_key_geo_data_unpublished_use.user_kind | 使用主体类别（单位／个人） | 类型层·违法主体 | 选填 | 核查前补齐 | 提示 | 规程 4.2.1【业】 |
+| type.survey_key_geo_data_unpublished_use.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 成果条例第 29 条第 3 项【法】 |
+| type.survey_key_geo_data_unpublished_use.activity_kind | 活动类别（行政管理／新闻传播／对外交流／教学／其他对社会公众有影响的活动） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 成果条例第 25 条第 2 款【法】 |
+| type.survey_key_geo_data_unpublished_use.use_time | 使用时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 4.4.2.2(3)【业】；规程 2.3(5)【业】 |
+| type.survey_key_geo_data_unpublished_use.public_impact | 对社会公众有影响的范围与程度 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 成果条例第 25 条第 2 款、第 29 条第 3 项【法】 |
+| type.survey_key_geo_data_unpublished_use.data_object | 被使用的重要地理信息数据内容与其载体 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 成果条例第 23 条【法】；规程 3.2.3.3(7)【业】 |
+| type.survey_key_geo_data_unpublished_use.data_category | 数据所属的重要地理信息数据类别 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 成果条例第 23 条【法】；测绘法第 37 条【法】 |
+| type.survey_key_geo_data_unpublished_use.data_source | 被使用数据的来源（自行测算／引用他人成果／境外来源） | 类型层·涉案对象 | 选填 | 核查前补齐 | 提示 | 规程 3.2.3.3(7)【业】；无直接法条依据，待定 |
+| type.survey_key_geo_data_unpublished_use.evidence_materials | 使用载体的原件、截图、视听资料与电子数据 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)(7)【业】 |
+| type.survey_key_geo_data_unpublished_use.inquiry_record | 询问笔录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(2)【业】 |
+| type.survey_key_geo_data_unpublished_use.not_published_finding | 该数据未经依法公布的事实认定（比对国务院或者国务院授权部门的公告） | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 成果条例第 25 条第 1 款、第 2 款【法】；2025 通知第五项【业】 |
+| type.survey_key_geo_data_unpublished_use.publish_announcement | 已依法公布该数据的公告（有则填公告名称、文号与公布日期） | 类型层·认定与检验结论 | 选填 | 核查前补齐 | 提示 | 成果条例第 25 条第 1 款【法】 |
+| type.survey_key_geo_data_unpublished_use.identification_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见 | 类型层·认定与检验结论 | 选填 | 核查前补齐 | 提示 | 规程 3.2.4.7【业】 |
+| type.survey_key_geo_data_unpublished_use.violation_count | 同一主体的违法次数（初次／第二次／三次及以上） | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 粤裁量序号 28【业】 |
+| type.survey_key_geo_data_unpublished_use.prior_penalty_record | 此前因同一事项受行政处罚的记录 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 粤裁量序号 28【业】 |
+| type.survey_key_geo_data_unpublished_use.enforcement_authority | 本事项由哪个部门依据职责查处（自然资源主管部门／其他有关部门） | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 成果条例第 29 条第 3 项「由测绘行政主管部门或者其他有关部门依据职责」【法】；规程 2.1.4、7.1(4)【业】 |
+| type.survey_key_geo_data_unpublished_use.order_correction | 责令改正的通知书与改正情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 成果条例第 29 条第 3 项「责令改正，给予警告」【法】；规程 15.5【业】 |
+| type.survey_key_geo_data_unpublished_use.fine_base | 罚款裁量档次（按违法次数分档） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤裁量序号 28【业】 |
 
 说明：
 
@@ -1562,8 +1562,8 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 待定项 | 分歧点或已查到的边界 | 去向 |
 |---|---|---|
-| 1. 要件键的类型编码段无定案依据 | 三（一）的草案编码是 `survey_quality_unqualified`。四（一）至四（八）的八个草案编码是 `result_not_submitted`、`key_geo_data_unauthorized_release`、`secret_geo_info_no_register`、`secret_geo_info_illegal_handling`、`custodian_damage_loss`、`custodian_unauthorized_transfer`、`custodian_refuse_provide`、`key_geo_data_unpublished_use`。九个编码都依赖尚未产出的违法类型编码表。编码确定后本部分九张表的要件键需整体回改 | 违法类型编码表票 |
-| 2. 类型层「登记时必填」项的后果取值与 #24 字面读法有出入 | 三、测绘质量类没有登记时必填项，26 条全部落在核查前补齐。若将来在本大类增设登记时必填项，其后果按 #181 口径取警告，不取阻断。四、测绘成果类登记时必填共 7 项：四（一）的 `obligor_name` 与 `obligor_kind`，四（二）的 `data_category` 与 `release_act`，四（三）的 `unit_role`，四（四）的 `act_type`，四（八）的 `activity_kind`。7 项后果一律取警告，不阻断登记。#24 决议写「必填项缺失即阻断」，两处口径的分歧尚未拍板 | #181 已记为应开票，本文件附议 |
+| 1. 要件键的类型编码段无定案依据 | 三（一）的草案编码是 `survey_quality_unqualified`。四（一）至四（八）的八个草案编码是 `survey_result_not_submitted`、`survey_key_geo_data_unauthorized_release`、`survey_secret_geo_info_no_register`、`survey_secret_geo_info_illegal_handling`、`survey_custodian_damage_loss`、`survey_custodian_unauthorized_transfer`、`survey_custodian_refuse_provide`、`survey_key_geo_data_unpublished_use`。九个编码都依赖尚未产出的违法类型编码表。编码确定后本部分九张表的要件键需整体回改 | 违法类型编码表票 |
+| 2. 类型层「录入时必填」项的后果取值与 #24 字面读法有出入 | 三、测绘质量类没有录入时必填项，26 条全部落在核查前补齐。若将来在本大类增设录入时必填项，其后果按 #181 口径取警告，不取阻断。四、测绘成果类录入时必填共 7 项：四（一）的 `obligor_name` 与 `obligor_kind`，四（二）的 `data_category` 与 `release_act`，四（三）的 `unit_role`，四（四）的 `act_type`，四（八）的 `activity_kind`。7 项后果一律取警告，不阻断登记。#24 决议写「必填项缺失即阻断」，两处口径的分歧尚未拍板 | #181 已记为应开票，本文件附议 |
 | 3. 附条件适用要件统一取选填、条件写进项名，该处理方式无直接依据 | 三（一）涉及 `illegal_income`、`loss_amount`、`site_survey`、`instruments_calibration`、`criminal_referral_check`。四涉及 `qualification_cert_no`（四（一））、`remeasure_cost`、`suspension_six_months`、`hearing_flag`、`secret_level`、`secret_appraisal`、`secrecy_referral`、`confiscation`、`written_agreement`、`secret_approval`、`custodian_designation`、`publish_announcement`、`data_source` 等 13 项。规程未规定条件要件的表达方式 | 沿用 #181 口径，待定项与 #181 合并 |
 | 4. 成果质量类的刑事追诉标准无依据 | 附录 C 三未设「追究刑事责任规定」条目。测绘法第 63 条不写刑事责任。粤条例第 44 条写「构成犯罪的，依法追究刑事责任」，但未指明罪名。本票未查到成果质量不合格对应的罪名与追诉标准 | 无直接依据，待定。`criminal_referral_check` 取选填、提示 |
 | 5. 罚款依据只有广东省地方性法规 | 测绘法第 63 条与基础测绘条例第 33 条都不设罚款。罚款上限 3 万元出自粤条例第 44 条。跨省办案时该依据不适用，`fine_base` 与 `illegal_income` 的适用前提消失 | 待定。`fine_base` 的依据栏标【业】不标【法】，代码侧需支持按法域切换依据 |
@@ -1650,7 +1650,7 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 含义：测绘地理信息类线索**不跑分派前自动核查**。本部分写的「核查前补齐」指 `GLOSSARY.md`「核查」词条下的人为核查动作，即立案前对线索所做的核实。它不指「内业核查」任务。因此本部分所有「核查前补齐」项都不由系统自动触发，全部由承办人在人为核查环节补齐。
 
-**登记门槛口径。** 沿用 #181：公共层是登记门槛，类型层不是登记门槛。类型层是选定初步涉嫌违法类型之后的定向收集清单，缺失在立案前补齐。类型层「登记时必填」项的缺件后果一律取**警告**，不阻断登记。该口径与 #24 决议「必填项缺失即阻断」的字面读法有出入，分歧记入「待定项与依据缺口」第 2 项，本部分不自行拍板。「阻断」指阻断进入处罚流程，不指阻断线索登记。
+**登记门槛口径。** 沿用 #181：公共层是登记门槛，类型层不是登记门槛。类型层是选定初步涉嫌违法类型之后的定向收集清单，缺失在立案前补齐。类型层「录入时必填」项的缺件后果一律取**警告**，不阻断登记。该口径与 #24 决议「必填项缺失即阻断」的字面读法有出入，分歧记入「待定项与依据缺口」第 2 项，本部分不自行拍板。「阻断」指阻断进入处罚流程，不指阻断线索登记。
 
 **主体差异：本大类的主体不是测绘单位。** #183 正文明确指出，「投诉地图不规范」这类线索用不上测绘资质证书号。查证结果与该判断一致。本大类八个类型的送审义务人由《地图管理条例》第 16 条第 1 款、第 37 条、第 38 条直接列举。列举的义务人共七类：出版单位、展示者、登载者、进口者、出口者、生产者、互联网地图服务单位。第 37 条的义务人是「任何单位和个人」，含自然人。地图编制单位只在两处进入要件。第一处是《地图管理条例》第 7 条，该条要求从事地图编制活动的单位取得测绘资质证书。第二处是第 16 条第 2 款第 (三) 项，该项把「地图编制单位的测绘资质证书」列为送审材料。
 
@@ -1711,33 +1711,33 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 #### （一）应当送审而未送审地图或者附着地图图形产品
 
-类型编码草案：`map_review_missing`。
+类型编码草案：`survey_map_review_missing`。
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.map_review_missing.party_name | 实施被质疑行为的单位全称或者个人姓名 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《地图管理条例》第 16 条第 1 款【法】；规程 3.2.3.3(1)【业】 |
-| type.map_review_missing.party_role | 当事人在地图活动中的角色（出版单位／展示者／登载者／进口者／出口者／生产者／地图编制单位） | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《地图管理条例》第 16 条第 1 款【法】；规程 4.4.2.2(3)【业】 |
-| type.map_review_missing.responsible_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 62 条「依法给予行政处罚、处分」【法】；规程 4.4.2.2(3)【业】 |
-| type.map_review_missing.map_compiler | 地图编制单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 7 条、第 16 条第 2 款第 (三) 项【法】 |
-| type.map_review_missing.compiler_qualification | 地图编制单位的测绘资质证书编号与资质等级 | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 7 条【法】；《地图审核管理规定》第 10 条第 1 款第 (三) 项、第 2 款【业】 |
-| type.map_review_missing.map_object | 涉案地图或者附着地图图形产品的名称、载体形式与规格 | 类型层·涉案对象 | 必填 | 登记时 | 警告 | 规程 3.2.3.3(7)【业】；规程 4.4.2.2(3)【业】 |
-| type.map_review_missing.map_carrier | 地图向社会公开的载体与渠道（出版／展示／登载／互联网地图服务／进口／出口／产品生产） | 类型层·涉案对象 | 必填 | 登记时 | 警告 | 《地图管理条例》第 16 条第 1 款【法】；《地图审核管理规定》第 5 条第 1 款【业】 |
-| type.map_review_missing.map_is_simple | 涉案地图是否属于景区图、街区图、地铁线路图等内容简单的地图 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 15 条第 2 款【法】；《地图审核管理规定》第 6 条第 (二) 项【业】 |
-| type.map_review_missing.map_is_publication | 涉案地图是否属于出版物 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 16 条第 1 款、第 27 条【法】；《出版管理条例》第 2 条第 3 款【法】 |
-| type.map_review_missing.submit_scenario | 应当送审的具体情形（首次出版展示登载生产进出口／已批准地图再次公开且内容发生变化／拟在境外出版展示登载） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图审核管理规定》第 5 条【业】；《地图管理条例》第 15 条第 2 款、第 16 条第 1 款【法】 |
-| type.map_review_missing.no_approval_record | 当事人未取得地图审核批准文件与审图号的事实 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 15 条第 2 款、第 21 条第 1 款【法】；《地图审核管理规定》第 23 条第 2 款【业】 |
-| type.map_review_missing.public_time | 地图向社会公开的时间与持续时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 15 条第 2 款、第 24 条第 1 款【法】；规程 4.4.2.2【业】 |
-| type.map_review_missing.map_sample | 涉案地图样图或者样品 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(7)【业】；《地图审核管理规定》第 10 条第 1 款第 (二) 项【业】 |
-| type.map_review_missing.site_inspection | 现场勘验笔录、照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(4)、3.1.1(2)【业】 |
-| type.map_review_missing.seizure_record | 查封、扣押的地图、附着地图图形的产品及设备、工具、原材料清单 | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 规程 3.1.1(7)、3.3【业】；《地图管理条例》第 43 条第 (三) 项【法】 |
-| type.map_review_missing.content_review_opinion | 地图内容是否符合国家有关标准和规定的审查意见或者认定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(10)、3.2.4.7【业】；《地图审核管理规定》第 18 条、第 23 条第 1 款【业】 |
-| type.map_review_missing.content_error_grade | 地图内容表示的错误程度（没有错误／一般性错误／较大错误） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 测绘地理信息类序号 29【业】 |
-| type.map_review_missing.political_or_secret | 地图内容表示是否存在政治性问题或者泄露国家秘密 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 29【业】；《地图管理条例》第 8 条第 (一)(二)(三) 项【法】 |
-| type.map_review_missing.map_copies_count | 违法地图图件数量 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 规程 4.4.2.2(3)「地图违法图件数量」【业】 |
-| type.map_review_missing.illegal_income | 违法所得金额 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 49 条【法】；规程 3.2.3.3(6)【业】 |
-| type.map_review_missing.order_correction | 责令改正的下达时间与履行情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 49 条「责令改正」【法】；规程 8.4【业】 |
-| type.map_review_missing.local_regulation_check | 是否同时构成《广东省测绘条例》第 45 条第 (一) 项的擅自编制、印刷、出版、展示、登载和销售地图 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《广东省测绘条例》第 39 条第 1 款、第 45 条第 (一) 项【业】 |
-| type.map_review_missing.criminal_referral_check | 是否达到刑事追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《刑法》第 111、282、398 条【法】；《地图管理条例》第 49 条末句【法】；规程 7.1(8)、11【业】 |
+| type.survey_map_review_missing.party_name | 实施被质疑行为的单位全称或者个人姓名 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《地图管理条例》第 16 条第 1 款【法】；规程 3.2.3.3(1)【业】 |
+| type.survey_map_review_missing.party_role | 当事人在地图活动中的角色（出版单位／展示者／登载者／进口者／出口者／生产者／地图编制单位） | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《地图管理条例》第 16 条第 1 款【法】；规程 4.4.2.2(3)【业】 |
+| type.survey_map_review_missing.responsible_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 62 条「依法给予行政处罚、处分」【法】；规程 4.4.2.2(3)【业】 |
+| type.survey_map_review_missing.map_compiler | 地图编制单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 7 条、第 16 条第 2 款第 (三) 项【法】 |
+| type.survey_map_review_missing.compiler_qualification | 地图编制单位的测绘资质证书编号与资质等级 | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 7 条【法】；《地图审核管理规定》第 10 条第 1 款第 (三) 项、第 2 款【业】 |
+| type.survey_map_review_missing.map_object | 涉案地图或者附着地图图形产品的名称、载体形式与规格 | 类型层·涉案对象 | 必填 | 录入时 | 警告 | 规程 3.2.3.3(7)【业】；规程 4.4.2.2(3)【业】 |
+| type.survey_map_review_missing.map_carrier | 地图向社会公开的载体与渠道（出版／展示／登载／互联网地图服务／进口／出口／产品生产） | 类型层·涉案对象 | 必填 | 录入时 | 警告 | 《地图管理条例》第 16 条第 1 款【法】；《地图审核管理规定》第 5 条第 1 款【业】 |
+| type.survey_map_review_missing.map_is_simple | 涉案地图是否属于景区图、街区图、地铁线路图等内容简单的地图 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 15 条第 2 款【法】；《地图审核管理规定》第 6 条第 (二) 项【业】 |
+| type.survey_map_review_missing.map_is_publication | 涉案地图是否属于出版物 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 16 条第 1 款、第 27 条【法】；《出版管理条例》第 2 条第 3 款【法】 |
+| type.survey_map_review_missing.submit_scenario | 应当送审的具体情形（首次出版展示登载生产进出口／已批准地图再次公开且内容发生变化／拟在境外出版展示登载） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图审核管理规定》第 5 条【业】；《地图管理条例》第 15 条第 2 款、第 16 条第 1 款【法】 |
+| type.survey_map_review_missing.no_approval_record | 当事人未取得地图审核批准文件与审图号的事实 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 15 条第 2 款、第 21 条第 1 款【法】；《地图审核管理规定》第 23 条第 2 款【业】 |
+| type.survey_map_review_missing.public_time | 地图向社会公开的时间与持续时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 15 条第 2 款、第 24 条第 1 款【法】；规程 4.4.2.2【业】 |
+| type.survey_map_review_missing.map_sample | 涉案地图样图或者样品 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(7)【业】；《地图审核管理规定》第 10 条第 1 款第 (二) 项【业】 |
+| type.survey_map_review_missing.site_inspection | 现场勘验笔录、照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(4)、3.1.1(2)【业】 |
+| type.survey_map_review_missing.seizure_record | 查封、扣押的地图、附着地图图形的产品及设备、工具、原材料清单 | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 规程 3.1.1(7)、3.3【业】；《地图管理条例》第 43 条第 (三) 项【法】 |
+| type.survey_map_review_missing.content_review_opinion | 地图内容是否符合国家有关标准和规定的审查意见或者认定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(10)、3.2.4.7【业】；《地图审核管理规定》第 18 条、第 23 条第 1 款【业】 |
+| type.survey_map_review_missing.content_error_grade | 地图内容表示的错误程度（没有错误／一般性错误／较大错误） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 测绘地理信息类序号 29【业】 |
+| type.survey_map_review_missing.political_or_secret | 地图内容表示是否存在政治性问题或者泄露国家秘密 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 29【业】；《地图管理条例》第 8 条第 (一)(二)(三) 项【法】 |
+| type.survey_map_review_missing.map_copies_count | 违法地图图件数量 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 规程 4.4.2.2(3)「地图违法图件数量」【业】 |
+| type.survey_map_review_missing.illegal_income | 违法所得金额 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 49 条【法】；规程 3.2.3.3(6)【业】 |
+| type.survey_map_review_missing.order_correction | 责令改正的下达时间与履行情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 49 条「责令改正」【法】；规程 8.4【业】 |
+| type.survey_map_review_missing.local_regulation_check | 是否同时构成《广东省测绘条例》第 45 条第 (一) 项的擅自编制、印刷、出版、展示、登载和销售地图 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《广东省测绘条例》第 39 条第 1 款、第 45 条第 (一) 项【业】 |
+| type.survey_map_review_missing.criminal_referral_check | 是否达到刑事追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《刑法》第 111、282、398 条【法】；《地图管理条例》第 49 条末句【法】；规程 7.1(8)、11【业】 |
 
 说明：
 
@@ -1752,33 +1752,33 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 #### （二）不需要送审的地图不符合国家有关标准和规定
 
-类型编码草案：`map_exempt_nonconforming`。
+类型编码草案：`survey_map_exempt_nonconforming`。
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.map_exempt_nonconforming.party_name | 实施被质疑行为的单位全称或者个人姓名 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《地图管理条例》第 8 条第 1 款【法】；规程 3.2.3.3(1)【业】 |
-| type.map_exempt_nonconforming.party_role | 当事人在地图活动中的角色（编制／出版／展示／登载／生产／进口／出口） | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《地图管理条例》第 8 条第 1 款、第 16 条第 1 款【法】；规程 4.4.2.2(3)【业】 |
-| type.map_exempt_nonconforming.responsible_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 62 条【法】；规程 4.4.2.2(3)【业】 |
-| type.map_exempt_nonconforming.map_compiler | 地图编制单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 7 条、第 8 条第 1 款【法】 |
-| type.map_exempt_nonconforming.compiler_qualification | 地图编制单位的测绘资质证书编号与资质等级 | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 7 条【法】 |
-| type.map_exempt_nonconforming.map_object | 涉案地图或者附着地图图形产品的名称、载体形式与规格 | 类型层·涉案对象 | 必填 | 登记时 | 警告 | 规程 3.2.3.3(7)【业】；规程 4.4.2.2(3)【业】 |
-| type.map_exempt_nonconforming.exempt_ground | 免审事由（直接使用具有审图号的公益性地图／景区图街区图公共交通线路图等内容简单的地图／法律法规明确应予公开且不涉及国界边界历史疆界行政区域界线或者范围的地图） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 《地图审核管理规定》第 6 条【业】；《地图管理条例》第 15 条第 2 款但书【法】 |
-| type.map_exempt_nonconforming.map_carrier | 地图向社会公开的载体与渠道 | 类型层·涉案对象 | 必填 | 登记时 | 警告 | 《地图管理条例》第 24 条第 1 款【法】；规程 4.4.2.2(3)【业】 |
-| type.map_exempt_nonconforming.nonconforming_detail | 不符合国家有关标准和规定的具体情形（逐项对照《地图管理条例》第 8 条第 2 款五类禁止内容与《公开地图内容表示规范》） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 8 条【法】；《公开地图内容表示规范》（自然资规〔2023〕2 号）第三项至第二十二项【业】；规程 3.2.3.3(7)【业】 |
-| type.map_exempt_nonconforming.violated_standard | 所违反的具体标准与规定条款（国家标准编号或者规范性文件条号） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 8 条第 1 款「国家有关地图编制标准」「国家有关地图内容表示的规定」【法】 |
-| type.map_exempt_nonconforming.public_time | 地图向社会公开的时间与持续时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 24 条第 1 款【法】；规程 4.4.2.2【业】 |
-| type.map_exempt_nonconforming.confidentiality_proof | 保密技术处理证明文件（利用涉及国家秘密的测绘成果编制地图时填写） | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 13 条、第 16 条第 3 款【法】；《地图审核管理规定》第 11 条第 1 款【业】 |
-| type.map_exempt_nonconforming.map_sample | 涉案地图样图或者样品 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(7)【业】 |
-| type.map_exempt_nonconforming.site_inspection | 现场勘验笔录、照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(4)、3.1.1(2)【业】 |
-| type.map_exempt_nonconforming.content_review_opinion | 地图内容是否符合国家有关标准和规定的审查意见或者认定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(10)、3.2.4.7【业】；《地图审核管理规定》第 18 条【业】 |
-| type.map_exempt_nonconforming.secrecy_determination | 地图所载内容是否属于国家秘密的认定 | 类型层·认定与检验结论 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 8 条第 2 款第 (三) 项【法】；《保守国家秘密法》（2024 修订）第 13 条、第 15 条【法】 |
-| type.map_exempt_nonconforming.content_error_grade | 地图内容表示的错误程度（一般性错误／较大错误） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 30【业】 |
-| type.map_exempt_nonconforming.political_or_secret | 地图内容表示是否存在政治性问题或者泄露国家秘密 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 30【业】；《地图管理条例》第 8 条第 2 款【法】 |
-| type.map_exempt_nonconforming.map_copies_count | 违法地图图件数量 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 规程 4.4.2.2(3)【业】 |
-| type.map_exempt_nonconforming.illegal_income | 违法所得金额 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 50 条【法】；规程 3.2.3.3(6)【业】 |
-| type.map_exempt_nonconforming.serious_circumstance | 情节严重的具体情形（是否向社会通报） | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 50 条「情节严重的，可以向社会通报」【法】 |
-| type.map_exempt_nonconforming.order_correction | 责令改正的下达时间与履行情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 50 条【法】；规程 8.4【业】 |
-| type.map_exempt_nonconforming.criminal_referral_check | 是否达到刑事追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《刑法》第 111、282、398 条【法】；《地图管理条例》第 50 条末句【法】；规程 7.1(8)、11【业】 |
+| type.survey_map_exempt_nonconforming.party_name | 实施被质疑行为的单位全称或者个人姓名 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《地图管理条例》第 8 条第 1 款【法】；规程 3.2.3.3(1)【业】 |
+| type.survey_map_exempt_nonconforming.party_role | 当事人在地图活动中的角色（编制／出版／展示／登载／生产／进口／出口） | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《地图管理条例》第 8 条第 1 款、第 16 条第 1 款【法】；规程 4.4.2.2(3)【业】 |
+| type.survey_map_exempt_nonconforming.responsible_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 62 条【法】；规程 4.4.2.2(3)【业】 |
+| type.survey_map_exempt_nonconforming.map_compiler | 地图编制单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 7 条、第 8 条第 1 款【法】 |
+| type.survey_map_exempt_nonconforming.compiler_qualification | 地图编制单位的测绘资质证书编号与资质等级 | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 7 条【法】 |
+| type.survey_map_exempt_nonconforming.map_object | 涉案地图或者附着地图图形产品的名称、载体形式与规格 | 类型层·涉案对象 | 必填 | 录入时 | 警告 | 规程 3.2.3.3(7)【业】；规程 4.4.2.2(3)【业】 |
+| type.survey_map_exempt_nonconforming.exempt_ground | 免审事由（直接使用具有审图号的公益性地图／景区图街区图公共交通线路图等内容简单的地图／法律法规明确应予公开且不涉及国界边界历史疆界行政区域界线或者范围的地图） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 《地图审核管理规定》第 6 条【业】；《地图管理条例》第 15 条第 2 款但书【法】 |
+| type.survey_map_exempt_nonconforming.map_carrier | 地图向社会公开的载体与渠道 | 类型层·涉案对象 | 必填 | 录入时 | 警告 | 《地图管理条例》第 24 条第 1 款【法】；规程 4.4.2.2(3)【业】 |
+| type.survey_map_exempt_nonconforming.nonconforming_detail | 不符合国家有关标准和规定的具体情形（逐项对照《地图管理条例》第 8 条第 2 款五类禁止内容与《公开地图内容表示规范》） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 8 条【法】；《公开地图内容表示规范》（自然资规〔2023〕2 号）第三项至第二十二项【业】；规程 3.2.3.3(7)【业】 |
+| type.survey_map_exempt_nonconforming.violated_standard | 所违反的具体标准与规定条款（国家标准编号或者规范性文件条号） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 8 条第 1 款「国家有关地图编制标准」「国家有关地图内容表示的规定」【法】 |
+| type.survey_map_exempt_nonconforming.public_time | 地图向社会公开的时间与持续时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 24 条第 1 款【法】；规程 4.4.2.2【业】 |
+| type.survey_map_exempt_nonconforming.confidentiality_proof | 保密技术处理证明文件（利用涉及国家秘密的测绘成果编制地图时填写） | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 13 条、第 16 条第 3 款【法】；《地图审核管理规定》第 11 条第 1 款【业】 |
+| type.survey_map_exempt_nonconforming.map_sample | 涉案地图样图或者样品 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(7)【业】 |
+| type.survey_map_exempt_nonconforming.site_inspection | 现场勘验笔录、照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(4)、3.1.1(2)【业】 |
+| type.survey_map_exempt_nonconforming.content_review_opinion | 地图内容是否符合国家有关标准和规定的审查意见或者认定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(10)、3.2.4.7【业】；《地图审核管理规定》第 18 条【业】 |
+| type.survey_map_exempt_nonconforming.secrecy_determination | 地图所载内容是否属于国家秘密的认定 | 类型层·认定与检验结论 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 8 条第 2 款第 (三) 项【法】；《保守国家秘密法》（2024 修订）第 13 条、第 15 条【法】 |
+| type.survey_map_exempt_nonconforming.content_error_grade | 地图内容表示的错误程度（一般性错误／较大错误） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 30【业】 |
+| type.survey_map_exempt_nonconforming.political_or_secret | 地图内容表示是否存在政治性问题或者泄露国家秘密 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 30【业】；《地图管理条例》第 8 条第 2 款【法】 |
+| type.survey_map_exempt_nonconforming.map_copies_count | 违法地图图件数量 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 规程 4.4.2.2(3)【业】 |
+| type.survey_map_exempt_nonconforming.illegal_income | 违法所得金额 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 50 条【法】；规程 3.2.3.3(6)【业】 |
+| type.survey_map_exempt_nonconforming.serious_circumstance | 情节严重的具体情形（是否向社会通报） | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 50 条「情节严重的，可以向社会通报」【法】 |
+| type.survey_map_exempt_nonconforming.order_correction | 责令改正的下达时间与履行情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 50 条【法】；规程 8.4【业】 |
+| type.survey_map_exempt_nonconforming.criminal_referral_check | 是否达到刑事追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《刑法》第 111、282、398 条【法】；《地图管理条例》第 50 条末句【法】；规程 7.1(8)、11【业】 |
 
 说明：
 
@@ -1793,34 +1793,34 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 #### （三）经审核不符合国家有关标准和规定的地图未按照审核要求修改即向社会公开
 
-类型编码草案：`map_review_unmodified_public`。
+类型编码草案：`survey_map_review_unmodified_public`。
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.map_review_unmodified_public.party_name | 实施被质疑行为的单位全称或者个人姓名 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《地图管理条例》第 16 条第 1 款【法】；规程 3.2.3.3(1)【业】 |
-| type.map_review_unmodified_public.party_role | 当事人在地图活动中的角色（送审人／出版单位／展示者／登载者／生产者／进口者／出口者） | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《地图管理条例》第 16 条第 1 款【法】；规程 4.4.2.2(3)【业】 |
-| type.map_review_unmodified_public.responsible_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 62 条【法】；规程 4.4.2.2(3)【业】 |
-| type.map_review_unmodified_public.map_compiler | 地图编制单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 7 条【法】 |
-| type.map_review_unmodified_public.compiler_qualification | 地图编制单位或者送审人的测绘资质证书编号与资质等级 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 51 条「降低资质等级或者吊销测绘资质证书」、第 56 条【法】 |
-| type.map_review_unmodified_public.map_object | 涉案地图或者附着地图图形产品的名称、载体形式与规格 | 类型层·涉案对象 | 必填 | 登记时 | 警告 | 规程 3.2.3.3(7)【业】 |
-| type.map_review_unmodified_public.map_carrier | 地图向社会公开的载体与渠道 | 类型层·涉案对象 | 必填 | 登记时 | 警告 | 《地图管理条例》第 24 条第 1 款【法】；规程 4.4.2.2(3)【业】 |
-| type.map_review_unmodified_public.review_authority | 有审核权的部门名称与层级 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 17 条、第 18 条【法】；《地图审核管理规定》第 7 条、第 8 条、第 14 条【业】 |
-| type.map_review_unmodified_public.review_result_doc | 地图审核的书面决定（不予批准文件，或者载明修改要求的地图内容审查意见） | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《地图审核管理规定》第 23 条第 1 款、第 3 款【业】；规程 3.2.3.3(3)(10)【业】 |
-| type.map_review_unmodified_public.review_requirement | 审核要求修改的具体内容与部位 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 51 条「未按照审核要求修改」【法】；《地图审核管理规定》第 18 条、第 23 条第 3 款【业】 |
-| type.map_review_unmodified_public.unmodified_fact | 未按审核要求修改即向社会公开的事实 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 51 条【法】 |
-| type.map_review_unmodified_public.public_time | 地图向社会公开的时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 24 条第 1 款、第 51 条【法】；规程 4.4.2.2【业】 |
-| type.map_review_unmodified_public.reviewed_version | 送审的地图样图或者样品 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(7)【业】；《地图审核管理规定》第 10 条第 1 款第 (二) 项【业】 |
-| type.map_review_unmodified_public.published_version | 实际向社会公开的地图版本 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(7)【业】；《地图管理条例》第 43 条第 (一)(二) 项【法】 |
-| type.map_review_unmodified_public.site_inspection | 现场勘验笔录、照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(4)、3.1.1(2)【业】 |
-| type.map_review_unmodified_public.comparison_opinion | 公开版本与审核要求的比对结论 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(10)、3.2.4.7【业】 |
-| type.map_review_unmodified_public.content_error_grade | 地图内容表示的错误程度（一般性错误／较大错误） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 31【业】 |
-| type.map_review_unmodified_public.political_or_secret | 地图内容表示是否存在政治性问题或者泄露国家秘密 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 31【业】；《地图管理条例》第 8 条第 2 款【法】 |
-| type.map_review_unmodified_public.map_copies_count | 违法地图图件数量 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 规程 4.4.2.2(3)【业】 |
-| type.map_review_unmodified_public.illegal_income | 违法所得金额 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 51 条【法】；规程 3.2.3.3(6)【业】 |
-| type.map_review_unmodified_public.serious_circumstance | 情节严重的具体情形（是否责令停业整顿、是否向社会通报） | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 51 条【法】 |
-| type.map_review_unmodified_public.order_correction | 责令改正的下达时间与履行情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 51 条【法】；规程 8.4【业】 |
-| type.map_review_unmodified_public.qualification_penalty_transfer | 提请颁发资质证书的部门决定降低资质等级或者吊销测绘资质证书的情况 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 56 条【法】；《测绘法》第 66 条第 1 款【法】 |
-| type.map_review_unmodified_public.criminal_referral_check | 是否达到刑事追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《刑法》第 111、282、398 条【法】；《地图管理条例》第 51 条末句【法】；规程 7.1(8)、11【业】 |
+| type.survey_map_review_unmodified_public.party_name | 实施被质疑行为的单位全称或者个人姓名 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《地图管理条例》第 16 条第 1 款【法】；规程 3.2.3.3(1)【业】 |
+| type.survey_map_review_unmodified_public.party_role | 当事人在地图活动中的角色（送审人／出版单位／展示者／登载者／生产者／进口者／出口者） | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《地图管理条例》第 16 条第 1 款【法】；规程 4.4.2.2(3)【业】 |
+| type.survey_map_review_unmodified_public.responsible_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 62 条【法】；规程 4.4.2.2(3)【业】 |
+| type.survey_map_review_unmodified_public.map_compiler | 地图编制单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 7 条【法】 |
+| type.survey_map_review_unmodified_public.compiler_qualification | 地图编制单位或者送审人的测绘资质证书编号与资质等级 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 51 条「降低资质等级或者吊销测绘资质证书」、第 56 条【法】 |
+| type.survey_map_review_unmodified_public.map_object | 涉案地图或者附着地图图形产品的名称、载体形式与规格 | 类型层·涉案对象 | 必填 | 录入时 | 警告 | 规程 3.2.3.3(7)【业】 |
+| type.survey_map_review_unmodified_public.map_carrier | 地图向社会公开的载体与渠道 | 类型层·涉案对象 | 必填 | 录入时 | 警告 | 《地图管理条例》第 24 条第 1 款【法】；规程 4.4.2.2(3)【业】 |
+| type.survey_map_review_unmodified_public.review_authority | 有审核权的部门名称与层级 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 17 条、第 18 条【法】；《地图审核管理规定》第 7 条、第 8 条、第 14 条【业】 |
+| type.survey_map_review_unmodified_public.review_result_doc | 地图审核的书面决定（不予批准文件，或者载明修改要求的地图内容审查意见） | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《地图审核管理规定》第 23 条第 1 款、第 3 款【业】；规程 3.2.3.3(3)(10)【业】 |
+| type.survey_map_review_unmodified_public.review_requirement | 审核要求修改的具体内容与部位 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 51 条「未按照审核要求修改」【法】；《地图审核管理规定》第 18 条、第 23 条第 3 款【业】 |
+| type.survey_map_review_unmodified_public.unmodified_fact | 未按审核要求修改即向社会公开的事实 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 51 条【法】 |
+| type.survey_map_review_unmodified_public.public_time | 地图向社会公开的时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 24 条第 1 款、第 51 条【法】；规程 4.4.2.2【业】 |
+| type.survey_map_review_unmodified_public.reviewed_version | 送审的地图样图或者样品 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(7)【业】；《地图审核管理规定》第 10 条第 1 款第 (二) 项【业】 |
+| type.survey_map_review_unmodified_public.published_version | 实际向社会公开的地图版本 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(7)【业】；《地图管理条例》第 43 条第 (一)(二) 项【法】 |
+| type.survey_map_review_unmodified_public.site_inspection | 现场勘验笔录、照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(4)、3.1.1(2)【业】 |
+| type.survey_map_review_unmodified_public.comparison_opinion | 公开版本与审核要求的比对结论 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(10)、3.2.4.7【业】 |
+| type.survey_map_review_unmodified_public.content_error_grade | 地图内容表示的错误程度（一般性错误／较大错误） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 31【业】 |
+| type.survey_map_review_unmodified_public.political_or_secret | 地图内容表示是否存在政治性问题或者泄露国家秘密 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 31【业】；《地图管理条例》第 8 条第 2 款【法】 |
+| type.survey_map_review_unmodified_public.map_copies_count | 违法地图图件数量 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 规程 4.4.2.2(3)【业】 |
+| type.survey_map_review_unmodified_public.illegal_income | 违法所得金额 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 51 条【法】；规程 3.2.3.3(6)【业】 |
+| type.survey_map_review_unmodified_public.serious_circumstance | 情节严重的具体情形（是否责令停业整顿、是否向社会通报） | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 51 条【法】 |
+| type.survey_map_review_unmodified_public.order_correction | 责令改正的下达时间与履行情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 51 条【法】；规程 8.4【业】 |
+| type.survey_map_review_unmodified_public.qualification_penalty_transfer | 提请颁发资质证书的部门决定降低资质等级或者吊销测绘资质证书的情况 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 56 条【法】；《测绘法》第 66 条第 1 款【法】 |
+| type.survey_map_review_unmodified_public.criminal_referral_check | 是否达到刑事追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《刑法》第 111、282、398 条【法】；《地图管理条例》第 51 条末句【法】；规程 7.1(8)、11【业】 |
 
 说明：
 
@@ -1835,33 +1835,33 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 #### （四）弄虚作假、伪造申请材料骗取地图审核批准文件，或者伪造、冒用地图审核批准文件和审图号
 
-类型编码草案：`map_approval_fraud`。
+类型编码草案：`survey_map_approval_fraud`。
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.map_approval_fraud.party_name | 实施被质疑行为的单位全称或者个人姓名 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《地图管理条例》第 52 条【法】；规程 3.2.3.3(1)【业】 |
-| type.map_approval_fraud.party_role | 当事人在地图活动中的角色（送审人／出版单位／展示者／登载者／生产者／进口者／出口者） | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《地图管理条例》第 16 条第 1 款【法】；规程 4.4.2.2(3)【业】 |
-| type.map_approval_fraud.responsible_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 62 条【法】；规程 4.4.2.2(3)【业】 |
-| type.map_approval_fraud.impersonated_party | 被冒用的单位名称与其审图号（冒用情形时填写） | 类型层·违法主体 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 52 条「冒用」【法】；规程 3.2.3.3(9)【业】 |
-| type.map_approval_fraud.fraud_mode | 行为方式（弄虚作假骗取批准文件／伪造申请材料骗取批准文件／伪造地图审核批准文件／伪造审图号／冒用地图审核批准文件／冒用审图号） | 类型层·违法事实 | 必填 | 登记时 | 警告 | 《地图管理条例》第 52 条【法】；规程 3.2.3.3(9)【业】 |
-| type.map_approval_fraud.compiler_qualification | 送审时提交的地图编制单位的测绘资质证书编号与资质等级 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 16 条第 2 款第 (三) 项【法】；《地图审核管理规定》第 10 条第 1 款第 (三) 项【业】；规程 3.2.3.3(3)(9)【业】 |
-| type.map_approval_fraud.map_approval_doc | 涉案地图审核批准文件的名称、文号、核发日期与核发机关 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 21 条第 1 款【法】；《地图审核管理规定》第 23 条第 2 款【业】；规程 3.2.3.3(3)【业】 |
-| type.map_approval_fraud.review_no | 涉案审图号 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 21 条第 1 款、第 22 条【法】；《地图审核管理规定》第 26 条【业】 |
-| type.map_approval_fraud.review_authority | 有审核权的部门名称与层级 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 17 条、第 18 条【法】；《地图审核管理规定》第 7 条、第 8 条【业】 |
-| type.map_approval_fraud.map_object | 涉案地图或者附着地图图形产品的名称、载体形式与规格 | 类型层·涉案对象 | 必填 | 登记时 | 警告 | 规程 3.2.3.3(7)【业】 |
-| type.map_approval_fraud.map_carrier | 地图向社会公开的载体与渠道 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 52 条「没收违法地图和附着地图图形的产品」【法】 |
-| type.map_approval_fraud.submitted_materials | 当事人提交的全部送审材料（地图审核申请表、地图样图或者样品、测绘资质证书、保密技术处理证明） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 《地图审核管理规定》第 10 条第 1 款、第 11 条、第 12 条【业】；规程 3.2.3.3(3)(9)【业】 |
-| type.map_approval_fraud.falsity_detail | 弄虚作假或者伪造的具体内容、部位与手段 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(9)【业】；《地图审核管理规定》第 12 条「对申请材料的真实性负责」【业】 |
-| type.map_approval_fraud.announcement_record | 核发机关网站或者新闻媒体上公告的地图名称、批准文件与审图号记录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 21 条第 2 款【法】；《地图审核管理规定》第 25 条【业】 |
-| type.map_approval_fraud.seizure_record | 查封、扣押与没收的地图、附着地图图形的产品及设备、工具、原材料清单 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.1.1(7)、3.3【业】；《地图管理条例》第 43 条第 (三) 项、第 52 条【法】 |
-| type.map_approval_fraud.authenticity_opinion | 批准文件与审图号真伪的认定意见或者鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(10)、3.2.4.7【业】 |
-| type.map_approval_fraud.content_error_grade | 地图内容表示是否存在政治性问题或者泄露国家秘密 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 32【业】；《地图管理条例》第 8 条第 2 款【法】 |
-| type.map_approval_fraud.map_copies_count | 违法地图图件数量 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 规程 4.4.2.2(3)【业】 |
-| type.map_approval_fraud.illegal_income | 违法所得金额 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 52 条【法】；规程 3.2.3.3(6)【业】 |
-| type.map_approval_fraud.serious_circumstance | 情节严重的具体情形（是否责令停业整顿、降低资质等级或者吊销测绘资质证书） | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 52 条【法】 |
-| type.map_approval_fraud.order_stop | 责令停止违法行为的下达时间与履行情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 52 条「责令停止违法行为」【法】；规程 2.2.2.1、8.4【业】 |
-| type.map_approval_fraud.qualification_penalty_transfer | 提请颁发资质证书的部门决定降低资质等级或者吊销测绘资质证书的情况 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 56 条【法】；《测绘法》第 66 条第 1 款【法】 |
-| type.map_approval_fraud.criminal_referral_check | 是否达到刑事追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《刑法》第 280 条、第 111 条、第 282 条【法】；《地图管理条例》第 52 条末句【法】；规程 7.1(8)、11【业】 |
+| type.survey_map_approval_fraud.party_name | 实施被质疑行为的单位全称或者个人姓名 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《地图管理条例》第 52 条【法】；规程 3.2.3.3(1)【业】 |
+| type.survey_map_approval_fraud.party_role | 当事人在地图活动中的角色（送审人／出版单位／展示者／登载者／生产者／进口者／出口者） | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《地图管理条例》第 16 条第 1 款【法】；规程 4.4.2.2(3)【业】 |
+| type.survey_map_approval_fraud.responsible_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 62 条【法】；规程 4.4.2.2(3)【业】 |
+| type.survey_map_approval_fraud.impersonated_party | 被冒用的单位名称与其审图号（冒用情形时填写） | 类型层·违法主体 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 52 条「冒用」【法】；规程 3.2.3.3(9)【业】 |
+| type.survey_map_approval_fraud.fraud_mode | 行为方式（弄虚作假骗取批准文件／伪造申请材料骗取批准文件／伪造地图审核批准文件／伪造审图号／冒用地图审核批准文件／冒用审图号） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《地图管理条例》第 52 条【法】；规程 3.2.3.3(9)【业】 |
+| type.survey_map_approval_fraud.compiler_qualification | 送审时提交的地图编制单位的测绘资质证书编号与资质等级 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 16 条第 2 款第 (三) 项【法】；《地图审核管理规定》第 10 条第 1 款第 (三) 项【业】；规程 3.2.3.3(3)(9)【业】 |
+| type.survey_map_approval_fraud.map_approval_doc | 涉案地图审核批准文件的名称、文号、核发日期与核发机关 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 21 条第 1 款【法】；《地图审核管理规定》第 23 条第 2 款【业】；规程 3.2.3.3(3)【业】 |
+| type.survey_map_approval_fraud.review_no | 涉案审图号 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 21 条第 1 款、第 22 条【法】；《地图审核管理规定》第 26 条【业】 |
+| type.survey_map_approval_fraud.review_authority | 有审核权的部门名称与层级 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 17 条、第 18 条【法】；《地图审核管理规定》第 7 条、第 8 条【业】 |
+| type.survey_map_approval_fraud.map_object | 涉案地图或者附着地图图形产品的名称、载体形式与规格 | 类型层·涉案对象 | 必填 | 录入时 | 警告 | 规程 3.2.3.3(7)【业】 |
+| type.survey_map_approval_fraud.map_carrier | 地图向社会公开的载体与渠道 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 52 条「没收违法地图和附着地图图形的产品」【法】 |
+| type.survey_map_approval_fraud.submitted_materials | 当事人提交的全部送审材料（地图审核申请表、地图样图或者样品、测绘资质证书、保密技术处理证明） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 《地图审核管理规定》第 10 条第 1 款、第 11 条、第 12 条【业】；规程 3.2.3.3(3)(9)【业】 |
+| type.survey_map_approval_fraud.falsity_detail | 弄虚作假或者伪造的具体内容、部位与手段 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(9)【业】；《地图审核管理规定》第 12 条「对申请材料的真实性负责」【业】 |
+| type.survey_map_approval_fraud.announcement_record | 核发机关网站或者新闻媒体上公告的地图名称、批准文件与审图号记录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 21 条第 2 款【法】；《地图审核管理规定》第 25 条【业】 |
+| type.survey_map_approval_fraud.seizure_record | 查封、扣押与没收的地图、附着地图图形的产品及设备、工具、原材料清单 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.1.1(7)、3.3【业】；《地图管理条例》第 43 条第 (三) 项、第 52 条【法】 |
+| type.survey_map_approval_fraud.authenticity_opinion | 批准文件与审图号真伪的认定意见或者鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(10)、3.2.4.7【业】 |
+| type.survey_map_approval_fraud.content_error_grade | 地图内容表示是否存在政治性问题或者泄露国家秘密 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 32【业】；《地图管理条例》第 8 条第 2 款【法】 |
+| type.survey_map_approval_fraud.map_copies_count | 违法地图图件数量 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 规程 4.4.2.2(3)【业】 |
+| type.survey_map_approval_fraud.illegal_income | 违法所得金额 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 52 条【法】；规程 3.2.3.3(6)【业】 |
+| type.survey_map_approval_fraud.serious_circumstance | 情节严重的具体情形（是否责令停业整顿、降低资质等级或者吊销测绘资质证书） | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 52 条【法】 |
+| type.survey_map_approval_fraud.order_stop | 责令停止违法行为的下达时间与履行情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 52 条「责令停止违法行为」【法】；规程 2.2.2.1、8.4【业】 |
+| type.survey_map_approval_fraud.qualification_penalty_transfer | 提请颁发资质证书的部门决定降低资质等级或者吊销测绘资质证书的情况 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 56 条【法】；《测绘法》第 66 条第 1 款【法】 |
+| type.survey_map_approval_fraud.criminal_referral_check | 是否达到刑事追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《刑法》第 280 条、第 111 条、第 282 条【法】；《地图管理条例》第 52 条末句【法】；规程 7.1(8)、11【业】 |
 
 说明：
 
@@ -1876,31 +1876,31 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 #### （五）未在地图的适当位置显著标注审图号，或者未按照有关规定送交样本
 
-类型编码草案：`map_review_no_label`。
+类型编码草案：`survey_map_review_no_label`。
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.map_review_no_label.party_name | 实施被质疑行为的单位全称或者个人姓名 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《地图管理条例》第 22 条、第 25 条【法】；规程 3.2.3.3(1)【业】 |
-| type.map_review_no_label.party_role | 当事人在地图活动中的角色（送审者／出版单位／展示者／登载者／生产者／互联网地图服务单位） | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《地图管理条例》第 16 条第 1 款、第 22 条、第 25 条【法】；规程 4.4.2.2(3)【业】 |
-| type.map_review_no_label.responsible_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 62 条【法】；规程 4.4.2.2(3)【业】 |
-| type.map_review_no_label.map_compiler | 地图编制单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 7 条【法】 |
-| type.map_review_no_label.compiler_qualification | 地图编制单位或者送审者的测绘资质证书编号与资质等级 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 53 条「降低资质等级或者吊销测绘资质证书」、第 56 条【法】 |
-| type.map_review_no_label.map_approval_doc | 地图审核批准文件的名称、文号、核发日期与核发机关 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 21 条第 1 款、第 22 条【法】；规程 3.2.3.3(3)【业】 |
-| type.map_review_no_label.review_no | 已核发的审图号 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 21 条第 1 款【法】；《地图审核管理规定》第 26 条【业】 |
-| type.map_review_no_label.map_object | 涉案地图或者附着地图图形产品的名称、载体形式与规格 | 类型层·涉案对象 | 必填 | 登记时 | 警告 | 规程 3.2.3.3(7)【业】 |
-| type.map_review_no_label.map_is_publication | 涉案地图是否属于出版物，是否属互联网地图服务 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 22 条但书【法】；《地图审核管理规定》第 27 条【业】 |
-| type.map_review_no_label.breach_mode | 行为方式（未在适当位置显著标注审图号／未按照有关规定送交样本） | 类型层·违法事实 | 必填 | 登记时 | 警告 | 《地图管理条例》第 22 条、第 25 条、第 53 条【法】 |
-| type.map_review_no_label.label_position_required | 依法应当标注审图号的位置（地图或者产品的适当位置／出版物的版权页／无版权页时的适当位置／互联网地图页面左下角） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 22 条【法】；《地图审核管理规定》第 27 条【业】 |
-| type.map_review_no_label.label_defect | 未标注或者标注不显著的事实与部位（未标注审图号情形时填写） | 类型层·违法事实 | 选填 | 核查前补齐 | 阻断 | 《地图管理条例》第 22 条、第 53 条【法】 |
-| type.map_review_no_label.sample_delivery_fact | 样本送交情况：是否送交、送交时间、送交份数、接收部门（未送交样本情形时填写） | 类型层·违法事实 | 选填 | 核查前补齐 | 阻断 | 《地图管理条例》第 25 条【法】；《广东省测绘条例》第 40 条【业】 |
-| type.map_review_no_label.evidence_photo | 涉案地图或者附着地图图形产品的实物照片、出版物版权页照片、互联网地图页面截屏 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)(7)【业】 |
-| type.map_review_no_label.site_inspection | 现场勘验笔录、照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(4)、3.1.1(2)【业】 |
-| type.map_review_no_label.political_or_secret | 地图内容表示是否存在政治性问题或者泄露国家秘密 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 33【业】；《地图管理条例》第 8 条第 2 款【法】 |
-| type.map_review_no_label.serious_circumstance | 情节严重的具体情形（是否责令停业整顿、降低资质等级或者吊销测绘资质证书） | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 53 条【法】 |
-| type.map_review_no_label.order_correction | 责令改正的下达时间与履行情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 53 条【法】；规程 8.4【业】 |
-| type.map_review_no_label.local_regulation_check | 是否同时构成《广东省测绘条例》第 45 条第 (二) 项的未按照规定将地图样图或者样品报送备案 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《广东省测绘条例》第 40 条、第 45 条第 (二) 项【业】 |
-| type.map_review_no_label.qualification_penalty_transfer | 提请颁发资质证书的部门决定降低资质等级或者吊销测绘资质证书的情况 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 56 条【法】；《测绘法》第 66 条第 1 款【法】 |
-| type.map_review_no_label.criminal_referral_check | 是否达到刑事追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 62 条末句【法】；《刑法》第 280 条、第 398 条【法】；规程 7.1(8)、11【业】 |
+| type.survey_map_review_no_label.party_name | 实施被质疑行为的单位全称或者个人姓名 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《地图管理条例》第 22 条、第 25 条【法】；规程 3.2.3.3(1)【业】 |
+| type.survey_map_review_no_label.party_role | 当事人在地图活动中的角色（送审者／出版单位／展示者／登载者／生产者／互联网地图服务单位） | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《地图管理条例》第 16 条第 1 款、第 22 条、第 25 条【法】；规程 4.4.2.2(3)【业】 |
+| type.survey_map_review_no_label.responsible_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 62 条【法】；规程 4.4.2.2(3)【业】 |
+| type.survey_map_review_no_label.map_compiler | 地图编制单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 7 条【法】 |
+| type.survey_map_review_no_label.compiler_qualification | 地图编制单位或者送审者的测绘资质证书编号与资质等级 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 53 条「降低资质等级或者吊销测绘资质证书」、第 56 条【法】 |
+| type.survey_map_review_no_label.map_approval_doc | 地图审核批准文件的名称、文号、核发日期与核发机关 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 21 条第 1 款、第 22 条【法】；规程 3.2.3.3(3)【业】 |
+| type.survey_map_review_no_label.review_no | 已核发的审图号 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 21 条第 1 款【法】；《地图审核管理规定》第 26 条【业】 |
+| type.survey_map_review_no_label.map_object | 涉案地图或者附着地图图形产品的名称、载体形式与规格 | 类型层·涉案对象 | 必填 | 录入时 | 警告 | 规程 3.2.3.3(7)【业】 |
+| type.survey_map_review_no_label.map_is_publication | 涉案地图是否属于出版物，是否属互联网地图服务 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 22 条但书【法】；《地图审核管理规定》第 27 条【业】 |
+| type.survey_map_review_no_label.breach_mode | 行为方式（未在适当位置显著标注审图号／未按照有关规定送交样本） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《地图管理条例》第 22 条、第 25 条、第 53 条【法】 |
+| type.survey_map_review_no_label.label_position_required | 依法应当标注审图号的位置（地图或者产品的适当位置／出版物的版权页／无版权页时的适当位置／互联网地图页面左下角） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 22 条【法】；《地图审核管理规定》第 27 条【业】 |
+| type.survey_map_review_no_label.label_defect | 未标注或者标注不显著的事实与部位（未标注审图号情形时填写） | 类型层·违法事实 | 选填 | 核查前补齐 | 阻断 | 《地图管理条例》第 22 条、第 53 条【法】 |
+| type.survey_map_review_no_label.sample_delivery_fact | 样本送交情况：是否送交、送交时间、送交份数、接收部门（未送交样本情形时填写） | 类型层·违法事实 | 选填 | 核查前补齐 | 阻断 | 《地图管理条例》第 25 条【法】；《广东省测绘条例》第 40 条【业】 |
+| type.survey_map_review_no_label.evidence_photo | 涉案地图或者附着地图图形产品的实物照片、出版物版权页照片、互联网地图页面截屏 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)(7)【业】 |
+| type.survey_map_review_no_label.site_inspection | 现场勘验笔录、照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(4)、3.1.1(2)【业】 |
+| type.survey_map_review_no_label.political_or_secret | 地图内容表示是否存在政治性问题或者泄露国家秘密 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 33【业】；《地图管理条例》第 8 条第 2 款【法】 |
+| type.survey_map_review_no_label.serious_circumstance | 情节严重的具体情形（是否责令停业整顿、降低资质等级或者吊销测绘资质证书） | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 53 条【法】 |
+| type.survey_map_review_no_label.order_correction | 责令改正的下达时间与履行情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 53 条【法】；规程 8.4【业】 |
+| type.survey_map_review_no_label.local_regulation_check | 是否同时构成《广东省测绘条例》第 45 条第 (二) 项的未按照规定将地图样图或者样品报送备案 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《广东省测绘条例》第 40 条、第 45 条第 (二) 项【业】 |
+| type.survey_map_review_no_label.qualification_penalty_transfer | 提请颁发资质证书的部门决定降低资质等级或者吊销测绘资质证书的情况 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 56 条【法】；《测绘法》第 66 条第 1 款【法】 |
+| type.survey_map_review_no_label.criminal_referral_check | 是否达到刑事追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 62 条末句【法】；《刑法》第 280 条、第 398 条【法】；规程 7.1(8)、11【业】 |
 
 说明：
 
@@ -1915,35 +1915,35 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 #### （六）互联网地图服务单位使用未经依法审核批准的地图提供服务，或者未对互联网地图新增内容进行核查校对
 
-类型编码草案：`internet_map_service_unapproved`。
+类型编码草案：`survey_internet_map_service_unapproved`。
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.internet_map_service_unapproved.party_name | 互联网地图服务单位名称 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《地图管理条例》第 38 条、第 54 条【法】；规程 3.2.3.3(1)【业】 |
-| type.internet_map_service_unapproved.responsible_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 62 条【法】；《刑法》第 286 之一条第 2 款【法】；规程 4.4.2.2(3)【业】 |
-| type.internet_map_service_unapproved.internet_map_qualification | 互联网地图服务单位的测绘资质证书编号与资质等级 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 33 条第 1 款、第 54 条、第 56 条【法】；《测绘法》第 38 条第 2 款【法】 |
-| type.internet_map_service_unapproved.review_no_validity | 涉案地图的审图号、核发日期与有效期；无审图号的记录该事实 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 21 条第 1 款、第 38 条【法】；《地图审核管理规定》第 28 条第 1 款【业】 |
-| type.internet_map_service_unapproved.service_type | 提供的服务类型（地理位置定位／地理信息上传标注／地图数据库开发／互联网地图出版） | 类型层·涉案对象 | 必填 | 登记时 | 警告 | 《地图管理条例》第 33 条第 1 款、第 2 款【法】 |
-| type.internet_map_service_unapproved.map_object | 涉案地图的名称、版本与表现地范围 | 类型层·涉案对象 | 必填 | 登记时 | 警告 | 规程 3.2.3.3(7)【业】；规程 4.4.2.2(3)「互联网地图」【业】 |
-| type.internet_map_service_unapproved.server_location | 存放地图数据的服务器位置 | 类型层·涉案对象 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 34 条第 1 款【法】；《测绘法》第 38 条第 2 款「建立地图数据安全管理制度」【法】 |
-| type.internet_map_service_unapproved.breach_mode | 行为方式（使用未经依法审核批准的地图提供服务／未对互联网地图新增内容进行核查校对） | 类型层·违法事实 | 必填 | 登记时 | 警告 | 《地图管理条例》第 38 条、第 54 条【法】 |
-| type.internet_map_service_unapproved.unapproved_fact | 使用未经依法审核批准的地图提供服务的事实 | 类型层·违法事实 | 选填 | 核查前补齐 | 阻断 | 《地图管理条例》第 38 条、第 54 条【法】；《测绘法》第 38 条第 2 款【法】 |
-| type.internet_map_service_unapproved.verification_fact | 对互联网地图新增内容的核查校对情况 | 类型层·违法事实 | 选填 | 核查前补齐 | 阻断 | 《地图管理条例》第 38 条、第 54 条【法】；《地图审核管理规定》第 28 条第 2 款、第 31 条【业】 |
-| type.internet_map_service_unapproved.filing_record | 每六个月向作出审核批准的部门备案新增标注内容及核查校对情况的记录 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 38 条「按照国家有关规定……备案」【法】；《地图审核管理规定》第 28 条第 2 款【业】 |
-| type.internet_map_service_unapproved.service_period | 违法行为的起止时间与持续时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 54 条【法】；规程 4.4.2.2【业】 |
-| type.internet_map_service_unapproved.webpage_evidence | 涉案互联网地图页面的网址、截屏、访问时间、新增标注记录与后台日志 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)(7)【业】；《地图管理条例》第 43 条第 (一)(二) 项【法】 |
-| type.internet_map_service_unapproved.safety_reviewer | 地图安全审校人员配备情况与内部安全审校核查制度 | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 《地图审核管理规定》第 31 条【业】 |
-| type.internet_map_service_unapproved.site_inspection | 现场勘验笔录、照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(4)、3.1.1(2)【业】 |
-| type.internet_map_service_unapproved.seizure_record | 查封、扣押的设备及电子数据清单 | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 规程 3.1.1(7)、3.3【业】 |
-| type.internet_map_service_unapproved.content_review_opinion | 涉案地图内容是否符合国家有关标准和规定的审查意见或者认定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(10)、3.2.4.7【业】 |
-| type.internet_map_service_unapproved.content_error_grade | 地图内容表示的错误程度（没有错误／一般性错误／较大错误） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 34【业】 |
-| type.internet_map_service_unapproved.political_or_secret | 地图内容表示是否存在政治性问题或者泄露国家秘密 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 34【业】；《地图管理条例》第 8 条第 2 款【法】 |
-| type.internet_map_service_unapproved.illegal_income | 违法所得金额 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 54 条【法】；规程 3.2.3.3(6)【业】 |
-| type.internet_map_service_unapproved.order_correction | 责令改正的下达时间与履行情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 54 条【法】；规程 8.4【业】 |
-| type.internet_map_service_unapproved.refuse_correction | 经责令改正而拒不改正的情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《刑法》第 286 之一条第 1 款【法】；法释〔2019〕15 号第 2 条【法】；规程 8.4【业】 |
-| type.internet_map_service_unapproved.cross_dept_report | 向出版行政主管部门、网络安全和信息化主管部门报告或者抄告的情况 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 26 条、第 36 条第 2 款、第 43 条【法】；《测绘法》第 38 条第 3 款【法】；规程 2.2.2.2【业】 |
-| type.internet_map_service_unapproved.qualification_penalty_transfer | 提请颁发资质证书的部门决定降低资质等级或者吊销测绘资质证书的情况（情节严重时填写） | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 54 条、第 56 条【法】；《测绘法》第 66 条第 1 款【法】 |
-| type.internet_map_service_unapproved.criminal_referral_check | 是否达到刑法第 286 之一条第 1 款四项的追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《刑法》第 286 之一条【法】；法释〔2019〕15 号第 1 条至第 6 条【法】；《地图管理条例》第 54 条末句【法】；规程 7.1(8)、11【业】 |
+| type.survey_internet_map_service_unapproved.party_name | 互联网地图服务单位名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《地图管理条例》第 38 条、第 54 条【法】；规程 3.2.3.3(1)【业】 |
+| type.survey_internet_map_service_unapproved.responsible_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 62 条【法】；《刑法》第 286 之一条第 2 款【法】；规程 4.4.2.2(3)【业】 |
+| type.survey_internet_map_service_unapproved.internet_map_qualification | 互联网地图服务单位的测绘资质证书编号与资质等级 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 33 条第 1 款、第 54 条、第 56 条【法】；《测绘法》第 38 条第 2 款【法】 |
+| type.survey_internet_map_service_unapproved.review_no_validity | 涉案地图的审图号、核发日期与有效期；无审图号的记录该事实 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 21 条第 1 款、第 38 条【法】；《地图审核管理规定》第 28 条第 1 款【业】 |
+| type.survey_internet_map_service_unapproved.service_type | 提供的服务类型（地理位置定位／地理信息上传标注／地图数据库开发／互联网地图出版） | 类型层·涉案对象 | 必填 | 录入时 | 警告 | 《地图管理条例》第 33 条第 1 款、第 2 款【法】 |
+| type.survey_internet_map_service_unapproved.map_object | 涉案地图的名称、版本与表现地范围 | 类型层·涉案对象 | 必填 | 录入时 | 警告 | 规程 3.2.3.3(7)【业】；规程 4.4.2.2(3)「互联网地图」【业】 |
+| type.survey_internet_map_service_unapproved.server_location | 存放地图数据的服务器位置 | 类型层·涉案对象 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 34 条第 1 款【法】；《测绘法》第 38 条第 2 款「建立地图数据安全管理制度」【法】 |
+| type.survey_internet_map_service_unapproved.breach_mode | 行为方式（使用未经依法审核批准的地图提供服务／未对互联网地图新增内容进行核查校对） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《地图管理条例》第 38 条、第 54 条【法】 |
+| type.survey_internet_map_service_unapproved.unapproved_fact | 使用未经依法审核批准的地图提供服务的事实 | 类型层·违法事实 | 选填 | 核查前补齐 | 阻断 | 《地图管理条例》第 38 条、第 54 条【法】；《测绘法》第 38 条第 2 款【法】 |
+| type.survey_internet_map_service_unapproved.verification_fact | 对互联网地图新增内容的核查校对情况 | 类型层·违法事实 | 选填 | 核查前补齐 | 阻断 | 《地图管理条例》第 38 条、第 54 条【法】；《地图审核管理规定》第 28 条第 2 款、第 31 条【业】 |
+| type.survey_internet_map_service_unapproved.filing_record | 每六个月向作出审核批准的部门备案新增标注内容及核查校对情况的记录 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 38 条「按照国家有关规定……备案」【法】；《地图审核管理规定》第 28 条第 2 款【业】 |
+| type.survey_internet_map_service_unapproved.service_period | 违法行为的起止时间与持续时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 54 条【法】；规程 4.4.2.2【业】 |
+| type.survey_internet_map_service_unapproved.webpage_evidence | 涉案互联网地图页面的网址、截屏、访问时间、新增标注记录与后台日志 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)(7)【业】；《地图管理条例》第 43 条第 (一)(二) 项【法】 |
+| type.survey_internet_map_service_unapproved.safety_reviewer | 地图安全审校人员配备情况与内部安全审校核查制度 | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 《地图审核管理规定》第 31 条【业】 |
+| type.survey_internet_map_service_unapproved.site_inspection | 现场勘验笔录、照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(4)、3.1.1(2)【业】 |
+| type.survey_internet_map_service_unapproved.seizure_record | 查封、扣押的设备及电子数据清单 | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 规程 3.1.1(7)、3.3【业】 |
+| type.survey_internet_map_service_unapproved.content_review_opinion | 涉案地图内容是否符合国家有关标准和规定的审查意见或者认定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(10)、3.2.4.7【业】 |
+| type.survey_internet_map_service_unapproved.content_error_grade | 地图内容表示的错误程度（没有错误／一般性错误／较大错误） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 34【业】 |
+| type.survey_internet_map_service_unapproved.political_or_secret | 地图内容表示是否存在政治性问题或者泄露国家秘密 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 34【业】；《地图管理条例》第 8 条第 2 款【法】 |
+| type.survey_internet_map_service_unapproved.illegal_income | 违法所得金额 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 54 条【法】；规程 3.2.3.3(6)【业】 |
+| type.survey_internet_map_service_unapproved.order_correction | 责令改正的下达时间与履行情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 54 条【法】；规程 8.4【业】 |
+| type.survey_internet_map_service_unapproved.refuse_correction | 经责令改正而拒不改正的情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《刑法》第 286 之一条第 1 款【法】；法释〔2019〕15 号第 2 条【法】；规程 8.4【业】 |
+| type.survey_internet_map_service_unapproved.cross_dept_report | 向出版行政主管部门、网络安全和信息化主管部门报告或者抄告的情况 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 26 条、第 36 条第 2 款、第 43 条【法】；《测绘法》第 38 条第 3 款【法】；规程 2.2.2.2【业】 |
+| type.survey_internet_map_service_unapproved.qualification_penalty_transfer | 提请颁发资质证书的部门决定降低资质等级或者吊销测绘资质证书的情况（情节严重时填写） | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 54 条、第 56 条【法】；《测绘法》第 66 条第 1 款【法】 |
+| type.survey_internet_map_service_unapproved.criminal_referral_check | 是否达到刑法第 286 之一条第 1 款四项的追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《刑法》第 286 之一条【法】；法释〔2019〕15 号第 1 条至第 6 条【法】；《地图管理条例》第 54 条末句【法】；规程 7.1(8)、11【业】 |
 
 说明：
 
@@ -1958,29 +1958,29 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 #### （七）通过互联网上传标注了含有按照国家有关规定在地图上不得表示的内容
 
-类型编码草案：`internet_map_upload_prohibited`。
+类型编码草案：`survey_internet_map_upload_prohibited`。
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.internet_map_upload_prohibited.party_name | 实施上传标注的单位全称或者个人姓名 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《地图管理条例》第 37 条「任何单位和个人」、第 55 条【法】；规程 3.2.3.3(1)【业】 |
-| type.internet_map_upload_prohibited.party_type | 主体类型（单位／个人） | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《地图管理条例》第 37 条【法】 |
-| type.internet_map_upload_prohibited.responsible_persons | 直接负责的主管人员和其他直接责任人员（主体为单位时填写） | 类型层·违法主体 | 选填 | 核查前补齐 | 提示 | 《测绘法》第 62 条「处分」【法】；规程 4.4.2.2(3)【业】 |
-| type.internet_map_upload_prohibited.upload_platform | 上传标注所在的互联网地图服务平台名称与网址 | 类型层·涉案对象 | 必填 | 登记时 | 警告 | 《地图管理条例》第 37 条【法】；规程 4.4.2.2(3)「互联网地图」【业】 |
-| type.internet_map_upload_prohibited.upload_content | 上传标注的具体内容 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 37 条【法】；规程 3.2.3.3(7)【业】 |
-| type.internet_map_upload_prohibited.upload_location | 上传标注指向的地理位置 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 37 条【法】；契约 §3.7:100【业】 |
-| type.internet_map_upload_prohibited.prohibited_detail | 含有按照国家有关规定在地图上不得表示的内容的具体情形 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 8 条第 2 款五类、第 37 条【法】；《公开地图内容表示规范》（自然资规〔2023〕2 号）第二十项、第二十一项、第二十二项【业】 |
-| type.internet_map_upload_prohibited.prohibited_basis | 所违反的具体国家规定条款 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 37 条「按照国家有关规定」【法】；《公开地图内容表示规范》【业】 |
-| type.internet_map_upload_prohibited.upload_time | 上传标注的时间与持续时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 55 条【法】；规程 4.4.2.2【业】 |
-| type.internet_map_upload_prohibited.webpage_evidence | 上传标注页面的网址、截屏、访问时间、页面留存记录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)(7)【业】 |
-| type.internet_map_upload_prohibited.upload_identity | 上传者的账号、注册信息、登录 IP 地址与上传日志 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(7)「电子数据等材料」【业】 |
-| type.internet_map_upload_prohibited.content_review_opinion | 上传标注内容是否属不得表示内容的审查意见或者认定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(10)、3.2.4.7【业】 |
-| type.internet_map_upload_prohibited.secrecy_determination | 上传标注内容是否属于国家秘密的认定 | 类型层·认定与检验结论 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 8 条第 2 款第 (三) 项【法】；《保守国家秘密法》（2024 修订）第 13 条、第 15 条【法】 |
-| type.internet_map_upload_prohibited.political_or_secret | 上传标注内容是否存在政治性问题或者泄露国家秘密 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 35【业】；《地图管理条例》第 8 条第 2 款【法】 |
-| type.internet_map_upload_prohibited.platform_duty | 互联网地图服务单位是否履行立即停止传输、保存有关记录、向有关部门报告的义务 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 36 条第 2 款【法】；《互联网信息服务管理办法》第 16 条【法】 |
-| type.internet_map_upload_prohibited.order_correction | 责令改正的下达时间与履行情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 55 条【法】；规程 8.4【业】 |
-| type.internet_map_upload_prohibited.refuse_correction | 经责令改正而拒不改正的情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《刑法》第 286 之一条第 1 款【法】；法释〔2019〕15 号第 2 条【法】 |
-| type.internet_map_upload_prohibited.cross_dept_report | 向出版行政主管部门、网络安全和信息化主管部门、公安机关报告或者抄告的情况 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 36 条第 2 款、第 43 条【法】；《测绘法》第 38 条第 3 款【法】；《互联网信息服务管理办法》第 18 条、第 20 条【法】；规程 2.2.2.2【业】 |
-| type.internet_map_upload_prohibited.criminal_referral_check | 是否达到刑事追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《刑法》第 111、282、285、286 之一、398 条【法】；法释〔2019〕15 号第 3 条至第 6 条【法】；《地图管理条例》第 55 条末句【法】；规程 7.1(8)、11【业】 |
+| type.survey_internet_map_upload_prohibited.party_name | 实施上传标注的单位全称或者个人姓名 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《地图管理条例》第 37 条「任何单位和个人」、第 55 条【法】；规程 3.2.3.3(1)【业】 |
+| type.survey_internet_map_upload_prohibited.party_type | 主体类型（单位／个人） | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《地图管理条例》第 37 条【法】 |
+| type.survey_internet_map_upload_prohibited.responsible_persons | 直接负责的主管人员和其他直接责任人员（主体为单位时填写） | 类型层·违法主体 | 选填 | 核查前补齐 | 提示 | 《测绘法》第 62 条「处分」【法】；规程 4.4.2.2(3)【业】 |
+| type.survey_internet_map_upload_prohibited.upload_platform | 上传标注所在的互联网地图服务平台名称与网址 | 类型层·涉案对象 | 必填 | 录入时 | 警告 | 《地图管理条例》第 37 条【法】；规程 4.4.2.2(3)「互联网地图」【业】 |
+| type.survey_internet_map_upload_prohibited.upload_content | 上传标注的具体内容 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 37 条【法】；规程 3.2.3.3(7)【业】 |
+| type.survey_internet_map_upload_prohibited.upload_location | 上传标注指向的地理位置 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 37 条【法】；契约 §3.7:100【业】 |
+| type.survey_internet_map_upload_prohibited.prohibited_detail | 含有按照国家有关规定在地图上不得表示的内容的具体情形 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 8 条第 2 款五类、第 37 条【法】；《公开地图内容表示规范》（自然资规〔2023〕2 号）第二十项、第二十一项、第二十二项【业】 |
+| type.survey_internet_map_upload_prohibited.prohibited_basis | 所违反的具体国家规定条款 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 37 条「按照国家有关规定」【法】；《公开地图内容表示规范》【业】 |
+| type.survey_internet_map_upload_prohibited.upload_time | 上传标注的时间与持续时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 55 条【法】；规程 4.4.2.2【业】 |
+| type.survey_internet_map_upload_prohibited.webpage_evidence | 上传标注页面的网址、截屏、访问时间、页面留存记录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)(7)【业】 |
+| type.survey_internet_map_upload_prohibited.upload_identity | 上传者的账号、注册信息、登录 IP 地址与上传日志 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(7)「电子数据等材料」【业】 |
+| type.survey_internet_map_upload_prohibited.content_review_opinion | 上传标注内容是否属不得表示内容的审查意见或者认定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(10)、3.2.4.7【业】 |
+| type.survey_internet_map_upload_prohibited.secrecy_determination | 上传标注内容是否属于国家秘密的认定 | 类型层·认定与检验结论 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 8 条第 2 款第 (三) 项【法】；《保守国家秘密法》（2024 修订）第 13 条、第 15 条【法】 |
+| type.survey_internet_map_upload_prohibited.political_or_secret | 上传标注内容是否存在政治性问题或者泄露国家秘密 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 35【业】；《地图管理条例》第 8 条第 2 款【法】 |
+| type.survey_internet_map_upload_prohibited.platform_duty | 互联网地图服务单位是否履行立即停止传输、保存有关记录、向有关部门报告的义务 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 36 条第 2 款【法】；《互联网信息服务管理办法》第 16 条【法】 |
+| type.survey_internet_map_upload_prohibited.order_correction | 责令改正的下达时间与履行情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图管理条例》第 55 条【法】；规程 8.4【业】 |
+| type.survey_internet_map_upload_prohibited.refuse_correction | 经责令改正而拒不改正的情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《刑法》第 286 之一条第 1 款【法】；法释〔2019〕15 号第 2 条【法】 |
+| type.survey_internet_map_upload_prohibited.cross_dept_report | 向出版行政主管部门、网络安全和信息化主管部门、公安机关报告或者抄告的情况 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 36 条第 2 款、第 43 条【法】；《测绘法》第 38 条第 3 款【法】；《互联网信息服务管理办法》第 18 条、第 20 条【法】；规程 2.2.2.2【业】 |
+| type.survey_internet_map_upload_prohibited.criminal_referral_check | 是否达到刑事追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《刑法》第 111、282、285、286 之一、398 条【法】；法释〔2019〕15 号第 3 条至第 6 条【法】；《地图管理条例》第 55 条末句【法】；规程 7.1(8)、11【业】 |
 
 说明：
 
@@ -1995,30 +1995,30 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 #### （八）最终向社会公开的地图与审核通过的地图内容及表现形式不一致，或者互联网地图服务审图号有效期届满未重新送审
 
-类型编码草案：`map_public_inconsistent`。
+类型编码草案：`survey_map_public_inconsistent`。
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.map_public_inconsistent.party_name | 实施被质疑行为的单位全称或者个人姓名 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《地图审核管理规定》第 5 条、第 32 条【业】；规程 3.2.3.3(1)【业】 |
-| type.map_public_inconsistent.party_role | 当事人在地图活动中的角色（送审人／出版单位／展示者／登载者／生产者／进口者／出口者／互联网地图服务单位） | 类型层·违法主体 | 必填 | 登记时 | 警告 | 《地图审核管理规定》第 5 条【业】；《地图管理条例》第 16 条第 1 款【法】；规程 4.4.2.2(3)【业】 |
-| type.map_public_inconsistent.responsible_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 62 条【法】；规程 4.4.2.2(3)【业】 |
-| type.map_public_inconsistent.compiler_qualification | 地图编制单位或者送审人的测绘资质证书编号与资质等级 | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 7 条【法】 |
-| type.map_public_inconsistent.map_approval_doc | 地图审核批准文件的名称、文号、核发日期与核发机关 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 21 条第 1 款【法】；《地图审核管理规定》第 23 条第 2 款【业】；规程 3.2.3.3(3)【业】 |
-| type.map_public_inconsistent.review_no | 已核发的审图号 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 21 条第 1 款【法】；《地图审核管理规定》第 26 条【业】 |
-| type.map_public_inconsistent.review_no_validity | 审图号的核发日期与有效期届满日 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《地图审核管理规定》第 28 条第 1 款「互联网地图服务审图号有效期为两年」【业】 |
-| type.map_public_inconsistent.map_object | 涉案地图或者附着地图图形产品的名称、载体形式与规格 | 类型层·涉案对象 | 必填 | 登记时 | 警告 | 规程 3.2.3.3(7)【业】 |
-| type.map_public_inconsistent.inconsistency_type | 情形选择（最终公开的地图与审核通过的地图内容及表现形式不一致／互联网地图服务审图号有效期届满未重新送审） | 类型层·违法事实 | 必填 | 登记时 | 警告 | 《地图审核管理规定》第 32 条【业】 |
-| type.map_public_inconsistent.resubmit_scenario | 应当重新送审的情形（再次出版展示登载生产进出口且地图内容发生变化／审图号到期／拟在境外出版展示登载） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图审核管理规定》第 5 条、第 28 条第 1 款【业】 |
-| type.map_public_inconsistent.expiry_fact | 有效期届满后未重新送审的事实与届满日期（情形二时填写） | 类型层·违法事实 | 选填 | 核查前补齐 | 阻断 | 《地图审核管理规定》第 28 条第 1 款、第 32 条【业】 |
-| type.map_public_inconsistent.public_time | 最终向社会公开的时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 《地图审核管理规定》第 32 条【业】；规程 4.4.2.2【业】 |
-| type.map_public_inconsistent.approved_version | 审核通过的地图样图或者样品 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(7)【业】；《地图审核管理规定》第 10 条第 1 款第 (二) 项【业】 |
-| type.map_public_inconsistent.public_version | 最终向社会公开的地图版本或者互联网地图服务页面截屏 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)(7)【业】 |
-| type.map_public_inconsistent.filing_record | 每六个月新增标注内容及核查校对情况的备案记录（互联网地图服务情形时填写） | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 《地图审核管理规定》第 28 条第 2 款【业】 |
-| type.map_public_inconsistent.comparison_opinion | 最终公开版本与审核通过版本在内容及表现形式上的比对结论 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(10)、3.2.4.7【业】 |
-| type.map_public_inconsistent.political_or_secret | 不一致处是否存在政治性问题或者泄露国家秘密 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 36【业】；《地图管理条例》第 8 条第 2 款【法】 |
-| type.map_public_inconsistent.order_correction | 责令改正的下达时间与履行情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图审核管理规定》第 32 条「责令改正」【业】；规程 8.4【业】 |
-| type.map_public_inconsistent.refuse_correction | 经责令改正而拒不改正的情况（互联网地图服务情形时填写） | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《刑法》第 286 之一条第 1 款【法】；法释〔2019〕15 号第 2 条【法】 |
-| type.map_public_inconsistent.criminal_referral_check | 是否达到刑事追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 62 条末句【法】；《刑法》第 111、282、286 之一、398 条【法】；规程 7.1(8)、11【业】 |
+| type.survey_map_public_inconsistent.party_name | 实施被质疑行为的单位全称或者个人姓名 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《地图审核管理规定》第 5 条、第 32 条【业】；规程 3.2.3.3(1)【业】 |
+| type.survey_map_public_inconsistent.party_role | 当事人在地图活动中的角色（送审人／出版单位／展示者／登载者／生产者／进口者／出口者／互联网地图服务单位） | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《地图审核管理规定》第 5 条【业】；《地图管理条例》第 16 条第 1 款【法】；规程 4.4.2.2(3)【业】 |
+| type.survey_map_public_inconsistent.responsible_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 62 条【法】；规程 4.4.2.2(3)【业】 |
+| type.survey_map_public_inconsistent.compiler_qualification | 地图编制单位或者送审人的测绘资质证书编号与资质等级 | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 《地图管理条例》第 7 条【法】 |
+| type.survey_map_public_inconsistent.map_approval_doc | 地图审核批准文件的名称、文号、核发日期与核发机关 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 21 条第 1 款【法】；《地图审核管理规定》第 23 条第 2 款【业】；规程 3.2.3.3(3)【业】 |
+| type.survey_map_public_inconsistent.review_no | 已核发的审图号 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《地图管理条例》第 21 条第 1 款【法】；《地图审核管理规定》第 26 条【业】 |
+| type.survey_map_public_inconsistent.review_no_validity | 审图号的核发日期与有效期届满日 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 《地图审核管理规定》第 28 条第 1 款「互联网地图服务审图号有效期为两年」【业】 |
+| type.survey_map_public_inconsistent.map_object | 涉案地图或者附着地图图形产品的名称、载体形式与规格 | 类型层·涉案对象 | 必填 | 录入时 | 警告 | 规程 3.2.3.3(7)【业】 |
+| type.survey_map_public_inconsistent.inconsistency_type | 情形选择（最终公开的地图与审核通过的地图内容及表现形式不一致／互联网地图服务审图号有效期届满未重新送审） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《地图审核管理规定》第 32 条【业】 |
+| type.survey_map_public_inconsistent.resubmit_scenario | 应当重新送审的情形（再次出版展示登载生产进出口且地图内容发生变化／审图号到期／拟在境外出版展示登载） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《地图审核管理规定》第 5 条、第 28 条第 1 款【业】 |
+| type.survey_map_public_inconsistent.expiry_fact | 有效期届满后未重新送审的事实与届满日期（情形二时填写） | 类型层·违法事实 | 选填 | 核查前补齐 | 阻断 | 《地图审核管理规定》第 28 条第 1 款、第 32 条【业】 |
+| type.survey_map_public_inconsistent.public_time | 最终向社会公开的时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 《地图审核管理规定》第 32 条【业】；规程 4.4.2.2【业】 |
+| type.survey_map_public_inconsistent.approved_version | 审核通过的地图样图或者样品 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(7)【业】；《地图审核管理规定》第 10 条第 1 款第 (二) 项【业】 |
+| type.survey_map_public_inconsistent.public_version | 最终向社会公开的地图版本或者互联网地图服务页面截屏 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)(7)【业】 |
+| type.survey_map_public_inconsistent.filing_record | 每六个月新增标注内容及核查校对情况的备案记录（互联网地图服务情形时填写） | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 《地图审核管理规定》第 28 条第 2 款【业】 |
+| type.survey_map_public_inconsistent.comparison_opinion | 最终公开版本与审核通过版本在内容及表现形式上的比对结论 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(10)、3.2.4.7【业】 |
+| type.survey_map_public_inconsistent.political_or_secret | 不一致处是否存在政治性问题或者泄露国家秘密 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 粤自然资规字〔2022〕2 号附件 1-3 序号 36【业】；《地图管理条例》第 8 条第 2 款【法】 |
+| type.survey_map_public_inconsistent.order_correction | 责令改正的下达时间与履行情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《地图审核管理规定》第 32 条「责令改正」【业】；规程 8.4【业】 |
+| type.survey_map_public_inconsistent.refuse_correction | 经责令改正而拒不改正的情况（互联网地图服务情形时填写） | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《刑法》第 286 之一条第 1 款【法】；法释〔2019〕15 号第 2 条【法】 |
+| type.survey_map_public_inconsistent.criminal_referral_check | 是否达到刑事追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《测绘法》第 62 条末句【法】；《刑法》第 111、282、286 之一、398 条【法】；规程 7.1(8)、11【业】 |
 
 说明：
 
@@ -2127,8 +2127,8 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 待定项 | 分歧点或已查到的边界 | 去向 |
 |---|---|---|
-| 1. 类型编码未定，要件键需回改 | `map_review_missing`、`map_exempt_nonconforming`、`map_review_unmodified_public`、`map_approval_fraud`、`map_review_no_label`、`internet_map_service_unapproved`、`internet_map_upload_prohibited`、`map_public_inconsistent` 八个编码是本部分草案。违法类型编码表尚未产出。 | 编码确定后八张表的全部要件键整体回改。本文件「二、要件键的命名口径」已规定该义务。 |
-| 2. 登记时必填项的缺件后果 | 本部分沿用 #181 口径：类型层「登记时必填」项的缺件后果一律取警告，不阻断登记。#24 决议三写「必填项缺失即阻断」。两种读法冲突。本部分登记时必填共 22 项。 | 与 #181 的分歧合并处理，由汇总票拍板。本部分不自行拍板。 |
+| 1. 类型编码未定，要件键需回改 | `survey_map_review_missing`、`survey_map_exempt_nonconforming`、`survey_map_review_unmodified_public`、`survey_map_approval_fraud`、`survey_map_review_no_label`、`survey_internet_map_service_unapproved`、`survey_internet_map_upload_prohibited`、`survey_map_public_inconsistent` 八个编码是本部分草案。违法类型编码表尚未产出。 | 编码确定后八张表的全部要件键整体回改。本文件「二、要件键的命名口径」已规定该义务。 |
+| 2. 录入时必填项的缺件后果 | 本部分沿用 #181 口径：类型层「录入时必填」项的缺件后果一律取警告，不阻断登记。#24 决议三写「必填项缺失即阻断」。两种读法冲突。本部分录入时必填共 22 项。 | 与 #181 的分歧合并处理，由汇总票拍板。本部分不自行拍板。 |
 | 3. 刑法第 286 之一条的前置责令改正主体 | 法释〔2019〕15 号第 2 条把「监管部门」界定为网信、电信、公安等依照法律、行政法规承担信息网络安全监管职责的部门。《地图管理条例》第 26 条、第 43 条、第 56 条赋予自然资源主管部门（原测绘地理信息行政主管部门）地图违法的查处权，但《网络安全法》与《互联网信息服务管理办法》未把地图内容监管列为该部门的「信息网络安全监管职责」。**未检索到任何条文把自然资源主管部门列入该条监管部门。** | `refuse_correction` 的证据效力待定。若本机关的责令改正不充当前置要件，（六）（七）（八）的刑事移送必须先由网信、电信或者公安机关另行责令改正。需业务方与法制机构拍板。 |
 | 4. 地图内容表示的错误程度与政治性问题的判定标准 | 粤自然资规字〔2022〕2 号附件 1-3 序号 29 至 36 统一用「没有错误／一般性错误／较大错误」三档与「是否存在政治性问题或者泄露国家秘密」两档作裁量轴，**未给三档的判定标准，也未定义「政治性问题」**。《公开地图内容表示规范》（自然资规〔2023〕2 号）给出禁止表示的内容清单，但未与三档挂钩。 | `content_error_grade`、`political_or_secret` 的必填性与必填时机明确，判定阈值待定。八个类型共 13 项受此影响。需省级配套文件或者部里口径出台后回填。 |
 | 5. （一）与《广东省测绘条例》第 45 条第 (一) 项的竞合 | 同一「应当送审而未送审」行为在广东省内同时触犯《地图管理条例》第 49 条（可以处 10 万元以下罚款）与《广东省测绘条例》第 45 条第 (一) 项（责令停止违法行为，并处 3000 元以上 1 万元以下罚款）。粤自然资规字〔2022〕2 号附件 1-3 把两者分列序号 29 与序号 37，**未规定竞合处理规则**。 | `local_regulation_check` 设为选填、核查前补齐、提示。择一重还是分别认定无依据，需拍板。 |
@@ -2193,7 +2193,7 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 **USER LOCK L2 对本大类必填时机的影响**：L2 原文是「只针对土地类、矿产类线索。测绘地理信息类、国土空间规划类不跑。」测绘类线索不跑分派前自动核查。本大类所有「核查前补齐」指的是 GLOSSARY「核查」词条下的人为核查动作，不是内业核查任务。本大类没有自动核查可依赖的空间参照数据，标志点位坐标须由办案人实地勘验取得。
 
-**登记门槛口径**沿用 #181：公共层是登记门槛，类型层不是。类型层「登记时必填」项的缺件后果一律取警告，不阻断登记。「阻断」指阻断进入处罚流程，不指阻断线索登记。该口径与 #24「必填项缺失即阻断」的字面读法有出入，分歧记入待定项。
+**登记门槛口径**沿用 #181：公共层是登记门槛，类型层不是。类型层「录入时必填」项的缺件后果一律取警告，不阻断登记。「阻断」指阻断进入处罚流程，不指阻断线索登记。该口径与 #24「必填项缺失即阻断」的字面读法有出入，分歧记入待定项。
 
 **几何类型**照契约 §3.7:100 取点。测量标志本身是点位设施，点状几何与本大类的对象形态一致。这是本系统的业务口径，不是法定要求。
 
@@ -2204,26 +2204,26 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.marker_damage_move.party | 实施被质疑行为的单位或者个人名称 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
-| type.marker_damage_move.liable_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 23 条【法】；规程 11.2.1【业】 |
-| type.marker_damage_move.marker_permanence | 标志属永久性还是正在使用中的临时性 | 类型层·涉案对象 | 必填 | 登记时 | 警告 | 测绘法第 41 条第 1 款【法】；标志条例第 4 条【法】 |
-| type.marker_damage_move.marker_category | 标志类别与名称（三角点、基线点、导线点、军用控制点、重力点、天文点、水准点、卫星定位点的觇标和标石标志，地形测图、工程测量、形变测量的固定标志，海底大地点设施） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 41 条第 2 款【法】；标志条例第 4 条【法】 |
-| type.marker_damage_move.marker_point_id | 标志点号、等级与点位坐标 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(7)【业】；规程 4.4.2.2(3)【业】 |
-| type.marker_damage_move.marker_setter | 标志设置部门或者建设单位，以及属基础性测量标志还是部门专用测量标志 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 标志条例第 3 条、第 12 条、第 19 条【法】 |
-| type.marker_damage_move.marker_custodian | 负责保管标志的单位和人员，以及测量标志委托保管书 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 标志条例第 12 条、第 13 条、第 14 条【法】；广东省测绘条例第 43 条【业】 |
-| type.marker_damage_move.act_mode | 行为方式（损毁，或者擅自移动） | 类型层·违法事实 | 必填 | 登记时 | 警告 | 测绘法第 41 条第 1 款、第 64 条第（一）项【法】；标志条例第 22 条第（一）项【法】 |
-| type.marker_damage_move.act_time_place | 行为发生时间与地点 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 2.2.1(2)【业】；规程 4.4.2.2【业】 |
-| type.marker_damage_move.marker_count | 被损毁或者被移动的标志数量 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 公安部立案标准通知一（八）2【业】；刑法第 323 条【法】 |
-| type.marker_damage_move.scene_inspection | 现场勘验笔录（附勘测图）、现场照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】；规程 3.1.1(2)【业】 |
-| type.marker_damage_move.marker_record | 标志点之记、标志建成时的现状照片、历次检查与维修记录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(7)【业】；标志条例第 13 条、第 18 条【法】 |
-| type.marker_damage_move.custodian_report | 保管单位或者保管人的报告、制止、检举材料，以及乡级人民政府的转报材料 | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 标志条例第 13 条、第 14 条【法】 |
-| type.marker_damage_move.damage_degree | 标志使用效能受损程度（未失去使用效能／失去部分使用效能且经维修可恢复／完全丧失使用效能且无法恢复） | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 广东裁量基准序号 15【业】；规程 3.2.3.3(10)【业】 |
-| type.marker_damage_move.recognition_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
-| type.marker_damage_move.rectification_status | 责令限期改正的下达时间与完成情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 23 条【法】；规程 2.2.2.1【业】 |
-| type.marker_damage_move.military_marker | 是否涉及军用控制点或者军事部门测量标志 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 43 条【法】；标志条例第 5 条第 3 款【法】 |
-| type.marker_damage_move.criminal_referral_check | 是否达到刑法第 323 条追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 323 条【法】；公安部立案标准通知一（八）【业】；规程 11.1.1、11.1.2【业】 |
-| type.marker_damage_move.public_security_referral | 是否移送公安机关作治安管理处罚 | 类型层·程序环节 | 选填 | 只提示 | 提示 | 标志条例第 25 条【法】 |
-| type.marker_damage_move.rebuild_cost | 标志维修费用或者重建费用的核算金额与核算依据 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 20 条、第 21 条、第 23 条【法】 |
+| type.survey_marker_damage_move.party | 实施被质疑行为的单位或者个人名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
+| type.survey_marker_damage_move.liable_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 23 条【法】；规程 11.2.1【业】 |
+| type.survey_marker_damage_move.marker_permanence | 标志属永久性还是正在使用中的临时性 | 类型层·涉案对象 | 必填 | 录入时 | 警告 | 测绘法第 41 条第 1 款【法】；标志条例第 4 条【法】 |
+| type.survey_marker_damage_move.marker_category | 标志类别与名称（三角点、基线点、导线点、军用控制点、重力点、天文点、水准点、卫星定位点的觇标和标石标志，地形测图、工程测量、形变测量的固定标志，海底大地点设施） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 41 条第 2 款【法】；标志条例第 4 条【法】 |
+| type.survey_marker_damage_move.marker_point_id | 标志点号、等级与点位坐标 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(7)【业】；规程 4.4.2.2(3)【业】 |
+| type.survey_marker_damage_move.marker_setter | 标志设置部门或者建设单位，以及属基础性测量标志还是部门专用测量标志 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 标志条例第 3 条、第 12 条、第 19 条【法】 |
+| type.survey_marker_damage_move.marker_custodian | 负责保管标志的单位和人员，以及测量标志委托保管书 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 标志条例第 12 条、第 13 条、第 14 条【法】；广东省测绘条例第 43 条【业】 |
+| type.survey_marker_damage_move.act_mode | 行为方式（损毁，或者擅自移动） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 测绘法第 41 条第 1 款、第 64 条第（一）项【法】；标志条例第 22 条第（一）项【法】 |
+| type.survey_marker_damage_move.act_time_place | 行为发生时间与地点 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 2.2.1(2)【业】；规程 4.4.2.2【业】 |
+| type.survey_marker_damage_move.marker_count | 被损毁或者被移动的标志数量 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 公安部立案标准通知一（八）2【业】；刑法第 323 条【法】 |
+| type.survey_marker_damage_move.scene_inspection | 现场勘验笔录（附勘测图）、现场照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】；规程 3.1.1(2)【业】 |
+| type.survey_marker_damage_move.marker_record | 标志点之记、标志建成时的现状照片、历次检查与维修记录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(7)【业】；标志条例第 13 条、第 18 条【法】 |
+| type.survey_marker_damage_move.custodian_report | 保管单位或者保管人的报告、制止、检举材料，以及乡级人民政府的转报材料 | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 标志条例第 13 条、第 14 条【法】 |
+| type.survey_marker_damage_move.damage_degree | 标志使用效能受损程度（未失去使用效能／失去部分使用效能且经维修可恢复／完全丧失使用效能且无法恢复） | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 广东裁量基准序号 15【业】；规程 3.2.3.3(10)【业】 |
+| type.survey_marker_damage_move.recognition_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
+| type.survey_marker_damage_move.rectification_status | 责令限期改正的下达时间与完成情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 23 条【法】；规程 2.2.2.1【业】 |
+| type.survey_marker_damage_move.military_marker | 是否涉及军用控制点或者军事部门测量标志 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 43 条【法】；标志条例第 5 条第 3 款【法】 |
+| type.survey_marker_damage_move.criminal_referral_check | 是否达到刑法第 323 条追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 323 条【法】；公安部立案标准通知一（八）【业】；规程 11.1.1、11.1.2【业】 |
+| type.survey_marker_damage_move.public_security_referral | 是否移送公安机关作治安管理处罚 | 类型层·程序环节 | 选填 | 只提示 | 提示 | 标志条例第 25 条【法】 |
+| type.survey_marker_damage_move.rebuild_cost | 标志维修费用或者重建费用的核算金额与核算依据 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 20 条、第 21 条、第 23 条【法】 |
 
 说明：
 
@@ -2241,25 +2241,25 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.marker_land_occupy.party | 实施侵占的单位或者个人名称 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
-| type.marker_land_occupy.liable_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 23 条【法】 |
-| type.marker_land_occupy.marker_is_permanent | 被侵占用地上的标志属永久性测量标志 | 类型层·涉案对象 | 必填 | 登记时 | 警告 | 测绘法第 41 条第 1 款【法】；标志条例第 22 条第（二）项【法】 |
-| type.marker_land_occupy.marker_category | 标志类别与名称 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 41 条第 2 款【法】；标志条例第 4 条【法】 |
-| type.marker_land_occupy.marker_point_id | 标志点号、等级与点位坐标 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(7)【业】；规程 4.4.2.2(3)【业】 |
-| type.marker_land_occupy.marker_land_scope | 标志占用土地的范围（地面标志 36 至 100 平方米，地下标志 16 至 36 平方米） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 标志条例第 10 条【法】 |
-| type.marker_land_occupy.marker_setter | 标志设置部门或者建设单位 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 标志条例第 3 条、第 12 条【法】 |
-| type.marker_land_occupy.marker_custodian | 负责保管标志的单位和人员，以及测量标志委托保管书 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 标志条例第 12 条、第 13 条【法】；广东省测绘条例第 43 条【业】 |
-| type.marker_land_occupy.occupy_mode | 侵占方式（在标志占地范围内烧荒、耕作、取土、挖沙，或者其他侵占永久性测量标志用地的行为） | 类型层·违法事实 | 必填 | 登记时 | 警告 | 标志条例第 22 条第（二）项【法】；测绘法第 64 条第（二）项【法】 |
-| type.marker_land_occupy.occupied_area | 被侵占的面积与占用位置 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 标志条例第 10 条、第 22 条第（二）项【法】；规程 3.2.3.3(4)【业】 |
-| type.marker_land_occupy.act_time_place | 行为发生时间与地点 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 2.2.1(2)【业】；规程 4.4.2.2【业】 |
-| type.marker_land_occupy.scene_inspection | 现场勘验笔录（附勘测图）、现场照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】 |
-| type.marker_land_occupy.boundary_overlay | 标志占地范围与实际占用范围的套合比对图件 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)(7)【业】；规程 3.2.4.6【业】 |
-| type.marker_land_occupy.land_use_basis | 占用人对涉案土地主张的使用依据（承包合同、权属证书、审批文件） | 类型层·现场勘验与证据材料 | 选填 | 只提示 | 提示 | 规程 3.2.3.3(5)【业】 |
-| type.marker_land_occupy.damage_degree | 侵占对标志使用效能的影响程度 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 广东裁量基准序号 16（按序号 15 执行）【业】；规程 3.2.3.3(10)【业】 |
-| type.marker_land_occupy.recognition_opinion | 市（地）级以上自然资源主管部门出具的认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
-| type.marker_land_occupy.rectification_status | 责令限期改正的下达时间与完成情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 23 条【法】；规程 2.2.2.1【业】 |
-| type.marker_land_occupy.criminal_referral_check | 是否达到刑法第 323 条追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 323 条【法】；公安部立案标准通知一（八）【业】；规程 11.1.1【业】 |
-| type.marker_land_occupy.restore_cost | 恢复原状费用或者标志维修、重建费用的核算金额与核算依据 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 20 条、第 21 条、第 23 条【法】 |
+| type.survey_marker_land_occupy.party | 实施侵占的单位或者个人名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
+| type.survey_marker_land_occupy.liable_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 23 条【法】 |
+| type.survey_marker_land_occupy.marker_is_permanent | 被侵占用地上的标志属永久性测量标志 | 类型层·涉案对象 | 必填 | 录入时 | 警告 | 测绘法第 41 条第 1 款【法】；标志条例第 22 条第（二）项【法】 |
+| type.survey_marker_land_occupy.marker_category | 标志类别与名称 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 41 条第 2 款【法】；标志条例第 4 条【法】 |
+| type.survey_marker_land_occupy.marker_point_id | 标志点号、等级与点位坐标 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(7)【业】；规程 4.4.2.2(3)【业】 |
+| type.survey_marker_land_occupy.marker_land_scope | 标志占用土地的范围（地面标志 36 至 100 平方米，地下标志 16 至 36 平方米） | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 标志条例第 10 条【法】 |
+| type.survey_marker_land_occupy.marker_setter | 标志设置部门或者建设单位 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 标志条例第 3 条、第 12 条【法】 |
+| type.survey_marker_land_occupy.marker_custodian | 负责保管标志的单位和人员，以及测量标志委托保管书 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 标志条例第 12 条、第 13 条【法】；广东省测绘条例第 43 条【业】 |
+| type.survey_marker_land_occupy.occupy_mode | 侵占方式（在标志占地范围内烧荒、耕作、取土、挖沙，或者其他侵占永久性测量标志用地的行为） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 标志条例第 22 条第（二）项【法】；测绘法第 64 条第（二）项【法】 |
+| type.survey_marker_land_occupy.occupied_area | 被侵占的面积与占用位置 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 标志条例第 10 条、第 22 条第（二）项【法】；规程 3.2.3.3(4)【业】 |
+| type.survey_marker_land_occupy.act_time_place | 行为发生时间与地点 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 2.2.1(2)【业】；规程 4.4.2.2【业】 |
+| type.survey_marker_land_occupy.scene_inspection | 现场勘验笔录（附勘测图）、现场照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】 |
+| type.survey_marker_land_occupy.boundary_overlay | 标志占地范围与实际占用范围的套合比对图件 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)(7)【业】；规程 3.2.4.6【业】 |
+| type.survey_marker_land_occupy.land_use_basis | 占用人对涉案土地主张的使用依据（承包合同、权属证书、审批文件） | 类型层·现场勘验与证据材料 | 选填 | 只提示 | 提示 | 规程 3.2.3.3(5)【业】 |
+| type.survey_marker_land_occupy.damage_degree | 侵占对标志使用效能的影响程度 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 广东裁量基准序号 16（按序号 15 执行）【业】；规程 3.2.3.3(10)【业】 |
+| type.survey_marker_land_occupy.recognition_opinion | 市（地）级以上自然资源主管部门出具的认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
+| type.survey_marker_land_occupy.rectification_status | 责令限期改正的下达时间与完成情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 23 条【法】；规程 2.2.2.1【业】 |
+| type.survey_marker_land_occupy.criminal_referral_check | 是否达到刑法第 323 条追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 323 条【法】；公安部立案标准通知一（八）【业】；规程 11.1.1【业】 |
+| type.survey_marker_land_occupy.restore_cost | 恢复原状费用或者标志维修、重建费用的核算金额与核算依据 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 20 条、第 21 条、第 23 条【法】 |
 
 说明：
 
@@ -2277,27 +2277,27 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.marker_safety_zone.party | 实施被质疑活动的单位或者个人名称 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
-| type.marker_safety_zone.liable_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 23 条【法】 |
-| type.marker_safety_zone.marker_is_permanent | 涉案标志属永久性测量标志 | 类型层·涉案对象 | 必填 | 登记时 | 警告 | 测绘法第 41 条第 1 款【法】 |
-| type.marker_safety_zone.marker_category | 标志类别与名称 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 41 条第 2 款【法】；标志条例第 4 条【法】 |
-| type.marker_safety_zone.marker_point_id | 标志点号、等级与点位坐标 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(7)【业】；规程 4.4.2.2(3)【业】 |
-| type.marker_safety_zone.zone_boundary | 本类型适用的安全控制范围取值与规范来源 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 标志条例第 22 条第（三）（四）（五）（六）项【法】；测绘法第 41 条第 1 款【法】 |
-| type.marker_safety_zone.marker_setter | 标志设置部门或者建设单位 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 标志条例第 3 条、第 12 条【法】 |
-| type.marker_safety_zone.marker_custodian | 负责保管标志的单位和人员 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 标志条例第 12 条、第 13 条【法】 |
-| type.marker_safety_zone.activity_type | 从事的活动类型（采石、爆破、射击、架设高压电线，建设影响使用效能的建筑物，架设通讯设施、设置观望台、搭帐篷、拴牲畜或者设置其他附着物，擅自拆除设有测量标志的建筑物或者拆除建筑物上的测量标志） | 类型层·违法事实 | 必填 | 登记时 | 警告 | 标志条例第 22 条第（三）（四）（五）（六）项【法】；测绘法第 64 条第（三）项【法】 |
-| type.marker_safety_zone.distance_to_marker | 活动位置与标志的距离 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 标志条例第 22 条第（三）项【法】 |
-| type.marker_safety_zone.hazard_consequence | 对标志安全和使用效能造成的危害后果 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 测绘法第 41 条第 1 款、第 64 条第（三）项【法】 |
-| type.marker_safety_zone.act_time_place | 行为发生时间与地点 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 2.2.1(2)【业】；规程 4.4.2.2【业】 |
-| type.marker_safety_zone.scene_inspection | 现场勘验笔录（附勘测图）、现场照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】 |
-| type.marker_safety_zone.distance_measurement | 距离与范围的测量数据、勘测图与测量方法说明 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】 |
-| type.marker_safety_zone.project_approval | 活动所属建设项目的立项、规划许可或者施工许可文件 | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 规程 3.2.3.3(3)(5)【业】 |
-| type.marker_safety_zone.damage_degree | 标志使用效能受损程度 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 广东裁量基准序号 17（按序号 15 执行）【业】；规程 3.2.3.3(10)【业】 |
-| type.marker_safety_zone.recognition_opinion | 市（地）级以上自然资源主管部门出具的认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
-| type.marker_safety_zone.rectification_status | 责令限期改正的下达时间与完成情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 23 条【法】；规程 2.2.2.1【业】 |
-| type.marker_safety_zone.military_marker | 是否涉及军用控制点或者军事部门测量标志 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 43 条【法】；标志条例第 5 条第 3 款【法】 |
-| type.marker_safety_zone.criminal_referral_check | 是否达到刑法第 323 条追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 323 条【法】；公安部立案标准通知一（八）【业】；规程 11.1.1【业】 |
-| type.marker_safety_zone.restore_cost | 恢复原状费用或者标志维修、重建费用的核算金额 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 20 条、第 21 条、第 23 条【法】 |
+| type.survey_marker_safety_zone.party | 实施被质疑活动的单位或者个人名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
+| type.survey_marker_safety_zone.liable_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 23 条【法】 |
+| type.survey_marker_safety_zone.marker_is_permanent | 涉案标志属永久性测量标志 | 类型层·涉案对象 | 必填 | 录入时 | 警告 | 测绘法第 41 条第 1 款【法】 |
+| type.survey_marker_safety_zone.marker_category | 标志类别与名称 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 41 条第 2 款【法】；标志条例第 4 条【法】 |
+| type.survey_marker_safety_zone.marker_point_id | 标志点号、等级与点位坐标 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(7)【业】；规程 4.4.2.2(3)【业】 |
+| type.survey_marker_safety_zone.zone_boundary | 本类型适用的安全控制范围取值与规范来源 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 标志条例第 22 条第（三）（四）（五）（六）项【法】；测绘法第 41 条第 1 款【法】 |
+| type.survey_marker_safety_zone.marker_setter | 标志设置部门或者建设单位 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 标志条例第 3 条、第 12 条【法】 |
+| type.survey_marker_safety_zone.marker_custodian | 负责保管标志的单位和人员 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 标志条例第 12 条、第 13 条【法】 |
+| type.survey_marker_safety_zone.activity_type | 从事的活动类型（采石、爆破、射击、架设高压电线，建设影响使用效能的建筑物，架设通讯设施、设置观望台、搭帐篷、拴牲畜或者设置其他附着物，擅自拆除设有测量标志的建筑物或者拆除建筑物上的测量标志） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 标志条例第 22 条第（三）（四）（五）（六）项【法】；测绘法第 64 条第（三）项【法】 |
+| type.survey_marker_safety_zone.distance_to_marker | 活动位置与标志的距离 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 标志条例第 22 条第（三）项【法】 |
+| type.survey_marker_safety_zone.hazard_consequence | 对标志安全和使用效能造成的危害后果 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 测绘法第 41 条第 1 款、第 64 条第（三）项【法】 |
+| type.survey_marker_safety_zone.act_time_place | 行为发生时间与地点 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 2.2.1(2)【业】；规程 4.4.2.2【业】 |
+| type.survey_marker_safety_zone.scene_inspection | 现场勘验笔录（附勘测图）、现场照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】 |
+| type.survey_marker_safety_zone.distance_measurement | 距离与范围的测量数据、勘测图与测量方法说明 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】 |
+| type.survey_marker_safety_zone.project_approval | 活动所属建设项目的立项、规划许可或者施工许可文件 | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 规程 3.2.3.3(3)(5)【业】 |
+| type.survey_marker_safety_zone.damage_degree | 标志使用效能受损程度 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 广东裁量基准序号 17（按序号 15 执行）【业】；规程 3.2.3.3(10)【业】 |
+| type.survey_marker_safety_zone.recognition_opinion | 市（地）级以上自然资源主管部门出具的认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
+| type.survey_marker_safety_zone.rectification_status | 责令限期改正的下达时间与完成情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 23 条【法】；规程 2.2.2.1【业】 |
+| type.survey_marker_safety_zone.military_marker | 是否涉及军用控制点或者军事部门测量标志 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 43 条【法】；标志条例第 5 条第 3 款【法】 |
+| type.survey_marker_safety_zone.criminal_referral_check | 是否达到刑法第 323 条追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 323 条【法】；公安部立案标准通知一（八）【业】；规程 11.1.1【业】 |
+| type.survey_marker_safety_zone.restore_cost | 恢复原状费用或者标志维修、重建费用的核算金额 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 20 条、第 21 条、第 23 条【法】 |
 
 说明：
 
@@ -2315,28 +2315,28 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.marker_relocate.party | 工程建设单位名称 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 测绘法第 43 条【法】；标志条例第 23 条第（二）项【法】；规程 3.2.3.3(1)【业】 |
-| type.marker_relocate.liable_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 23 条【法】 |
-| type.marker_relocate.marker_category | 标志类别与名称 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 41 条第 2 款【法】；标志条例第 4 条【法】 |
-| type.marker_relocate.marker_point_id | 标志点号、等级与点位坐标 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(7)【业】；规程 4.4.2.2(3)【业】 |
-| type.marker_relocate.marker_setter | 标志设置部门，以及属基础性测量标志还是部门专用测量标志 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 标志条例第 19 条第（一）（二）项、第 20 条【法】 |
-| type.marker_relocate.marker_custodian | 负责保管标志的单位和人员 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 标志条例第 12 条、第 19 条第 2 款【法】 |
-| type.marker_relocate.construction_project | 工程建设项目名称、建设单位与立项或者核准文件 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 测绘法第 43 条【法】；规程 3.2.3.3(5)【业】 |
-| type.marker_relocate.act_mode | 行为方式（擅自拆迁，或者使标志失去使用效能，或者拒绝支付迁建费用） | 类型层·违法事实 | 必填 | 登记时 | 警告 | 测绘法第 64 条第（四）项【法】；标志条例第 23 条第（二）项【法】 |
-| type.marker_relocate.avoid_necessity | 工程建设是否确实无法避开永久性测量标志 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 测绘法第 43 条【法】；标志条例第 19 条【法】 |
-| type.marker_relocate.act_time_place | 行为发生时间与地点 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 2.2.1(2)【业】；规程 4.4.2.2【业】 |
-| type.marker_relocate.relocation_approval | 省、自治区、直辖市人民政府测绘地理信息主管部门的拆迁批准文件；属部门专用标志时设置标志的部门的同意材料 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 测绘法第 43 条【法】；标志条例第 19 条第（一）（二）项【法】；规程 3.2.3.3(3)【业】 |
-| type.marker_relocate.military_consent | 涉及军用控制点时军队测绘部门的同意材料 | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 测绘法第 43 条【法】；标志条例第 5 条第 3 款【法】 |
-| type.marker_relocate.custodian_notice | 拆迁前通知负责保管标志的单位和人员的材料 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 标志条例第 19 条第 2 款【法】 |
-| type.marker_relocate.scene_inspection | 现场勘验笔录（附勘测图）、现场照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】 |
-| type.marker_relocate.construction_contract | 工程施工合同、施工方案与标志处置方案 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(5)【业】 |
-| type.marker_relocate.loss_of_function | 标志失去使用效能的事实与程度认定 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 测绘法第 64 条第（四）项【法】；广东裁量基准序号 18【业】；规程 3.2.3.3(10)【业】 |
-| type.marker_relocate.recognition_opinion | 市（地）级以上自然资源主管部门出具的认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
-| type.marker_relocate.relocation_fee_amount | 应当支付的迁建费用金额与实际支付凭据 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 阻断 | 测绘法第 43 条、第 64 条第（四）项【法】；标志条例第 20 条【法】；规程 3.2.3.3(6)【业】 |
-| type.marker_relocate.relocation_fee_basis | 迁建费用的核算依据与核算过程 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 标志条例第 20 条【法】；无全国统一收费标准，待定 |
-| type.marker_relocate.rebuild_organizer | 收取迁建费用的部门名称与其组织实施重建的情况 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 标志条例第 20 条、第 21 条【法】 |
-| type.marker_relocate.rectification_status | 责令限期改正的下达时间与完成情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 23 条【法】；规程 2.2.2.1【业】 |
-| type.marker_relocate.criminal_referral_check | 是否达到刑法第 323 条追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 323 条【法】；公安部立案标准通知一（八）【业】；规程 11.1.1【业】 |
+| type.survey_marker_relocate.party | 工程建设单位名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 测绘法第 43 条【法】；标志条例第 23 条第（二）项【法】；规程 3.2.3.3(1)【业】 |
+| type.survey_marker_relocate.liable_persons | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 23 条【法】 |
+| type.survey_marker_relocate.marker_category | 标志类别与名称 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 41 条第 2 款【法】；标志条例第 4 条【法】 |
+| type.survey_marker_relocate.marker_point_id | 标志点号、等级与点位坐标 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(7)【业】；规程 4.4.2.2(3)【业】 |
+| type.survey_marker_relocate.marker_setter | 标志设置部门，以及属基础性测量标志还是部门专用测量标志 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 标志条例第 19 条第（一）（二）项、第 20 条【法】 |
+| type.survey_marker_relocate.marker_custodian | 负责保管标志的单位和人员 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 标志条例第 12 条、第 19 条第 2 款【法】 |
+| type.survey_marker_relocate.construction_project | 工程建设项目名称、建设单位与立项或者核准文件 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 测绘法第 43 条【法】；规程 3.2.3.3(5)【业】 |
+| type.survey_marker_relocate.act_mode | 行为方式（擅自拆迁，或者使标志失去使用效能，或者拒绝支付迁建费用） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 测绘法第 64 条第（四）项【法】；标志条例第 23 条第（二）项【法】 |
+| type.survey_marker_relocate.avoid_necessity | 工程建设是否确实无法避开永久性测量标志 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 测绘法第 43 条【法】；标志条例第 19 条【法】 |
+| type.survey_marker_relocate.act_time_place | 行为发生时间与地点 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 2.2.1(2)【业】；规程 4.4.2.2【业】 |
+| type.survey_marker_relocate.relocation_approval | 省、自治区、直辖市人民政府测绘地理信息主管部门的拆迁批准文件；属部门专用标志时设置标志的部门的同意材料 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 测绘法第 43 条【法】；标志条例第 19 条第（一）（二）项【法】；规程 3.2.3.3(3)【业】 |
+| type.survey_marker_relocate.military_consent | 涉及军用控制点时军队测绘部门的同意材料 | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 测绘法第 43 条【法】；标志条例第 5 条第 3 款【法】 |
+| type.survey_marker_relocate.custodian_notice | 拆迁前通知负责保管标志的单位和人员的材料 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 标志条例第 19 条第 2 款【法】 |
+| type.survey_marker_relocate.scene_inspection | 现场勘验笔录（附勘测图）、现场照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】 |
+| type.survey_marker_relocate.construction_contract | 工程施工合同、施工方案与标志处置方案 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(5)【业】 |
+| type.survey_marker_relocate.loss_of_function | 标志失去使用效能的事实与程度认定 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 测绘法第 64 条第（四）项【法】；广东裁量基准序号 18【业】；规程 3.2.3.3(10)【业】 |
+| type.survey_marker_relocate.recognition_opinion | 市（地）级以上自然资源主管部门出具的认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
+| type.survey_marker_relocate.relocation_fee_amount | 应当支付的迁建费用金额与实际支付凭据 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 阻断 | 测绘法第 43 条、第 64 条第（四）项【法】；标志条例第 20 条【法】；规程 3.2.3.3(6)【业】 |
+| type.survey_marker_relocate.relocation_fee_basis | 迁建费用的核算依据与核算过程 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 标志条例第 20 条【法】；无全国统一收费标准，待定 |
+| type.survey_marker_relocate.rebuild_organizer | 收取迁建费用的部门名称与其组织实施重建的情况 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 标志条例第 20 条、第 21 条【法】 |
+| type.survey_marker_relocate.rectification_status | 责令限期改正的下达时间与完成情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 23 条【法】；规程 2.2.2.1【业】 |
+| type.survey_marker_relocate.criminal_referral_check | 是否达到刑法第 323 条追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 323 条【法】；公安部立案标准通知一（八）【业】；规程 11.1.1【业】 |
 
 说明：
 
@@ -2354,26 +2354,26 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.marker_misuse.party | 使用标志的测绘单位或者个人名称 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
-| type.marker_misuse.liable_persons | 直接负责的主管人员和其他直接责任人员，以及实际作业人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 23 条【法】 |
-| type.marker_misuse.marker_is_permanent | 涉案标志属永久性测量标志 | 类型层·涉案对象 | 必填 | 登记时 | 警告 | 测绘法第 44 条第 1 款【法】；标志条例第 16 条【法】 |
-| type.marker_misuse.marker_category | 标志类别与名称 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 41 条第 2 款【法】；标志条例第 4 条【法】 |
-| type.marker_misuse.marker_point_id | 标志点号、等级与点位坐标 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(7)【业】；规程 4.4.2.2(3)【业】 |
-| type.marker_misuse.marker_custodian | 负责保管标志的单位和人员 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 标志条例第 12 条、第 16 条【法】 |
-| type.marker_misuse.work_cert | 使用人员的测绘作业证件及其有效期 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 测绘法第 31 条第 1 款、第 44 条第 1 款【法】；规程 3.2.3.3(3)【业】 |
-| type.marker_misuse.use_purpose | 使用标志的测绘任务、用途与使用时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 测绘法第 44 条【法】；规程 3.2.3.3(5)【业】 |
-| type.marker_misuse.violated_procedure | 所违反的操作规程名称与具体条款 | 类型层·违法事实 | 必填 | 登记时 | 警告 | 测绘法第 64 条第（五）项【法】；标志条例第 23 条第（三）项【法】 |
-| type.marker_misuse.damage_fact | 标志毁损的事实、部位与毁损形态 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 测绘法第 64 条第（五）项【法】；标志条例第 23 条第（三）项【法】 |
-| type.marker_misuse.act_time_place | 行为发生时间与地点 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 2.2.1(2)【业】；规程 4.4.2.2【业】 |
-| type.marker_misuse.scene_inspection | 现场勘验笔录（附勘测图）、现场照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】 |
-| type.marker_misuse.equipment_tools | 使用标志时的仪器、设备与工具 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(8)【业】；规程 3.1.1(7)【业】 |
-| type.marker_misuse.custodian_check_record | 保管人员查验标志使用后完好状况的记录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 测绘法第 44 条第 2 款【法】；标志条例第 16 条【法】 |
-| type.marker_misuse.causation | 违反操作规程与标志毁损之间的因果关系认定 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 测绘法第 64 条第（五）项【法】；规程 3.2.3.3(10)【业】；规程 3.2.4.7【业】 |
-| type.marker_misuse.damage_degree | 标志使用效能受损程度 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 广东裁量基准序号 19（按序号 15 执行）【业】 |
-| type.marker_misuse.recognition_opinion | 市（地）级以上自然资源主管部门出具的认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
-| type.marker_misuse.rectification_status | 责令限期改正的下达时间与完成情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 23 条【法】；规程 2.2.2.1【业】 |
-| type.marker_misuse.criminal_referral_check | 是否达到刑法第 323 条追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 323 条【法】；公安部立案标准通知一（八）【业】；规程 11.1.1【业】 |
-| type.marker_misuse.repair_cost | 标志维修费用或者重建费用的核算金额与核算依据 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 20 条、第 21 条、第 23 条【法】 |
+| type.survey_marker_misuse.party | 使用标志的测绘单位或者个人名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
+| type.survey_marker_misuse.liable_persons | 直接负责的主管人员和其他直接责任人员，以及实际作业人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 23 条【法】 |
+| type.survey_marker_misuse.marker_is_permanent | 涉案标志属永久性测量标志 | 类型层·涉案对象 | 必填 | 录入时 | 警告 | 测绘法第 44 条第 1 款【法】；标志条例第 16 条【法】 |
+| type.survey_marker_misuse.marker_category | 标志类别与名称 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 41 条第 2 款【法】；标志条例第 4 条【法】 |
+| type.survey_marker_misuse.marker_point_id | 标志点号、等级与点位坐标 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(7)【业】；规程 4.4.2.2(3)【业】 |
+| type.survey_marker_misuse.marker_custodian | 负责保管标志的单位和人员 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 标志条例第 12 条、第 16 条【法】 |
+| type.survey_marker_misuse.work_cert | 使用人员的测绘作业证件及其有效期 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 测绘法第 31 条第 1 款、第 44 条第 1 款【法】；规程 3.2.3.3(3)【业】 |
+| type.survey_marker_misuse.use_purpose | 使用标志的测绘任务、用途与使用时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 测绘法第 44 条【法】；规程 3.2.3.3(5)【业】 |
+| type.survey_marker_misuse.violated_procedure | 所违反的操作规程名称与具体条款 | 类型层·违法事实 | 必填 | 录入时 | 警告 | 测绘法第 64 条第（五）项【法】；标志条例第 23 条第（三）项【法】 |
+| type.survey_marker_misuse.damage_fact | 标志毁损的事实、部位与毁损形态 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 测绘法第 64 条第（五）项【法】；标志条例第 23 条第（三）项【法】 |
+| type.survey_marker_misuse.act_time_place | 行为发生时间与地点 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 2.2.1(2)【业】；规程 4.4.2.2【业】 |
+| type.survey_marker_misuse.scene_inspection | 现场勘验笔录（附勘测图）、现场照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】 |
+| type.survey_marker_misuse.equipment_tools | 使用标志时的仪器、设备与工具 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(8)【业】；规程 3.1.1(7)【业】 |
+| type.survey_marker_misuse.custodian_check_record | 保管人员查验标志使用后完好状况的记录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 测绘法第 44 条第 2 款【法】；标志条例第 16 条【法】 |
+| type.survey_marker_misuse.causation | 违反操作规程与标志毁损之间的因果关系认定 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 测绘法第 64 条第（五）项【法】；规程 3.2.3.3(10)【业】；规程 3.2.4.7【业】 |
+| type.survey_marker_misuse.damage_degree | 标志使用效能受损程度 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 广东裁量基准序号 19（按序号 15 执行）【业】 |
+| type.survey_marker_misuse.recognition_opinion | 市（地）级以上自然资源主管部门出具的认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
+| type.survey_marker_misuse.rectification_status | 责令限期改正的下达时间与完成情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 23 条【法】；规程 2.2.2.1【业】 |
+| type.survey_marker_misuse.criminal_referral_check | 是否达到刑法第 323 条追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 323 条【法】；公安部立案标准通知一（八）【业】；规程 11.1.1【业】 |
+| type.survey_marker_misuse.repair_cost | 标志维修费用或者重建费用的核算金额与核算依据 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 测绘法第 64 条【法】；标志条例第 20 条、第 21 条、第 23 条【法】 |
 
 说明：
 
@@ -2391,22 +2391,22 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.marker_obstruct.party | 实施干扰或者阻挠的单位或者个人名称 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
-| type.marker_obstruct.liable_persons | 负有直接责任的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 标志条例第 23 条【法】；规程 11.2.1【业】 |
-| type.marker_obstruct.construction_unit | 测量标志建设单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 标志条例第 11 条【法】；规程 3.2.3.3(1)【业】 |
-| type.marker_obstruct.build_basis | 建设单位依法使用土地或者在建筑物上建设标志的依据文件 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 标志条例第 8 条、第 10 条、第 11 条【法】；规程 3.2.3.3(3)【业】 |
-| type.marker_obstruct.planned_marker | 拟建标志的类别、点位、占地范围与专门标牌设置情况 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 标志条例第 8 条、第 9 条、第 10 条【法】；广东省测绘条例第 42 条【业】 |
-| type.marker_obstruct.obstruct_mode | 干扰或者阻挠的方式 | 类型层·违法事实 | 必填 | 登记时 | 警告 | 标志条例第 11 条、第 23 条第（一）项【法】 |
-| type.marker_obstruct.obstruct_time_place | 干扰或者阻挠的时间与地点 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 2.2.1(2)【业】；规程 4.4.2.2【业】 |
-| type.marker_obstruct.obstruct_consequence | 是否造成标志建设停工、延误或者点位变更 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 标志条例第 23 条第（一）项【法】 |
-| type.marker_obstruct.scene_inspection | 现场勘验笔录（附勘测图）、现场照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】 |
-| type.marker_obstruct.witness_evidence | 建设单位人员的陈述、证人证言与询问笔录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(2)【业】；规程 3.2.4.3、3.2.4.5【业】 |
-| type.marker_obstruct.land_right_claim | 干扰方对涉案土地或者建筑物主张的权利及其依据 | 类型层·现场勘验与证据材料 | 选填 | 只提示 | 提示 | 标志条例第 11 条【法】；规程 3.2.3.3(5)【业】 |
-| type.marker_obstruct.recognition_opinion | 市（地）级以上自然资源主管部门出具的认定意见 | 类型层·认定与检验结论 | 选填 | 只提示 | 提示 | 规程 3.2.4.7【业】 |
-| type.marker_obstruct.rectification_status | 责令限期改正的下达时间、届满时间与完成情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 阻断 | 标志条例第 23 条【法】；规程 2.2.2.1【业】；广东裁量基准序号 23【业】 |
-| type.marker_obstruct.fine_grade_basis | 责令改正期限届满后的改正时间（1 个月内改正／1 个月以上改正或者拒不改正） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 广东裁量基准序号 23【业】 |
-| type.marker_obstruct.public_security_referral | 是否移送公安机关作治安管理处罚 | 类型层·程序环节 | 选填 | 只提示 | 提示 | 标志条例第 25 条【法】 |
-| type.marker_obstruct.loss_compensation | 造成损失的金额与赔偿主张 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 标志条例第 23 条【法】 |
+| type.survey_marker_obstruct.party | 实施干扰或者阻挠的单位或者个人名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
+| type.survey_marker_obstruct.liable_persons | 负有直接责任的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 标志条例第 23 条【法】；规程 11.2.1【业】 |
+| type.survey_marker_obstruct.construction_unit | 测量标志建设单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 标志条例第 11 条【法】；规程 3.2.3.3(1)【业】 |
+| type.survey_marker_obstruct.build_basis | 建设单位依法使用土地或者在建筑物上建设标志的依据文件 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 标志条例第 8 条、第 10 条、第 11 条【法】；规程 3.2.3.3(3)【业】 |
+| type.survey_marker_obstruct.planned_marker | 拟建标志的类别、点位、占地范围与专门标牌设置情况 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 标志条例第 8 条、第 9 条、第 10 条【法】；广东省测绘条例第 42 条【业】 |
+| type.survey_marker_obstruct.obstruct_mode | 干扰或者阻挠的方式 | 类型层·违法事实 | 必填 | 录入时 | 警告 | 标志条例第 11 条、第 23 条第（一）项【法】 |
+| type.survey_marker_obstruct.obstruct_time_place | 干扰或者阻挠的时间与地点 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 2.2.1(2)【业】；规程 4.4.2.2【业】 |
+| type.survey_marker_obstruct.obstruct_consequence | 是否造成标志建设停工、延误或者点位变更 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 标志条例第 23 条第（一）项【法】 |
+| type.survey_marker_obstruct.scene_inspection | 现场勘验笔录（附勘测图）、现场照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】 |
+| type.survey_marker_obstruct.witness_evidence | 建设单位人员的陈述、证人证言与询问笔录 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(2)【业】；规程 3.2.4.3、3.2.4.5【业】 |
+| type.survey_marker_obstruct.land_right_claim | 干扰方对涉案土地或者建筑物主张的权利及其依据 | 类型层·现场勘验与证据材料 | 选填 | 只提示 | 提示 | 标志条例第 11 条【法】；规程 3.2.3.3(5)【业】 |
+| type.survey_marker_obstruct.recognition_opinion | 市（地）级以上自然资源主管部门出具的认定意见 | 类型层·认定与检验结论 | 选填 | 只提示 | 提示 | 规程 3.2.4.7【业】 |
+| type.survey_marker_obstruct.rectification_status | 责令限期改正的下达时间、届满时间与完成情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 阻断 | 标志条例第 23 条【法】；规程 2.2.2.1【业】；广东裁量基准序号 23【业】 |
+| type.survey_marker_obstruct.fine_grade_basis | 责令改正期限届满后的改正时间（1 个月内改正／1 个月以上改正或者拒不改正） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 广东裁量基准序号 23【业】 |
+| type.survey_marker_obstruct.public_security_referral | 是否移送公安机关作治安管理处罚 | 类型层·程序环节 | 选填 | 只提示 | 提示 | 标志条例第 25 条【法】 |
+| type.survey_marker_obstruct.loss_compensation | 造成损失的金额与赔偿主张 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 标志条例第 23 条【法】 |
 
 说明：
 
@@ -2424,27 +2424,27 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.marker_unlicensed.party | 使用标志的测绘单位或者个人名称 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
-| type.marker_unlicensed.liable_persons | 负有直接责任的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 标志条例第 23 条【法】；规程 11.2.1【业】 |
-| type.marker_unlicensed.marker_is_permanent | 涉案标志属永久性测量标志 | 类型层·涉案对象 | 必填 | 登记时 | 警告 | 标志条例第 16 条【法】 |
-| type.marker_unlicensed.marker_category | 标志类别与名称 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 41 条第 2 款【法】；标志条例第 4 条【法】 |
-| type.marker_unlicensed.marker_point_id | 标志点号、等级与点位坐标 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(7)【业】 |
-| type.marker_unlicensed.marker_custodian | 负责保管标志的单位和人员 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 标志条例第 12 条、第 16 条【法】 |
-| type.marker_unlicensed.work_cert_absence | 使用人员是否持有测绘工作证件，以及证件的取得情况 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 标志条例第 16 条【法】；规程 3.2.3.3(3)【业】 |
-| type.marker_unlicensed.cert_fraud | 是否存在冒用、借用他人证件或者以其他人名义执业的情形 | 类型层·资质资格与许可 | 选填 | 只提示 | 提示 | 规程 3.2.3.3(9)【业】 |
-| type.marker_unlicensed.supervising_body | 实施监督的县级以上人民政府管理测绘工作的部门名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 标志条例第 16 条、第 23 条【法】 |
-| type.marker_unlicensed.use_purpose | 使用标志的测绘任务、用途与使用时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 标志条例第 16 条【法】；规程 3.2.3.3(5)【业】 |
-| type.marker_unlicensed.refuse_supervision | 拒绝管理测绘工作的部门监督的事实、时间与方式 | 类型层·违法事实 | 必填 | 登记时 | 警告 | 标志条例第 16 条、第 23 条第（四）项【法】 |
-| type.marker_unlicensed.refuse_query | 拒绝负责保管标志的单位和人员查询的事实、时间与方式 | 类型层·违法事实 | 必填 | 登记时 | 警告 | 标志条例第 16 条、第 23 条第（四）项【法】 |
-| type.marker_unlicensed.marker_condition | 使用后标志的完好状况 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 标志条例第 16 条【法】；测绘法第 44 条第 2 款【法】 |
-| type.marker_unlicensed.scene_inspection | 现场勘验笔录（附勘测图）、现场照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】 |
-| type.marker_unlicensed.supervision_record | 主管部门监督与保管单位查询的现场记录、通知书与送达回证 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 标志条例第 16 条【法】；规程 3.2.3.3(4)【业】 |
-| type.marker_unlicensed.equipment_tools | 使用标志时的仪器、设备与工具 | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 规程 3.2.3.3(8)【业】；规程 3.1.1(7)【业】 |
-| type.marker_unlicensed.recognition_opinion | 市（地）级以上自然资源主管部门出具的认定意见 | 类型层·认定与检验结论 | 选填 | 只提示 | 提示 | 规程 3.2.4.7【业】 |
-| type.marker_unlicensed.rectification_status | 责令限期改正的下达时间、届满时间与完成情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 阻断 | 标志条例第 23 条【法】；规程 2.2.2.1【业】；广东裁量基准序号 24【业】 |
-| type.marker_unlicensed.public_security_referral | 是否移送公安机关作治安管理处罚 | 类型层·程序环节 | 选填 | 只提示 | 提示 | 标志条例第 25 条【法】 |
-| type.marker_unlicensed.fine_grade_basis | 责令改正期限届满后的改正时间（1 个月内改正／1 个月以上改正或者拒不改正） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 广东裁量基准序号 24（按序号 23 执行）【业】 |
-| type.marker_unlicensed.loss_compensation | 造成损失的金额与赔偿主张 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 标志条例第 23 条【法】 |
+| type.survey_marker_unlicensed.party | 使用标志的测绘单位或者个人名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 规程 3.2.3.3(1)【业】；规程 2.3(1)【业】 |
+| type.survey_marker_unlicensed.liable_persons | 负有直接责任的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 标志条例第 23 条【法】；规程 11.2.1【业】 |
+| type.survey_marker_unlicensed.marker_is_permanent | 涉案标志属永久性测量标志 | 类型层·涉案对象 | 必填 | 录入时 | 警告 | 标志条例第 16 条【法】 |
+| type.survey_marker_unlicensed.marker_category | 标志类别与名称 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 41 条第 2 款【法】；标志条例第 4 条【法】 |
+| type.survey_marker_unlicensed.marker_point_id | 标志点号、等级与点位坐标 | 类型层·涉案对象 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(7)【业】 |
+| type.survey_marker_unlicensed.marker_custodian | 负责保管标志的单位和人员 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 标志条例第 12 条、第 16 条【法】 |
+| type.survey_marker_unlicensed.work_cert_absence | 使用人员是否持有测绘工作证件，以及证件的取得情况 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 标志条例第 16 条【法】；规程 3.2.3.3(3)【业】 |
+| type.survey_marker_unlicensed.cert_fraud | 是否存在冒用、借用他人证件或者以其他人名义执业的情形 | 类型层·资质资格与许可 | 选填 | 只提示 | 提示 | 规程 3.2.3.3(9)【业】 |
+| type.survey_marker_unlicensed.supervising_body | 实施监督的县级以上人民政府管理测绘工作的部门名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 标志条例第 16 条、第 23 条【法】 |
+| type.survey_marker_unlicensed.use_purpose | 使用标志的测绘任务、用途与使用时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 标志条例第 16 条【法】；规程 3.2.3.3(5)【业】 |
+| type.survey_marker_unlicensed.refuse_supervision | 拒绝管理测绘工作的部门监督的事实、时间与方式 | 类型层·违法事实 | 必填 | 录入时 | 警告 | 标志条例第 16 条、第 23 条第（四）项【法】 |
+| type.survey_marker_unlicensed.refuse_query | 拒绝负责保管标志的单位和人员查询的事实、时间与方式 | 类型层·违法事实 | 必填 | 录入时 | 警告 | 标志条例第 16 条、第 23 条第（四）项【法】 |
+| type.survey_marker_unlicensed.marker_condition | 使用后标志的完好状况 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 标志条例第 16 条【法】；测绘法第 44 条第 2 款【法】 |
+| type.survey_marker_unlicensed.scene_inspection | 现场勘验笔录（附勘测图）、现场照片、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】 |
+| type.survey_marker_unlicensed.supervision_record | 主管部门监督与保管单位查询的现场记录、通知书与送达回证 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 标志条例第 16 条【法】；规程 3.2.3.3(4)【业】 |
+| type.survey_marker_unlicensed.equipment_tools | 使用标志时的仪器、设备与工具 | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 规程 3.2.3.3(8)【业】；规程 3.1.1(7)【业】 |
+| type.survey_marker_unlicensed.recognition_opinion | 市（地）级以上自然资源主管部门出具的认定意见 | 类型层·认定与检验结论 | 选填 | 只提示 | 提示 | 规程 3.2.4.7【业】 |
+| type.survey_marker_unlicensed.rectification_status | 责令限期改正的下达时间、届满时间与完成情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 阻断 | 标志条例第 23 条【法】；规程 2.2.2.1【业】；广东裁量基准序号 24【业】 |
+| type.survey_marker_unlicensed.public_security_referral | 是否移送公安机关作治安管理处罚 | 类型层·程序环节 | 选填 | 只提示 | 提示 | 标志条例第 25 条【法】 |
+| type.survey_marker_unlicensed.fine_grade_basis | 责令改正期限届满后的改正时间（1 个月内改正／1 个月以上改正或者拒不改正） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 广东裁量基准序号 24（按序号 23 执行）【业】 |
+| type.survey_marker_unlicensed.loss_compensation | 造成损失的金额与赔偿主张 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 标志条例第 23 条【法】 |
 
 说明：
 
@@ -2532,7 +2532,7 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 **USER LOCK L2 对本大类必填时机的影响**：测绘类线索不跑分派前自动核查。本大类所有「核查前补齐」指 GLOSSARY「核查」词条下的人为核查动作。本大类没有可自动核查的空间参照数据，外方身份、批准文件内容、成果归属都须人工核对。
 
-**登记门槛口径**沿用 #181：公共层是登记门槛，类型层不是。类型层「登记时必填」项的缺件后果一律取警告，不阻断登记。本大类四个类型的 foreign_party 与 activity_content 定为登记时必填，缺件后果取警告。
+**登记门槛口径**沿用 #181：公共层是登记门槛，类型层不是。类型层「录入时必填」项的缺件后果一律取警告，不阻断登记。本大类四个类型的 foreign_party 与 activity_content 定为录入时必填，缺件后果取警告。
 
 **几何类型**照契约 §3.7:100 取点。涉外测绘活动的范围与路线在来华测绘办法第 11 条第（五）项中是线状与面状描述。点状几何与本大类的对象形态不一致。该不一致属 #24 决议十二记录的业务口径，本票不改，只在此说明。
 
@@ -2543,33 +2543,33 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.foreign_survey_unapproved.foreign_party | 外国的组织或者个人的名称、国籍或者注册地 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 测绘法第 8 条、第 51 条【法】；规程 3.2.3.3(1)【业】 |
-| type.foreign_survey_unapproved.foreign_party_docs | 外方的身份证明与有关资信证明文件 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 11 条第（四）项【业】；规程 3.2.3.3(1)【业】 |
-| type.foreign_survey_unapproved.chinese_partner | 应当合作的中华人民共和国有关部门或者单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 测绘法第 8 条第 2 款【法】；来华测绘办法第 6 条【业】 |
-| type.foreign_survey_unapproved.chinese_participants | 实际参与测绘活动的中方人员及其所属单位 | 类型层·违法主体 | 选填 | 只提示 | 提示 | 来华测绘办法第 14 条【业】；规程 3.2.3.3(1)(5)【业】 |
-| type.foreign_survey_unapproved.approval_status | 是否取得国务院测绘地理信息主管部门会同军队测绘部门的批准 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 测绘法第 8 条第 1 款【法】；来华测绘办法第 4 条【业】 |
-| type.foreign_survey_unapproved.cooperation_form | 是否采取合资、合作形式，以及合作的具体形式与中方参与方式 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 测绘法第 8 条第 2 款【法】；来华测绘办法第 6 条【业】 |
-| type.foreign_survey_unapproved.prohibited_business | 是否落入合资、合作企业不得从事的测绘业务（大地测量、测绘航空摄影、行政区域界线测绘、海洋测绘、地图编制、导航电子地图编制） | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 7 条【业】 |
-| type.foreign_survey_unapproved.activity_content | 实际从事的测绘活动内容、范围、路线、测绘精度与成果形式 | 类型层·违法事实 | 必填 | 登记时 | 警告 | 测绘法第 2 条【法】；来华测绘办法第 11 条第（五）项【业】；规程 4.4.2.2(3)【业】 |
-| type.foreign_survey_unapproved.activity_time_area | 测绘活动的时间与地点，以及是否在中华人民共和国管辖的其他海域 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 测绘法第 2 条、第 8 条第 1 款【法】；处罚办法第 6 条第 2 款【业】 |
-| type.foreign_survey_unapproved.results_and_data | 已形成的测绘成果、资料、图件与电子数据 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 51 条【法】；规程 3.2.3.3(7)【业】 |
-| type.foreign_survey_unapproved.scene_inspection | 现场勘验笔录、现场照片、相关数据、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】；规程 3.1.1(2)【业】 |
-| type.foreign_survey_unapproved.instruments_tools | 使用的测绘仪器、软件、设备的清单与实物 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 测绘法第 51 条【法】；来华测绘办法第 11 条第（六）项【业】；规程 3.2.3.3(8)【业】；规程 3.1.1(7)【业】 |
-| type.foreign_survey_unapproved.contract_docs | 中外双方就测绘活动签订的合同、协议或者用工文件 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(5)【业】 |
-| type.foreign_survey_unapproved.chinese_personnel_presence | 中方测绘人员是否全程参与具体测绘活动 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 14 条、第 16 条第（五）项【业】 |
-| type.foreign_survey_unapproved.secrecy_appraisal | 涉案测绘成果是否属于国家秘密及其密级的鉴定结论 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 保密法第 28 条、第 57 条【法】；测绘法第 34 条第 2 款、第 47 条【法】；保密范围规定第 2 条【业】；境外窃密解释第 7 条【法】；规程 3.2.3.3(10)【业】 |
-| type.foreign_survey_unapproved.recognition_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
-| type.foreign_survey_unapproved.severity_grading | 是否属情节严重，以及认定所依据的事实 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 阻断 | 测绘法第 51 条【法】；无规范性文件分档标准，待定 |
-| type.foreign_survey_unapproved.illegal_gains | 违法所得金额与计算凭据 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 测绘法第 51 条【法】；规程 3.2.3.3(6)【业】 |
-| type.foreign_survey_unapproved.stop_order | 责令停止违法行为的下达与执行情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 51 条【法】；规程 2.2.2.1【业】 |
-| type.foreign_survey_unapproved.espionage_referral | 是否涉嫌间谍行为，以及移送国家安全机关的情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 反间谍法第 4 条第 1 款第（三）项、第 6 条、第 16 条、第 54 条第 4 款【法】；来华测绘办法第 3 条、第 17 条【业】 |
-| type.foreign_survey_unapproved.exit_penalty | 限期出境或者驱逐出境的建议，以及公安机关的决定与执行情况 | 类型层·程序环节 | 选填 | 只提示 | 提示 | 测绘法第 51 条、第 66 条第 2 款【法】；反间谍法第 66 条【法】 |
-| type.foreign_survey_unapproved.criminal_referral_check | 是否达到刑法第 111 条或者第 282 条追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 111 条、第 282 条【法】；境外窃密解释第 2 条、第 3 条、第 4 条【法】；规程 11.1.1、11.1.2【业】 |
+| type.survey_foreign_survey_unapproved.foreign_party | 外国的组织或者个人的名称、国籍或者注册地 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 测绘法第 8 条、第 51 条【法】；规程 3.2.3.3(1)【业】 |
+| type.survey_foreign_survey_unapproved.foreign_party_docs | 外方的身份证明与有关资信证明文件 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 11 条第（四）项【业】；规程 3.2.3.3(1)【业】 |
+| type.survey_foreign_survey_unapproved.chinese_partner | 应当合作的中华人民共和国有关部门或者单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 测绘法第 8 条第 2 款【法】；来华测绘办法第 6 条【业】 |
+| type.survey_foreign_survey_unapproved.chinese_participants | 实际参与测绘活动的中方人员及其所属单位 | 类型层·违法主体 | 选填 | 只提示 | 提示 | 来华测绘办法第 14 条【业】；规程 3.2.3.3(1)(5)【业】 |
+| type.survey_foreign_survey_unapproved.approval_status | 是否取得国务院测绘地理信息主管部门会同军队测绘部门的批准 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 测绘法第 8 条第 1 款【法】；来华测绘办法第 4 条【业】 |
+| type.survey_foreign_survey_unapproved.cooperation_form | 是否采取合资、合作形式，以及合作的具体形式与中方参与方式 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 测绘法第 8 条第 2 款【法】；来华测绘办法第 6 条【业】 |
+| type.survey_foreign_survey_unapproved.prohibited_business | 是否落入合资、合作企业不得从事的测绘业务（大地测量、测绘航空摄影、行政区域界线测绘、海洋测绘、地图编制、导航电子地图编制） | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 7 条【业】 |
+| type.survey_foreign_survey_unapproved.activity_content | 实际从事的测绘活动内容、范围、路线、测绘精度与成果形式 | 类型层·违法事实 | 必填 | 录入时 | 警告 | 测绘法第 2 条【法】；来华测绘办法第 11 条第（五）项【业】；规程 4.4.2.2(3)【业】 |
+| type.survey_foreign_survey_unapproved.activity_time_area | 测绘活动的时间与地点，以及是否在中华人民共和国管辖的其他海域 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 测绘法第 2 条、第 8 条第 1 款【法】；处罚办法第 6 条第 2 款【业】 |
+| type.survey_foreign_survey_unapproved.results_and_data | 已形成的测绘成果、资料、图件与电子数据 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 测绘法第 51 条【法】；规程 3.2.3.3(7)【业】 |
+| type.survey_foreign_survey_unapproved.scene_inspection | 现场勘验笔录、现场照片、相关数据、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】；规程 3.1.1(2)【业】 |
+| type.survey_foreign_survey_unapproved.instruments_tools | 使用的测绘仪器、软件、设备的清单与实物 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 测绘法第 51 条【法】；来华测绘办法第 11 条第（六）项【业】；规程 3.2.3.3(8)【业】；规程 3.1.1(7)【业】 |
+| type.survey_foreign_survey_unapproved.contract_docs | 中外双方就测绘活动签订的合同、协议或者用工文件 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.3(5)【业】 |
+| type.survey_foreign_survey_unapproved.chinese_personnel_presence | 中方测绘人员是否全程参与具体测绘活动 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 14 条、第 16 条第（五）项【业】 |
+| type.survey_foreign_survey_unapproved.secrecy_appraisal | 涉案测绘成果是否属于国家秘密及其密级的鉴定结论 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 保密法第 28 条、第 57 条【法】；测绘法第 34 条第 2 款、第 47 条【法】；保密范围规定第 2 条【业】；境外窃密解释第 7 条【法】；规程 3.2.3.3(10)【业】 |
+| type.survey_foreign_survey_unapproved.recognition_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见，或者受委托机构出具的鉴定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
+| type.survey_foreign_survey_unapproved.severity_grading | 是否属情节严重，以及认定所依据的事实 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 阻断 | 测绘法第 51 条【法】；无规范性文件分档标准，待定 |
+| type.survey_foreign_survey_unapproved.illegal_gains | 违法所得金额与计算凭据 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 测绘法第 51 条【法】；规程 3.2.3.3(6)【业】 |
+| type.survey_foreign_survey_unapproved.stop_order | 责令停止违法行为的下达与执行情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 测绘法第 51 条【法】；规程 2.2.2.1【业】 |
+| type.survey_foreign_survey_unapproved.espionage_referral | 是否涉嫌间谍行为，以及移送国家安全机关的情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 反间谍法第 4 条第 1 款第（三）项、第 6 条、第 16 条、第 54 条第 4 款【法】；来华测绘办法第 3 条、第 17 条【业】 |
+| type.survey_foreign_survey_unapproved.exit_penalty | 限期出境或者驱逐出境的建议，以及公安机关的决定与执行情况 | 类型层·程序环节 | 选填 | 只提示 | 提示 | 测绘法第 51 条、第 66 条第 2 款【法】；反间谍法第 66 条【法】 |
+| type.survey_foreign_survey_unapproved.criminal_referral_check | 是否达到刑法第 111 条或者第 282 条追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 111 条、第 282 条【法】；境外窃密解释第 2 条、第 3 条、第 4 条【法】；规程 11.1.1、11.1.2【业】 |
 
 说明：
 
 1. 本类型的事实底座是四项：外方主体资格、批准状态、合作形式、实际从事的测绘活动内容。测绘法第 51 条把违法行为写成「未经批准，或者未与中华人民共和国有关部门、单位合作，擅自从事测绘活动」，是两条并列的成立路径。approval_status 对应第一条路径，cooperation_form 对应第二条路径。二者缺一即成立，但两项都必须收集，因为无法在登记阶段判断走哪条路径。
-2. foreign_party 在本类型是定性前提。主体不是外国的组织或者个人时，测绘法第 51 条不适用，只能另按测绘法第 55 条以下处理。按本文件「二、缺件后果的判据」，该项的缺件后果应取阻断。但 #181 已确立的登记门槛口径规定类型层「登记时必填」项的后果一律取警告。本表沿用 #181 口径取警告，把该冲突记入待定项，不自行拍板。
+2. foreign_party 在本类型是定性前提。主体不是外国的组织或者个人时，测绘法第 51 条不适用，只能另按测绘法第 55 条以下处理。按本文件「二、缺件后果的判据」，该项的缺件后果应取阻断。但 #181 已确立的登记门槛口径规定类型层「录入时必填」项的后果一律取警告。本表沿用 #181 口径取警告，把该冲突记入待定项，不自行拍板。
 3. 与规程 3.2.3.3 的对应关系：instruments_tools 是第 (8) 项的具体化，同时是测绘法第 51 条「没收测绘工具」的对象，因此取阻断。results_and_data 是第 (7) 项的具体化，同时是「没收测绘成果」的对象。contract_docs 是第 (5) 项的具体化。外方国籍与注册地、中方合作单位、中方人员全程参与、情节严重分档在 11 项之外。
 4. 本类型特有的认定要求是密级鉴定。境外窃密解释第 7 条规定审理为境外窃取、刺探、收买、非法提供国家秘密案件，需要对有关事项是否属于国家秘密以及属于何种密级进行鉴定的，由国家保密工作部门或者省、自治区、直辖市保密工作部门鉴定。该鉴定机关与规程 3.2.4.7 的测绘违法认定机关不是同一主体。本表把两项分列，不合并。
 5. severity_grading 取阻断。测绘法第 51 条以「情节严重」切分两档罚款：十万元以上五十万元以下，与五十万元以上一百万元以下并限期出境或者驱逐出境。该变量缺失时处罚档次无法确定，处罚决定无法作出。广东省没有对应的裁量分档，认定标准记入待定项。
@@ -2582,27 +2582,27 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.foreign_survey_fraud.foreign_party | 外国的组织或者个人的名称、国籍或者注册地 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 来华测绘办法第 2 条、第 18 条【业】；规程 3.2.3.3(1)【业】 |
-| type.foreign_survey_fraud.foreign_party_docs | 外方的身份证明与有关资信证明文件 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 11 条第（四）项【业】 |
-| type.foreign_survey_fraud.chinese_partner | 中方合作部门、单位或者接待单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 测绘法第 8 条第 2 款【法】；来华测绘办法第 6 条【业】 |
-| type.foreign_survey_fraud.chinese_liable_persons | 中方负有直接责任的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 18 条【业】；规程 11.2.1【业】 |
-| type.foreign_survey_fraud.permit_doc | 一次性测绘批准文件的名称、文号、日期、批准机关与批准内容 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 12 条第（四）项【业】；规程 3.2.3.3(3)【业】 |
-| type.foreign_survey_fraud.activity_approval | 国务院及其有关部门或者省、自治区、直辖市人民政府批准外方来华开展科技、文化、体育等活动的文件 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 11 条第（二）项、第 12 条第（一）项【业】 |
-| type.foreign_survey_fraud.application_materials | 申请一次性测绘时提交的七项申请材料 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 11 条第（一）至（七）项【业】 |
-| type.foreign_survey_fraud.fraud_mode | 欺骗手段的具体方式（伪造证明文件／提供虚假材料）与涉及的材料项 | 类型层·违法事实 | 必填 | 登记时 | 警告 | 来华测绘办法第 18 条第（一）项【业】 |
-| type.foreign_survey_fraud.fraud_evidence | 被伪造或者虚假的材料原件、真伪鉴定意见、出具机关的核查回复 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(9)(10)【业】 |
-| type.foreign_survey_fraud.actual_activity | 实际从事的测绘活动内容、范围、路线、精度与成果形式 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 14 条、第 16 条第（三）项【业】；规程 4.4.2.2(3)【业】 |
-| type.foreign_survey_fraud.scene_inspection | 现场勘验笔录、现场照片、相关数据、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】 |
-| type.foreign_survey_fraud.instruments_tools | 使用的测绘仪器、软件、设备的清单与实物 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 11 条第（六）项【业】；规程 3.2.3.3(8)【业】 |
-| type.foreign_survey_fraud.results_and_data | 已形成的测绘成果、资料、图件与电子数据 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 18 条【业】；规程 3.2.3.3(7)【业】 |
-| type.foreign_survey_fraud.chinese_personnel_presence | 中方测绘人员是否全程参与具体测绘活动 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 14 条、第 16 条第（五）项【业】 |
-| type.foreign_survey_fraud.secrecy_appraisal | 涉案测绘成果是否属于国家秘密及其密级的鉴定结论 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 保密法第 28 条、第 57 条【法】；保密范围规定第 2 条【业】；境外窃密解释第 7 条【法】 |
-| type.foreign_survey_fraud.revoke_permit | 撤销批准文件的决定与送达情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 18 条【业】 |
-| type.foreign_survey_fraud.results_seizure | 测绘成果的收缴情况与清单 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 18 条【业】；规程 3.1.1(7)【业】 |
-| type.foreign_survey_fraud.ministry_report | 向国务院自然资源主管部门报告或者移送案件的材料 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 18 条【业】；处罚办法第 6 条第 3 款、第 7 条【业】；规程 2.1.4【业】 |
-| type.foreign_survey_fraud.espionage_referral | 是否涉嫌间谍行为，以及移送国家安全机关的情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 反间谍法第 4 条第 1 款第（三）项、第 16 条、第 54 条第 4 款【法】；来华测绘办法第 17 条【业】 |
-| type.foreign_survey_fraud.criminal_referral_check | 是否达到刑法第 111 条或者第 282 条追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 111 条、第 282 条【法】；境外窃密解释第 2 条、第 3 条、第 4 条【法】；规程 11.1.1【业】 |
-| type.foreign_survey_fraud.fine_basis | 三万元以下罚款的裁量情节与违法所得 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 18 条【业】；规程 3.2.3.3(6)【业】 |
+| type.survey_foreign_survey_fraud.foreign_party | 外国的组织或者个人的名称、国籍或者注册地 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 来华测绘办法第 2 条、第 18 条【业】；规程 3.2.3.3(1)【业】 |
+| type.survey_foreign_survey_fraud.foreign_party_docs | 外方的身份证明与有关资信证明文件 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 11 条第（四）项【业】 |
+| type.survey_foreign_survey_fraud.chinese_partner | 中方合作部门、单位或者接待单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 测绘法第 8 条第 2 款【法】；来华测绘办法第 6 条【业】 |
+| type.survey_foreign_survey_fraud.chinese_liable_persons | 中方负有直接责任的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 18 条【业】；规程 11.2.1【业】 |
+| type.survey_foreign_survey_fraud.permit_doc | 一次性测绘批准文件的名称、文号、日期、批准机关与批准内容 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 12 条第（四）项【业】；规程 3.2.3.3(3)【业】 |
+| type.survey_foreign_survey_fraud.activity_approval | 国务院及其有关部门或者省、自治区、直辖市人民政府批准外方来华开展科技、文化、体育等活动的文件 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 11 条第（二）项、第 12 条第（一）项【业】 |
+| type.survey_foreign_survey_fraud.application_materials | 申请一次性测绘时提交的七项申请材料 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 11 条第（一）至（七）项【业】 |
+| type.survey_foreign_survey_fraud.fraud_mode | 欺骗手段的具体方式（伪造证明文件／提供虚假材料）与涉及的材料项 | 类型层·违法事实 | 必填 | 录入时 | 警告 | 来华测绘办法第 18 条第（一）项【业】 |
+| type.survey_foreign_survey_fraud.fraud_evidence | 被伪造或者虚假的材料原件、真伪鉴定意见、出具机关的核查回复 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(9)(10)【业】 |
+| type.survey_foreign_survey_fraud.actual_activity | 实际从事的测绘活动内容、范围、路线、精度与成果形式 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 14 条、第 16 条第（三）项【业】；规程 4.4.2.2(3)【业】 |
+| type.survey_foreign_survey_fraud.scene_inspection | 现场勘验笔录、现场照片、相关数据、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】 |
+| type.survey_foreign_survey_fraud.instruments_tools | 使用的测绘仪器、软件、设备的清单与实物 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 11 条第（六）项【业】；规程 3.2.3.3(8)【业】 |
+| type.survey_foreign_survey_fraud.results_and_data | 已形成的测绘成果、资料、图件与电子数据 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 18 条【业】；规程 3.2.3.3(7)【业】 |
+| type.survey_foreign_survey_fraud.chinese_personnel_presence | 中方测绘人员是否全程参与具体测绘活动 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 14 条、第 16 条第（五）项【业】 |
+| type.survey_foreign_survey_fraud.secrecy_appraisal | 涉案测绘成果是否属于国家秘密及其密级的鉴定结论 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 保密法第 28 条、第 57 条【法】；保密范围规定第 2 条【业】；境外窃密解释第 7 条【法】 |
+| type.survey_foreign_survey_fraud.revoke_permit | 撤销批准文件的决定与送达情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 18 条【业】 |
+| type.survey_foreign_survey_fraud.results_seizure | 测绘成果的收缴情况与清单 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 18 条【业】；规程 3.1.1(7)【业】 |
+| type.survey_foreign_survey_fraud.ministry_report | 向国务院自然资源主管部门报告或者移送案件的材料 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 18 条【业】；处罚办法第 6 条第 3 款、第 7 条【业】；规程 2.1.4【业】 |
+| type.survey_foreign_survey_fraud.espionage_referral | 是否涉嫌间谍行为，以及移送国家安全机关的情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 反间谍法第 4 条第 1 款第（三）项、第 16 条、第 54 条第 4 款【法】；来华测绘办法第 17 条【业】 |
+| type.survey_foreign_survey_fraud.criminal_referral_check | 是否达到刑法第 111 条或者第 282 条追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 111 条、第 282 条【法】；境外窃密解释第 2 条、第 3 条、第 4 条【法】；规程 11.1.1【业】 |
+| type.survey_foreign_survey_fraud.fine_basis | 三万元以下罚款的裁量情节与违法所得 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 18 条【业】；规程 3.2.3.3(6)【业】 |
 
 说明：
 
@@ -2620,30 +2620,30 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.foreign_survey_exceed.foreign_party | 外国的组织或者个人的名称、国籍或者注册地 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 来华测绘办法第 2 条、第 18 条【业】；规程 3.2.3.3(1)【业】 |
-| type.foreign_survey_exceed.chinese_partner | 中方合作部门或者单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 测绘法第 8 条第 2 款【法】；来华测绘办法第 6 条【业】 |
-| type.foreign_survey_exceed.chinese_liable_persons | 中方负有直接责任的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 18 条【业】；规程 11.2.1【业】 |
-| type.foreign_survey_exceed.permit_doc | 一次性测绘批准文件的名称、文号、日期与批准机关 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 12 条第（四）项【业】；规程 3.2.3.3(3)【业】 |
-| type.foreign_survey_exceed.approved_content | 批准文件载明的测绘活动范围、路线、测绘精度与测绘成果形式 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 11 条第（五）项、第 14 条【业】 |
-| type.foreign_survey_exceed.qualification_cert | 属合资、合作企业时的测绘资质证书与其载明的业务范围 | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 来华测绘办法第 8 条、第 14 条【业】；规程 3.2.3.3(3)【业】 |
-| type.foreign_survey_exceed.actual_content | 实际从事的测绘活动范围、路线、测绘精度与测绘成果形式 | 类型层·违法事实 | 必填 | 登记时 | 警告 | 来华测绘办法第 14 条、第 16 条第（三）项【业】；规程 4.4.2.2(3)【业】 |
-| type.foreign_survey_exceed.deviation | 超出批准内容的具体事项与超出幅度 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 14 条、第 18 条第（二）项【业】 |
-| type.foreign_survey_exceed.activity_time_area | 测绘活动的时间与地点 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 2.2.1(2)【业】；规程 4.4.2.2【业】 |
-| type.foreign_survey_exceed.results_and_data | 已形成的测绘成果、资料、图件与电子数据 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 18 条【业】；规程 3.2.3.3(7)【业】 |
-| type.foreign_survey_exceed.scene_inspection | 现场勘验笔录、现场照片、相关数据、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】 |
-| type.foreign_survey_exceed.instruments_tools | 使用的测绘仪器、软件、设备的清单与实物 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 11 条第（六）项【业】；规程 3.2.3.3(8)【业】 |
-| type.foreign_survey_exceed.comparison_analysis | 批准内容与实际活动的比对分析材料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(7)(10)【业】 |
-| type.foreign_survey_exceed.supervision_record | 县级以上地方人民政府自然资源主管部门按来华测绘办法第 16 条开展检查的记录 | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 来华测绘办法第 16 条【业】 |
-| type.foreign_survey_exceed.chinese_personnel_presence | 中方测绘人员是否全程参与具体测绘活动 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 14 条、第 16 条第（五）项【业】 |
-| type.foreign_survey_exceed.results_submission | 是否按成果条例汇交测绘成果副本或者目录 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 16 条第（四）项【业】；成果条例第 8 条【法】；测绘法第 33 条【法】 |
-| type.foreign_survey_exceed.secrecy_appraisal | 超出部分形成的成果是否属于国家秘密及其密级的鉴定结论 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 保密法第 28 条、第 57 条【法】；保密范围规定第 2 条【业】；境外窃密解释第 7 条【法】 |
-| type.foreign_survey_exceed.recognition_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
-| type.foreign_survey_exceed.revoke_permit | 撤销批准文件的决定与送达情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 18 条【业】 |
-| type.foreign_survey_exceed.results_seizure | 测绘成果的收缴情况与清单 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 18 条【业】；规程 3.1.1(7)【业】 |
-| type.foreign_survey_exceed.ministry_report | 向国务院自然资源主管部门报告或者移送案件的材料 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 18 条【业】；处罚办法第 6 条第 3 款、第 7 条【业】；规程 2.1.4【业】 |
-| type.foreign_survey_exceed.espionage_referral | 是否涉嫌间谍行为，以及移送国家安全机关的情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 反间谍法第 4 条第 1 款第（三）项、第 16 条、第 54 条第 4 款【法】；来华测绘办法第 17 条【业】 |
-| type.foreign_survey_exceed.criminal_referral_check | 是否达到刑法第 111 条或者第 282 条追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 111 条、第 282 条【法】；境外窃密解释第 2 条至第 4 条【法】；规程 11.1.1【业】 |
-| type.foreign_survey_exceed.fine_basis | 三万元以下罚款的裁量情节与违法所得 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 18 条【业】；规程 3.2.3.3(6)【业】 |
+| type.survey_foreign_survey_exceed.foreign_party | 外国的组织或者个人的名称、国籍或者注册地 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 来华测绘办法第 2 条、第 18 条【业】；规程 3.2.3.3(1)【业】 |
+| type.survey_foreign_survey_exceed.chinese_partner | 中方合作部门或者单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 测绘法第 8 条第 2 款【法】；来华测绘办法第 6 条【业】 |
+| type.survey_foreign_survey_exceed.chinese_liable_persons | 中方负有直接责任的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 18 条【业】；规程 11.2.1【业】 |
+| type.survey_foreign_survey_exceed.permit_doc | 一次性测绘批准文件的名称、文号、日期与批准机关 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 12 条第（四）项【业】；规程 3.2.3.3(3)【业】 |
+| type.survey_foreign_survey_exceed.approved_content | 批准文件载明的测绘活动范围、路线、测绘精度与测绘成果形式 | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 11 条第（五）项、第 14 条【业】 |
+| type.survey_foreign_survey_exceed.qualification_cert | 属合资、合作企业时的测绘资质证书与其载明的业务范围 | 类型层·资质资格与许可 | 选填 | 核查前补齐 | 提示 | 来华测绘办法第 8 条、第 14 条【业】；规程 3.2.3.3(3)【业】 |
+| type.survey_foreign_survey_exceed.actual_content | 实际从事的测绘活动范围、路线、测绘精度与测绘成果形式 | 类型层·违法事实 | 必填 | 录入时 | 警告 | 来华测绘办法第 14 条、第 16 条第（三）项【业】；规程 4.4.2.2(3)【业】 |
+| type.survey_foreign_survey_exceed.deviation | 超出批准内容的具体事项与超出幅度 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 14 条、第 18 条第（二）项【业】 |
+| type.survey_foreign_survey_exceed.activity_time_area | 测绘活动的时间与地点 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 2.2.1(2)【业】；规程 4.4.2.2【业】 |
+| type.survey_foreign_survey_exceed.results_and_data | 已形成的测绘成果、资料、图件与电子数据 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 18 条【业】；规程 3.2.3.3(7)【业】 |
+| type.survey_foreign_survey_exceed.scene_inspection | 现场勘验笔录、现场照片、相关数据、视听资料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.6【业】 |
+| type.survey_foreign_survey_exceed.instruments_tools | 使用的测绘仪器、软件、设备的清单与实物 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 11 条第（六）项【业】；规程 3.2.3.3(8)【业】 |
+| type.survey_foreign_survey_exceed.comparison_analysis | 批准内容与实际活动的比对分析材料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(7)(10)【业】 |
+| type.survey_foreign_survey_exceed.supervision_record | 县级以上地方人民政府自然资源主管部门按来华测绘办法第 16 条开展检查的记录 | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 来华测绘办法第 16 条【业】 |
+| type.survey_foreign_survey_exceed.chinese_personnel_presence | 中方测绘人员是否全程参与具体测绘活动 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 14 条、第 16 条第（五）项【业】 |
+| type.survey_foreign_survey_exceed.results_submission | 是否按成果条例汇交测绘成果副本或者目录 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 16 条第（四）项【业】；成果条例第 8 条【法】；测绘法第 33 条【法】 |
+| type.survey_foreign_survey_exceed.secrecy_appraisal | 超出部分形成的成果是否属于国家秘密及其密级的鉴定结论 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 保密法第 28 条、第 57 条【法】；保密范围规定第 2 条【业】；境外窃密解释第 7 条【法】 |
+| type.survey_foreign_survey_exceed.recognition_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
+| type.survey_foreign_survey_exceed.revoke_permit | 撤销批准文件的决定与送达情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 18 条【业】 |
+| type.survey_foreign_survey_exceed.results_seizure | 测绘成果的收缴情况与清单 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 18 条【业】；规程 3.1.1(7)【业】 |
+| type.survey_foreign_survey_exceed.ministry_report | 向国务院自然资源主管部门报告或者移送案件的材料 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 18 条【业】；处罚办法第 6 条第 3 款、第 7 条【业】；规程 2.1.4【业】 |
+| type.survey_foreign_survey_exceed.espionage_referral | 是否涉嫌间谍行为，以及移送国家安全机关的情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 反间谍法第 4 条第 1 款第（三）项、第 16 条、第 54 条第 4 款【法】；来华测绘办法第 17 条【业】 |
+| type.survey_foreign_survey_exceed.criminal_referral_check | 是否达到刑法第 111 条或者第 282 条追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 111 条、第 282 条【法】；境外窃密解释第 2 条至第 4 条【法】；规程 11.1.1【业】 |
+| type.survey_foreign_survey_exceed.fine_basis | 三万元以下罚款的裁量情节与违法所得 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 18 条【业】；规程 3.2.3.3(6)【业】 |
 
 说明：
 
@@ -2661,23 +2661,23 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.foreign_survey_export.foreign_party | 实施携带或者传输出境的外国的组织或者个人 | 类型层·违法主体 | 必填 | 登记时 | 警告 | 来华测绘办法第 2 条、第 19 条【业】；规程 3.2.3.3(1)【业】 |
-| type.foreign_survey_export.chinese_partner | 中方合作部门或者单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 15 条第 2 款【业】；测绘法第 8 条第 2 款【法】 |
-| type.foreign_survey_export.chinese_liable_persons | 中方负有直接责任的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 保密法第 57 条【法】；规程 11.2.1【业】 |
-| type.foreign_survey_export.results_owner | 来华测绘成果归中方部门或者单位所有，还是归外方所有 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 15 条第 2 款【业】 |
-| type.foreign_survey_export.results_description | 出境成果的名称、形式、数量与载体类型 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 15 条【业】；规程 3.2.3.3(7)【业】 |
-| type.foreign_survey_export.export_mode | 出境方式（携带／传输／寄递／托运） | 类型层·违法事实 | 必填 | 登记时 | 警告 | 保密法第 28 条第（四）（五）项【法】；来华测绘办法第 15 条第 2 款、第 19 条【业】 |
-| type.foreign_survey_export.export_time_route | 出境时间、出境口岸或者传输通道、目的地 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 2.2.1(2)【业】；规程 4.4.2.2【业】 |
-| type.foreign_survey_export.export_approval | 依法批准出境的文件（对外提供属于国家秘密的测绘成果审批文件，或者国家秘密载体出境批准文件） | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 测绘法第 34 条第 2 款【法】；成果条例第 18 条【法】；保密法第 28 条第（五）项【法】；规程 3.2.3.3(3)【业】 |
-| type.foreign_survey_export.export_evidence | 海关查获材料、出境记录、传输日志、邮件或者网络传输取证 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.2【业】 |
-| type.foreign_survey_export.results_seized | 被查获或者被扣押的成果与载体清单 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.1.1(7)【业】；规程 3.2.5【业】；反间谍法第 62 条、第 63 条【法】 |
-| type.foreign_survey_export.secrecy_appraisal | 出境成果是否属于国家秘密及其密级的鉴定结论 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 保密法第 28 条、第 57 条【法】；保密范围规定第 2 条【业】；境外窃密解释第 7 条【法】；规程 3.2.3.3(10)【业】 |
-| type.foreign_survey_export.recognition_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
-| type.foreign_survey_export.customs_secrecy_link | 海关、保密行政管理部门的处理情况与移送材料 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 保密法第 57 条第 2 款【法】；《国家秘密载体出境保密管理规定》第 5 条、第 6 条【业】 |
-| type.foreign_survey_export.ministry_report | 向国务院自然资源主管部门报告或者移送案件的材料 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 19 条【业】；处罚办法第 6 条第 3 款、第 7 条【业】；规程 2.1.4【业】 |
-| type.foreign_survey_export.espionage_referral | 是否涉嫌间谍行为，以及移送国家安全机关的情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 阻断 | 反间谍法第 4 条第 1 款第（三）项、第 6 条、第 16 条【法】；来华测绘办法第 17 条【业】 |
-| type.foreign_survey_export.criminal_referral_check | 是否达到刑法第 111 条或者第 282 条追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 111 条、第 282 条【法】；境外窃密解释第 2 条至第 4 条【法】；规程 11.1.1、11.1.2【业】 |
-| type.foreign_survey_export.fine_basis | 三万元以下罚款的裁量情节与违法所得 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 19 条【业】；保密法第 57 条【法】 |
+| type.survey_foreign_survey_export.foreign_party | 实施携带或者传输出境的外国的组织或者个人 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 来华测绘办法第 2 条、第 19 条【业】；规程 3.2.3.3(1)【业】 |
+| type.survey_foreign_survey_export.chinese_partner | 中方合作部门或者单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 15 条第 2 款【业】；测绘法第 8 条第 2 款【法】 |
+| type.survey_foreign_survey_export.chinese_liable_persons | 中方负有直接责任的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 保密法第 57 条【法】；规程 11.2.1【业】 |
+| type.survey_foreign_survey_export.results_owner | 来华测绘成果归中方部门或者单位所有，还是归外方所有 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 15 条第 2 款【业】 |
+| type.survey_foreign_survey_export.results_description | 出境成果的名称、形式、数量与载体类型 | 类型层·涉案对象 | 必填 | 核查前补齐 | 阻断 | 来华测绘办法第 15 条【业】；规程 3.2.3.3(7)【业】 |
+| type.survey_foreign_survey_export.export_mode | 出境方式（携带／传输／寄递／托运） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 保密法第 28 条第（四）（五）项【法】；来华测绘办法第 15 条第 2 款、第 19 条【业】 |
+| type.survey_foreign_survey_export.export_time_route | 出境时间、出境口岸或者传输通道、目的地 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 2.2.1(2)【业】；规程 4.4.2.2【业】 |
+| type.survey_foreign_survey_export.export_approval | 依法批准出境的文件（对外提供属于国家秘密的测绘成果审批文件，或者国家秘密载体出境批准文件） | 类型层·资质资格与许可 | 必填 | 核查前补齐 | 阻断 | 测绘法第 34 条第 2 款【法】；成果条例第 18 条【法】；保密法第 28 条第（五）项【法】；规程 3.2.3.3(3)【业】 |
+| type.survey_foreign_survey_export.export_evidence | 海关查获材料、出境记录、传输日志、邮件或者网络传输取证 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.3(4)【业】；规程 3.2.4.2【业】 |
+| type.survey_foreign_survey_export.results_seized | 被查获或者被扣押的成果与载体清单 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.1.1(7)【业】；规程 3.2.5【业】；反间谍法第 62 条、第 63 条【法】 |
+| type.survey_foreign_survey_export.secrecy_appraisal | 出境成果是否属于国家秘密及其密级的鉴定结论 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 阻断 | 保密法第 28 条、第 57 条【法】；保密范围规定第 2 条【业】；境外窃密解释第 7 条【法】；规程 3.2.3.3(10)【业】 |
+| type.survey_foreign_survey_export.recognition_opinion | 市（地）级以上自然资源主管部门出具的测绘违法认定意见 | 类型层·认定与检验结论 | 必填 | 核查前补齐 | 警告 | 规程 3.2.4.7【业】 |
+| type.survey_foreign_survey_export.customs_secrecy_link | 海关、保密行政管理部门的处理情况与移送材料 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 保密法第 57 条第 2 款【法】；《国家秘密载体出境保密管理规定》第 5 条、第 6 条【业】 |
+| type.survey_foreign_survey_export.ministry_report | 向国务院自然资源主管部门报告或者移送案件的材料 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 19 条【业】；处罚办法第 6 条第 3 款、第 7 条【业】；规程 2.1.4【业】 |
+| type.survey_foreign_survey_export.espionage_referral | 是否涉嫌间谍行为，以及移送国家安全机关的情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 阻断 | 反间谍法第 4 条第 1 款第（三）项、第 6 条、第 16 条【法】；来华测绘办法第 17 条【业】 |
+| type.survey_foreign_survey_export.criminal_referral_check | 是否达到刑法第 111 条或者第 282 条追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 刑法第 111 条、第 282 条【法】；境外窃密解释第 2 条至第 4 条【法】；规程 11.1.1、11.1.2【业】 |
+| type.survey_foreign_survey_export.fine_basis | 三万元以下罚款的裁量情节与违法所得 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 来华测绘办法第 19 条【业】；保密法第 57 条【法】 |
 
 说明：
 
@@ -2768,9 +2768,9 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 
 | 待定项 | 分歧点或已查到的边界 | 去向 |
 |---|---|---|
-| 类型编码未定，要件键需回改 | 测量标志类七个编码是本票草案：`marker_damage_move`、`marker_land_occupy`、`marker_safety_zone`、`marker_relocate`、`marker_misuse`、`marker_obstruct`、`marker_unlicensed`。其它类四个编码是本票草案：`foreign_survey_unapproved`、`foreign_survey_fraud`、`foreign_survey_exceed`、`foreign_survey_export`。十一个编码都依赖尚未产出的违法类型编码表 | 编码确定后十一张表的要件键整体回改 |
-| 登记时必填项的后果取警告 | 与 #24「必填项缺失即阻断」的字面读法有出入。本票沿用 #181 口径 | 分歧已在 #181 记入待定项，本票不自行拍板 |
-| 登记时必填项中有一批是定性前提 | 测量标志类 20 项登记时必填项里有 13 项按本文件「二、缺件后果的判据」应取阻断，例如 marker_permanence、marker_is_permanent、act_mode、occupy_mode、activity_type、violated_procedure、obstruct_mode、refuse_supervision、refuse_query。这些项都是本类型能否定性的前提。其它类 8 项登记时必填项全部按同一判据应取阻断：foreign_party 四项、activity_content、fraud_mode、actual_content、export_mode。foreign_party 决定测绘法第 51 条与来华测绘办法是否适用，其余四项是各类型的行为构成要素。#181 的登记门槛口径要求登记时必填项的后果一律取警告 | 两个口径在本部分直接冲突。本票取警告。需业务方一次拍板：登记时必填项的后果按登记门槛口径统一取警告，还是按定性前提判据取阻断 |
+| 类型编码未定，要件键需回改 | 测量标志类七个编码是本票草案：`survey_marker_damage_move`、`survey_marker_land_occupy`、`survey_marker_safety_zone`、`survey_marker_relocate`、`survey_marker_misuse`、`survey_marker_obstruct`、`survey_marker_unlicensed`。其它类四个编码是本票草案：`survey_foreign_survey_unapproved`、`survey_foreign_survey_fraud`、`survey_foreign_survey_exceed`、`survey_foreign_survey_export`。十一个编码都依赖尚未产出的违法类型编码表 | 编码确定后十一张表的要件键整体回改 |
+| 录入时必填项的后果取警告 | 与 #24「必填项缺失即阻断」的字面读法有出入。本票沿用 #181 口径 | 分歧已在 #181 记入待定项，本票不自行拍板 |
+| 录入时必填项中有一批是定性前提 | 测量标志类 20 项录入时必填项里有 13 项按本文件「二、缺件后果的判据」应取阻断，例如 marker_permanence、marker_is_permanent、act_mode、occupy_mode、activity_type、violated_procedure、obstruct_mode、refuse_supervision、refuse_query。这些项都是本类型能否定性的前提。其它类 8 项录入时必填项全部按同一判据应取阻断：foreign_party 四项、activity_content、fraud_mode、actual_content、export_mode。foreign_party 决定测绘法第 51 条与来华测绘办法是否适用，其余四项是各类型的行为构成要素。#181 的登记门槛口径要求录入时必填项的后果一律取警告 | 两个口径在本部分直接冲突。本票取警告。需业务方一次拍板：录入时必填项的后果按登记门槛口径统一取警告，还是按定性前提判据取阻断 |
 | 附条件适用的要件统一取选填 | 条件写在项名里。规程未规定条件要件的表达方式。沿用 #181 口径 | 待定 |
 | 「安全控制范围」无统一定义 | 测绘法第 41 条第 1 款用「安全控制范围」但未定义。标志条例第 22 条第（三）项给出距标志 50 米的界线，第（四）（五）（六）项分别以占地范围、标志上、设有标志的建筑物为界。地方性法规另设更大范围。广东省测绘条例未设范围 | zone_boundary 的取值枚举与规范来源栏口径待业务方拍板 |
 | zone_boundary 的呈现分组归类 | 该项界定标志的空间保护边界，不属行为要素，也不属程序事项。八组中只有涉案对象组容纳这一性质 | 归类无直接依据。八组不足以容纳时需在汇总时统一处理 |
@@ -2853,7 +2853,7 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 | 序号 | 分歧 | 甲方口径 | 乙方口径 | 去向 |
 |---|---|---|---|---|
 | 1 | 外部结论类要件的缺件后果口径不统一 | #181 对 `crime_identification` 取**警告**，理由是认定意见不是本机关能补齐的 | 本文件第二部分对 `secret_appraisal` 与 `quality_inspection_report` 取**阻断**，理由是密级与质量等级是本类型能否定性的前提 | 新票。见「六、给后续票的输入」第 4 项 |
-| 2 | 类型层是否阻断线索登记 | #24 决议写「必填项缺失即阻断」。按字面直读，90 项登记时必填项应阻断登记 | 本文件沿用 #181 口径，90 项登记时必填的后果一律取**警告**，不阻断登记。第四部分明确提出异议，认为其 21 项登记时必填按本文件「二、缺件后果的判据」应取阻断 | #181 已记为应开票，本文件附议。见「六、给后续票的输入」第 2 项 |
+| 2 | 类型层是否阻断线索登记 | #24 决议写「必填项缺失即阻断」。按字面直读，90 项录入时必填项应阻断登记 | 本文件沿用 #181 口径，90 项录入时必填的后果一律取**警告**，不阻断登记。第四部分明确提出异议，认为其 21 项录入时必填按本文件「二、缺件后果的判据」应取阻断 | #181 已记为应开票，本文件附议。见「六、给后续票的输入」第 2 项 |
 | 3 | 四（八）的 `enforcement_authority` 是否抵触 #24 决议十一 | #24 决议十一规定录入要件里不出现管辖连接点，也不出现有权查处机关 | 第二部分认为成果条例第 29 条第 3 项「或者其他有关部门依据职责」是法定的开放式指派。该部分把该项写成事实记录，不写成管辖判断 | 新票或者 #24 复议 |
 | 4 | 罚款基数缺失算不算「无法进入处罚流程」 | 第一部分按「算」处理。一（二）的 `rectification_notice_service` 与 `overdue_non_correction`、二（一）至二（七）的 `agreed_remuneration`、二（八）的 `illegal_income` 共 9 项取**阻断**。理由是测绘法第 53 条的罚款以「逾期不改正」为法定前提，第 55 条至第 59 条的罚款以约定报酬或者违法所得为唯一基数，无定额兜底 | 若按「不算」处理，该 9 项属裁量基数缺失，应由阻断降为**警告** | 与 #30 校验规则票合并考虑 |
 
@@ -3031,7 +3031,7 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 | 票名 | 要决的事 | 关联 |
 |---|---|---|
 | 违法类型编码表：四类法域具体违法行为的业务编码与版本 | 编码粒度、层级、命名规则，与类型层要件键类型段的对应关系，版本机制 | 本文件 40 个草案编码、#181 的 22 个草案编码、#182–#184 |
-| 类型层要件的登记门槛：类型层是否阻断线索登记 | 三种口径：登记时必填即阻断／登记时必填只警告／类型层不设登记时必填 | 本文件 90 项登记时必填、#181 的 13 项、#24 决议、第四部分的异议 |
+| 类型层要件的登记门槛：类型层是否阻断线索登记 | 三种口径：录入时必填即阻断／录入时必填只警告／类型层不设录入时必填 | 本文件 90 项录入时必填、#181 的 13 项、#24 决议、第四部分的异议 |
 | 录入要件三层（公共／来源／类型）的呈现分组名统一 | 公共层八项与来源层五组各归哪组，与类型层八组是否同一套词汇 | 本文件八组词汇、#181 八组词汇、#24 决议 |
 | 外部结论类要件的缺件后果口径统一 | 密级鉴定、质量检验报告、耕地破坏程度认定、标志使用效能受损程度都不是本机关能自出的结论。#181 对 `crime_identification` 取警告。本文件第二部分对 `secret_appraisal` 与 `quality_inspection_report` 取阻断。两种口径需统一 | #181、本文件第二部分与第四部分、#30 |
 | 测绘成本构成与测算方法查证 | 测绘法第 29 条第 2 款与第 57 条都使用「测绘成本」。四部分均未检索到给出成本构成与测算方法的法律、行政法规、规章或者规范性文件。需查明是否存在行业性测算规程 | 本文件二（六）的 `survey_cost` 与 `below_cost_conclusion` |
