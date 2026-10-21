@@ -9,6 +9,9 @@
 
 ---
 
+
+> 2026-10-21 #203 回改说明：要件键已改成 `type.<类型编码>.<字段>`，表格新增「呈现」栏，依据栏已改成「文件编号 + 条号」，见 `legal-document-table.md`。文中旧键名、【法】／【业】标注和位移表里的旧写法，以表格为准。
+
 ## 1. 一手来源
 
 | 来源 | 文号／地址 | 本次用途 |
@@ -129,7 +132,7 @@
 2. **六属性照 #24**：要件键、呈现、必填性、必填时机（录入时／核查前补齐／只提示）、缺件后果（阻断／警告／提示）、依据（条号＋【法/业】）。
 3. **必填时机与缺件后果的搭配**：必填（录入时）→ 录入缺失即阻断。必填（核查前补齐）→ 录入时缺失给警告，立案前的齐备把关由 #30 校验规则按要件键引用（#24 第三节：「整体能否推进」归校验规则）。选填（只提示）→ 提示。「核查前补齐＋警告」的搭配沿用 #24 来源层 `clue.campaign_no`、`clue.opinion_ref` 先例。
 4. **宁缺毋滥**：公共层能承载的不重复设。位置（面）→ `clue.location`（契约 §3.7:100，矿产＝面，业务口径，#24 第十二节）。协议、凭证、账目等实体材料 → `clue.materials`（公共层选填）。行为时间、经过 → `clue.narrative`。来源层已有的（交办文号、移送函编号等）不重复设。
-5. **要件键形态为 `type.<类型编码>.<字段>`**（#192 决议取甲案，原 `clue.mineral.*` 作废，编码见 `violation-type-codes.md`）。类型编码带法域短码，不同法域的类型键不会冲突。校验规则仍按单键引用。
+5. **要件键形态为 `type.<类型编码>.<字段>`**（#192 决议取甲案，原矿产专用前缀作废，编码见 `violation-type-codes.md`）。类型编码带法域短码，不同法域的类型键不会冲突。校验规则仍按单键引用。
 6. **类型要件取并集**（#24 第七节：初步涉嫌违法类型可空、多值、逐条选）。同一要件键在多个所选类型下必填性不同时，**建议按最严者呈现与判定**。并集合并语义 #24 未规定，此条是建议，实现时由 #30 定案。
 7. **证照项逐行为定，不一刀切**（票面约束）：越界勘查、越界采矿、破坏性采矿、擅自滚动勘探开发类、转让矿业权类的主体是持证人，设许可证号项。纯无证类（无证采矿）不设许可证号项。
 8. **登记时记当时必填清单**（#24 第九节、ADR 0018）。本稿只出当前版。
@@ -157,98 +160,98 @@
 
 **一（一）无证勘查和越界勘查**
 
-| 要件键 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
-|---|---|---|---|---|---|
-| type.mineral_explore_without_license_or_overstep.explore_situation | 涉嫌情形单选：无证勘查／许可证有效期满未延续／越界勘查 | 必填 | 录入时 | 阻断 | 附录 B 一（一）情形列举【业】；矿法第 63 条（未取得探矿权、越界）与第 66 条（探矿权人无证作业）罚则分流【法】 |
-| type.mineral_explore_without_license_or_overstep.explore_license_no | 勘查许可证号 | 涉嫌越界勘查或有效期满未延续情形时必填；无证勘查情形不适用 | 核查前补齐 | 警告 | 规程 3.2.3.2(3)【业】；矿法第 63 条第 2 款（越界以探矿权登记的勘查区域为比对基准）【法】；附录 B 一（一）【业】 |
-| type.mineral_explore_without_license_or_overstep.commodity | 勘查目标矿种 | 选填 | 只提示 | 提示 | 规程 3.2.3.2(4)【业】 |
+| 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
+|---|---|---|---|---|---|---|
+| type.mineral_explore_without_license_or_overstep.explore_situation | 涉嫌情形单选：无证勘查／许可证有效期满未延续／越界勘查 | 违法事实 | 必填 | 录入时 | 阻断 | doc_002 附录 B 一（一）情形列举；doc_079 第 63 条与第 66 条罚则分流 |
+| type.mineral_explore_without_license_or_overstep.explore_license_no | 勘查许可证号 | 许可资质与审批 | 涉嫌越界勘查或有效期满未延续情形时必填；无证勘查情形不适用 | 核查前补齐 | 警告 | doc_002 3.2.3.2(3)；doc_079 第 63 条第 2 款；doc_002 附录 B 一（一） |
+| type.mineral_explore_without_license_or_overstep.commodity | 勘查目标矿种 | 涉案对象 | 选填 | 只提示 | 提示 | doc_002 3.2.3.2(4) |
 
 **一（二）擅自进行滚动勘探开发、边探边采或者试采**
 
-| 要件键 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
-|---|---|---|---|---|---|
-| type.mineral_explore_rolling_or_trial.explore_license_no | 勘查许可证号 | 必填（本行为主体是探矿权人） | 核查前补齐 | 警告 | 附录 B 一（二）法律依据（原勘查区块登记管理办法第 19、20 条主体均为探矿权人）【业】；矿法第 33 条【法】 |
-| type.mineral_explore_rolling_or_trial.commodity | 矿种 | 必填 | 录入时 | 阻断 | 矿法第 36 条、实施条例第 38 条（油气探采合一是现行唯一保留形态，矿种直接决定定性）【法】；附录 B 一（二）（滚动勘探开发限石油天然气，试采限流体矿产）【业】 |
+| 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
+|---|---|---|---|---|---|---|
+| type.mineral_explore_rolling_or_trial.explore_license_no | 勘查许可证号 | 许可资质与审批 | 必填（本行为主体是探矿权人） | 核查前补齐 | 警告 | doc_002 附录 B 一（二）法律依据；doc_079 第 33 条 |
+| type.mineral_explore_rolling_or_trial.commodity | 矿种 | 涉案对象 | 必填 | 录入时 | 阻断 | doc_079 第 36 条；doc_080 第 38 条；doc_002 附录 B 一（二） |
 
 **二（一）无证采矿**
 
-| 要件键 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
-|---|---|---|---|---|---|
-| type.mineral_mine_without_license.mine_situation | 涉嫌情形单选（附录 B 9 情形，含「其他」） | 必填 | 录入时 | 阻断 | 附录 B 二（一）情形列举【业】；矿法第 64 条（未取得采矿权）与第 67 条（采矿权人无证作业）罚则分流【法】 |
-| type.mineral_mine_without_license.commodity | 开采矿种 | 选填 | 核查前补齐 | 警告 | 规程 3.2.3.2(4)【业】；矿法第 64 条第 1 款（违法采出矿产品市场价值是罚款基数）【法】；矿法第 8 条第 3 款、第 68 条第 2 款（战略性矿产保护性开采影响定性）【法】 |
-| type.mineral_mine_without_license.output_clue | 采出矿产品数量与价值线索（估算量、外销情况） | 选填 | 只提示 | 提示 | 规程 3.2.3.2(4)、4.2.5【业】；附录 B 二（四）价值认定层级（销赃数额→价格和数量→认定报告）【业】 |
+| 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
+|---|---|---|---|---|---|---|
+| type.mineral_mine_without_license.mine_situation | 涉嫌情形单选（附录 B 9 情形，含「其他」） | 违法事实 | 必填 | 录入时 | 阻断 | doc_002 附录 B 二（一）情形列举；doc_079 第 64 条与第 67 条罚则分流 |
+| type.mineral_mine_without_license.commodity | 开采矿种 | 涉案对象 | 选填 | 核查前补齐 | 警告 | doc_002 3.2.3.2(4)；doc_079 第 64 条第 1 款；doc_079 第 8 条第 3 款、第 68 条第 2 款 |
+| type.mineral_mine_without_license.output_clue | 采出矿产品数量与价值线索（估算量、外销情况） | 违法事实 | 选填 | 只提示 | 提示 | doc_002 3.2.3.2(4)、4.2.5；doc_002 附录 B 二（四）价值认定层级 |
 
 许可证号不设。理由：无证类无证照可填（票面口径）。情形②③④⑤⑥涉及曾经持证或持勘查许可证，证号属调查内容，核查前由内业核查（矿业权分布底图，矿法第 59 条【法】）与调查补齐，不设登记要件。
 
 **二（二）越界采矿**
 
-| 要件键 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
-|---|---|---|---|---|---|
-| type.mineral_mine_overstep.mining_license_no | 采矿许可证号 | 必填 | 核查前补齐 | 警告 | 附录 B 二（二）定义（超出采矿许可证载明矿区范围）【业】；规程 3.2.3.2(3)【业】；矿法第 64 条第 2 款（越界以采矿权登记的开采区域为比对基准）【法】 |
-| type.mineral_mine_overstep.commodity | 越界开采矿种 | 选填 | 核查前补齐 | 警告 | 规程 3.2.3.2(4)【业】；矿法第 64 条第 1 款（市场价值是罚款基数）【法】 |
-| type.mineral_mine_overstep.output_clue | 采出矿产品数量与价值线索（含越界部分是否已采出） | 选填 | 只提示 | 提示 | 规程 4.2.5【业】；附录 B 二（五）4（未采出的处理不同）【业】；矿法第 64 条第 1 款（有无采出矿产品罚款档不同）【法】 |
+| 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
+|---|---|---|---|---|---|---|
+| type.mineral_mine_overstep.mining_license_no | 采矿许可证号 | 许可资质与审批 | 必填 | 核查前补齐 | 警告 | doc_002 附录 B 二（二）定义；doc_002 3.2.3.2(3)；doc_079 第 64 条第 2 款 |
+| type.mineral_mine_overstep.commodity | 越界开采矿种 | 涉案对象 | 选填 | 核查前补齐 | 警告 | doc_002 3.2.3.2(4)；doc_079 第 64 条第 1 款 |
+| type.mineral_mine_overstep.output_clue | 采出矿产品数量与价值线索（含越界部分是否已采出） | 违法事实 | 选填 | 只提示 | 提示 | doc_002 4.2.5；doc_002 附录 B 二（五）4；doc_079 第 64 条第 1 款 |
 
 **二（三）破坏性采矿**
 
-| 要件键 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
-|---|---|---|---|---|---|
-| type.mineral_mine_destructive.mining_license_no | 采矿许可证号 | 必填（本行为主体是采矿权人） | 核查前补齐 | 警告 | 附录 B 二（三）定义【业】；规程 3.2.3.2(3)【业】；矿法第 68 条（情节严重由原矿业权出让部门吊销许可证）【法】 |
-| type.mineral_mine_destructive.commodity | 矿种 | 选填 | 核查前补齐 | 警告 | 规程 3.2.3.2(4)【业】 |
-| type.mineral_mine_destructive.destruction_clue | 矿产资源破坏情况线索（破坏性开采方式、损失情形） | 选填 | 只提示 | 提示 | 附录 B 二（三）定义【业】；矿法第 68 条第 1 款（三种情形以「造成矿产资源破坏」为要件）【法】；规程 3.2.3.2(8)（涉罪认定意见属核查、调查内容，登记只提示）【业】 |
+| 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
+|---|---|---|---|---|---|---|
+| type.mineral_mine_destructive.mining_license_no | 采矿许可证号 | 许可资质与审批 | 必填（本行为主体是采矿权人） | 核查前补齐 | 警告 | doc_002 附录 B 二（三）定义；doc_002 3.2.3.2(3)；doc_079 第 68 条 |
+| type.mineral_mine_destructive.commodity | 矿种 | 涉案对象 | 选填 | 核查前补齐 | 警告 | doc_002 3.2.3.2(4) |
+| type.mineral_mine_destructive.destruction_clue | 矿产资源破坏情况线索（破坏性开采方式、损失情形） | 违法事实 | 选填 | 只提示 | 提示 | doc_002 附录 B 二（三）定义；doc_079 第 68 条第 1 款；doc_002 3.2.3.2(8) |
 
 **三（一）买卖、出租或者以其他形式转让矿产资源**
 
-| 要件键 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
-|---|---|---|---|---|---|
-| type.mineral_transfer_resource.transfer_control_clue | 他人实际接收、控制矿点情况线索（是否已进场、是否已开采） | 选填 | 只提示 | 提示 | 附录 B 三（五）1（不能仅以合同与价款认定）、三（五）2（本项定义：允许他人开采依附于自己土地的矿产资源并牟利）【业】 |
-| type.mineral_transfer_resource.commodity | 涉及矿种 | 选填 | 只提示 | 提示 | 规程 3.2.3.2(4)【业】 |
+| 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
+|---|---|---|---|---|---|---|
+| type.mineral_transfer_resource.transfer_control_clue | 他人实际接收、控制矿点情况线索（是否已进场、是否已开采） | 违法事实 | 选填 | 只提示 | 提示 | doc_002 附录 B 三（五）1、三（五）2 |
+| type.mineral_transfer_resource.commodity | 涉及矿种 | 涉案对象 | 选填 | 只提示 | 提示 | doc_002 3.2.3.2(4) |
 
 许可证号不设。理由：本项出让方是土地权属主体，不必然持有矿业权（附录 B 三（五）2 定义【业】）。转让协议、价款凭证的实体材料由公共层 `clue.materials` 承载（规程 3.2.3.2(7)【业】），类型层不重复设材料键。
 
 **三（二）将探矿权、采矿权倒卖牟利**
 
-| 要件键 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
-|---|---|---|---|---|---|
-| type.mineral_transfer_rights_resale.explore_license_no | 勘查许可证号（涉探矿权时） | 选填 | 核查前补齐 | 警告 | 规程 3.2.3.2(3)(7)【业】 |
-| type.mineral_transfer_rights_resale.mining_license_no | 采矿许可证号（涉采矿权时） | 选填 | 核查前补齐 | 警告 | 规程 3.2.3.2(3)(7)【业】 |
-| type.mineral_transfer_rights_resale.transfer_registered | 转让变更登记办理情况（已办／未办／不明） | 选填 | 核查前补齐 | 警告 | 矿法第 22 条第 2、3 款（转让经依法登记发生效力，未经登记不发生效力）【法】 |
-| type.mineral_transfer_rights_resale.transfer_control_clue | 受让方实际接收、控制矿山情况线索 | 选填 | 只提示 | 提示 | 附录 B 三（五）1【业】 |
+| 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
+|---|---|---|---|---|---|---|
+| type.mineral_transfer_rights_resale.explore_license_no | 勘查许可证号（涉探矿权时） | 许可资质与审批 | 选填 | 核查前补齐 | 警告 | doc_002 3.2.3.2(3)(7) |
+| type.mineral_transfer_rights_resale.mining_license_no | 采矿许可证号（涉采矿权时） | 许可资质与审批 | 选填 | 核查前补齐 | 警告 | doc_002 3.2.3.2(3)(7) |
+| type.mineral_transfer_rights_resale.transfer_registered | 转让变更登记办理情况（已办／未办／不明） | 许可资质与审批 | 选填 | 核查前补齐 | 警告 | doc_079 第 22 条第 2、3 款 |
+| type.mineral_transfer_rights_resale.transfer_control_clue | 受让方实际接收、控制矿山情况线索 | 违法事实 | 选填 | 只提示 | 提示 | doc_002 附录 B 三（五）1 |
 
 **三（三）未经批准，擅自转让探矿权、采矿权**
 
-| 要件键 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
-|---|---|---|---|---|---|
-| type.mineral_transfer_rights_unapproved.explore_license_no | 勘查许可证号（涉探矿权时） | 选填 | 核查前补齐 | 警告 | 规程 3.2.3.2(3)(7)【业】 |
-| type.mineral_transfer_rights_unapproved.mining_license_no | 采矿许可证号（涉采矿权时） | 选填 | 核查前补齐 | 警告 | 规程 3.2.3.2(3)(7)【业】 |
-| type.mineral_transfer_rights_unapproved.transfer_registered | 转让变更登记办理情况（已办／未办／不明） | 选填 | 核查前补齐 | 警告 | 矿法第 22 条第 2、3 款【法】；附录 B 三（三）【业】 |
-| type.mineral_transfer_rights_unapproved.transfer_control_clue | 受让方实际接收、控制矿山情况线索 | 选填 | 只提示 | 提示 | 附录 B 三（五）1、5（受让方按无证勘查开采处罚）【业】；矿法第 63、64 条【法】 |
+| 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
+|---|---|---|---|---|---|---|
+| type.mineral_transfer_rights_unapproved.explore_license_no | 勘查许可证号（涉探矿权时） | 许可资质与审批 | 选填 | 核查前补齐 | 警告 | doc_002 3.2.3.2(3)(7) |
+| type.mineral_transfer_rights_unapproved.mining_license_no | 采矿许可证号（涉采矿权时） | 许可资质与审批 | 选填 | 核查前补齐 | 警告 | doc_002 3.2.3.2(3)(7) |
+| type.mineral_transfer_rights_unapproved.transfer_registered | 转让变更登记办理情况（已办／未办／不明） | 许可资质与审批 | 选填 | 核查前补齐 | 警告 | doc_079 第 22 条第 2、3 款；doc_002 附录 B 三（三） |
+| type.mineral_transfer_rights_unapproved.transfer_control_clue | 受让方实际接收、控制矿山情况线索 | 违法事实 | 选填 | 只提示 | 提示 | doc_002 附录 B 三（五）1、5；doc_079 第 63、64 条 |
 
 说明：新矿法下矿业权转让不再经「批准」，改为登记生效（矿法第 22、27 条，实施条例第 19–22 条【法】）。本项行为形态已实质变化（见 §5.2），但附录 B 仍是现行规程清单，要件照项呈现。
 
 **三（四）以承包等方式擅自转让采矿权**
 
-| 要件键 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
-|---|---|---|---|---|---|
-| type.mineral_transfer_mining_by_contract.mining_license_no | 采矿许可证号 | 选填 | 核查前补齐 | 警告 | 规程 3.2.3.2(3)(7)【业】 |
-| type.mineral_transfer_mining_by_contract.transfer_registered | 变更登记办理情况（已办／未办／不明） | 选填 | 核查前补齐 | 警告 | 矿法第 22 条第 2、3 款【法】 |
-| type.mineral_transfer_mining_by_contract.transfer_control_clue | 承包方实际接收、控制矿山情况线索（含是否仅承包采掘工程） | 选填 | 只提示 | 提示 | 附录 B 三（五）1（须确认实际接收控制）、三（五）3（单纯承包采掘工程不属于转让）【业】 |
+| 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
+|---|---|---|---|---|---|---|
+| type.mineral_transfer_mining_by_contract.mining_license_no | 采矿许可证号 | 许可资质与审批 | 选填 | 核查前补齐 | 警告 | doc_002 3.2.3.2(3)(7) |
+| type.mineral_transfer_mining_by_contract.transfer_registered | 变更登记办理情况（已办／未办／不明） | 许可资质与审批 | 选填 | 核查前补齐 | 警告 | doc_079 第 22 条第 2、3 款 |
+| type.mineral_transfer_mining_by_contract.transfer_control_clue | 承包方实际接收、控制矿山情况线索（含是否仅承包采掘工程） | 违法事实 | 选填 | 只提示 | 提示 | doc_002 附录 B 三（五）1、三（五）3 |
 
 **四（一）违法审批发放勘查许可证**（与四（二）同形，要件逐类型各设一份）
 
-| 要件键 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
-|---|---|---|---|---|---|
-| type.mineral_approve_explore_license.approval_doc_no | 涉事审批发证文件文号或许可证号 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.2(3)【业】；规程 7.2(2)（行政处理决定指向批准文件：明确无效、撤销、废止）【业】 |
-| type.mineral_approve_explore_license.approval_org | 涉事审批发证机关 | 必填 | 核查前补齐 | 警告 | 规程 7.2(2)【业】；附录 B 四（一）（二）（审批权限划分是定性前提）【业】 |
-| type.mineral_approve_explore_license.approval_defect | 违法审批发证情形（超越权限／不符合法定条件／违反程序／其他） | 选填 | 只提示 | 提示 | 附录 B 四（三）3（权限定性按部改革意见执行）【业】；旧矿法第 47 条情形列举（附录 B 原依据）【业】；矿法第 62 条【法】 |
+| 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
+|---|---|---|---|---|---|---|
+| type.mineral_approve_explore_license.approval_doc_no | 涉事审批发证文件文号或许可证号 | 许可资质与审批 | 必填 | 核查前补齐 | 警告 | doc_002 3.2.3.2(3)；doc_002 7.2(2) |
+| type.mineral_approve_explore_license.approval_org | 涉事审批发证机关 | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_002 7.2(2)；doc_002 附录 B 四（一）（二） |
+| type.mineral_approve_explore_license.approval_defect | 违法审批发证情形（超越权限／不符合法定条件／违反程序／其他） | 违法事实 | 选填 | 只提示 | 提示 | doc_002 附录 B 四（三）3；旧；doc_079 第 47 条情形列举；doc_079 第 62 条 |
 
 
 **四（二）违法审批发放采矿许可证**
 
-| 要件键 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
-|---|---|---|---|---|---|
-| type.mineral_approve_mining_license.approval_doc_no | 涉事审批发证文件文号或许可证号 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.2(3)【业】；规程 7.2(2)（行政处理决定指向批准文件：明确无效、撤销、废止）【业】 |
-| type.mineral_approve_mining_license.approval_org | 涉事审批发证机关 | 必填 | 核查前补齐 | 警告 | 规程 7.2(2)【业】；附录 B 四（一）（二）（审批权限划分是定性前提）【业】 |
-| type.mineral_approve_mining_license.approval_defect | 违法审批发证情形（超越权限／不符合法定条件／违反程序／其他） | 选填 | 只提示 | 提示 | 附录 B 四（三）3（权限定性按部改革意见执行）【业】；旧矿法第 47 条情形列举（附录 B 原依据）【业】；矿法第 62 条【法】 |
+| 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
+|---|---|---|---|---|---|---|
+| type.mineral_approve_mining_license.approval_doc_no | 涉事审批发证文件文号或许可证号 | 许可资质与审批 | 必填 | 核查前补齐 | 警告 | doc_002 3.2.3.2(3)；doc_002 7.2(2) |
+| type.mineral_approve_mining_license.approval_org | 涉事审批发证机关 | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_002 7.2(2)；doc_002 附录 B 四（一）（二） |
+| type.mineral_approve_mining_license.approval_defect | 违法审批发证情形（超越权限／不符合法定条件／违反程序／其他） | 违法事实 | 选填 | 只提示 | 提示 | doc_002 附录 B 四（三）3；旧；doc_079 第 47 条情形列举；doc_079 第 62 条 |
 
 - 说明一：本大类的案件出口是行政处理决定（撤销、废止）＋党纪政务责任，不是罚款（规程 7.2(2)、附录 B 四（三）1，底稿 §8）。吊销许可证由颁证机关执行（规程 10.x）。这些影响 #30 校验规则与流程设计，不影响本清单。
 - 说明二：本大类「本机关既是被调查对象又是调查者」的利益冲突承载，另有专票（#35 结论新开票），不在本清单范围。

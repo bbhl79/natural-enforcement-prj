@@ -11,6 +11,9 @@
 
 ---
 
+
+> 2026-10-21 #203 回改说明：本文件表格已按 #192 乙案、#199 决议收敛。`认定结论`、`现场勘验与证据材料`、`金额与裁量` 三类项已移出，见 `type-layer-moved-items.md`。`呈现` 列只写栏名。依据栏已改成「文件编号 + 条号」，文件见 `legal-document-table.md`，原【法】／【业】标注取消。`subject_name` 已统一为同一声明常量。录入时必填项的缺件后果已按 #198 判据重判。文中统计数字、简称表、【法】／【业】口径和说明里提到已移出的键或旧后果、旧依据写法，一律以表格为准。
+
 ## 一、结论摘要
 
 ### 一、覆盖范围
@@ -152,19 +155,19 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_approve_without_authority.approval_authority | 作出被质疑批准的机关或单位名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《土地管理法》第 79 条【法】；规程 3.2.3.1(11)【业】 |
-| type.land_approve_without_authority.actual_approvers | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《土地管理法》第 79 条【法】；《违反土地管理规定行为处分办法》第 5 条【业】；规程 11.2.1(2)(3)【业】 |
-| type.land_approve_without_authority.self_approval | 被质疑的批准行为是否由本机关作出 | 类型层·违法主体 | 选填 | 只提示 | 提示 | 规程 7.1(2)、7.2(2)、11.2.1(2)(3)【业】 |
-| type.land_approve_without_authority.approval_act_type | 批准事项类型（农用地转用／土地征收／建设用地／供地／临时用地／乡村建设／宅基地） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《土地管理法》第 44、46、53、54、57、60、61、62 条【法】；《土地管理法实施条例》第 23、24 条【法】 |
-| type.land_approve_without_authority.approval_document | 被质疑的批准文件名称、文号、日期、批准机关 | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(11)【业】；规程 4.4.2.2(1)【业】 |
-| type.land_approve_without_authority.statutory_approval_level | 该批准事项的法定审批层级（国务院／省、自治区、直辖市人民政府／市、县人民政府／乡、镇人民政府） | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 44、45、46、53、57、60、61、62 条【法】；《土地管理法实施条例》第 23、24 条【法】 |
-| type.land_approve_without_authority.approval_meeting_minutes | 审批会议纪要、审批记录 | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.1(11)【业】 |
-| type.land_approve_without_authority.project_approvals | 建设项目批准、核准或备案文件 | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.1(8)【业】；《土地管理法实施条例》第 24 条第 (一)(二) 项【法】 |
-| type.land_approve_without_authority.pre_approval_opinion | 建设项目用地预审与选址意见书 | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 警告 | 《土地管理法实施条例》第 24 条第 (一) 项【法】 |
-| type.land_approve_without_authority.plan_indicator | 土地利用年度计划指标（新增建设用地占用农用地计划指标）的占用情况 | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 警告 | 《违反土地管理规定行为处分办法》第 6 条第 (三)(四) 项【业】；《国务院关于深化改革严格土地管理的决定》一 (二)【业】 |
-| type.land_approve_without_authority.land_area | 涉案土地面积 | 类型层·涉案土地 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(5)【业】；规程 4.4.2.2(1)【业】 |
-| type.land_approve_without_authority.land_use_category | 涉案土地地类（永久基本农田／耕地／其他农用地／建设用地／未利用地） | 类型层·涉案土地 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(3)(4)【业】；《土地管理法》第 44、46 条【法】 |
-| type.land_approve_without_authority.criminal_referral_check | 是否达到刑法第 410 条追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《刑法》第 410 条【法】；《最高人民法院关于审理破坏土地资源刑事案件具体应用法律若干问题的解释》第 4 条、第 9 条【法】；《最高人民法院关于审理破坏林地资源刑事案件具体应用法律若干问题的解释》第 2 条、第 3 条【法】；《最高人民法院关于审理破坏草原资源刑事案件应用法律若干问题的解释》第 3 条【法】；规程 7.1(8)、11.1【业】 |
+| type.land_approve_without_authority.approval_authority | 作出被质疑批准的机关或单位名称 | 违法主体 | 必填 | 录入时 | 警告 | doc_001 第 79 条；doc_002 3.2.3.1(11) |
+| type.land_approve_without_authority.actual_approvers | 直接负责的主管人员和其他直接责任人员 | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_001 第 79 条；doc_003 第 5 条；doc_002 11.2.1(2)(3) |
+| type.land_approve_without_authority.self_approval | 被质疑的批准行为是否由本机关作出 | 违法主体 | 选填 | 只提示 | 提示 | doc_002 7.1(2)、7.2(2)、11.2.1(2)(3) |
+| type.land_approve_without_authority.approval_act_type | 批准事项类型（农用地转用／土地征收／建设用地／供地／临时用地／乡村建设／宅基地） | 违法事实 | 必填 | 录入时 | 阻断 | doc_001 第 44、46、53、54、57、60、61、62 条；doc_004 第 23、24 条 |
+| type.land_approve_without_authority.approval_document | 被质疑的批准文件名称、文号、日期、批准机关 | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(11)；doc_002 4.4.2.2(1) |
+| type.land_approve_without_authority.statutory_approval_level | 该批准事项的法定审批层级（国务院／省、自治区、直辖市人民政府／市、县人民政府／乡、镇人民政府） | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_001 第 44、45、46、53、57、60、61、62 条；doc_004 第 23、24 条 |
+| type.land_approve_without_authority.approval_meeting_minutes | 审批会议纪要、审批记录 | 许可资质与审批 | 必填 | 核查前补齐 | 警告 | doc_002 3.2.3.1(11) |
+| type.land_approve_without_authority.project_approvals | 建设项目批准、核准或备案文件 | 许可资质与审批 | 必填 | 核查前补齐 | 警告 | doc_002 3.2.3.1(8)；doc_004 第 24 条第 (一)(二) 项 |
+| type.land_approve_without_authority.pre_approval_opinion | 建设项目用地预审与选址意见书 | 许可资质与审批 | 必填 | 核查前补齐 | 警告 | doc_004 第 24 条第 (一) 项 |
+| type.land_approve_without_authority.plan_indicator | 土地利用年度计划指标（新增建设用地占用农用地计划指标）的占用情况 | 许可资质与审批 | 必填 | 核查前补齐 | 警告 | doc_003 第 6 条第 (三)(四) 项；doc_005 一 (二) |
+| type.land_approve_without_authority.land_area | 涉案土地面积 | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(5)；doc_002 4.4.2.2(1) |
+| type.land_approve_without_authority.land_use_category | 涉案土地地类（永久基本农田／耕地／其他农用地／建设用地／未利用地） | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(3)(4)；doc_001 第 44、46 条 |
+| type.land_approve_without_authority.criminal_referral_check | 是否达到刑法第 410 条追诉标准 | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_006 第 410 条；doc_007 第 4 条、第 9 条；doc_008 第 2 条、第 3 条；doc_009 第 3 条；doc_002 7.1(8)、11.1 |
 
 说明：
 
@@ -180,18 +183,17 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_approve_wrong_use.approval_authority | 作出被质疑批准的机关或单位名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《土地管理法》第 79 条【法】；规程 3.2.3.1(11)【业】 |
-| type.land_approve_wrong_use.actual_approvers | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《土地管理法》第 79 条【法】；《违反土地管理规定行为处分办法》第 6 条第 (一) 项【业】；规程 11.2.1(2)(3)【业】 |
-| type.land_approve_wrong_use.self_approval | 被质疑的批准行为是否由本机关作出 | 类型层·违法主体 | 选填 | 只提示 | 提示 | 规程 7.1(2)、7.2(2)、11.2.1(2)(3)【业】 |
-| type.land_approve_wrong_use.planning_use | 土地利用总体规划／国土空间规划确定的土地用途 | 类型层·涉案土地 | 必填 | 录入时 | 警告 | 《土地管理法》第 25 条【法】；规程 3.2.3.1(4)【业】 |
-| type.land_approve_wrong_use.approved_use | 批准文件载明的用途 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 25 条【法】；规程 3.2.3.1(11)【业】 |
-| type.land_approve_wrong_use.approval_document | 批准用地的文件名称、文号、日期 | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(11)【业】；规程 4.4.2.2(1)【业】 |
-| type.land_approve_wrong_use.plan_adjustment_approval | 土地利用总体规划修改的批准文件（规划用途已依法变更时提供） | 类型层·土地来源与用地审批 | 选填 | 核查前补齐 | 提示 | 《土地管理法》第 25 条【法】 |
-| type.land_approve_wrong_use.plan_indicator | 土地利用年度计划指标（新增建设用地占用农用地计划指标）的占用情况 | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 警告 | 《违反土地管理规定行为处分办法》第 6 条第 (三)(四) 项【业】；《国务院关于深化改革严格土地管理的决定》一 (二)【业】 |
-| type.land_approve_wrong_use.plan_map_ref | 规划图件的图幅号与版本 | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 规程 3.2.3.1(4)【业】 |
-| type.land_approve_wrong_use.land_area | 涉案土地面积 | 类型层·涉案土地 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(5)【业】；规程 4.4.2.2(1)【业】 |
-| type.land_approve_wrong_use.land_use_category | 涉案土地地类（永久基本农田／耕地／其他农用地／建设用地／未利用地） | 类型层·涉案土地 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(3)(4)【业】；《土地管理法》第 25 条【法】 |
-| type.land_approve_wrong_use.criminal_referral_check | 是否达到刑法第 410 条追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《刑法》第 410 条【法】；《最高人民法院关于审理破坏土地资源刑事案件具体应用法律若干问题的解释》第 4 条、第 9 条【法】；规程 7.1(8)、11.1【业】 |
+| type.land_approve_wrong_use.approval_authority | 作出被质疑批准的机关或单位名称 | 违法主体 | 必填 | 录入时 | 警告 | doc_001 第 79 条；doc_002 3.2.3.1(11) |
+| type.land_approve_wrong_use.actual_approvers | 直接负责的主管人员和其他直接责任人员 | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_001 第 79 条；doc_003 第 6 条第 (一) 项；doc_002 11.2.1(2)(3) |
+| type.land_approve_wrong_use.self_approval | 被质疑的批准行为是否由本机关作出 | 违法主体 | 选填 | 只提示 | 提示 | doc_002 7.1(2)、7.2(2)、11.2.1(2)(3) |
+| type.land_approve_wrong_use.planning_use | 土地利用总体规划／国土空间规划确定的土地用途 | 涉案对象 | 必填 | 录入时 | 阻断 | doc_001 第 25 条；doc_002 3.2.3.1(4) |
+| type.land_approve_wrong_use.approved_use | 批准文件载明的用途 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_001 第 25 条；doc_002 3.2.3.1(11) |
+| type.land_approve_wrong_use.approval_document | 批准用地的文件名称、文号、日期 | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(11)；doc_002 4.4.2.2(1) |
+| type.land_approve_wrong_use.plan_adjustment_approval | 土地利用总体规划修改的批准文件（规划用途已依法变更时提供） | 许可资质与审批 | 选填 | 核查前补齐 | 提示 | doc_001 第 25 条 |
+| type.land_approve_wrong_use.plan_indicator | 土地利用年度计划指标（新增建设用地占用农用地计划指标）的占用情况 | 许可资质与审批 | 必填 | 核查前补齐 | 警告 | doc_003 第 6 条第 (三)(四) 项；doc_005 一 (二) |
+| type.land_approve_wrong_use.land_area | 涉案土地面积 | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(5)；doc_002 4.4.2.2(1) |
+| type.land_approve_wrong_use.land_use_category | 涉案土地地类（永久基本农田／耕地／其他农用地／建设用地／未利用地） | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(3)(4)；doc_001 第 25 条 |
+| type.land_approve_wrong_use.criminal_referral_check | 是否达到刑法第 410 条追诉标准 | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_006 第 410 条；doc_007 第 4 条、第 9 条；doc_002 7.1(8)、11.1 |
 
 说明：
 
@@ -207,25 +209,23 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_approve_illegal_procedure.approval_authority | 作出被质疑批准的机关或单位名称 | 类型层·违法主体 | 必填 | 录入时 | 警告 | 《土地管理法》第 79 条【法】；规程 3.2.3.1(11)【业】 |
-| type.land_approve_illegal_procedure.actual_approvers | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《土地管理法》第 79 条【法】；《违反土地管理规定行为处分办法》第 7 条第 (五) 项【业】；规程 11.2.1(2)(3)【业】 |
-| type.land_approve_illegal_procedure.self_approval | 被质疑的批准行为是否由本机关作出 | 类型层·违法主体 | 选填 | 只提示 | 提示 | 规程 7.1(2)、7.2(2)、11.2.1(2)(3)【业】 |
-| type.land_approve_illegal_procedure.approval_act_type | 被质疑的批准行为类型（农用地转用／土地征收／建设用地／供地／用地预审与选址） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《土地管理法》第 44、46、47、53 条【法】；《土地管理法实施条例》第 23、24、25 条【法】 |
-| type.land_approve_illegal_procedure.procedure_steps | 法定程序环节及完成情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 44、47 条【法】；《土地管理法实施条例》第 23、24、25 条【法】；《国务院关于深化改革严格土地管理的决定》一 (二)【业】；规程 附录 A 一（三）1(2)【业】 |
-| type.land_approve_illegal_procedure.violated_step | 缺失或违反的具体程序环节 | 类型层·程序环节 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 44、47 条【法】；《土地管理法实施条例》第 23、24、25 条【法】；《违反土地管理规定行为处分办法》第 7 条第 (五) 项【业】 |
-| type.land_approve_illegal_procedure.expropriation_procedure_docs | 征地程序材料：征收土地预公告、土地现状调查、社会稳定风险评估、补偿安置方案及公告、听证记录、征收土地公告（批准行为类型含土地征收时填写） | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《土地管理法》第 47、48 条【法】；《土地管理法实施条例》第 26、27、28、29、30、31 条【法】 |
-| type.land_approve_illegal_procedure.split_approval | 是否将单个建设项目用地拆分审批 | 类型层·程序环节 | 选填 | 只提示 | 提示 | 《国务院关于深化改革严格土地管理的决定》一 (二)【业】 |
-| type.land_approve_illegal_procedure.approval_document | 批准用地的文件名称、文号、日期 | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(11)【业】；规程 4.4.2.2(1)【业】 |
-| type.land_approve_illegal_procedure.approval_meeting_minutes | 审批会议纪要、审批记录 | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.1(11)【业】 |
-| type.land_approve_illegal_procedure.project_approvals | 建设项目批准、核准或备案文件 | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.1(8)【业】；《土地管理法实施条例》第 24 条第 (一)(二) 项【法】 |
-| type.land_approve_illegal_procedure.pre_approval_opinion | 建设项目用地预审与选址意见书 | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 警告 | 《土地管理法实施条例》第 24 条第 (一) 项【法】 |
-| type.land_approve_illegal_procedure.compensation_agreement | 征地补偿安置协议（批准行为类型含土地征收时填写） | 类型层·土地来源与用地审批 | 选填 | 核查前补齐 | 提示 | 《土地管理法实施条例》第 29 条【法】；规程 附录 A 一（六）2【业】 |
-| type.land_approve_illegal_procedure.compensation_payment_voucher | 补偿款支付凭证（批准行为类型含土地征收时填写） | 类型层·土地来源与用地审批 | 选填 | 核查前补齐 | 提示 | 《土地管理法实施条例》第 30 条【法】；规程 附录 A 一（六）2【业】 |
-| type.land_approve_illegal_procedure.land_actual_control | 土地是否被征地者实际控制（批准行为类型含土地征收时填写） | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 规程 附录 A 一（六）2【业】；规程 3.2.3.1(6)【业】 |
-| type.land_approve_illegal_procedure.site_leveling_construction | 平整场地、动工建设情况（批准行为类型含土地征收时填写） | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 规程 附录 A 一（六）2【业】；规程 3.2.3.1(5)(6)【业】 |
-| type.land_approve_illegal_procedure.land_area | 涉案土地面积 | 类型层·涉案土地 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(5)【业】；规程 4.4.2.2(1)【业】 |
-| type.land_approve_illegal_procedure.land_use_category | 涉案土地地类（永久基本农田／耕地／其他农用地／建设用地／未利用地） | 类型层·涉案土地 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(3)(4)【业】 |
-| type.land_approve_illegal_procedure.criminal_referral_check | 是否达到刑法第 410 条追诉标准 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《刑法》第 410 条【法】；《最高人民法院关于审理破坏土地资源刑事案件具体应用法律若干问题的解释》第 4 条、第 9 条【法】；规程 7.1(8)、11.1【业】 |
+| type.land_approve_illegal_procedure.approval_authority | 作出被质疑批准的机关或单位名称 | 违法主体 | 必填 | 录入时 | 警告 | doc_001 第 79 条；doc_002 3.2.3.1(11) |
+| type.land_approve_illegal_procedure.actual_approvers | 直接负责的主管人员和其他直接责任人员 | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_001 第 79 条；doc_003 第 7 条第 (五) 项；doc_002 11.2.1(2)(3) |
+| type.land_approve_illegal_procedure.self_approval | 被质疑的批准行为是否由本机关作出 | 违法主体 | 选填 | 只提示 | 提示 | doc_002 7.1(2)、7.2(2)、11.2.1(2)(3) |
+| type.land_approve_illegal_procedure.approval_act_type | 被质疑的批准行为类型（农用地转用／土地征收／建设用地／供地／用地预审与选址） | 违法事实 | 必填 | 录入时 | 阻断 | doc_001 第 44、46、47、53 条；doc_004 第 23、24、25 条 |
+| type.land_approve_illegal_procedure.procedure_steps | 法定程序环节及完成情况 | 程序环节 | 必填 | 核查前补齐 | 阻断 | doc_001 第 44、47 条；doc_004 第 23、24、25 条；doc_005 一 (二)；doc_002；doc_002 附录 A 一（三）1(2) |
+| type.land_approve_illegal_procedure.violated_step | 缺失或违反的具体程序环节 | 程序环节 | 必填 | 核查前补齐 | 阻断 | doc_001 第 44、47 条；doc_004 第 23、24、25 条；doc_003 第 7 条第 (五) 项 |
+| type.land_approve_illegal_procedure.expropriation_procedure_docs | 征地程序材料：征收土地预公告、土地现状调查、社会稳定风险评估、补偿安置方案及公告、听证记录、征收土地公告（批准行为类型含土地征收时填写） | 程序环节 | 选填 | 核查前补齐 | 提示 | doc_001 第 47、48 条；doc_004 第 26、27、28、29、30、31 条 |
+| type.land_approve_illegal_procedure.split_approval | 是否将单个建设项目用地拆分审批 | 程序环节 | 选填 | 只提示 | 提示 | doc_005 一 (二) |
+| type.land_approve_illegal_procedure.approval_document | 批准用地的文件名称、文号、日期 | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(11)；doc_002 4.4.2.2(1) |
+| type.land_approve_illegal_procedure.approval_meeting_minutes | 审批会议纪要、审批记录 | 许可资质与审批 | 必填 | 核查前补齐 | 警告 | doc_002 3.2.3.1(11) |
+| type.land_approve_illegal_procedure.project_approvals | 建设项目批准、核准或备案文件 | 许可资质与审批 | 必填 | 核查前补齐 | 警告 | doc_002 3.2.3.1(8)；doc_004 第 24 条第 (一)(二) 项 |
+| type.land_approve_illegal_procedure.pre_approval_opinion | 建设项目用地预审与选址意见书 | 许可资质与审批 | 必填 | 核查前补齐 | 警告 | doc_004 第 24 条第 (一) 项 |
+| type.land_approve_illegal_procedure.compensation_agreement | 征地补偿安置协议（批准行为类型含土地征收时填写） | 许可资质与审批 | 选填 | 核查前补齐 | 提示 | doc_004 第 29 条；doc_002；doc_002 附录 A 一（六）2 |
+| type.land_approve_illegal_procedure.compensation_payment_voucher | 补偿款支付凭证（批准行为类型含土地征收时填写） | 许可资质与审批 | 选填 | 核查前补齐 | 提示 | doc_004 第 30 条；doc_002；doc_002 附录 A 一（六）2 |
+| type.land_approve_illegal_procedure.land_area | 涉案土地面积 | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(5)；doc_002 4.4.2.2(1) |
+| type.land_approve_illegal_procedure.land_use_category | 涉案土地地类（永久基本农田／耕地／其他农用地／建设用地／未利用地） | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(3)(4) |
+| type.land_approve_illegal_procedure.criminal_referral_check | 是否达到刑法第 410 条追诉标准 | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_006 第 410 条；doc_007 第 4 条、第 9 条；doc_002 7.1(8)、11.1 |
 
 说明：
 
@@ -243,21 +243,17 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_illegal_supply.actual_approvers | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《土地管理法》第 79 条【法】；《违反土地管理规定行为处分办法》第 4、8、9 条【业】；规程 11.2.1(2)(3)【业】 |
-| type.land_illegal_supply.self_approval | 被质疑的供地行为是否由本机关作出 | 类型层·违法主体 | 选填 | 只提示 | 提示 | 规程 7.1(2)、7.2(2)、11.2.1(2)(3)【业】 |
-| type.land_illegal_supply.supply_mode | 供地方式（出让—招拍挂／出让—协议；划拨） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《土地管理法》第 54 条【法】；《城市房地产管理法》第 13 条【法】；《招标拍卖挂牌出让国有建设用地使用权规定》第 4 条【业】；规程 附录 A 一（四）1【业】 |
-| type.land_illegal_supply.supply_policy_category | 项目所属供地政策类别（是否属划拨用地目录情形；是否属限制类、禁止类；是否应当招拍挂） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《划拨用地目录》（自然资源部令，2025-06-13 公布、2025-06-18 施行）【业】；《自然资源开发利用限制和禁止目录（2021 年本）》（自然资发〔2021〕171 号）【业】；《违反土地管理规定行为处分办法》第 4 条第 (二) 项、第 9 条第 (一) 项【业】；规程 附录 A 一（四）1(3)(4)(5)【业】 |
-| type.land_illegal_supply.supply_document | 供地批准文件、划拨决定书或供地方案 | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 53 条【法】；规程 3.2.3.1(7)【业】 |
-| type.land_illegal_supply.supply_contract | 出让合同、划拨合同或供地协议（载明用途、容积率、出让金） | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(7)【业】；《土地管理法》第 54 条【法】 |
-| type.land_illegal_supply.land_use_condition | 出让或划拨合同确定的用途、容积率，以及合同签订后是否被擅自批准调整 | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 警告 | 《违反土地管理规定行为处分办法》第 9 条第 (四) 项【业】 |
-| type.land_illegal_supply.land_holder | 供地受让人（用地单位）名称 | 类型层·土地来源与用地审批 | 选填 | 核查前补齐 | 提示 | 《土地管理法》第 79 条【法】；规程 3.2.3.1(7)【业】 |
-| type.land_illegal_supply.bid_auction_records | 招拍挂过程材料：出让公告、竞买人或投标人名单、成交确认书、中标或竞得通知书、结果公布材料（供地方式为招拍挂时填写） | 类型层·现场勘验与证据材料 | 选填 | 核查前补齐 | 提示 | 《招标拍卖挂牌出让国有建设用地使用权规定》第 6、22 条【业】；规程 3.2.3.1(7)【业】 |
-| type.land_illegal_supply.actual_price | 实际出让价或划拨地价 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 《违反土地管理规定行为处分办法》第 8 条【业】；《国务院关于深化改革严格土地管理的决定》一 (四)【业】；《城市房地产管理法》第 13 条第 3 款【法】 |
-| type.land_illegal_supply.price_basis | 地价依据（基准地价、评估报告、协议出让最低价计算依据） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 《协议出让国有土地使用权规定》（国土资源部令第 21 号）【业】；《城市房地产管理法》第 13 条第 3 款【法】 |
-| type.land_illegal_supply.land_pay_receipt | 出让金缴纳凭证、减免或变相减免情况 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 《违反土地管理规定行为处分办法》第 9 条第 (三) 项【业】；规程 3.2.3.1(7)【业】 |
-| type.land_illegal_supply.land_area | 供地面积 | 类型层·涉案土地 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(5)【业】；规程 4.4.2.2(1)【业】 |
-| type.land_illegal_supply.land_use_category | 供地土地地类（永久基本农田／耕地／其他农用地／建设用地／未利用地） | 类型层·涉案土地 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(3)(4)【业】 |
-| type.land_illegal_supply.criminal_referral_check | 是否构成非法低价出让国有土地使用权罪 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《刑法》第 410 条【法】；规程 7.1(8)、11.1【业】 |
+| type.land_illegal_supply.actual_approvers | 直接负责的主管人员和其他直接责任人员 | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_001 第 79 条；doc_003 第 4、8、9 条；doc_002 11.2.1(2)(3) |
+| type.land_illegal_supply.self_approval | 被质疑的供地行为是否由本机关作出 | 违法主体 | 选填 | 只提示 | 提示 | doc_002 7.1(2)、7.2(2)、11.2.1(2)(3) |
+| type.land_illegal_supply.supply_mode | 供地方式（出让—招拍挂／出让—协议；划拨） | 违法事实 | 必填 | 录入时 | 阻断 | doc_001 第 54 条；doc_010 第 13 条；doc_011 第 4 条；doc_002；doc_002 附录 A 一（四）1 |
+| type.land_illegal_supply.supply_policy_category | 项目所属供地政策类别（是否属划拨用地目录情形；是否属限制类、禁止类；是否应当招拍挂） | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_012；doc_013；doc_003 第 4 条第 (二) 项、第 9 条第 (一) 项；doc_002；doc_002 附录 A 一（四）1(3)(4)(5) |
+| type.land_illegal_supply.supply_document | 供地批准文件、划拨决定书或供地方案 | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_001 第 53 条；doc_002 3.2.3.1(7) |
+| type.land_illegal_supply.supply_contract | 出让合同、划拨合同或供地协议（载明用途、容积率、出让金） | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(7)；doc_001 第 54 条 |
+| type.land_illegal_supply.land_use_condition | 出让或划拨合同确定的用途、容积率，以及合同签订后是否被擅自批准调整 | 许可资质与审批 | 必填 | 核查前补齐 | 警告 | doc_003 第 9 条第 (四) 项 |
+| type.land_illegal_supply.land_holder | 供地受让人（用地单位）名称 | 许可资质与审批 | 选填 | 核查前补齐 | 提示 | doc_001 第 79 条；doc_002 3.2.3.1(7) |
+| type.land_illegal_supply.land_area | 供地面积 | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(5)；doc_002 4.4.2.2(1) |
+| type.land_illegal_supply.land_use_category | 供地土地地类（永久基本农田／耕地／其他农用地／建设用地／未利用地） | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(3)(4) |
+| type.land_illegal_supply.criminal_referral_check | 是否构成非法低价出让国有土地使用权罪 | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_006 第 410 条；doc_002 7.1(8)、11.1 |
 
 说明：
 
@@ -396,21 +392,15 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_occupy_without_approval.subject_name | 违法主体（用地单位或者个人）名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 2.2.1(1)【业】；规程 2.3(1)「有明确的行为人」【业】；《土地管理法》第 77 条【法】 |
-| type.land_occupy_without_approval.subject_kind | 违法主体类别（单位／个人／其他组织） | 类型层·违法主体 | 选填 | 核查前补齐 | 提示 | 规程 3.2.3.1(1)【业】；规程 4.2.1 违法责任主体认定【业】 |
-| type.land_occupy_without_approval.occurrence_time | 违法行为发生时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 4.4.2.2(1) 土地违法案件基本要素【业】；规程 2.3(5) 追诉时效【业】 |
-| type.land_occupy_without_approval.boundary | 违法用地界址范围或者勘测定界坐标 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 4.2.2、4.2.3、4.2.4【业】；规程 3.2.3.1(5)【业】 |
-| type.land_occupy_without_approval.actual_area | 实际占地面积（以作为建设用地用途的实际控制土地面积计） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 附录 A 二（五）5【业】；《土地管理法实施条例》第 57 条第 1 款（罚款按每平方米计）【法】 |
-| type.land_occupy_without_approval.land_class | 占用地类（农用地／建设用地／未利用地） | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 规程 4.2.2【业】；附录 A 二（五）1、2【业】 |
-| type.land_occupy_without_approval.land_right | 土地权属人及权属证明材料 | 类型层·涉案土地 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(3)【业】 |
-| type.land_occupy_without_approval.approval_status | 用地批准情况（有无批准文件、批准文号与批准机关） | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(7)【业】；《土地管理法》第 44 条、第 53 条、第 57 条、第 59 条、第 60 条、第 61 条【法】；《土地管理法实施条例》第 21 条、第 22 条第 2 款【法】 |
-| type.land_occupy_without_approval.fraud_evidence | 骗取批准的证明材料（伪造的批准文件、欺骗手段材料；线索表述为「未经批准」且无欺骗手段的填「不适用」） | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(7)「骗取批准的证明材料」【业】；《土地管理法》第 77 条【法】 |
-| type.land_occupy_without_approval.plan_conformity | 是否符合土地利用总体规划的认定结论 | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 规程 4.2.3【业】；附录 A 二（五）3、4【业】；《土地管理法》第 77 条【法】 |
-| type.land_occupy_without_approval.permanent_farmland | 是否占用永久基本农田（或者原基本农田） | 类型层·认定结论 | 必填 | 核查前补齐 | 警告 | 规程 4.2.4【业】；规程 3.2.3.1(4)【业】 |
-| type.land_occupy_without_approval.structures | 地上新建建筑物和其他设施情况 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 《土地管理法》第 77 条【法】；附录 A 二（五）1、2【业】；规程 3.2.3.1(6)【业】 |
-| type.land_occupy_without_approval.project_approval | 项目立项、规划、环评、建设审批材料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.1(8)【业】；规程 4.4.2.2(1)【业】 |
-| type.land_occupy_without_approval.crime_identification | 破坏耕地等农用地涉嫌犯罪的认定意见、鉴定意见 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.1(9)【业】；规程 3.2.4.7【业】 |
-| type.land_occupy_without_approval.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《土地管理法》第 77 条【法】；《违反土地管理规定行为处分办法》第 10 条【业】 |
+| type.land_occupy_without_approval.subject_name | 违法主体名称（取值：名称｜无法确定） | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 2.2.1(1)；doc_002 2.3(1)；doc_001 第 77 条 |
+| type.land_occupy_without_approval.subject_kind | 违法主体类别（单位／个人／其他组织） | 违法主体 | 选填 | 核查前补齐 | 提示 | doc_002 3.2.3.1(1)；doc_002 4.2.1 违法责任主体认定 |
+| type.land_occupy_without_approval.occurrence_time | 违法行为发生时间 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 4.4.2.2(1) 土地违法案件基本要素；doc_002 2.3(5) 追诉时效 |
+| type.land_occupy_without_approval.boundary | 违法用地界址范围或者勘测定界坐标 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 4.2.2、4.2.3、4.2.4；doc_002 3.2.3.1(5) |
+| type.land_occupy_without_approval.actual_area | 实际占地面积（以作为建设用地用途的实际控制土地面积计） | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 附录 A 二（五）5；doc_004 第 57 条第 1 款 |
+| type.land_occupy_without_approval.land_right | 土地权属人及权属证明材料 | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(3) |
+| type.land_occupy_without_approval.approval_status | 用地批准情况（有无批准文件、批准文号与批准机关） | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(7)；doc_001 第 44 条、第 53 条、第 57 条、第 59 条、第 60 条、第 61 条；doc_004 第 21 条、第 22 条第 2 款 |
+| type.land_occupy_without_approval.fraud_evidence | 骗取批准的证明材料（伪造的批准文件、欺骗手段材料；线索表述为「未经批准」且无欺骗手段的填「不适用」） | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(7)；doc_001 第 77 条 |
+| type.land_occupy_without_approval.responsible_person | 直接负责的主管人员和其他直接责任人员 | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_001 第 77 条；doc_003 第 10 条 |
 
 说明：
 
@@ -427,22 +417,16 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_occupy_exceed_approved.subject_name | 违法主体（用地单位或者个人）名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 2.2.1(1)、2.3(1)【业】；《土地管理法》第 77 条【法】 |
-| type.land_occupy_exceed_approved.subject_kind | 违法主体类别（单位／个人／其他组织） | 类型层·违法主体 | 选填 | 核查前补齐 | 提示 | 规程 3.2.3.1(1)【业】；规程 4.2.1【业】 |
-| type.land_occupy_exceed_approved.occurrence_time | 违法行为发生时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 4.4.2.2(1)、2.3(5)【业】 |
-| type.land_occupy_exceed_approved.boundary | 违法用地界址范围或者勘测定界坐标 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 4.2.2、4.2.3、4.2.4【业】 |
-| type.land_occupy_exceed_approved.approved_area | 批准占用数量（批准文件载明的用地面积） | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(7)【业】；《土地管理法》第 77 条第 2 款【法】 |
-| type.land_occupy_exceed_approved.approved_standard | 批准的建设用地标准（规划用地标准、节约集约用地标准） | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 52 条【法】；《土地管理法实施条例》第 14 条第 1 款【法】 |
-| type.land_occupy_exceed_approved.actual_area | 实际占地面积（以作为建设用地用途的实际控制土地面积计） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 附录 A 二（五）5【业】；《土地管理法实施条例》第 57 条第 1 款【法】 |
-| type.land_occupy_exceed_approved.excess_area | 多占面积（实际占地面积与批准占用数量的差额） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 77 条第 2 款「超过批准的数量占用土地，多占的土地以非法占用土地论处」【法】 |
-| type.land_occupy_exceed_approved.land_class | 占用地类（农用地／建设用地／未利用地） | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 规程 4.2.2【业】；附录 A 二（五）1、2【业】 |
-| type.land_occupy_exceed_approved.land_right | 土地权属人及权属证明材料 | 类型层·涉案土地 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(3)【业】 |
-| type.land_occupy_exceed_approved.plan_conformity | 是否符合土地利用总体规划的认定结论 | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 规程 4.2.3【业】；附录 A 二（五）3、4【业】；《土地管理法》第 77 条【法】 |
-| type.land_occupy_exceed_approved.permanent_farmland | 是否占用永久基本农田（或者原基本农田） | 类型层·认定结论 | 必填 | 核查前补齐 | 警告 | 规程 4.2.4【业】；规程 3.2.3.1(4)【业】 |
-| type.land_occupy_exceed_approved.structures | 地上新建建筑物和其他设施情况 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 《土地管理法》第 77 条【法】；附录 A 二（五）1、2【业】；规程 3.2.3.1(6)【业】 |
-| type.land_occupy_exceed_approved.project_approval | 项目立项、规划、环评、建设审批材料 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.1(8)【业】 |
-| type.land_occupy_exceed_approved.crime_identification | 破坏耕地等农用地涉嫌犯罪的认定意见、鉴定意见 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.1(9)【业】；规程 3.2.4.7【业】 |
-| type.land_occupy_exceed_approved.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《土地管理法》第 77 条【法】；《违反土地管理规定行为处分办法》第 10 条【业】 |
+| type.land_occupy_exceed_approved.subject_name | 违法主体名称（取值：名称｜无法确定） | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 2.2.1(1)、2.3(1)；doc_001 第 77 条 |
+| type.land_occupy_exceed_approved.subject_kind | 违法主体类别（单位／个人／其他组织） | 违法主体 | 选填 | 核查前补齐 | 提示 | doc_002 3.2.3.1(1)；doc_002 4.2.1 |
+| type.land_occupy_exceed_approved.occurrence_time | 违法行为发生时间 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 4.4.2.2(1)、2.3(5) |
+| type.land_occupy_exceed_approved.boundary | 违法用地界址范围或者勘测定界坐标 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 4.2.2、4.2.3、4.2.4 |
+| type.land_occupy_exceed_approved.approved_area | 批准占用数量（批准文件载明的用地面积） | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(7)；doc_001 第 77 条第 2 款 |
+| type.land_occupy_exceed_approved.approved_standard | 批准的建设用地标准（规划用地标准、节约集约用地标准） | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_001 第 52 条；doc_004 第 14 条第 1 款 |
+| type.land_occupy_exceed_approved.actual_area | 实际占地面积（以作为建设用地用途的实际控制土地面积计） | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 附录 A 二（五）5；doc_004 第 57 条第 1 款 |
+| type.land_occupy_exceed_approved.excess_area | 多占面积（实际占地面积与批准占用数量的差额） | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_001 第 77 条第 2 款 |
+| type.land_occupy_exceed_approved.land_right | 土地权属人及权属证明材料 | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(3) |
+| type.land_occupy_exceed_approved.responsible_person | 直接负责的主管人员和其他直接责任人员 | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_001 第 77 条；doc_003 第 10 条 |
 
 说明：
 
@@ -459,18 +443,15 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_occupy_refuse_return.subject_name | 当事人名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 2.2.1(1)、2.3(1)【业】；《土地管理法》第 79 条【法】 |
-| type.land_occupy_refuse_return.subject_kind | 当事人类别（单位／个人／其他组织） | 类型层·违法主体 | 选填 | 核查前补齐 | 提示 | 规程 3.2.3.1(1)【业】；规程 4.2.1【业】 |
-| type.land_occupy_refuse_return.occurrence_time | 违法行为发生时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 4.4.2.2(1)、2.3(5)【业】 |
-| type.land_occupy_refuse_return.recovery_decision | 依法收回非法批准、使用的土地的决定或者通知及送达回证 | 类型层·程序环节 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 79 条第 1 款「非法批准、使用的土地应当收回」【法】；规程 7.1(2)、7.2(2)【业】 |
-| type.land_occupy_refuse_return.refuse_evidence | 当事人拒不归还的事实材料（询问笔录、现场勘验笔录、送达后仍占有使用的证据） | 类型层·程序环节 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 79 条第 1 款「有关当事人拒不归还的，以非法占用土地论处」【法】；规程 3.2.3.1(2)、(5)【业】 |
-| type.land_occupy_refuse_return.boundary | 违法用地界址范围或者勘测定界坐标 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 4.2.2、4.2.3、4.2.4【业】 |
-| type.land_occupy_refuse_return.actual_area | 实际占地面积（以作为建设用地用途的实际控制土地面积计） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 附录 A 二（五）5【业】；《土地管理法实施条例》第 57 条第 1 款【法】 |
-| type.land_occupy_refuse_return.land_class | 占用地类（农用地／建设用地／未利用地） | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 规程 4.2.2【业】；附录 A 二（五）1、2【业】 |
-| type.land_occupy_refuse_return.land_right | 土地权属人及权属证明材料 | 类型层·涉案土地 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(3)【业】 |
-| type.land_occupy_refuse_return.plan_conformity | 是否符合土地利用总体规划的认定结论 | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 规程 4.2.3【业】；附录 A 二（五）3、4【业】；《土地管理法》第 77 条【法】 |
-| type.land_occupy_refuse_return.structures | 地上新建建筑物和其他设施情况 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 《土地管理法》第 77 条【法】；附录 A 二（五）1、2【业】；规程 3.2.3.1(6)【业】 |
-| type.land_occupy_refuse_return.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《土地管理法》第 77 条、第 79 条【法】；《违反土地管理规定行为处分办法》第 10 条【业】 |
+| type.land_occupy_refuse_return.subject_name | 违法主体名称（取值：名称｜无法确定） | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 2.2.1(1)、2.3(1)；doc_001 第 79 条 |
+| type.land_occupy_refuse_return.subject_kind | 当事人类别（单位／个人／其他组织） | 违法主体 | 选填 | 核查前补齐 | 提示 | doc_002 3.2.3.1(1)；doc_002 4.2.1 |
+| type.land_occupy_refuse_return.occurrence_time | 违法行为发生时间 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 4.4.2.2(1)、2.3(5) |
+| type.land_occupy_refuse_return.recovery_decision | 依法收回非法批准、使用的土地的决定或者通知及送达回证 | 程序环节 | 必填 | 核查前补齐 | 阻断 | doc_001 第 79 条第 1 款；doc_002 7.1(2)、7.2(2) |
+| type.land_occupy_refuse_return.refuse_evidence | 当事人拒不归还的事实材料（询问笔录、现场勘验笔录、送达后仍占有使用的证据） | 程序环节 | 必填 | 核查前补齐 | 阻断 | doc_001 第 79 条第 1 款；doc_002 3.2.3.1(2)、(5) |
+| type.land_occupy_refuse_return.boundary | 违法用地界址范围或者勘测定界坐标 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 4.2.2、4.2.3、4.2.4 |
+| type.land_occupy_refuse_return.actual_area | 实际占地面积（以作为建设用地用途的实际控制土地面积计） | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 附录 A 二（五）5；doc_004 第 57 条第 1 款 |
+| type.land_occupy_refuse_return.land_right | 土地权属人及权属证明材料 | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(3) |
+| type.land_occupy_refuse_return.responsible_person | 直接负责的主管人员和其他直接责任人员 | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_001 第 77 条、第 79 条；doc_003 第 10 条 |
 
 说明：
 
@@ -517,22 +498,18 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_transfer_illegal.transferor_name | 转让方（转让人）名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 附录 A 三（六）2「没收违法所得适用于转让方」【业】；规程 3.2.3.1(1)【业】；《土地管理法》第 74 条【法】 |
-| type.land_transfer_illegal.transferor_id | 转让方身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(1)【业】 |
-| type.land_transfer_illegal.transferee_name | 受让方（受让人）名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 附录 A 三（六）2「拆除或者没收地上建筑物适用于受让方」【业】；规程 3.2.3.1(1)【业】；《土地管理法》第 74 条【法】 |
-| type.land_transfer_illegal.transferee_id | 受让方身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(1)【业】 |
-| type.land_transfer_illegal.occurrence_time | 转让行为发生时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 4.4.2.2(1)、2.3(5)【业】 |
-| type.land_transfer_illegal.transfer_contract | 转让协议、合同等书面文件 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(10)「转让协议」【业】；《土地管理法》第 2 条第 3 款【法】 |
-| type.land_transfer_illegal.price_payment | 转让价款及实际交付价款凭证 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.1(10)「实际交付价款凭证」【业】；规程 4.2.8.1【业】 |
-| type.land_transfer_illegal.actual_delivery | 土地已实际交付的证明（受让方是否实际接收、占有、控制土地） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(10)「土地已实际交付证明材料」【业】；附录 A 三（六）1【业】 |
-| type.land_transfer_illegal.illegal_income | 违法所得认定材料 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.1(10)「违法所得认定材料」【业】；规程 4.2.8.1【业】；《土地管理法实施条例》第 54 条【法】 |
-| type.land_transfer_illegal.transfer_area | 转让涉及土地面积 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 阻断 | 附录 A 三（五）1(3) 非法转让其他土地二十亩以上为「情节严重」【业】 |
-| type.land_transfer_illegal.land_right | 土地权属人、权属证明材料及地类 | 类型层·涉案土地 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(3)【业】；《土地管理法》第 74 条【法】 |
-| type.land_transfer_illegal.plan_conformity | 是否符合土地利用总体规划的认定结论 | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 74 条【法】；规程 4.2.3【业】 |
-| type.land_transfer_illegal.structures | 非法转让的土地上新建的建筑物和其他设施情况 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 《土地管理法》第 74 条【法】；附录 A 三（六）2【业】；规程 3.2.3.1(6)【业】 |
-| type.land_transfer_illegal.is_real_estate_transfer | 是否属于房地产转让（是否涉及房地产权利转移） | 类型层·程序环节 | 必填 | 核查前补齐 | 阻断 | 附录 A 三（六）3【业】；《城市房地产管理法》第 37 条【法】 |
-| type.land_transfer_illegal.transfer_chain | 转让环节（是否属于再转让，链条上各环节的当事人与时间） | 类型层·程序环节 | 选填 | 只提示 | 提示 | 附录 A 三（六）4「对每个环节的违法转让行为都应当予以处罚」【业】 |
-| type.land_transfer_illegal.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《土地管理法》第 74 条【法】；《违反土地管理规定行为处分办法》第 11 条【业】 |
+| type.land_transfer_illegal.transferor_name | 转让方（转让人）名称 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 附录 A 三（六）2；doc_002 3.2.3.1(1)；doc_001 第 74 条 |
+| type.land_transfer_illegal.transferor_id | 转让方身份证明材料 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(1) |
+| type.land_transfer_illegal.transferee_name | 受让方（受让人）名称 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 附录 A 三（六）2；doc_002 3.2.3.1(1)；doc_001 第 74 条 |
+| type.land_transfer_illegal.transferee_id | 受让方身份证明材料 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(1) |
+| type.land_transfer_illegal.occurrence_time | 转让行为发生时间 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 4.4.2.2(1)、2.3(5) |
+| type.land_transfer_illegal.transfer_contract | 转让协议、合同等书面文件 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(10)；doc_001 第 2 条第 3 款 |
+| type.land_transfer_illegal.price_payment | 转让价款及实际交付价款凭证 | 违法事实 | 必填 | 核查前补齐 | 警告 | doc_002 3.2.3.1(10)；doc_002 4.2.8.1 |
+| type.land_transfer_illegal.actual_delivery | 土地已实际交付的证明（受让方是否实际接收、占有、控制土地） | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(10)；doc_002 附录 A 三（六）1 |
+| type.land_transfer_illegal.land_right | 土地权属人、权属证明材料及地类 | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(3)；doc_001 第 74 条 |
+| type.land_transfer_illegal.is_real_estate_transfer | 是否属于房地产转让（是否涉及房地产权利转移） | 程序环节 | 必填 | 核查前补齐 | 阻断 | doc_002 附录 A 三（六）3；doc_010 第 37 条 |
+| type.land_transfer_illegal.transfer_chain | 转让环节（是否属于再转让，链条上各环节的当事人与时间） | 程序环节 | 选填 | 只提示 | 提示 | doc_002 附录 A 三（六）4 |
+| type.land_transfer_illegal.responsible_person | 直接负责的主管人员和其他直接责任人员 | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_001 第 74 条；doc_003 第 11 条 |
 
 说明：
 
@@ -549,27 +526,21 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_transfer_allocated_unapproved.transferor_name | 转让方名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 附录 A 三（六）2【业】；规程 3.2.3.1(1)【业】 |
-| type.land_transfer_allocated_unapproved.transferor_id | 转让方身份证明材料（证件类型与号码） | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(1)【业】；规程 2.3(1)【业】 |
-| type.land_transfer_allocated_unapproved.transferee_name | 受让方名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 附录 A 三（六）2【业】；规程 3.2.3.1(1)【业】 |
-| type.land_transfer_allocated_unapproved.transferee_id | 受让方身份证明材料（证件类型与号码） | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(1)【业】；规程 2.3(1)【业】 |
-| type.land_transfer_allocated_unapproved.occurrence_time | 转让行为发生时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 4.4.2.2(1)、2.3(5)【业】 |
-| type.land_transfer_allocated_unapproved.land_acquisition | 土地使用权取得方式为划拨的证明（划拨供地批准材料） | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 《城镇国有土地使用权出让和转让暂行条例》第 43 条、第 44 条【法】；规程 3.2.3.1(7)【业】 |
-| type.land_transfer_allocated_unapproved.land_cert | 国有土地使用证（领有情况） | 类型层·涉案土地 | 必填 | 核查前补齐 | 阻断 | 《城镇国有土地使用权出让和转让暂行条例》第 45 条第 2 项【法】 |
-| type.land_transfer_allocated_unapproved.transfer_approval | 转让审批情况（有无报有批准权的人民政府审批、是否准予转让） | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 《城市房地产管理法》第 40 条第 1 款【法】；附录 A 三（二）1(1)【业】 |
-| type.land_transfer_allocated_unapproved.allocation_conditions | 划拨土地使用权转让的四项条件核对（土地使用者为公司、企业、其他经济组织和个人；领有国有土地使用证；具有地上建筑物、其他附着物合法的产权证明；补交土地使用权出让金或者以转让、出租、抵押所获效益抵交出让金） | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《城镇国有土地使用权出让和转让暂行条例》第 45 条【法】 |
-| type.land_transfer_allocated_unapproved.premium_payment | 土地使用权出让金缴纳情况 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 《城市房地产管理法》第 67 条「责令缴纳土地使用权出让金」【法】；《城镇国有土地使用权出让和转让暂行条例》第 45 条第 4 项【法】 |
-| type.land_transfer_allocated_unapproved.transfer_contract | 转让协议、合同等书面文件 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(10)【业】 |
-| type.land_transfer_allocated_unapproved.price_payment | 转让价款及实际交付价款凭证 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.1(10)【业】；规程 4.2.8.1【业】 |
-| type.land_transfer_allocated_unapproved.actual_delivery | 土地已实际交付的证明（受让方是否实际接收、占有、控制土地） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(10)【业】；附录 A 三（六）1【业】 |
-| type.land_transfer_allocated_unapproved.illegal_income | 违法所得认定材料 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.1(10)【业】；规程 4.2.8.1【业】；《土地管理法实施条例》第 54 条【法】 |
-| type.land_transfer_allocated_unapproved.transfer_area | 转让涉及土地面积 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 阻断 | 附录 A 三（五）1(3)【业】 |
-| type.land_transfer_allocated_unapproved.land_right | 土地权属人、权属证明材料及地类 | 类型层·涉案土地 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(3)【业】 |
-| type.land_transfer_allocated_unapproved.plan_conformity | 是否符合土地利用总体规划的认定结论 | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 74 条【法】；规程 4.2.3【业】 |
-| type.land_transfer_allocated_unapproved.structures | 地上建筑物和其他附着物情况及产权证明 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 《城镇国有土地使用权出让和转让暂行条例》第 45 条第 3 项【法】；附录 A 三（六）2【业】 |
-| type.land_transfer_allocated_unapproved.is_real_estate_transfer | 是否属于房地产转让 | 类型层·程序环节 | 必填 | 核查前补齐 | 阻断 | 附录 A 三（六）3【业】；《城市房地产管理法》第 37 条【法】 |
-| type.land_transfer_allocated_unapproved.transfer_chain | 转让环节（是否属于再转让） | 类型层·程序环节 | 选填 | 只提示 | 提示 | 附录 A 三（六）4【业】 |
-| type.land_transfer_allocated_unapproved.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《土地管理法》第 74 条【法】；《违反土地管理规定行为处分办法》第 11 条【业】 |
+| type.land_transfer_allocated_unapproved.transferor_name | 转让方名称 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 附录 A 三（六）2；doc_002 3.2.3.1(1) |
+| type.land_transfer_allocated_unapproved.transferor_id | 转让方身份证明材料（证件类型与号码） | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(1)；doc_002 2.3(1) |
+| type.land_transfer_allocated_unapproved.transferee_name | 受让方名称 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 附录 A 三（六）2；doc_002 3.2.3.1(1) |
+| type.land_transfer_allocated_unapproved.transferee_id | 受让方身份证明材料（证件类型与号码） | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(1)；doc_002 2.3(1) |
+| type.land_transfer_allocated_unapproved.occurrence_time | 转让行为发生时间 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 4.4.2.2(1)、2.3(5) |
+| type.land_transfer_allocated_unapproved.land_acquisition | 土地使用权取得方式为划拨的证明（划拨供地批准材料） | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_014 第 43 条、第 44 条；doc_002 3.2.3.1(7) |
+| type.land_transfer_allocated_unapproved.land_cert | 国有土地使用证（领有情况） | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_014 第 45 条第 2 项 |
+| type.land_transfer_allocated_unapproved.transfer_approval | 转让审批情况（有无报有批准权的人民政府审批、是否准予转让） | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_010 第 40 条第 1 款；doc_002 附录 A 三（二）1(1) |
+| type.land_transfer_allocated_unapproved.transfer_contract | 转让协议、合同等书面文件 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(10) |
+| type.land_transfer_allocated_unapproved.price_payment | 转让价款及实际交付价款凭证 | 违法事实 | 必填 | 核查前补齐 | 警告 | doc_002 3.2.3.1(10)；doc_002 4.2.8.1 |
+| type.land_transfer_allocated_unapproved.actual_delivery | 土地已实际交付的证明（受让方是否实际接收、占有、控制土地） | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(10)；doc_002 附录 A 三（六）1 |
+| type.land_transfer_allocated_unapproved.land_right | 土地权属人、权属证明材料及地类 | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(3) |
+| type.land_transfer_allocated_unapproved.is_real_estate_transfer | 是否属于房地产转让 | 程序环节 | 必填 | 核查前补齐 | 阻断 | doc_002 附录 A 三（六）3；doc_010 第 37 条 |
+| type.land_transfer_allocated_unapproved.transfer_chain | 转让环节（是否属于再转让） | 程序环节 | 选填 | 只提示 | 提示 | doc_002 附录 A 三（六）4 |
+| type.land_transfer_allocated_unapproved.responsible_person | 直接负责的主管人员和其他直接责任人员 | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_001 第 74 条；doc_003 第 11 条 |
 
 说明：
 
@@ -587,28 +558,20 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_transfer_granted_unqualified.transferor_name | 转让方名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 附录 A 三（六）2【业】；规程 3.2.3.1(1)【业】 |
-| type.land_transfer_granted_unqualified.transferor_id | 转让方身份证明材料（证件类型与号码） | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(1)【业】；规程 2.3(1)【业】 |
-| type.land_transfer_granted_unqualified.transferee_name | 受让方名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 附录 A 三（六）2【业】；规程 3.2.3.1(1)【业】 |
-| type.land_transfer_granted_unqualified.transferee_id | 受让方身份证明材料（证件类型与号码） | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(1)【业】；规程 2.3(1)【业】 |
-| type.land_transfer_granted_unqualified.occurrence_time | 转让行为发生时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 4.4.2.2(1)、2.3(5)【业】 |
-| type.land_transfer_granted_unqualified.land_acquisition | 土地使用权取得方式为出让的证明（国有土地使用权出让合同） | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 《城镇国有土地使用权出让和转让暂行条例》第 19 条【法】；《城市房地产管理法》第 39 条【法】；规程 3.2.3.1(7)【业】 |
-| type.land_transfer_granted_unqualified.premium_paid | 按出让合同约定是否已支付全部土地使用权出让金，并取得土地使用权证书 | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《城市房地产管理法》第 39 条第 1 款第 1 项【法】 |
-| type.land_transfer_granted_unqualified.investment_condition | 投资开发条件核对（属于房屋建设工程的完成开发投资总额的 25% 以上；属于成片开发土地的形成工业用地或者其他建设用地条件） | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《城市房地产管理法》第 39 条第 1 款第 2 项【法】；《城镇国有土地使用权出让和转让暂行条例》第 19 条第 2 款【法】 |
-| type.land_transfer_granted_unqualified.house_cert | 转让时房屋已经建成的，持有房屋所有权证书（房屋尚未建成的填「不适用」） | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《城市房地产管理法》第 39 条第 2 款【法】 |
-| type.land_transfer_granted_unqualified.prohibited_circumstances | 其他不得转让情形（司法机关和行政机关依法裁定、决定查封或者以其他形式限制房地产权利；依法收回土地使用权；共有房地产未经其他共有人书面同意；权属有争议；未依法登记领取权属证书） | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《城市房地产管理法》第 38 条【法】 |
-| type.land_transfer_granted_unqualified.transfer_contract | 转让协议、合同等书面文件 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(10)【业】 |
-| type.land_transfer_granted_unqualified.price_payment | 转让价款及实际交付价款凭证 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.1(10)【业】；规程 4.2.8.1【业】 |
-| type.land_transfer_granted_unqualified.actual_delivery | 土地已实际交付的证明（受让方是否实际接收、占有、控制土地） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(10)【业】；附录 A 三（六）1【业】 |
-| type.land_transfer_granted_unqualified.illegal_income | 违法所得认定材料 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.1(10)【业】；规程 4.2.8.1【业】；《土地管理法实施条例》第 54 条【法】 |
-| type.land_transfer_granted_unqualified.transfer_area | 转让涉及土地面积 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 阻断 | 附录 A 三（五）1(3)【业】 |
-| type.land_transfer_granted_unqualified.land_right | 土地权属人、权属证明材料及地类 | 类型层·涉案土地 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(3)【业】 |
-| type.land_transfer_granted_unqualified.plan_conformity | 是否符合土地利用总体规划的认定结论 | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 74 条【法】；规程 4.2.3【业】 |
-| type.land_transfer_granted_unqualified.structures | 地上新建的建筑物和其他设施情况 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 《土地管理法》第 74 条【法】；附录 A 三（六）2【业】；规程 3.2.3.1(6)【业】 |
-| type.land_transfer_granted_unqualified.is_real_estate_transfer | 是否属于房地产转让 | 类型层·程序环节 | 必填 | 核查前补齐 | 阻断 | 附录 A 三（六）3【业】；《城市房地产管理法》第 37 条【法】 |
-| type.land_transfer_granted_unqualified.is_dev_project | 是否属于擅自转让房地产开发项目 | 类型层·程序环节 | 选填 | 只提示 | 提示 | 《城市房地产开发经营管理条例》第 35 条【法】；附录 A 三（三）2(4)【业】 |
-| type.land_transfer_granted_unqualified.transfer_chain | 转让环节（是否属于再转让） | 类型层·程序环节 | 选填 | 只提示 | 提示 | 附录 A 三（六）4【业】 |
-| type.land_transfer_granted_unqualified.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《土地管理法》第 74 条【法】；《违反土地管理规定行为处分办法》第 11 条【业】 |
+| type.land_transfer_granted_unqualified.transferor_name | 转让方名称 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 附录 A 三（六）2；doc_002 3.2.3.1(1) |
+| type.land_transfer_granted_unqualified.transferor_id | 转让方身份证明材料（证件类型与号码） | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(1)；doc_002 2.3(1) |
+| type.land_transfer_granted_unqualified.transferee_name | 受让方名称 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 附录 A 三（六）2；doc_002 3.2.3.1(1) |
+| type.land_transfer_granted_unqualified.transferee_id | 受让方身份证明材料（证件类型与号码） | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(1)；doc_002 2.3(1) |
+| type.land_transfer_granted_unqualified.occurrence_time | 转让行为发生时间 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 4.4.2.2(1)、2.3(5) |
+| type.land_transfer_granted_unqualified.land_acquisition | 土地使用权取得方式为出让的证明（国有土地使用权出让合同） | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_014 第 19 条；doc_010 第 39 条；doc_002 3.2.3.1(7) |
+| type.land_transfer_granted_unqualified.transfer_contract | 转让协议、合同等书面文件 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(10) |
+| type.land_transfer_granted_unqualified.price_payment | 转让价款及实际交付价款凭证 | 违法事实 | 必填 | 核查前补齐 | 警告 | doc_002 3.2.3.1(10)；doc_002 4.2.8.1 |
+| type.land_transfer_granted_unqualified.actual_delivery | 土地已实际交付的证明（受让方是否实际接收、占有、控制土地） | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(10)；doc_002 附录 A 三（六）1 |
+| type.land_transfer_granted_unqualified.land_right | 土地权属人、权属证明材料及地类 | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(3) |
+| type.land_transfer_granted_unqualified.is_real_estate_transfer | 是否属于房地产转让 | 程序环节 | 必填 | 核查前补齐 | 阻断 | doc_002 附录 A 三（六）3；doc_010 第 37 条 |
+| type.land_transfer_granted_unqualified.is_dev_project | 是否属于擅自转让房地产开发项目 | 程序环节 | 选填 | 只提示 | 提示 | doc_015 第 35 条；doc_002 附录 A 三（三）2(4) |
+| type.land_transfer_granted_unqualified.transfer_chain | 转让环节（是否属于再转让） | 程序环节 | 选填 | 只提示 | 提示 | doc_002 附录 A 三（六）4 |
+| type.land_transfer_granted_unqualified.responsible_person | 直接负责的主管人员和其他直接责任人员 | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_001 第 74 条；doc_003 第 11 条 |
 
 说明：
 
@@ -626,26 +589,21 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_transfer_collective.collective_owner | 土地所有权人（农村集体经济组织）名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 63 条、第 82 条【法】；规程 3.2.3.1(1)【业】 |
-| type.land_transfer_collective.collective_owner_id | 土地所有权人（农村集体经济组织）身份证明材料（证件类型与号码） | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(1)【业】；规程 2.3(1)【业】 |
-| type.land_transfer_collective.transferee_name | 受让方、承租方或者使用单位名称 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 82 条【法】；附录 A 三（六）2「对受让方、承租方占地建设的按照违法占地处理」【业】 |
-| type.land_transfer_collective.transferee_id | 受让方、承租方或者使用单位身份证明材料（证件类型与号码） | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(1)【业】；规程 2.3(1)【业】 |
-| type.land_transfer_collective.occurrence_time | 转让、出租行为发生时间 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 4.4.2.2(1)、2.3(5)【业】 |
-| type.land_transfer_collective.land_right | 集体土地权属证明材料及地类 | 类型层·涉案土地 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(3)【业】；《土地管理法》第 82 条【法】 |
-| type.land_transfer_collective.is_operational_collective_land | 是否为集体经营性建设用地（经依法登记，且土地利用总体规划、城乡规划确定为工业、商业等经营性用途） | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 63 条第 1 款【法】；《土地管理法》第 82 条第 1 款【法】 |
-| type.land_transfer_collective.non_agri_use | 是否用于非农业建设 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 82 条第 1 款「擅自将农民集体所有的土地通过出让、转让使用权或者出租等方式用于非农业建设」【法】 |
-| type.land_transfer_collective.member_consent | 集体经济组织成员的村民会议三分之二以上成员或者三分之二以上村民代表的同意（决议） | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 63 条第 2 款【法】 |
-| type.land_transfer_collective.written_contract | 出让、出租的书面合同及其载明事项（土地界址、面积、动工期限、使用期限、土地用途、规划条件、双方其他权利义务） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 63 条第 1 款【法】；规程 3.2.3.1(10)「转让协议」【业】 |
-| type.land_transfer_collective.contract_validity_terms | 规划条件、产业准入和生态环境保护要求是否依法纳入书面合同（未依法纳入的，合同无效） | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《土地管理法实施条例》第 41 条【法】 |
-| type.land_transfer_collective.pilot_area | 是否属于农村集体经营性建设用地入市试点区范围（广州：增城区、花都区） | 类型层·程序环节 | 选填 | 只提示 | 提示 | 广州市规划和自然资源局《关于市十六届人大四次会议第 20242586 号建议答复的函》（2024-04-23）【业】 |
-| type.land_transfer_collective.price_payment | 转让、出租价款及实际交付价款凭证 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.1(10)【业】；规程 4.2.8.1【业】 |
-| type.land_transfer_collective.actual_delivery | 土地已实际交付的证明（受让方、承租方是否实际接收、占有、控制土地） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1(10)【业】；附录 A 三（六）1【业】 |
-| type.land_transfer_collective.illegal_income | 违法所得认定材料 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.1(10)【业】；规程 4.2.8.1【业】；《土地管理法实施条例》第 60 条【法】 |
-| type.land_transfer_collective.transfer_area | 转让、出租涉及土地面积 | 类型层·金额与裁量 | 必填 | 核查前补齐 | 阻断 | 附录 A 三（五）1(3)【业】 |
-| type.land_transfer_collective.structures | 地上新建的建筑物和其他设施情况 | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 警告 | 《土地管理法》第 82 条【法】；附录 A 三（六）2【业】；规程 3.2.3.1(6)【业】 |
-| type.land_transfer_collective.transferee_build | 受让方、承租方是否已在受让、承租土地上占地建设 | 类型层·违法事实 | 必填 | 核查前补齐 | 警告 | 附录 A 三（六）2「对受让方、承租方占地建设的按照违法占地处理」【业】 |
-| type.land_transfer_collective.transfer_chain | 转让环节（是否属于再转让） | 类型层·程序环节 | 选填 | 只提示 | 提示 | 附录 A 三（六）4【业】 |
-| type.land_transfer_collective.responsible_person | 直接负责的主管人员和其他直接责任人员 | 类型层·违法主体 | 必填 | 核查前补齐 | 警告 | 《土地管理法》第 82 条【法】；《违反土地管理规定行为处分办法》第 11 条【业】 |
+| type.land_transfer_collective.collective_owner | 土地所有权人（农村集体经济组织）名称 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_001 第 63 条、第 82 条；doc_002 3.2.3.1(1) |
+| type.land_transfer_collective.collective_owner_id | 土地所有权人（农村集体经济组织）身份证明材料（证件类型与号码） | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(1)；doc_002 2.3(1) |
+| type.land_transfer_collective.transferee_name | 受让方、承租方或者使用单位名称 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_001 第 82 条；doc_002 附录 A 三（六）2 |
+| type.land_transfer_collective.transferee_id | 受让方、承租方或者使用单位身份证明材料（证件类型与号码） | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(1)；doc_002 2.3(1) |
+| type.land_transfer_collective.occurrence_time | 转让、出租行为发生时间 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 4.4.2.2(1)、2.3(5) |
+| type.land_transfer_collective.land_right | 集体土地权属证明材料及地类 | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(3)；doc_001 第 82 条 |
+| type.land_transfer_collective.non_agri_use | 是否用于非农业建设 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_001 第 82 条第 1 款 |
+| type.land_transfer_collective.member_consent | 集体经济组织成员的村民会议三分之二以上成员或者三分之二以上村民代表的同意（决议） | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_001 第 63 条第 2 款 |
+| type.land_transfer_collective.written_contract | 出让、出租的书面合同及其载明事项（土地界址、面积、动工期限、使用期限、土地用途、规划条件、双方其他权利义务） | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_001 第 63 条第 1 款；doc_002 3.2.3.1(10) |
+| type.land_transfer_collective.pilot_area | 是否属于农村集体经营性建设用地入市试点区范围（广州：增城区、花都区） | 程序环节 | 选填 | 只提示 | 提示 | 待定 |
+| type.land_transfer_collective.price_payment | 转让、出租价款及实际交付价款凭证 | 违法事实 | 必填 | 核查前补齐 | 警告 | doc_002 3.2.3.1(10)；doc_002 4.2.8.1 |
+| type.land_transfer_collective.actual_delivery | 土地已实际交付的证明（受让方、承租方是否实际接收、占有、控制土地） | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1(10)；doc_002 附录 A 三（六）1 |
+| type.land_transfer_collective.transferee_build | 受让方、承租方是否已在受让、承租土地上占地建设 | 违法事实 | 必填 | 核查前补齐 | 警告 | doc_002 附录 A 三（六）2 |
+| type.land_transfer_collective.transfer_chain | 转让环节（是否属于再转让） | 程序环节 | 选填 | 只提示 | 提示 | doc_002 附录 A 三（六）4 |
+| type.land_transfer_collective.responsible_person | 直接负责的主管人员和其他直接责任人员 | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_001 第 82 条；doc_003 第 11 条 |
 
 说明：
 
@@ -776,19 +734,13 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_farmland_general.party_identity | 当事人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1（1）【业】；规程 2.3 第（1）项【业】 |
-| type.land_farmland_general.destroy_method | 破坏行为方式（占用耕地建窑、建坟、擅自在耕地上建房、挖砂、采石、采矿、取土；因开发土地造成土地荒漠化、盐渍化；其他） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《土地管理法》第 37 条第 2 款、第 75 条【法】 |
-| type.land_farmland_general.reported_area | 举报或初查所述占用耕地面积 | 类型层·涉案土地 | 选填 | 录入时 | 提示 | 规程 3.2.3.1（5）（6）【业】 |
-| type.land_farmland_general.land_class_proof | 地类及权属证明材料 | 类型层·涉案土地 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1（3）【业】 |
-| type.land_farmland_general.evidence_list | 证据材料清单（3.2.3.1 适用项：（2）（3）（4）（5）（6）（7）（8）（9）（12）） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1【业】 |
-| type.land_farmland_general.site_survey | 现场勘验材料（现场勘验笔录、勘测定界图、勘测报告） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1（5）、3.2.4.6【业】 |
-| type.land_farmland_general.current_land_class | 涉案地块现状地类与是否占用永久基本农田的认定（套合比对结果） | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 规程 4.2.2、4.2.4【业】 |
-| type.land_farmland_general.damage_degree_opinion | 耕地破坏程度认定意见或鉴定意见 | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.4.7【业】 |
-| type.land_farmland_general.planting_condition_damage | 破坏种植条件的事实结论 | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 75 条【法】；《基本农田保护条例》第 17 条【法】 |
-| type.land_farmland_general.reclamation_fee_std | 耕地开垦费标准（罚款计算基数） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 《土地管理法实施条例》第 55 条【法】；《广东省非农业建设补充耕地管理办法》（广东省人民政府令第 146 号）第 10 条【业】 |
-| type.land_farmland_general.other_dept_handling | 其他部门职责分工处理情况（农业农村、生态环境） | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《土地管理法》第 75 条【法】；规程 2.2.2.2【业】 |
-| type.land_farmland_general.crime_opinion | 是否达到刑事追诉标准的判断，以及破坏耕地涉嫌犯罪的认定意见、鉴定意见材料（基本农田 5 亩／基本农田以外耕地 10 亩以上且造成种植条件严重毁坏或严重污染） | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.1（9）【业】；《最高人民法院关于审理破坏土地资源刑事案件具体应用法律若干问题的解释》第 3 条【法】；《最高人民检察院、公安部关于公安机关管辖的刑事案件立案追诉标准的规定（一）》第 67 条【法】 |
-| type.land_farmland_general.limitation | 追诉时效经过与继续状态判断（破坏耕地的违法行为是否具有连续或继续状态，按案件具体情况区别对待） | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 规程 15.3【业】；《最高人民法院、最高人民检察院关于办理非法占用耕地案件适用法律若干问题的规定》第 3 条（法释〔2026〕10 号）【法】 |
+| type.land_farmland_general.party_identity | 当事人身份证明材料 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1（1）；doc_002 2.3 第（1）项 |
+| type.land_farmland_general.destroy_method | 破坏行为方式（占用耕地建窑、建坟、擅自在耕地上建房、挖砂、采石、采矿、取土；因开发土地造成土地荒漠化、盐渍化；其他） | 违法事实 | 必填 | 录入时 | 阻断 | doc_001 第 37 条第 2 款、第 75 条 |
+| type.land_farmland_general.reported_area | 举报或初查所述占用耕地面积 | 涉案对象 | 选填 | 录入时 | 提示 | doc_002 3.2.3.1（5）（6） |
+| type.land_farmland_general.land_class_proof | 地类及权属证明材料 | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1（3） |
+| type.land_farmland_general.other_dept_handling | 其他部门职责分工处理情况（农业农村、生态环境） | 程序环节 | 选填 | 核查前补齐 | 提示 | doc_001 第 75 条；doc_002 2.2.2.2 |
+| type.land_farmland_general.crime_opinion | 是否达到刑事追诉标准的判断，以及破坏耕地涉嫌犯罪的认定意见、鉴定意见材料（基本农田 5 亩／基本农田以外耕地 10 亩以上且造成种植条件严重毁坏或严重污染） | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_002 3.2.3.1（9）；doc_007 第 3 条；doc_016 第 67 条 |
+| type.land_farmland_general.limitation | 追诉时效经过与继续状态判断（破坏耕地的违法行为是否具有连续或继续状态，按案件具体情况区别对待） | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_002 15.3；doc_017 第 3 条 |
 
 **说明**：
 
@@ -804,19 +756,13 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_farmland_permanent.party_identity | 当事人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1（1）【业】；规程 2.3 第（1）项【业】 |
-| type.land_farmland_permanent.destroy_method | 破坏行为方式（占用基本农田建窑、建房、建坟、挖砂、采石、采矿、取土、堆放固体废弃物、其他破坏基本农田的活动） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《基本农田保护条例》第 17 条【法】；《土地管理法》第 37 条第 2 款【法】 |
-| type.land_farmland_permanent.reported_area | 举报或初查所述占用面积 | 类型层·涉案土地 | 选填 | 录入时 | 提示 | 规程 3.2.3.1（5）（6）【业】 |
-| type.land_farmland_permanent.land_class_proof | 地类及权属证明材料 | 类型层·涉案土地 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1（3）【业】 |
-| type.land_farmland_permanent.evidence_list | 证据材料清单（3.2.3.1 适用项：（2）（3）（4）（5）（6）（7）（8）（9）（12）） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1【业】 |
-| type.land_farmland_permanent.site_survey | 现场勘验材料（现场勘验笔录、勘测定界图、勘测报告） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1（5）、3.2.4.6【业】 |
-| type.land_farmland_permanent.permanent_farmland_determination | 占用永久基本农田（或原基本农田）的认定结论与套合比对结果 | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 规程 4.2.4【业】 |
-| type.land_farmland_permanent.damage_degree_opinion | 耕地破坏程度认定意见或鉴定意见 | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.4.7【业】 |
-| type.land_farmland_permanent.planting_condition_damage | 毁坏种植条件的事实结论 | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《基本农田保护条例》第 33 条【法】；《土地管理法》第 75 条【法】 |
-| type.land_farmland_permanent.reclamation_fee_std | 耕地开垦费标准（含占用基本农田加收、占用永久基本农田按当地最高标准两倍口径） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 《土地管理法实施条例》第 55 条【法】；《广东省非农业建设补充耕地管理办法》（广东省人民政府令第 146 号）第 10 条【业】；粤发〔2017〕21 号【业】 |
-| type.land_farmland_permanent.other_dept_handling | 其他部门职责分工处理情况（农业农村、生态环境） | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《土地管理法》第 75 条【法】；规程 2.2.2.2【业】 |
-| type.land_farmland_permanent.crime_opinion | 是否达到刑事追诉标准的判断，以及破坏耕地涉嫌犯罪的认定意见、鉴定意见材料 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 规程 3.2.3.1（9）【业】；《最高人民法院关于审理破坏土地资源刑事案件具体应用法律若干问题的解释》第 3 条【法】 |
-| type.land_farmland_permanent.limitation | 追诉时效经过与继续状态判断（破坏耕地的违法行为是否具有连续或继续状态，按案件具体情况区别对待） | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 规程 15.3【业】；法释〔2026〕10 号第 3 条【法】 |
+| type.land_farmland_permanent.party_identity | 当事人身份证明材料 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1（1）；doc_002 2.3 第（1）项 |
+| type.land_farmland_permanent.destroy_method | 破坏行为方式（占用基本农田建窑、建房、建坟、挖砂、采石、采矿、取土、堆放固体废弃物、其他破坏基本农田的活动） | 违法事实 | 必填 | 录入时 | 阻断 | doc_018 第 17 条；doc_001 第 37 条第 2 款 |
+| type.land_farmland_permanent.reported_area | 举报或初查所述占用面积 | 涉案对象 | 选填 | 录入时 | 提示 | doc_002 3.2.3.1（5）（6） |
+| type.land_farmland_permanent.land_class_proof | 地类及权属证明材料 | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1（3） |
+| type.land_farmland_permanent.other_dept_handling | 其他部门职责分工处理情况（农业农村、生态环境） | 程序环节 | 选填 | 核查前补齐 | 提示 | doc_001 第 75 条；doc_002 2.2.2.2 |
+| type.land_farmland_permanent.crime_opinion | 是否达到刑事追诉标准的判断，以及破坏耕地涉嫌犯罪的认定意见、鉴定意见材料 | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_002 3.2.3.1（9）；doc_007 第 3 条 |
+| type.land_farmland_permanent.limitation | 追诉时效经过与继续状态判断（破坏耕地的违法行为是否具有连续或继续状态，按案件具体情况区别对待） | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_002 15.3；法释〔2026〕10 号第 3 条 |
 
 **说明**：
 
@@ -853,15 +799,13 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_reclaim_state_land_refuse.party_identity | 当事人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1（1）【业】；规程 2.3 第（1）项【业】 |
-| type.land_reclaim_state_land_refuse.recovery_ground | 收回国有土地使用权的法定事由（对应《土地管理法》第 58 条第 1 款第 1—4 项） | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 58 条第 1 款【法】 |
-| type.land_reclaim_state_land_refuse.recovery_approval | 收回国有土地使用权的批准文件（报经原批准用地的人民政府或者有批准权的人民政府批准） | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 58 条第 1 款【法】 |
-| type.land_reclaim_state_land_refuse.evidence_list | 证据材料清单（3.2.3.1 适用项：（2）（3）（4）（5）（6）（7）（8）（12）） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1【业】 |
-| type.land_reclaim_state_land_refuse.right_holder | 土地使用权归属与取得方式证明材料（划拨批准文件或者出让等有偿使用合同） | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 56 条、第 58 条【法】；规程 3.2.3.1（1）（3）（7）【业】 |
-| type.land_reclaim_state_land_refuse.refusal_fact | 当事人拒不交出土地的事实（询问笔录、现场勘验笔录、违法地块现状材料） | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 81 条【法】；规程 3.2.3.1（2）（5）（6）【业】 |
-| type.land_reclaim_state_land_refuse.occupied_area | 拒不交出土地的面积（罚款计算基数：非法占用土地每平方米） | 类型层·涉案土地 | 必填 | 核查前补齐 | 警告 | 《土地管理法实施条例》第 59 条【法】 |
-| type.land_reclaim_state_land_refuse.compensation | 是否属于第 58 条第 1 款第 1 项情形、是否已给予适当补偿 | 类型层·违法事实 | 选填 | 核查前补齐 | 提示 | 《土地管理法》第 58 条第 2 款【法】 |
-| type.land_reclaim_state_land_refuse.prior_notice | 收回决定的事先告知、送达与催告记录 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 规程 8.4.1、9.1、10.2【业】 |
+| type.land_reclaim_state_land_refuse.party_identity | 当事人身份证明材料 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1（1）；doc_002 2.3 第（1）项 |
+| type.land_reclaim_state_land_refuse.recovery_ground | 收回国有土地使用权的法定事由（对应《土地管理法》第 58 条第 1 款第 1—4 项） | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_001 第 58 条第 1 款 |
+| type.land_reclaim_state_land_refuse.recovery_approval | 收回国有土地使用权的批准文件（报经原批准用地的人民政府或者有批准权的人民政府批准） | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_001 第 58 条第 1 款 |
+| type.land_reclaim_state_land_refuse.right_holder | 土地使用权归属与取得方式证明材料（划拨批准文件或者出让等有偿使用合同） | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_001 第 56 条、第 58 条；doc_002 3.2.3.1（1）（3）（7） |
+| type.land_reclaim_state_land_refuse.occupied_area | 拒不交出土地的面积（罚款计算基数：非法占用土地每平方米） | 涉案对象 | 必填 | 核查前补齐 | 警告 | doc_004 第 59 条 |
+| type.land_reclaim_state_land_refuse.compensation | 是否属于第 58 条第 1 款第 1 项情形、是否已给予适当补偿 | 违法事实 | 选填 | 核查前补齐 | 提示 | doc_001 第 58 条第 2 款 |
+| type.land_reclaim_state_land_refuse.prior_notice | 收回决定的事先告知、送达与催告记录 | 程序环节 | 选填 | 核查前补齐 | 提示 | doc_002 8.4.1、9.1、10.2 |
 
 **说明**：
 
@@ -876,15 +820,12 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_temporary_land_refuse.party_identity | 当事人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1（1）【业】；规程 2.3 第（1）项【业】 |
-| type.land_temporary_land_refuse.temporary_approval | 临时用地批准文件 | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 57 条第 1 款【法】；《土地管理法实施条例》第 20 条第 2 款【法】 |
-| type.land_temporary_land_refuse.expiry_date | 临时用地批准期限的起止日与届满日 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 57 条第 3 款【法】；《土地管理法实施条例》第 20 条第 2 款【法】 |
+| type.land_temporary_land_refuse.party_identity | 当事人身份证明材料 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1（1）；doc_002 2.3 第（1）项 |
+| type.land_temporary_land_refuse.temporary_approval | 临时用地批准文件 | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_001 第 57 条第 1 款；doc_004 第 20 条第 2 款 |
+| type.land_temporary_land_refuse.expiry_date | 临时用地批准期限的起止日与届满日 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_001 第 57 条第 3 款；doc_004 第 20 条第 2 款 |
 | type.temporary_land_refuse | 临时使用土地合同（约定用途与使用期限） | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 57 条第 1 款【法】；规程 3.2.3.1（7）【业】 |
-| type.land_temporary_land_refuse.occupancy_status | 期满后仍实际占用、拒不归还的事实（现场勘验材料、违法地块现状材料、询问笔录） | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 81 条【法】；规程 3.2.3.1（2）（5）（6）【业】 |
-| type.land_temporary_land_refuse.evidence_list | 证据材料清单（3.2.3.1 适用项：（2）（3）（4）（5）（6）（7）（8）（12）） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1【业】 |
-| type.land_temporary_land_refuse.occupied_area | 拒不归还的土地面积 | 类型层·涉案土地 | 必填 | 核查前补齐 | 警告 | 《土地管理法实施条例》第 59 条【法】 |
-| type.land_temporary_land_refuse.cultivated_condition | 是否占用耕地、是否涉及恢复种植条件 | 类型层·认定结论 | 选填 | 核查前补齐 | 提示 | 《土地管理法实施条例》第 20 条第 3 款【法】 |
-| type.land_temporary_land_refuse.compensation_paid | 是否按合同约定支付临时使用土地补偿费 | 类型层·违法事实 | 选填 | 核查前补齐 | 提示 | 《土地管理法》第 57 条第 1 款【法】 |
+| type.land_temporary_land_refuse.occupied_area | 拒不归还的土地面积 | 涉案对象 | 必填 | 核查前补齐 | 警告 | doc_004 第 59 条 |
+| type.land_temporary_land_refuse.compensation_paid | 是否按合同约定支付临时使用土地补偿费 | 违法事实 | 选填 | 核查前补齐 | 提示 | doc_001 第 57 条第 1 款 |
 
 **说明**：
 
@@ -899,14 +840,13 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_use_mismatch.party_identity | 当事人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1（1）【业】；规程 2.3 第（1）项【业】 |
-| type.land_use_mismatch.approved_use | 批准的用地用途（土地使用权出让等有偿使用合同约定，或者土地使用权划拨批准文件规定） | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 56 条【法】；规程 3.2.3.1（7）【业】 |
-| type.land_use_mismatch.actual_use | 实际使用用途 | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《土地管理法》第 56 条、第 81 条【法】 |
-| type.land_use_mismatch.use_change_approval | 是否办理改变土地用途的批准（经自然资源主管部门同意、报原批准用地的人民政府批准；城市规划区内报批前先经城市规划行政主管部门同意） | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 56 条【法】 |
-| type.land_use_mismatch.right_holder | 土地权属与取得方式证明材料（划拨批准文件或者出让等有偿使用合同） | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1（1）（3）（7）【业】 |
-| type.land_use_mismatch.evidence_list | 证据材料清单（3.2.3.1 适用项：（2）（3）（4）（5）（6）（7）（8）（12）） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1【业】 |
-| type.land_use_mismatch.occupied_area | 不按批准用途使用的土地面积 | 类型层·涉案土地 | 必填 | 核查前补齐 | 警告 | 《土地管理法实施条例》第 59 条【法】 |
-| type.land_use_mismatch.prior_notice | 责令交还土地、责令限期改正的处理过程记录 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 规程 15.5、8.4.1【业】 |
+| type.land_use_mismatch.party_identity | 当事人身份证明材料 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1（1）；doc_002 2.3 第（1）项 |
+| type.land_use_mismatch.approved_use | 批准的用地用途（土地使用权出让等有偿使用合同约定，或者土地使用权划拨批准文件规定） | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_001 第 56 条；doc_002 3.2.3.1（7） |
+| type.land_use_mismatch.actual_use | 实际使用用途 | 违法事实 | 必填 | 录入时 | 阻断 | doc_001 第 56 条、第 81 条 |
+| type.land_use_mismatch.use_change_approval | 是否办理改变土地用途的批准（经自然资源主管部门同意、报原批准用地的人民政府批准；城市规划区内报批前先经城市规划行政主管部门同意） | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_001 第 56 条 |
+| type.land_use_mismatch.right_holder | 土地权属与取得方式证明材料（划拨批准文件或者出让等有偿使用合同） | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1（1）（3）（7） |
+| type.land_use_mismatch.occupied_area | 不按批准用途使用的土地面积 | 涉案对象 | 必填 | 核查前补齐 | 警告 | doc_004 第 59 条 |
+| type.land_use_mismatch.prior_notice | 责令交还土地、责令限期改正的处理过程记录 | 程序环节 | 选填 | 核查前补齐 | 提示 | doc_002 15.5、8.4.1 |
 
 **说明**：
 
@@ -921,13 +861,10 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_temporary_permanent_structure.party_identity | 当事人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1（1）【业】；规程 2.3 第（1）项【业】 |
-| type.land_temporary_permanent_structure.temporary_approval | 临时用地批准文件与临时使用土地合同 | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 57 条【法】；规程 3.2.3.1（7）【业】 |
-| type.land_temporary_permanent_structure.structure_fact | 在临时使用的土地上修建永久性建筑物的事实（现场勘验材料、勘测定界图、勘测报告、违法地块现状材料、询问笔录） | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 57 条第 2 款【法】；实施条例第 52 条【法】；规程 3.2.3.1（2）（5）（6）【业】 |
-| type.land_temporary_permanent_structure.structure_area | 永久性建筑物占用土地面积 | 类型层·涉案土地 | 必填 | 核查前补齐 | 警告 | 《土地管理法实施条例》第 52 条【法】 |
-| type.land_temporary_permanent_structure.reclamation_fee_base | 土地复垦费核定金额（罚款计算基数：按占用面积处土地复垦费 5 倍以上 10 倍以下） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 《土地管理法实施条例》第 52 条【法】；《土地复垦条例》第 18 条【法】 |
-| type.land_temporary_permanent_structure.evidence_list | 证据材料清单（3.2.3.1 适用项：（2）（3）（4）（5）（6）（7）（8）（12）） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1【业】 |
-| type.land_temporary_permanent_structure.removal_execution | 责令限期拆除的送达、整改与申请人民法院强制执行状态 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《土地管理法实施条例》第 52 条【法】；规程 10.3【业】 |
+| type.land_temporary_permanent_structure.party_identity | 当事人身份证明材料 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1（1）；doc_002 2.3 第（1）项 |
+| type.land_temporary_permanent_structure.temporary_approval | 临时用地批准文件与临时使用土地合同 | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_001 第 57 条；doc_002 3.2.3.1（7） |
+| type.land_temporary_permanent_structure.structure_area | 永久性建筑物占用土地面积 | 涉案对象 | 必填 | 核查前补齐 | 警告 | doc_004 第 52 条 |
+| type.land_temporary_permanent_structure.removal_execution | 责令限期拆除的送达、整改与申请人民法院强制执行状态 | 程序环节 | 选填 | 核查前补齐 | 提示 | doc_004 第 52 条；doc_002 10.3 |
 
 **说明**：
 
@@ -942,15 +879,12 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_temporary_reclaim_default.party_identity | 当事人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1（1）【业】；规程 2.3 第（1）项【业】 |
-| type.land_temporary_reclaim_default.temporary_approval | 临时用地批准文件与期满日 | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 《土地管理法实施条例》第 20 条第 2 款【法】 |
-| type.land_temporary_reclaim_default.one_year_deadline | 一年复垦期的起算日与届满日 | 类型层·违法事实 | 必填 | 核查前补齐 | 阻断 | 《土地管理法实施条例》第 20 条第 3 款【法】 |
-| type.land_temporary_reclaim_default.cultivated_land | 涉案土地地类（是否占用耕地；占用耕地的应当恢复种植条件） | 类型层·涉案土地 | 必填 | 核查前补齐 | 阻断 | 《土地管理法实施条例》第 20 条第 3 款【法】 |
-| type.land_temporary_reclaim_default.reclamation_status | 复垦或恢复种植条件的完成情况（现场勘验材料、违法地块现状材料、恢复种植条件的现状与检测材料） | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《土地管理法实施条例》第 20 条第 3 款、第 56 条第 2 款【法】 |
-| type.land_temporary_reclaim_default.evidence_list | 证据材料清单（3.2.3.1 适用项：（2）（3）（4）（5）（6）（7）（8）（12）） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1【业】 |
-| type.land_temporary_reclaim_default.agri_dept_opinion | 农业农村主管部门关于复垦方案、复垦质量或者代为完成复垦的意见 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《土地管理法实施条例》第 56 条第 2 款【法】；《广东省土地管理条例》第 21 条【业】 |
-| type.land_temporary_reclaim_default.reclamation_plan_fee | 复垦方案编制与复垦费用预存、落实情况 | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 警告 | 《土地管理法》第 43 条【法】；《广东省土地管理条例》第 21 条【业】 |
-| type.land_temporary_reclaim_default.reclamation_fee_base | 土地复垦费核定金额（罚款计算基数：土地复垦费 2 倍以上 5 倍以下） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 《土地管理法实施条例》第 56 条第 1 款【法】；《土地复垦条例》第 18 条【法】 |
+| type.land_temporary_reclaim_default.party_identity | 当事人身份证明材料 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1（1）；doc_002 2.3 第（1）项 |
+| type.land_temporary_reclaim_default.temporary_approval | 临时用地批准文件与期满日 | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_004 第 20 条第 2 款 |
+| type.land_temporary_reclaim_default.one_year_deadline | 一年复垦期的起算日与届满日 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_004 第 20 条第 3 款 |
+| type.land_temporary_reclaim_default.cultivated_land | 涉案土地地类（是否占用耕地；占用耕地的应当恢复种植条件） | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_004 第 20 条第 3 款 |
+| type.land_temporary_reclaim_default.agri_dept_opinion | 农业农村主管部门关于复垦方案、复垦质量或者代为完成复垦的意见 | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_004 第 56 条第 2 款；doc_019 第 21 条 |
+| type.land_temporary_reclaim_default.reclamation_plan_fee | 复垦方案编制与复垦费用预存、落实情况 | 许可资质与审批 | 必填 | 核查前补齐 | 警告 | doc_001 第 43 条；doc_019 第 21 条 |
 
 **说明**：
 
@@ -965,13 +899,9 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_pre_plan_rebuild.party_identity | 当事人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1（1）【业】；规程 2.3 第（1）项【业】 |
-| type.land_pre_plan_rebuild.building_evidence | 建筑物、构筑物系「土地利用总体规划制定前已建」的证明材料（建设时间、竣工与使用情况材料） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 65 条【法】 |
-| type.land_pre_plan_rebuild.planning_use | 土地利用总体规划确定的土地用途（套合比对结果） | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 65 条【法】；规程 4.2.3【业】 |
-| type.land_pre_plan_rebuild.rebuild_fact | 重建、扩建的事实（现场勘验材料、违法地块现状材料、询问笔录） | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 65 条【法】；《土地管理法实施条例》第 53 条【法】 |
-| type.land_pre_plan_rebuild.evidence_list | 证据材料清单（3.2.3.1 适用项：（2）（3）（4）（5）（6）（8）（12）） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1【业】 |
-| type.land_pre_plan_rebuild.occupied_area | 重建、扩建占用的土地面积 | 类型层·涉案土地 | 选填 | 核查前补齐 | 提示 | 《土地管理法实施条例》第 53 条【法】 |
-| type.land_pre_plan_rebuild.removal_execution | 责令限期拆除的送达、整改与强制执行状态 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《土地管理法实施条例》第 53 条【法】；规程 10.3【业】 |
+| type.land_pre_plan_rebuild.party_identity | 当事人身份证明材料 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1（1）；doc_002 2.3 第（1）项 |
+| type.land_pre_plan_rebuild.occupied_area | 重建、扩建占用的土地面积 | 涉案对象 | 选填 | 核查前补齐 | 提示 | doc_004 第 53 条 |
+| type.land_pre_plan_rebuild.removal_execution | 责令限期拆除的送达、整改与强制执行状态 | 程序环节 | 选填 | 核查前补齐 | 提示 | doc_004 第 53 条；doc_002 10.3 |
 
 **说明**：
 
@@ -986,14 +916,11 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_forbidden_reclamation.party_identity | 当事人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1（1）【业】；规程 2.3 第（1）项【业】 |
-| type.land_forbidden_reclamation.zone_determination | 是否位于国土空间规划确定的禁止开垦范围内的认定（套合比对结果） | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《土地管理法实施条例》第 9 条第 1 款【法】；《土地管理法》第 40 条第 1 款【法】；《广东省土地管理条例》第 19 条【业】 |
-| type.land_forbidden_reclamation.development_activity | 土地开发活动的事实（现场勘验材料、违法地块现状材料、询问笔录） | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《土地管理法实施条例》第 9 条第 1 款【法】；规程 3.2.3.1（2）（5）（6）【业】 |
-| type.land_forbidden_reclamation.development_area | 土地开发面积 | 类型层·涉案土地 | 选填 | 核查前补齐 | 提示 | 《土地管理法》第 77 条【法】 |
-| type.land_forbidden_reclamation.approval_status | 是否经依法批准开垦（批准文件） | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 40 条第 1 款【法】；《土地管理法实施条例》第 9 条第 2 款【法】 |
-| type.land_forbidden_reclamation.original_land_class | 涉案土地原地类（未利用土地、荒山荒地荒滩、其他） | 类型层·涉案土地 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 40 条第 1 款【法】；规程 4.2.2【业】 |
-| type.land_forbidden_reclamation.evidence_list | 证据材料清单（3.2.3.1 适用项：（2）（3）（4）（5）（6）（8）（12）） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1【业】 |
-| type.land_forbidden_reclamation.unused_land_approval | 开发未确定土地使用权的国有荒山、荒地、荒滩的申请与批准材料 | 类型层·土地来源与用地审批 | 选填 | 核查前补齐 | 提示 | 《土地管理法实施条例》第 9 条第 2 款【法】 |
+| type.land_forbidden_reclamation.party_identity | 当事人身份证明材料 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1（1）；doc_002 2.3 第（1）项 |
+| type.land_forbidden_reclamation.development_area | 土地开发面积 | 涉案对象 | 选填 | 核查前补齐 | 提示 | doc_001 第 77 条 |
+| type.land_forbidden_reclamation.approval_status | 是否经依法批准开垦（批准文件） | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_001 第 40 条第 1 款；doc_004 第 9 条第 2 款 |
+| type.land_forbidden_reclamation.original_land_class | 涉案土地原地类（未利用土地、荒山荒地荒滩、其他） | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_001 第 40 条第 1 款；doc_002 4.2.2 |
+| type.land_forbidden_reclamation.unused_land_approval | 开发未确定土地使用权的国有荒山、荒地、荒滩的申请与批准材料 | 许可资质与审批 | 选填 | 核查前补齐 | 提示 | doc_004 第 9 条第 2 款 |
 
 **说明**：
 
@@ -1008,15 +935,10 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_reclaim_obligation.party_identity | 当事人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1（1）【业】；规程 2.3 第（1）项【业】 |
-| type.land_reclaim_obligation.damage_fact | 因挖损、塌陷、压占等造成土地破坏的事实（现场勘验材料、违法地块现状材料、询问笔录） | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 43 条【法】；规程 3.2.3.1（2）（5）（6）【业】 |
-| type.land_reclaim_obligation.obligation_holder | 负有复垦义务的违法责任主体（用地单位、采矿权人等）与义务来源文件 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 43 条【法】 |
-| type.land_reclaim_obligation.reclamation_plan_fee | 复垦方案编制、复垦费用预存与使用监管协议签订情况 | 类型层·土地来源与用地审批 | 必填 | 核查前补齐 | 警告 | 《土地管理法》第 43 条【法】；《土地复垦条例》第 13 条、第 15 条、第 18 条【法】；《广东省土地管理条例》第 21 条【业】 |
-| type.land_reclaim_obligation.non_performance | 拒不履行或者复垦不符合要求的事实（整改情况、验收结论、代为复垦记录） | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 76 条【法】 |
-| type.land_reclaim_obligation.reclamation_status | 复垦完成情况与土地现状（现场勘验材料、违法地块现状材料） | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 43 条【法】；《土地管理法实施条例》第 56 条【法】 |
-| type.land_reclaim_obligation.evidence_list | 证据材料清单（3.2.3.1 适用项：（2）（3）（4）（5）（6）（8）（12）） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1【业】 |
-| type.land_reclaim_obligation.reclamation_fee_base | 土地复垦费核定金额（罚款计算基数：土地复垦费 2 倍以上 5 倍以下） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 《土地管理法实施条例》第 56 条第 1 款【法】；《土地复垦条例》第 18 条【法】 |
-| type.land_reclaim_obligation.agri_dept_opinion | 农业农村主管部门关于复垦质量或者代为组织复垦的意见 | 类型层·程序环节 | 必填 | 核查前补齐 | 警告 | 《土地管理法》第 76 条【法】；《土地复垦条例》第 18 条【法】；《广东省土地管理条例》第 21 条【业】；《耕地保护和质量提升法》第 65 条第 2 款【法】 |
+| type.land_reclaim_obligation.party_identity | 当事人身份证明材料 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1（1）；doc_002 2.3 第（1）项 |
+| type.land_reclaim_obligation.obligation_holder | 负有复垦义务的违法责任主体（用地单位、采矿权人等）与义务来源文件 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_001 第 43 条 |
+| type.land_reclaim_obligation.reclamation_plan_fee | 复垦方案编制、复垦费用预存与使用监管协议签订情况 | 许可资质与审批 | 必填 | 核查前补齐 | 警告 | doc_001 第 43 条；doc_020 第 13 条、第 15 条、第 18 条；doc_019 第 21 条 |
+| type.land_reclaim_obligation.agri_dept_opinion | 农业农村主管部门关于复垦质量或者代为组织复垦的意见 | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_001 第 76 条；doc_020 第 18 条；doc_019 第 21 条；doc_021 第 65 条第 2 款 |
 
 **说明**：
 
@@ -1033,15 +955,11 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.land_permanent_farmland_nonfarm.party_identity | 当事人身份证明材料 | 类型层·违法主体 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1（1）【业】；规程 2.3 第（1）项【业】 |
-| type.land_permanent_farmland_nonfarm.actual_use | 实际用途（发展林果业、挖塘养鱼） | 类型层·违法事实 | 必填 | 录入时 | 警告 | 《土地管理法》第 37 条第 3 款【法】 |
-| type.land_permanent_farmland_nonfarm.permanent_farmland_determination | 是否占用永久基本农田的认定结论与套合比对结果 | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《土地管理法》第 37 条第 3 款【法】；规程 4.2.4【业】 |
-| type.land_permanent_farmland_nonfarm.occupied_area | 占用永久基本农田的面积 | 类型层·涉案土地 | 必填 | 核查前补齐 | 警告 | 《土地管理法实施条例》第 51 条【法】 |
-| type.land_permanent_farmland_nonfarm.planting_condition_damage | 是否破坏种植条件的事实结论 | 类型层·认定结论 | 必填 | 核查前补齐 | 阻断 | 《土地管理法实施条例》第 51 条第 2 款【法】；《土地管理法》第 75 条【法】 |
-| type.land_permanent_farmland_nonfarm.correction_record | 责令改正的送达、改正期限与当事人改正情况 | 类型层·程序环节 | 必填 | 核查前补齐 | 阻断 | 《土地管理法实施条例》第 51 条第 1 款【法】；规程附录 A 五（十）【业】；规程 15.5、附录 E 第 26 项【业】 |
-| type.land_permanent_farmland_nonfarm.evidence_list | 证据材料清单（3.2.3.1 适用项：（2）（3）（4）（5）（6）（7）（8）（12）） | 类型层·现场勘验与证据材料 | 必填 | 核查前补齐 | 阻断 | 规程 3.2.3.1【业】 |
-| type.land_permanent_farmland_nonfarm.reclamation_fee_std | 耕地开垦费标准（罚款计算基数：占用面积处耕地开垦费 2 倍以上 5 倍以下；占用永久基本农田按当地最高标准两倍口径） | 类型层·金额与裁量 | 必填 | 核查前补齐 | 警告 | 《土地管理法实施条例》第 51 条【法】；《广东省非农业建设补充耕地管理办法》（广东省人民政府令第 146 号）第 10 条【业】；粤发〔2017〕21 号【业】 |
-| type.land_permanent_farmland_nonfarm.agri_dept_handling | 农业农村主管部门关于耕地种植用途管控、林果业与养殖业政策事项的处理情况 | 类型层·程序环节 | 选填 | 核查前补齐 | 提示 | 《土地管理法》第 37 条第 3 款、第 75 条【法】；规程 2.2.2.2【业】 |
+| type.land_permanent_farmland_nonfarm.party_identity | 当事人身份证明材料 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.1（1）；doc_002 2.3 第（1）项 |
+| type.land_permanent_farmland_nonfarm.actual_use | 实际用途（发展林果业、挖塘养鱼） | 违法事实 | 必填 | 录入时 | 阻断 | doc_001 第 37 条第 3 款 |
+| type.land_permanent_farmland_nonfarm.occupied_area | 占用永久基本农田的面积 | 涉案对象 | 必填 | 核查前补齐 | 警告 | doc_004 第 51 条 |
+| type.land_permanent_farmland_nonfarm.correction_record | 责令改正的送达、改正期限与当事人改正情况 | 程序环节 | 必填 | 核查前补齐 | 阻断 | doc_004 第 51 条第 1 款；doc_002；doc_002 附录 A 五（十）；doc_002 15.5、附录 E 第 26 项 |
+| type.land_permanent_farmland_nonfarm.agri_dept_handling | 农业农村主管部门关于耕地种植用途管控、林果业与养殖业政策事项的处理情况 | 程序环节 | 选填 | 核查前补齐 | 提示 | doc_001 第 37 条第 3 款、第 75 条；doc_002 2.2.2.2 |
 
 **本类型的制度性约束**（源自附录 A 五（十）「查处注意事项」，该条目本身不列为违法类型）：
 
