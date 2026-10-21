@@ -123,6 +123,8 @@ export async function loadAdminHomeSummary(dispatch: ApiDispatch, opcodes: reado
 export function adminHomeLoader(store: SessionStore) {
   return () => {
     const summary = sessionOpcodes(store).then((opcodes) => loadAdminHomeSummary(store.dispatch, opcodes));
+    // 失败由页面的 Await 接住显示；先挂空处理，免得渲染前落定的拒绝被当成未处理。
+    summary.catch(() => undefined);
     return { summary };
   };
 }

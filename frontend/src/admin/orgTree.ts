@@ -275,6 +275,8 @@ export function orgTreeLoader(store: SessionStore) {
   return () => {
     const tree = sessionOpcodes(store).then((opcodes) =>
       (opcodes.includes('org.tree.read') ? loadOrgTree(store.dispatch) : null));
+    // 失败由页面的 Await 接住显示；先挂空处理，免得渲染前落定的拒绝被当成未处理。
+    tree.catch(() => undefined);
     return { tree };
   };
 }

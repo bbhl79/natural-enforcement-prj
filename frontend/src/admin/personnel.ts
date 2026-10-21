@@ -887,6 +887,8 @@ export function personnelListLoader(store: SessionStore) {
   return () => {
     const list = sessionOpcodes(store).then((opcodes) =>
       (opcodes.includes(PERSONNEL_READ) ? loadPersonnelList(store.dispatch) : null));
+    // 失败由页面的 Await 接住显示；先挂空处理，免得渲染前落定的拒绝被当成未处理。
+    list.catch(() => undefined);
     return { list };
   };
 }
@@ -896,6 +898,8 @@ export function personnelCardLoader(store: SessionStore) {
     const id = params.id ?? '';
     const card = sessionOpcodes(store).then((opcodes) =>
       (opcodes.includes(PERSONNEL_READ) ? loadPersonnelCard(store.dispatch, id) : null));
+    // 失败由页面的 Await 接住显示；先挂空处理，免得渲染前落定的拒绝被当成未处理。
+    card.catch(() => undefined);
     return { card };
   };
 }
@@ -904,6 +908,8 @@ export function personnelCreateLoader(store: SessionStore) {
   return () => {
     const orgUnits = sessionOpcodes(store).then((opcodes) =>
       (opcodes.includes(PERSONNEL_REGISTER) && opcodes.includes('org.tree.read') ? loadRegisterOrgUnits(store.dispatch) : []));
+    // 失败由页面的 Await 接住显示；先挂空处理，免得渲染前落定的拒绝被当成未处理。
+    orgUnits.catch(() => undefined);
     return { orgUnits };
   };
 }
