@@ -17,3 +17,7 @@ e2e/results/
 .env.local
 *.log
 .DS_Store
+
+# 原型本地天地图 key（勿入库）
+**/tianditu.local.js
+**/clue-dispatch/.env.local
