@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PROTOTYPE · 线索登记与分派（#191）· 用完即弃</title>
+<style>
+/* PROTOTYPE（#191）：低保真、用完即弃，不进生产代码。配色沿用 admin-console（login.css）。 */
+:root{color-scheme:light;--green:#1f6b56;--green-press:#185744;--green-soft:#e8f2ee;--ink:#1c1917;--muted:#78716c;--border:#e4e4e7;--bg:#f4f6f6;--white:#fff;
+--danger:#b42318;--danger-bg:#fef3f2;--amber:#b54708;--amber-bg:#fffaeb;--ok:#067647;--ok-bg:#ecfdf3;--blue:#1d4ed8;--blue-bg:#eff6ff}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"PingFang SC","Noto Sans SC","Noto Sans CJK SC","Microsoft YaHei",sans-serif;background:var(--bg);color:var(--ink);font-size:13px;line-height:1.55}
+button,input,select,textarea{font-family:inherit;font-size:13px}button{cursor:pointer}
+.demo-bar{background:#f1f5f9;border-bottom:1px dashed #94a3b8;padding:6px 16px;font-size:12px;color:#334155;display:flex;gap:14px;flex-wrap:wrap;align-items:center}
+.demo-bar select{height:26px;border:1px solid #cbd5e1;border-radius:6px;padding:0 6px}.demo-bar label{display:inline-flex;gap:4px;align-items:center}
+.topbar{height:46px;background:var(--white);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:12px}
+.brand{font-weight:650;font-size:14px;color:var(--green-press)}.proto{background:var(--danger);color:#fff;border-radius:4px;padding:0 8px;font-size:11px;letter-spacing:1px}
+.shell{display:flex;min-height:calc(100vh - 82px);align-items:stretch}
+.sidenav{width:164px;background:var(--white);border-right:1px solid var(--border);padding:12px 10px;flex-shrink:0}
+.nav-item{display:flex;justify-content:space-between;padding:9px 12px;border-radius:8px;color:#44403c;margin-bottom:2px;cursor:pointer}
+.nav-item.on{background:var(--green-soft);color:var(--green-press);font-weight:600}.nav-item .n{background:#e7e5e4;border-radius:10px;padding:0 7px;font-size:11px}
+.main{flex:1;padding:14px 20px 48px;min-width:0}
+.rail{width:410px;flex-shrink:0;background:#fafaf9;border-left:1px solid var(--border);padding:12px 14px}
+.page-h{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;gap:12px}
+.page-h h1{font-size:19px;font-weight:650}.page-h .desc{color:var(--muted);margin-top:3px;font-size:12px}
+.btn{height:30px;padding:0 12px;border-radius:8px;border:1px solid var(--border);background:var(--white);color:var(--ink);display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.btn-primary{background:var(--green);color:#fff;border-color:var(--green)}.btn-primary:hover{background:var(--green-press)}
+.btn-line{border-color:var(--green);color:var(--green-press)}.btn-sm{height:26px;padding:0 9px;font-size:12px}.btn[disabled]{opacity:.45;cursor:not-allowed}
+.tag{display:inline-flex;align-items:center;padding:0 7px;border-radius:4px;font-size:12px;background:var(--green-soft);color:var(--green-press);margin:0 4px 2px 0;white-space:nowrap}
+.tag.gray{background:#f5f5f4;color:#57534e}.tag.amber{background:var(--amber-bg);color:var(--amber)}.tag.blue{background:var(--blue-bg);color:var(--blue)}.tag.red{background:var(--danger-bg);color:var(--danger)}
+.card{background:var(--white);border:1px solid var(--border);border-radius:12px;padding:13px 15px;margin-bottom:12px}
+.card-h{font-weight:600;font-size:14px;margin-bottom:10px;display:flex;align-items:center;gap:8px}.card-h .hint{margin-left:auto;font-weight:400;color:var(--muted);font-size:12px}
+.banner{border-radius:8px;padding:9px 13px;margin-bottom:10px;line-height:1.6}
+.banner.err{color:var(--danger);background:var(--danger-bg)}.banner.ok{color:var(--ok);background:var(--ok-bg)}.banner.gray{color:#57534e;background:#fafaf9;border:1px dashed #d6d3d1}
+.banner.amber{color:var(--amber);background:var(--amber-bg)}.banner.blue{color:var(--blue);background:var(--blue-bg)}
+.table{width:100%;border-collapse:collapse;background:#fff}.table th,.table td{border-bottom:1px solid var(--border);padding:7px 8px;text-align:left;vertical-align:top}
+.table th{background:#fafaf9;color:var(--muted);font-weight:500;font-size:12px}.table tr.pick{cursor:pointer}.table tr.pick:hover td{background:#fafaf9}.table tr.sel td{background:var(--green-soft)}
+.form-row{display:grid;grid-template-columns:132px 1fr;gap:10px;margin-bottom:10px;align-items:start}.form-row>label{color:var(--muted);padding-top:6px}.req{color:var(--danger);margin-left:2px}
+.input,.select,textarea.input{border:1px solid var(--border);border-radius:8px;padding:6px 9px;background:#fff;width:100%;min-height:32px}textarea.input{min-height:60px;resize:vertical}
+.help{font-size:12px;color:var(--muted);margin-top:3px}.err{font-size:12px;color:var(--danger);margin-top:3px}
+.kv{display:grid;grid-template-columns:104px 1fr;gap:5px 10px}.kv .k{color:var(--muted)}
+.checks{display:flex;gap:12px;flex-wrap:wrap;padding-top:6px}.checks label{display:inline-flex;gap:5px;align-items:center}
+svg.map{width:100%;height:auto;border:1px solid var(--border);border-radius:8px;background:#fff;display:block}svg.map.click{cursor:crosshair}svg.map.small{max-width:250px}
+.hit{display:grid;grid-template-columns:250px 1fr;gap:14px;border-top:1px solid var(--border);padding-top:10px;margin-top:10px}
+.mask{position:fixed;inset:0;background:rgba(28,25,23,.42);display:flex;align-items:flex-start;justify-content:center;padding-top:110px;z-index:50}
+.dialog{width:520px;background:#fff;border-radius:12px;padding:18px 20px;box-shadow:0 20px 40px rgba(0,0,0,.18)}.dialog h3{font-size:16px;margin-bottom:8px}.dialog .foot{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+.tabs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}.tabs button{border:1px solid var(--border);background:#fff;border-radius:6px;height:26px;padding:0 8px;font-size:12px}.tabs button.on{background:#334155;color:#fff;border-color:#334155}
+.step{display:flex;gap:6px;align-items:center;margin-bottom:5px}.step .btn{flex:1;justify-content:flex-start;white-space:normal;height:auto;min-height:28px;padding:4px 9px;text-align:left}.step .done{color:var(--ok);width:14px}
+.rail h4{font-size:13px;margin:0 0 8px}.rail .card{padding:11px 13px}.small{font-size:12px;color:var(--muted)}
+.trail div{border-bottom:1px dashed #e7e5e4;padding:4px 0;font-size:12px}.trail .t{color:var(--muted)}
+.mono{font-family:ui-monospace,Menlo,monospace;font-size:12px}
+.note{border-left:3px solid #94a3b8;padding:2px 10px;color:#475569;font-size:12px;margin:8px 0}
+</style>
+</head>
+<body>
+<div class="demo-bar" id="bar"></div>
+<div class="topbar"><span class="brand">广州市规划和自然资源局监督监管与执法协同系统</span><span class="proto">PROTOTYPE · #191</span><span class="small">线索登记 → 分派 · 低保真 · 数据全是虚构 · 状态只在本页内存里</span></div>
+<div class="shell"><nav class="sidenav" id="nav"></nav><main class="main" id="main"></main><aside class="rail" id="rail"></aside></div>
+<div id="modal"></div>
+
+<script src="tianditu.local.js"></script>
+<script>
+'use strict';
+/* =====================================================================================
+   纯模型 Model：要回答的逻辑都在这里，不碰 DOM，可以整段搬进真实代码。
+   口径出处：#24（录入要件三层叠加、来源编码表）、#198（类型层缺件）、#25（疑似重复、捞回）、
+   #187（两步分派、辖区对应、测绘兜底、管辖移送）、#111 L2（自动核查，重跑提示）。
+   ===================================================================================== */
+const Model = (() => {
+  const THRESHOLD = 0.6; // 60%：配置在哪里属于待定项，这里写死
+
+  const S = (c, n, g, lv = 1, pend = false) => ({ c, n, g, lv, pend });
+  const SOURCES = [ // 线索来源编码表，名称照抄；pend＝名称待统一（#191 待定项 2）
+    S('1','主动发现','1',0), S('16','日常巡查','1'), S('13','专项排查','1'),
+    S('1301','乱占耕地建房问题整治','1',2), S('1302','耕地占补平衡问题','1',2), S('1303','废弃矿洞排查封堵整治','1',2), S('1304','殡葬用地整治','1',2), S('1305','个人买地建房','1',2),
+    S('5','上级交办','5',0), S('501','部级交办','5'), S('502','省级交办','5'), S('503','市级交办','5'),
+    S('22','部门移送','22',0), S('2201','公安机关移送','22'), S('2202','检察机关移送','22'), S('18','司法移送','22'), S('19','行政执法移送','22'), S('20','纪检监察移送','22'),
+    S('801','行政督查','22'), S('802','机构检测报告','22',1,true), S('803','行政检查（含日常检查和专项检查）属于双随机的','22',1,true), S('2203','其他行政主管部门移送','22'),
+    S('3','群众举报','3',0), S('301','举报','3'), S('302','投诉','3'), S('303','曝光','3'), S('304','信访','3',1,true), S('305','电话举报','3'), S('306','线索征集平台','3'),
+    S('21','舆情监测','21',0,true)];
+  const sourceOf = c => SOURCES.find(x => x.c === c);
+
+  const DOMAINS = { // 一条线索一个法域；土地、矿产＝面，测绘、规划＝点（契约 §3.7，业务口径）；只有土地、矿产有自动核查
+    land: { n: '土地', geom: 'polygon', check: true }, mineral: { n: '矿产', geom: 'polygon', check: true },
+    survey: { n: '测绘地理信息', geom: 'point', check: false }, planning: { n: '国土空间规划', geom: 'point', check: false } };
+
+  // 类型层要件：清单由 #181–#184 定。这里只取少量示例演示缺件行为，不代表定案内容。[键, 名称, 缺件后果, 录入时必填]
+  const TYPES = [
+    { c: 'land_occupy_without_approval', n: '未经批准或者采取欺骗手段骗取批准，违法占用土地', d: 'land', items: [['occupied_area','占用面积（亩）','阻断'],['land_class','占用地类','警告'],['permanent_farmland','是否涉及永久基本农田','警告']] },
+    { c: 'land_farmland_permanent', n: '破坏永久基本农田行为', d: 'land', items: [['damage_form','破坏方式','阻断'],['damaged_area','破坏面积（亩）','警告']] },
+    { c: 'land_other', n: '附录外其他（只带公共层和来源层）', d: 'land', items: [] },
+    { c: 'mineral_mine_without_license', n: '无证采矿', d: 'mineral', items: [['mineral_kind','矿种','阻断'],['mining_method','采矿方式','警告']] },
+    { c: 'mineral_other', n: '附录外其他（只带公共层和来源层）', d: 'mineral', items: [] },
+    { c: 'survey_qualification_none', n: '未取得测绘资质证书，擅自从事测绘活动', d: 'survey', items: [['project_name','测绘项目名称','阻断'],['party_name','违法主体名称','警告']] },
+    { c: 'survey_other', n: '附录外其他（只带公共层和来源层）', d: 'survey', items: [] },
+    { c: 'planning_build_without_permit', n: '未取得建设工程规划许可证或者未按照建设工程规划许可证的规定进行建设', d: 'planning', items: [['project_name','建设项目名称','阻断'],['permit_no','规划许可证号（如有）','提示',false]] },
+    { c: 'planning_other', n: '附录外其他（只带公共层和来源层）', d: 'planning', items: [] }];
+
+  const ORGS = { sj: { n: '市局', p: null }, th: { n: '天河区分局', p: 'sj' }, sp: { n: '石牌自然资源所', p: 'th' }, ld: { n: '龙洞自然资源所', p: 'th' }, ws: { n: '五山自然资源所', p: 'th' }, by: { n: '白云区分局', p: 'sj' } };
+  const depth = id => ORGS[id].p ? 1 + depth(ORGS[id].p) : 0;
+  const kids = id => Object.keys(ORGS).filter(k => ORGS[k].p === id);
+  const scope = id => [id, ...kids(id).flatMap(scope)]; // 数据范围＝本机构＋下级
+  const PEOPLE = { sj: ['吴十'], th: ['孙七','钱八'], sp: ['张三','李四'], ld: ['王五'], ws: ['赵六'], by: ['周九'] };
+  const ACTORS = {
+    zhou: { n: '小周', org: 'th', role: '经办' }, lin: { n: '小林', org: 'th', role: '内勤' }, chen: { n: '老陈', org: 'sj', role: '内勤' },
+    mei: { n: '阿梅', org: 'by', role: '内勤' }, shi: { n: '小石', org: 'sp', role: '内勤' }, he: { n: '老何', org: 'sj', role: '监督' } };
+  // 辖区对应（参照数据）：街道或镇 → 所，或直接归区分局。400×300 的示意地图分四格。
+  const CELLS = [ { n: '石牌街道', d: '天河区', org: 'sp', x: 0, y: 0 }, { n: '龙洞街道', d: '天河区', org: 'ld', x: 200, y: 0 },
+                  { n: '五山街道', d: '天河区', org: 'ws', x: 0, y: 150 }, { n: '江高镇', d: '白云区', org: 'by', x: 200, y: 150 } ];
+  const DISTRICT_ORG = { '天河区': 'th', '白云区': 'by' };
+  const REASONS = ['经核实与既有线索不是同一件事', '补充了新的事实或材料', '既有线索已处理完毕', '其他（须写说明）'];
+
+  /* ---------- 几何：用 5×5 的采样格近似面积与重合，够原型用 ---------- */
+  const cellIdx = p => (p[0] < 200 ? 0 : 1) + (p[1] < 150 ? 0 : 2);
+  const inPoly = (p, pts) => { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i], [xj, yj] = pts[j]; if ((yi > p[1]) !== (yj > p[1]) && p[0] < (xj - xi) * (p[1] - yi) / (yj - yi) + xi) c = !c; } return c; };
+  const GRID = []; for (let y = 2.5; y < 300; y += 5) for (let x = 2.5; x < 400; x += 5) GRID.push([x, y]);
+  const cover = g => g.kind === 'point' ? [] : GRID.filter(p => inPoly(p, g.pts));
+  const key = p => p[0] + ',' + p[1];
+  function overlapCells(a, b) { // 两块面共同覆盖的采样点（点状线索没有重合部分可画）
+    if (a.kind === 'point' || b.kind === 'point') return [];
+    const sb = new Set(cover(b).map(key)); return cover(a).filter(p => sb.has(key(p))); }
+  function overlap(a, b) { // 重合比例＝重合部分 ÷ 较小一块。点状：点落在对方范围内算 100%（待业务确认，见页内说明）
+    if (a.kind === 'point' && b.kind === 'point') return Math.hypot(a.pts[0][0] - b.pts[0][0], a.pts[0][1] - b.pts[0][1]) < 8 ? 1 : 0;
+    if (a.kind === 'point') return inPoly(a.pts[0], b.pts) ? 1 : 0;
+    if (b.kind === 'point') return inPoly(b.pts[0], a.pts) ? 1 : 0;
+    const ca = cover(a), cb = cover(b), m = Math.min(ca.length, cb.length); if (!m) return 0;
+    const sb = new Set(cb.map(key)); return ca.filter(p => sb.has(key(p))).length / m; }
+  function locate(g) { // 各街道或镇的面积占比，大的在前
+    if (g.kind === 'point') return [{ cell: CELLS[cellIdx(g.pts[0])], share: 1 }];
+    const pts = cover(g); if (!pts.length) return [{ cell: CELLS[cellIdx(g.pts[0])], share: 1 }];
+    const cnt = [0, 0, 0, 0]; pts.forEach(p => cnt[cellIdx(p)]++);
+    return cnt.map((c, i) => ({ cell: CELLS[i], share: c / pts.length })).filter(x => x.share > 0).sort((a, b) => b.share - a.share); }
+  function districts(g) { const m = {}; locate(g).forEach(x => m[x.cell.d] = (m[x.cell.d] || 0) + x.share); return Object.entries(m).map(([d, share]) => ({ d, share })).sort((a, b) => b.share - a.share); }
+  const geomOk = d => d.geometry && (d.geometry.kind === 'polygon' ? d.geometry.pts.length >= 3 : d.geometry.pts.length === 1);
+  // 上传的 GIS 文件。原型不解析文件内容，用这几份示例几何代替；规则是真的：同批同法域、同几何类型，否则拒绝录入并提示（#24 第十节）。
+  const FILES = [
+    { name: '石牌地块.geojson', kind: 'polygon', pts: [[150,110],[190,110],[190,140],[150,140]] },
+    { name: '与X-0412重合的地块.geojson', kind: 'polygon', pts: [[60,40],[160,40],[160,100],[60,100]] },
+    { name: '与X-0398重合的地块.geojson', kind: 'polygon', pts: [[50,200],[120,200],[120,250],[50,250]] },
+    { name: '跨天河白云两区的地块.geojson', kind: 'polygon', pts: [[220,120],[300,120],[300,185],[220,185]] },
+    { name: '单个点位.geojson', kind: 'point', pts: [[170,40]] },
+    { name: '点面混合.geojson', kind: 'mixed', pts: [] }];
+  function parseFile(f, domain) { // → { ok, geometry, name, features, kind, error }
+    const want = DOMAINS[domain].geom, wantN = want === 'polygon' ? '面' : '点', base = { name: f.name, kind: f.kind };
+    if (f.kind === 'mixed') return { ...base, ok: false, features: f.n || 2, error: '文件里既有点又有面，拒绝录入。同一批只能是同一种几何类型，请拆开分别上传。' };
+    if (f.kind !== want) return { ...base, ok: false, features: f.n || 1, error: `文件里是${f.kind === 'polygon' ? '面' : '点'}，${DOMAINS[domain].n}类线索要${wantN}。请换文件，或换法域。` };
+    return { ...base, ok: true, features: f.n || 1, geometry: { kind: want, pts: f.pts.map(p => [...p]) } }; }
+
+  /* ---------- GIS 文件读写：示意地图 400×300 对应广州一块范围（CGCS2000 经纬度），手绘成果存成 GeoJSON，上传的 GeoJSON 读回地图 ---------- */
+  const LON0 = 113.30, LAT1 = 23.20, DEG = 0.0004; // 左上角经纬度，每个单位 0.0004°（约 40 米）
+  const toLonLat = p => [+(LON0 + p[0] * DEG).toFixed(6), +(LAT1 - p[1] * DEG).toFixed(6)];
+  const fromLonLat = c => [Math.round((c[0] - LON0) / DEG), Math.round((LAT1 - c[1]) / DEG)];
+  const inMap = p => p.every(Number.isFinite) && p[0] >= 0 && p[0] <= 400 && p[1] >= 0 && p[1] <= 300;
+  function toGeoJSON(g, props = {}) {
+    const poly = g.kind === 'polygon';
+    return { type: 'FeatureCollection', crs: { type: 'name', properties: { name: 'urn:ogc:def:crs:EPSG::4490' } },
+      features: [{ type: 'Feature', properties: props, geometry: poly ? { type: 'Polygon', coordinates: [[...g.pts, g.pts[0]].map(toLonLat)] } : { type: 'Point', coordinates: toLonLat(g.pts[0]) } }] }; }
+  function parseGeoJSON(name, text, domain) { // 真的读文件内容；非 GeoJSON 格式原型不读
+    const bad = error => ({ name, ok: false, features: 0, error });
+    let j; try { j = JSON.parse(text); } catch { return bad('文件不是有效的 GeoJSON。'); }
+    const gs = (j.type === 'FeatureCollection' ? j.features || [] : j.type === 'Feature' ? [j] : [{ geometry: j }]).map(f => f && f.geometry).filter(Boolean);
+    if (!gs.length) return bad('文件里没有要素。');
+    const kindOf = g => ['Polygon', 'MultiPolygon'].includes(g.type) ? 'polygon' : g.type === 'Point' ? 'point' : 'other', kinds = new Set(gs.map(kindOf));
+    if (kinds.has('other')) return bad('文件里有线或其他几何，线索只收面或点。');
+    if (kinds.size > 1) return parseFile({ name, kind: 'mixed', n: gs.length }, domain);
+    const kind = [...kinds][0], g0 = gs[0];
+    let raw = kind === 'point' ? [g0.coordinates] : g0.type === 'Polygon' ? g0.coordinates[0] : g0.coordinates[0][0];
+    if (kind === 'polygon' && raw.length > 1 && raw[0][0] === raw.at(-1)[0] && raw[0][1] === raw.at(-1)[1]) raw = raw.slice(0, -1);
+    const pts = raw.map(fromLonLat);
+    if (kind === 'polygon' && pts.length < 3) return bad('面至少要 3 个角点。');
+    if (!pts.every(inMap)) return bad('坐标不在示意地图范围内（东经 113.30°–113.46°，北纬 23.08°–23.20°）。');
+    return parseFile({ name, kind, pts, n: gs.length }, domain); }
+
+  /* ---------- 线索来源：三级联动，界面只显示名称，不显示编码；上级编码显式存，不按前缀推 ---------- */
+  const sourceChildren = c => { const x = sourceOf(c); return !x ? [] : x.lv === 0 ? SOURCES.filter(y => y.lv === 1 && y.g === c) : c === '13' ? SOURCES.filter(y => y.lv === 2) : []; };
+  const sourcePath = c => { const x = c && sourceOf(c); return !x ? [] : x.lv === 0 ? [c] : x.lv === 1 ? [x.g, c] : [x.g, '13', c]; };
+  const sourceName = c => sourcePath(c).map(k => sourceOf(k).n).join(' / ');
+
+  /* ---------- 录入要件：公共 + 来源 + 类型 三层叠加 ---------- */
+  function items(d) {
+    const out = [], add = (layer, k, label, req, cons, w = 'text', x = {}) => out.push({ layer, key: k, label, req: !!req, cons, w, ...x });
+    add('公共', 'clue.source', '线索来源', 1, '阻断', 'source'); add('公共', 'clue.domain', '法域', 1, '阻断', 'domain');
+    add('公共', 'clue.location', '位置', 1, '阻断', 'map'); add('公共', 'clue.received_at', '收到或发现的时间', 1, '阻断', 'datetime');
+    add('公共', 'clue.narrative', '反映的情况', 1, '阻断', 'textarea'); add('公共', 'clue.materials', '随附材料', 0, '提示', 'files');
+    add('公共', 'clue.tags', '标签', 0, '提示'); add('公共', 'clue.initial_types', '初步涉嫌违法类型', 0, '提示', 'types');
+    const g = d.sourceCode && sourceOf(d.sourceCode).g;
+    if (g === '1') { add('来源', 'clue.finder', '发现人', 1, '阻断'); if (d.sourceCode === '16') add('来源', 'clue.patrol_no', '巡查记录号', 1, '阻断');
+      if (/^13/.test(d.sourceCode)) add('来源', 'clue.campaign_no', '专项批次号', 0, '警告', 'text', { note: '选填，核查前补齐' });
+      add('来源', 'clue.satellite_batch', '卫片批次', 0, '提示'); add('来源', 'clue.satellite_plot', '卫片图斑编号', 0, '提示'); }
+    if (g === '5') { add('来源', 'clue.assign_doc_no', '交办文号', 1, '阻断'); add('来源', 'clue.assign_org', '交办单位', 1, '阻断'); }
+    if (g === '22') { add('来源', 'clue.transfer_doc_no', '移送函编号', 1, '阻断'); add('来源', 'clue.transfer_org', '移送单位', 1, '阻断'); }
+    if (g === '3') { add('来源', 'clue.reporter_anonymous', '是否匿名', 1, '阻断', 'yesno');
+      if (d.f['clue.reporter_anonymous'] !== '是') { add('来源', 'clue.reporter_name', '反映人姓名', 0, '提示'); add('来源', 'clue.reporter_contact', '反映人联系方式', 0, '提示'); }
+      add('来源', 'clue.verifiable_basis', '可核查的事实基础', 1, '阻断', 'textarea'); }
+    if (g === '21') { add('来源', 'clue.opinion_source', '舆情来源', 1, '阻断'); add('来源', 'clue.opinion_published_at', '发布时间', 1, '阻断');
+      add('来源', 'clue.opinion_ref', '链接或材料', 0, '警告', 'text', { note: '选填，核查前补齐' }); }
+    d.initialTypes.forEach(c => TYPES.find(t => t.c === c).items.forEach(([k, label, cons, req = true]) => add('类型', `type.${c}.${k}`, label, req, cons, 'text', { type: c })));
+    return out; }
+  function has(d, it) {
+    switch (it.key) { case 'clue.source': return !!d.sourceCode; case 'clue.domain': return !!d.domain; case 'clue.location': return geomOk(d);
+      case 'clue.initial_types': return d.initialTypes.length > 0; default: { const v = d.f[it.key]; return v != null && String(v).trim() !== ''; } } }
+  function validate(d) { // 公共层、来源层的阻断项阻断录入；类型层任何项都不阻断录入，缺的记入缺件清单（#198）
+    const missing = items(d).filter(i => i.req && !has(d, i));
+    return { blocking: missing.filter(i => i.layer !== '类型' && i.cons === '阻断'), typeGaps: missing.filter(i => i.layer === '类型') }; }
+
+  /* ---------- 状态与规则 ---------- */
+  const isClosed = l => ['closed', 'closed-with-old', 'transferred-out'].includes(l.status);
+  const isReport = l => sourceOf(l.sourceCode).g === '3'; // 「3 群众举报」及其下全部编码一律只能派
+  const entitled = (s, l, k) => { const a = ACTORS[k]; if (!a || a.role === '监督') return false; // 捞回的三类人，监督不能
+    if (k === l.enteredBy) return true; if (a.role !== '内勤') return false; if (a.org === l.enteredOrg) return true;
+    return l.hits.some(h => { const o = s.leads.find(x => x.id === h.id); return o && o.handlerOrg === a.org; }); };
+  const stageText = l => ({ handling: '线索办理中', closed: '已结案', decide: '未派出', held: '未派出', pool: '待分派', 'org-set': '待指定承办人', assigned: '线索办理中', 'closed-with-old': '已结案', 'transferred-out': '已移送' })[l.status];
+  function limitedView(s, hit) { // 有限信息视图（#25）：匿名既有线索只到月、只到区；不给来源、身份、材料、精确几何、录入人
+    const o = s.leads.find(x => x.id === hit.id), c = locate(o.geometry)[0].cell;
+    return { id: o.id, ratio: hit.ratio, reg: o.anonymous ? o.registeredAt.slice(0, 7) : o.registeredAt.slice(0, 10), domain: DOMAINS[o.domain].n,
+      types: o.initialTypes.map(t => TYPES.find(x => x.c === t).n), place: o.anonymous ? c.d : `${c.d} · ${c.n}`, stage: stageText(o), tags: o.tags }; }
+
+  const seed = (id, domain, src, anon, kind, pts, org, reg, tags, types, closed = false) => ({ id, domain, sourceCode: src, anonymous: anon, geometry: { kind, pts }, initialTypes: types, f: {}, gaps: [],
+    enteredBy: '—', enteredOrg: org, poolOrg: org, handlerOrg: org, registeredAt: reg, status: closed ? 'closed' : 'handling', hits: [], ack: false, check: null, tags, lead: null, assist: [] });
+  const init = () => ({ clock: 0, actorId: 'lin', seq: 0, trail: [], reminders: [], notice: null, lastRegistered: null, leads: [
+    seed('X-0412', 'land', '301', false, 'polygon', [[40,30],[140,30],[140,100],[40,100]], 'sp', '2026-09-12', ['占耕'], ['land_occupy_without_approval']),
+    seed('X-0398', 'land', '302', true, 'polygon', [[30,190],[130,190],[130,260],[30,260]], 'th', '2026-08-03', [], ['land_farmland_permanent']),
+    seed('X-0377', 'land', '16', false, 'polygon', [[230,30],[330,30],[330,100],[230,100]], 'ld', '2026-07-20', [], [], true),
+    seed('X-0420', 'survey', '16', false, 'point', [[30,130]], 'sp', '2026-10-02', ['重点关注'], ['survey_qualification_none'])] });
+
+  function reduce(state, a) {
+    if (a.t === 'reset') return init();
+    const s = structuredClone(state); s.notice = null; s.clock++;
+    const who = ACTORS[s.actorId], L = id => s.leads.find(l => l.id === id);
+    const stamp = () => { const m = 540 + s.clock; return `10-21 ${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
+    const log = (text, leadId, by) => s.trail.unshift({ t: stamp(), who: by || `${who.n} · ${ORGS[who.org].n} · ${who.role}`, text, leadId });
+    const no = text => { s.notice = { k: 'err', text }; return s; };
+    const ok = text => { s.notice = { k: 'ok', text }; return s; };
+    const isNei = who.role === '内勤';
+    switch (a.t) {
+      case 'actor': s.actorId = a.id; s.clock--; return s;
+      case 'register': {
+        s.lastRegistered = null; const d = a.draft, v = validate(d);
+        if (v.blocking.length) { const names = v.blocking.map(i => i.label).join('、'); log(`失败留痕：录入被拒，缺 ${names}`); return no(`公共层或来源层有必填项缺失，录入被阻断：${names}。已记一行失败留痕。`); }
+        const id = 'X-' + String(500 + (++s.seq)).padStart(4, '0');
+        const hits = s.leads.filter(o => !isClosed(o)).map(o => ({ id: o.id, ratio: overlap(d.geometry, o.geometry) })).filter(h => h.ratio >= THRESHOLD).sort((x, y) => y.ratio - x.ratio);
+        const gaps = v.typeGaps.map(i => ({ key: i.key, label: i.label, cons: i.cons }));
+        s.leads.push({ id, domain: d.domain, sourceCode: d.sourceCode, anonymous: d.f['clue.reporter_anonymous'] === '是', geometry: d.geometry, initialTypes: [...d.initialTypes], f: { ...d.f }, gaps,
+          geoFile: d.file && d.file.ok ? d.file.name : null, enteredBy: s.actorId, enteredOrg: who.org, poolOrg: who.org, handlerOrg: null, registeredAt: '2026-10-21', status: hits.length ? 'decide' : 'pool', hits, ack: false,
+          check: DOMAINS[d.domain].check ? 'running' : null, tags: (d.f['clue.tags'] || '').split(/[,，\s]+/).filter(Boolean), lead: null, assist: [] });
+        s.lastRegistered = id;
+        log(`登记线索 ${id}${gaps.length ? `；类型层缺 ${gaps.length} 项，记入缺件清单（不写失败留痕）` : ''}`, id);
+        if (DOMAINS[d.domain].check) log('自动核查自动开始', id, '系统');
+        log(hits.length ? `疑似重复：与 ${hits.map(h => h.id).join('、')} 空间重合 ≥ ${THRESHOLD * 100}%，等待录入人决定派不派` : `未发现疑似重复，进入 ${ORGS[who.org].n} 内勤池`, id, '系统');
+        return s; }
+      case 'decide': {
+        const l = L(a.id); if (!l || l.status !== 'decide') return no('这条线索不在「待决定」状态。');
+        if (s.actorId !== l.enteredBy) return no('疑似重复的线索派不派，由录入人决定。');
+        if (a.choice === 'hold') { if (isReport(l)) return no('投诉、举报类线索必须派出，不能选不派。'); l.status = 'held'; log('选择不派（疑似重复，默认）', l.id); return ok('已设为不派。可在「不派线索」页捞回。'); }
+        if (!isReport(l) && !a.ack) return no('疑似重复的线索要派出，须先点「已知晓」。');
+        l.status = 'pool'; l.ack = !isReport(l); log(isReport(l) ? '派出（投诉、举报类只能派；重合信息仅供参考）' : '点「已知晓」，派出', l.id); return ok(`已派出，进入 ${ORGS[l.poolOrg].n} 内勤池。`); }
+      case 'check': { const l = L(a.id); if (!l || l.check !== 'running') return no('这条线索没有进行中的自动核查。');
+        l.check = a.result; log(a.result === 'done' ? '自动核查已完成，核查报告和分析图已挂到线索上' : '自动核查没跑成，挂重跑提示，线索仍可分派', l.id, '系统'); return s; }
+      case 'rerun': { const l = L(a.id); if (!l || l.check !== 'failed') return no('只有没跑成的核查可以重跑。'); l.check = 'running'; log('重新运行自动核查', l.id); return ok('已重新运行，核查进行中。'); }
+      case 'assignOrg': {
+        const l = L(a.id); if (!isNei) return no('只有内勤可以指定承办机构。'); if (!l || l.status !== 'pool') return no('这条线索不在待分派池。');
+        if (!scope(who.org).includes(l.poolOrg)) return no('这条线索不在你的数据范围内。');
+        if (!scope(who.org).includes(a.org)) return no('该机构在你的数据范围之外，只能走管辖移送或指定管辖。');
+        if (a.fb && (l.domain !== 'survey' || !a.fb.basis || !a.fb.basis.trim())) return no('兜底只用于测绘类，且须填所在区与依据。');
+        const loc = locate(l.geometry)[0].cell, dd = a.fb ? a.fb.district : loc.d;
+        l.handlerOrg = a.org; l.status = 'org-set';
+        log(`分派：承办机构＝${ORGS[a.org].n}。快照：所在区 ${dd}${a.fb ? '' : `、街道 ${loc.n}、所 ${ORGS[loc.org].n}`}（辖区对应）${a.fb ? `；改按注册地、办公地或户籍地，依据：${a.fb.basis}` : ''}`, l.id);
+        return ok(`已指定承办机构：${ORGS[a.org].n}。下一步由承办机构内勤指定主办人。`); }
+      case 'assignPeople': {
+        const l = L(a.id); if (!isNei || !l || l.status !== 'org-set' || who.org !== l.handlerOrg) return no('只有承办机构的内勤可以指定主办人、协办人。');
+        if (!a.lead) return no('请选主办人。'); l.lead = a.lead; l.assist = a.assist || []; l.status = 'assigned';
+        log(`指定主办人 ${a.lead}${l.assist.length ? `，协办人 ${l.assist.join('、')}` : ''}`, l.id); return ok('已分派。'); }
+      case 'transfer': {
+        const l = L(a.id); if (!isNei || !l || l.status !== 'pool' || !scope(who.org).includes(l.poolOrg)) return no('只有数据范围内的内勤可以对待分派线索作管辖移送。');
+        if (a.kind === 'org') { if (!a.org || a.org === l.poolOrg) return no('请选一个不同的机构。'); l.poolOrg = a.org; log(`管辖移送 → ${ORGS[a.org].n}（进入对方待分派池）`, l.id); return ok(`已移送到 ${ORGS[a.org].n} 的待分派池。`); }
+        if (!a.name || !a.doc || !a.date) return no('系统外机关：须填机关名称、移送书编号和日期。');
+        l.status = 'transferred-out'; log(`管辖移送 → ${a.name}（系统外机关），移送书 ${a.doc}，${a.date}。送出即办结本机关的环节`, l.id); return ok('已移送，本机关的环节办结。'); }
+      case 'revoke': {
+        const l = L(a.id); if (!l || l.status !== 'held') return no('这条线索不在不派状态。');
+        if (!entitled(s, l, s.actorId)) return no(who.role === '监督' ? '监督人员不能捞回。' : '只有录入人本人、录入机构的内勤、所撞既有线索承办机构的内勤可以捞回。');
+        if (!a.reason) return no('捞回须选理由。'); if (a.reason.startsWith('其他') && !(a.note || '').trim()) return no('选「其他」须写说明。');
+        l.status = 'pool'; s.reminders.forEach(r => { if (r.leadId === l.id) r.done = true; });
+        log(`捞回，理由：${a.reason}${a.note ? `（${a.note}）` : ''}`, l.id); return ok(`已捞回，进入 ${ORGS[l.poolOrg].n} 内勤池。`); }
+      case 'closeLead': { const o = L(a.id); if (!o || isClosed(o)) return s; o.status = 'closed'; log(`旧线索 ${o.id} 结案（不予立案）`, o.id, '系统');
+        s.leads.filter(m => m.status === 'held' && m.hits.some(h => h.id === o.id)).forEach(m => { s.reminders.push({ id: 'R' + (s.reminders.length + 1), leadId: m.id, oldId: o.id, done: false });
+          log(`提醒：${o.id} 已结案，请有权捞回的人逐条处理 ${m.id}（不自动派，不自动关）`, m.id, '系统'); }); return s; }
+      case 'resolveReminder': {
+        const r = s.reminders.find(x => x.id === a.rid), l = r && L(r.leadId); if (!r || r.done) return no('这条提醒已处理。');
+        if (!entitled(s, l, s.actorId)) return no(who.role === '监督' ? '监督人员不能处理这类提醒。' : '你不在有权捞回的人之列。');
+        if (a.how === 'revoke') { if (!a.reason) return no('捞回须选理由。'); if (a.reason.startsWith('其他') && !(a.note || '').trim()) return no('选「其他」须写说明。');
+          l.status = 'pool'; r.done = true; log(`处理提醒：捞回，理由：${a.reason}${a.note ? `（${a.note}）` : ''}`, l.id); return ok('已捞回并派出。'); }
+        if (!(a.note || '').trim()) return no('请写明原因。'); l.status = 'closed-with-old'; r.done = true; log(`处理提醒：写明原因，随旧线索 ${r.oldId} 一起办结。原因：${a.note}`, l.id); return ok('已随旧线索办结。'); }
+      case 'fillGap': { const l = L(a.id); if (!l || !(a.value || '').trim()) return no('请填写内容。'); l.f[a.key] = a.value; l.gaps = l.gaps.filter(g => g.key !== a.key); return ok('已补齐，这一项从缺件清单里消失（缺件清单是事实记录，不写留痕）。'); }
+    }
+    return s; }
+  return { THRESHOLD, SOURCES, DOMAINS, TYPES, ORGS, PEOPLE, ACTORS, CELLS, DISTRICT_ORG, REASONS, FILES, parseFile, parseGeoJSON, toGeoJSON, toLonLat, LON0, LAT1, DEG, geomOk, sourceChildren, sourcePath, sourceName, sourceOf, scope, depth, items, has, validate, overlap, overlapCells, locate, districts,
+    init, reduce, isClosed, isReport, entitled, stageText, limitedView };
+})();
+
+/* =====================================================================================
+   页面壳：只负责把 Model 的状态画出来、把点击翻译成动作。可整体丢弃。
+   ===================================================================================== */
+const M = Model;
+let state = M.init();
+const blank = () => ({ domain: 'land', sourceCode: '', f: {}, geometry: { kind: 'polygon', pts: [] }, initialTypes: [], file: null });
+const ui = { geoMode: 'file', tdtKey: (typeof window !== 'undefined' && window.TIANDITU_KEY) ? String(window.TIANDITU_KEY).trim() : '', tdtBase: 'vec', page: 'register', draft: blank(), errKeys: [], modal: null, result: null, sel: null, tmp: {}, showOld: false, gapList: true, gapDispatch: true, intro: true, sc: 0, done: {}, focus: null };
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const actor = () => M.ACTORS[state.actorId];
+const who = k => { const a = M.ACTORS[k]; return a ? `${a.n} · ${M.ORGS[a.org].n} · ${a.role}` : '—'; };
+const orgN = id => id ? M.ORGS[id].n : '—';
+const lead = id => state.leads.find(l => l.id === id);
+const pct = r => Math.round(r * 100) + '%';
+const dispatch = a => { state = M.reduce(state, a); render(); };
+const domainN = l => M.DOMAINS[l.domain].n;
+const srcN = c => M.sourceName(c); // 只显示名称路径，不显示编码
+function tdtTiles() { // 天地图 WMTS（Web 墨卡托）。需要在顶栏填入天地图 key；没有 key 时只画底图示意。
+  const key = ui.tdtKey; if (!key) return '';
+  const z = 13, n = 2 ** z, layer = ui.tdtBase === 'img' ? 'img' : 'vec', note = layer === 'img' ? 'cia' : 'cva', D = M.DEG, L0 = M.LON0, T = M.LAT1;
+  const colOf = lon => Math.floor((lon + 180) / 360 * n), rowOf = lat => { const r = lat * Math.PI / 180; return Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n); };
+  const lonOf = x => x / n * 360 - 180, latOf = y => Math.atan(Math.sinh(Math.PI * (1 - 2 * y / n))) * 180 / Math.PI;
+  let s = '';
+  for (let x = colOf(L0); x <= colOf(L0 + 400 * D); x++) for (let y = rowOf(T); y <= rowOf(T - 300 * D); y++) {
+    const X0 = (lonOf(x) - L0) / D, X1 = (lonOf(x + 1) - L0) / D, Y0 = (T - latOf(y)) / D, Y1 = (T - latOf(y + 1)) / D;
+    for (const lay of [layer, note]) s += `<image href="${`https://t${(x + y) % 8}.tianditu.gov.cn/${lay}_w/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=${lay}&STYLE=default&TILEMATRIXSET=w&FORMAT=tiles&TILECOL=${x}&TILEROW=${y}&TILEMATRIX=${z}&tk=${encodeURIComponent(key)}`.replace(/&/g, '&amp;')}" x="${X0}" y="${Y0}" width="${X1 - X0}" height="${Y1 - Y0}" preserveAspectRatio="none"/>`; }
+  return s; }
+const STATUS = { decide: '待录入人决定派不派', held: '不派', pool: '待分派', 'org-set': '待指定承办人', assigned: '已分派', 'closed-with-old': '随旧线索办结', 'transferred-out': '已管辖移送（系统外）', handling: '线索办理中（既有）', closed: '已结案（既有）' };
+
+/* ---------- 小部件 ---------- */
+function mapSvg(o) {
+  let s = `<svg class="map ${o.click ? 'click' : ''} ${o.small ? 'small' : ''}" viewBox="0 0 400 300" ${o.click ? 'data-map="1"' : ''}>`;
+  const tiles = o.small ? '' : tdtTiles();
+  s += `<rect width="400" height="300" fill="#eef3ee"/>${tiles}`;
+  M.CELLS.forEach(c => s += `<rect x="${c.x}" y="${c.y}" width="200" height="150" fill="none" stroke="#78716c" stroke-opacity=".55" stroke-dasharray="3 3"/>`);
+  s += `<text x="396" y="295" text-anchor="end" font-size="9" fill="#57534e" stroke="#fff" stroke-width="2.5" paint-order="stroke">${tiles ? '© 天地图' : '请配置本地天地图 key（见 README）'}</text>`;
+  (o.old || []).forEach(l => { const p = l.geometry.pts; s += l.geometry.kind === 'point' ? `<circle cx="${p[0][0]}" cy="${p[0][1]}" r="4" fill="none" stroke="#b54708" stroke-dasharray="2"/>` : `<polygon points="${p.map(q => q.join(',')).join(' ')}" fill="none" stroke="#b54708" stroke-dasharray="4"/><text x="${p[0][0] + 3}" y="${p[0][1] + 11}" font-size="9" fill="#b54708">${l.id}</text>`; });
+  if (o.overlap && o.overlap.length) s += `<g fill="#f59e0b" opacity=".6">${o.overlap.map(p => `<rect x="${p[0] - 2.5}" y="${p[1] - 2.5}" width="5" height="5"/>`).join('')}</g>`;
+  const p = o.pts || [];
+  if (o.kind === 'point') p.forEach(q => s += `<circle cx="${q[0]}" cy="${q[1]}" r="5" fill="#1f6b56" stroke="#fff" stroke-width="1.5"/>`);
+  else { if (p.length >= 3) s += `<polygon points="${p.map(q => q.join(',')).join(' ')}" fill="#1f6b56" fill-opacity=".14" stroke="#1f6b56" stroke-width="1.6"/>`; else if (p.length === 2) s += `<polyline points="${p.map(q => q.join(',')).join(' ')}" fill="none" stroke="#1f6b56"/>`;
+    p.forEach(q => s += `<circle cx="${q[0]}" cy="${q[1]}" r="2.6" fill="#1f6b56"/>`); }
+  return s + '</svg>'; }
+
+function chips(l, ctx) { // 重跑提示一直挂着；缺件只作提示，不属于警告，是否露出受页面开关控制（#191 待反应）
+  const c = [];
+  if (l.check === 'failed') c.push('<span class="tag amber" title="核查没跑成，不影响分派">重跑提示：自动核查没跑成</span>');
+  if (l.check === 'running') c.push('<span class="tag gray">自动核查进行中</span>');
+  if (l.hits.length) c.push(`<span class="tag gray">疑似重复${l.ack ? '·已知晓' : ''}</span>`);
+  if (M.isReport(l)) c.push('<span class="tag gray">举报类·只能派</span>');
+  if (l.gaps.length && (ctx === 'detail' || (ctx === 'list' && ui.gapList) || (ctx === 'dispatch' && ui.gapDispatch))) c.push(`<span class="tag blue" title="提示，不影响分派">缺件 ${l.gaps.length} 项</span>`);
+  return c.join(''); }
+
+function checkCard(l) { // 土地、矿产才有这块；测绘、规划整块不出现
+  if (!M.DOMAINS[l.domain].check) return '';
+  const st = { running: '<span class="tag gray">进行中</span>', done: '<span class="tag">已完成</span>', failed: '<span class="tag amber">没跑成</span>' }[l.check];
+  let b = '';
+  if (l.check === 'failed') b = `<div class="banner amber">重跑提示：自动核查没跑成。线索仍可分派，这条提示一直挂到核查跑成为止。<br><button class="btn btn-sm btn-line" data-act="rerun" data-id="${l.id}">重新运行核查</button></div>`;
+  if (l.check === 'done') b = '<div class="kv"><span class="k">核查报告</span><span>已生成（示意）· 只核事实，不判断有无问题</span><span class="k">分析图</span><span>已生成（示意）</span></div>';
+  if (l.check === 'running') b = '<div class="help">录入后自动运行，不能跳过。核查只核事实，不拦分派。</div>';
+  return `<div class="card"><div class="card-h">自动核查 ${st}</div>${b}</div>`; }
+
+function dupCard(l) {
+  if (!l.hits.length) return '';
+  let h = `<div class="card"><div class="card-h">疑似重复<span class="hint">与未结案线索空间重合 ≥ ${pct(M.THRESHOLD)}（按较小一块算）</span></div>
+    <div class="banner gray">存在空间范围重合的既有线索。系统不会合并、删除任何线索。</div>`;
+  l.hits.forEach(hit => { const v = M.limitedView(state, hit), o = lead(hit.id);
+    h += `<div class="hit"><div>${mapSvg({ pts: l.geometry.pts, kind: l.geometry.kind, overlap: M.overlapCells(l.geometry, o.geometry), small: true })}<div class="help">橙色＝重合部分。只画你自己这条的范围，不画既有线索的轮廓。${l.geometry.kind === 'point' ? '（点状：该点落在既有线索范围内。）' : ''}</div></div>
+      <div class="kv"><span class="k">重合比例</span><b>${pct(v.ratio)}</b><span class="k">编号</span><span class="mono">${v.id}</span><span class="k">登记时间</span><span>${v.reg}</span><span class="k">法域</span><span>${v.domain}</span>
+      <span class="k">初步涉嫌类型</span><span>${v.types.map(esc).join('；') || '—'}</span><span class="k">所在</span><span>${v.place}</span><span class="k">办理阶段</span><span>${v.stage}</span><span class="k">标签</span><span>${v.tags.map(t => `<span class="tag gray">${esc(t)}</span>`).join('') || '—'}</span></div></div>`; });
+  return h + '<div class="help" style="margin-top:8px">有限信息视图：不显示反映人身份与联系方式、原始材料、精确坐标与几何、录入人。</div></div>'; }
+
+/* ---------- 页面 ---------- */
+function field(it) {
+  const d = ui.draft, v = d.f[it.key] ?? '', req = it.req ? '<span class="req">*</span>' : '';
+  let w;
+  if (it.w === 'source') { const path = M.sourcePath(d.sourceCode), opt = (x, sel) => `<option value="${x.c}" ${sel === x.c ? 'selected' : ''}>${esc(x.n)}${x.pend ? '（名称待定）' : ''}</option>`;
+    const sel = (lv, list, ph) => `<select class="select" style="margin-bottom:6px" data-bind="source" data-lv="${lv}"><option value="">${ph}</option>${list.map(x => opt(x, path[lv])).join('')}</select>`;
+    w = sel(0, M.SOURCES.filter(x => x.lv === 0), '请选择线索来源');
+    if (path[0] && M.sourceChildren(path[0]).length) w += sel(1, M.sourceChildren(path[0]), '（只选到上一级）');
+    if (path[1] && M.sourceChildren(path[1]).length) w += sel(2, M.sourceChildren(path[1]), '（只选到上一级）');
+    w += '<div class="help">多级选择，可只选到大类。</div>'; }
+  else if (it.w === 'domain') w = `<select class="select" data-bind="domain">${Object.entries(M.DOMAINS).map(([k, x]) => `<option value="${k}" ${d.domain === k ? 'selected' : ''}>${x.n}</option>`).join('')}</select><div class="help">一条线索一个法域。</div>`;
+  else if (it.w === 'map') { const g = d.geometry, pts = g.pts, poly = g.kind === 'polygon', f = d.file, old = ui.showOld ? state.leads.filter(l => !M.isClosed(l)) : [], draw = ui.geoMode === 'draw';
+    // 一个整体的 GIS 地图控件：工具条（取得位置的方式、底图）+ 地图 + 文件状态。上传的内容显示在地图上，手绘的成果自动存成 GIS 文件。
+    const tool = `<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:6px"><div class="tabs" style="margin:0"><button class="${draw ? '' : 'on'}" data-act="geoMode" data-m="file">上传 GIS 文件</button><button class="${draw ? 'on' : ''}" data-act="geoMode" data-m="draw">在地图上手绘</button></div>
+      <span class="small">底图 <select data-bind="tdtBase" style="height:24px"><option value="vec" ${ui.tdtBase !== 'img' ? 'selected' : ''}>天地图 · 矢量</option><option value="img" ${ui.tdtBase === 'img' ? 'selected' : ''}>天地图 · 影像</option></select>
+      · ${ui.tdtKey ? '底图已接天地图（key 来自本地未入库配置）' : '<span style="color:var(--amber)">请配置本地天地图 key（同目录 tianditu.local.js，见 README）</span>'}</span></div>`;
+    w = `<div style="border:1px solid var(--border);border-radius:10px;padding:10px;background:#fafaf9">${tool}`;
+    if (!draw) w += `<div style="margin-bottom:6px"><input type="file" data-bind="file" accept=".geojson,.json,.kml,.zip,.shp,.gpkg"> <span class="help">${poly ? '土地、矿产上传「面」' : '测绘、规划上传「点」'}，坐标系 CGCS2000。批量时一个要素＝一条线索，同一批只能是同一法域、同一种几何类型。</span>
+      <div class="help" style="margin-top:4px">原型只真正读取 GeoJSON（用「手绘」下载的文件可以再传回来）；其他格式按文件名取示例几何代替。没有文件可点：${M.FILES.map((x, i) => `<button class="btn btn-sm" style="margin:2px 4px 0 0" data-act="sampleFile" data-i="${i}">${esc(x.name)}</button>`).join('')}</div></div>`;
+    else w += `<div class="help" style="margin-bottom:6px">${poly ? '土地、矿产画「面」：在地图上依次点出范围的各个角（至少 3 个点）。' : '测绘、规划记「点」：在地图上点一下。'}　<button class="btn btn-sm" data-act="undoPt">撤销上一点</button> <button class="btn btn-sm" data-act="clearPts">清空</button>　已落 ${pts.length} 个点</div>`;
+    w += mapSvg({ pts, kind: g.kind, click: draw, old });
+    if (f) w += f.ok ? `<div class="banner ok" style="margin:8px 0 0">${f.drawn ? `手绘成果已保存为 GIS 文件「${esc(f.name)}」` : `已读取「${esc(f.name)}」`}：${f.features} 个要素，${poly ? '面' : '点'}，CGCS2000，已显示在地图上。${f.features > 1 ? '文件含多个要素，原型只取第一个（批量录入没做）。' : ''} <button class="btn btn-sm" data-act="download">下载 GeoJSON</button></div>` : `<div class="banner err" style="margin:8px 0 0">「${esc(f.name)}」不能用：${esc(f.error)}</div>`;
+    w += '</div>';
+    if (M.geomOk(d)) { const ds = M.districts(g), ls = M.locate(g);
+      w += `<div class="banner gray" style="margin-top:8px"><b>系统算出的位置</b>：${ds.map(x => `${x.d}${ds.length > 1 ? ' ' + pct(x.share) : ''}`).join('、')}；${ls.map(x => `${x.cell.n}${ls.length > 1 ? ' ' + pct(x.share) : ''}`).join('、')}。
+        <div class="help">给你核对位置对不对。你不用填所在区，线索上也不存所在区；分派时系统再按「辖区对应」现算。</div>${ds.length > 1 ? '<div style="margin-top:4px">提示：这块面跨区。一般应分割后重传，也可以照传，由内勤在分派时选。不阻断录入。</div>' : ''}</div>`; } }
+  else if (it.w === 'files') { const fs = Array.isArray(v) ? v : [], anon = d.f['clue.reporter_anonymous'] === '是';
+    w = `<input type="file" multiple data-bind="files">${fs.length ? `<table class="table" style="margin-top:6px">${fs.map((n, i) => `<tr><td>${esc(n)}</td><td style="width:60px"><button class="btn btn-sm" data-act="rmFile" data-i="${i}">移除</button></td></tr>`).join('')}</table>` : ''}
+      <div class="help">选填，可多个。照片、视频、举报信、文书等原始材料，落在这条线索名下。原型不真正上传，只记文件名。</div>${anon ? '<div class="banner gray" style="margin-top:6px">这是匿名举报。举报信原件往往带反映人姓名，上传原件会破坏匿名。匿名时材料的边界还没定（#24 第十三节，留 #10），原型不替业务限制。</div>' : ''}`; }
+  else if (it.w === 'types') w = `<div class="checks">${M.TYPES.filter(t => t.d === d.domain).map(t => `<label title="${esc(t.n)}"><input type="checkbox" data-bind="type" value="${t.c}" ${d.initialTypes.includes(t.c) ? 'checked' : ''}>${esc(t.n.length > 22 ? t.n.slice(0, 22) + '…' : t.n)}</label>`).join('')}</div><div class="help">可空、可多选。类型层要件取所选类型的并集。清单只是示例。</div>`;
+  else if (it.w === 'yesno') w = `<div class="checks">${['是', '否'].map(o => `<label><input type="radio" name="yn" data-f="${it.key}" data-rr="1" value="${o}" ${v === o ? 'checked' : ''}>${o}</label>`).join('')}</div>`;
+  else if (it.w === 'textarea') w = `<textarea class="input" data-f="${it.key}">${esc(v)}</textarea>`;
+  else if (it.w === 'datetime') { const show = String(v || '').replace('T', ' ').slice(0, 10);
+    w = `<input class="input" data-f="${it.key}" value="${esc(show)}" placeholder="年-月-日，如 2026-10-21" inputmode="numeric" style="max-width:200px"><div class="help">格式：年-月-日</div>`; }
+  else w = `<input class="input" data-f="${it.key}" value="${esc(v)}">`;
+  const err = ui.errKeys.includes(it.key) ? '<div class="err">必填，请补充</div>' : '';
+  const tp = it.layer === '类型' && it.req ? `<div class="help">录入时必填 · 缺件后果：${it.cons}。缺了也能保存，会记入缺件清单。</div>` : '';
+  return `<div class="form-row"><label>${esc(it.label)}${req}</label><div>${w}${it.note ? `<div class="help">${it.note}</div>` : ''}${tp}${err}</div></div>`; }
+
+function pageForm() {
+  const its = M.items(ui.draft), by = l => its.filter(i => i.layer === l);
+  const a = actor(); let h = '';
+  if (ui.intro) h += `<div class="card"><div class="card-h">这个原型要回答什么<span class="hint"><a href="#" data-act="intro">收起</a></span></div>
+    <p>用点得动的低保真界面，把「线索登记 → 分派」摆出来让人反应：<b>登记表单怎么提示缺件、几何怎么录；疑似重复怎么提示、默认不派与「已知晓」；自动核查的三种状态与重跑提示；分派、不派与捞回。</b></p>
+    <p class="help">右侧「引导演示」有 6 个场景，每步一个按钮，照着点；也可以用顶部「身份」自由切换后随便点。所有口径取自 #24、#25、#187、#198、#111 的定案，不标待定；仅有两项待定：① 60% 参数放哪配置；② 304、802、803、21 名称统一（下拉里标「名称待定」）。</p>
+    <details><summary class="small" style="cursor:pointer">本原型替业务做的假设与界面上引出的新业务问题（需经狂人转达，不在原型里拍板）</summary><ol class="help" style="margin:6px 0 0 18px">
+      <li>位置是一个整体的 GIS 地图控件：「上传 GIS 文件」（默认）或「在地图上手绘」。上传的内容显示在地图上；手绘的成果自动存成 GeoJSON 文件，可下载，也能再上传回来。系统算出所在区、街道给录入人核对。几何类型与法域不符、点面混合的文件会被拒绝。</li>
+      <li>天地图：底图 key 放在同目录未入库的 <code>tianditu.local.js</code>（已被 gitignore）。有 key 时加载矢量／影像瓦片；没有则地图区显示「请配置本地天地图 key」，其余流程仍可点。key 可能限制来源域名，file:// 打开可能被拒，建议 <code>python3 -m http.server</code> 在本目录起本地服务后用浏览器打开。地图范围固定在广州一块示意区域。原型只读 GeoJSON，其他格式（KML、Shapefile 等）按文件名取示例几何；批量上传的界面没做。</li>
+      <li>点状线索（测绘、规划）怎么判「重合 60%」：原型暂按「点落在对方范围内＝100%，否则 0」。</li>
+      <li>自动核查没跑成后，「重跑」是人点还是系统自动再试、谁能点：原型放了手动按钮。</li>
+      <li>捞回的理由选项：原型给了 4 条示意，清单待业务定。</li>
+      <li>#25 匿名规则只写了「当前实名、既有匿名时，实名方同规则过滤」：原型对既有线索匿名时按规则过滤，对「当前匿名、既有实名」不过滤。是否要对称，待确认。</li>
+      <li>缺件清单在列表页、分派页是否露出（归本票，顶部两个开关供反应）：露出时只作蓝灰色提示，不属于警告，不拦分派。</li>
+      <li>疑似重复放在「保存之后的派不派一步」，而不是画完位置立刻弹出：这是界面选择，请反应。</li>
+      <li>规划类 9 项移送系统外机关、不走分派：9 项是哪几项未在票里列出，原型没有做。重新分派、指定管辖也没有做。</li></ol></details></div>`;
+  else h += '<div class="small" style="margin-bottom:8px"><a href="#" data-act="intro">展开：这个原型要回答什么</a></div>';
+  h += `<div class="page-h"><div><h1>线索登记</h1><div class="desc">录入人：${who(state.actorId)}　·　公共层 + 来源层 + 类型层叠加　·　不记管辖机关与管辖连接点</div></div></div>`;
+  if (ui.errKeys.length) h += `<div class="banner err">公共层或来源层的必填项没填，保存被阻断（红字处）。已记一行失败留痕：谁、何时、缺哪几项。</div>`;
+  h += `<div class="card"><div class="card-h">公共要件</div>${by('公共').map(field).join('')}</div>`;
+  if (by('来源').length) h += `<div class="card"><div class="card-h">来源要件<span class="hint">按来源大类 · ${esc(srcN(ui.draft.sourceCode))}</span></div>${by('来源').map(field).join('')}</div>`;
+  if (by('类型').length) h += `<div class="card"><div class="card-h">类型要件<span class="hint">示例清单，实际由 #181–#184 定</span></div><div class="banner blue">类型层不是录入门槛：必填项没填也能保存，保存时会弹窗列出缺项，确认后记入线索的缺件清单。</div>${by('类型').map(field).join('')}</div>`;
+  h += `<button class="btn btn-primary" data-act="save">保存</button> <span class="small">公共层、来源层缺必填项会被阻断；类型层缺项弹窗确认后可保存</span>`;
+  return h; }
+
+function pageResult(l) {
+  const rep = M.isReport(l), mine = state.actorId === l.enteredBy;
+  let h = `<div class="page-h"><div><h1>线索 <span class="mono">${l.id}</span> 已登记</h1><div class="desc">${domainN(l)} · ${esc(srcN(l.sourceCode))} · 位置：${M.districts(l.geometry).map(x => x.d).join('、')}　${chips(l, 'detail')}</div></div><button class="btn" data-act="again">继续录入下一条</button></div>`;
+  h += checkCard(l);
+  if (!l.hits.length) h += `<div class="banner ok">未发现疑似重复，已派出：进入「${orgN(l.poolOrg)}」内勤池，等待内勤分派。</div>`;
+  else { h += dupCard(l);
+    if (l.status === 'decide') {
+      if (!mine) h += `<div class="banner gray">派不派由录入人（${who(l.enteredBy)}）决定。</div>`;
+      else if (rep) h += `<div class="card"><div class="banner blue">投诉、举报类线索必须派出，不能选不派。上面的重合信息仅供参考。</div><button class="btn btn-primary" data-act="decide" data-id="${l.id}" data-choice="send">派出</button> <button class="btn" disabled>不派</button> <span class="small">「3 群众举报」及其下全部编码都只能派</span></div>`;
+      else h += `<div class="card"><div class="card-h">派不派？<span class="hint">疑似重复，默认不派</span></div><button class="btn btn-primary" data-act="decide" data-id="${l.id}" data-choice="hold">不派（默认）</button> <button class="btn btn-line" data-act="decide" data-id="${l.id}" data-choice="send" data-ack="1">已知晓，仍要派出</button>
+        <div class="help" style="margin-top:6px">点「已知晓」后派出，系统留痕。同一地点的不同违法行为照常派，后面由承办部门决定标记去重或认定不实。</div></div>`; }
+    else h += `<div class="banner ${l.status === 'held' ? 'gray' : 'ok'}">${l.status === 'held' ? '已设为不派。线索在「不派线索」页，有权的人可以捞回。' : `已派出（${l.ack ? '录入人已点「已知晓」' : '举报类只能派'}）：进入「${orgN(l.poolOrg)}」内勤池。`}</div>`; }
+  if (l.gaps.length) h += `<div class="banner blue">缺件清单（${l.gaps.length} 项）已记在线索上，在线索详情常驻，补齐后消失：${l.gaps.map(g => esc(g.label)).join('、')}。</div>`;
+  return h; }
+
+function pageList() {
+  const a = actor(), vis = state.leads.filter(l => a.org === 'sj' || [l.enteredOrg, l.poolOrg, l.handlerOrg].some(o => o && M.scope(a.org).includes(o)) || l.enteredBy === state.actorId);
+  let h = `<div class="page-h"><div><h1>线索列表</h1><div class="desc">${who(state.actorId)} 可见 ${vis.length} 条</div></div></div>
+    <table class="table"><tr><th>编号</th><th>法域</th><th>来源</th><th>状态</th><th>承办机构</th><th>提示</th></tr>${vis.map(l => `<tr class="pick ${ui.sel === l.id ? 'sel' : ''}" data-act="pickList" data-id="${l.id}"><td class="mono">${l.id}</td><td>${domainN(l)}</td><td>${esc(srcN(l.sourceCode))}</td><td>${STATUS[l.status]}</td><td>${orgN(l.handlerOrg)}</td><td>${chips(l, 'list')}</td></tr>`).join('')}</table>`;
+  const l = ui.sel && lead(ui.sel); if (l) h += '<div style="height:12px"></div>' + detail(l);
+  return h; }
+
+function detail(l) {
+  let h = `<div class="card"><div class="card-h">线索详情 <span class="mono">${l.id}</span></div><div class="kv"><span class="k">法域</span><span>${domainN(l)}</span><span class="k">线索来源</span><span>${esc(srcN(l.sourceCode))}</span><span class="k">状态</span><span>${STATUS[l.status]}${l.status === 'pool' ? `（${orgN(l.poolOrg)}内勤池）` : ''}</span>
+    <span class="k">承办机构</span><span>${orgN(l.handlerOrg)}</span><span class="k">主办／协办</span><span>${l.lead ? `${l.lead}${l.assist.length ? ' ／ ' + l.assist.join('、') : ''}` : '—'}</span><span class="k">录入人</span><span>${l.enteredBy === '—' ? '（既有线索）' : who(l.enteredBy)}</span>
+    <span class="k">位置文件</span><span>${l.geoFile ? esc(l.geoFile) : '（既有线索）'}</span>
+    <span class="k">随附材料</span><span>${Array.isArray(l.f['clue.materials']) && l.f['clue.materials'].length ? l.f['clue.materials'].map(esc).join('、') : '—'}</span></div></div>`;
+  h += `<div class="card"><div class="card-h">缺件清单<span class="hint">类型层「录入时必填」没填的项 · 常驻 · 补齐后消失 · 不写留痕</span></div>`;
+  h += l.gaps.length ? `<table class="table">${l.gaps.map(g => `<tr><td>${esc(g.label)}</td><td class="small">缺件后果：${g.cons}${g.cons === '阻断' ? '（进入处罚流程时拦，具体卡点归 #30）' : ''}</td><td><input class="input" style="min-height:26px;padding:2px 8px" data-t="gap_${g.key}" value="${esc(ui.tmp['gap_' + g.key] || '')}"></td><td><button class="btn btn-sm btn-line" data-act="fillGap" data-id="${l.id}" data-key="${g.key}">补齐</button></td></tr>`).join('')}</table>` : '<div class="help">没有缺件。</div>';
+  return h + '</div>' + checkCard(l) + dupCard(l); }
+
+const poolOf = a => state.leads.filter(l => l.status === 'pool' && M.scope(a.org).includes(l.poolOrg));
+const orgSetOf = a => state.leads.filter(l => l.status === 'org-set' && l.handlerOrg === a.org);
+function pageDispatch() {
+  const a = actor(); let h = `<div class="page-h"><div><h1>分派</h1><div class="desc">${who(state.actorId)}　·　线索进录入人所在机构的内勤池；第一步指定承办机构，第二步由承办机构内勤指定主办人、协办人</div></div></div>`;
+  if (a.role !== '内勤') return h + `<div class="banner gray">分派由内勤操作。请在顶部「身份」里切换到一位内勤（小林、老陈、阿梅、小石）。</div>`;
+  const p1 = poolOf(a), p2 = orgSetOf(a), sel = ui.sel && [...p1, ...p2].find(l => l.id === ui.sel);
+  const rows = (ls, title) => `<div class="card"><div class="card-h">${title}（${ls.length}）</div>${ls.length ? `<table class="table">${ls.map(l => `<tr class="pick ${ui.sel === l.id ? 'sel' : ''}" data-act="pick" data-id="${l.id}"><td class="mono">${l.id}</td><td>${domainN(l)}</td><td>${chips(l, 'dispatch')}</td></tr>`).join('')}</table>` : '<div class="help">空</div>'}</div>`;
+  h += `<div style="display:grid;grid-template-columns:330px 1fr;gap:14px;align-items:start"><div>${rows(p1, '待分派池')}${rows(p2, '待指定承办人')}</div><div>`;
+  if (!sel) return h + '<div class="banner gray">从左边选一条线索。</div></div></div>';
+  h += `<div class="card"><div class="card-h">线索 <span class="mono">${sel.id}</span> · ${domainN(sel)} ${chips(sel, 'dispatch')}</div>`;
+  if (sel.check === 'failed') h += '<div class="banner amber">重跑提示：自动核查没跑成。不影响分派，可以现在就派。</div>';
+  if (sel.gaps.length && ui.gapDispatch) h += `<div class="banner blue">提示：类型层还缺 ${sel.gaps.length} 项（${sel.gaps.map(g => esc(g.label)).join('、')}）。只是提示，不影响分派。</div>`;
+  if (sel.status === 'org-set') { const ppl = M.PEOPLE[sel.handlerOrg];
+    h += `<div class="kv"><span class="k">承办机构</span><span>${orgN(sel.handlerOrg)}</span></div><div class="form-row" style="margin-top:10px"><label>主办人<span class="req">*</span></label><select class="select" data-t="lead" data-rr="1"><option value="">请选择</option>${ppl.map(x => `<option ${ui.tmp.lead === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+      <div class="form-row"><label>协办人</label><div class="checks">${ppl.filter(x => x !== ui.tmp.lead).map(x => `<label><input type="checkbox" data-bind="assist" value="${x}" ${(ui.tmp.assist || []).includes(x) ? 'checked' : ''}>${x}</label>`).join('')}</div></div>
+      <button class="btn btn-primary" data-act="assignPeople">确认分派</button></div>`;
+    return h + '</div></div>'; }
+  const locs = M.locate(sel.geometry), ds = M.districts(sel.geometry), survey = sel.domain === 'survey', fb = survey && ui.tmp.fb;
+  const sugOrg = fb ? M.DISTRICT_ORG[ui.tmp.fbd || '天河区'] : (ds.length === 1 ? locs[0].cell.org : '');
+  const inScope = M.scope(a.org), pick = ui.tmp.org ?? (sugOrg && inScope.includes(sugOrg) ? sugOrg : '');
+  h += `<div class="card-h" style="font-size:13px">系统按位置现算的建议<span class="hint">只作建议，不自动派；线索上不存管辖事实</span></div><div class="kv">
+    <span class="k">所在区</span><span>${fb ? esc(ui.tmp.fbd || '天河区') + '（兜底：内勤选）' : ds.map(x => `${x.d}${ds.length > 1 ? ' ' + pct(x.share) : ''}`).join('、')}</span>
+    ${fb ? '' : `<span class="k">街道／所</span><span>${locs.map(x => `${x.cell.n}（${orgN(x.cell.org)}${ds.length > 1 ? ' ' + pct(x.share) : ''}）`).join('；')}</span>`}</div>`;
+  if (ds.length > 1 && !fb) h += '<div class="banner gray" style="margin-top:8px">这块面跨区。系统只列出各区面积占比，不自动取最大区。拿不准时报共同上级走指定管辖。</div>';
+  if (survey) h += `<div class="note"><label><input type="checkbox" data-t="fb" data-rr="1" ${fb ? 'checked' : ''}> 难以确定违法行为发生地，改按注册地、办公地或户籍地</label>
+    ${fb ? `<div class="form-row" style="margin:8px 0 0"><label>所在区<span class="req">*</span></label><select class="select" data-t="fbd" data-rr="1">${['天河区', '白云区'].map(x => `<option ${(ui.tmp.fbd || '天河区') === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div><div class="form-row" style="margin:8px 0 0"><label>依据<span class="req">*</span></label><input class="input" data-t="fbb" value="${esc(ui.tmp.fbb || '')}" placeholder="如：单位注册地在白云区"></div>` : ''}</div>`;
+  h += `<div class="form-row" style="margin-top:10px"><label>承办机构<span class="req">*</span></label><div><select class="select" data-t="org" data-rr="1"><option value="">请选择</option>${Object.keys(M.ORGS).map(id => { const out = !inScope.includes(id); return `<option value="${id}" ${pick === id ? 'selected' : ''} ${out ? 'disabled' : ''}>${'　'.repeat(M.depth(id))}${M.ORGS[id].n}${out ? '（数据范围外，只能走管辖移送或指定管辖）' : ''}</option>`; }).join('')}</select>
+    <div class="help">限本机构或数据范围内的下级。没有所的区，承办机构只能选区分局。</div></div></div>
+    <button class="btn btn-primary" ${pick ? '' : 'disabled'} data-act="assignOrg">确认分派</button> <button class="btn" data-act="toggleX">不属本级管辖？管辖移送</button>`;
+  if (ui.tmp.xopen) { const k = ui.tmp.xk || 'org';
+    h += `<div class="note" style="margin-top:10px"><div class="checks"><label><input type="radio" name="xk" data-t="xk" data-rr="1" value="org" ${k === 'org' ? 'checked' : ''}>移送给系统内机构</label><label><input type="radio" name="xk" data-t="xk" data-rr="1" value="ext" ${k === 'ext' ? 'checked' : ''}>移送给系统外机关</label></div>
+      ${k === 'org' ? `<div class="form-row" style="margin:8px 0"><label>目标机构</label><select class="select" data-t="xo" data-rr="1"><option value="">请选择</option>${Object.keys(M.ORGS).filter(id => id !== sel.poolOrg).map(id => `<option value="${id}" ${ui.tmp.xo === id ? 'selected' : ''}>${M.ORGS[id].n}</option>`).join('')}</select></div><div class="help">线索进入对方的待分派池，含数据范围外的机构。送出即办结本机关的环节。</div>`
+      : `<div class="form-row" style="margin:8px 0 4px"><label>机关名称</label><input class="input" data-t="xn" value="${esc(ui.tmp.xn || '')}" placeholder="如：某镇人民政府"></div><div class="form-row" style="margin:0 0 4px"><label>移送书编号</label><input class="input" data-t="xd" value="${esc(ui.tmp.xd || '')}"></div><div class="form-row" style="margin:0 0 4px"><label>移送日期</label><input class="input" type="date" data-t="xt" value="${esc(ui.tmp.xt || '')}"></div>`}
+      <button class="btn btn-sm btn-line" data-act="transfer">确认移送</button></div>`; }
+  return h + '</div></div></div>'; }
+
+function pageHeld() {
+  const a = actor(), held = state.leads.filter(l => l.status === 'held'), rem = state.reminders.filter(r => !r.done && M.entitled(state, lead(r.leadId), state.actorId));
+  const rsel = id => `<select class="select" data-t="rs_${id}" style="width:auto"><option value="">选理由</option>${M.REASONS.map(r => `<option ${ui.tmp['rs_' + id] === r ? 'selected' : ''}>${r}</option>`).join('')}</select> <input class="input" style="width:170px" data-t="rn_${id}" value="${esc(ui.tmp['rn_' + id] || '')}" placeholder="说明（选「其他」必填）">`;
+  let h = `<div class="page-h"><div><h1>不派线索与提醒</h1><div class="desc">${who(state.actorId)}　·　选了「不派」的线索放这里；录入人本人、录入单位内勤、旧线索承办单位内勤可以捞回；监督不能捞回</div></div></div>`;
+  h += `<div class="card"><div class="card-h">待处理提醒（${rem.length}）<span class="hint">旧线索结案时提醒；逐条处理，不自动派，不自动关</span></div>`;
+  h += rem.length ? rem.map(r => `<div style="border-top:1px solid var(--border);padding:8px 0"><div>既有线索 <span class="mono">${r.oldId}</span> 已结案。你有权处理 <span class="mono">${r.leadId}</span>（当初选了不派）：</div><div style="margin-top:6px">${rsel(r.id)}</div>
+      <div style="margin-top:6px"><button class="btn btn-sm btn-primary" data-act="resolve" data-rid="${r.id}" data-how="revoke">捞回并派出</button> <button class="btn btn-sm" data-act="resolve" data-rid="${r.id}" data-how="finish">写明原因，随旧线索一起办结</button></div></div>`).join('') : '<div class="help">没有你的待办提醒。（演示：右侧「模拟系统事件」里让一条旧线索结案。）</div>';
+  h += '</div>';
+  h += `<div class="card"><div class="card-h">不派线索（${held.length}）</div>${held.length ? `<table class="table"><tr><th>编号</th><th>法域</th><th>录入人</th><th>所撞既有线索</th><th>捞回</th></tr>${held.map(l => { const ok = M.entitled(state, l, state.actorId);
+    return `<tr><td class="mono">${l.id}</td><td>${domainN(l)}</td><td>${who(l.enteredBy)}</td><td>${l.hits.map(x => `<span class="mono">${x.id}</span> ${pct(x.ratio)}${lead(x.id) && M.isClosed(lead(x.id)) ? '（已结案）' : ''}`).join('<br>')}</td>
+      <td>${ok ? `${rsel(l.id)} <button class="btn btn-sm btn-line" data-act="revoke" data-id="${l.id}">捞回</button>` : `<button class="btn btn-sm" disabled>捞回</button><div class="help">${a.role === '监督' ? '监督人员不能捞回' : '不在有权捞回的三类人之列'}</div>`}</td></tr>`; }).join('')}</table>` : '<div class="help">空</div>'}</div>`;
+  return h; }
+
+/* ---------- 右栏：引导演示、模拟系统事件、状态、留痕 ---------- */
+const A = {}; // 动作：按钮和引导演示共用同一批
+const SC = [
+  { t: '① 缺件照录、核查没跑成照派', d: '看点：类型层缺件不拦录入，缺件清单常驻详情；核查没跑成，重跑提示一直挂着，分派照常。', steps: [
+    ['重置；以小林（天河区分局内勤）填入示例土地线索', () => { A.reset(); A.actor({ id: 'lin' }); A.sample({ n: 'A' }); }], ['点「保存」：弹窗列出类型层 3 项缺件', () => A.save()], ['弹窗里点「确认保存」', () => A.save({ confirm: '1' })],
+    ['模拟：自动核查没跑成', () => A.check({ result: 'failed' })], ['去「分派」页：重跑提示、缺件都只是提示', () => A.focusGo({ page: 'dispatch' })],
+    ['确认分派到石牌自然资源所（建议值）', () => A.assignOrg()], ['换小石（石牌所内勤）指定主办人张三', () => { A.actor({ id: 'shi' }); A.focusGo({ page: 'dispatch' }); ui.tmp.lead = '张三'; A.assignPeople(); }],
+    ['去「线索列表」补齐一项缺件：缺件清单少一项', () => { ui.page = 'list'; ui.sel = ui.focus; ui.tmp['gap_type.land_occupy_without_approval.occupied_area'] = '9'; A.fillGap({ id: ui.focus, key: 'type.land_occupy_without_approval.occupied_area' }); }]] },
+  { t: '② 疑似重复：默认不派 → 已知晓', d: '看点：重合 80% 的示意图与有限信息；默认「不派」，点「已知晓」才派，系统留痕。', steps: [
+    ['重置；小林填入与 X-0412 重合约 80% 的土地线索', () => { A.reset(); A.actor({ id: 'lin' }); A.sample({ n: 'B' }); }], ['点「保存」：进入登记结果，疑似重复出现在这一步', () => A.save()],
+    ['点「已知晓，仍要派出」', () => A.decide({ id: ui.focus, choice: 'send', ack: '1' })], ['去「线索列表」看这条线索：疑似重复·已知晓', () => { ui.page = 'list'; ui.sel = ui.focus; render(); }]] },
+  { t: '③ 群众举报撞重合：只能派；匿名不反暴露', d: '看点：举报类「不派」灰掉，重合信息仍展示；既有线索 X-0398 是匿名举报，只显示到月、到区。', steps: [
+    ['重置；小周（天河区分局经办，非内勤）填入投诉线索', () => { A.reset(); A.actor({ id: 'zhou' }); A.sample({ n: 'C' }); }], ['点「保存」：看有限信息视图（登记时间只到月、所在只到区）', () => A.save()],
+    ['点「派出」（只能派）', () => A.decide({ id: ui.focus, choice: 'send' })]] },
+  { t: '④ 不派 → 旧线索结案 → 捞回', d: '看点：不派线索放哪、谁能捞回、旧线索结案时逐条提醒；监督不能捞回。', steps: [
+    ['重置；小周填入与 X-0412 重合的线索', () => { A.reset(); A.actor({ id: 'zhou' }); A.sample({ n: 'B' }); }], ['点「保存」', () => A.save()], ['点「不派（默认）」', () => A.decide({ id: ui.focus, choice: 'hold' })],
+    ['换老何（监督）去「不派线索」页：不能捞回', () => { A.actor({ id: 'he' }); A.go({ page: 'held' }); }], ['模拟：旧线索 X-0412 结案', () => A.closeLead({ id: 'X-0412' })],
+    ['换小石（旧线索承办机构内勤）去「不派线索」页：出现提醒', () => { A.actor({ id: 'shi' }); A.go({ page: 'held' }); }], ['小石选理由，点「捞回并派出」', () => { ui.tmp['rs_R1'] = M.REASONS[0]; A.resolve({ rid: 'R1', how: 'revoke' }); }]] },
+  { t: '⑤ 测绘类：打点、无自动核查、兜底', d: '看点：位置是点；整块「自动核查」不出现；上级内勤（老陈）可派给没有所的白云区分局，并用「改按注册地」兜底。', steps: [
+    ['重置；小林填入测绘类上级交办线索（打点）', () => { A.reset(); A.actor({ id: 'lin' }); A.sample({ n: 'D' }); }], ['点「保存」：缺 1 项警告级类型要件，弹窗确认', () => A.save()], ['确认保存：结果页没有自动核查', () => A.save({ confirm: '1' })],
+    ['换老陈（市局内勤）去「分派」页并勾「改按注册地」', () => { A.actor({ id: 'chen' }); A.focusGo({ page: 'dispatch' }); ui.tmp.fb = true; ui.tmp.fbd = '白云区'; ui.tmp.fbb = '单位注册地在白云区'; render(); }],
+    ['确认分派：承办机构＝白云区分局（建议值）', () => A.assignOrg()]] },
+  { t: '⑥ 面跨区与数据范围外：管辖移送', d: '看点：面跨区只提示不阻断；分派页列占比、不自动取大；白云区分局对小林灰显，只能走管辖移送。', steps: [
+    ['重置；小林填入跨天河、白云两区的土地线索：表单出现提示', () => { A.reset(); A.actor({ id: 'lin' }); A.sample({ n: 'E' }); }], ['点「保存」', () => A.save()],
+    ['去「分派」页：占比建议；白云区分局灰显', () => A.focusGo({ page: 'dispatch' })], ['点「管辖移送」→ 系统内机构：白云区分局', () => { ui.tmp.xopen = true; ui.tmp.xk = 'org'; ui.tmp.xo = 'by'; A.transfer(); }],
+    ['换阿梅（白云区分局内勤）去「分派」页：线索在她的待分派池', () => { A.actor({ id: 'mei' }); A.focusGo({ page: 'dispatch' }); }]] }];
+
+function pageRail() {
+  const s = SC[ui.sc]; let h = `<div class="card"><h4>引导演示（每个场景第 1 步会重置）</h4><div class="tabs">${SC.map((x, i) => `<button class="${i === ui.sc ? 'on' : ''}" data-act="sc" data-i="${i}">${'①②③④⑤⑥'[i]}</button>`).join('')}</div>
+    <div style="font-weight:600;margin-bottom:4px">${s.t}</div><div class="small" style="margin-bottom:8px">${s.d}</div>${s.steps.map((st, i) => `<div class="step"><span class="done">${ui.done[ui.sc + '-' + i] ? '✓' : ''}</span><button class="btn" data-act="step" data-i="${i}">${i + 1}. ${st[0]}</button></div>`).join('')}</div>`;
+  const f = ui.focus && lead(ui.focus);
+  h += `<div class="card"><h4>模拟系统事件（非正式界面）</h4><div class="small" style="margin-bottom:6px">核查对象：${f ? `<span class="mono">${f.id}</span>` : '—（先登记一条）'}</div>
+    <button class="btn btn-sm" ${f && f.check === 'running' ? '' : 'disabled'} data-act="check" data-result="done">让核查跑完</button> <button class="btn btn-sm" ${f && f.check === 'running' ? '' : 'disabled'} data-act="check" data-result="failed">让核查没跑成</button>
+    <div class="small" style="margin:8px 0 4px">让旧线索结案（不予立案）：</div>${state.leads.filter(l => l.status === 'handling').map(l => `<button class="btn btn-sm" data-act="closeLead" data-id="${l.id}">${l.id} · ${domainN(l)} · ${orgN(l.handlerOrg)}</button>`).join(' ') || '<span class="small">没有未结案的既有线索</span>'}</div>`;
+  h += `<div class="card"><h4>当前状态</h4><table class="table" style="font-size:12px"><tr><th>编号</th><th>状态</th><th>承办</th><th>核查</th><th>缺件</th><th>重合</th></tr>${state.leads.map(l => `<tr><td class="mono">${l.id}</td><td>${STATUS[l.status]}</td><td>${orgN(l.handlerOrg)}</td><td>${{ running: '进行中', done: '已完成', failed: '没跑成' }[l.check] || '—'}</td><td>${l.gaps.length || '—'}</td><td>${l.hits.map(x => x.id + ' ' + pct(x.ratio)).join('<br>') || '—'}</td></tr>`).join('')}</table></div>`;
+  h += `<div class="card"><h4>留痕（最新在前）</h4><div class="trail">${state.trail.slice(0, 14).map(t => `<div><span class="t">${t.t}</span> <b>${esc(t.who)}</b><br>${esc(t.text)}</div>`).join('') || '<div class="small">还没有留痕</div>'}</div></div>`;
+  return h; }
+
+/* ---------- 渲染与事件 ---------- */
+function render() {
+  const a = actor();
+  $('#bar').innerHTML = `<span><b>身份</b> <select data-bind="actor">${Object.keys(M.ACTORS).map(k => `<option value="${k}" ${k === state.actorId ? 'selected' : ''}>${who(k)}</option>`).join('')}</select></span>
+    <span><b>缺件提示露出（#191 待反应）</b> <label><input type="checkbox" data-bind="gapList" ${ui.gapList ? 'checked' : ''}>列表页</label> <label><input type="checkbox" data-bind="gapDispatch" ${ui.gapDispatch ? 'checked' : ''}>分派页</label></span>
+    <label><input type="checkbox" data-bind="showOld" ${ui.showOld ? 'checked' : ''}>演示辅助：登记地图上显示既有线索轮廓</label><button class="btn btn-sm" data-act="reset">重置全部</button>`;
+  const n = { pool: poolOf(a).length + orgSetOf(a).length, held: state.leads.filter(l => l.status === 'held').length };
+  $('#nav').innerHTML = [['register', '线索登记'], ['list', '线索列表'], ['dispatch', '分派', a.role === '内勤' ? n.pool : 0], ['held', '不派线索与提醒', n.held]].map(([k, t, c]) => `<div class="nav-item ${ui.page === k ? 'on' : ''}" data-act="go" data-page="${k}"><span>${t}</span>${c ? `<span class="n">${c}</span>` : ''}</div>`).join('');
+  let h = state.notice ? `<div class="banner ${state.notice.k}">${esc(state.notice.text)}</div>` : '';
+  if (ui.page === 'register') h += ui.result ? pageResult(lead(ui.result)) : pageForm(); else if (ui.page === 'list') h += pageList(); else if (ui.page === 'dispatch') h += pageDispatch(); else h += pageHeld();
+  $('#main').innerHTML = h; $('#rail').innerHTML = pageRail();
+  $('#modal').innerHTML = ui.modal ? `<div class="mask"><div class="dialog"><h3>类型层有 ${ui.modal.length} 项录入时必填的要件没填</h3><div class="help" style="margin-bottom:8px">类型层不是录入门槛，缺了也能保存。缺项会记入这条线索的缺件清单，在线索详情常驻，补齐后消失。</div>
+    <table class="table">${ui.modal.map(i => `<tr><td>${esc(i.label)}</td><td class="small">缺件后果：${i.cons}</td></tr>`).join('')}</table><div class="foot"><button class="btn" data-act="closeModal">返回补填</button><button class="btn btn-primary" data-act="save" data-confirm="1">确认保存</button></div></div></div>` : ''; }
+const $ = q => document.querySelector(q);
+
+A.reset = () => { ui.draft = blank(); ui.errKeys = []; ui.modal = null; ui.result = null; ui.sel = null; ui.tmp = {}; ui.focus = null; ui.page = 'register'; ui.done = {}; ui.geoMode = 'file'; dispatch({ t: 'reset' }); };
+A.actor = d => { ui.tmp = {}; dispatch({ t: 'actor', id: d.id }); };
+A.go = d => { ui.page = d.page; if (d.page === 'register') ui.result = null; ui.tmp = {}; render(); };
+A.focusGo = d => { ui.page = d.page; ui.sel = ui.focus; ui.tmp = {}; render(); };
+A.pick = d => { ui.sel = d.id; ui.tmp = {}; render(); }; A.pickList = d => { ui.sel = d.id; ui.focus = d.id; render(); };
+const SAMPLE_FILE = { A: 0, B: 1, C: 2, D: 4, E: 3 }; // 引导演示的几何，对应哪份示例文件
+A.sample = d => { ui.page = 'register'; ui.result = null; ui.errKeys = []; ui.geoMode = 'file'; ui.draft = structuredClone(SAMPLES[d.n]);
+  ui.draft.file = M.parseFile(M.FILES[SAMPLE_FILE[d.n]], ui.draft.domain); render(); };
+A.rmFile = d => { ui.draft.f['clue.materials'].splice(+d.i, 1); render(); };
+A.geoMode = d => { ui.geoMode = d.m; render(); };
+A.applyFile = r => { ui.draft.file = { name: r.name, ok: r.ok, features: r.features, error: r.error };
+  ui.draft.geometry = r.ok ? r.geometry : { kind: M.DOMAINS[ui.draft.domain].geom, pts: [] }; render(); };
+A.loadFile = f => A.applyFile(M.parseFile(f, ui.draft.domain));
+const drawnFile = () => { ui.draft.file = M.geomOk(ui.draft) ? { name: '手绘范围.geojson', ok: true, features: 1, drawn: true } : null; }; // 手绘成果自动存成 GIS 文件
+A.download = () => { const d = ui.draft; if (!M.geomOk(d)) return; const blob = new Blob([JSON.stringify(M.toGeoJSON(d.geometry, { 法域: M.DOMAINS[d.domain].n }), null, 1)], { type: 'application/geo+json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (d.file && d.file.name) || '线索位置.geojson'; a.click(); URL.revokeObjectURL(a.href); };
+A.sampleFile = d => A.loadFile(M.FILES[+d.i]);
+A.intro = () => { ui.intro = !ui.intro; render(); }; A.again = () => { ui.result = null; ui.draft = blank(); render(); };
+A.undoPt = () => { ui.draft.geometry.pts.pop(); drawnFile(); render(); }; A.clearPts = () => { ui.draft.geometry.pts = []; drawnFile(); render(); }; A.closeModal = () => { ui.modal = null; render(); };
+A.save = d => { const v = M.validate(ui.draft);
+  if (!v.blocking.length && v.typeGaps.length && !(d && d.confirm === '1')) { ui.modal = v.typeGaps; return render(); }
+  ui.modal = null; ui.errKeys = v.blocking.map(i => i.key); dispatch({ t: 'register', draft: ui.draft });
+  if (state.lastRegistered) { ui.result = state.lastRegistered; ui.focus = ui.result; ui.errKeys = []; ui.page = 'register'; render(); } };
+A.decide = d => dispatch({ t: 'decide', id: d.id, choice: d.choice, ack: d.ack === '1' });
+A.check = d => dispatch({ t: 'check', id: d.id || ui.focus, result: d.result }); A.rerun = d => dispatch({ t: 'rerun', id: d.id });
+A.closeLead = d => dispatch({ t: 'closeLead', id: d.id });
+A.assignOrg = () => { const l = lead(ui.sel); if (!l) return; const locs = M.locate(l.geometry), ds = M.districts(l.geometry), fb = l.domain === 'survey' && ui.tmp.fb;
+  const sug = fb ? M.DISTRICT_ORG[ui.tmp.fbd || '天河区'] : (ds.length === 1 ? locs[0].cell.org : ''); const org = ui.tmp.org ?? sug;
+  dispatch({ t: 'assignOrg', id: l.id, org, fb: fb ? { district: ui.tmp.fbd || '天河区', basis: ui.tmp.fbb } : null }); };
+A.assignPeople = () => dispatch({ t: 'assignPeople', id: ui.sel, lead: ui.tmp.lead, assist: ui.tmp.assist || [] });
+A.toggleX = () => { ui.tmp.xopen = !ui.tmp.xopen; render(); };
+A.transfer = () => ui.tmp.xk === 'ext' ? dispatch({ t: 'transfer', id: ui.sel, kind: 'ext', name: ui.tmp.xn, doc: ui.tmp.xd, date: ui.tmp.xt }) : dispatch({ t: 'transfer', id: ui.sel, kind: 'org', org: ui.tmp.xo });
+A.revoke = d => dispatch({ t: 'revoke', id: d.id, reason: ui.tmp['rs_' + d.id], note: ui.tmp['rn_' + d.id] });
+A.resolve = d => dispatch({ t: 'resolveReminder', rid: d.rid, how: d.how, reason: ui.tmp['rs_' + d.rid], note: ui.tmp['rn_' + d.rid] });
+A.fillGap = d => dispatch({ t: 'fillGap', id: d.id, key: d.key, value: ui.tmp['gap_' + d.key] });
+A.sc = d => { ui.sc = +d.i; render(); }; A.step = d => { SC[ui.sc].steps[+d.i][1](); ui.done[ui.sc + '-' + d.i] = true; render(); };
+
+const SAMPLES = { // 引导演示用的预填内容
+  A: { domain: 'land', sourceCode: '16', f: { 'clue.received_at': '2026-10-21', 'clue.narrative': '某地块有人平整土地、堆放建材，疑似未批先占。', 'clue.finder': '李巡查员', 'clue.patrol_no': 'XC-2026-1021-07' }, geometry: { kind: 'polygon', pts: [[150,110],[190,110],[190,140],[150,140]] }, initialTypes: ['land_occupy_without_approval'] },
+  B: { domain: 'land', sourceCode: '16', f: { 'clue.received_at': '2026-10-21', 'clue.narrative': '该地块近日再次动工。', 'clue.finder': '李巡查员', 'clue.patrol_no': 'XC-2026-1021-09', 'type.land_occupy_without_approval.occupied_area': '9', 'type.land_occupy_without_approval.land_class': '耕地', 'type.land_occupy_without_approval.permanent_farmland': '否' }, geometry: { kind: 'polygon', pts: [[60,40],[160,40],[160,100],[60,100]] }, initialTypes: ['land_occupy_without_approval'] },
+  C: { domain: 'land', sourceCode: '302', f: { 'clue.received_at': '2026-10-21', 'clue.narrative': '邻近村民反映该地块被挖掘。', 'clue.reporter_anonymous': '否', 'clue.reporter_name': '王女士', 'clue.reporter_contact': '138****0000', 'clue.verifiable_basis': '现场有挖掘机作业，可核查。' }, geometry: { kind: 'polygon', pts: [[50,200],[120,200],[120,250],[50,250]] }, initialTypes: [] },
+  D: { domain: 'survey', sourceCode: '5', f: { 'clue.received_at': '2026-10-21', 'clue.narrative': '某单位未取得测绘资质承接项目。', 'clue.assign_doc_no': '穗交办〔2026〕18号', 'clue.assign_org': '市局', 'type.survey_qualification_none.project_name': '某片区地形测量' }, geometry: { kind: 'point', pts: [[170,40]] }, initialTypes: ['survey_qualification_none'] },
+  E: { domain: 'land', sourceCode: '16', f: { 'clue.received_at': '2026-10-21', 'clue.narrative': '两区交界处有人填埋。', 'clue.finder': '李巡查员', 'clue.patrol_no': 'XC-2026-1021-12' }, geometry: { kind: 'polygon', pts: [[220,120],[300,120],[300,185],[220,185]] }, initialTypes: [] } };
+
+document.addEventListener('click', e => {
+  const m = e.target.closest('svg[data-map]');
+  if (m) { const r = m.getBoundingClientRect(), p = [Math.round((e.clientX - r.left) / r.width * 400), Math.round((e.clientY - r.top) / r.height * 300)], g = ui.draft.geometry;
+    if (g.kind === 'point') g.pts = [p]; else g.pts.push(p); drawnFile(); return render(); }
+  const el = e.target.closest('[data-act]'); if (el && A[el.dataset.act]) { e.preventDefault(); A[el.dataset.act](el.dataset); } });
+document.addEventListener('input', e => { const t = e.target;
+  if (t.dataset.f && t.type !== 'radio') ui.draft.f[t.dataset.f] = t.value;
+  else if (t.dataset.t && t.tagName !== 'SELECT' && t.type !== 'checkbox' && t.type !== 'radio') ui.tmp[t.dataset.t] = t.value; });
+document.addEventListener('change', e => { const t = e.target, b = t.dataset.bind;
+  if (b === 'actor') return A.actor({ id: t.value });
+  if (b === 'source') { const lv = +t.dataset.lv, path = M.sourcePath(ui.draft.sourceCode); ui.draft.sourceCode = t.value || (lv ? path[lv - 1] : ''); return render(); } // 清空本级就退回上一级
+  if (b === 'tdtBase') { ui.tdtBase = t.value; return render(); }
+  if (b === 'domain') { ui.draft.domain = t.value; ui.draft.geometry = { kind: M.DOMAINS[t.value].geom, pts: [] }; ui.draft.initialTypes = []; ui.draft.file = null; return render(); }
+  if (b === 'files') { const cur = Array.isArray(ui.draft.f['clue.materials']) ? ui.draft.f['clue.materials'] : []; ui.draft.f['clue.materials'] = [...cur, ...[...t.files].map(x => x.name)]; return render(); }
+  if (b === 'file') { const f = t.files[0]; if (!f) return;
+    if (/\.(geo)?json$/i.test(f.name)) return f.text().then(x => A.applyFile(M.parseGeoJSON(f.name, x, ui.draft.domain)));
+    const pool = M.FILES.filter(x => x.kind === M.DOMAINS[ui.draft.domain].geom), h = [...f.name].reduce((a, c) => a + c.charCodeAt(0), 0);
+    return A.loadFile({ ...pool[h % pool.length], name: f.name }); }
+  if (b === 'type') { const s = new Set(ui.draft.initialTypes); t.checked ? s.add(t.value) : s.delete(t.value); ui.draft.initialTypes = [...s]; return render(); }
+  if (b === 'assist') { const s = new Set(ui.tmp.assist || []); t.checked ? s.add(t.value) : s.delete(t.value); ui.tmp.assist = [...s]; return; }
+  if (b === 'gapList' || b === 'gapDispatch' || b === 'showOld') { ui[b] = t.checked; return render(); }
+  if (t.dataset.f) { ui.draft.f[t.dataset.f] = t.value; if (t.dataset.rr) render(); return; }
+  if (t.dataset.t) { ui.tmp[t.dataset.t] = t.type === 'checkbox' ? t.checked : t.value; if (t.dataset.t === 'org') ui.tmp.org = t.value || undefined; if (t.dataset.rr) render(); } });
+render();
+</script>
+</body>
+</html>
