@@ -6,7 +6,6 @@ import {
   ADMIN_HOME_OPCODES,
   globalSearchPath,
   ORG_MAINTENANCE_OPCODE,
-  plannedModule,
   plannedModuleByPath,
   plannedModulesOf,
   plannedSecondary,
