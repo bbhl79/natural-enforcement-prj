@@ -16,4 +16,17 @@ export {
   deleteSurveyPointById,
 } from './spatial/survey-point.ts';
 export type { SurveyPointDomain, SurveyPointInput, SurveyPointRow } from './spatial/survey-point.ts';
+// 参照数据（ADR 0016；#210）：来源编码、违法类型编码、依据文件、类型依据、辖区对应的初值常量。
+export {
+  DOCUMENTS,
+  JURISDICTION_ROWS,
+  SOURCE_CODES,
+  VIOLATION_TYPES,
+  VIOLATION_TYPE_BASIS,
+  findDocument,
+  findSourceCode,
+  findSourceGroupCode,
+  findViolationType,
+} from './reference-data/index.ts';
+export type { DocumentRow, SourceCodeRow, ViolationTypeRow } from './reference-data/index.ts';
 export { GeoDictModule } from './geo-dict.module.ts';

@@ -76,7 +76,8 @@ BullMQ/RustFS SDK），不引用 backend 内部路径（含 `../../backend/…` 
 | `storage-facility-entry` | #53 存储设施唯一入口（`@aws-sdk/*`、`@smithy/*`、`minio`、`rustfs` 只许在 `packages/storage`，业务侧只许经 `STORAGE_PORT` 注入；append-only 最保守语义的机器兜底） |
 | `audit-facility-entry` | ADR 0012 留痕设施唯一入口（`auditTrail` 这个 Prisma 委托只许在 `packages/audit`。包外引用即红。观察留痕行走表名） |
 | `spatial-no-orm-mutation` | 执行纪律 2（`geoDictLandBoundary` / `geoDictSurveyPoint` 两个空间模型禁用任何 ORM 写，含 upsert/createMany/updateMany/delete(Many) 与换行链式；写一律 `$queryRaw`/ST_ 函数。范围 = `backend/` + `packages/` + `integration/` + `e2e/` 全源码，SCAN_CODE 形态） |
-| `g1-model-allowlist` | #47 G1「地基不含业务实体」机检形态（承接 #52 AC4）：`backend/prisma/schema.prisma` 的 model 名与白名单逐字相等，表外新增即红——建表动作必须回 #47/#16 定案票，不得自行放宽。#69 定案列入 `AuthSession`、`AuthRememberMe`（见下节「认证记录」）。#92 定案列入 `Role`、`Permission`、`RolePermission`、`PersonnelRole`、`AuditTrail`（见下节「权限与留痕」） |
+| `reference-data-no-mutation` | 参照数据只追加的机器兜底（#210，ADR 0016）：五张参照数据表（`GeoDictSourceCode` / `GeoDictViolationType` / `GeoDictDocument` / `GeoDictViolationTypeBasis` / `GeoDictJurisdiction`）的 Prisma 委托只许 insert（create/createMany），不许 update/updateMany/delete/deleteMany/upsert——改参照数据＝追加新版本，不许就地改行或删行。范围 = `backend/` + `packages/` + `integration/` + `e2e/` 全源码，SCAN_CODE 形态，含换行链式 |
+| `g1-model-allowlist` | #47 G1「地基不含业务实体」机检形态（承接 #52 AC4）：`backend/prisma/schema.prisma` 的 model 名与白名单逐字相等，表外新增即红——建表动作必须回 #47/#16 定案票，不得自行放宽。#69 定案列入 `AuthSession`、`AuthRememberMe`（见下节「认证记录」）。#92 定案列入 `Role`、`Permission`、`RolePermission`、`PersonnelRole`、`AuditTrail`（见下节「权限与留痕」）。#210 定案列入五张参照数据表（见下节「参照数据」） |
 
 ## 认证记录（#69）
 
@@ -141,6 +142,24 @@ BullMQ/RustFS SDK），不引用 backend 内部路径（含 `../../backend/…` 
 留痕表白名单名字是 `AuditTrail`。技术主键是 ULID。除主键、`created_at`、`action`、`outcome` 外都可空。`outcome` 只有 `succeeded` 与 `failed`。触发器复用 `reject_row_mutation`，拒绝 UPDATE 和 DELETE。登录标识、执法证号、口令不进入任何一列。可空整数列 `item_count` 记导出条数，只有带条数的动作写值（ADR 0013）。人员导出写 `personnel.exported`。导出留痕表 `ExportAudit` 已冻结：不再写入，表、触发器和白名单条目保留，已有行可查（ADR 0013）。
 
 参照种子在所有环境写入七个角色、操作码名册和允许行。允许行以 GitHub issue #71 为准。`authz.binding.submit` 与 `authz.binding.approve` 只给系统管理。人员导出 `personnel.profile.export` 只给系统管理（#125）。开发测试夹具（机构与人员）只在 `NODE_ENV` 不是 `production` 时写入。生产环境必须设置 `NODE_ENV=production`，夹具人员才不进生产库。夹具人员带手机号，`password_changed_at` 为空。生产环境的首个系统管理人员不在本票。
+
+## 参照数据（#210，ADR 0016）
+
+五张参照数据表在空间字典模块（geo-dict）名下，随种子只追加写入。库层触发器拒 UPDATE 与
+DELETE（复用 `reject_row_mutation`），应用层另由结构测试 `reference-data-no-mutation` 兜底：
+委托只许 insert，改数据＝追加新版本。
+
+| 白名单名字 | 承载 | 键 | 说明 |
+|---|---|---|---|
+| `GeoDictSourceCode` | 线索来源编码 | `code` + `version` | 30 项（5 大类 + 20 二级 + 5 三级）。`parent_code` 显式存上级编码，不按前缀推断 |
+| `GeoDictViolationType` | 违法类型编码 | `code` + `version` | 94 个可选具体违法行为 + 19 个不可选大类。`domain` 取 land/mineral/survey/planning；`appendix` 是附录序号出处，不进编码 |
+| `GeoDictDocument` | 依据文件表 | `code` + `version` | 80 份。`hierarchy_level` 取效力层级九档，`validity_status` 取效力状态三值 |
+| `GeoDictViolationTypeBasis` | 违法类型的依据引用 | 类型版本 + 文件版本 + 条号 + 用途 | 用途四类：处罚、裁量基准、移送处分、认定标准。引用钉版本，展示名随行冻结快照 |
+| `GeoDictJurisdiction` | 辖区对应 | `code` + `version` | 只存「街道（镇）编码 → 机构」，不按法域区分。业务方交付后随种子只追加写入 |
+
+初值常量在 `backend/geo-dict/src/reference-data/`，由 `tools/generate-clue-reference-data.mjs`
+从 `docs/research/` 下的定稿底稿生成；种子按同一份常量写库。核查图层与街道边界几何不入种子
+（ADR 0021 未立）。
 
 ## 测试装配层豁免（integration 层）
 

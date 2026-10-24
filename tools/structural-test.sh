@@ -96,6 +96,11 @@
 #                           （create/createMany/upsert/update/updateMany/delete/deleteMany，
 #                           含换行链式）——含必填空间字段的模型禁用 ORM 写
 #                           （infra/VERSIONS.md 执行纪律 2），写一律走 $queryRaw/ST_ 函数
+#   reference-data-no-mutation 参照数据只追加的机器兜底（#210）：五张参照数据表
+#                           （geoDictSourceCode / geoDictViolationType / geoDictDocument /
+#                           geoDictViolationTypeBasis / geoDictJurisdiction）的 delegate
+#                           只许 insert，不许 update/updateMany/delete/deleteMany/upsert
+#                           （ADR 0016：改参照数据＝追加新版本，不许就地改行或删行）
 #   runtime-manifest        运行参数清单（ADR 0008、#80、#120）：infra/docker-compose.yml 与
 #                           .github/workflows/ci.yml 里的变量名必须登记在 infra/runtime.env；
 #                           密钥只许引用变量（compose）或 secrets（CI），不许字面量、默认值、
@@ -164,6 +169,7 @@ RULES=(
   storage-facility-entry
   audit-facility-entry
   spatial-no-orm-mutation
+  reference-data-no-mutation
   runtime-manifest
   user-lock-assertions
   frontend-router-mode
@@ -433,6 +439,8 @@ declare -A ASSEMBLY_EXEMPT=(
   ["integration/tx-audit-seam.test.ts"]="../backend/identity/src/"
   # #122：会话操作码清单与授权判定的等价性断言，同样直接装配 AccessControlService
   ["integration/session-opcodes.test.ts"]="../backend/identity/src/"
+  # #210：参照数据种子、录入要件声明与 form-schema 接口的断言，同样直接装配三个模块的源码。
+  ["integration/clue-form-schema.test.ts"]="../backend/case/src/ ../backend/geo-dict/src/ ../backend/identity/src/"
 )
 
 is_assembly_exempt() { # $1 = 相对 ROOT 路径, $2 = specifier
@@ -664,6 +672,8 @@ check_weak-reference-entry() {
 # #96 去掉人员表旧 role 列。字段见 schema.prisma 与 backend/README.md「权限与留痕」。
 # #128（#105 岗位标记 A1）追加 PersonnelPost，记入 PR 供 #47 G1 定案。
 # #75 定案追加 PersonnelPasswordHistory（ADR 0015）。
+# #210 定案追加五张参照数据表（ADR 0016）：GeoDictSourceCode、GeoDictViolationType、
+# GeoDictDocument、GeoDictViolationTypeBasis、GeoDictJurisdiction。
 G1_MODELS=(
   MigrationProbe
   OrgUnit
@@ -683,6 +693,11 @@ G1_MODELS=(
   PersonnelPasswordHistory
   GeoDictLandBoundary
   GeoDictSurveyPoint
+  GeoDictSourceCode
+  GeoDictViolationType
+  GeoDictDocument
+  GeoDictViolationTypeBasis
+  GeoDictJurisdiction
 )
 check_g1-model-allowlist() {
   local schema="$BACKEND/prisma/schema.prisma" model in_schema extra missing fails=0
@@ -811,6 +826,35 @@ check_spatial-no-orm-mutation() {
   done < <(find "$BACKEND" "$ROOT/packages" "$ROOT/integration" "$ROOT/e2e" "${SCAN_CODE[@]}")
   if [ "$hits" -eq 0 ]; then
     note_ok "spatial-no-orm-mutation：backend + packages + integration + e2e 全源码无空间模型 ORM 写调用（执行纪律 2 机器兜底）"
+  fi
+}
+
+# 规则（#210 新增）：参照数据只追加的机器兜底——五张参照数据表（ADR 0016）的 delegate
+# 只许 insert（create/createMany），不许 update / updateMany / delete / deleteMany / upsert。
+# 库层触发器已拒 UPDATE 与 DELETE（reject_row_mutation），本规则补的是应用层那一道：
+# 改参照数据只能追加新版本，不许就地改行、不许删行、不许 upsert 顶掉旧版本。
+# 形态与 spatial-no-orm-mutation 同款：SCAN_CODE 范围 + 换行链式二次判定。
+REFERENCE_MODEL='geoDictSourceCode|geoDictViolationType|geoDictDocument|geoDictViolationTypeBasis|geoDictJurisdiction'
+REFERENCE_ORM_METHOD='upsert|updateMany|update|deleteMany|delete'
+REFERENCE_ORM_WRITE="(${REFERENCE_MODEL})[[:space:]]*\.[[:space:]]*(${REFERENCE_ORM_METHOD})[[:space:]]*\("
+check_reference-data-no-mutation() {
+  local hits=0 file lines line
+  while IFS= read -r file; do
+    lines="$(grep -En -e "$REFERENCE_ORM_WRITE" "$file" 2>/dev/null)"
+    if [ -n "$lines" ]; then
+      while IFS= read -r line; do
+        note_fail "reference-data-no-mutation：参照数据表 ORM 改写调用 ${file#"$ROOT"/}:${line%%:*}（ADR 0016 只追加：改参照数据＝追加新版本，不许就地改行或删行）"
+        hits=$((hits + 1))
+      done <<< "$lines"
+      continue
+    fi
+    if tr '\n' ' ' < "$file" | grep -qE "$REFERENCE_ORM_WRITE"; then
+      note_fail "reference-data-no-mutation：${file#"$ROOT"/} 折行后检出参照数据表 ORM 改写（换行链式形态）"
+      hits=$((hits + 1))
+    fi
+  done < <(find "$BACKEND" "$ROOT/packages" "$ROOT/integration" "$ROOT/e2e" "${SCAN_CODE[@]}")
+  if [ "$hits" -eq 0 ]; then
+    note_ok "reference-data-no-mutation：backend + packages + integration + e2e 全源码无参照数据表 ORM 改写调用（ADR 0016 只追加）"
   fi
 }
 

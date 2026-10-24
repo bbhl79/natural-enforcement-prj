@@ -11,6 +11,18 @@ const CASE_OPCODES = [
   'clue.org.assign',
   'clue.handler.assign',
   'clue.verify.start',
+  // #210 新增 11 个线索操作码（#207 协议 A 节「操作码终稿」）。
+  'clue.register',
+  'clue.dispatch.decide',
+  'clue.withdraw.undo',
+  'clue.disposition.record',
+  'clue.reminder.resolve',
+  'clue.item.supplement',
+  'clue.verify.retry',
+  'clue.reference.read',
+  'clue.geometry.update',
+  'clue.designate.request',
+  'clue.pool.reassign',
   'case.open',
   'doc.draft',
   'doc.submit',
@@ -51,6 +63,21 @@ const ADMIN_OPCODES = [
   'audit.admin.export',
   'authz.binding.submit',
   'authz.binding.approve',
+] as const;
+
+/** #210 新增的 11 个线索操作码（#207 协议 A 节「操作码终稿」）。 */
+const NEW_CLUE_OPCODES = [
+  'clue.register',
+  'clue.dispatch.decide',
+  'clue.withdraw.undo',
+  'clue.disposition.record',
+  'clue.reminder.resolve',
+  'clue.item.supplement',
+  'clue.verify.retry',
+  'clue.reference.read',
+  'clue.geometry.update',
+  'clue.designate.request',
+  'clue.pool.reassign',
 ] as const;
 
 describe('操作码名册', () => {
@@ -198,6 +225,80 @@ describe('操作码名册', () => {
       qualification: 'none',
       mustBeCaseHandler: false,
       changesPrimaryState: false,
+    });
+  });
+});
+
+describe('#210 新增 11 个线索操作码', () => {
+  it('名册里都有条目，且不另造平行名册（复用码仍是那四个）', () => {
+    for (const code of NEW_CLUE_OPCODES) {
+      expect(OPCODES, code).toContain(code);
+    }
+    // 复用码不另造平行名册：派机构、派主办、读、导出各只有一条。
+    expect(OPCODES.filter((code) => code.startsWith('clue.')).sort()).toEqual(
+      [
+        ...NEW_CLUE_OPCODES,
+        'clue.export',
+        'clue.handler.assign',
+        'clue.org.assign',
+        'clue.read',
+        'clue.verify.start',
+      ].sort(),
+    );
+  });
+
+  it('登记、决定、撤回、处置、提醒处理、重绘、重新指定接收机构改变主状态', () => {
+    for (const code of [
+      'clue.register',
+      'clue.dispatch.decide',
+      'clue.withdraw.undo',
+      'clue.disposition.record',
+      'clue.reminder.resolve',
+      'clue.geometry.update',
+      'clue.pool.reassign',
+    ]) {
+      expect(opcodeRequirements(code)?.changesPrimaryState, code).toBe(true);
+    }
+  });
+
+  it('补齐要件、手动重跑、实名查阅、报请指定管辖不改变主状态', () => {
+    for (const code of [
+      'clue.item.supplement',
+      'clue.verify.retry',
+      'clue.reference.read',
+      'clue.designate.request',
+    ]) {
+      expect(opcodeRequirements(code)?.changesPrimaryState, code).toBe(false);
+    }
+  });
+
+  it('新增 11 码一律不要求执法资格、不必是主办人（对象级校验归 case 服务）', () => {
+    for (const code of NEW_CLUE_OPCODES) {
+      expect(opcodeRequirements(code), code).toEqual({
+        qualification: 'none',
+        mustBeCaseHandler: false,
+        changesPrimaryState: opcodeRequirements(code)?.changesPrimaryState,
+      });
+    }
+  });
+
+  it('监督角色贡献的允许行不改变主状态的码时仍可放行，改变主状态的码不放行', () => {
+    const notChanging = NEW_CLUE_OPCODES.filter((code) => !opcodeRequirements(code)?.changesPrimaryState);
+    for (const code of notChanging) {
+      expect(effectiveOpcodeRequirements(code, ['监督'])?.changesPrimaryState, code).toBe(false);
+    }
+    for (const code of NEW_CLUE_OPCODES.filter((c) => opcodeRequirements(c)?.changesPrimaryState)) {
+      // 监督的允许行对改变主状态的码不生效：effectiveOpcodeRequirements 仍返回宽要求，
+      // 但 AccessControlService 的 effectiveGrantingRoles 会把监督过滤掉。
+      expect(opcodeRequirements(code)?.changesPrimaryState, code).toBe(true);
+    }
+  });
+
+  it('启动核查的名册条目保留（本期只移除种子授权，不改名册）', () => {
+    expect(opcodeRequirements('clue.verify.start')).toEqual({
+      qualification: 'operator',
+      mustBeCaseHandler: true,
+      changesPrimaryState: true,
     });
   });
 });

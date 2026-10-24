@@ -42,6 +42,22 @@ const CASE_OPCODES = {
   'clue.org.assign': entry('none', false, true),
   'clue.handler.assign': entry('assignee', false, true),
   'clue.verify.start': entry('operator', true, true),
+  // ---- #210 新增 11 个线索操作码（#207 协议 A 节「操作码终稿」）----
+  // 名册只承载「角色 × 操作码」这一层。对象级校验（录入人、机构内勤、承办人等）
+  // 归 case 服务（#207 协议 A 节），故这 11 码一律不要求执法资格、不必是主办人。
+  // 「改变主状态」只表示该动作会改写线索主状态或归属，因而监督角色贡献的允许行
+  // 对它不生效（改变主状态的判断不采用监督角色贡献的允许行）。
+  'clue.register': entry('none', false, true),
+  'clue.dispatch.decide': entry('none', false, true),
+  'clue.withdraw.undo': entry('none', false, true),
+  'clue.disposition.record': entry('none', false, true),
+  'clue.reminder.resolve': entry('none', false, true),
+  'clue.item.supplement': entry('none', false, false),
+  'clue.verify.retry': entry('none', false, false),
+  'clue.reference.read': entry('none', false, false),
+  'clue.geometry.update': entry('none', false, true),
+  'clue.designate.request': entry('none', false, false),
+  'clue.pool.reassign': entry('none', false, true),
   'case.open': entry('operator', true, true),
   'doc.draft': entry('operator', true, false),
   'doc.submit': entry('operator', true, false),

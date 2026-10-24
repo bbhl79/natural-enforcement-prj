@@ -121,6 +121,15 @@ write_probe_g1-model-allowlist() {
     "}"
 }
 
+write_probe_reference-data-no-mutation() {
+  # #210：参照数据只追加（ADR 0016）。就地改行即违例；改参照数据只能追加新版本。
+  tmp_write "backend/geo-dict/src/_structural-probe-reference.ts" \
+    "// 探针（临时，勿入库）：参照数据表就地改行（ADR 0016 只追加）" \
+    "export function probe(prisma: { geoDictSourceCode: { update(input: unknown): unknown } }) {" \
+    "  return prisma.geoDictSourceCode.update({ where: { id: 'probe' }, data: { name: 'probe' } });" \
+    "}"
+}
+
 write_probe_queue-in-integration() {
   # C7 扩范围证据：integration 层同样在设施入口规则范围内（装配层不豁免形态类规则）
   tmp_write "integration/_structural-probe.ts" \
@@ -386,6 +395,8 @@ SPECS=(
   "supervision-deps|supervision-deps|supervision 表外依赖业务模块 approval"
   "weak-reference-entry|weak-reference-entry|跨域弱引用入口名未从 shield 导入"
   "screenshot-full-set|screenshot-full-set|截图全集多出 v0.4 之外的文件名"
+  # #210 新增规则：参照数据只追加的机器兜底。
+  "reference-data-no-mutation|reference-data-no-mutation|参照数据表就地改行（ADR 0016 只追加）"
 )
 
 # ---------- 护栏①（#171）动态层：带违例的整闸全量运行，三族各取一条 ----------
