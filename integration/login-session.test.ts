@@ -198,8 +198,12 @@ describe('POST /api/auth/login', () => {
       roles: ['监督', '经办'],
       passwordChangeRequired: false,
       passwordChangeKind: null,
+      // 顺序＝名册顺序。#210：clue.verify.start 移除本期种子授权；
+      // 11 个线索操作码按角色进允许行，此人（监督＋经办）持有其中八个。
       opcodes: [
-        'clue.verify.start', 'case.open', 'doc.draft', 'doc.submit', 'case.reassign.submit',
+        'clue.register', 'clue.withdraw.undo', 'clue.disposition.record', 'clue.reminder.resolve',
+        'clue.item.supplement', 'clue.verify.retry', 'clue.reference.read', 'clue.geometry.update',
+        'case.open', 'doc.draft', 'doc.submit', 'case.reassign.submit',
         'legal.review.request', 'clue.read', 'case.read', 'doc.read', 'clue.export', 'case.export',
         'doc.export', 'audit.admin.read', 'audit.admin.export',
       ],
