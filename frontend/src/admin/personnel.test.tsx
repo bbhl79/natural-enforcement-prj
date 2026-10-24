@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import reducer, { loadSession } from '../login/loginSlice';
-import { visibleMenu } from '../shell/menu';
+import { visibleSecondaries } from '../shell/menu';
 import { renderRoute, renderRouter, settled } from '../test-utils';
 import {
   CertForm,
@@ -1612,8 +1612,8 @@ describe('人员页路由', () => {
     await store.dispatch(loadSession());
     const operator = store.getState().login.operator as unknown as Json;
     expect(operator.posts).toBeUndefined();
-    expect(visibleMenu(store.getState().login.operator?.opcodes ?? []).map((item) => item.id))
-      .toEqual(visibleMenu(ADMIN).map((item) => item.id));
-    expect(visibleMenu(ADMIN).map((item) => item.id)).toContain('person');
+    expect(visibleSecondaries('admin', store.getState().login.operator?.opcodes ?? []).map((item) => item.id))
+      .toEqual(visibleSecondaries('admin', ADMIN).map((item) => item.id));
+    expect(visibleSecondaries('admin', ADMIN).map((item) => item.id)).toContain('person');
   });
 });

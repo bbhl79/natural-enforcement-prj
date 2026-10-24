@@ -11,7 +11,18 @@
 .console button,.console input,.console select{font-family:inherit;font-size:13px}
 .console button{cursor:pointer}
 .console .topbar{height:52px;background:var(--white);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;gap:16px}
-.console .top-brand{display:flex;align-items:center;gap:10px}
+.console .top-brand{display:flex;align-items:center;gap:10px;flex-shrink:0}
+/* 顶栏一级五总入口：键位固定，横向排布，窄屏可横向滚动。 */
+.console .top-nav{display:flex;align-items:center;gap:2px;margin-left:8px;flex:1;min-width:0;overflow-x:auto;padding:0 4px}
+.console .top-nav-item{border:none;background:transparent;color:#44403c;padding:5px 10px;border-radius:8px;font-size:12.5px;font-weight:500;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;height:32px;cursor:pointer;line-height:1.2;text-decoration:none}
+.console .top-nav-item:hover{background:#f5f5f4;color:var(--green-press)}
+.console .top-nav-item.active{background:var(--green-soft);color:var(--green-press);font-weight:650}
+/* 综合查询：顶栏全局搜，人人可用，不占一级。 */
+.console .global-search{display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #d6d3d1;border-radius:8px;padding:2px 8px 2px 10px;height:32px}
+.console .global-search input{border:none;outline:none;background:transparent;width:168px;font-size:12px;color:#1c1917;min-width:0}
+.console .global-search input::placeholder{color:#a8a29e}
+.console .global-search .gs-btn{border:none;background:var(--green-soft);color:var(--green-press);border-radius:6px;height:24px;padding:0 8px;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap}
+.console .global-search .gs-btn:hover{background:#d8ebe2}
 .console .logo{width:30px;height:30px;border-radius:8px;background:var(--green);display:grid;place-items:center}
 .console .top-brand-text{font-weight:650;font-size:14px;color:var(--green-press)}
 .console .top-brand-sub{font-size:11px;color:var(--muted)}
@@ -24,10 +35,14 @@
 .console .shell{display:flex;min-height:calc(100vh - 52px)}
 .console .sidenav{width:196px;background:var(--white);border-right:1px solid var(--border);padding:12px 10px;flex-shrink:0}
 .console .nav-section{font-size:11px;color:#a8a29e;padding:14px 12px 6px}
+.console .sidenav-sec{font-size:11px;font-weight:600;color:var(--muted);padding:2px 10px 8px;letter-spacing:.3px}
+.console .sidenav-hint{margin:4px 6px;padding:10px 12px;font-size:12px;line-height:1.55;color:#57534e;background:#fafaf9;border:1px dashed #d6d3d1;border-radius:8px}
 .console .nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;color:#44403c;margin-bottom:2px;text-decoration:none}
 .console .nav-item.active{background:var(--green-soft);color:var(--green-press);font-weight:600}
 .console .nav-item .dot{width:6px;height:6px;border-radius:50%;background:#d6d3d1}
 .console .nav-item.active .dot{background:var(--green)}
+/* 规划中占位标记：本期不进入真实业务。 */
+.console .plan-tag{background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;border-radius:4px;padding:0 5px;font-size:10px;white-space:nowrap;margin-left:auto}
 .console .main{flex:1;padding:14px 20px 48px;min-width:0}
 .console .crumb{color:var(--muted);font-size:12px;margin-bottom:10px}
 .console .crumb b{color:var(--ink);font-weight:500}

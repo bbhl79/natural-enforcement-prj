@@ -78,6 +78,7 @@ BullMQ/RustFS SDK），不引用 backend 内部路径（含 `../../backend/…` 
 | `spatial-no-orm-mutation` | 执行纪律 2（`geoDictLandBoundary` / `geoDictSurveyPoint` 两个空间模型禁用任何 ORM 写，含 upsert/createMany/updateMany/delete(Many) 与换行链式；写一律 `$queryRaw`/ST_ 函数。范围 = `backend/` + `packages/` + `integration/` + `e2e/` 全源码，SCAN_CODE 形态） |
 | `reference-data-no-mutation` | 参照数据只追加的机器兜底（#210，ADR 0016）：五张参照数据表（`GeoDictSourceCode` / `GeoDictViolationType` / `GeoDictDocument` / `GeoDictViolationTypeBasis` / `GeoDictJurisdiction`）的 Prisma 委托只许 insert（create/createMany），不许 update/updateMany/delete/deleteMany/upsert——改参照数据＝追加新版本，不许就地改行或删行。范围 = `backend/` + `packages/` + `integration/` + `e2e/` 全源码，SCAN_CODE 形态，含换行链式 |
 | `g1-model-allowlist` | #47 G1「地基不含业务实体」机检形态（承接 #52 AC4）：`backend/prisma/schema.prisma` 的 model 名与白名单逐字相等，表外新增即红——建表动作必须回 #47/#16 定案票，不得自行放宽。#69 定案列入 `AuthSession`、`AuthRememberMe`（见下节「认证记录」）。#92 定案列入 `Role`、`Permission`、`RolePermission`、`PersonnelRole`、`AuditTrail`（见下节「权限与留痕」）。#210 定案列入五张参照数据表（见下节「参照数据」） |
+| `screenshot-full-set` | 截图全集文件名集合（#105「截图验收（loop ⑥c）」、#134 收口、#207 换全集）：`docs/screens/<票>/` 顶层 `*.png` 的并集不得越出状态键全集。状态键全集 = 原型 v0.4 的 78 键（`frontend/prototype/admin-console/screens/*.png`，除 `overview.png`）∪ #207 协议第 I 节的 62 键（`docs/screens/keys-207.txt`）。v0.4 时代那批键一张不少（缺即红）；#207 时代那批由各执行票分票出图，齐套判定留到 #220「全集收尾」收口。自动判定只比文件名集合；画面一致由逐图人查（各票 README 与 PR） |
 
 ## 认证记录（#69）
 

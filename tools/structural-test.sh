@@ -112,10 +112,14 @@
 #                           data 模式（createBrowserRouter + RouterProvider）。前端源码出现
 #                           声明式 <BrowserRouter>/<HashRouter>，或任何 package.json、源码、
 #                           vite 配置引用框架模式开发插件 @react-router/dev 即失败
-#   screenshot-full-set     截图全集文件名集合（#105「截图验收（loop ⑥c）」、#134 收口）：
-#                           docs/screens/<票>/ 顶层 *.png 的并集，与原型 v0.4 状态键
+#   screenshot-full-set     截图全集文件名集合（#105「截图验收（loop ⑥c）」、#134 收口、#207 换全集）：
+#                           docs/screens/<票>/ 顶层 *.png 的并集，不得越出状态键全集。
+#                           状态键全集 = 原型 v0.4 的 78 键
 #                           （frontend/prototype/admin-console/screens/*.png，除 overview.png）
-#                           完全相等。自动判定只比文件名集合；画面一致由逐图人查（各票 README 与 PR）
+#                           ∪ #207 协议第 I 节的 62 键（docs/screens/keys-207.txt）。
+#                           v0.4 时代那批键一张不少（缺即红）；#207 时代那批由各执行票分票出图，
+#                           齐套判定留到 #220「全集收尾」收口。
+#                           自动判定只比文件名集合；画面一致由逐图人查（各票 README 与 PR）
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
@@ -1088,39 +1092,54 @@ check_frontend-router-mode() {
   fi
 }
 
-# 规则（#134 收口，#105「截图验收（loop ⑥c）」）：截图全集文件名集合与 v0.4 的 78 个状态键完全相等。
-# 应有集合 = 原型 v0.4 状态截图（screens/*.png，除改动总览 overview.png；diff/ 对照不计）。
+# 规则（#134 收口，#105「截图验收（loop ⑥c）」；#207 换全集，#209 起分票交付）：
+# 截图全集 = 两个时代的状态键并集：
+#   v0.4 时代（已收口，#122–#134 出齐）：原型 frontend/prototype/admin-console/screens/*.png
+#     的 78 键（除改动总览 overview.png）。这批键一张不少，已出的图也不许撤走。
+#   #207 时代（#207 协议第 I 节定义的 62 键，本全集定义处）：docs/screens/keys-207.txt，
+#     由 #209 起各执行票分票出图。本规则只判两条：已出的图不许越出全集；v0.4 时代不许缺键。
+#     62 键的齐套判定由 #220「全集收尾」收口时把缺口一并纳入判红。
 # 实有集合 = docs/screens/<票>/ 顶层 *.png 的并集（compare/、extra/ 等子目录是对照与单测验收图，不计）。
-# 自动判定只比文件名集合；画面是否与 v0.4 一致由前端交互设计工程师逐图自查、Lei Hu gate② 签收。
+# 自动判定只比文件名集合；画面是否与原型一致由前端交互设计工程师逐图自查、Lei Hu gate② 签收。
 SCREENS_WANT_DIR="$ROOT/frontend/prototype/admin-console/screens"
 SCREENS_HAVE_DIR="$ROOT/docs/screens"
+SCREENS_KEYS_207="$ROOT/docs/screens/keys-207.txt"
 check_screenshot-full-set() {
-  local fails=0 want have missing extra
-  if [ ! -d "$SCREENS_WANT_DIR" ] || [ ! -d "$SCREENS_HAVE_DIR" ]; then
-    note_fail "screenshot-full-set：缺少原型截图目录或 docs/screens 目录"
+  local fails=0 want_v04 want_207 want have missing extra pending
+  if [ ! -d "$SCREENS_WANT_DIR" ] || [ ! -d "$SCREENS_HAVE_DIR" ] || [ ! -f "$SCREENS_KEYS_207" ]; then
+    note_fail "screenshot-full-set：缺少原型截图目录、docs/screens 目录或 #207 状态键清单"
     return
   fi
-  want="$(find "$SCREENS_WANT_DIR" -maxdepth 1 -type f -name '*.png' ! -name 'overview.png' -printf '%f\n' | sort)"
-  have="$(find "$SCREENS_HAVE_DIR" -mindepth 2 -maxdepth 2 -type f -name '*.png' -printf '%f\n' | sort -u)"
+  # 三份清单一律按 LC_ALL=C 排序，comm 的两边必须同序同序则。
+  # keys-207.txt 记的是状态键本身（不带扩展名，与 #207 协议第 I 节代码块逐字一致），
+  # 比对时补上 .png 才与文件名同形。
+  want_v04="$(find "$SCREENS_WANT_DIR" -maxdepth 1 -type f -name '*.png' ! -name 'overview.png' -printf '%f\n' | LC_ALL=C sort)"
+  want_207="$(grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "$SCREENS_KEYS_207" | sed 's/$/.png/' | LC_ALL=C sort)"
+  want="$(printf '%s\n%s\n' "$want_v04" "$want_207" | LC_ALL=C sort -u)"
+  have="$(find "$SCREENS_HAVE_DIR" -mindepth 2 -maxdepth 2 -type f -name '*.png' -printf '%f\n' | LC_ALL=C sort -u)"
   # 本机 comm 是 uutils 实现，不吃 herestring 参数；比较失败必须显式判红，不许静默放过。
-  if ! missing="$(comm -23 <(printf '%s\n' "$want") <(printf '%s\n' "$have"))"; then
-    note_fail "screenshot-full-set：全集与状态键的集合比较执行失败"
-    return
-  fi
   if ! extra="$(comm -13 <(printf '%s\n' "$want") <(printf '%s\n' "$have"))"; then
     note_fail "screenshot-full-set：全集与状态键的集合比较执行失败"
     return
   fi
+  if ! missing="$(comm -23 <(printf '%s\n' "$want_v04") <(printf '%s\n' "$have"))"; then
+    note_fail "screenshot-full-set：全集与状态键的集合比较执行失败"
+    return
+  fi
+  if ! pending="$(comm -23 <(printf '%s\n' "$want_207") <(printf '%s\n' "$have"))"; then
+    note_fail "screenshot-full-set：全集与状态键的集合比较执行失败"
+    return
+  fi
   if [ -n "$missing" ]; then
-    note_fail "screenshot-full-set：全集缺状态键：$(tr '\n' ' ' <<<"$missing")"
+    note_fail "screenshot-full-set：v0.4 收口时代缺状态键：$(tr '\n' ' ' <<<"$missing")"
     fails=1
   fi
   if [ -n "$extra" ]; then
-    note_fail "screenshot-full-set：全集多出 v0.4 之外的文件名：$(tr '\n' ' ' <<<"$extra")"
+    note_fail "screenshot-full-set：全集多出状态键之外的文件名：$(tr '\n' ' ' <<<"$extra")"
     fails=1
   fi
   if [ "$fails" -eq 0 ]; then
-    note_ok "screenshot-full-set：docs/screens 各票顶层截图并集 $(wc -l <<<"$have" | xargs) 个文件名，与 v0.4 状态键完全相等"
+    note_ok "screenshot-full-set：docs/screens 各票顶层截图并集 $(wc -l <<<"$have" | xargs) 个文件名，全在 v0.4 的 $(wc -l <<<"$want_v04" | xargs) 键与 #207 的 $(wc -l <<<"$want_207" | xargs) 键之内；#207 键待出 $(wc -l <<<"$pending" | xargs) 个"
   fi
 }
 

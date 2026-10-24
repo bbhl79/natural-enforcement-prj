@@ -31,7 +31,12 @@ describe('next 参数校验（#91 约定第 3 条）', () => {
   it('去认证页时记下原路径；首页和不合规的值不带 next', () => {
     expect(withNext(LOGIN_PATH, '/admin')).toBe('/auth/login?next=%2Fadmin');
     expect(withNext(LOGIN_PATH, '/')).toBe(LOGIN_PATH);
+    expect(withNext(LOGIN_PATH, HOME_PATH)).toBe(LOGIN_PATH);
     expect(withNext(PASSWORD_PATH, '//evil.example.com')).toBe(PASSWORD_PATH);
+  });
+
+  it('落地页是统一工作台，「/」是它的别名', () => {
+    expect(HOME_PATH).toBe('/workbench');
   });
 });
 
@@ -58,13 +63,16 @@ describe('按认证状态改写地址（#91 约定第 2 条）', () => {
     expect(authRedirect('password-change-required', at(PASSWORD_PATH))).toBeNull();
   });
 
-  it('已登录访问认证页 → 回到 next；没有或不合规时到首页', () => {
+  it('已登录访问认证页 → 回到 next；没有或不合规时到落地页', () => {
     expect(authRedirect('authenticated', at(LOGIN_PATH, '?next=%2Fadmin'))).toBe('/admin');
     expect(authRedirect('authenticated', at(PASSWORD_PATH, '?next=%2Fadmin'))).toBe('/admin');
     expect(authRedirect('authenticated', at(LOGIN_PATH, '?next=https%3A%2F%2Fevil.example.com'))).toBe(HOME_PATH);
     expect(authRedirect('authenticated', at(LOGIN_PATH, '?next=%2F%2Fevil.example.com'))).toBe(HOME_PATH);
     expect(authRedirect('authenticated', at(LOGIN_PATH, '?next=%2Fauth%2Fpassword'))).toBe(HOME_PATH);
     expect(authRedirect('authenticated', at(LOGIN_PATH, '?next=%2Fx%2F..%2F%2Fevil.example%2Fpath'))).toBe(HOME_PATH);
+    // next 指向落地页或其别名时，统一落到落地页。
+    expect(authRedirect('authenticated', at(LOGIN_PATH, '?next=%2F'))).toBe(HOME_PATH);
+    expect(authRedirect('authenticated', at(LOGIN_PATH, '?next=%2Fworkbench'))).toBe(HOME_PATH);
     expect(authRedirect('authenticated', at('/admin'))).toBeNull();
   });
 

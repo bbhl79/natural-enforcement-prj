@@ -354,7 +354,7 @@ write_probe_weak-reference-entry() {
 }
 
 write_probe_screenshot-full-set() {
-  # 截图全集多出 v0.4 状态键之外的文件名。规则只比文件名，不校验 PNG 格式与画面。
+  # 截图全集多出状态键之外的文件名。规则只比文件名，不校验 PNG 格式与画面。
   # 落点是 docs/screens 深度 2 的新目录，cleanup 连空目录一并删掉，树回到干净状态。
   tmp_write "docs/screens/_structural-probe/probe-extra.png" \
     "// 探针（临时，勿入库）：截图全集外的文件名"
@@ -394,7 +394,7 @@ SPECS=(
   "storage-facility-entry|storage-facility-entry|业务侧裸依赖存储 SDK @aws-sdk/client-s3"
   "supervision-deps|supervision-deps|supervision 表外依赖业务模块 approval"
   "weak-reference-entry|weak-reference-entry|跨域弱引用入口名未从 shield 导入"
-  "screenshot-full-set|screenshot-full-set|截图全集多出 v0.4 之外的文件名"
+  "screenshot-full-set|screenshot-full-set|截图全集多出状态键之外的文件名"
   # #210 新增规则：参照数据只追加的机器兜底。
   "reference-data-no-mutation|reference-data-no-mutation|参照数据表就地改行（ADR 0016 只追加）"
 )
