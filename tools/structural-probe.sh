@@ -148,6 +148,16 @@ write_probe_spatial-in-integration() {
     "}"
 }
 
+write_probe_clue-spatial-orm-write() {
+  # #211：线索空间部件归 case 模块（规格 F）。它含 Unsupported 空间字段，ORM 写同样绕过
+  # ST_Transform 口径（执行纪律 2），故空间纪律的模型集扩到它与命中集表。
+  tmp_write "backend/case/src/_structural-probe-clue-spatial.ts" \
+    "// 探针（临时，勿入库）：线索空间部件 ORM 写（执行纪律 2 禁止的形态）" \
+    "export function probe(prisma: { clueSpatialPart: { create(input: unknown): unknown } }) {" \
+    "  return prisma.clueSpatialPart.create({ data: { id: 'probe' } });" \
+    "}"
+}
+
 write_probe_audit-facility-entry() {
   tmp_write "integration/_structural-probe-audit.ts" \
     "// 探针（临时，勿入库）：包外引用留痕委托" \
@@ -397,6 +407,8 @@ SPECS=(
   "screenshot-full-set|screenshot-full-set|截图全集多出状态键之外的文件名"
   # #210 新增规则：参照数据只追加的机器兜底。
   "reference-data-no-mutation|reference-data-no-mutation|参照数据表就地改行（ADR 0016 只追加）"
+  # #211：线索空间三表归 case 模块，空间纪律的模型集扩到线索空间部件与命中集表。
+  "clue-spatial-orm-write|spatial-no-orm-mutation|线索空间部件 ORM 写（#211 新空间表禁 ORM 写）"
 )
 
 # ---------- 护栏①（#171）动态层：带违例的整闸全量运行，三族各取一条 ----------

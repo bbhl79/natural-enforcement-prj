@@ -678,6 +678,10 @@ check_weak-reference-entry() {
 # #75 定案追加 PersonnelPasswordHistory（ADR 0015）。
 # #210 定案追加五张参照数据表（ADR 0016）：GeoDictSourceCode、GeoDictViolationType、
 # GeoDictDocument、GeoDictViolationTypeBasis、GeoDictJurisdiction。
+# #211 定案追加 18 张线索业务表（规格 F）：Clue、ClueSpatialObject、ClueSpatialPart、
+# ClueRequirementSnapshot、ClueItemValue、ClueItemGap、ClueInitialType、ClueTagLibrary、
+# ClueTag、ClueMaterial、ClueSpatialHit、ClueVerificationRun、ClueHandler、ClueAssignment、
+# ClueWithdrawal、ClueDisposition、ClueClosureReminder、ClueDesignationRequest。
 G1_MODELS=(
   MigrationProbe
   OrgUnit
@@ -702,6 +706,24 @@ G1_MODELS=(
   GeoDictDocument
   GeoDictViolationTypeBasis
   GeoDictJurisdiction
+  Clue
+  ClueSpatialObject
+  ClueSpatialPart
+  ClueRequirementSnapshot
+  ClueItemValue
+  ClueItemGap
+  ClueInitialType
+  ClueTagLibrary
+  ClueTag
+  ClueMaterial
+  ClueSpatialHit
+  ClueVerificationRun
+  ClueHandler
+  ClueAssignment
+  ClueWithdrawal
+  ClueDisposition
+  ClueClosureReminder
+  ClueDesignationRequest
 )
 check_g1-model-allowlist() {
   local schema="$BACKEND/prisma/schema.prisma" model in_schema extra missing fails=0
@@ -803,13 +825,15 @@ check_audit-facility-entry() {
 }
 
 # 规则 o（评审必修扩口径）：空间纪律机器兜底——backend/、packages/、integration/、e2e/
-# 全源码不得对两个空间模型 delegate 调任何 ORM 写。含必填 Unsupported 空间字段的模型走
+# 全源码不得对空间模型 delegate 调任何 ORM 写。含必填 Unsupported 空间字段的模型走
 # ORM 写会绕过 ST_Transform 统一口径（infra/VERSIONS.md 执行纪律 2），写一律 $queryRaw/ST_ 函数。
 # 扩口径三处：① 方法集补全（create/update 之外的 upsert/createMany/updateMany/
 # delete/deleteMany 同样是 ORM 写）；② 文件形态 = SCAN_CODE（.mjs/.cjs 种子与校验器、
 # .sh 用例内联 node 都能拿到 delegate）；③ 换行链式（prisma.geoDictLandBoundary 换行
 # .create(）折行后二次判定，单行已命中的文件不重复报。
-SPATIAL_MODEL='geoDictLandBoundary|geoDictSurveyPoint'
+# #211 扩口径：线索空间三表归 case 模块（规格 F），其中 clueSpatialPart（含 Unsupported
+# 空间字段）与 clueSpatialHit（命中集经空间函数算出）同样禁 ORM 写。
+SPATIAL_MODEL='geoDictLandBoundary|geoDictSurveyPoint|clueSpatialPart|clueSpatialHit'
 SPATIAL_ORM_METHOD='createManyAndReturn|createMany|create|upsert|updateMany|update|deleteMany|delete'
 SPATIAL_ORM_WRITE="(${SPATIAL_MODEL})[[:space:]]*\.[[:space:]]*(${SPATIAL_ORM_METHOD})[[:space:]]*\("
 check_spatial-no-orm-mutation() {

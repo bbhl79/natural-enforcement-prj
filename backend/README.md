@@ -78,11 +78,11 @@ BullMQ/RustFS SDK），不引用 backend 内部路径（含 `../../backend/…` 
 | `module-public-entry` | 往来形态（禁内部路径/跨模块相对路径；范围含 integration 层，豁免见下节） |
 | `frontend-boundary` | frontend 行（不直连库、不引 backend 内部） |
 | `weak-reference-entry` | 弱引用经 shield 入口 |
-| `g1-model-allowlist` | #47 G1「地基不含业务实体」机检形态（承接 #52 AC4）：`backend/prisma/schema.prisma` 的 model 名与白名单逐字相等，表外新增即红——建表动作必须回 #47/#16 定案票，不得自行放宽。#69 定案列入 `AuthSession`、`AuthRememberMe`（见下节「认证记录」）。#92 定案列入 `Role`、`Permission`、`RolePermission`、`PersonnelRole`、`AuditTrail`（见下节「权限与留痕」）。#210 定案列入五张参照数据表（见下节「参照数据」） |
+| `g1-model-allowlist` | #47 G1「地基不含业务实体」机检形态（承接 #52 AC4）：`backend/prisma/schema.prisma` 的 model 名与白名单逐字相等，表外新增即红——建表动作必须回 #47/#16 定案票，不得自行放宽。#69 定案列入 `AuthSession`、`AuthRememberMe`（见下节「认证记录」）。#92 定案列入 `Role`、`Permission`、`RolePermission`、`PersonnelRole`、`AuditTrail`（见下节「权限与留痕」）。#210 定案列入五张参照数据表（见下节「参照数据」）。#211 定案列入 18 张线索业务表（见下节「线索登记」） |
 | `queue-facility-entry` | #55 队列设施唯一入口（bullmq/ioredis 只许在 `packages/queue`，业务侧只许经 `QUEUE_PORT` 注入；G5 机器兜底） |
 | `storage-facility-entry` | #53 存储设施唯一入口（`@aws-sdk/*`、`@smithy/*`、`minio`、`rustfs` 只许在 `packages/storage`，业务侧只许经 `STORAGE_PORT` 注入；append-only 最保守语义的机器兜底） |
 | `audit-facility-entry` | ADR 0012 留痕设施唯一入口（`auditTrail` 这个 Prisma 委托只许在 `packages/audit`。包外引用即红。观察留痕行走表名） |
-| `spatial-no-orm-mutation` | 执行纪律 2（`geoDictLandBoundary` / `geoDictSurveyPoint` 两个空间模型禁用任何 ORM 写，含 upsert/createMany/updateMany/delete(Many) 与换行链式；写一律 `$queryRaw`/ST_ 函数。范围 = `backend/` + `packages/` + `integration/` + `e2e/` 全源码，SCAN_CODE 形态） |
+| `spatial-no-orm-mutation` | 执行纪律 2（`geoDictLandBoundary` / `geoDictSurveyPoint` 两个空间字典模型与 `clueSpatialPart` / `clueSpatialHit` 两个线索空间模型禁用任何 ORM 写，含 upsert/createMany/updateMany/delete(Many) 与换行链式；写一律 `$queryRaw`/ST_ 函数。范围 = `backend/` + `packages/` + `integration/` + `e2e/` 全源码，SCAN_CODE 形态） |
 | `reference-data-no-mutation` | 参照数据只追加的机器兜底（#210，ADR 0016）：五张参照数据表（`GeoDictSourceCode` / `GeoDictViolationType` / `GeoDictDocument` / `GeoDictViolationTypeBasis` / `GeoDictJurisdiction`）的 Prisma 委托只许 insert（create/createMany），不许 update/updateMany/delete/deleteMany/upsert——改参照数据＝追加新版本，不许就地改行或删行。范围 = `backend/` + `packages/` + `integration/` + `e2e/` 全源码，SCAN_CODE 形态，含换行链式 |
 | `runtime-manifest` | 非矩阵行：运行参数清单（ADR 0008、#80、#120）。`infra/docker-compose.yml` 与 `.github/workflows/ci.yml` 里的变量名必须登记在 `infra/runtime.env`；密钥只许引用变量（compose）或 secrets（CI），不许字面量、默认值、回落值，也不许出现清单里密钥的夹具值 |
 | `user-lock-assertions` | 非矩阵行：锁清单断言（#105「锁清单」、#111、#120）。`docs/user-lock.md` 每节带一个断言编号；测试代码里必须有标题以该编号开头的 it/test（含 it.todo「待实现」登记）；测试里出现清单外编号同样判红 |
@@ -170,6 +170,32 @@ DELETE（复用 `reject_row_mutation`），应用层另由结构测试 `referenc
 初值常量在 `backend/geo-dict/src/reference-data/`，由 `tools/generate-clue-reference-data.mjs`
 从 `docs/research/` 下的定稿底稿生成；种子按同一份常量写库。核查图层与街道边界几何不入种子
 （ADR 0021 未立）。
+
+## 线索登记（#211）
+
+18 张线索业务表归案件聚合模块（case）名下，是线索业务事实。迁移
+`20261024224815_issue211_clue_registration` 建表；`audit_trail` 同批只新增可空 `detail TEXT`
+（结构化快照，只写不回）。
+
+| 白名单名字 | 承载 | 说明 |
+|---|---|---|
+| `Clue` | 线索主体 | 业务编号 `code` 与主键分离（取值来自 sequence `clue_code_seq`，形如 `CL0000000001`）。`idempotency_key` 与 `request_digest` 同存两列，同 key 异报文即 409 |
+| `ClueSpatialObject` | 空间对象 | 线索持有 1..1 空间对象。`kind` 取 face/point，`part_count` 是几何部件数 |
+| `ClueSpatialPart` | 空间部件 | 形制沿用 `GeoDictLandBoundary`：`geom` 为 EPSG:4490，`source_srid` + `source_geom` 保留来源坐标。禁 ORM 写，几何读写走 `$queryRaw` |
+| `ClueSpatialHit` | 疑似重复命中集 | 每个合格面对一行：双方面 id、双方各自重合度、交集面积（平方米）。只存当前命中集，重算整体替换。禁 ORM 写 |
+| `ClueRequirementSnapshot` | 录入要件快照 | 登记时快照要件键集合，老线索按登记当时判断。`declaration_version` 记声明版本 |
+| `ClueItemValue` | 要件取值 | 一条线索逐键落值。`value` 是文本，`value_json` 是结构化取值 |
+| `ClueItemGap` | 缺件 | 类型层缺件为常驻事实行。补齐后清单消失（`filled_at` 有值），行仍保留 |
+| `ClueInitialType` | 初步涉嫌违法类型 | 可空可多个，取值取自违法类型清单 |
+| `ClueTagLibrary` / `ClueTag` | 标签库与线索标签 | 登记时 create-on-use：库里没有的当场新建 |
+| `ClueMaterial` | 已登记材料 | 只在登记事务中写入，没有待关联状态。`kind` 取 attachment/spatial-source；GeoJSON 来源文件不占普通附件配额 |
+| `ClueVerificationRun` | 内业核查运行 | 土地/矿产录入后自动入队，点状不跑。`run_no` 是同一线索的运行序号 |
+| `ClueHandler` | 承办人 | 主办/协办。`role` 取 main/assist |
+| `ClueAssignment` | 分派事实 | 首次分派、重新分派、指定管辖、系统管理员重新指定都并入本表。`kind` 取 initial/reassign/designate/pool-reassign |
+| `ClueWithdrawal` | 撤回不派 | `reason_codes` 是数组列，至少一项；`note` 必填 |
+| `ClueDisposition` | 处置 | 不予立案、随旧线索办结、移送。`disposition` 取 no-case/with-old/transfer |
+| `ClueClosureReminder` | 结案提醒 | 不予立案、移送、立案时按当前命中集逐对生成 |
+| `ClueDesignationRequest` | 指定管辖报请 | 下级报请上级指定管辖。`status` 取 pending/approved/rejected |
 
 ## 测试装配层豁免（integration 层）
 
