@@ -1,27 +1,52 @@
-// 菜单项 → 所需操作码（#105「菜单来源」）。前端写死，不建表。
-// 菜单可见只是方便；真正的授权由服务端每次校验（故事 16）。
+// 顶栏一级五总入口与侧栏二级（#207 导航锁、#209 执行票）。
+// 一级键位固定：workbench｜clue｜case｜supervise｜admin；二级键位同样固定，文案可改、键位不改。
+// 菜单可见性只是便利；真正的授权由服务端每次校验（#207「菜单可见性仍只是便利」）。
 // 操作码原文只在这里和 data- 属性上，不进用户可见文本。
 
-export type MenuSection = '业务办理' | '管理台';
+import { CLUE_VIEWS, withPreservedQuery } from './clueUrl';
 
-export interface MenuItem {
-  id: string;
+/** 顶栏一级入口键位。键位稳定：文案可改，键位不改。 */
+export type PrimaryKey = 'workbench' | 'clue' | 'case' | 'supervise' | 'admin';
+
+export interface PrimaryEntry {
+  id: PrimaryKey;
   label: string;
+  /** 一级入口地址。 */
   path: string;
-  section: MenuSection;
-  /** 会话清单含其中任一码即显示 */
+  /**
+   * 会话清单含其中任一码即渲染该一级入口；空数组＝所有登录人员可见。
+   * 「系统管理」一级无权限时不渲染，也不在页面上作说明。
+   */
   anyOf: readonly string[];
+}
+
+export interface SecondaryEntry {
+  id: string;
+  /** 所属一级入口。 */
+  primary: PrimaryKey;
+  label: string;
+  /** 站内地址（含查询串）。 */
+  path: string;
+  /** 会话清单含其中任一码即渲染该二级入口；缺省＝该一级下人人可见。 */
+  anyOf?: readonly string[];
+  /** 规划中占位：本期不进入真实业务，点了只在主区提示。 */
+  planned?: boolean;
+  /** 规划中占位的补充说明（进主区提示里）。 */
+  hint?: string;
 }
 
 /**
  * 机构维护的入口码。#105:178：`org.tree.read` 也给内勤（选承办机构用），
- * `org.unit.register` 等三码只给系统管理。凭 `org.tree.read` 判定会让内勤看到「管理台」一区，
- * 与原型 P1 noadmin 相反，所以「机构」菜单、管理台入口和维护视角都按 `org.unit.register` 判定。
- * 该码由 #123 入名册；入册前「机构」菜单对所有人都不显示。
+ * `org.unit.register` 等三码只给系统管理。凭 `org.tree.read` 判定会让内勤看到
+ * 「系统管理」一级，与原型 P1 noadmin 相反，所以「机构」入口和维护视角都按
+ * `org.unit.register` 判定。
  */
 export const ORG_MAINTENANCE_OPCODE = 'org.unit.register';
 
-/** 管理台首页的入口码：持有任一即可进入管理台区。只收系统管理或监督才有的码，不收内勤也有的码。 */
+/**
+ * 「系统管理」一级的入口码：持有任一即可看到该一级入口。只收系统管理或监督才有的码，
+ * 不收内勤也有的码。
+ */
 export const ADMIN_HOME_OPCODES = [
   ORG_MAINTENANCE_OPCODE,
   'personnel.profile.read',
@@ -29,50 +54,168 @@ export const ADMIN_HOME_OPCODES = [
   'audit.admin.read',
 ] as const;
 
-/** 业务区工作台的入口码（原型 P1：业务读码任一）。 */
+/** 业务侧读码：内勤以外的业务角色都持有。用于「只有管理台入口、没有业务入口」的判定。 */
 export const BUSINESS_OPCODES = ['clue.read', 'case.read'] as const;
 
-export const MENU: readonly MenuItem[] = [
-  { id: 'home', label: '工作台', path: '/', section: '业务办理', anyOf: BUSINESS_OPCODES },
-  { id: 'clue', label: '线索', path: '/clues', section: '业务办理', anyOf: ['clue.read'] },
-  { id: 'case', label: '案件', path: '/cases', section: '业务办理', anyOf: ['case.read'] },
-  { id: 'admin', label: '管理台首页', path: '/admin', section: '管理台', anyOf: ADMIN_HOME_OPCODES },
-  { id: 'org', label: '机构', path: '/admin/org-units', section: '管理台', anyOf: [ORG_MAINTENANCE_OPCODE] },
-  { id: 'person', label: '人员', path: '/admin/personnel', section: '管理台', anyOf: ['personnel.profile.read'] },
-  { id: 'locked', label: '被锁人员', path: '/admin/locked-personnel', section: '管理台', anyOf: ['personnel.locked.read'] },
-  { id: 'audit', label: '管理台留痕', path: '/admin/audit', section: '管理台', anyOf: ['audit.admin.read'] },
+export const PRIMARY_ENTRIES: readonly PrimaryEntry[] = [
+  { id: 'workbench', label: '统一工作台', path: '/workbench', anyOf: [] },
+  { id: 'clue', label: '线索中心', path: '/clue', anyOf: [] },
+  { id: 'case', label: '案件中心', path: '/case', anyOf: [] },
+  { id: 'supervise', label: '统筹督导', path: '/supervise', anyOf: [] },
+  { id: 'admin', label: '系统管理', path: '/admin', anyOf: ADMIN_HOME_OPCODES },
+];
+
+export const SECONDARY_ENTRIES: readonly SecondaryEntry[] = [
+  // 统一工作台：待办看板与线索录入三环节（环节内容由对应业务切片接入）
+  { id: 'board', primary: 'workbench', label: '待办看板', path: '/workbench' },
+  { id: 'step-register', primary: 'workbench', label: '① 线索录入', path: '/workbench?step=1', planned: true },
+  { id: 'step-verify', primary: 'workbench', label: '② 内业核查', path: '/workbench?step=2', planned: true },
+  { id: 'step-dispatch', primary: 'workbench', label: '③ 分派决定', path: '/workbench?step=3', planned: true },
+  // 线索中心：四个视图与 /clue?view= 对应
+  ...CLUE_VIEWS.map((view) => ({
+    id: `clue-${view.id}`,
+    primary: 'clue' as PrimaryKey,
+    label: view.label,
+    path: `/clue?view=${view.id}`,
+  })),
+  // 案件中心：规划中占位，不进真实业务
+  {
+    id: 'case-onsite',
+    primary: 'case',
+    label: '现场核查与立案呈批',
+    path: '/case?module=case-onsite',
+    planned: true,
+    hint: '案件程序主干不在本期范围。',
+  },
+  {
+    id: 'case-trial',
+    primary: 'case',
+    label: '案件查办与审理',
+    path: '/case?module=case-trial',
+    planned: true,
+    hint: '案件程序主干不在本期范围。',
+  },
+  // 统筹督导：规划中占位，含卷宗评查
+  {
+    id: 'supervise-review',
+    primary: 'supervise',
+    label: '执法监督与卷宗评查',
+    path: '/supervise?module=supervise-review',
+    planned: true,
+    hint: '含卷宗评查，归属统筹督导，不进案件中心。',
+  },
+  // 系统管理：既有管理台入口，各按自身操作码出现
+  { id: 'admin-home', primary: 'admin', label: '管理台首页', path: '/admin', anyOf: ADMIN_HOME_OPCODES },
+  { id: 'org', primary: 'admin', label: '机构', path: '/admin/org-units', anyOf: [ORG_MAINTENANCE_OPCODE] },
+  { id: 'person', primary: 'admin', label: '人员', path: '/admin/personnel', anyOf: ['personnel.profile.read'] },
+  { id: 'locked', primary: 'admin', label: '被锁人员', path: '/admin/locked-personnel', anyOf: ['personnel.locked.read'] },
+  { id: 'audit', primary: 'admin', label: '管理台留痕', path: '/admin/audit', anyOf: ['audit.admin.read'] },
+  // 系统管理下的规划中占位
+  {
+    id: 'authz',
+    primary: 'admin',
+    label: '角色与权限',
+    path: '/admin?module=authz',
+    anyOf: [ORG_MAINTENANCE_OPCODE],
+    planned: true,
+    hint: '角色与操作码矩阵的绑定维护在后续业务切片开放。',
+  },
+  {
+    id: 'reference',
+    primary: 'admin',
+    label: '参照数据与配置类对象',
+    path: '/admin?module=reference',
+    anyOf: [ORG_MAINTENANCE_OPCODE],
+    planned: true,
+    hint: '参照数据与配置类对象的维护在后续业务切片开放。',
+  },
 ];
 
 export function hasAny(opcodes: readonly string[], wanted: readonly string[]): boolean {
   return wanted.some((code) => opcodes.includes(code));
 }
 
-/** 按会话清单裁剪后的菜单，保持定义顺序。兼任多角色时自然是并集。 */
-export function visibleMenu(opcodes: readonly string[]): MenuItem[] {
-  return MENU.filter((item) => hasAny(opcodes, item.anyOf));
+/** 按会话清单裁剪后的一级入口，保持定义顺序。 */
+export function visiblePrimaries(opcodes: readonly string[]): PrimaryEntry[] {
+  return PRIMARY_ENTRIES.filter((item) => item.anyOf.length === 0 || hasAny(opcodes, item.anyOf));
 }
 
-export function visibleSections(opcodes: readonly string[]): MenuSection[] {
-  const sections: MenuSection[] = [];
-  for (const item of visibleMenu(opcodes)) {
-    if (!sections.includes(item.section)) sections.push(item.section);
+/** 按会话清单裁剪后的某一级下的二级入口，保持定义顺序。 */
+export function visibleSecondaries(primary: PrimaryKey, opcodes: readonly string[]): SecondaryEntry[] {
+  return SECONDARY_ENTRIES.filter(
+    (item) => item.primary === primary && (!item.anyOf || hasAny(opcodes, item.anyOf)),
+  );
+}
+
+/** 规划中占位项按键位取回；不是规划中项时返回 null。 */
+export function plannedSecondary(id: string): SecondaryEntry | null {
+  const found = SECONDARY_ENTRIES.find((item) => item.id === id);
+  return found && found.planned ? found : null;
+}
+
+/** 当前地址落在哪个一级入口上：按路径前缀取最长的一项。地址不属任何一级时返回 null。 */
+export function activePrimaryKey(pathname: string): PrimaryKey | null {
+  let best: PrimaryEntry | null = null;
+  for (const item of PRIMARY_ENTRIES) {
+    const hit = pathname === item.path || pathname.startsWith(`${item.path}/`);
+    if (hit && (!best || item.path.length > best.path.length)) best = item;
   }
-  return sections;
+  return best?.id ?? null;
+}
+
+/** 参数缺省值：线索中心不带 view 时按「全部线索」算。 */
+const PARAM_DEFAULT: Record<string, string> = { view: 'all' };
+
+/**
+ * 当前地址落在哪个二级入口上：地址前缀最长者优先；带参数的二级按参数值匹配。
+ * 本人不可见的二级不高亮（无权限页不高亮任何导航项）。
+ */
+export function activeSecondaryKey(
+  primary: PrimaryKey,
+  pathname: string,
+  search: string,
+  opcodes: readonly string[],
+): string | null {
+  const current = new URLSearchParams(search);
+  let best: { id: string; pathLength: number; paramCount: number } | null = null;
+  for (const item of visibleSecondaries(primary, opcodes)) {
+    const [base, query] = item.path.split('?');
+    const pathHit = pathname === base || pathname.startsWith(`${base}/`);
+    if (!pathHit) continue;
+    const params = new URLSearchParams(query ?? '');
+    let paramsHit = true;
+    for (const [key, value] of params) {
+      const actual = current.get(key) ?? PARAM_DEFAULT[key] ?? '';
+      if (actual !== value) {
+        paramsHit = false;
+        break;
+      }
+    }
+    if (!paramsHit) continue;
+    const candidate = { id: item.id, pathLength: base.length, paramCount: params.size };
+    if (
+      !best ||
+      candidate.pathLength > best.pathLength ||
+      (candidate.pathLength === best.pathLength && candidate.paramCount > best.paramCount)
+    ) {
+      best = candidate;
+    }
+  }
+  return best?.id ?? null;
 }
 
 /**
- * 当前地址落在哪个菜单项上：先在全部菜单里取路径前缀最长的一项，即当前页自己的菜单项；
- * 这一项对本人可见才高亮，不可见（无权限页）时不高亮任何项。
- * 原型 `assets/shell.js:48` 只在菜单项就是当前页时高亮，P2-forbidden、P4-denied、P7-denied 都不高亮。
+ * 二级入口的实际地址：线索中心的视图切换保留关键词、筛选、日期与分页。
  */
-export function activeMenuId(pathname: string, items: readonly MenuItem[]): string | null {
-  let best: MenuItem | null = null;
-  for (const item of MENU) {
-    const hit = item.path === '/'
-      ? pathname === '/'
-      : pathname === item.path || pathname.startsWith(`${item.path}/`);
-    if (hit && (!best || item.path.length > best.path.length)) best = item;
-  }
-  const id = best?.id ?? null;
-  return id !== null && items.some((item) => item.id === id) ? id : null;
+export function secondaryHref(item: SecondaryEntry, search: string): string {
+  return item.primary === 'clue' ? withPreservedQuery(item.path, search) : item.path;
+}
+
+/**
+ * 综合查询的落点：提交后进入线索中心并带关键词。人人可用，不占一级。
+ * 关键词为空时只进线索中心，不带查询串。
+ */
+export function globalSearchPath(keyword: string): string {
+  const trimmed = keyword.trim();
+  return trimmed ? `/clue?q=${encodeURIComponent(trimmed)}` : '/clue';
 }
