@@ -33,7 +33,7 @@ export default function SideNav({ opcodes, highlight = true }: { opcodes: readon
 
   const rows = [];
   const label = visible.find((item) => item.id === primary)?.label ?? '';
-  rows.push(<div key="sec" className="nav-section">{`${label} · 二级菜单`}</div>);
+  rows.push(<div key="sec" className="sidenav-sec">{`${label} · 二级菜单`}</div>);
   for (const item of items) {
     rows.push(
       <Link
@@ -43,7 +43,6 @@ export default function SideNav({ opcodes, highlight = true }: { opcodes: readon
         data-menu={item.id}
         data-requires={item.anyOf ? item.anyOf.join(' ') : ''}
       >
-        <span className="dot" />
         {item.label}
         {item.planned ? <span className="plan-tag">规划中</span> : null}
       </Link>,

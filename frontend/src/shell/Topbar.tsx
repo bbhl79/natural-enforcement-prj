@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 
 import type { OperatorSession } from '../login/loginSlice';
@@ -19,7 +19,7 @@ function Logo() {
 
 /**
  * 顶栏：系统名称、一级五总入口、综合查询、用户与退出。
- * 一级入口在会话没有相应操作码时不渲染（无权限者看不到「系统管理」）。
+ * 一级入口在会话没有相应操作码时不渲染（无权限者看不到「系统管理」，页面上也不作说明）。
  * 综合查询人人可用，不占一级，提交后进入线索中心并带关键词。
  */
 export default function Topbar({ operator, onLogout }: {
@@ -31,6 +31,13 @@ export default function Topbar({ operator, onLogout }: {
   const [keyword, setKeyword] = useState('');
   const primaries = operator ? visiblePrimaries(operator.opcodes) : [];
   const active = operator ? activePrimaryKey(location.pathname) : null;
+
+  // 线索中心的关键词回填顶栏搜索框：综合查询落到本页时能看到自己查的词。
+  useEffect(() => {
+    if (location.pathname !== '/clue') return;
+    const value = new URLSearchParams(location.search).get('q') ?? '';
+    setKeyword(value);
+  }, [location.pathname, location.search]);
 
   function onSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

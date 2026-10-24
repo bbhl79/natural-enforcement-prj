@@ -9,7 +9,7 @@ export default function PlannedNotice({ label, hint }: { label: string; hint?: s
             {label}
             <span className="tag gray">规划中</span>
           </h1>
-          <div className="desc">本模块为后续业务切片，本期不进入真实业务办理。</div>
+          <div className="desc">本模块尚未开放真实业务办理，后续范围接入后在此办理。</div>
         </div>
       </div>
       <div className="card">

@@ -7,7 +7,10 @@ import {
   globalSearchPath,
   ORG_MAINTENANCE_OPCODE,
   plannedModule,
+  plannedModuleByPath,
+  plannedModulesOf,
   plannedSecondary,
+  primaryIsPlanned,
   PRIMARY_ENTRIES,
   SECONDARY_ENTRIES,
   visiblePrimaries,
@@ -177,12 +180,12 @@ describe('当前所在一级与二级', () => {
   });
 
   it('管理台二级按最长地址前缀命中', () => {
-    expect(activeSecondaryKey('admin', '/admin', '')).toBe('admin-home');
-    expect(activeSecondaryKey('admin', '/admin/org-units', '')).toBe('org');
-    expect(activeSecondaryKey('admin', '/admin/personnel/new', '')).toBe('person');
-    expect(activeSecondaryKey('admin', '/admin/personnel/abc', '')).toBe('person');
-    expect(activeSecondaryKey('admin', '/admin/locked-personnel', '')).toBe('locked');
-    expect(activeSecondaryKey('admin', '/admin/audit', '')).toBe('audit');
+    expect(activeSecondaryKey('admin', '/admin', '', ADMIN)).toBe('admin-home');
+    expect(activeSecondaryKey('admin', '/admin/org-units', '', ADMIN)).toBe('org');
+    expect(activeSecondaryKey('admin', '/admin/personnel/new', '', ADMIN)).toBe('person');
+    expect(activeSecondaryKey('admin', '/admin/personnel/abc', '', ADMIN)).toBe('person');
+    expect(activeSecondaryKey('admin', '/admin/locked-personnel', '', ADMIN)).toBe('locked');
+    expect(activeSecondaryKey('admin', '/admin/audit', '', ADMIN)).toBe('audit');
   });
 
   it('本人不可见的二级不高亮', () => {
@@ -221,10 +224,26 @@ describe('规划中占位（案件中心、统筹督导、系统管理）', () =
   });
 
   it('一级入口本身也可给出规划中说明', () => {
-    expect(plannedModule('case')?.label).toBe('案件中心');
-    expect(plannedModule('supervise')?.label).toBe('统筹督导');
-    expect(plannedModule('workbench')).toBeNull();
-    expect(plannedModule('clue')).toBeNull();
+    expect(plannedModulesOf('case').map((item) => item.label)).toEqual([
+      '现场核查与立案呈批',
+      '案件查办与审理',
+    ]);
+    expect(plannedModulesOf('supervise').map((item) => item.label)).toEqual(['执法监督与卷宗评查']);
+    expect(plannedModulesOf('workbench')).toEqual([]);
+    expect(plannedModulesOf('clue')).toEqual([]);
+  });
+
+  it('案件中心与统筹督导整级都是规划中占位', () => {
+    expect(primaryIsPlanned('case')).toBe(true);
+    expect(primaryIsPlanned('supervise')).toBe(true);
+    expect(primaryIsPlanned('workbench')).toBe(false);
+    expect(primaryIsPlanned('clue')).toBe(false);
+  });
+
+  it('规划中占位按地址取回', () => {
+    expect(plannedModuleByPath('/case/onsite-check')?.label).toBe('现场核查与立案呈批');
+    expect(plannedModuleByPath('/supervise/review')?.label).toBe('执法监督与卷宗评查');
+    expect(plannedModuleByPath('/workbench')).toBeNull();
   });
 });
 

@@ -31,14 +31,12 @@ export interface SecondaryEntry {
   anyOf?: readonly string[];
   /** 规划中占位：本期不进入真实业务，点了只在主区提示。 */
   planned?: boolean;
-  /** 规划中占位的模块键位：主区据此取回说明。 */
-  module?: string;
   /** 规划中占位的补充说明（进主区提示里）。 */
   hint?: string;
 }
 
 /**
- * 规划中占位模块。一级入口本身（案件中心、统筹督导）与它们下面的二级占位同表登记，
+ * 规划中占位模块。一级入口本身与它们下面的二级占位同表登记，
  * 路由表与侧栏都从这张表派生，避免两处各写一份而走样。
  */
 export interface PlannedModule {
@@ -46,16 +44,15 @@ export interface PlannedModule {
   /** 所属一级入口。 */
   primary: PrimaryKey;
   label: string;
+  /** 站内地址。 */
+  path: string;
   /** 主区提示的补充说明。 */
   hint: string;
-  /** 是否进侧栏二级菜单；一级入口本身不进。 */
+  /** 是否进侧栏二级菜单。 */
   inMenu: boolean;
   /** 进侧栏时的操作码门槛；缺省＝人人可见。 */
   anyOf?: readonly string[];
 }
-
-/** 规划中占位在地址里的参数名。占位不另开路由，仍走一级入口的地址。 */
-export const PLANNED_MODULE_KEY = 'module';
 
 /**
  * 机构维护的入口码。#105:178：`org.tree.read` 也给内勤（选承办机构用），
@@ -85,19 +82,16 @@ export const PRIMARY_ENTRIES: readonly PrimaryEntry[] = [
   { id: 'admin', label: '系统管理', path: '/admin', anyOf: ADMIN_HOME_OPCODES },
 ];
 
-/** 规划中占位模块登记表。一级入口本身与二级占位同表。 */
+/**
+ * 规划中占位模块登记表。侧栏二级与主区提示页都从这张表派生。
+ * 占位各有独立地址，便于分享与截图；地址不另开一级。
+ */
 export const PLANNED_MODULES: readonly PlannedModule[] = [
-  {
-    id: 'case',
-    primary: 'case',
-    label: '案件中心',
-    hint: '案件程序主干不在本期范围。',
-    inMenu: false,
-  },
   {
     id: 'case-onsite',
     primary: 'case',
     label: '现场核查与立案呈批',
+    path: '/case/onsite-check',
     hint: '案件程序主干不在本期范围。',
     inMenu: true,
   },
@@ -105,20 +99,15 @@ export const PLANNED_MODULES: readonly PlannedModule[] = [
     id: 'case-trial',
     primary: 'case',
     label: '案件查办与审理',
+    path: '/case/trial',
     hint: '案件程序主干不在本期范围。',
     inMenu: true,
-  },
-  {
-    id: 'supervise',
-    primary: 'supervise',
-    label: '统筹督导',
-    hint: '含卷宗评查，归属统筹督导，不进案件中心。',
-    inMenu: false,
   },
   {
     id: 'supervise-review',
     primary: 'supervise',
     label: '执法监督与卷宗评查',
+    path: '/supervise/review',
     hint: '含卷宗评查，归属统筹督导，不进案件中心。',
     inMenu: true,
   },
@@ -126,6 +115,7 @@ export const PLANNED_MODULES: readonly PlannedModule[] = [
     id: 'admin-roles',
     primary: 'admin',
     label: '角色与权限',
+    path: '/admin/roles',
     hint: '角色与操作码矩阵的绑定维护在后续业务范围开放。',
     inMenu: true,
     anyOf: [ORG_MAINTENANCE_OPCODE],
@@ -134,17 +124,22 @@ export const PLANNED_MODULES: readonly PlannedModule[] = [
     id: 'admin-reference',
     primary: 'admin',
     label: '参照数据与配置类对象',
+    path: '/admin/reference',
     hint: '参照数据与配置类对象的维护在后续业务范围开放。',
     inMenu: true,
     anyOf: [ORG_MAINTENANCE_OPCODE],
   },
 ];
 
-/** 规划中占位项的地址：走一级入口的地址，占位键位进查询串。 */
-export function plannedModulePath(item: PlannedModule): string {
-  const primary = PRIMARY_ENTRIES.find((entry) => entry.id === item.primary);
-  if (!primary) return `/${item.primary}`;
-  return `${primary.path}?${PLANNED_MODULE_KEY}=${item.id}`;
+/** 某一级下的规划中占位项（按登记表顺序）。 */
+export function plannedModulesOf(primary: PrimaryKey): PlannedModule[] {
+  return PLANNED_MODULES.filter((item) => item.primary === primary);
+}
+
+/** 某一级是否整体为规划中占位（该级下所有二级都是占位）。 */
+export function primaryIsPlanned(primary: PrimaryKey): boolean {
+  const items = SECONDARY_ENTRIES.filter((item) => item.primary === primary);
+  return items.length > 0 && items.every((item) => item.planned);
 }
 
 /** 侧栏二级菜单。键位固定，顺序固定。 */
@@ -167,15 +162,14 @@ export const SECONDARY_ENTRIES: readonly SecondaryEntry[] = [
   { id: 'person', primary: 'admin', label: '人员', path: '/admin/personnel', anyOf: ['personnel.profile.read'] },
   { id: 'locked', primary: 'admin', label: '被锁人员', path: '/admin/locked-personnel', anyOf: ['personnel.locked.read'] },
   { id: 'audit', primary: 'admin', label: '管理台留痕', path: '/admin/audit', anyOf: ['audit.admin.read'] },
-  // 规划中占位：按登记表派生，二级菜单与主区提示同源
+  // 规划中占位：按登记表派生，二级菜单与主区提示页同源
   ...PLANNED_MODULES.filter((item) => item.inMenu).map((item) => ({
     id: item.id,
     primary: item.primary,
     label: item.label,
-    path: plannedModulePath(item),
+    path: item.path,
     anyOf: item.anyOf,
     planned: true,
-    module: item.id,
     hint: item.hint,
   })),
 ];
@@ -256,6 +250,16 @@ export function activeSecondaryKey(
     }
   }
   return best?.id ?? null;
+}
+
+/** 一级入口的地址。 */
+export function primaryPathOf(primary: PrimaryKey): string {
+  return PRIMARY_ENTRIES.find((item) => item.id === primary)?.path ?? `/${primary}`;
+}
+
+/** 规划中占位模块按地址取回；不是规划中项时返回 null。 */
+export function plannedModuleByPath(pathname: string): PlannedModule | null {
+  return PLANNED_MODULES.find((item) => item.path === pathname) ?? null;
 }
 
 /**
