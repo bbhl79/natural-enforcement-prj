@@ -360,3 +360,113 @@ model GeoDictSurveyPoint {
 
   @@map("geo_dict_survey_point")
 }
+
+// ---- 参照数据（#210；ADR 0016 参照数据随种子只追加写入）----
+// 五张表只追加：库层触发器拒 UPDATE 与 DELETE（复用 reject_row_mutation），
+// 与留痕表同一口径。业务唯一键 =「业务编码 + 版本」，种子按它判幂等。
+// 每一版带出处（source）与启用状态（status）；停用某编码 = 追加一版标 inactive，不改旧行。
+// 上一级显式存「上级编码」，不按编码前缀推断（ADR 0016「上下级与出处」）。
+// 引用钉版本：指向别的参照数据时存那一版的技术主键，并另存展示快照。
+
+/// 线索来源编码（#24 定稿 30 项：5 大类 + 20 二级 + 5 三级）。
+/// parent_code 显式存上级编码（1/5/22/3/21 为大类，其余挂其下）。
+model GeoDictSourceCode {
+  id         String   @id
+  code       String
+  version    Int
+  name       String
+  parentCode String?  @map("parent_code")
+  source     String
+  status     String   @default("active")
+  createdAt  DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([code, version])
+  @@index([code])
+  @@map("geo_dict_source_code")
+}
+
+/// 违法类型编码（#203 定稿：94 个可选具体违法行为 + 19 个不可选大类）。
+/// domain 取 land | mineral | survey | planning（ADR 0020 法域短码）。
+/// selectable 为 false 的是大类分组行：录入时不可选，不进要件键。
+model GeoDictViolationType {
+  id         String   @id
+  code       String
+  version    Int
+  name       String
+  domain     String
+  parentCode String?  @map("parent_code")
+  selectable Boolean  @default(true)
+  appendix   String?  // 附录序号出处（ADR 0020：序号只作出处属性，不进编码）
+  source     String
+  status     String   @default("active")
+  createdAt  DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  basis GeoDictViolationTypeBasis[]
+
+  @@unique([code, version])
+  @@index([code])
+  @@map("geo_dict_violation_type")
+}
+
+/// 依据文件表（#203 定稿 80 份；ADR 0019）。
+/// hierarchy_level 取效力层级九档，validity_status 取效力状态三值（GLOSSARY）。
+model GeoDictDocument {
+  id              String   @id
+  code            String
+  version         Int
+  name            String
+  hierarchyLevel  String   @map("hierarchy_level")
+  validityStatus  String   @map("validity_status")
+  note            String?
+  source          String
+  status          String   @default("active")
+  createdAt       DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  basis GeoDictViolationTypeBasis[]
+
+  @@unique([code, version])
+  @@index([code])
+  @@map("geo_dict_document")
+}
+
+/// 违法类型的依据引用（ADR 0019）：文件编号 + 条号，指向文件表；用途写在引用处。
+/// 引用钉版本：violation_type_id 与 document_id 指向那一版的技术主键；
+/// 展示用的编码与名称随行冻结快照，改版不影响已引用的旧行。
+model GeoDictViolationTypeBasis {
+  id                String             @id
+  violationTypeId   String             @map("violation_type_id")
+  violationType     GeoDictViolationType @relation(fields: [violationTypeId], references: [id])
+  violationTypeCode String             @map("violation_type_code")
+  violationTypeName String             @map("violation_type_name")
+  documentId        String             @map("document_id")
+  document          GeoDictDocument    @relation(fields: [documentId], references: [id])
+  documentCode      String             @map("document_code")
+  documentName      String             @map("document_name")
+  articleNo         String             @map("article_no")
+  purpose           String             // 依据用途四类：处罚 | 裁量基准 | 移送处分 | 认定标准
+  createdAt         DateTime           @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([violationTypeId, documentId, articleNo, purpose])
+  @@index([violationTypeId])
+  @@index([documentId])
+  @@map("geo_dict_violation_type_basis")
+}
+
+/// 辖区对应（GLOSSARY）：最小单元是街道或镇，一个单元归属一个所或区分局。
+/// 只存「街道编码 → 机构」，不按法域区分，不是有权查处机关映射表。
+/// 引用街道编码并保存编码快照；机构侧存机构编码与名称快照（机构改名不影响已冻结的对应）。
+model GeoDictJurisdiction {
+  id        String   @id
+  code      String
+  version   Int
+  name      String
+  orgCode   String   @map("org_code")
+  orgName   String   @map("org_name")
+  source    String
+  status    String   @default("active")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([code, version])
+  @@index([code])
+  @@map("geo_dict_jurisdiction")
+}
