@@ -5,7 +5,10 @@ import type { AuthPhase } from './login/loginSlice';
 
 export const LOGIN_PATH = '/auth/login';
 export const PASSWORD_PATH = '/auth/password';
-export const HOME_PATH = '/';
+/** 落地页：统一工作台（「/」是它的别名，路由表里重定向到本页）。 */
+export const HOME_PATH = '/workbench';
+/** 落地页的别名：「/」与 HOME_PATH 同义，都不带 next。 */
+const HOME_ALIASES = ['/', HOME_PATH];
 
 const PROBE_ORIGIN = 'http://next.invalid';
 
@@ -35,7 +38,7 @@ export function safeNext(raw: string | null | undefined): string | null {
 /** 认证页地址。原路径合规且不是首页时带上 next。 */
 export function withNext(authPath: string, target: string | null | undefined): string {
   const next = safeNext(target);
-  if (!next || next === HOME_PATH) return authPath;
+  if (!next || HOME_ALIASES.includes(next)) return authPath;
   return `${authPath}?next=${encodeURIComponent(next)}`;
 }
 
@@ -75,7 +78,9 @@ export function authRedirect(
     }
     case 'authenticated': {
       if (!onLogin && !onPassword) return null;
-      return safeNext(nextParam(location)) ?? HOME_PATH;
+      const next = safeNext(nextParam(location));
+      if (!next) return HOME_PATH;
+      return HOME_ALIASES.includes(next) ? HOME_PATH : next;
     }
     default:
       return null;
