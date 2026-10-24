@@ -1,9 +1,9 @@
 # #209 截图（五总入口壳与综合查询）
 
-- 规格：Chrome headless（Windows 侧 Chrome 155，`--headless=new`），视口宽 1440，整页截图，2026-10-25（UTC+8）。
+- 规格：Chrome headless（Windows 侧 Chrome 156.0.8078.47，`--headless=new`），视口宽 1440，整页截图，2026-10-25（UTC+8）。
 - 本目录顶层 `<状态键>.png` 是实现截图，文件名取自 #207 协议第 I 节的 62 键全集。本票出其中 5 键。
-- 做法：驱动 `dev build` 产出的前端构建产物截图；会话接口按演示身份返回操作码清单，其余接口返回空集，不落真实数据。
-- 驱动脚本是无依赖的 Node CDP／headless 客户端（不入仓，方法以本 README 为准）。
+- 做法：把前端构建产物（`dev build` 的前端产物）用本地静态服务发出去，另用一个只绑回环地址的假接口服务按演示身份返回会话，其余接口返回空集；再用 headless Chrome 逐张出图。假接口只在本机回环上跑，不落真实数据。
+- 驱动脚本不入仓，方法以本 README 为准。
 
 ## 本票出图（5 键）
 
@@ -27,7 +27,7 @@
 ## 复现步骤
 
 1. 构建前端产物：`./dev build`（产物在容器内，前端构建目录按 dev 脚本约定）。
-2. 起本地静态服务并模拟会话接口：按演示身份返回 `/api/auth/session`（`result=authenticated` 加 `name`／`code`／`orgName`／`roles`／`opcodes`），其余接口返回空集；服务只绑回环地址。
+2. 起本地静态服务（发前端产物，未知路径回落入口页），另起一个只绑回环地址的假接口服务：按演示身份返回 `/api/auth/session`（`result=authenticated` 加 `name`／`code`／`orgName`／`roles`／`opcodes`），其余接口返回空集。身份用 cookie 传递，入口页按 `?as=<身份>` 下发。
 3. 用 headless Chrome（视口 1440×900，整页截图）逐个访问上表地址，文件名取状态键。
 4. 截图驱动不入仓；方法见本 README 与 `docs/screens/122/README.md`。
 
