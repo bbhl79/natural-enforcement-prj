@@ -31,9 +31,31 @@ export interface SecondaryEntry {
   anyOf?: readonly string[];
   /** 规划中占位：本期不进入真实业务，点了只在主区提示。 */
   planned?: boolean;
+  /** 规划中占位的模块键位：主区据此取回说明。 */
+  module?: string;
   /** 规划中占位的补充说明（进主区提示里）。 */
   hint?: string;
 }
+
+/**
+ * 规划中占位模块。一级入口本身（案件中心、统筹督导）与它们下面的二级占位同表登记，
+ * 路由表与侧栏都从这张表派生，避免两处各写一份而走样。
+ */
+export interface PlannedModule {
+  id: string;
+  /** 所属一级入口。 */
+  primary: PrimaryKey;
+  label: string;
+  /** 主区提示的补充说明。 */
+  hint: string;
+  /** 是否进侧栏二级菜单；一级入口本身不进。 */
+  inMenu: boolean;
+  /** 进侧栏时的操作码门槛；缺省＝人人可见。 */
+  anyOf?: readonly string[];
+}
+
+/** 规划中占位在地址里的参数名。占位不另开路由，仍走一级入口的地址。 */
+export const PLANNED_MODULE_KEY = 'module';
 
 /**
  * 机构维护的入口码。#105:178：`org.tree.read` 也给内勤（选承办机构用），
@@ -54,9 +76,7 @@ export const ADMIN_HOME_OPCODES = [
   'audit.admin.read',
 ] as const;
 
-/** 业务侧读码：内勤以外的业务角色都持有。用于「只有管理台入口、没有业务入口」的判定。 */
-export const BUSINESS_OPCODES = ['clue.read', 'case.read'] as const;
-
+/** 顶栏一级五总入口。四个业务一级人人可见；「系统管理」按操作码出现。 */
 export const PRIMARY_ENTRIES: readonly PrimaryEntry[] = [
   { id: 'workbench', label: '统一工作台', path: '/workbench', anyOf: [] },
   { id: 'clue', label: '线索中心', path: '/clue', anyOf: [] },
@@ -65,12 +85,75 @@ export const PRIMARY_ENTRIES: readonly PrimaryEntry[] = [
   { id: 'admin', label: '系统管理', path: '/admin', anyOf: ADMIN_HOME_OPCODES },
 ];
 
+/** 规划中占位模块登记表。一级入口本身与二级占位同表。 */
+export const PLANNED_MODULES: readonly PlannedModule[] = [
+  {
+    id: 'case',
+    primary: 'case',
+    label: '案件中心',
+    hint: '案件程序主干不在本期范围。',
+    inMenu: false,
+  },
+  {
+    id: 'case-onsite',
+    primary: 'case',
+    label: '现场核查与立案呈批',
+    hint: '案件程序主干不在本期范围。',
+    inMenu: true,
+  },
+  {
+    id: 'case-trial',
+    primary: 'case',
+    label: '案件查办与审理',
+    hint: '案件程序主干不在本期范围。',
+    inMenu: true,
+  },
+  {
+    id: 'supervise',
+    primary: 'supervise',
+    label: '统筹督导',
+    hint: '含卷宗评查，归属统筹督导，不进案件中心。',
+    inMenu: false,
+  },
+  {
+    id: 'supervise-review',
+    primary: 'supervise',
+    label: '执法监督与卷宗评查',
+    hint: '含卷宗评查，归属统筹督导，不进案件中心。',
+    inMenu: true,
+  },
+  {
+    id: 'admin-roles',
+    primary: 'admin',
+    label: '角色与权限',
+    hint: '角色与操作码矩阵的绑定维护在后续业务范围开放。',
+    inMenu: true,
+    anyOf: [ORG_MAINTENANCE_OPCODE],
+  },
+  {
+    id: 'admin-reference',
+    primary: 'admin',
+    label: '参照数据与配置类对象',
+    hint: '参照数据与配置类对象的维护在后续业务范围开放。',
+    inMenu: true,
+    anyOf: [ORG_MAINTENANCE_OPCODE],
+  },
+];
+
+/** 规划中占位项的地址：走一级入口的地址，占位键位进查询串。 */
+export function plannedModulePath(item: PlannedModule): string {
+  const primary = PRIMARY_ENTRIES.find((entry) => entry.id === item.primary);
+  if (!primary) return `/${item.primary}`;
+  return `${primary.path}?${PLANNED_MODULE_KEY}=${item.id}`;
+}
+
+/** 侧栏二级菜单。键位固定，顺序固定。 */
 export const SECONDARY_ENTRIES: readonly SecondaryEntry[] = [
-  // 统一工作台：待办看板与线索录入三环节（环节内容由对应业务切片接入）
+  // 统一工作台：待办看板与线索录入三环节（环节内容由对应业务范围接入）
   { id: 'board', primary: 'workbench', label: '待办看板', path: '/workbench' },
-  { id: 'step-register', primary: 'workbench', label: '① 线索录入', path: '/workbench?step=1', planned: true },
-  { id: 'step-verify', primary: 'workbench', label: '② 内业核查', path: '/workbench?step=2', planned: true },
-  { id: 'step-dispatch', primary: 'workbench', label: '③ 分派决定', path: '/workbench?step=3', planned: true },
+  { id: 'step-register', primary: 'workbench', label: '① 线索录入', path: '/workbench?step=1' },
+  { id: 'step-verify', primary: 'workbench', label: '② 内业核查', path: '/workbench?step=2' },
+  { id: 'step-dispatch', primary: 'workbench', label: '③ 分派决定', path: '/workbench?step=3' },
   // 线索中心：四个视图与 /clue?view= 对应
   ...CLUE_VIEWS.map((view) => ({
     id: `clue-${view.id}`,
@@ -78,57 +161,23 @@ export const SECONDARY_ENTRIES: readonly SecondaryEntry[] = [
     label: view.label,
     path: `/clue?view=${view.id}`,
   })),
-  // 案件中心：规划中占位，不进真实业务
-  {
-    id: 'case-onsite',
-    primary: 'case',
-    label: '现场核查与立案呈批',
-    path: '/case?module=case-onsite',
-    planned: true,
-    hint: '案件程序主干不在本期范围。',
-  },
-  {
-    id: 'case-trial',
-    primary: 'case',
-    label: '案件查办与审理',
-    path: '/case?module=case-trial',
-    planned: true,
-    hint: '案件程序主干不在本期范围。',
-  },
-  // 统筹督导：规划中占位，含卷宗评查
-  {
-    id: 'supervise-review',
-    primary: 'supervise',
-    label: '执法监督与卷宗评查',
-    path: '/supervise?module=supervise-review',
-    planned: true,
-    hint: '含卷宗评查，归属统筹督导，不进案件中心。',
-  },
   // 系统管理：既有管理台入口，各按自身操作码出现
   { id: 'admin-home', primary: 'admin', label: '管理台首页', path: '/admin', anyOf: ADMIN_HOME_OPCODES },
   { id: 'org', primary: 'admin', label: '机构', path: '/admin/org-units', anyOf: [ORG_MAINTENANCE_OPCODE] },
   { id: 'person', primary: 'admin', label: '人员', path: '/admin/personnel', anyOf: ['personnel.profile.read'] },
   { id: 'locked', primary: 'admin', label: '被锁人员', path: '/admin/locked-personnel', anyOf: ['personnel.locked.read'] },
   { id: 'audit', primary: 'admin', label: '管理台留痕', path: '/admin/audit', anyOf: ['audit.admin.read'] },
-  // 系统管理下的规划中占位
-  {
-    id: 'authz',
-    primary: 'admin',
-    label: '角色与权限',
-    path: '/admin?module=authz',
-    anyOf: [ORG_MAINTENANCE_OPCODE],
+  // 规划中占位：按登记表派生，二级菜单与主区提示同源
+  ...PLANNED_MODULES.filter((item) => item.inMenu).map((item) => ({
+    id: item.id,
+    primary: item.primary,
+    label: item.label,
+    path: plannedModulePath(item),
+    anyOf: item.anyOf,
     planned: true,
-    hint: '角色与操作码矩阵的绑定维护在后续业务切片开放。',
-  },
-  {
-    id: 'reference',
-    primary: 'admin',
-    label: '参照数据与配置类对象',
-    path: '/admin?module=reference',
-    anyOf: [ORG_MAINTENANCE_OPCODE],
-    planned: true,
-    hint: '参照数据与配置类对象的维护在后续业务切片开放。',
-  },
+    module: item.id,
+    hint: item.hint,
+  })),
 ];
 
 export function hasAny(opcodes: readonly string[], wanted: readonly string[]): boolean {
@@ -147,7 +196,12 @@ export function visibleSecondaries(primary: PrimaryKey, opcodes: readonly string
   );
 }
 
-/** 规划中占位项按键位取回；不是规划中项时返回 null。 */
+/** 规划中占位模块按键位取回；不是规划中项时返回 null。 */
+export function plannedModule(id: string): PlannedModule | null {
+  return PLANNED_MODULES.find((item) => item.id === id) ?? null;
+}
+
+/** 规划中占位项按键位取回（只认进侧栏的二级占位）；不是规划中项时返回 null。 */
 export function plannedSecondary(id: string): SecondaryEntry | null {
   const found = SECONDARY_ENTRIES.find((item) => item.id === id);
   return found && found.planned ? found : null;
@@ -174,7 +228,7 @@ export function activeSecondaryKey(
   primary: PrimaryKey,
   pathname: string,
   search: string,
-  opcodes: readonly string[],
+  opcodes: readonly string[] = [],
 ): string | null {
   const current = new URLSearchParams(search);
   let best: { id: string; pathLength: number; paramCount: number } | null = null;

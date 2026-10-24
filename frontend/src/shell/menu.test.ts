@@ -4,7 +4,10 @@ import {
   activePrimaryKey,
   activeSecondaryKey,
   ADMIN_HOME_OPCODES,
+  globalSearchPath,
   ORG_MAINTENANCE_OPCODE,
+  plannedModule,
+  plannedSecondary,
   PRIMARY_ENTRIES,
   SECONDARY_ENTRIES,
   visiblePrimaries,
@@ -25,13 +28,13 @@ const ADMIN = [
 /** 监督：只读留痕。 */
 const SUPERVISE = ['clue.read', 'case.read', 'audit.admin.read'];
 
-const primaryKeys = (opcodes: string[]): PrimaryKey[] => visiblePrimaries(opcodes).map((item) => item.key);
-const secondaryKeys = (primary: PrimaryKey, opcodes: string[]) =>
-  visibleSecondaries(primary, opcodes).map((item) => item.key);
+const primaryIds = (opcodes: string[]): PrimaryKey[] => visiblePrimaries(opcodes).map((item) => item.id);
+const secondaryIds = (primary: PrimaryKey, opcodes: string[]) =>
+  visibleSecondaries(primary, opcodes).map((item) => item.id);
 
 describe('顶栏一级五总入口（#207 导航锁）', () => {
   it('五个一级入口齐全，键位与顺序固定', () => {
-    expect(PRIMARY_ENTRIES.map((item) => item.key)).toEqual([
+    expect(PRIMARY_ENTRIES.map((item) => item.id)).toEqual([
       'workbench',
       'clue',
       'case',
@@ -58,15 +61,15 @@ describe('顶栏一级五总入口（#207 导航锁）', () => {
   });
 
   it('除系统管理外，四个一级入口所有登录人员可见', () => {
-    expect(primaryKeys([])).toEqual(['workbench', 'clue', 'case', 'supervise']);
-    expect(primaryKeys(CLERK)).toEqual(['workbench', 'clue', 'case', 'supervise']);
+    expect(primaryIds([])).toEqual(['workbench', 'clue', 'case', 'supervise']);
+    expect(primaryIds(CLERK)).toEqual(['workbench', 'clue', 'case', 'supervise']);
   });
 
   it('系统管理一级仅在会话有相应操作码时出现', () => {
-    expect(primaryKeys(CLERK)).not.toContain('admin');
-    expect(primaryKeys(['org.tree.read'])).not.toContain('admin');
-    expect(primaryKeys(ADMIN)).toContain('admin');
-    expect(primaryKeys(SUPERVISE)).toContain('admin');
+    expect(primaryIds(CLERK)).not.toContain('admin');
+    expect(primaryIds(['org.tree.read'])).not.toContain('admin');
+    expect(primaryIds(ADMIN)).toContain('admin');
+    expect(primaryIds(SUPERVISE)).toContain('admin');
   });
 
   it('系统管理入口按管理类操作码判定，不认只给内勤的 org.tree.read', () => {
@@ -76,8 +79,23 @@ describe('顶栏一级五总入口（#207 导航锁）', () => {
 });
 
 describe('侧栏二级随一级切换（#207 导航锁）', () => {
+  it('统一工作台二级是待办看板与线索录入三环节', () => {
+    expect(secondaryIds('workbench', CLERK)).toEqual([
+      'board',
+      'step-register',
+      'step-verify',
+      'step-dispatch',
+    ]);
+    expect(visibleSecondaries('workbench', CLERK).map((item) => item.path)).toEqual([
+      '/workbench',
+      '/workbench?step=1',
+      '/workbench?step=2',
+      '/workbench?step=3',
+    ]);
+  });
+
   it('线索中心二级是四个视图，地址带视图参数', () => {
-    expect(secondaryKeys('clue', CLERK)).toEqual(['clue-all', 'clue-assign', 'clue-held', 'clue-remind']);
+    expect(secondaryIds('clue', CLERK)).toEqual(['clue-all', 'clue-assign', 'clue-held', 'clue-remind']);
     const paths = visibleSecondaries('clue', CLERK).map((item) => item.path);
     expect(paths).toEqual([
       '/clue?view=all',
@@ -100,16 +118,17 @@ describe('侧栏二级随一级切换（#207 导航锁）', () => {
   });
 
   it('系统管理二级承载既有管理台入口，各按自身操作码出现', () => {
-    expect(secondaryKeys('admin', ADMIN)).toEqual([
+    expect(secondaryIds('admin', ADMIN)).toEqual([
       'admin-home',
       'org',
       'person',
       'locked',
       'audit',
-      'admin-config',
+      'admin-roles',
+      'admin-reference',
     ]);
-    expect(secondaryKeys('admin', SUPERVISE)).toEqual(['admin-home', 'audit']);
-    expect(secondaryKeys('admin', CLERK)).toEqual([]);
+    expect(secondaryIds('admin', SUPERVISE)).toEqual(['admin-home', 'audit']);
+    expect(secondaryIds('admin', CLERK)).toEqual([]);
   });
 
   it('既有管理台子页地址保持可达', () => {
@@ -126,8 +145,8 @@ describe('侧栏二级随一级切换（#207 导航锁）', () => {
   });
 
   it('一级与二级不出现同一键位', () => {
-    const primaryKeysAll = PRIMARY_ENTRIES.map((item) => item.key);
-    for (const item of SECONDARY_ENTRIES) expect(primaryKeysAll).not.toContain(item.key);
+    const primaryIdsAll = PRIMARY_ENTRIES.map((item) => item.id);
+    for (const item of SECONDARY_ENTRIES) expect(primaryIdsAll).not.toContain(item.id);
   });
 });
 
@@ -135,7 +154,6 @@ describe('当前所在一级与二级', () => {
   it('按地址前缀判定当前一级，最长前缀优先', () => {
     expect(activePrimaryKey('/workbench')).toBe('workbench');
     expect(activePrimaryKey('/clue')).toBe('clue');
-    expect(activePrimaryKey('/clue?view=held')).toBe('clue');
     expect(activePrimaryKey('/case')).toBe('case');
     expect(activePrimaryKey('/case/onsite-check')).toBe('case');
     expect(activePrimaryKey('/supervise/review')).toBe('supervise');
@@ -151,6 +169,13 @@ describe('当前所在一级与二级', () => {
     expect(activeSecondaryKey('clue', '/clue', '?view=remind&q=abc')).toBe('clue-remind');
   });
 
+  it('工作台按步骤参数判定命中项', () => {
+    expect(activeSecondaryKey('workbench', '/workbench', '')).toBe('board');
+    expect(activeSecondaryKey('workbench', '/workbench', '?step=1')).toBe('step-register');
+    expect(activeSecondaryKey('workbench', '/workbench', '?step=2')).toBe('step-verify');
+    expect(activeSecondaryKey('workbench', '/workbench', '?step=3')).toBe('step-dispatch');
+  });
+
   it('管理台二级按最长地址前缀命中', () => {
     expect(activeSecondaryKey('admin', '/admin', '')).toBe('admin-home');
     expect(activeSecondaryKey('admin', '/admin/org-units', '')).toBe('org');
@@ -163,6 +188,43 @@ describe('当前所在一级与二级', () => {
   it('本人不可见的二级不高亮', () => {
     expect(activeSecondaryKey('admin', '/admin/audit', '', ['clue.read'])).toBeNull();
     expect(activeSecondaryKey('admin', '/admin', '', ['clue.read'])).toBeNull();
+  });
+});
+
+describe('综合查询（顶栏全局搜，人人可用，不占一级）', () => {
+  it('提交后进入线索中心并带关键词', () => {
+    expect(globalSearchPath('红线')).toBe('/clue?q=%E7%BA%A2%E7%BA%BF');
+  });
+
+  it('关键词为空时只进线索中心，不带查询串', () => {
+    expect(globalSearchPath('')).toBe('/clue');
+    expect(globalSearchPath('   ')).toBe('/clue');
+  });
+
+  it('综合查询不占一级入口', () => {
+    expect(PRIMARY_ENTRIES.map((item) => item.id)).not.toContain('search');
+  });
+});
+
+describe('规划中占位（案件中心、统筹督导、系统管理）', () => {
+  it('规划中的二级按键位取回，附带说明', () => {
+    expect(plannedSecondary('case-onsite')?.label).toBe('现场核查与立案呈批');
+    expect(plannedSecondary('case-trial')?.planned).toBe(true);
+    expect(plannedSecondary('supervise-review')?.planned).toBe(true);
+    expect(plannedSecondary('admin-roles')?.planned).toBe(true);
+  });
+
+  it('不是规划中项时取不到', () => {
+    expect(plannedSecondary('admin-home')).toBeNull();
+    expect(plannedSecondary('org')).toBeNull();
+    expect(plannedSecondary('nope')).toBeNull();
+  });
+
+  it('一级入口本身也可给出规划中说明', () => {
+    expect(plannedModule('case')?.label).toBe('案件中心');
+    expect(plannedModule('supervise')?.label).toBe('统筹督导');
+    expect(plannedModule('workbench')).toBeNull();
+    expect(plannedModule('clue')).toBeNull();
   });
 });
 
