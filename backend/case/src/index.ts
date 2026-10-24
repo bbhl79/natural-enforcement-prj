@@ -63,3 +63,21 @@ export type {
   TypeLayerItem,
 } from './clue/requirements/index.ts';
 export { CaseModule } from './case.module.ts';
+// #211：线索持久化端口（Prisma 适配器在模块内，不经公共出口出）。
+export { CLUE_STORE, ClueIdempotencyConflictError } from './persistence/clue-store.ts';
+export type {
+  ClueHitSummary,
+  ClueHitWrite,
+  ClueIdempotencyRow,
+  ClueItemGapRow,
+  ClueItemValueRow,
+  ClueMaterialRow,
+  ClueRegistrationOutcome,
+  ClueRegistrationResult,
+  ClueRegistrationWrite,
+  ClueRequirementSnapshotRow,
+  ClueRowToWrite,
+  ClueSpatialPartRow,
+  ClueSpatialWrite,
+  ClueStore,
+} from './persistence/clue-store.ts';

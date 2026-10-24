@@ -20,6 +20,8 @@ import {
   type AuditTrailFactory,
   type Rejected,
 } from '@natural-enforcement/audit';
+import { STORAGE_PORT, createDefaultStoragePort, type StoragePort } from '@natural-enforcement/storage';
+import { CLUE_STORE } from '@natural-enforcement/case';
 import {
   BootstrapService,
   CredentialService,
@@ -33,6 +35,7 @@ import {
   type BootstrapRequest,
   type OpenItemsCounter,
 } from '@natural-enforcement/identity';
+import { PrismaClueStore } from '../../case/src/persistence/prisma-clue-store.ts';
 import { PrismaIdentityStore } from '../../identity/src/persistence/prisma-identity-store.ts';
 import { PrismaClient, type Prisma } from '../../prisma/generated/prisma/client.ts';
 
@@ -407,6 +410,7 @@ class PrismaUnitOfWork implements UnitOfWork {
       remember: new PrismaRememberMeStore(client, null),
       audit: this.factory.forClient(client),
       auditReader: new PrismaAuditTrailReader(client as unknown as AuditTrailReadClient),
+      clues: new PrismaClueStore(client),
     };
   }
 }
@@ -415,6 +419,8 @@ class PrismaUnitOfWork implements UnitOfWork {
 export interface ApplicationOverrides {
   /** 接缝①：覆写留痕工厂，例如「业务写完后抛错」。 */
   auditTrailFactory?: AuditTrailFactory;
+  /** 存储端口：默认走存储设施包的 RustFS 适配；测试可换成记录写的假端口。 */
+  storagePort?: StoragePort;
   /** 接缝③：承办中事项计数。默认恒为 0（#124）。 */
   openItemsCounter?: OpenItemsCounter;
   /** 口令历史比对深度（ADR 0015，#132）。默认 5；测试可传 2。 */
@@ -449,6 +455,9 @@ class PersistenceModule {
         { provide: SESSION_CAPACITY, useValue: sessionCapacity },
         { provide: PRISMA, useValue: prisma },
         { provide: IDENTITY_STORE, useValue: new PrismaIdentityStore(prisma) },
+        { provide: CLUE_STORE, useValue: new PrismaClueStore(prisma) },
+        // 存储端口：默认按运行参数建 RustFS 适配；测试可覆写成记录写的假端口。
+        { provide: STORAGE_PORT, useValue: overrides.storagePort ?? createDefaultStoragePort() },
         { provide: AUDIT_TRAIL_FACTORY, useValue: auditTrailFactory },
         { provide: AUDIT_TRAIL_PORT, useValue: auditTrailFactory.forClient(prisma) },
         { provide: LOGIN_DIRECTORY, useValue: new PrismaLoginDirectory(prisma) },
@@ -465,6 +474,8 @@ class PersistenceModule {
       ],
       exports: [
         IDENTITY_STORE,
+        CLUE_STORE,
+        STORAGE_PORT,
         AUDIT_TRAIL_FACTORY,
         AUDIT_TRAIL_PORT,
         UNIT_OF_WORK,

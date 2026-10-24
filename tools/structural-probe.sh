@@ -173,6 +173,15 @@ write_probe_server-adapter-file() {
     "export const store = PrismaIdentityStore;"
 }
 
+write_probe_case-adapter-file() {
+  # #211：案件聚合模块的线索表适配器同样只在启动包的装配根里被引用（豁免名单收紧到
+  # 文件 + specifier 两条）。名单外的第二个文件引用照样判红。
+  tmp_write "backend/server/src/_structural-probe-case-adapter.ts" \
+    "// 探针（临时，勿入库）：第二个文件引用案件聚合模块的数据库适配器" \
+    "import { PrismaClueStore } from '../../case/src/persistence/prisma-clue-store.ts';" \
+    "export const store = PrismaClueStore;"
+}
+
 write_probe_exempt-tightness() {
   # 豁免必须tight：名单外的深路径导入仍要判红，否则豁免等于把整层放行
   inplace_append "$ROOT/integration/e2-access-matrix.test.ts" \
@@ -381,6 +390,7 @@ SPECS=(
   "exempt-tightness|module-public-entry|豁免名单外的深路径导入（豁免不放行整层）"
   "audit-facility-entry|audit-facility-entry|包外引用留痕委托"
   "server-adapter-file|module-public-entry|启动包第二个文件引用身份数据库适配器"
+  "case-adapter-file|module-public-entry|启动包第二个文件引用案件聚合数据库适配器"
   "compose-literal-secret|runtime-manifest|compose 写字面量密钥"
   "compose-unlisted-name|runtime-manifest|compose 引用清单外变量名"
   "ci-literal-secret|runtime-manifest|CI 密钥带 || 回落字面量"

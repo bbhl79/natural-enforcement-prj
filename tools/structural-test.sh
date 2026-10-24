@@ -131,9 +131,23 @@ QUEUE_DIR="$ROOT/packages/queue"
 STORAGE_DIR="$ROOT/packages/storage"
 # 留痕设施包（ADR 0012）：auditTrail 委托的唯一合法出现位置
 AUDIT_DIR="$ROOT/packages/audit"
-# ADR 0004：启动包里只有这一个文件可以直接引用身份模块的数据库适配器
+# ADR 0004：启动包里只有这一个文件可以直接引用各业务模块的数据库适配器
+# （#52 身份组织；#211 案件聚合的线索表适配器）。名单是文件 + specifier 白名单：
+# 名单外的深路径导入照样判红（红探针有负例证据）。
 SERVER_ADAPTER_FILE="backend/server/src/persistence.module.ts"
-SERVER_ADAPTER_SPEC="../../identity/src/persistence/prisma-identity-store.ts"
+SERVER_ADAPTER_SPECS=(
+  "../../identity/src/persistence/prisma-identity-store.ts"
+  "../../case/src/persistence/prisma-clue-store.ts"
+)
+
+# 该 specifier 是否在适配器豁免名单内。
+is_server_adapter_spec() { # $1 = specifier
+  local spec
+  for spec in "${SERVER_ADAPTER_SPECS[@]}"; do
+    [ "$spec" = "$1" ] && return 0
+  done
+  return 1
+}
 
 # 业务模块清单（定案命名，#47/#51）：模块名 → 源码目录（相对 ROOT）
 MODULES=(identity geo-dict case approval supervision deadline)
@@ -596,7 +610,7 @@ check_module-public-entry() {
     [ -n "$specs" ] || continue
     while IFS= read -r spec; do
       is_assembly_exempt "${file#"$ROOT"/}" "$spec" && continue
-      if [ "${file#"$ROOT"/}" = "$SERVER_ADAPTER_FILE" ] && [ "$spec" = "$SERVER_ADAPTER_SPEC" ]; then
+      if [ "${file#"$ROOT"/}" = "$SERVER_ADAPTER_FILE" ] && is_server_adapter_spec "$spec"; then
         continue
       fi
       case "$spec" in

@@ -5,6 +5,7 @@
 // 追加式最保守语义，衔接 #18；不宣称任何「封存」语义（G4 归后续切片）。
 export type { FileVersionRef, StoragePort } from './port.ts';
 export { STORAGE_PORT } from './tokens.ts';
+export { createDefaultStoragePort } from './default-port.ts';
 export { StorageModule } from './storage.module.ts';
 export { createRustFsStorage } from './rustfs-storage.ts';
 export type { RustFsStorageConfig } from './rustfs-storage.ts';

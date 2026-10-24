@@ -29,7 +29,7 @@
 | deadline | shield、case、approval、**geo-dict（#45 补丁 1：只读引用程序节点类型）** | case/approval 为订阅，geo-dict 为只读引用 |
 | frontend | shield + 各模块查询接口 | 不直连库、不依赖 backend 内部路径 |
 
-`backend/server` 是 HTTP 启动包，不是第七个业务模块，不占上表的一行。它经公共出口装入全部六个模块，包括监督统计。结构测试 `supervision-sink` 跳过该目录。ADR 0004 只允许这个包里的一个文件直接引用身份模块的数据库适配器。该文件是 `backend/server/src/persistence.module.ts`。
+`backend/server` 是 HTTP 启动包，不是第七个业务模块，不占上表的一行。它经公共出口装入全部六个模块，包括监督统计。结构测试 `supervision-sink` 跳过该目录。ADR 0004 只允许这个包里的一个文件直接引用各业务模块的数据库适配器。该文件是 `backend/server/src/persistence.module.ts`；准入的适配器只有两处：`backend/identity/src/persistence/prisma-identity-store.ts`（#52）与 `backend/case/src/persistence/prisma-clue-store.ts`（#211）。名单外的深路径导入照样判红（红探针 `case-adapter-file` 与 `server-adapter-file` 两项负例证据）。
 
 ## 往来形态：只有「只读查询 + 事件」两种，默认禁止直写
 

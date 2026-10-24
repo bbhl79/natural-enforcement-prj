@@ -10,8 +10,12 @@
 // 声明侧目前只有两条条件项（巡查记录号、专项批次号），条件表在本文件显式列出，
 // 声明新增条件项时同步补一行——不留「猜条件」的口子。
 
+import { PUBLIC_LAYER_ITEMS } from '../requirements/public-layer.ts';
 import type { RequirementItem } from '../requirements/types.ts';
 import type { ClueFormValues, ClueGap, ClueGapAssessment, ClueLayer } from './types.ts';
+
+/** 公共层的要件键。来源层的键也以 clue. 开头，按键前缀分层会分错，故按这份清单认。 */
+const PUBLIC_LAYER_KEYS: ReadonlySet<string> = new Set(PUBLIC_LAYER_ITEMS.map((item) => item.key));
 
 /**
  * 条件项的来源编码表。
@@ -45,9 +49,10 @@ export function itemApplies(item: RequirementItem, sourceCode: string): boolean 
   return codes.includes(sourceCode);
 }
 
-/** 要件层。类型层要件键以 `type.` 开头。 */
+/** 要件层：类型层按键前缀，公共层按公共声明的键清单，来源层是其余的 clue. 键。 */
 export function layerOf(item: RequirementItem): ClueLayer {
-  return item.key.startsWith('type.') ? 'type' : 'public';
+  if (item.key.startsWith('type.')) return 'type';
+  return PUBLIC_LAYER_KEYS.has(item.key) ? 'public' : 'source';
 }
 
 function isFilled(item: RequirementItem, input: GapAssessmentInput): boolean {
