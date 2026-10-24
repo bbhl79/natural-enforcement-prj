@@ -62,22 +62,31 @@ BullMQ/RustFS SDK），不引用 backend 内部路径（含 `../../backend/…` 
 
 ## 结构测试规则索引
 
+本表逐条登记 `tools/structural-test.sh` 的 `RULES` 数组全部规则：一条规则一行，行序与 `RULES` 数组一致。
+
 | 规则 | 矩阵行 |
 |---|---|
-| `shield-single-entry` / `shield-no-business-dep` | shield 行 |
-| `identity-deps` / `geo-dict-deps` | 第 1、2 行 |
-| `case-deps` / `approval-deps` / `supervision-deps` | 第 4、5、6 行 |
+| `shield-single-entry` | shield 行：公共出口仅 `packages/shield/src/index.ts` |
+| `shield-no-business-dep` | shield 行：shield 不依赖任何业务模块 |
+| `identity-deps` | 第 1 行：identity 不依赖任何业务模块（可依赖 shield 与留痕设施包 audit） |
+| `geo-dict-deps` | 第 2 行：geo-dict 不依赖任何业务模块 |
+| `case-deps` | 第 4 行：case 只许 → shield、identity、geo-dict |
+| `approval-deps` | 第 5 行：approval 只许 → shield、identity、case |
+| `supervision-deps` | 第 6 行：supervision 只许 → shield、identity、case |
 | `supervision-sink` | 第 6 行「单向」反向断言 |
 | `deadline-deps` | 第 7 行（含 #45 补丁 1） |
 | `module-public-entry` | 往来形态（禁内部路径/跨模块相对路径；范围含 integration 层，豁免见下节） |
 | `frontend-boundary` | frontend 行（不直连库、不引 backend 内部） |
 | `weak-reference-entry` | 弱引用经 shield 入口 |
+| `g1-model-allowlist` | #47 G1「地基不含业务实体」机检形态（承接 #52 AC4）：`backend/prisma/schema.prisma` 的 model 名与白名单逐字相等，表外新增即红——建表动作必须回 #47/#16 定案票，不得自行放宽。#69 定案列入 `AuthSession`、`AuthRememberMe`（见下节「认证记录」）。#92 定案列入 `Role`、`Permission`、`RolePermission`、`PersonnelRole`、`AuditTrail`（见下节「权限与留痕」）。#210 定案列入五张参照数据表（见下节「参照数据」） |
 | `queue-facility-entry` | #55 队列设施唯一入口（bullmq/ioredis 只许在 `packages/queue`，业务侧只许经 `QUEUE_PORT` 注入；G5 机器兜底） |
 | `storage-facility-entry` | #53 存储设施唯一入口（`@aws-sdk/*`、`@smithy/*`、`minio`、`rustfs` 只许在 `packages/storage`，业务侧只许经 `STORAGE_PORT` 注入；append-only 最保守语义的机器兜底） |
 | `audit-facility-entry` | ADR 0012 留痕设施唯一入口（`auditTrail` 这个 Prisma 委托只许在 `packages/audit`。包外引用即红。观察留痕行走表名） |
 | `spatial-no-orm-mutation` | 执行纪律 2（`geoDictLandBoundary` / `geoDictSurveyPoint` 两个空间模型禁用任何 ORM 写，含 upsert/createMany/updateMany/delete(Many) 与换行链式；写一律 `$queryRaw`/ST_ 函数。范围 = `backend/` + `packages/` + `integration/` + `e2e/` 全源码，SCAN_CODE 形态） |
 | `reference-data-no-mutation` | 参照数据只追加的机器兜底（#210，ADR 0016）：五张参照数据表（`GeoDictSourceCode` / `GeoDictViolationType` / `GeoDictDocument` / `GeoDictViolationTypeBasis` / `GeoDictJurisdiction`）的 Prisma 委托只许 insert（create/createMany），不许 update/updateMany/delete/deleteMany/upsert——改参照数据＝追加新版本，不许就地改行或删行。范围 = `backend/` + `packages/` + `integration/` + `e2e/` 全源码，SCAN_CODE 形态，含换行链式 |
-| `g1-model-allowlist` | #47 G1「地基不含业务实体」机检形态（承接 #52 AC4）：`backend/prisma/schema.prisma` 的 model 名与白名单逐字相等，表外新增即红——建表动作必须回 #47/#16 定案票，不得自行放宽。#69 定案列入 `AuthSession`、`AuthRememberMe`（见下节「认证记录」）。#92 定案列入 `Role`、`Permission`、`RolePermission`、`PersonnelRole`、`AuditTrail`（见下节「权限与留痕」）。#210 定案列入五张参照数据表（见下节「参照数据」） |
+| `runtime-manifest` | 非矩阵行：运行参数清单（ADR 0008、#80、#120）。`infra/docker-compose.yml` 与 `.github/workflows/ci.yml` 里的变量名必须登记在 `infra/runtime.env`；密钥只许引用变量（compose）或 secrets（CI），不许字面量、默认值、回落值，也不许出现清单里密钥的夹具值 |
+| `user-lock-assertions` | 非矩阵行：锁清单断言（#105「锁清单」、#111、#120）。`docs/user-lock.md` 每节带一个断言编号；测试代码里必须有标题以该编号开头的 it/test（含 it.todo「待实现」登记）；测试里出现清单外编号同样判红 |
+| `frontend-router-mode` | 非矩阵行：前端路由模式（#105「前端：路由与应用壳」、#122）。react-router 只用 data 模式（createBrowserRouter + RouterProvider）；前端源码出现声明式 `<BrowserRouter>`/`<HashRouter>`，或任何 package.json、源码、vite 配置引用框架模式开发插件 `@react-router/dev` 即失败 |
 | `screenshot-full-set` | 截图全集文件名集合（#105「截图验收（loop ⑥c）」、#134 收口、#207 换全集）：`docs/screens/<票>/` 顶层 `*.png` 的并集不得越出状态键全集。状态键全集 = 原型 v0.4 的 78 键（`frontend/prototype/admin-console/screens/*.png`，除 `overview.png`）∪ #207 协议第 I 节的 62 键（`docs/screens/keys-207.txt`）。v0.4 时代那批键一张不少（缺即红）；#207 时代那批由各执行票分票出图，齐套判定留到 #220「全集收尾」收口。自动判定只比文件名集合；画面一致由逐图人查（各票 README 与 PR） |
 
 ## 认证记录（#69）
