@@ -2,12 +2,19 @@
   "name": "@natural-enforcement/case",
   "version": "0.0.0",
   "private": true,
-  "description": "案件聚合模块（#51 空壳：NestJS 模块声明 + 领域占位，无业务实体——G1 不可扩大）",
+  "description": "案件聚合模块（#51 空壳：NestJS 模块声明 + 领域占位；#210 录入要件声明；#211 线索登记领域规则）",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
+  "scripts": {
+    "test": "vitest run"
+  },
   "dependencies": {
     "@nestjs/common": "12.1.2"
+  },
+  "devDependencies": {
+    "typescript": "6.0.2",
+    "vitest": "5.0.3"
   }
 }
