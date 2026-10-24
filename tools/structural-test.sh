@@ -439,6 +439,8 @@ declare -A ASSEMBLY_EXEMPT=(
   ["integration/tx-audit-seam.test.ts"]="../backend/identity/src/"
   # #122：会话操作码清单与授权判定的等价性断言，同样直接装配 AccessControlService
   ["integration/session-opcodes.test.ts"]="../backend/identity/src/"
+  # #210：参照数据种子、录入要件声明与 form-schema 接口的断言，同样直接装配三个模块的源码。
+  ["integration/clue-form-schema.test.ts"]="../backend/case/src/ ../backend/geo-dict/src/ ../backend/identity/src/"
 )
 
 is_assembly_exempt() { # $1 = 相对 ROOT 路径, $2 = specifier
