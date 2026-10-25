@@ -14,6 +14,8 @@ import {
   submitAssignOrg,
   submitAssignPeople,
   submitDecide,
+  submitDesignateReject,
+  submitDesignateRequest,
   type DispatchView,
 } from './dispatch';
 
@@ -49,12 +51,17 @@ export function dispatchFailureText(body: unknown): string {
         return '请指定主办承办人。';
       case 'assignee-not-qualified':
         return '承办人已停用或不属于承办机构。';
+      case 'missing-designate-reason':
+        return '报请指定管辖须填写理由。';
+      case 'missing-reject-reason':
+        return '驳回报请须填写理由。';
       default:
         return '提交未通过，请检查后再试。';
     }
   }
   if (value.result === 'concurrent-change') return '线索状态已被他人变更，请刷新后重试。';
   if (value.result === 'invalid-state') {
+    if (value.reason === 'designation-pending') return '该线索正在报请指定管辖：报请期间不能分派、重新分派或移送。';
     if (value.reason === 'designated-lock') return '该线索已指定管辖：仅指定者或其上级可再调整。';
     if (value.reason === 'org-unit-deactivated') return '目标机构已停用，不能接收线索。';
     return '当前状态不能执行该操作。';
@@ -116,6 +123,12 @@ export default function ClueDispatchSection({ clueId }: { readonly clueId: strin
             expectedStatus: view.status,
           }),
         )
+      }
+      onDesignateRequest={(input) =>
+        void run(() => submitDesignateRequest(dispatch, clueId, input))
+      }
+      onDesignateReject={(reason) =>
+        void run(() => submitDesignateReject(dispatch, clueId, { reason }))
       }
       onAssignPeople={(input) =>
         void run(() =>

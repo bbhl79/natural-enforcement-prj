@@ -196,14 +196,17 @@ async function designateReject(
   return { status: response.status, body: (await response.json()) as Record<string, unknown> };
 }
 
+interface TodoBody {
+  readonly result?: string;
+  readonly items?: { requestId: string; clueCode: string; reviewerOrgId: string }[];
+}
+
 /** 受理人待办。 */
-async function designationTodos(
-  code: string,
-): Promise<{ status: number; body: { result?: string; items?: { requestId: string; clueCode: string; reviewerOrgId: string }[] }> {
+async function designationTodos(code: string): Promise<{ status: number; body: TodoBody }> {
   const response = await fetch(`${baseUrl}/api/clues/designation-requests`, {
     headers: { cookie: await cookieOf(code) },
   });
-  return { status: response.status, body: (await response.json()) as { result?: string; items?: { requestId: string; clueCode: string; reviewerOrgId: string }[] } };
+  return { status: response.status, body: (await response.json()) as TodoBody };
 }
 
 /** 派机构。 */
@@ -604,7 +607,9 @@ describe('#215 报请期间的锁与受理人处理', () => {
     // 非受理人（报请方本人）不能驳回。
     const notReviewer = await designateReject(registered.body.id ?? '', { reason: '自我驳回' }, 'P-INTAKE-A');
     expect(notReviewer.status).toBe(403);
-    expect(notReviewer.body.reason).toBe('permission-denied');
+    // 报请方的数据范围不含受理机构（上级）：范围外拒绝。
+    expect(notReviewer.body.reason).toBe('scope-denied');
+    expect((await trailOf('authz.denied', registered.body.id ?? '')).length).toBeGreaterThan(0);
     rows = await cloned.prisma.clueDesignationRequest.findMany({
       where: { clueId: registered.body.id },
     });

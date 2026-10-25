@@ -326,6 +326,7 @@ export function AssignOrgPanel({
   busy,
   failure,
   onAssign,
+  designateByDefault = false,
 }: {
   view: DispatchView;
   orgOptions: readonly OrgOption[];
@@ -333,10 +334,12 @@ export function AssignOrgPanel({
   busy: boolean;
   failure: string | null;
   onAssign: (input: { orgUnitId: string; reason: string; designate: boolean }) => void;
+  /** 受理人处理报请时默认勾选指定管辖（#215）。 */
+  designateByDefault?: boolean;
 }) {
   const [orgUnitId, setOrgUnitId] = useState('');
   const [reason, setReason] = useState('');
-  const [designate, setDesignate] = useState(false);
+  const [designate, setDesignate] = useState(designateByDefault);
   const suggested = new Set(view.suggestion.suggestions.map((item) => item.orgUnitId));
   return (
     <div className="card" data-role="assign-org-panel">
@@ -360,7 +363,7 @@ export function AssignOrgPanel({
           <div className="help">只能派给本人数据范围内的机构；线索不属本级管辖的，报请上级指定管辖。</div>
         </div>
       </div>
-      {reassigning ? (
+      {reassigning || designateByDefault ? (
         <div className="form-row">
           <label htmlFor="dispatch-reason">理由</label>
           <div>
@@ -547,6 +550,17 @@ export function ClueDispatchBody({
         ) : null}
         {view.status === 'held' ? (
           <div className="banner gray">该线索已选不派；需要时可由有权人撤回不派。</div>
+        ) : null}
+        {view.mayReviewDesignation && !view.mayAssignOrg && !view.mayReassignOrg ? (
+          <AssignOrgPanel
+            view={view}
+            orgOptions={orgOptions}
+            reassigning={view.status !== 'in_pool'}
+            busy={busy}
+            failure={failure}
+            onAssign={onAssignOrg}
+            designateByDefault
+          />
         ) : null}
         {view.mayRequestDesignation ? (
           <DesignateRequestPanel
