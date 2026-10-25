@@ -13,8 +13,15 @@
 import { Prisma, type PrismaClient } from '../../../prisma/generated/prisma/client.ts';
 
 import type { VerificationLayerResult } from '../clue/verification/port.ts';
+import { isAnonymousValue } from '../clue/registration/rules.ts';
+import {
+  DUPLICATE_OVERLAP_THRESHOLD,
+  NOT_COMPARABLE_CLUE_STATUSES,
+} from '../clue/duplicate/rules.ts';
 import { ClueIdempotencyConflictError, ClueVerificationRunningError } from './clue-store.ts';
 import type {
+  ClueDuplicateContext,
+  ClueDuplicatePeer,
   ClueDecisionWrite,
   ClueDesignationCloseWrite,
   ClueDesignationRequestInsert,
@@ -47,17 +54,8 @@ type Db = PrismaClient | Prisma.TransactionClient;
 /** 入库统一坐标口径：EPSG:4490（CGCS2000 地理坐标系）。 */
 const TARGET_SRID = 4490;
 
-/**
- * 疑似重复的重合阈值（规格 B、USER LOCK 七项业务①）。
- * 逐面判定：交集占任一方的单面面积达到该值即命中；整体合并不算。
- */
-export const DUPLICATE_OVERLAP_THRESHOLD = 0.6;
-
-/**
- * 退出比对的线索状态：结案与已移送的退出比对；已立案（filed）仍算未结案，继续参与比对。
- * 其余状态（待分派决定、待分派池、已派机构、已派承办人、暂缓）都参与比对。
- */
-const NOT_COMPARABLE_STATUSES = ['closed', 'transferred_out'];
+/** 退出比对的线索状态取自领域规则（#212）：结案与已移送退出，已立案仍参与。 */
+const NOT_COMPARABLE_STATUSES: readonly string[] = NOT_COMPARABLE_CLUE_STATUSES;
 
 /** 线索编号格式：CL + 10 位补零（业务编号与主键分离，永不当引用键）。 */
 export function formatClueCode(sequence: bigint | number): string {
@@ -103,15 +101,23 @@ function designationRequestRow(row: {
   };
 }
 
+/** 匿名取值文本是否为「是」；空值即否。 */
+function isAnonymousText(value: string | null | undefined): boolean {
+  return typeof value === 'string' && isAnonymousValue(value);
+}
+
 interface OverlapRow {
   part_index: number;
   part_id: string;
   clue_id: string;
   clue_code: string;
   other_part_id: string;
+  other_part_index: number;
   inter_area: number;
   self_area: number;
   other_area: number;
+  self_geojson: string;
+  other_geojson: string;
 }
 
 export class PrismaClueStore implements ClueStore {
@@ -130,47 +136,12 @@ export class PrismaClueStore implements ClueStore {
       where: { clueId, filledAt: null },
       orderBy: { key: 'asc' },
     });
-    const hits = await this.prisma.$queryRaw<
-      Array<{
-        part_id: string;
-        part_index: number;
-        other_clue_id: string;
-        other_clue_code: string;
-        other_part_id: string;
-        self_ratio: number;
-        other_ratio: number;
-        intersection_area: number;
-      }>
-    >`
-      SELECT h.spatial_part_id AS part_id,
-             p.part_index,
-             h.other_clue_id,
-             c.code AS other_clue_code,
-             h.other_part_id,
-             h.self_ratio,
-             h.other_ratio,
-             h.intersection_area
-      FROM clue_spatial_hit h
-      JOIN clue c ON c.id = h.other_clue_id
-      JOIN clue_spatial_part p ON p.id = h.spatial_part_id
-      WHERE h.clue_id = ${clueId}
-      ORDER BY h.other_clue_id, h.spatial_part_id
-    `;
     return {
       id: clue.id,
       code: clue.code,
       status: clue.status,
       gaps: gaps.map((gap) => ({ key: gap.key, label: gap.label })),
-      hits: hits.map((hit) => ({
-        partId: hit.part_id,
-        partIndex: hit.part_index,
-        otherClueId: hit.other_clue_id,
-        otherClueCode: hit.other_clue_code,
-        otherPartId: hit.other_part_id,
-        selfRatio: hit.self_ratio,
-        otherRatio: hit.other_ratio,
-        intersectionArea: hit.intersection_area,
-      })),
+      hits: await this.listHitSummaries(clueId),
     };
   }
 
@@ -295,6 +266,218 @@ export class PrismaClueStore implements ClueStore {
         ON CONFLICT (clue_id, spatial_part_id, other_clue_id, other_part_id) DO NOTHING
       `;
     }
+  }
+
+  async readDuplicateContext(clueId: string): Promise<ClueDuplicateContext | null> {
+    const clue = await this.prisma.clue.findUnique({
+      where: { id: clueId },
+      select: {
+        id: true,
+        code: true,
+        domain: true,
+        sourceCode: true,
+        registeredAt: true,
+        anonymityConfirmed: true,
+        status: true,
+        registeredBy: true,
+        enteredOrgId: true,
+        verificationStatus: true,
+      },
+    });
+    if (!clue) return null;
+    const object = await this.prisma.clueSpatialObject.findUnique({ where: { clueId } });
+    if (!object) return null;
+    const parts = await this.prisma.$queryRaw<
+      Array<{ part_id: string; part_index: number; geojson: string }>
+    >`
+      SELECT id AS part_id, part_index, ST_AsGeoJSON(geom) AS geojson
+      FROM clue_spatial_part
+      WHERE spatial_object_id = ${object.id}
+      ORDER BY part_index
+    `;
+    const assignments = await this.prisma.clueAssignment.findMany({
+      where: { clueId, endedAt: null },
+      select: { orgUnitId: true },
+    });
+    return {
+      clueId: clue.id,
+      code: clue.code,
+      domain: clue.domain,
+      sourceCode: clue.sourceCode,
+      registeredAt: clue.registeredAt,
+      anonymityConfirmed: clue.anonymityConfirmed,
+      status: clue.status,
+      registeredBy: clue.registeredBy,
+      enteredOrgId: clue.enteredOrgId,
+      assignedOrgUnitIds: [...new Set(assignments.map((row) => row.orgUnitId))],
+      verificationStatus: clue.verificationStatus,
+      spatialKind: object.kind === 'point' ? 'point' : 'face',
+      parts: parts.map((part) => ({
+        partId: part.part_id,
+        partIndex: part.part_index,
+        geojson: part.geojson,
+      })),
+      hits: await this.listHitSummaries(clueId),
+      dupComputedAt: object.dupComputedAt,
+    };
+  }
+
+  async listHitSummaries(clueId: string): Promise<ClueHitSummary[]> {
+    const hits = await this.prisma.$queryRaw<
+      Array<{
+        part_id: string;
+        part_index: number;
+        other_clue_id: string;
+        other_clue_code: string;
+        other_part_id: string;
+        other_part_index: number;
+        self_ratio: number;
+        other_ratio: number;
+        intersection_area: number;
+        self_geojson: string;
+        other_geojson: string;
+      }>
+    >`
+      SELECT h.spatial_part_id AS part_id,
+             p.part_index,
+             h.other_clue_id,
+             c.code AS other_clue_code,
+             h.other_part_id,
+             op.part_index AS other_part_index,
+             h.self_ratio,
+             h.other_ratio,
+             h.intersection_area,
+             ST_AsGeoJSON(p.geom) AS self_geojson,
+             ST_AsGeoJSON(op.geom) AS other_geojson
+      FROM clue_spatial_hit h
+      JOIN clue c ON c.id = h.other_clue_id
+      JOIN clue_spatial_part p ON p.id = h.spatial_part_id
+      JOIN clue_spatial_part op ON op.id = h.other_part_id
+      WHERE h.clue_id = ${clueId}
+      ORDER BY h.other_clue_id, p.part_index
+    `;
+    return hits.map((hit) => ({
+      partId: hit.part_id,
+      partIndex: hit.part_index,
+      otherClueId: hit.other_clue_id,
+      otherClueCode: hit.other_clue_code,
+      otherPartId: hit.other_part_id,
+      otherPartIndex: hit.other_part_index,
+      selfRatio: hit.self_ratio,
+      otherRatio: hit.other_ratio,
+      intersectionArea: hit.intersection_area,
+      selfGeojson: hit.self_geojson,
+      otherGeojson: hit.other_geojson,
+    }));
+  }
+
+  async computeHitsForClue(clueId: string): Promise<ClueHitSummary[]> {
+    const parts = await this.prisma.$queryRaw<
+      Array<{ id: string; part_index: number; geojson: string }>
+    >`
+      SELECT p.id, p.part_index, ST_AsGeoJSON(p.geom) AS geojson
+      FROM clue_spatial_part p
+      JOIN clue_spatial_object o ON o.id = p.spatial_object_id
+      WHERE o.clue_id = ${clueId}
+      ORDER BY p.part_index
+    `;
+    if (parts.length === 0) return [];
+    const object = await this.prisma.clueSpatialObject.findUnique({ where: { clueId } });
+    if (object?.kind !== 'face') return [];
+    return this.computeHits(
+      parts.map((part) => ({
+        id: part.id,
+        partIndex: part.part_index,
+        geojson: part.geojson,
+        sourceSrid: TARGET_SRID,
+      })),
+      clueId,
+    );
+  }
+
+  async replaceHitSet(clueId: string, hits: readonly ClueHitWrite[]): Promise<void> {
+    // 整体替换：涉及该线索的正向与反向命中行全部删掉（命中行外键挂双方部件）。
+    await this.prisma.$queryRaw`
+      DELETE FROM clue_spatial_hit WHERE clue_id = ${clueId} OR other_clue_id = ${clueId}
+    `;
+    for (const hit of hits) {
+      await this.prisma.$queryRaw`
+        INSERT INTO clue_spatial_hit
+          (id, clue_id, spatial_part_id, other_clue_id, other_part_id, self_ratio, other_ratio, intersection_area, computed_at)
+        VALUES
+          (${hit.id}, ${clueId}, ${hit.partId}, ${hit.otherClueId}, ${hit.otherPartId},
+           ${hit.selfRatio}, ${hit.otherRatio}, ${hit.intersectionArea}, now())
+        ON CONFLICT (clue_id, spatial_part_id, other_clue_id, other_part_id) DO NOTHING
+      `;
+      // 反向行：对方线索也打上疑似重复标记（规格 B：不改对方状态）。
+      await this.prisma.$queryRaw`
+        INSERT INTO clue_spatial_hit
+          (id, clue_id, spatial_part_id, other_clue_id, other_part_id, self_ratio, other_ratio, intersection_area, computed_at)
+        VALUES
+          (${hit.reverseId}, ${hit.otherClueId}, ${hit.otherPartId}, ${clueId}, ${hit.partId},
+           ${hit.otherRatio}, ${hit.selfRatio}, ${hit.intersectionArea}, now())
+        ON CONFLICT (clue_id, spatial_part_id, other_clue_id, other_part_id) DO NOTHING
+      `;
+    }
+    await this.prisma.$queryRaw`
+      UPDATE clue_spatial_object SET dup_computed_at = now() WHERE clue_id = ${clueId}
+    `;
+  }
+
+  async replaceSpatialParts(clueId: string, parts: readonly ClueSpatialPartRow[]): Promise<void> {
+    const object = await this.prisma.clueSpatialObject.findUnique({ where: { clueId } });
+    if (!object) throw new Error('线索没有空间对象');
+    await this.prisma.$queryRaw`
+      DELETE FROM clue_spatial_part WHERE spatial_object_id = ${object.id}
+    `;
+    for (const part of parts) {
+      await this.insertSpatialPart(object.id, part);
+    }
+    await this.prisma.$queryRaw`
+      UPDATE clue_spatial_object
+      SET part_count = ${parts.length}, dup_computed_at = now()
+      WHERE id = ${object.id}
+    `;
+  }
+
+  async updateClueStatus(clueId: string, status: string): Promise<void> {
+    await this.prisma.clue.update({ where: { id: clueId }, data: { status } });
+  }
+
+  async readItemValues(clueId: string): Promise<Readonly<Record<string, string | null>>> {
+    const rows = await this.prisma.clueItemValue.findMany({ where: { clueId } });
+    return Object.fromEntries(rows.map((row) => [row.key, row.value]));
+  }
+
+  async readDuplicatePeers(peerIds: readonly string[]): Promise<ReadonlyMap<string, ClueDuplicatePeer>> {
+    const peers = new Map<string, ClueDuplicatePeer>();
+    if (peerIds.length === 0) return peers;
+    const clues = await this.prisma.clue.findMany({ where: { id: { in: [...peerIds] } } });
+    const values = await this.prisma.clueItemValue.findMany({
+      where: { clueId: { in: [...peerIds] }, key: { in: ['clue.location', 'clue.reporter_name', 'clue.reporter_contact', 'clue.reporter_anonymous'] } },
+    });
+    const valueOf = new Map<string, Map<string, string | null>>();
+    for (const row of values) {
+      const bucket = valueOf.get(row.clueId) ?? new Map<string, string | null>();
+      bucket.set(row.key, row.value);
+      valueOf.set(row.clueId, bucket);
+    }
+    for (const clue of clues) {
+      const bucket = valueOf.get(clue.id) ?? new Map<string, string | null>();
+      peers.set(clue.id, {
+        clueId: clue.id,
+        code: clue.code,
+        status: clue.status,
+        registeredAt: clue.registeredAt,
+        sourceCode: clue.sourceCode,
+        anonymityConfirmed: clue.anonymityConfirmed,
+        location: bucket.get('clue.location') ?? null,
+        reporterName: bucket.get('clue.reporter_name') ?? null,
+        reporterContact: bucket.get('clue.reporter_contact') ?? null,
+        reporterAnonymous: isAnonymousText(bucket.get('clue.reporter_anonymous')),
+      });
+    }
+    return peers;
   }
 
   async readClueOrgUnitId(clueId: string): Promise<string | null> {
@@ -777,9 +960,13 @@ export class PrismaClueStore implements ClueStore {
 
   /**
    * 逐面比对：与未结案线索的每个面对分别算交集，双方各自以单面 geography 面积作分母，
-   * 任一方达到阈值即该面对命中。点状不参与（本方法只对面状调用）。
+   * 任一方达到阈值即该面对命中。点状不参与（调用方只对面状调用）。
+   * excludeClueId 用于重算时排除自己（重绘后正式计算）。
    */
-  private async computeHits(parts: readonly ClueSpatialPartRow[]): Promise<ClueHitSummary[]> {
+  private async computeHits(
+    parts: readonly ClueSpatialPartRow[],
+    excludeClueId: string | null = null,
+  ): Promise<ClueHitSummary[]> {
     if (parts.length === 0) return [];
     const payload = JSON.stringify(
       parts.map((part) => ({ partIndex: part.partIndex, id: part.id, geojson: part.geojson })),
@@ -792,21 +979,27 @@ export class PrismaClueStore implements ClueStore {
         FROM jsonb_array_elements(${payload}::jsonb) AS part
       ),
       other_part AS (
-        SELECT c.id AS clue_id, c.code AS clue_code, p.id AS part_id, p.geom
+        SELECT c.id AS clue_id, c.code AS clue_code, p.id AS part_id, p.part_index, p.geom
         FROM clue_spatial_part p
         JOIN clue_spatial_object o ON o.id = p.spatial_object_id
         JOIN clue c ON c.id = o.clue_id
-        WHERE c.status NOT IN (${Prisma.join(NOT_COMPARABLE_STATUSES)})
+        WHERE o.kind = 'face'
+          AND c.status NOT IN (${Prisma.join(NOT_COMPARABLE_STATUSES)})
+          AND (${excludeClueId}::text IS NULL OR c.id <> ${excludeClueId}::text)
       ),
       overlap AS (
         SELECT np.part_index, np.part_id, op.clue_id, op.clue_code, op.part_id AS other_part_id,
+               op.part_index AS other_part_index,
                ST_Area(ST_Intersection(np.geom, op.geom)::geography) AS inter_area,
                ST_Area(np.geom::geography) AS self_area,
-               ST_Area(op.geom::geography) AS other_area
+               ST_Area(op.geom::geography) AS other_area,
+               ST_AsGeoJSON(np.geom) AS self_geojson,
+               ST_AsGeoJSON(op.geom) AS other_geojson
         FROM new_part np
         JOIN other_part op ON ST_Intersects(np.geom, op.geom)
       )
-      SELECT part_index, part_id, clue_id, clue_code, other_part_id, inter_area, self_area, other_area
+      SELECT part_index, part_id, clue_id, clue_code, other_part_id, other_part_index,
+             inter_area, self_area, other_area, self_geojson, other_geojson
       FROM overlap
       WHERE inter_area > 0
         AND (
@@ -820,9 +1013,12 @@ export class PrismaClueStore implements ClueStore {
       otherClueId: row.clue_id,
       otherClueCode: row.clue_code,
       otherPartId: row.other_part_id,
+      otherPartIndex: row.other_part_index,
       selfRatio: row.self_area > 0 ? row.inter_area / row.self_area : 0,
       otherRatio: row.other_area > 0 ? row.inter_area / row.other_area : 0,
       intersectionArea: row.inter_area,
+      selfGeojson: row.self_geojson,
+      otherGeojson: row.other_geojson,
     }));
   }
 }
