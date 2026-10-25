@@ -9,7 +9,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import reducer from '../login/loginSlice';
 import { renderRoute } from '../test-utils';
-import { AssignOrgPanel, AssignPeoplePanel, DecidePanel, HitGroups, SuggestionList } from './ClueDispatchPanel';
+import {
+  AssignOrgPanel,
+  AssignPeoplePanel,
+  ClueDispatchBody,
+  DecidePanel,
+  HitGroups,
+  SuggestionList,
+  TransferPanel,
+} from './ClueDispatchPanel';
 import { dispatchFailureText } from './ClueDispatchSection';
 import {
   dispatchStatusLabel,
@@ -342,5 +350,63 @@ describe('工作台三环节步骤条（#214）', () => {
     const { html } = await renderRoute(fresh(), '/workbench?step=2&clue=clue-1');
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain('step=3&amp;clue=clue-1');
+  });
+});
+
+describe('移送（自然资源部门以外机关）', () => {
+  it('移送面板：标签用「移送（自然资源部门以外机关）」、必填项与选填附件、发函日期默认北京当日提示', () => {
+    const html = renderToStaticMarkup(<TransferPanel busy={false} failure={null} onTransfer={() => undefined} />);
+    expect(html).toContain('移送（自然资源部门以外机关）');
+    expect(html).not.toContain('系统内移送');
+    expect(html).toContain('移送机关');
+    expect(html).toContain('文书编号');
+    expect(html).toContain('发函日期');
+    expect(html).toContain('留空默认北京当日');
+    expect(html).toContain('原因');
+    expect(html).toContain('data-role="transfer-attachments"');
+    expect(html).toContain('multiple');
+    expect(html).toContain('选填 0..n 件');
+    // 必填未填：登记按钮禁用。
+    expect(html).toMatch(/data-role="transfer-submit"[^>]*disabled/);
+  });
+
+  it('办理面板：有移送权限时在待分派池、已派机构、已派承办人都出现移送；无权限不出现', () => {
+    const render = (overrides: Partial<DispatchView>) =>
+      renderToStaticMarkup(
+        <ClueDispatchBody
+          view={view(overrides)}
+          orgOptions={[]}
+          busy={false}
+          failure={null}
+          onDecide={() => undefined}
+          onAssignOrg={() => undefined}
+          onAssignPeople={() => undefined}
+          onTransfer={() => undefined}
+        />,
+      );
+    const assignment = { orgUnitId: 'o1', orgName: '天河区分局', kind: 'initial', designate: false };
+    expect(render({ status: 'in_pool', mayDecide: false, mayAssignOrg: true, mayTransfer: true })).toContain(
+      'data-role="transfer-panel"',
+    );
+    expect(
+      render({ status: 'org_assigned', mayDecide: false, assignment, mayTransfer: true }),
+    ).toContain('data-role="transfer-panel"');
+    expect(
+      render({ status: 'handler_assigned', mayDecide: false, assignment, mayTransfer: true }),
+    ).toContain('data-role="transfer-panel"');
+    expect(render({ status: 'in_pool', mayDecide: false, mayAssignOrg: true, mayTransfer: false })).not.toContain(
+      'data-role="transfer-panel"',
+    );
+  });
+
+  it('失败文案：必填缺失、发函日期、附件、报请期间的锁', () => {
+    expect(dispatchFailureText({ result: 'non-compliant', rules: ['missing-disposition-fields'] })).toContain('必填');
+    expect(dispatchFailureText({ result: 'non-compliant', rules: ['invalid-letter-date'] })).toContain('发函日期');
+    expect(dispatchFailureText({ result: 'non-compliant', rules: ['attachment-content-mismatch'] })).toContain('附件');
+    expect(dispatchFailureText({ result: 'invalid-state', reason: 'designation-pending' })).toContain('报请');
+  });
+
+  it('已移送状态标签', () => {
+    expect(dispatchStatusLabel('transferred_out')).toBe('已移送');
   });
 });
