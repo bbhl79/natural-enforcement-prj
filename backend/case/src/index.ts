@@ -92,7 +92,8 @@ export type {
   ClueVerificationRunRow,
   ClueVerificationRunWrite,
 } from './persistence/clue-store.ts';
-// #213：内业核查的图层目录、状态口径、核查执行端口与报告组装。export {
+// #213：内业核查的图层目录、状态口径、核查执行端口与报告组装。
+export {
   ALL_LAYERS,
   AUTO_VERIFICATION_ATTEMPTS,
   AUTO_VERIFICATION_BACKOFF,

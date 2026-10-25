@@ -184,6 +184,21 @@ describe('#212 重绘与命中集替换', () => {
       .toHaveLength(1);
   });
 
+  it('已结案的对方退出比对：重绘不替它重算，本线索命中集里不再含它', async () => {
+    const peer = await register({ spatial: polygon(rect(115.40, 23.40, 115.50, 23.50)) });
+    const mine = await register({ spatial: polygon(rect(115.40, 23.40, 115.50, 23.50)) });
+    expect(mine.body.status).toBe('pending_decision');
+    await setStatus(peer.body.id ?? '', 'closed');
+
+    const redrawn = await redraw(mine.body.id ?? '', polygon(rect(115.60, 23.40, 115.70, 23.50)));
+    expect(redrawn.status).toBe(200);
+    expect(redrawn.body.hits ?? []).toEqual([]);
+    // 本线索不再持有对已结案对方的命中。
+    const mineHits = await hitRows(mine.body.id ?? '');
+    expect(mineHits).toHaveLength(0);
+    // 已结案对方不替它重算：不报错即可，其余既有标记行不受影响。
+  });
+
   it('几何不合规：400 non-compliant，失败留痕 invalid-geometry，几何部件不变', async () => {
     const mine = await register({ spatial: polygon(rect(118.80, 23.40, 118.90, 23.50)) });
     const before = await partGeojsons(mine.body.id ?? '');

@@ -3,6 +3,7 @@ import type {
   AuditTargetOrgBasis,
   ClueItemsSupplementFailedReason,
   ClueRegisterFailedReason,
+  ClueGeometryUpdateFailedReason,
   ClueVerifyRetryFailedReason,
   CertUpdateFailedReason,
   AuthzDeniedReason,
@@ -154,7 +155,16 @@ export type AuditAppend =
   | (AuditParties & { action: 'clue.items-supplemented'; outcome: 'failed'; reason: ClueItemsSupplementFailedReason })
   // 内业核查手动重跑（#213，规格 G）：动作词与新运行行同事务写入，detail 存新运行序号。
   | (AuditParties & { action: 'clue.verify-retried' })
-  | (AuditParties & { action: 'clue.verify-retried'; outcome: 'failed'; reason: ClueVerifyRetryFailedReason });
+  | (AuditParties & { action: 'clue.verify-retried'; outcome: 'failed'; reason: ClueVerifyRetryFailedReason })
+  // 疑似重复重绘（#212，规格 G）：动作词与新空间版本同事务写入，detail 存前后命中摘要。
+  | (AuditParties & { action: 'clue.geometry-updated' })
+  | (AuditParties & {
+    action: 'clue.geometry-updated';
+    outcome: 'failed';
+    reason: ClueGeometryUpdateFailedReason;
+  })
+  // 实名查阅（#212，规格 G）：只记查看事实，detail 存编号，不记明文。
+  | (AuditParties & { action: 'clue.reference-viewed' });
 
 /**
  * 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。

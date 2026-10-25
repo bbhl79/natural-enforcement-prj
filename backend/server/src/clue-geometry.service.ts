@@ -20,6 +20,7 @@ import {
 } from '@natural-enforcement/audit';
 import {
   CLUE_STORE,
+  isComparableClueStatus,
   requiresVerification,
   spatialVersionOf,
   parseSpatialSource,
@@ -158,10 +159,24 @@ export class ClueGeometryService {
       readonly after: readonly HitSummaryDetail[];
     }[] = [];
     await this.uow.run(async (tx) => {
+      // 对方「之前」的命中摘要要在动任何命中行之前快照（本线索的替换会删对方的反向行）。
+      const oldPeerIds = [...new Set(before.map((hit) => hit.otherClueId))];
+      const oldPeerSnapshots = new Map<string, readonly ClueHitSummary[]>();
+      for (const peerId of oldPeerIds) {
+        oldPeerSnapshots.set(peerId, await tx.clues.listHitSummaries(peerId));
+      }
+
       // 涉及本线索的命中行先清掉（命中行外键挂旧部件），再换部件。
       await tx.clues.replaceHitSet(clueId, []);
       await tx.clues.replaceSpatialParts(clueId, parts);
       after = await tx.clues.computeHitsForClue(clueId);
+      // 新撞上的对方快照也要在写入本线索新命中行之前取。
+      const newPeerSnapshots = new Map<string, readonly ClueHitSummary[]>();
+      for (const hit of after) {
+        if (oldPeerSnapshots.has(hit.otherClueId)) continue;
+        if (newPeerSnapshots.has(hit.otherClueId)) continue;
+        newPeerSnapshots.set(hit.otherClueId, await tx.clues.listHitSummaries(hit.otherClueId));
+      }
       await tx.clues.replaceHitSet(
         clueId,
         after.map((hit) => toHitWrite(hit)),
@@ -173,17 +188,19 @@ export class ClueGeometryService {
       }
 
       // 原命中与新命中涉及的对方线索分别完整重算（related-redraw，不递归）。
-      const peerCodes = new Map<string, string>();
-      for (const hit of [...before, ...after]) peerCodes.set(hit.otherClueId, hit.otherClueCode);
-      for (const [peerId, peerCode] of peerCodes) {
-        const peerBefore = await tx.clues.listHitSummaries(peerId);
+      // 已结案／已移送的对方退出比对：不替它重算，保留其既有标记行。
+      const peerIds = [...new Set([...before, ...after].map((hit) => hit.otherClueId))];
+      const peerInfos = await this.clues.readDuplicatePeers(peerIds);
+      for (const [peerId, peerInfo] of peerInfos) {
+        if (!isComparableClueStatus(peerInfo.status)) continue;
+        const peerBefore = oldPeerSnapshots.get(peerId) ?? newPeerSnapshots.get(peerId) ?? [];
         const peerAfter = await tx.clues.computeHitsForClue(peerId);
         await tx.clues.replaceHitSet(
           peerId,
           peerAfter.map((hit) => toHitWrite(hit)),
         );
         related.push({
-          otherClueCode: peerCode,
+          otherClueCode: peerInfo.code,
           before: toSummaries(peerBefore),
           after: toSummaries(peerAfter),
         });

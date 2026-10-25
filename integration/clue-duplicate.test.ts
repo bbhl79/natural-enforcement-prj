@@ -29,26 +29,27 @@ describe('#212 逐面计算', () => {
     expect(first.status).toBe(201);
     expect(first.body.status).toBe('in_pool');
 
-    // 对方面完全落在本面西侧一半内：交集=对方面积，占对方 100%，占本线索 50%。
+    // 对方面完全落在本面西侧一半内：交集=本面×对方面＝对方面积，
+    // 占本线索（后登小面）100%，占对方（先登大面）50%。
     const second = await register({ spatial: polygon(rect(113.10, 23.40, 113.15, 23.50)) });
     expect(second.status).toBe(201);
     expect(second.body.status).toBe('pending_decision');
     const hits = second.body.hits ?? [];
     expect(hits).toHaveLength(1);
     expect(hits[0]?.otherClueCode).toBe(first.body.code);
-    expect(hits[0]?.selfRatio).toBeCloseTo(0.5, 1);
-    expect(hits[0]?.otherRatio).toBeCloseTo(1, 5);
+    expect(hits[0]?.selfRatio).toBeCloseTo(1, 5);
+    expect(hits[0]?.otherRatio).toBeCloseTo(0.5, 1);
     expect(hits[0]?.intersectionArea).toBeGreaterThan(0);
 
     const rows = await hitRows(second.body.id ?? '');
     expect(rows).toHaveLength(1);
     expect(rows[0]?.other_clue_id).toBe(first.body.id);
-    // 反向行：对方视角比例对调。
+    // 反向行：对方视角比例对调（占本线索=50%，占对方=100%）。
     const reverse = await hitRows(first.body.id ?? '');
     expect(reverse).toHaveLength(1);
     expect(reverse[0]?.other_clue_id).toBe(second.body.id);
-    expect(reverse[0]?.self_ratio).toBeCloseTo(1, 5);
-    expect(reverse[0]?.other_ratio).toBeCloseTo(0.5, 1);
+    expect(reverse[0]?.self_ratio).toBeCloseTo(0.5, 1);
+    expect(reverse[0]?.other_ratio).toBeCloseTo(1, 5);
   });
 
   it('全部命中面对保存：本线索两个面分别命中同一对方，不只留最大一对', async () => {

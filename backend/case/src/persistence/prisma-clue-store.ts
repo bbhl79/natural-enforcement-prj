@@ -720,7 +720,7 @@ export class PrismaClueStore implements ClueStore {
         FROM jsonb_array_elements(${payload}::jsonb) AS part
       ),
       other_part AS (
-        SELECT c.id AS clue_id, c.code AS clue_code, p.id AS part_id, p.geom
+        SELECT c.id AS clue_id, c.code AS clue_code, p.id AS part_id, p.part_index, p.geom
         FROM clue_spatial_part p
         JOIN clue_spatial_object o ON o.id = p.spatial_object_id
         JOIN clue c ON c.id = o.clue_id
