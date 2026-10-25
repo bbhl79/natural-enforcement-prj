@@ -269,6 +269,112 @@ export function AssignOrgPanel({
   );
 }
 
+/** 移送（自然资源部门以外的机关；#216）。 */
+export function TransferPanel({
+  busy,
+  failure,
+  onTransfer,
+}: {
+  busy: boolean;
+  failure: string | null;
+  onTransfer: (input: { transferOrg: string; documentNo: string; letterDate: string; reason: string; attachments: readonly File[] }) => void;
+}) {
+  const [transferOrg, setTransferOrg] = useState('');
+  const [documentNo, setDocumentNo] = useState('');
+  const [letterDate, setLetterDate] = useState('');
+  const [reason, setReason] = useState('');
+  const [attachments, setAttachments] = useState<readonly File[]>([]);
+  const today = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return (
+    <div className="card" data-role="transfer-panel">
+      <div className="card-h">
+        移送（自然资源部门以外机关）
+        <span className="hint">登记后进已移送终态，退出比对与待办计数</span>
+      </div>
+      {failure ? <div className="banner danger" data-role="failure">{failure}</div> : null}
+      <div className="form-row">
+        <label htmlFor="transfer-org">移送机关</label>
+        <div>
+          <input
+            id="transfer-org"
+            className="input"
+            value={transferOrg}
+            onChange={(event) => setTransferOrg(event.target.value)}
+          />
+          <div className="help">只指向自然资源部门以外的机关；不区分管辖、涉刑、党纪政务。</div>
+        </div>
+      </div>
+      <div className="form-row">
+        <label htmlFor="transfer-doc-no">文书编号</label>
+        <div>
+          <input
+            id="transfer-doc-no"
+            className="input"
+            value={documentNo}
+            onChange={(event) => setDocumentNo(event.target.value)}
+          />
+        </div>
+      </div>
+      <div className="form-row">
+        <label htmlFor="transfer-letter-date">发函日期</label>
+        <div>
+          <input
+            id="transfer-letter-date"
+            className="input"
+            type="date"
+            value={letterDate}
+            onChange={(event) => setLetterDate(event.target.value)}
+          />
+          <div className="help">{`留空默认北京当日（${today}），允许补录。`}</div>
+        </div>
+      </div>
+      <div className="form-row">
+        <label htmlFor="transfer-reason">原因</label>
+        <div>
+          <input
+            id="transfer-reason"
+            className="input"
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+          />
+        </div>
+      </div>
+      <div className="form-row">
+        <label htmlFor="transfer-attachments">附件</label>
+        <div>
+          <input
+            id="transfer-attachments"
+            data-role="transfer-attachments"
+            type="file"
+            multiple
+            onChange={(event) => setAttachments(Array.from(event.target.files ?? []))}
+          />
+          <div className="help">选填 0..n 件：图片、PDF 或 Office 文档，服务端核对真实内容。</div>
+        </div>
+      </div>
+      <div className="actions">
+        <button
+          type="button"
+          className="btn"
+          data-role="transfer-submit"
+          disabled={busy || transferOrg.trim() === '' || documentNo.trim() === '' || reason.trim() === ''}
+          onClick={() =>
+            onTransfer({
+              transferOrg: transferOrg.trim(),
+              documentNo: documentNo.trim(),
+              letterDate: letterDate,
+              reason: reason.trim(),
+              attachments,
+            })
+          }
+        >
+          登记移送
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** 派主办／协办。 */
 export function AssignPeoplePanel({
   view,
@@ -357,6 +463,7 @@ export function ClueDispatchBody({
   onDecide,
   onAssignOrg,
   onAssignPeople,
+  onTransfer,
 }: {
   view: DispatchView;
   orgOptions: readonly OrgOption[];
@@ -365,6 +472,7 @@ export function ClueDispatchBody({
   onDecide: (decision: 'dispatch' | 'hold', acknowledged: boolean) => void;
   onAssignOrg: (input: { orgUnitId: string; reason: string; designate: boolean }) => void;
   onAssignPeople: (input: { mainId: string; assistIds: readonly string[] }) => void;
+  onTransfer: (input: { transferOrg: string; documentNo: string; letterDate: string; reason: string; attachments: readonly File[] }) => void;
 }): ReactNode {
   return (
     <>
@@ -384,6 +492,9 @@ export function ClueDispatchBody({
         ) : null}
         {view.status === 'in_pool' && !view.mayAssignOrg ? (
           <div className="banner gray">待分派池的线索由本机构内勤派出。</div>
+        ) : null}
+        {view.mayTransfer ? (
+          <TransferPanel busy={busy} failure={failure} onTransfer={onTransfer} />
         ) : null}
         {(view.status === 'org_assigned' || view.status === 'handler_assigned') && view.assignment ? (
           <div data-role="assigned">

@@ -103,6 +103,8 @@ export interface DispatchView {
   readonly mayReassignOrg: boolean;
   /** 当前操作者能不能派主办／协办（承办机构内勤）。 */
   readonly mayAssignPeople: boolean;
+  /** 当前操作者能不能登记移送（池所属机构内勤／承办机构内勤；#216）。 */
+  readonly mayTransfer: boolean;
 }
 
 export type DispatchViewOutcome =
@@ -622,6 +624,7 @@ export class ClueDispatchService {
     mayAssignOrg: boolean;
     mayReassignOrg: boolean;
     mayAssignPeople: boolean;
+    mayTransfer: boolean;
   }> {
     const roles = account?.roles ?? [];
     const actorOrg = account?.orgUnitId ?? null;
@@ -649,7 +652,16 @@ export class ClueDispatchService {
       roles.includes('内勤') &&
       actorOrg !== null &&
       actorOrg === context.assignment.orgUnitId;
-    return { mayDecide, mayAssignOrg, mayReassignOrg, mayAssignPeople };
+    // 移送（#216）：待分派池取池所属机构内勤，已派机构／已派承办人取承办机构内勤。
+    const transferOrgId = context.assignment?.orgUnitId ?? context.enteredOrgId;
+    const mayTransfer =
+      (context.status === 'in_pool' ||
+        context.status === 'org_assigned' ||
+        context.status === 'handler_assigned') &&
+      roles.includes('内勤') &&
+      actorOrg !== null &&
+      actorOrg === transferOrgId;
+    return { mayDecide, mayAssignOrg, mayReassignOrg, mayAssignPeople, mayTransfer };
   }
 
   /** 组装分派视图。 */
@@ -661,6 +673,7 @@ export class ClueDispatchService {
       mayAssignOrg: boolean;
       mayReassignOrg: boolean;
       mayAssignPeople: boolean;
+      mayTransfer: boolean;
     },
   ): Promise<DispatchView> {
     const groups = new Map<string, DispatchHitGroup & { pairs: DispatchHitPair[] }>();
@@ -732,6 +745,7 @@ export class ClueDispatchService {
       mayAssignOrg: affordance.mayAssignOrg,
       mayReassignOrg: affordance.mayReassignOrg,
       mayAssignPeople: affordance.mayAssignPeople,
+      mayTransfer: affordance.mayTransfer,
     };
   }
 

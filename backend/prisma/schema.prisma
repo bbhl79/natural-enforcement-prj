@@ -824,6 +824,8 @@ model ClueDisposition {
   transferredOrg String? @map("transferred_org")
   /// 文书编号
   documentNo String? @map("document_no")
+  /// 移送发函日期（#216：默认北京当日、允许补录；仅移送的处置行有值）
+  letterDate DateTime? @db.Timestamptz(6) @map("letter_date")
   /// 说明
   note String?
   recordedBy String   @map("recorded_by")

@@ -46,6 +46,9 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'clue.held',
   'clue.org-assigned',
   'clue.handler-assigned',
+  // 移送与停用机构池重新指定（#216，规格 G）：登记移送、重新指定接收机构。
+  'clue.disposition-recorded',
+  'clue.pool-reassigned',
 ] as const;
 
 /**
@@ -305,6 +308,45 @@ export const CLUE_HANDLER_ASSIGNED_FAILED_REASONS = [
 export type ClueHandlerAssignedFailedReason = (typeof CLUE_HANDLER_ASSIGNED_FAILED_REASONS)[number];
 
 /**
+ * 移送登记被拒（outcome=failed）的原因（#216，规格 G）。
+ * missing-disposition-fields 移送机关、文书编号或原因必填缺失；
+ * invalid-letter-date 发函日期补录值不合规；
+ * invalid-attachment 附件类型、真实内容、件数或字节数不合规（存储零写入）；
+ * designation-pending 存在未关闭的指定管辖报请，报请期间下级不能移送；
+ * invalid-state 线索状态不允许移送；
+ * concurrent-change 与并发写入冲突。
+ */
+export const CLUE_DISPOSITION_RECORDED_FAILED_REASONS = [
+  'missing-disposition-fields',
+  'invalid-letter-date',
+  'invalid-attachment',
+  'designation-pending',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type ClueDispositionRecordedFailedReason =
+  (typeof CLUE_DISPOSITION_RECORDED_FAILED_REASONS)[number];
+
+/**
+ * 停用机构池重新指定被拒（outcome=failed）的原因（#216，规格 G）。
+ * missing-reassign-reason 理由必填；
+ * org-unit-required 目标机构必填；
+ * org-unit-deactivated 目标机构已停用；
+ * org-unit-not-deactivated 线索所在池机构未停用（对象级限已停用机构的未派出线索）；
+ * invalid-state 线索状态不允许重新指定；
+ * concurrent-change 与并发写入冲突。
+ */
+export const CLUE_POOL_REASSIGNED_FAILED_REASONS = [
+  'missing-reassign-reason',
+  'org-unit-required',
+  'org-unit-deactivated',
+  'org-unit-not-deactivated',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type CluePoolReassignedFailedReason = (typeof CLUE_POOL_REASSIGNED_FAILED_REASONS)[number];
+
+/**
  * 带结构化快照（detail）的动作（#211，规格 G）。
  * 线索动作把编号、当前命中集摘要、缺件键写进 detail，不占用 previousValue/nextValue/itemCount。
  * detail 只写不回：查阅接口不返回它。其余动作一律不带 detail。
@@ -318,5 +360,8 @@ export const AUDIT_DETAIL_ACTIONS = [
   'clue.held',
   'clue.org-assigned',
   'clue.handler-assigned',
+  // 移送与停用机构池重新指定（#216，规格 G）：处置类型、移送机关、文书编号、发函日期、新接收机构。
+  'clue.disposition-recorded',
+  'clue.pool-reassigned',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];

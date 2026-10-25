@@ -79,6 +79,8 @@ export interface DispatchView {
   readonly mayAssignOrg: boolean;
   readonly mayReassignOrg: boolean;
   readonly mayAssignPeople: boolean;
+  /** 能不能登记移送（池所属机构内勤／承办机构内勤；#216）。 */
+  readonly mayTransfer: boolean;
 }
 
 /** 写动作的判别结果。成功后由调用方重新取分派视图。 */
@@ -146,6 +148,36 @@ export async function submitAssignPeople(
   return readResult(response);
 }
 
+/** 移送登记的提交内容（附件为页面取的本地文件，选填 0..n）。 */
+export interface TransferInput {
+  readonly transferOrg: string;
+  readonly documentNo: string;
+  /** 发函日期（YYYY-MM-DD；空＝服务端缺省北京当日）。 */
+  readonly letterDate: string;
+  readonly reason: string;
+  readonly attachments: readonly File[];
+}
+
+/** 移送（自然资源部门以外的机关；登记后进已移送终态）。 */
+export async function submitTransfer(
+  dispatch: ApiDispatch,
+  clueId: string,
+  input: TransferInput & { readonly expectedStatus: string },
+): Promise<DispatchActionResult> {
+  const form = new FormData();
+  form.set('transferOrg', input.transferOrg);
+  form.set('documentNo', input.documentNo);
+  form.set('letterDate', input.letterDate);
+  form.set('reason', input.reason);
+  form.set('expectedStatus', input.expectedStatus);
+  for (const file of input.attachments) form.append('attachment', file);
+  const response = await apiFetch(dispatch, `/api/clues/${clueId}/transfer`, {
+    method: 'POST',
+    body: form,
+  });
+  return readResult(response);
+}
+
 /** 达标阈值（与服务端 DUPLICATE_OVERLAP_THRESHOLD 同值：界面口径，改配归管理台二期）。 */
 export const OVERLAP_THRESHOLD = 0.6;
 
@@ -177,6 +209,8 @@ export function dispatchStatusLabel(status: string): string {
       return '已派承办人';
     case 'held':
       return '不派';
+    case 'transferred_out':
+      return '已移送';
     default:
       return status;
   }

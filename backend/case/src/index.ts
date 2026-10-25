@@ -83,6 +83,10 @@ export type {
   ClueMaterialRow,
   ClueOrgAssignWrite,
   CluePeopleAssignWrite,
+  CluePoolClueRow,
+  CluePoolReassignWrite,
+  ClueTransferContext,
+  ClueTransferWrite,
   ClueRegistrationOutcome,
   ClueRegistrationResult,
   ClueRegistrationWrite,
@@ -166,3 +170,14 @@ export type {
   StreetBoundaryRequest,
   StreetFeature,
 } from './clue/dispatch/index.ts';
+// #216：移送与停用机构池重新指定的领域规则（规格 D 节、GLOSSARY）。
+export {
+  CLUE_DISPOSITION_RULE_CODES,
+  POOL_REASSIGN_FROM_STATUSES,
+  TRANSFER_FROM_STATUSES,
+  TRANSFERRED_OUT_STATUS,
+  assessTransfer,
+  beijingDateOf,
+  parseLetterDate,
+} from './clue/disposition/index.ts';
+export type { TransferAssessment } from './clue/disposition/index.ts';

@@ -25,6 +25,10 @@ import type {
   ClueIdempotencyRow,
   ClueOrgAssignWrite,
   CluePeopleAssignWrite,
+  CluePoolClueRow,
+  CluePoolReassignWrite,
+  ClueTransferContext,
+  ClueTransferWrite,
   ClueRegistrationOutcome,
   ClueRegistrationResult,
   ClueRegistrationWrite,
@@ -626,6 +630,138 @@ export class PrismaClueStore implements ClueStore {
       })),
     });
     return true;
+  }
+
+  async readTransferContext(clueId: string): Promise<ClueTransferContext | null> {
+    // 当前有效分派事实（ended_at 为空）的接收机构：已派机构／已派承办人时即承办机构。
+    const rows = await this.prisma.$queryRaw<
+      Array<{ id: string; code: string; status: string; entered_org_id: string; assignment_org_id: string | null }>
+    >`
+      SELECT c.id, c.code, c.status, c.entered_org_id, a.org_unit_id AS assignment_org_id
+      FROM clue c
+      LEFT JOIN clue_assignment a ON a.clue_id = c.id AND a.ended_at IS NULL
+      WHERE c.id = ${clueId}
+    `;
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      clueId: row.id,
+      code: row.code,
+      status: row.status,
+      enteredOrgId: row.entered_org_id,
+      assignmentOrgId: row.assignment_org_id,
+    };
+  }
+
+  async hasOpenDesignationRequest(clueId: string): Promise<boolean> {
+    // 未关闭的报请＝status 'pending'（approved/rejected 均已关闭）。
+    const rows = await this.prisma.$queryRaw<Array<{ count: bigint }>>`
+      SELECT count(*)::bigint AS count
+      FROM clue_designation_request
+      WHERE clue_id = ${clueId} AND status = 'pending'
+    `;
+    return Number(rows[0]?.count ?? 0n) > 0;
+  }
+
+  async recordTransfer(write: ClueTransferWrite): Promise<boolean> {
+    // 条件更新：移送只允许从待分派池、已派机构或已派承办人出发；
+    // 并发冲突时这一笔不生效，调用方回 409 concurrent-change。
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      UPDATE clue SET status = 'transferred_out'
+      WHERE id = ${write.clueId}
+        AND status = ${write.expectedStatus}
+        AND status IN ('in_pool', 'org_assigned', 'handler_assigned')
+      RETURNING id
+    `;
+    if (rows.length === 0) return false;
+    const now = write.recordedAt;
+    // 终态：关止当前分派事实与承办人行，退出 OpenItems 的当前有效行口径。
+    await this.prisma.clueAssignment.updateMany({
+      where: { clueId: write.clueId, endedAt: null },
+      data: { endedAt: now },
+    });
+    await this.prisma.clueHandler.updateMany({
+      where: { clueId: write.clueId, endedAt: null },
+      data: { endedAt: now },
+    });
+    await this.prisma.clueDisposition.create({
+      data: {
+        id: write.dispositionId,
+        clueId: write.clueId,
+        disposition: 'transfer',
+        transferredOrg: write.transferredOrg,
+        documentNo: write.documentNo,
+        letterDate: new Date(`${write.letterDate}T00:00:00.000+08:00`),
+        note: write.reason,
+        recordedBy: write.recordedBy,
+        recordedAt: now,
+      },
+    });
+    if (write.materials.length > 0) {
+      await this.prisma.clueMaterial.createMany({
+        data: write.materials.map((material) => ({
+          id: material.id,
+          clueId: write.clueId,
+          kind: material.kind,
+          fileKey: material.fileKey,
+          versionId: material.versionId,
+          fileName: material.fileName,
+          contentType: material.contentType,
+          byteSize: material.byteSize,
+          digest: material.digest,
+        })),
+      });
+    }
+    return true;
+  }
+
+  async reassignPool(write: CluePoolReassignWrite): Promise<boolean> {
+    // 条件更新：只接未派出的线索（待分派池、待分派决定、不派），状态不变；
+    // 线索归属改为新接收机构（待分派池的池随之移动），并发冲突时这一笔不生效。
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      UPDATE clue SET entered_org_id = ${write.orgUnitId}
+      WHERE id = ${write.clueId}
+        AND status = ${write.expectedStatus}
+        AND status IN ('in_pool', 'pending_decision', 'held')
+      RETURNING id
+    `;
+    if (rows.length === 0) return false;
+    // 指定事实：kind='pool-reassign'，designate=false——不构成指定管辖、不加锁。
+    await this.prisma.clueAssignment.create({
+      data: {
+        id: write.assignmentId,
+        clueId: write.clueId,
+        orgUnitId: write.orgUnitId,
+        kind: 'pool-reassign',
+        designate: false,
+        assignedBy: write.assignedBy,
+        assignedByOrgId: write.assignedByOrgId,
+        reason: write.reason,
+        assignedAt: write.assignedAt,
+      },
+    });
+    return true;
+  }
+
+  async listPoolClues(orgUnitId: string): Promise<readonly CluePoolClueRow[]> {
+    // 已停用机构待分派池里的未派出线索：待分派池、待分派决定、不派。
+    return this.prisma.$queryRaw<
+      Array<{ id: string; code: string; status: string; domain: string; registered_at: Date }>
+    >`
+      SELECT id, code, status, domain, registered_at
+      FROM clue
+      WHERE entered_org_id = ${orgUnitId}
+        AND status IN ('in_pool', 'pending_decision', 'held')
+      ORDER BY registered_at DESC, code DESC
+    `.then((rows) =>
+      rows.map((row) => ({
+        clueId: row.id,
+        code: row.code,
+        status: row.status,
+        domain: row.domain,
+        registeredAt: row.registered_at,
+      })),
+    );
   }
 
   /** 业务编号：取库内 sequence 的下一个值（迁移创建，不算 model）。 */
