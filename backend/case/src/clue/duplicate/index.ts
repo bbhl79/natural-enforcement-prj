@@ -1,0 +1,35 @@
+// 疑似重复的领域规则出口（#212）。
+
+export {
+  ANONYMOUS_REPORTER_DISPLAY,
+  COMPLAINT_SOURCE_GROUP_CODE,
+  DUPLICATE_OVERLAP_THRESHOLD,
+  NOT_COMPARABLE_CLUE_STATUSES,
+  POINT_NO_OVERLAP_NOTICE,
+  RULE_ACK_REQUIRED,
+  RULE_COMPLAINT_MUST_DISPATCH,
+  SQUARE_METERS_PER_MU,
+  doesSpatialOverlapJudgement,
+  duplicateDecisionContract,
+  facePairBoldSide,
+  facePairRatios,
+  formatFacePairLabel,
+  formatRatio,
+  formatRegisteredAtDay,
+  formatRegisteredAtMonth,
+  groupFacesByOtherClue,
+  isComparableClueStatus,
+  isFacePairHit,
+  limitedLocation,
+  maskReporterContact,
+  maskReporterName,
+  squareMetersToMu,
+} from './rules.ts';
+export type {
+  DuplicateDecisionContract,
+  DuplicateDecisionInput,
+  DuplicateGroup,
+  FacePair,
+  FacePairBoldSide,
+  FacePairRatios,
+} from './rules.ts';
