@@ -13,10 +13,17 @@ import { AdminService } from './admin.service.ts';
 import { AuditBrowseService } from './audit-browse.service.ts';
 import { AuditController } from './audit.controller.ts';
 import { ClueClosureController } from './clue-closure.controller.ts';
+import { ClueDesignationController } from './clue-designation.controller.ts';
+import { ClueDesignationService } from './clue-designation.service.ts';
 import { ClueDispatchController } from './clue-dispatch.controller.ts';
 import { ClueClosureService } from './clue-closure.service.ts';
 import { ClueDispatchService } from './clue-dispatch.service.ts';
+import { ClueDispositionController } from './clue-disposition.controller.ts';
+import { ClueDispositionService } from './clue-disposition.service.ts';
 import { ClueFormSchemaController } from './clue-form-schema.controller.ts';
+import { ClueDuplicateController } from './clue-duplicate.controller.ts';
+import { ClueDuplicateService } from './clue-duplicate.service.ts';
+import { ClueGeometryController } from './clue-geometry.controller.ts';
 import { ClueItemSupplementController } from './clue-item-supplement.controller.ts';
 import { ClueRegistrationController } from './clue-registration.controller.ts';
 import { ClueSuggestionService } from './clue-suggestion.service.ts';
@@ -25,6 +32,7 @@ import { ClueWithdrawController } from './clue-withdraw.controller.ts';
 import { AuthController } from './auth.controller.ts';
 import { AuthService } from './auth.service.ts';
 import { ClueFormSchemaService } from './clue-form-schema.service.ts';
+import { ClueGeometryService } from './clue-geometry.service.ts';
 import { ClueItemSupplementService } from './clue-item-supplement.service.ts';
 import { ClueRegistrationService } from './clue-registration.service.ts';
 import { ClueVerificationService } from './clue-verification.service.ts';
@@ -62,9 +70,13 @@ import { SourceGate } from './source-gate.ts';
     ClueRegistrationController,
     ClueItemSupplementController,
     ClueVerificationController,
+    ClueGeometryController,
+    ClueDuplicateController,
     ClueDispatchController,
     ClueWithdrawController,
     ClueClosureController,
+    ClueDispositionController,
+    ClueDesignationController,
   ],
   providers: [
     AuthService,
@@ -81,7 +93,11 @@ import { SourceGate } from './source-gate.ts';
     ClueDispatchService,
     ClueWithdrawService,
     ClueClosureService,
+    ClueDispositionService,
+    ClueDesignationService,
     ClueVerificationWorker,
+    ClueGeometryService,
+    ClueDuplicateService,
     SourceGate,
     { provide: APP_GUARD, useClass: SessionGuard },
   ],

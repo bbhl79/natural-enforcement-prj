@@ -8,7 +8,9 @@ import { Await, Link, useLoaderData, useRevalidator, useSearchParams } from 'rea
 import { useAppDispatch } from '../hooks';
 import ClueHeldSection from '../clue/ClueHeldSection';
 import ClueReminderSection from '../clue/ClueReminderSection';
+import { ClueDuplicateTab } from '../clue/ClueDuplicateTab';
 import { ClueVerificationTab } from '../clue/ClueVerificationTab';
+import { readReporter, type DuplicateView } from '../clue/duplicate';
 import { retryVerification, type VerificationView } from '../clue/verification';
 import { clueViewLabel, readClueUrlState, CLUE_VIEW_KEY } from '../shell/clueUrl';
 
@@ -25,8 +27,9 @@ export default function ClueCenterPage() {
   const state = readClueUrlState(params.toString());
   const view = state.view || 'all';
   const filters = Object.entries(state.filters).filter(([, value]) => value);
-  const { verification } = useLoaderData() as {
+  const { verification, duplicate } = useLoaderData() as {
     verification: Promise<VerificationView> | null;
+    duplicate: Promise<DuplicateView> | null;
   };
   const dispatch = useAppDispatch();
   const revalidator = useRevalidator();
@@ -111,7 +114,25 @@ export default function ClueCenterPage() {
               </Link>
             ))}
           </div>
-          {tab !== 'verification' ? (
+          {tab === 'duplicate' ? (
+            duplicate === null ? (
+              <div className="empty">
+                <div className="t">没有可比的疑似重复</div>
+                <div>地址里没有线索编号。</div>
+              </div>
+            ) : (
+              <Suspense fallback={<div className="card" aria-busy="true">载入中…</div>}>
+                <Await resolve={duplicate} errorElement={<div className="err">疑似重复比对读取失败。</div>}>
+                  {(resolved: DuplicateView) => (
+                    <ClueDuplicateTab
+                      view={resolved}
+                      onReadReporter={(otherClueId) => readReporter(dispatch, otherClueId)}
+                    />
+                  )}
+                </Await>
+              </Suspense>
+            )
+          ) : tab !== 'verification' ? (
             <div className="empty">
               <div className="t">{TABS.find((item) => item.id === tab)?.label ?? '基本信息与要件'}</div>
               <div>本页签的内容在后续范围接入。</div>

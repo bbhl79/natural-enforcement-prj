@@ -122,3 +122,13 @@
 .console .center-box .code{font-size:56px;font-weight:700;color:#d6d3d1}
 .console .center-box h2{font-size:20px;margin:6px 0 8px}
 .console .center-box p{color:var(--muted);margin-bottom:16px}
+/* 疑似重复比对页签（#212）：分组折叠、达标加粗、图斑对比。 */
+.console .dup-group{border:1px solid var(--border);border-radius:10px;margin-bottom:12px;background:#fff}
+.console .dup-group>summary{cursor:pointer;padding:10px 14px;font-weight:600;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.console .dup-group>summary .hint{font-weight:400}
+.console .dup-group .table{margin:0 14px 12px}
+.console .dup-peer{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:0 14px 10px}
+.console td.dup-hit{font-weight:700}
+.console .dup-compare{padding:8px 0}
+.console .dup-compare svg{width:320px;height:200px;border:1px dashed var(--border);border-radius:8px;background:#fafaf9}
+.console .dup-legend{display:flex;gap:8px;margin-top:6px}

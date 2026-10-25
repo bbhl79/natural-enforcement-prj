@@ -14,6 +14,9 @@ import {
   submitAssignOrg,
   submitAssignPeople,
   submitDecide,
+  submitTransfer,
+  submitDesignateReject,
+  submitDesignateRequest,
   type DispatchView,
 } from './dispatch';
 
@@ -49,16 +52,36 @@ export function dispatchFailureText(body: unknown): string {
         return '请指定主办承办人。';
       case 'assignee-not-qualified':
         return '承办人已停用或不属于承办机构。';
+      case 'missing-disposition-fields':
+        return '移送机关、文书编号与原因必填。';
+      case 'invalid-letter-date':
+        return '发函日期须为真实日历日（YYYY-MM-DD）。';
+      case 'attachment-count-exceeded':
+        return '附件不得超过 20 件。';
+      case 'attachment-size-exceeded':
+      case 'attachment-total-size-exceeded':
+        return '附件大小超限：单件不超过 20MB，合计不超过 100MB。';
+      case 'attachment-empty':
+      case 'attachment-type-not-allowed':
+      case 'attachment-content-mismatch':
+        return '附件不合规：只收图片、PDF 与 Office 文档，真实内容须与扩展名一致。';
+      case 'missing-designate-reason':
+        return '报请指定管辖须填写理由。';
+      case 'missing-reject-reason':
+        return '驳回报请须填写理由。';
       default:
         return '提交未通过，请检查后再试。';
     }
   }
   if (value.result === 'concurrent-change') return '线索状态已被他人变更，请刷新后重试。';
   if (value.result === 'invalid-state') {
+    if (value.reason === 'designation-pending') return '该线索正在报请指定管辖：报请期间不能分派、重新分派或移送。';
     if (value.reason === 'designated-lock') return '该线索已指定管辖：仅指定者或其上级可再调整。';
     if (value.reason === 'org-unit-deactivated') return '目标机构已停用，不能接收线索。';
+    if (value.reason === 'designation-pending') return '该线索已报请指定管辖：受理期间不能移送。';
     return '当前状态不能执行该操作。';
   }
+  if (value.reason === 'permission-denied') return '当前账号无权办理该操作。';
   return '操作未完成，请重试。';
 }
 
@@ -117,9 +140,23 @@ export default function ClueDispatchSection({ clueId }: { readonly clueId: strin
           }),
         )
       }
+      onDesignateRequest={(input) =>
+        void run(() => submitDesignateRequest(dispatch, clueId, input))
+      }
+      onDesignateReject={(reason) =>
+        void run(() => submitDesignateReject(dispatch, clueId, { reason }))
+      }
       onAssignPeople={(input) =>
         void run(() =>
           submitAssignPeople(dispatch, clueId, {
+            ...input,
+            expectedStatus: view.status,
+          }),
+        )
+      }
+      onTransfer={(input) =>
+        void run(() =>
+          submitTransfer(dispatch, clueId, {
             ...input,
             expectedStatus: view.status,
           }),

@@ -73,6 +73,10 @@ export type {
   ClueActiveAssignment,
   ClueActiveHandler,
   ClueDecisionWrite,
+  ClueDesignationCloseWrite,
+  ClueDesignationRequestInsert,
+  ClueDesignationRequestRow,
+  ClueDesignationRequestWrite,
   ClueDispatchContext,
   ClueDispatchHit,
   ClueHitSummary,
@@ -83,6 +87,10 @@ export type {
   ClueMaterialRow,
   ClueOrgAssignWrite,
   CluePeopleAssignWrite,
+  CluePoolClueRow,
+  CluePoolReassignWrite,
+  ClueTransferContext,
+  ClueTransferWrite,
   ClueRegistrationOutcome,
   ClueRegistrationResult,
   ClueRegistrationWrite,
@@ -91,6 +99,8 @@ export type {
   ClueSpatialPartRow,
   ClueSpatialWrite,
   ClueStore,
+  ClueDuplicateContext,
+  ClueDuplicatePeer,
   ClueVerificationArtifacts,
   ClueVerificationContext,
   ClueVerificationFinishWrite,
@@ -144,10 +154,56 @@ export type {
   VerificationRunStatus,
   VerificationStatus,
 } from './clue/verification/index.ts';
-// #214：分派决定与两步分派的领域规则、街道镇边界查询端口（辖区建议）。
+// #212：疑似重复比对——逐面 60% 命中判定、比对范围、对方状态条、按对方线索分组、
+// 决定步数据契约（已知晓／举报必派）与匿名对称脱敏口径。
 export {
+  ANONYMOUS_REPORTER_DISPLAY,
+  CLUE_STATUS_LABELS,
+  COMPLAINT_SOURCE_GROUP_CODE,
+  DUPLICATE_OVERLAP_THRESHOLD,
+  MARKABLE_PEER_STATUSES,
+  NOT_COMPARABLE_CLUE_STATUSES,
+  POINT_NO_OVERLAP_NOTICE,
+  RULE_ACK_REQUIRED,
+  RULE_COMPLAINT_MUST_DISPATCH,
+  SQUARE_METERS_PER_MU,
+  doesSpatialOverlapJudgement,
+  duplicateDecisionContract,
+  facePairBoldSide,
+  facePairRatios,
+  formatFacePairLabel,
+  formatRatio,
+  formatRegisteredAtDay,
+  formatRegisteredAtMonth,
+  groupFacesByOtherClue,
+  isComparableClueStatus,
+  isFacePairHit,
+  isMarkablePeerStatus,
+  limitedLocation,
+  maskReporterContact,
+  maskReporterName,
+  peerStatusAfterHit,
+  squareMetersToMu,
+} from './clue/duplicate/index.ts';
+export type {
+  DuplicateDecisionContract,
+  DuplicateDecisionInput,
+  DuplicateGroup,
+  DuplicateSpatialKind,
+  FacePair,
+  FacePairAreas,
+  FacePairBoldSide,
+  FacePairRatios,
+} from './clue/duplicate/index.ts';
+// #214：分派决定与两步分派的领域规则、街道镇边界查询端口（辖区建议）。
+// #215：报请指定管辖的状态门槛、受理人候选链与失败原因封闭表。
+export {
+  CLUE_DESIGNATE_REJECTED_FAILED_REASONS,
+  CLUE_DESIGNATE_REQUESTED_FAILED_REASONS,
+  CLUE_DESIGNATE_RULE_CODES,
   CLUE_DISPATCH_RULE_CODES,
   DECIDE_FROM_STATUS,
+  DESIGNATE_REQUEST_FROM_STATUSES,
   DUP_TERMINAL_STATUSES,
   ORG_ASSIGN_FROM_STATUSES,
   PEOPLE_ASSIGN_FROM_STATUS,
@@ -156,8 +212,11 @@ export {
   createStreetBoundaryPort,
   decideDispatch,
   isOpenHit,
+  reviewerOrgCandidates,
 } from './clue/dispatch/index.ts';
 export type {
+  ClueDesignateRejectedFailedReason,
+  ClueDesignateRequestedFailedReason,
   DecideOutcome,
   StreetBoundaryOutcome,
   StreetBoundaryPart,
@@ -199,3 +258,14 @@ export type {
   ClueWithdrawHit,
   ClueWithdrawWrite,
 } from './persistence/clue-store.ts';
+// #216：移送与停用机构池重新指定的领域规则（规格 D 节、GLOSSARY）。
+export {
+  CLUE_DISPOSITION_RULE_CODES,
+  POOL_REASSIGN_FROM_STATUSES,
+  TRANSFER_FROM_STATUSES,
+  TRANSFERRED_OUT_STATUS,
+  assessTransfer,
+  beijingDateOf,
+  parseLetterDate,
+} from './clue/disposition/index.ts';
+export type { TransferAssessment } from './clue/disposition/index.ts';

@@ -27,6 +27,8 @@ import {
   type OrgUnitLevel,
   type OrgWriteResult,
 } from './orgTree';
+import PoolReassignPanel from './PoolReassignPanel';
+import { POOL_REASSIGN } from './poolReassign';
 
 const REGISTER = 'org.unit.register';
 const RENAME = 'org.unit.rename';
@@ -582,14 +584,25 @@ export function OrgTreeView({
           </ul>
           {onlyRoot ? <div className="banner gray" style={{ marginTop: 12 }}>还没有下级机构。请先建区分局，再在区分局下建所。</div> : null}
         </div>
-        <Detail
-          tree={tree}
-          unit={selected}
-          opcodes={opcodes}
-          onCreate={() => onDialog({ kind: 'create', parent: selected })}
-          onRename={() => onDialog({ kind: 'rename', unit: selected })}
-          onDeactivate={() => onDialog({ kind: 'deactivate', unit: selected })}
-        />
+        <div>
+          <Detail
+            tree={tree}
+            unit={selected}
+            opcodes={opcodes}
+            onCreate={() => onDialog({ kind: 'create', parent: selected })}
+            onRename={() => onDialog({ kind: 'rename', unit: selected })}
+            onDeactivate={() => onDialog({ kind: 'deactivate', unit: selected })}
+          />
+          {selected.deactivatedAt && opcodes.includes(POOL_REASSIGN) ? (
+            <PoolReassignPanel
+              orgUnitId={selected.id}
+              orgName={selected.name}
+              targets={tree.orgUnits
+                .filter((unit) => !unit.deactivatedAt)
+                .map((unit) => ({ id: unit.id, name: unit.name }))}
+            />
+          ) : null}
+        </div>
       </div>
       {dialog?.kind === 'create' ? (
         <CreateDialog parent={dialog.parent} onCancel={() => onDialog(null)} onSubmit={(input) => onCreate(dialog.parent, input)} />

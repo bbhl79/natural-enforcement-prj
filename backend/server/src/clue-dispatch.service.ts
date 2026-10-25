@@ -46,6 +46,7 @@ import {
 import { LOGIN_DIRECTORY, type LoginDirectory } from './login-directory.ts';
 import { UNIT_OF_WORK, type UnitOfWork } from './unit-of-work.ts';
 import { ClueSuggestionService, type AreaSuggestionView } from './clue-suggestion.service.ts';
+import type { DesignationRequestView } from './clue-designation.service.ts';
 
 const DECIDE_OPCODE = 'clue.dispatch.decide';
 const ORG_OPCODE = 'clue.org.assign';
@@ -103,6 +104,16 @@ export interface DispatchView {
   readonly mayReassignOrg: boolean;
   /** 当前操作者能不能派主办／协办（承办机构内勤）。 */
   readonly mayAssignPeople: boolean;
+  /** 当前操作者能不能登记移送（池所属机构内勤／承办机构内勤；#216）。 */
+  readonly mayTransfer: boolean;
+  /** 进行中的指定管辖报请（无即 null；#215）。 */
+  readonly designation: DesignationRequestView | null;
+  /** 当前操作者能不能发起报请指定管辖（本级机构内勤、可报请状态、无待处理报请）。 */
+  readonly mayRequestDesignation: boolean;
+  /** 当前操作者能不能处理报请（受理机构内勤；designate=true 指定或驳回）。 */
+  readonly mayReviewDesignation: boolean;
+  /** 报请期间的指定锁是否拦当前操作者（受理机构子树内、非受理机构本人）。 */
+  readonly designationLocked: boolean;
 }
 
 export type DispatchViewOutcome =
@@ -194,8 +205,10 @@ export class ClueDispatchService {
     }
     const account = await this.directory.findById(actor.personnelId);
     const suggestion = await this.suggestion.buildFor(context);
-    const affordance = await this.affordances(actor, account, context);
-    return { status: 200, body: await this.buildView(context, suggestion, affordance) };
+    const pendingDesignation = await this.clues.readPendingDesignationRequest(clueId);
+    const designation = await this.designationView(pendingDesignation);
+    const affordance = await this.affordances(actor, account, context, designation);
+    return { status: 200, body: await this.buildView(context, suggestion, affordance, designation) };
   }
 
   /** 分派决定（录入人本人；默认不派／已知晓／举报必派）。 */
@@ -332,6 +345,11 @@ export class ClueDispatchService {
     if (guard) {
       return this.rejectOrg(actor, actorCode, actorOrgId, clueId, guard);
     }
+    // 报请期间的指定锁（#215）：受理机构子树内的下级此时不能分派、重新分派或指定。
+    const pendingGuard = await this.designationPendingGuard(actorOrgId, clueId);
+    if (pendingGuard) {
+      return this.rejectOrg(actor, actorCode, actorOrgId, clueId, pendingGuard);
+    }
     if (target.deactivatedAt !== null) {
       return this.rejectOrg(actor, actorCode, actorOrgId, clueId, {
         status: 409,
@@ -463,6 +481,16 @@ export class ClueDispatchService {
           designate: kind === 'designate',
         }),
       });
+      // 受理人以 designate=true 指定承办机构：同时关闭进行中的报请（#215）。
+      if (kind === 'designate') {
+        await tx.clues.closePendingDesignationRequests({
+          clueId,
+          status: 'approved',
+          decidedBy: actor.personnelId,
+          decisionReason: null,
+          decidedAt: new Date(),
+        });
+      }
       return {
         status: 200,
         body: {
@@ -517,6 +545,11 @@ export class ClueDispatchService {
     const guard = this.stateGuard(context.status, input.expectedStatus, [PEOPLE_ASSIGN_FROM_STATUS]);
     if (guard) {
       return this.rejectPeople(actor, actorCode, actorOrgId, clueId, guard);
+    }
+    // 报请期间的指定锁（#215）：承办机构在受理机构子树内时同样拦派主办／协办。
+    const pendingGuard = await this.designationPendingGuard(actorOrgId, clueId);
+    if (pendingGuard) {
+      return this.rejectPeople(actor, actorCode, actorOrgId, clueId, pendingGuard);
     }
     const mainId = input.mainId.trim();
     if (mainId === '') {
@@ -612,16 +645,35 @@ export class ClueDispatchService {
     return null;
   }
 
+  /**
+   * 报请期间的指定锁（#215，规格 D）：有待处理报请时，受理机构子树内（含报请方）、
+   * 非受理机构本人的操作者不能分派、重新分派或指定，返回 409 designation-pending。
+   * 受理人本人与更高上级不受此锁；移送（#216）按同一口径接本判定。
+   */
+  private async designationPendingGuard(actorOrgId: string, clueId: string): Promise<Rejection | null> {
+    const pending = await this.clues.readPendingDesignationRequest(clueId);
+    if (pending === null || pending.reviewerOrgId === null) return null;
+    if (actorOrgId === '' || actorOrgId === pending.reviewerOrgId) return null;
+    const subtree = await this.identity.listOrgUnitSubtreeIds(pending.reviewerOrgId);
+    if (!subtree.includes(actorOrgId)) return null;
+    return { status: 409, result: 'invalid-state', rules: [], reason: 'designation-pending' };
+  }
+
   /** 当前操作者的分派办理权限（界面 affordance；服务端每次都照校验）。 */
   private async affordances(
     actor: ActorRef,
     account: { readonly orgUnitId: string | null; readonly roles: readonly string[] } | null,
     context: ClueDispatchContext,
+    designation: DesignationRequestView | null,
   ): Promise<{
     mayDecide: boolean;
     mayAssignOrg: boolean;
     mayReassignOrg: boolean;
     mayAssignPeople: boolean;
+    mayTransfer: boolean;
+    mayRequestDesignation: boolean;
+    mayReviewDesignation: boolean;
+    designationLocked: boolean;
   }> {
     const roles = account?.roles ?? [];
     const actorOrg = account?.orgUnitId ?? null;
@@ -649,7 +701,75 @@ export class ClueDispatchService {
       roles.includes('内勤') &&
       actorOrg !== null &&
       actorOrg === context.assignment.orgUnitId;
-    return { mayDecide, mayAssignOrg, mayReassignOrg, mayAssignPeople };
+    // 移送（#216）：待分派池取池所属机构内勤，已派机构／已派承办人取承办机构内勤。
+    const transferOrgId = context.assignment?.orgUnitId ?? context.enteredOrgId;
+    const mayTransfer =
+      (context.status === 'in_pool' ||
+        context.status === 'org_assigned' ||
+        context.status === 'handler_assigned') &&
+      roles.includes('内勤') &&
+      actorOrg !== null &&
+      actorOrg === transferOrgId;
+    // 报请指定管辖（#215）：本级机构内勤、可报请状态、无待处理报请时可发起；
+    // 受理机构内勤可处理；受理机构子树内的其他人被报请期间的指定锁拦下。
+    const owningOrg =
+      context.status === 'in_pool'
+        ? context.enteredOrgId
+        : (context.assignment?.orgUnitId ?? context.enteredOrgId);
+    const mayRequestDesignation =
+      designation === null &&
+      roles.includes('内勤') &&
+      actorOrg !== null &&
+      actorOrg === owningOrg &&
+      (ORG_ASSIGN_FROM_STATUSES as readonly string[]).includes(context.status);
+    const mayReviewDesignation =
+      designation !== null &&
+      roles.includes('内勤') &&
+      actorOrg !== null &&
+      actorOrg === designation.reviewerOrgId;
+    const designationLocked = await this.designationLockedFor(actorOrg, designation);
+    return {
+      mayDecide,
+      mayAssignOrg,
+      mayReassignOrg,
+      mayAssignPeople,
+      mayTransfer,
+      mayRequestDesignation,
+      mayReviewDesignation,
+      designationLocked,
+    };
+  }
+
+  /** 报请期间的指定锁：受理机构子树内（含报请方）、非受理机构本人的操作者被拦。 */
+  private async designationLockedFor(
+    actorOrg: string | null,
+    designation: DesignationRequestView | null,
+  ): Promise<boolean> {
+    if (designation === null || actorOrg === null || actorOrg === '') return false;
+    if (actorOrg === designation.reviewerOrgId) return false;
+    const subtree = await this.identity.listOrgUnitSubtreeIds(designation.reviewerOrgId);
+    return subtree.includes(actorOrg);
+  }
+
+  /** 组装进行中的报请视图（无即 null）。 */
+  private async designationView(
+    row: Awaited<ReturnType<ClueStore['readPendingDesignationRequest']>>,
+  ): Promise<DesignationRequestView | null> {
+    if (row === null || row.reviewerOrgId === null) return null;
+    const requesting = await this.identity.findOrgUnitById(row.requestingOrgId);
+    const proposed = row.proposedOrgId === null ? null : await this.identity.findOrgUnitById(row.proposedOrgId);
+    const reviewer = await this.identity.findOrgUnitById(row.reviewerOrgId);
+    return {
+      requestId: row.id,
+      requestingOrgId: row.requestingOrgId,
+      requestingOrgName: requesting?.name ?? '',
+      proposedOrgId: row.proposedOrgId,
+      proposedOrgName: proposed?.name ?? null,
+      reviewerOrgId: row.reviewerOrgId,
+      reviewerOrgName: reviewer?.name ?? '',
+      reason: row.reason,
+      createdAt: row.createdAt.toISOString(),
+    };
   }
 
   /** 组装分派视图。 */
@@ -661,7 +781,12 @@ export class ClueDispatchService {
       mayAssignOrg: boolean;
       mayReassignOrg: boolean;
       mayAssignPeople: boolean;
+      mayTransfer: boolean;
+      mayRequestDesignation: boolean;
+      mayReviewDesignation: boolean;
+      designationLocked: boolean;
     },
+    designation: DesignationRequestView | null,
   ): Promise<DispatchView> {
     const groups = new Map<string, DispatchHitGroup & { pairs: DispatchHitPair[] }>();
     for (const hit of context.hits) {
@@ -732,6 +857,11 @@ export class ClueDispatchService {
       mayAssignOrg: affordance.mayAssignOrg,
       mayReassignOrg: affordance.mayReassignOrg,
       mayAssignPeople: affordance.mayAssignPeople,
+      mayTransfer: affordance.mayTransfer,
+      designation,
+      mayRequestDesignation: affordance.mayRequestDesignation,
+      mayReviewDesignation: affordance.mayReviewDesignation,
+      designationLocked: affordance.designationLocked,
     };
   }
 

@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import type { ActorRef } from '@natural-enforcement/identity';
 
+import { ClueDispositionService } from './clue-disposition.service.ts';
 import { OrgUnitsService } from './org-units.service.ts';
 import { SameOriginReadGuard } from './same-origin-read.guard.ts';
 import { sourceAddress } from './session-cookie.ts';
@@ -30,7 +31,10 @@ const text = (value: unknown): string => (typeof value === 'string' ? value : ''
  */
 @Controller('api')
 export class OrgUnitsController {
-  constructor(private readonly orgUnits: OrgUnitsService) {}
+  constructor(
+    private readonly orgUnits: OrgUnitsService,
+    private readonly disposition: ClueDispositionService,
+  ) {}
 
   @Get('org-units')
   @UseGuards(SameOriginReadGuard)
@@ -70,6 +74,14 @@ export class OrgUnitsController {
   @Post('admin/org-units/:id/deactivate')
   async deactivate(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {
     const outcome = await this.orgUnits.deactivate(req.actor as ActorRef, id, sourceAddress(req));
+    res.status(outcome.status).json(outcome.body);
+  }
+
+  /** 已停用机构待分派池的未派出线索清单（#216；只授系统管理，供重新指定接收机构）。 */
+  @Get('admin/org-units/:id/pool-clues')
+  @UseGuards(SameOriginReadGuard)
+  async poolClues(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {
+    const outcome = await this.disposition.listPoolClues(req.actor as ActorRef, id);
     res.status(outcome.status).json(outcome.body);
   }
 }

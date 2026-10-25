@@ -79,6 +79,44 @@ export interface DispatchView {
   readonly mayAssignOrg: boolean;
   readonly mayReassignOrg: boolean;
   readonly mayAssignPeople: boolean;
+  /** 能不能登记移送（池所属机构内勤／承办机构内勤；#216）。 */
+  readonly mayTransfer: boolean;
+  /** 进行中的指定管辖报请（#215；无即 null）。 */
+  readonly designation: DesignationRequestView | null;
+  /** 当前操作者可发起报请指定管辖。 */
+  readonly mayRequestDesignation: boolean;
+  /** 当前操作者是受理人，可处理报请（designate=true 指定或驳回）。 */
+  readonly mayReviewDesignation: boolean;
+  /** 报请期间的指定锁拦当前操作者（受理链条的下级）。 */
+  readonly designationLocked: boolean;
+}
+
+/** 进行中的指定管辖报请（#215）。 */
+export interface DesignationRequestView {
+  readonly requestId: string;
+  readonly requestingOrgId: string;
+  readonly requestingOrgName: string;
+  readonly proposedOrgId: string | null;
+  readonly proposedOrgName: string | null;
+  readonly reviewerOrgId: string;
+  readonly reviewerOrgName: string;
+  readonly reason: string;
+  readonly createdAt: string;
+}
+
+/** 受理人待办里的一条报请事项（#215）。 */
+export interface DesignationTodoItem {
+  readonly requestId: string;
+  readonly clueId: string;
+  readonly clueCode: string;
+  readonly requestingOrgId: string;
+  readonly requestingOrgName: string;
+  readonly proposedOrgId: string | null;
+  readonly proposedOrgName: string | null;
+  readonly reviewerOrgId: string;
+  readonly reviewerOrgName: string;
+  readonly reason: string;
+  readonly createdAt: string;
 }
 
 /** 写动作的判别结果。成功后由调用方重新取分派视图。 */
@@ -146,6 +184,72 @@ export async function submitAssignPeople(
   return readResult(response);
 }
 
+/** 移送登记的提交内容（附件为页面取的本地文件，选填 0..n）。 */
+export interface TransferInput {
+  readonly transferOrg: string;
+  readonly documentNo: string;
+  /** 发函日期（YYYY-MM-DD；空＝服务端缺省北京当日）。 */
+  readonly letterDate: string;
+  readonly reason: string;
+  readonly attachments: readonly File[];
+}
+
+/** 移送（自然资源部门以外的机关；登记后进已移送终态）。 */
+export async function submitTransfer(
+  dispatch: ApiDispatch,
+  clueId: string,
+  input: TransferInput & { readonly expectedStatus: string },
+): Promise<DispatchActionResult> {
+  const form = new FormData();
+  form.set('transferOrg', input.transferOrg);
+  form.set('documentNo', input.documentNo);
+  form.set('letterDate', input.letterDate);
+  form.set('reason', input.reason);
+  form.set('expectedStatus', input.expectedStatus);
+  for (const file of input.attachments) form.append('attachment', file);
+  const response = await apiFetch(dispatch, `/api/clues/${clueId}/transfer`, {
+    method: 'POST',
+    body: form,
+  });
+  return readResult(response);
+}
+
+/** 报请指定管辖（本级机构内勤；理由必填、可选拟归属机构）。 */
+export async function submitDesignateRequest(
+  dispatch: ApiDispatch,
+  clueId: string,
+  input: { readonly reason: string; readonly proposedOrgId: string | null },
+): Promise<DispatchActionResult> {
+  const response = await apiFetch(dispatch, `/api/clues/${clueId}/designate-request`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return readResult(response);
+}
+
+/** 驳回报请（受理人；理由必填）。 */
+export async function submitDesignateReject(
+  dispatch: ApiDispatch,
+  clueId: string,
+  input: { readonly reason: string },
+): Promise<DispatchActionResult> {
+  const response = await apiFetch(dispatch, `/api/clues/${clueId}/designate-reject`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return readResult(response);
+}
+
+/** 受理人待办：待处理的指定管辖报请。 */
+export async function loadDesignationTodos(dispatch: ApiDispatch): Promise<DesignationTodoItem[]> {
+  const response = await apiFetch(dispatch, '/api/clues/designation-requests');
+  if (!response.ok) throw new Error(`指定管辖待办取数失败（${response.status}）`);
+  const body = (await response.json()) as { readonly items?: readonly DesignationTodoItem[] };
+  return [...(body.items ?? [])];
+}
+
 /** 达标阈值（与服务端 DUPLICATE_OVERLAP_THRESHOLD 同值：界面口径，改配归管理台二期）。 */
 export const OVERLAP_THRESHOLD = 0.6;
 
@@ -177,6 +281,8 @@ export function dispatchStatusLabel(status: string): string {
       return '已派承办人';
     case 'held':
       return '不派';
+    case 'transferred_out':
+      return '已移送';
     default:
       return status;
   }
