@@ -6,7 +6,8 @@
 #
 # 纪律：
 #   - 镜像引用唯一依据 infra/VERSIONS.md，tag + digest 钉死，严禁 latest、严禁换非定案镜像。
-#   - 拉取只发生在 dev build 语义内（US13）。本脚本不隐式拉取：镜像不在场即报错并指路 dev build。
+#   - 拉取不在本脚本内隐式发生：镜像不在场即报出钉定引用的 docker pull 命令，由执行者拉一次，
+#     之后本机长期复用（该镜像不进 dev build 拉取清单，避免每次 CI 都拉 3.4GB）。
 #   - 不传 --no-sandbox、不加 --cap-add、不共享宿主 IPC：该镜像的 Chromium 自带沙箱在本机可直接跑。
 #   - 出图在容器内完成，产物写回宿主目录（只挂一个输出目录，不挂仓库）。
 set -euo pipefail
@@ -46,7 +47,9 @@ fi
 
 if ! docker image inspect "$BROWSER_IMAGE" >/dev/null 2>&1; then
   echo "[FAIL] 浏览器镜像不在场：$BROWSER_IMAGE" >&2
-  echo "  拉取只发生在 dev build 语义内，请先运行：dev build" >&2
+  echo "  该镜像不进 dev build 的拉取清单（每次 CI 都拉 3.4GB 不划算）。" >&2
+  echo "  按 infra/VERSIONS.md 的钉定引用手动拉一次即可，本地长期复用：" >&2
+  echo "    docker pull $BROWSER_IMAGE" >&2
   exit 1
 fi
 

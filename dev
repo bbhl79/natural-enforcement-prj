@@ -54,10 +54,6 @@ NGINX_IMAGE='nginx:1.29.8@sha256:1881968aff6f7cdcc4b888c00a11f4ce241ad7ec957e0cb
 FRONTEND_IMAGE='natural-enforcement/frontend:dev'
 # HTTP 进程本地镜像（ADR 0004：dev build 构建；容器内 3000，不映射宿主）
 SERVER_IMAGE='natural-enforcement/server:dev'
-# 浏览器镜像（截图与浏览器型 e2e）：唯一依据 infra/VERSIONS.md「浏览器」行。
-# 按 VERSIONS.md 执行纪律 4 走官方 mcr.microsoft.com/playwright 镜像；tag + digest 钉死。
-# 拉取只发生在 build 语义内（US13）；tools/screenshot.sh 复用同一引用，不另造镜像。
-BROWSER_IMAGE='mcr.microsoft.com/playwright:v1.64.1-jammy-amd64@sha256:5eb4ef2b80d9c5af9dccb9155b29be324461c8bbaed41b989db5e86545e7fd38'
 # localhost 证书在仓库外（#94 / #80 开发侧）。dev up 生成，nginx 只读挂载，不入库。
 DEV_CERT_DIR="${HOME}/.local/share/natural-enforcement/dev-certs"
 export NE_DEV_CERT_DIR="$DEV_CERT_DIR"
@@ -639,7 +635,6 @@ build_backend() {
 ensure_images() {
   require_compose_file
   require_image_registered "$LINT_IMAGE"
-  require_image_registered "$BROWSER_IMAGE"
   local compose_images
   compose_images="$("${COMPOSE[@]}" config --images)" || {
     echo "[FAIL] build：解析 compose 镜像清单失败。" >&2
@@ -649,8 +644,6 @@ ensure_images() {
   local img role seen=" " i
   # 工具链镜像先行：LINT_IMAGE 不在 compose 清单里（上方注释已记）
   imgs+=("$LINT_IMAGE"); roles+=("工具链镜像")
-  # 浏览器镜像同 LINT_IMAGE：不在 compose 清单里，供截图与浏览器型 e2e 用
-  imgs+=("$BROWSER_IMAGE"); roles+=("浏览器镜像")
   while IFS= read -r img; do
     [ -z "$img" ] && continue
     [ "$img" = "$FRONTEND_IMAGE" ] && continue   # 本地构建镜像，不拉
