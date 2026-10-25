@@ -668,3 +668,36 @@ describe('可见文字不出现操作码与原因码（SCREENS.md:8；P8 动作�
     }
   });
 });
+
+// #211 规格 G：detail 是结构化快照，只写不回。库里写进去了，查阅与导出都不得交出这一列。
+describe('结构化快照 detail 只写不回（#211 规格 G）', () => {
+  it('线索动作带了 detail 写进库，查阅响应与导出文件都不出现这一列', async () => {
+    const marker = 'CLUE-DETAIL-MARKER-211';
+    const trailId = '01ZZZZZZZZZZZZZZZZZZZZZZZC';
+    await cloned.prisma.$executeRaw`
+      INSERT INTO audit_trail (id, action, outcome, actor_id, actor_code, org_unit_id, resource_type, resource_id, detail)
+      VALUES (${trailId}, 'clue.registered', 'succeeded', ${ids.clerkA}, 'P-126-CLERK-A', ${deptAId},
+              'clue', 'clue-211-detail', ${marker})`;
+    // 写的那一侧确实落库了。按表名裸读，不碰留痕委托（audit-facility-entry 只许包内引用）。
+    const stored = await cloned.prisma.$queryRaw<{ detail: string | null }[]>`
+      SELECT detail FROM audit_trail WHERE id = ${trailId}`;
+    expect(stored[0]?.detail).toBe(marker);
+
+    // 回的那一侧不得出现这一列：响应正文里没有快照文字，也没有 detail 这个字段名。
+    const response = await post('/api/admin/audit/query', await login(PHONES.superA), range());
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    expect(text).not.toContain(marker);
+    expect(text).not.toContain('"detail"');
+    const body = JSON.parse(text) as ListBody;
+    const row = (body.rows ?? []).find((item) => item.id === trailId);
+    expect(row).toBeDefined();
+    expect(Object.keys(row!)).not.toContain('detail');
+
+    // 导出文件同样不得出现这一列。
+    const { file } = await exportFile(PHONES.superA);
+    const sheet = readXlsxSheet(file);
+    expect(sheet.xml).not.toContain(marker);
+    expect(sheet.rows.flat().filter((cell) => cell.includes(marker))).toEqual([]);
+  });
+});
