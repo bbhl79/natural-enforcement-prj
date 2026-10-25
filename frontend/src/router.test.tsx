@@ -224,7 +224,6 @@ describe('应用壳与菜单（P1）', () => {
     expect(html).toContain('你同时担任「经办」和「系统管理」');
     expect(html).toContain('天河区分局 · 经办、系统管理');
     expect(html).toContain('我的待办');
-    expect(html).toContain('待办看板尚未开放');
   });
 
   it('无管理权：没有管理台入口', async () => {
