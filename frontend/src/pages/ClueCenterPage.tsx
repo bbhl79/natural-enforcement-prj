@@ -1,14 +1,54 @@
 // 线索中心（一级入口）。视图、关键词、筛选、日期与分页都从地址取（见 shell/clueUrl.ts），
 // 本页只提供入口与筛选条件的回显；线索清单的取数与列表由后续业务范围接入。
-import { Link, useSearchParams } from 'react-router';
+// 抽屉按四页签装配（基本信息与要件／内业核查／疑似重复比对／流转与留痕），
+// 本期落地的是「内业核查」页签（#213）。
+import { Suspense, useState } from 'react';
+import { Await, Link, useLoaderData, useRevalidator, useSearchParams } from 'react-router';
 
+import { useAppDispatch } from '../hooks';
+import { ClueVerificationTab } from '../clue/ClueVerificationTab';
+import { retryVerification, type VerificationView } from '../clue/verification';
 import { clueViewLabel, readClueUrlState, CLUE_VIEW_KEY } from '../shell/clueUrl';
+
+/** 抽屉四页签（规格 H 节）。 */
+const TABS = [
+  { id: 'basic', label: '基本信息与要件' },
+  { id: 'verification', label: '内业核查' },
+  { id: 'duplicate', label: '疑似重复比对' },
+  { id: 'trail', label: '流转与留痕' },
+] as const;
 
 export default function ClueCenterPage() {
   const [params] = useSearchParams();
   const state = readClueUrlState(params.toString());
   const view = state.view || 'all';
   const filters = Object.entries(state.filters).filter(([, value]) => value);
+  const { verification } = useLoaderData() as {
+    verification: Promise<VerificationView> | null;
+  };
+  const dispatch = useAppDispatch();
+  const revalidator = useRevalidator();
+  const [busy, setBusy] = useState(false);
+  const [retryFailure, setRetryFailure] = useState<string | null>(null);
+  const clueId = state.clue;
+  const tab = state.tab === '' ? 'basic' : state.tab;
+
+  const onRetry = () => {
+    setBusy(true);
+    setRetryFailure(null);
+    retryVerification(dispatch, clueId)
+      .then((result) => {
+        if (!result.ok) {
+          setRetryFailure(
+            result.status === 403 ? '没有重跑权限。' : `重跑未受理（${result.status}）。`,
+          );
+          return;
+        }
+        revalidator.revalidate();
+      })
+      .finally(() => setBusy(false));
+  };
+
   return (
     <>
       <div className="crumb"><b>线索中心</b></div>
@@ -42,6 +82,48 @@ export default function ClueCenterPage() {
           <div>线索的查询与详情办理在后续范围接入。登记已开放：点上面的「登记线索」按来源与法域逐层填。</div>
         </div>
       </div>
+
+      {clueId === '' ? null : (
+        <div className="card">
+          <div className="card-h">
+            线索详情
+            <span className="hint">线索编号与页签都在地址里</span>
+          </div>
+          <div className="filters">
+            {TABS.map((item) => (
+              <Link
+                key={item.id}
+                className={item.id === tab ? 'btn btn-sm btn-primary' : 'btn btn-sm'}
+                to={`/clue?${CLUE_VIEW_KEY}=${view}&clue=${clueId}&tab=${item.id}`}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </div>
+          {tab !== 'verification' ? (
+            <div className="empty">
+              <div className="t">{TABS.find((item) => item.id === tab)?.label ?? '基本信息与要件'}</div>
+              <div>本页签的内容在后续范围接入。</div>
+            </div>
+          ) : verification === null ? (
+            <div className="empty">
+              <div className="t">没有可看的核查</div>
+              <div>地址里没有线索编号。</div>
+            </div>
+          ) : (
+            <Suspense fallback={<div className="card" aria-busy="true">载入中…</div>}>
+              <Await resolve={verification} errorElement={<div className="err">核查结果读取失败。</div>}>
+                {(resolved: VerificationView) => (
+                  <>
+                    <ClueVerificationTab view={resolved} onRetry={onRetry} busy={busy} />
+                    {retryFailure !== null ? <div className="err">{retryFailure}</div> : null}
+                  </>
+                )}
+              </Await>
+            </Suspense>
+          )}
+        </div>
+      )}
     </>
   );
 }
