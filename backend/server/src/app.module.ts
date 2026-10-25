@@ -13,6 +13,8 @@ import { AdminService } from './admin.service.ts';
 import { AuditBrowseService } from './audit-browse.service.ts';
 import { AuditController } from './audit.controller.ts';
 import { ClueClosureController } from './clue-closure.controller.ts';
+import { ClueCenterController } from './clue-center.controller.ts';
+import { ClueCenterService } from './clue-center.service.ts';
 import { ClueDesignationController } from './clue-designation.controller.ts';
 import { ClueDesignationService } from './clue-designation.service.ts';
 import { ClueDispatchController } from './clue-dispatch.controller.ts';
@@ -47,6 +49,8 @@ import { PersonnelController } from './personnel.controller.ts';
 import { PersonnelProfilesService } from './personnel-profiles.service.ts';
 import { SessionGuard } from './session.guard.ts';
 import { SourceGate } from './source-gate.ts';
+import { WorkbenchController } from './workbench.controller.ts';
+import { WorkbenchService } from './workbench.service.ts';
 
 /** 启动包装入六个业务模块。它本身不是第七个业务模块。 */
 @Module({
@@ -75,8 +79,10 @@ import { SourceGate } from './source-gate.ts';
     ClueDispatchController,
     ClueWithdrawController,
     ClueClosureController,
+    ClueCenterController,
     ClueDispositionController,
     ClueDesignationController,
+    WorkbenchController,
   ],
   providers: [
     AuthService,
@@ -98,6 +104,8 @@ import { SourceGate } from './source-gate.ts';
     ClueVerificationWorker,
     ClueGeometryService,
     ClueDuplicateService,
+    ClueCenterService,
+    WorkbenchService,
     SourceGate,
     { provide: APP_GUARD, useClass: SessionGuard },
   ],
