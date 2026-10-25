@@ -17,6 +17,19 @@ export const DUPLICATE_OVERLAP_THRESHOLD = 0.6;
  */
 export const NOT_COMPARABLE_CLUE_STATUSES = ['closed', 'transferred_out'] as const;
 
+/**
+ * 可被打上疑似重复标记的对方线索状态（规格 B 对方状态条）。
+ * 撞上对方只打标记，不改对方状态；结案与已移送的线索不参与比对，不在此表。
+ */
+export const MARKABLE_PEER_STATUSES = [
+  'in_pool',
+  'pending_decision',
+  'org_assigned',
+  'handler_assigned',
+  'held',
+  'filed',
+] as const;
+
 /** 一亩等于的平方米数（界面按亩换算交集面积）。 */
 export const SQUARE_METERS_PER_MU = 2000 / 3;
 
@@ -35,9 +48,35 @@ export const RULE_ACK_REQUIRED = 'ack-required';
 /** 几何形态：面状线索做空间重合判定，点状不做。 */
 export type DuplicateSpatialKind = 'face' | 'point';
 
+/** 线索主状态的中文说明（对方线索状态展示用）。 */
+export const CLUE_STATUS_LABELS: Readonly<Record<string, string>> = {
+  pending_decision: '待分派决定',
+  in_pool: '待分派',
+  org_assigned: '已派机构',
+  handler_assigned: '已派承办人',
+  held: '暂缓',
+  transferred_out: '已移送',
+  closed: '已结案',
+  filed: '已立案',
+};
+
 /** 一个线索的状态是否参与比对（规格 B）。 */
 export function isComparableClueStatus(status: string): boolean {
   return !(NOT_COMPARABLE_CLUE_STATUSES as readonly string[]).includes(status);
+}
+
+/** 该状态的对方线索能否被打上疑似重复标记。 */
+export function isMarkablePeerStatus(status: string): boolean {
+  return (MARKABLE_PEER_STATUSES as readonly string[]).includes(status);
+}
+
+/**
+ * 对方线索被新线索撞上后的主状态（规格 B 对方状态条）。
+ * 只打疑似重复标记，不改对方状态：这里返回原值。
+ * 对方在待分派决定时不因命中消失自动解除——解除属撤回不派（另票），本票不改状态。
+ */
+export function peerStatusAfterHit(status: string): string {
+  return status;
 }
 
 /** 该几何形态是否做空间重合判定（规格 B：点状直接「不做空间重合判定」）。 */

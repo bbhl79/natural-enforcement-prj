@@ -2,8 +2,10 @@
 
 export {
   ANONYMOUS_REPORTER_DISPLAY,
+  CLUE_STATUS_LABELS,
   COMPLAINT_SOURCE_GROUP_CODE,
   DUPLICATE_OVERLAP_THRESHOLD,
+  MARKABLE_PEER_STATUSES,
   NOT_COMPARABLE_CLUE_STATUSES,
   POINT_NO_OVERLAP_NOTICE,
   RULE_ACK_REQUIRED,
@@ -20,16 +22,20 @@ export {
   groupFacesByOtherClue,
   isComparableClueStatus,
   isFacePairHit,
+  isMarkablePeerStatus,
   limitedLocation,
   maskReporterContact,
   maskReporterName,
+  peerStatusAfterHit,
   squareMetersToMu,
 } from './rules.ts';
 export type {
   DuplicateDecisionContract,
   DuplicateDecisionInput,
   DuplicateGroup,
+  DuplicateSpatialKind,
   FacePair,
+  FacePairAreas,
   FacePairBoldSide,
   FacePairRatios,
 } from './rules.ts';
