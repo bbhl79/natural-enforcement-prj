@@ -160,6 +160,25 @@ export interface ClueRegistrationResult {
   readonly hits: readonly ClueHitSummary[];
 }
 
+/** 补齐缺件的写入内容。 */
+export interface ClueGapFillWrite {
+  readonly clueId: string;
+  /** 补上的取值。 */
+  readonly values: readonly { readonly id: string; readonly key: string; readonly value: string }[];
+  /** 被补齐的缺件行 id。 */
+  readonly gapIds: readonly string[];
+  /** 补齐时间。 */
+  readonly filledAt: Date;
+}
+
+/** 补齐结果。 */
+export interface ClueGapFillOutcome {
+  /** 已补齐的要件键。 */
+  readonly filledKeys: readonly string[];
+  /** 仍未补齐的缺件。 */
+  readonly remaining: readonly { readonly key: string; readonly label: string }[];
+}
+
 /** 线索存储端口。 */
 export interface ClueStore {
   /** 按幂等键查线索。 */
@@ -173,4 +192,10 @@ export interface ClueStore {
   insertRegistration(write: ClueRegistrationWrite): Promise<ClueRegistrationOutcome>;
   /** 写命中集：正反两个方向各一行，对方线索也打上疑似重复标记（不改对方状态）。 */
   insertHits(clueId: string, hits: readonly ClueHitWrite[]): Promise<void>;
+  /** 读线索的登记机构（对象级校验的目标机构）。 */
+  readClueOrgUnitId(clueId: string): Promise<string | null>;
+  /** 读一条线索的未补齐缺件。 */
+  listOpenGaps(clueId: string): Promise<ClueItemGapRow[]>;
+  /** 补齐：写取值并把对应缺件标为已补齐（缺件行保留为事实，清单随之外）。 */
+  fillGaps(write: ClueGapFillWrite): Promise<ClueGapFillOutcome>;
 }

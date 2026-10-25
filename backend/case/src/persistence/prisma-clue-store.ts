@@ -14,6 +14,9 @@ import { Prisma, type PrismaClient } from '../../../prisma/generated/prisma/clie
 
 import { ClueIdempotencyConflictError } from './clue-store.ts';
 import type {
+  ClueGapFillOutcome,
+  ClueGapFillWrite,
+  ClueItemGapRow,
   ClueHitSummary,
   ClueHitWrite,
   ClueIdempotencyRow,
@@ -249,6 +252,62 @@ export class PrismaClueStore implements ClueStore {
         ON CONFLICT (clue_id, spatial_part_id, other_clue_id, other_part_id) DO NOTHING
       `;
     }
+  }
+
+  async readClueOrgUnitId(clueId: string): Promise<string | null> {
+    const row = await this.prisma.clue.findUnique({
+      where: { id: clueId },
+      select: { enteredOrgId: true },
+    });
+    return row?.enteredOrgId ?? null;
+  }
+
+  async listOpenGaps(clueId: string): Promise<ClueItemGapRow[]> {
+    const rows = await this.prisma.clueItemGap.findMany({
+      where: { clueId, filledAt: null },
+      orderBy: { key: 'asc' },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      key: row.key,
+      layer: row.layer,
+      label: row.label,
+      required: row.required,
+      timing: row.timing,
+      consequence: row.consequence,
+    }));
+  }
+
+  /**
+   * 补齐缺件：写要件取值并把对应缺件标为已补齐。
+   * 缺件行保留为事实（补齐时间写在行上），未补齐的清单随之外。
+   */
+  async fillGaps(write: ClueGapFillWrite): Promise<ClueGapFillOutcome> {
+    for (const value of write.values) {
+      await this.prisma.clueItemValue.upsert({
+        where: { clueId_key: { clueId: write.clueId, key: value.key } },
+        create: { id: value.id, clueId: write.clueId, key: value.key, value: value.value },
+        update: { value: value.value },
+      });
+    }
+    if (write.gapIds.length > 0) {
+      await this.prisma.clueItemGap.updateMany({
+        where: { id: { in: [...write.gapIds] }, clueId: write.clueId, filledAt: null },
+        data: { filledAt: write.filledAt },
+      });
+    }
+    const remaining = await this.prisma.clueItemGap.findMany({
+      where: { clueId: write.clueId, filledAt: null },
+      orderBy: { key: 'asc' },
+    });
+    const filled = await this.prisma.clueItemGap.findMany({
+      where: { id: { in: [...write.gapIds] }, clueId: write.clueId },
+      orderBy: { key: 'asc' },
+    });
+    return {
+      filledKeys: filled.map((row) => row.key),
+      remaining: remaining.map((row) => ({ key: row.key, label: row.label })),
+    };
   }
 
   /** 业务编号：取库内 sequence 的下一个值（迁移创建，不算 model）。 */

@@ -156,6 +156,20 @@ async function trailOf(action: string, resourceId?: string): Promise<TrailRow[]>
   `;
 }
 
+/** 补齐缺件。 */
+async function fillGaps(
+  clueId: string,
+  values: Record<string, string>,
+  code = 'P-CLERK-A',
+): Promise<{ status: number; body: any }> {
+  const response = await fetch(`${baseUrl}/api/clues/${clueId}/gaps/fill`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie: await cookieOf(code) },
+    body: JSON.stringify({ values }),
+  });
+  return { status: response.status, body: await response.json() };
+}
+
 const BASE_VALUES = {
   'clue.received_at': '2026-10-25',
   'clue.narrative': '巡查发现一处硬化地面',
@@ -335,5 +349,93 @@ describe('#211 线索登记', () => {
     expect(response.status).toBe(400);
     const body = await response.json();
     expect(body.rules).toContain('idempotency-key-required');
+  });
+});
+
+describe('#211 缺件补齐', () => {
+  it('补齐单项：200，缺件清单随之外，留痕 clue.items-supplemented', async () => {
+    const registered = await register({
+      types: 'land_approve_without_authority',
+      values: BASE_VALUES,
+      polygon: geojsonPolygon(square(20)),
+      confirm: true,
+    });
+    expect(registered.status).toBe(200);
+    const gaps = registered.body.gaps as { key: string; label: string }[];
+    expect(gaps.length).toBeGreaterThan(1);
+    const first = gaps[0];
+
+    const filled = await fillGaps(registered.body.id, { [first.key]: '某机关' });
+    expect(filled.status).toBe(200);
+    expect(filled.body.result).toBe('supplemented');
+    expect(filled.body.filled.map((item: { key: string }) => item.key)).toEqual([first.key]);
+    expect(filled.body.gaps.map((item: { key: string }) => item.key)).not.toContain(first.key);
+
+    const rows = await cloned.prisma.clueItemGap.findMany({ where: { clueId: registered.body.id } });
+    const row = rows.find((item) => item.key === first.key);
+    expect(row?.filledAt).not.toBeNull();
+    const values = await cloned.prisma.clueItemValue.findMany({
+      where: { clueId: registered.body.id, key: first.key },
+    });
+    expect(values[0]?.value).toBe('某机关');
+
+    const trail = await trailOf('clue.items-supplemented', registered.body.id);
+    expect(trail).toHaveLength(1);
+    expect(trail[0]?.outcome).toBe('succeeded');
+    expect(trail[0]?.detail).toContain(first.key);
+  });
+
+  it('一键补齐：多项同一次提交，补齐后清单为空', async () => {
+    const registered = await register({
+      types: 'land_approve_without_authority',
+      values: BASE_VALUES,
+      polygon: geojsonPolygon(square(21)),
+      confirm: true,
+    });
+    const gaps = registered.body.gaps as { key: string }[];
+    const submitted = Object.fromEntries(gaps.map((gap) => [gap.key, '补齐内容']));
+    const filled = await fillGaps(registered.body.id, submitted);
+    expect(filled.status).toBe(200);
+    expect(filled.body.gaps).toEqual([]);
+    const open = await cloned.prisma.clueItemGap.count({
+      where: { clueId: registered.body.id, filledAt: null },
+    });
+    expect(open).toBe(0);
+  });
+
+  it('同一次提交任一项不合格：全部不保存', async () => {
+    const registered = await register({
+      types: 'land_approve_without_authority',
+      values: BASE_VALUES,
+      polygon: geojsonPolygon(square(22)),
+      confirm: true,
+    });
+    const gaps = registered.body.gaps as { key: string }[];
+    const result = await fillGaps(registered.body.id, {
+      [gaps[0].key]: '这一项合格',
+      'type.land_approve_without_authority.not_a_gap': '这一项不是缺件',
+    });
+    expect(result.status).toBe(400);
+    expect(result.body.result).toBe('non-compliant');
+    const open = await cloned.prisma.clueItemGap.count({
+      where: { clueId: registered.body.id, filledAt: null },
+    });
+    expect(open).toBe(gaps.length);
+    const values = await cloned.prisma.clueItemValue.findMany({
+      where: { clueId: registered.body.id, key: gaps[0].key },
+    });
+    expect(values).toHaveLength(0);
+  });
+
+  it('监督只读：补齐被拒 403', async () => {
+    const registered = await register({
+      types: 'land_approve_without_authority',
+      values: BASE_VALUES,
+      polygon: geojsonPolygon(square(23)),
+      confirm: true,
+    });
+    const gaps = registered.body.gaps as { key: string }[];
+    const result = await fillGaps(registered.body.id, { [gaps[0].key]: '监督不能补' }, 'P-SUPER-B');
+    expect(result.status).toBe(403);
   });
 });
