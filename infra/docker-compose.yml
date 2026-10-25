@@ -80,8 +80,23 @@ services:
     pull_policy: never
     environment:
       DATABASE_URL: "${DATABASE_URL:?缺少 DATABASE_URL，见 infra/runtime.env}"
+      # 队列（#213）：核查 worker 与核查任务投递走同一个 Redis。
+      REDIS_URL: "${REDIS_URL:?缺少 REDIS_URL，见 infra/runtime.env}"
+      # 七类核查图层与街道镇边界的空间服务地址（#213，ADR 0021）。
+      # 运行参数，由部署环境注入；未配置即为空，该层在核查时判「查不成」。
+      # 这是本文件里唯一允许空回落的一组：地址尚未就绪，缺它不能让编排起不来。
+      NE_LAYER_URL_PERMANENT_FARMLAND: "${NE_LAYER_URL_PERMANENT_FARMLAND:-}"
+      NE_LAYER_URL_ECOLOGICAL_REDLINE: "${NE_LAYER_URL_ECOLOGICAL_REDLINE:-}"
+      NE_LAYER_URL_URBAN_DEVELOPMENT_BOUNDARY: "${NE_LAYER_URL_URBAN_DEVELOPMENT_BOUNDARY:-}"
+      NE_LAYER_URL_CULTIVATED_LAND: "${NE_LAYER_URL_CULTIVATED_LAND:-}"
+      NE_LAYER_URL_LAND_CONVERSION_APPROVAL: "${NE_LAYER_URL_LAND_CONVERSION_APPROVAL:-}"
+      NE_LAYER_URL_CONSTRUCTION_LAND_PERMIT: "${NE_LAYER_URL_CONSTRUCTION_LAND_PERMIT:-}"
+      NE_LAYER_URL_LAND_SUPPLY_REDLINE: "${NE_LAYER_URL_LAND_SUPPLY_REDLINE:-}"
+      NE_LAYER_URL_STREET_BOUNDARY: "${NE_LAYER_URL_STREET_BOUNDARY:-}"
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
