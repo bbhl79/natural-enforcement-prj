@@ -342,6 +342,36 @@ export interface ClueOrgAssignWrite {
   readonly assignedAt: Date;
 }
 
+/** 撤回不派编排上下文里的一条命中（权限校验要对方线索的承办机构）。 */
+export interface ClueWithdrawHit {
+  readonly otherClueId: string;
+  readonly otherClueCode: string;
+  readonly otherStatus: string;
+  /** 对方线索当前承办机构（无有效分派即 null；其内勤是撤回不派的有权人之一）。 */
+  readonly otherHandlerOrgId: string | null;
+}
+
+/** 撤回不派编排上下文：权限与状态校验要用的全部事实。 */
+export interface ClueWithdrawContext {
+  readonly clueId: string;
+  readonly code: string;
+  readonly status: string;
+  readonly registeredBy: string;
+  readonly enteredOrgId: string;
+  readonly hits: readonly ClueWithdrawHit[];
+}
+
+/** 撤回不派的写入。 */
+export interface ClueWithdrawWrite {
+  readonly clueId: string;
+  readonly expectedStatus: string;
+  readonly withdrawalId: string;
+  readonly reasonCodes: readonly string[];
+  readonly note: string;
+  readonly withdrawnBy: string;
+  readonly withdrawnAt: Date;
+}
+
 /** 派主办／协办的写入。 */
 export interface CluePeopleAssignWrite {
   readonly clueId: string;
@@ -410,4 +440,12 @@ export interface ClueStore {
    * 返回 false 表示当前状态与 expectedStatus 不符（并发冲突），业务行不变。
    */
   assignPeople(write: CluePeopleAssignWrite): Promise<boolean>;
+  /** 读撤回不派编排上下文（状态、登记人、当前命中集与对方承办机构）。 */
+  readWithdrawContext(clueId: string): Promise<ClueWithdrawContext | null>;
+  /**
+   * 撤回不派：状态由 expectedStatus 条件更新为待分派池，写入撤回行，
+   * 同时了结该线索未处理的结案提醒（撤回即回答了提醒）。
+   * 返回 false 表示当前状态与 expectedStatus 不符（并发冲突），业务行不变。
+   */
+  applyWithdrawal(write: ClueWithdrawWrite): Promise<boolean>;
 }

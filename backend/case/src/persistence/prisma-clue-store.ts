@@ -35,6 +35,8 @@ import type {
   ClueVerificationFinishWrite,
   ClueVerificationRunRow,
   ClueVerificationRunWrite,
+  ClueWithdrawContext,
+  ClueWithdrawWrite,
 } from './clue-store.ts';
 
 /** Prisma 根客户端，或一个交互式事务客户端。 */
@@ -624,6 +626,68 @@ export class PrismaClueStore implements ClueStore {
         role: handler.role,
         assignedAt: write.assignedAt,
       })),
+    });
+    return true;
+  }
+
+  async readWithdrawContext(clueId: string): Promise<ClueWithdrawContext | null> {
+    const clue = await this.prisma.clue.findUnique({ where: { id: clueId } });
+    if (!clue) return null;
+    const hits = await this.prisma.$queryRaw<
+      Array<{
+        other_clue_id: string;
+        other_clue_code: string;
+        other_status: string;
+        other_handler_org_id: string | null;
+      }>
+    >`
+      SELECT DISTINCT h.other_clue_id,
+             c.code AS other_clue_code,
+             c.status AS other_status,
+             a.org_unit_id AS other_handler_org_id
+      FROM clue_spatial_hit h
+      JOIN clue c ON c.id = h.other_clue_id
+      LEFT JOIN clue_assignment a ON a.clue_id = h.other_clue_id AND a.ended_at IS NULL
+      WHERE h.clue_id = ${clueId}
+      ORDER BY h.other_clue_id
+    `;
+    return {
+      clueId: clue.id,
+      code: clue.code,
+      status: clue.status,
+      registeredBy: clue.registeredBy,
+      enteredOrgId: clue.enteredOrgId,
+      hits: hits.map((hit) => ({
+        otherClueId: hit.other_clue_id,
+        otherClueCode: hit.other_clue_code,
+        otherStatus: hit.other_status,
+        otherHandlerOrgId: hit.other_handler_org_id,
+      })),
+    };
+  }
+
+  async applyWithdrawal(write: ClueWithdrawWrite): Promise<boolean> {
+    // 条件更新：撤回不派只允许从「不派」出发；并发冲突时这一笔不生效，调用方回 409。
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      UPDATE clue SET status = 'in_pool'
+      WHERE id = ${write.clueId} AND status = ${write.expectedStatus} AND status = 'held'
+      RETURNING id
+    `;
+    if (rows.length === 0) return false;
+    await this.prisma.clueWithdrawal.create({
+      data: {
+        id: write.withdrawalId,
+        clueId: write.clueId,
+        reasonCodes: [...write.reasonCodes],
+        note: write.note,
+        withdrawnBy: write.withdrawnBy,
+        withdrawnAt: write.withdrawnAt,
+      },
+    });
+    // 撤回不派即回答了待处理的结案提醒：业务行随撤回一并了结（提醒由业务表承载，不加留痕）。
+    await this.prisma.clueClosureReminder.updateMany({
+      where: { clueId: write.clueId, resolvedAt: null },
+      data: { resolvedAt: write.withdrawnAt, resolution: 'withdrawn' },
     });
     return true;
   }

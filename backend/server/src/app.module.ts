@@ -19,6 +19,7 @@ import { ClueItemSupplementController } from './clue-item-supplement.controller.
 import { ClueRegistrationController } from './clue-registration.controller.ts';
 import { ClueSuggestionService } from './clue-suggestion.service.ts';
 import { ClueVerificationController } from './clue-verification.controller.ts';
+import { ClueWithdrawController } from './clue-withdraw.controller.ts';
 import { AuthController } from './auth.controller.ts';
 import { AuthService } from './auth.service.ts';
 import { ClueFormSchemaService } from './clue-form-schema.service.ts';
@@ -26,6 +27,7 @@ import { ClueItemSupplementService } from './clue-item-supplement.service.ts';
 import { ClueRegistrationService } from './clue-registration.service.ts';
 import { ClueVerificationService } from './clue-verification.service.ts';
 import { ClueVerificationWorker } from './clue-verification.worker.ts';
+import { ClueWithdrawService } from './clue-withdraw.service.ts';
 import { HealthController } from './health.controller.ts';
 import { OrgUnitsController } from './org-units.controller.ts';
 import { OrgUnitsService } from './org-units.service.ts';
@@ -59,6 +61,7 @@ import { SourceGate } from './source-gate.ts';
     ClueItemSupplementController,
     ClueVerificationController,
     ClueDispatchController,
+    ClueWithdrawController,
   ],
   providers: [
     AuthService,
@@ -73,6 +76,7 @@ import { SourceGate } from './source-gate.ts';
     ClueVerificationService,
     ClueSuggestionService,
     ClueDispatchService,
+    ClueWithdrawService,
     ClueVerificationWorker,
     SourceGate,
     { provide: APP_GUARD, useClass: SessionGuard },

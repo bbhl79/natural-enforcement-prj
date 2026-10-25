@@ -166,3 +166,24 @@ export type {
   StreetBoundaryRequest,
   StreetFeature,
 } from './clue/dispatch/index.ts';
+// #217：撤回不派与结案的领域规则（四项原因、说明必填、状态门槛）。
+export {
+  CLUE_CLOSURE_RULE_CODES,
+  DISPOSITION_KINDS,
+  DISPOSITION_RECORD_FROM_STATUS,
+  REMINDER_KINDS,
+  REMINDER_RESOLUTIONS,
+  WITHDRAW_FROM_STATUS,
+  WITHDRAW_REASONS,
+  checkDispositionNote,
+  checkWithdrawInput,
+} from './clue/closure/index.ts';
+export type {
+  DispositionNoteCheckOutcome,
+  WithdrawCheckOutcome,
+} from './clue/closure/index.ts';
+export type {
+  ClueWithdrawContext,
+  ClueWithdrawHit,
+  ClueWithdrawWrite,
+} from './persistence/clue-store.ts';

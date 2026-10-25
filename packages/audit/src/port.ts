@@ -2,11 +2,14 @@ import type {
   AccountMaintenanceFailedReason,
   AuditTargetOrgBasis,
   ClueDispatchDecideFailedReason,
+  ClueDispositionRecordedFailedReason,
   ClueHandlerAssignedFailedReason,
   ClueItemsSupplementFailedReason,
   ClueOrgAssignedFailedReason,
   ClueRegisterFailedReason,
+  ClueReminderResolvedFailedReason,
   ClueVerifyRetryFailedReason,
+  ClueWithdrawnFailedReason,
   CertUpdateFailedReason,
   AuthzDeniedReason,
   LoginFailedReason,
@@ -166,7 +169,22 @@ export type AuditAppend =
   | (AuditParties & { action: 'clue.org-assigned' })
   | (AuditParties & { action: 'clue.org-assigned'; outcome: 'failed'; reason: ClueOrgAssignedFailedReason })
   | (AuditParties & { action: 'clue.handler-assigned' })
-  | (AuditParties & { action: 'clue.handler-assigned'; outcome: 'failed'; reason: ClueHandlerAssignedFailedReason });
+  | (AuditParties & { action: 'clue.handler-assigned'; outcome: 'failed'; reason: ClueHandlerAssignedFailedReason })
+  // 撤回不派与结案（#217，规格 G）：动作词与状态写入同事务，detail 存原因编码／处置类型／提醒处理结果。
+  | (AuditParties & { action: 'clue.withdrawn' })
+  | (AuditParties & { action: 'clue.withdrawn'; outcome: 'failed'; reason: ClueWithdrawnFailedReason })
+  | (AuditParties & { action: 'clue.disposition-recorded' })
+  | (AuditParties & {
+      action: 'clue.disposition-recorded';
+      outcome: 'failed';
+      reason: ClueDispositionRecordedFailedReason;
+    })
+  | (AuditParties & { action: 'clue.reminder-resolved' })
+  | (AuditParties & {
+      action: 'clue.reminder-resolved';
+      outcome: 'failed';
+      reason: ClueReminderResolvedFailedReason;
+    });
 
 /**
  * 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。

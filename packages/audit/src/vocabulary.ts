@@ -46,6 +46,10 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'clue.held',
   'clue.org-assigned',
   'clue.handler-assigned',
+  // 撤回不派与结案（#217，规格 G）：撤回不派、处置登记、提醒处理。
+  'clue.withdrawn',
+  'clue.disposition-recorded',
+  'clue.reminder-resolved',
 ] as const;
 
 /**
@@ -305,6 +309,49 @@ export const CLUE_HANDLER_ASSIGNED_FAILED_REASONS = [
 export type ClueHandlerAssignedFailedReason = (typeof CLUE_HANDLER_ASSIGNED_FAILED_REASONS)[number];
 
 /**
+ * 撤回不派被拒（outcome=failed）的原因（#217，规格 G）。
+ * missing-withdraw-reason 未勾原因（至少一项）；missing-withdraw-note 补充说明必填；
+ * invalid-withdraw-reason 勾选的原因不在四项常用原因之内；
+ * invalid-state 线索不在「不派」状态；concurrent-change 与并发写入冲突。
+ */
+export const CLUE_WITHDRAWN_FAILED_REASONS = [
+  'missing-withdraw-reason',
+  'missing-withdraw-note',
+  'invalid-withdraw-reason',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type ClueWithdrawnFailedReason = (typeof CLUE_WITHDRAWN_FAILED_REASONS)[number];
+
+/**
+ * 处置登记（不予立案／随旧线索办结）被拒（outcome=failed）的原因（#217，规格 G）。
+ * missing-disposition-fields 说明必填；invalid-state 线索状态不允许登记；
+ * concurrent-change 与并发写入冲突。
+ */
+export const CLUE_DISPOSITION_RECORDED_FAILED_REASONS = [
+  'missing-disposition-fields',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type ClueDispositionRecordedFailedReason =
+  (typeof CLUE_DISPOSITION_RECORDED_FAILED_REASONS)[number];
+
+/**
+ * 结案提醒处理被拒（outcome=failed）的原因（#217，规格 G）。
+ * missing-withdraw-reason／missing-withdraw-note 选「撤回不派再办」时的原因与说明必填；
+ * missing-disposition-fields 选「随旧线索办结」时的原因必填；
+ * invalid-state 提醒或线索状态不允许处理；concurrent-change 与并发写入冲突。
+ */
+export const CLUE_REMINDER_RESOLVED_FAILED_REASONS = [
+  'missing-withdraw-reason',
+  'missing-withdraw-note',
+  'missing-disposition-fields',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type ClueReminderResolvedFailedReason = (typeof CLUE_REMINDER_RESOLVED_FAILED_REASONS)[number];
+
+/**
  * 带结构化快照（detail）的动作（#211，规格 G）。
  * 线索动作把编号、当前命中集摘要、缺件键写进 detail，不占用 previousValue/nextValue/itemCount。
  * detail 只写不回：查阅接口不返回它。其余动作一律不带 detail。
@@ -318,5 +365,9 @@ export const AUDIT_DETAIL_ACTIONS = [
   'clue.held',
   'clue.org-assigned',
   'clue.handler-assigned',
+  // 撤回不派与结案（#217，规格 G）：撤回原因编码、处置类型、提醒 ID 与处理结果。
+  'clue.withdrawn',
+  'clue.disposition-recorded',
+  'clue.reminder-resolved',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];
