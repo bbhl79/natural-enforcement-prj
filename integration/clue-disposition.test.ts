@@ -873,4 +873,54 @@ describe('#216 停用机构池重新指定', () => {
     expect(failed).toHaveLength(1);
     expect(failed[0]?.reason).toBe('concurrent-change');
   });
+
+  it('P4 权限：A 部门系统管理员重指定到范围外根机构 B → 403 scope-denied', async () => {
+    // 创建 A 部门系统管理员。
+    await seedPerson('P-216-DEPT-ADMIN', 'A部门管理员', deptAId, ['系统管理'], '13900003020');
+    await cookieOf('P-216-DEPT-ADMIN', INITIAL_PASSWORD);
+    // 在 A 部门下属停用所登记线索。
+    const stationId = await addStation(deptAId);
+    await seedPerson('P-216-ST-AA', '停用所内勤辛', stationId, ['内勤'], '13900003021');
+    await cookieOf('P-216-ST-AA', INITIAL_PASSWORD);
+    const registered = await register({ polygon: geojsonPolygon(square(80)), code: 'P-216-ST-AA' });
+    const clueId = registered.body.id ?? '';
+    await cloned.prisma.orgUnit.update({
+      where: { id: stationId },
+      data: { deactivatedAt: new Date(T0) },
+    });
+
+    // A 部门管理员重指定到 B 部门（不在其数据范围内）→ 403。
+    const outcome = await poolReassign(clueId, { orgUnitId: deptBId }, 'P-216-DEPT-ADMIN');
+    expect(outcome.status).toBe(403);
+    expect(outcome.body.reason).toBe('scope-denied');
+    // 留痕验证。
+    const deniedTrail = await cloned.prisma.$queryRaw<TrailRow[]>`
+      SELECT action, outcome, reason FROM audit_trail
+      WHERE action = 'authz.denied' AND resource_id = ${clueId} AND opcode = 'clue.pool.reassign'
+    `;
+    expect(deniedTrail).toHaveLength(1);
+    expect(deniedTrail[0]?.reason).toBe('scope-denied');
+    // 业务行不变。
+    const clue = await cloned.prisma.clue.findUnique({ where: { id: clueId } });
+    expect(clue?.enteredOrgId).toBe(stationId);
+    expect(
+      await cloned.prisma.clueAssignment.count({ where: { clueId, kind: 'pool-reassign' } }),
+    ).toBe(0);
+  });
+
+  it('P4 权限：根机构系统管理员重新指定成功（正向保留）', async () => {
+    const stationId = await addStation(deptAId);
+    await seedPerson('P-216-ST-AB', '停用所内勤壬', stationId, ['内勤'], '13900003022');
+    await cookieOf('P-216-ST-AB', INITIAL_PASSWORD);
+    const registered = await register({ polygon: geojsonPolygon(square(81)), code: 'P-216-ST-AB' });
+    const clueId = registered.body.id ?? '';
+    await cloned.prisma.orgUnit.update({
+      where: { id: stationId },
+      data: { deactivatedAt: new Date(T0) },
+    });
+
+    const outcome = await poolReassign(clueId, { orgUnitId: deptBId }, 'P-ADMIN-HQ');
+    expect(outcome.status).toBe(200);
+    expect(outcome.body.result).toBe('pool-reassigned');
+  });
 });

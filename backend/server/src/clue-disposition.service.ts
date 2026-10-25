@@ -374,6 +374,19 @@ export class ClueDispositionService {
       if (!isAccessDenied(error)) throw error;
       return { status: 403, body: { reason: error.reason } };
     }
+    // P4 权限：只允许能覆盖目标根机构的系统管理员（根机构／超管）。
+    // 目标机构的根机构必须在操作者的数据范围内，部门管理员不能跨根机构重指定。
+    if (actorOrgId !== '') {
+      const targetRootId = (await this.identity.findOrgUnitPathToRoot(orgUnitId)).at(-1) ?? '';
+      if (targetRootId !== '') {
+        const rootPath = await this.identity.findOrgUnitPathToRoot(targetRootId);
+        rootPath.push(targetRootId);
+        if (!rootPath.includes(actorOrgId)) {
+          await this.denyPool(actor, actorCode, actorOrgId, clueId, 'scope-denied');
+          return { status: 403, body: { reason: 'scope-denied' } };
+        }
+      }
+    }
     // 理由必填。
     if (input.reason.trim() === '') {
       return this.rejectPool(actor, actorCode, actorOrgId, clueId, {
@@ -523,6 +536,36 @@ export class ClueDispositionService {
     };
     await this.uow.run(async () =>
       rejected<ClueTransferOutcome>({ status: 403, body: { reason: 'permission-denied' } }, denial),
+    );
+  }
+
+  /** 池重新指定的对象级拒绝：403 并写 authz.denied 留痕（#207 P4）。 */
+  private async denyPool(
+    actor: ActorRef,
+    actorCode: string | null,
+    orgUnitId: string,
+    clueId: string,
+    reason: DenyReason,
+  ): Promise<void> {
+    const denial: AuthzDeniedEntry = {
+      action: 'authz.denied',
+      outcome: 'failed',
+      actorId: actor.personnelId,
+      actorCode,
+      subjectPersonnelId: null,
+      subjectCode: null,
+      orgUnitId,
+      sourceIp: null,
+      reason,
+      opcode: POOL_REASSIGN_OPCODE,
+      resourceType: 'clue',
+      resourceId: clueId,
+      previousValue: null,
+      targetOrgUnitId: orgUnitId,
+      targetOrgUnitBasis: 'object',
+    };
+    await this.uow.run(async () =>
+      rejected<CluePoolReassignOutcome>({ status: 403, body: { reason } }, denial),
     );
   }
 
