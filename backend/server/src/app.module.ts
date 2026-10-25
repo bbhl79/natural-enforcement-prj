@@ -13,6 +13,8 @@ import { AdminService } from './admin.service.ts';
 import { AuditBrowseService } from './audit-browse.service.ts';
 import { AuditController } from './audit.controller.ts';
 import { ClueFormSchemaController } from './clue-form-schema.controller.ts';
+import { ClueDuplicateController } from './clue-duplicate.controller.ts';
+import { ClueDuplicateService } from './clue-duplicate.service.ts';
 import { ClueGeometryController } from './clue-geometry.controller.ts';
 import { ClueItemSupplementController } from './clue-item-supplement.controller.ts';
 import { ClueRegistrationController } from './clue-registration.controller.ts';
@@ -58,6 +60,7 @@ import { SourceGate } from './source-gate.ts';
     ClueItemSupplementController,
     ClueVerificationController,
     ClueGeometryController,
+    ClueDuplicateController,
   ],
   providers: [
     AuthService,
@@ -72,6 +75,7 @@ import { SourceGate } from './source-gate.ts';
     ClueVerificationService,
     ClueVerificationWorker,
     ClueGeometryService,
+    ClueDuplicateService,
     SourceGate,
     { provide: APP_GUARD, useClass: SessionGuard },
   ],
