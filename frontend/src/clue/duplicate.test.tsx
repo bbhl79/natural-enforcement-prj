@@ -69,6 +69,7 @@ function view(overrides: Partial<DuplicateView> = {}): DuplicateView {
       ruleCodes: [],
     },
     groups: [group()],
+    historicalGroups: [],
     ...overrides,
   };
 }
