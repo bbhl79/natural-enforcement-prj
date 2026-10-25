@@ -12,6 +12,8 @@ import { AdminController } from './admin.controller.ts';
 import { AdminService } from './admin.service.ts';
 import { AuditBrowseService } from './audit-browse.service.ts';
 import { AuditController } from './audit.controller.ts';
+import { ClueDesignationController } from './clue-designation.controller.ts';
+import { ClueDesignationService } from './clue-designation.service.ts';
 import { ClueDispatchController } from './clue-dispatch.controller.ts';
 import { ClueDispatchService } from './clue-dispatch.service.ts';
 import { ClueFormSchemaController } from './clue-form-schema.controller.ts';
@@ -65,6 +67,7 @@ import { SourceGate } from './source-gate.ts';
     ClueGeometryController,
     ClueDuplicateController,
     ClueDispatchController,
+    ClueDesignationController,
   ],
   providers: [
     AuthService,
@@ -79,6 +82,7 @@ import { SourceGate } from './source-gate.ts';
     ClueVerificationService,
     ClueSuggestionService,
     ClueDispatchService,
+    ClueDesignationService,
     ClueVerificationWorker,
     ClueGeometryService,
     ClueDuplicateService,

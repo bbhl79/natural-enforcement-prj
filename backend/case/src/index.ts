@@ -73,6 +73,10 @@ export type {
   ClueActiveAssignment,
   ClueActiveHandler,
   ClueDecisionWrite,
+  ClueDesignationCloseWrite,
+  ClueDesignationRequestInsert,
+  ClueDesignationRequestRow,
+  ClueDesignationRequestWrite,
   ClueDispatchContext,
   ClueDispatchHit,
   ClueHitSummary,
@@ -188,9 +192,14 @@ export type {
   FacePairRatios,
 } from './clue/duplicate/index.ts';
 // #214：分派决定与两步分派的领域规则、街道镇边界查询端口（辖区建议）。
+// #215：报请指定管辖的状态门槛、受理人候选链与失败原因封闭表。
 export {
+  CLUE_DESIGNATE_REJECTED_FAILED_REASONS,
+  CLUE_DESIGNATE_REQUESTED_FAILED_REASONS,
+  CLUE_DESIGNATE_RULE_CODES,
   CLUE_DISPATCH_RULE_CODES,
   DECIDE_FROM_STATUS,
+  DESIGNATE_REQUEST_FROM_STATUSES,
   DUP_TERMINAL_STATUSES,
   ORG_ASSIGN_FROM_STATUSES,
   PEOPLE_ASSIGN_FROM_STATUS,
@@ -199,8 +208,11 @@ export {
   createStreetBoundaryPort,
   decideDispatch,
   isOpenHit,
+  reviewerOrgCandidates,
 } from './clue/dispatch/index.ts';
 export type {
+  ClueDesignateRejectedFailedReason,
+  ClueDesignateRequestedFailedReason,
   DecideOutcome,
   StreetBoundaryOutcome,
   StreetBoundaryPart,

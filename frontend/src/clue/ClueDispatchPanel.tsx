@@ -19,6 +19,134 @@ import {
   type DispatchView,
 } from './dispatch';
 
+/** 报请指定管辖（本级机构内勤；理由必填、可选拟归属机构）。 */
+export function DesignateRequestPanel({
+  busy,
+  failure,
+  orgOptions,
+  onRequest,
+}: {
+  busy: boolean;
+  failure: string | null;
+  orgOptions: readonly OrgOption[];
+  onRequest: (input: { reason: string; proposedOrgId: string | null }) => void;
+}) {
+  const [reason, setReason] = useState('');
+  const [proposedOrgId, setProposedOrgId] = useState('');
+  return (
+    <div className="card" data-role="designate-request-panel">
+      <div className="card-h">
+        报请指定管辖
+        <span className="hint">线索不属本级管辖（含应归平级机构的）时报请上级指定</span>
+      </div>
+      {failure ? <div className="banner danger" data-role="failure">{failure}</div> : null}
+      <div className="form-row">
+        <label htmlFor="designate-reason">报请理由</label>
+        <div>
+          <input
+            id="designate-reason"
+            className="input"
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+          />
+          <div className="help">理由必填；报请期间该线索不能分派、重新分派或移送。</div>
+        </div>
+      </div>
+      <div className="form-row">
+        <label htmlFor="designate-proposed">拟归属机构</label>
+        <div>
+          <select
+            id="designate-proposed"
+            className="select"
+            value={proposedOrgId}
+            onChange={(event) => setProposedOrgId(event.target.value)}
+          >
+            <option value="">不指定（由直接上级受理）</option>
+            {orgOptions.map((org) => (
+              <option key={org.orgUnitId} value={org.orgUnitId}>
+                {org.name}
+              </option>
+            ))}
+          </select>
+          <div className="help">选填；受理人＝报请方与拟归属机构的最近共同上级内勤。</div>
+        </div>
+      </div>
+      <div className="actions">
+        <button
+          type="button"
+          className="btn btn-primary"
+          data-role="designate-request"
+          disabled={busy || reason.trim() === ''}
+          onClick={() => onRequest({ reason: reason.trim(), proposedOrgId: proposedOrgId === '' ? null : proposedOrgId })}
+        >
+          报请指定管辖
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** 受理人处理进行中的报请（#215）：指定管辖（designate=true 派机构）或驳回。 */
+export function DesignateReviewPanel({
+  view,
+  busy,
+  failure,
+  onReject,
+}: {
+  view: DispatchView;
+  busy: boolean;
+  failure: string | null;
+  onReject: (reason: string) => void;
+}) {
+  const [rejectReason, setRejectReason] = useState('');
+  const designation = view.designation;
+  if (!designation) return null;
+  return (
+    <div className="card" data-role="designate-review-panel">
+      <div className="card-h">
+        指定管辖报请
+        <span className="hint">{`报请机构：${designation.requestingOrgName}`}</span>
+      </div>
+      {failure ? <div className="banner danger" data-role="failure">{failure}</div> : null}
+      <div className="banner amber" data-role="designate-pending">
+        {`${designation.requestingOrgName}报请指定管辖：${designation.reason}；拟归属：${designation.proposedOrgName ?? '未指定'}。`}
+      </div>
+      {view.mayReviewDesignation ? (
+        <>
+          <div className="help">
+            处理＝以「指定管辖」指定承办机构（同时关闭报请），或驳回。驳回须填理由。
+          </div>
+          <div className="form-row">
+            <label htmlFor="designate-reject-reason">驳回理由</label>
+            <div>
+              <input
+                id="designate-reject-reason"
+                className="input"
+                value={rejectReason}
+                onChange={(event) => setRejectReason(event.target.value)}
+              />
+            </div>
+          </div>
+          <div className="actions">
+            <button
+              type="button"
+              className="btn"
+              data-role="designate-reject"
+              disabled={busy || rejectReason.trim() === ''}
+              onClick={() => onReject(rejectReason.trim())}
+            >
+              驳回报请
+            </button>
+            <span className="help">指定承办机构请用下方「重新分派／指定管辖」，勾选指定管辖。</span>
+          </div>
+        </>
+      ) : (
+        <div className="help">{`该报请由${designation.reviewerOrgName}的内勤受理。`}</div>
+      )}
+    </div>
+  );
+}
+
 /** 对比查看的一对命中面（审图意见 #1 口径：两边的面各自什么形状、占多少）。 */
 function CompareDialog({
   view,
@@ -198,6 +326,7 @@ export function AssignOrgPanel({
   busy,
   failure,
   onAssign,
+  designateByDefault = false,
 }: {
   view: DispatchView;
   orgOptions: readonly OrgOption[];
@@ -205,10 +334,12 @@ export function AssignOrgPanel({
   busy: boolean;
   failure: string | null;
   onAssign: (input: { orgUnitId: string; reason: string; designate: boolean }) => void;
+  /** 受理人处理报请时默认勾选指定管辖（#215）。 */
+  designateByDefault?: boolean;
 }) {
   const [orgUnitId, setOrgUnitId] = useState('');
   const [reason, setReason] = useState('');
-  const [designate, setDesignate] = useState(false);
+  const [designate, setDesignate] = useState(designateByDefault);
   const suggested = new Set(view.suggestion.suggestions.map((item) => item.orgUnitId));
   return (
     <div className="card" data-role="assign-org-panel">
@@ -232,7 +363,7 @@ export function AssignOrgPanel({
           <div className="help">只能派给本人数据范围内的机构；线索不属本级管辖的，报请上级指定管辖。</div>
         </div>
       </div>
-      {reassigning ? (
+      {reassigning || designateByDefault ? (
         <div className="form-row">
           <label htmlFor="dispatch-reason">理由</label>
           <div>
@@ -357,6 +488,8 @@ export function ClueDispatchBody({
   onDecide,
   onAssignOrg,
   onAssignPeople,
+  onDesignateRequest,
+  onDesignateReject,
 }: {
   view: DispatchView;
   orgOptions: readonly OrgOption[];
@@ -365,6 +498,8 @@ export function ClueDispatchBody({
   onDecide: (decision: 'dispatch' | 'hold', acknowledged: boolean) => void;
   onAssignOrg: (input: { orgUnitId: string; reason: string; designate: boolean }) => void;
   onAssignPeople: (input: { mainId: string; assistIds: readonly string[] }) => void;
+  onDesignateRequest: (input: { reason: string; proposedOrgId: string | null }) => void;
+  onDesignateReject: (reason: string) => void;
 }): ReactNode {
   return (
     <>
@@ -373,6 +508,16 @@ export function ClueDispatchBody({
           {`线索 ${view.code}`}
           <span className="hint">{`${view.sourceName} · ${dispatchStatusLabel(view.status)}`}</span>
         </div>
+        {view.designation !== null ? (
+          <>
+            {view.designationLocked ? (
+              <div className="banner amber" data-role="designation-lock">
+                该线索正在报请指定管辖：报请期间不能分派、重新分派或移送，待上级受理后恢复办理。
+              </div>
+            ) : null}
+            <DesignateReviewPanel view={view} busy={busy} failure={failure} onReject={onDesignateReject} />
+          </>
+        ) : null}
         {view.status === 'pending_decision' && view.mayDecide ? (
           <DecidePanel view={view} busy={busy} failure={failure} onDecide={onDecide} />
         ) : null}
@@ -405,6 +550,25 @@ export function ClueDispatchBody({
         ) : null}
         {view.status === 'held' ? (
           <div className="banner gray">该线索已选不派；需要时可由有权人撤回不派。</div>
+        ) : null}
+        {view.mayReviewDesignation && !view.mayAssignOrg && !view.mayReassignOrg ? (
+          <AssignOrgPanel
+            view={view}
+            orgOptions={orgOptions}
+            reassigning={view.status !== 'in_pool'}
+            busy={busy}
+            failure={failure}
+            onAssign={onAssignOrg}
+            designateByDefault
+          />
+        ) : null}
+        {view.mayRequestDesignation ? (
+          <DesignateRequestPanel
+            busy={busy}
+            failure={failure}
+            orgOptions={orgOptions}
+            onRequest={onDesignateRequest}
+          />
         ) : null}
       </div>
     </>

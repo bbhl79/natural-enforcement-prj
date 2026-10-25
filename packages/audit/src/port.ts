@@ -1,6 +1,8 @@
 import type {
   AccountMaintenanceFailedReason,
   AuditTargetOrgBasis,
+  ClueDesignateRejectedFailedReason,
+  ClueDesignateRequestedFailedReason,
   ClueDispatchDecideFailedReason,
   ClueHandlerAssignedFailedReason,
   ClueItemsSupplementFailedReason,
@@ -176,7 +178,20 @@ export type AuditAppend =
   | (AuditParties & { action: 'clue.org-assigned' })
   | (AuditParties & { action: 'clue.org-assigned'; outcome: 'failed'; reason: ClueOrgAssignedFailedReason })
   | (AuditParties & { action: 'clue.handler-assigned' })
-  | (AuditParties & { action: 'clue.handler-assigned'; outcome: 'failed'; reason: ClueHandlerAssignedFailedReason });
+  | (AuditParties & { action: 'clue.handler-assigned'; outcome: 'failed'; reason: ClueHandlerAssignedFailedReason })
+  // 报请指定管辖与驳回（#215，规格 G）：动作词与报请行同事务写入，detail 存报请机构、拟归属机构与受理机构。
+  | (AuditParties & { action: 'clue.designate-requested' })
+  | (AuditParties & {
+      action: 'clue.designate-requested';
+      outcome: 'failed';
+      reason: ClueDesignateRequestedFailedReason;
+    })
+  | (AuditParties & { action: 'clue.designate-rejected' })
+  | (AuditParties & {
+      action: 'clue.designate-rejected';
+      outcome: 'failed';
+      reason: ClueDesignateRejectedFailedReason;
+    });
 
 /**
  * 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。

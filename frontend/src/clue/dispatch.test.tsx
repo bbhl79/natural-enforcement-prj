@@ -9,7 +9,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import reducer from '../login/loginSlice';
 import { renderRoute } from '../test-utils';
-import { AssignOrgPanel, AssignPeoplePanel, DecidePanel, HitGroups, SuggestionList } from './ClueDispatchPanel';
+import {
+  AssignOrgPanel,
+  AssignPeoplePanel,
+  ClueDispatchBody,
+  DecidePanel,
+  HitGroups,
+  SuggestionList,
+} from './ClueDispatchPanel';
 import { dispatchFailureText } from './ClueDispatchSection';
 import {
   dispatchStatusLabel,
@@ -68,6 +75,10 @@ function view(overrides: Partial<DispatchView> = {}): DispatchView {
     mayAssignOrg: false,
     mayReassignOrg: false,
     mayAssignPeople: false,
+    designation: null,
+    mayRequestDesignation: false,
+    mayReviewDesignation: false,
+    designationLocked: false,
     ...overrides,
   };
 }
@@ -341,5 +352,61 @@ describe('工作台三环节步骤条（#214）', () => {
     const { html } = await renderRoute(fresh(), '/workbench?step=2&clue=clue-1');
     expect(html).toContain('aria-busy="true"');
     expect(html).toContain('step=3&amp;clue=clue-1');
+  });
+});
+
+describe('报请指定管辖与指定锁', () => {
+  const designation = {
+    requestId: 'r1',
+    requestingOrgId: 'org-a',
+    requestingOrgName: '第一执法支队',
+    proposedOrgId: 'org-b',
+    proposedOrgName: '第二执法支队',
+    reviewerOrgId: 'org-hq',
+    reviewerOrgName: '自然执法总队',
+    reason: '该地不属本级管辖',
+    createdAt: '2026-10-25T01:00:00.000Z',
+  };
+  const noop = () => undefined;
+  const body = (overrides: Partial<DispatchView>) =>
+    renderToStaticMarkup(
+      <ClueDispatchBody
+        view={view({ status: 'in_pool', mayDecide: false, ...overrides })}
+        orgOptions={[{ orgUnitId: 'org-b', name: '第二执法支队' }]}
+        busy={false}
+        failure={null}
+        onDecide={noop}
+        onAssignOrg={noop}
+        onAssignPeople={noop}
+        onDesignateRequest={noop}
+        onDesignateReject={noop}
+      />,
+    );
+
+  it('本级内勤可见报请入口：理由必填、拟归属机构选填', () => {
+    const html = body({ mayRequestDesignation: true });
+    expect(html).toContain('designate-request-panel');
+    expect(html).toContain('报请理由');
+    expect(html).toContain('拟归属机构');
+  });
+
+  it('受理人看到报请事项与驳回入口', () => {
+    const html = body({ designation, mayReviewDesignation: true });
+    expect(html).toContain('designate-review-panel');
+    expect(html).toContain('designate-reject');
+    expect(html).toContain('该地不属本级管辖');
+  });
+
+  it('被报请锁拦下的下级看到锁提示，没有驳回入口', () => {
+    const html = body({ designation, designationLocked: true });
+    expect(html).toContain('designation-lock');
+    expect(html).toContain('报请期间不能分派、重新分派或移送');
+    expect(html).not.toContain('designate-reject"');
+  });
+
+  it('指定锁的失败文案', () => {
+    expect(dispatchFailureText({ result: 'invalid-state', reason: 'designation-pending' })).toContain('报请指定管辖');
+    expect(dispatchFailureText({ result: 'invalid-state', reason: 'designated-lock' })).toContain('已指定管辖');
+    expect(dispatchFailureText({ result: 'non-compliant', rules: ['missing-reject-reason'] })).toContain('驳回');
   });
 });
