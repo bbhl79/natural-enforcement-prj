@@ -1031,9 +1031,6 @@ export class PrismaClueStore implements ClueStore {
     return result.count;
   }
 
-     return true;
-   }
- 
   async readWithdrawContext(clueId: string): Promise<ClueWithdrawContext | null> {
     const clue = await this.prisma.clue.findUnique({ where: { id: clueId } });
     if (!clue) return null;
@@ -1392,8 +1389,6 @@ export class PrismaClueStore implements ClueStore {
       hitHandlerOrgIds: row.hit_handler_org_ids ?? [],
     }));
   }
-
- 
 
   /** 业务编号：取库内 sequence 的下一个值（迁移创建，不算 model）。 */
   private async nextCode(): Promise<string> {

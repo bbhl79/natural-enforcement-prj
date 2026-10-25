@@ -382,6 +382,8 @@ export const CLUE_REMINDER_RESOLVED_FAILED_REASONS = [
   'concurrent-change',
 ] as const;
 export type ClueReminderResolvedFailedReason = (typeof CLUE_REMINDER_RESOLVED_FAILED_REASONS)[number];
+
+/**
  * 停用机构池重新指定被拒（outcome=failed）的原因（#216，规格 G）。
  * missing-reassign-reason 理由必填；
  * org-unit-required 目标机构必填；
