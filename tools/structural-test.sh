@@ -131,9 +131,23 @@ QUEUE_DIR="$ROOT/packages/queue"
 STORAGE_DIR="$ROOT/packages/storage"
 # 留痕设施包（ADR 0012）：auditTrail 委托的唯一合法出现位置
 AUDIT_DIR="$ROOT/packages/audit"
-# ADR 0004：启动包里只有这一个文件可以直接引用身份模块的数据库适配器
+# ADR 0004：启动包里只有这一个文件可以直接引用各业务模块的数据库适配器
+# （#52 身份组织；#211 案件聚合的线索表适配器）。名单是文件 + specifier 白名单：
+# 名单外的深路径导入照样判红（红探针有负例证据）。
 SERVER_ADAPTER_FILE="backend/server/src/persistence.module.ts"
-SERVER_ADAPTER_SPEC="../../identity/src/persistence/prisma-identity-store.ts"
+SERVER_ADAPTER_SPECS=(
+  "../../identity/src/persistence/prisma-identity-store.ts"
+  "../../case/src/persistence/prisma-clue-store.ts"
+)
+
+# 该 specifier 是否在适配器豁免名单内。
+is_server_adapter_spec() { # $1 = specifier
+  local spec
+  for spec in "${SERVER_ADAPTER_SPECS[@]}"; do
+    [ "$spec" = "$1" ] && return 0
+  done
+  return 1
+}
 
 # 业务模块清单（定案命名，#47/#51）：模块名 → 源码目录（相对 ROOT）
 MODULES=(identity geo-dict case approval supervision deadline)
@@ -596,7 +610,7 @@ check_module-public-entry() {
     [ -n "$specs" ] || continue
     while IFS= read -r spec; do
       is_assembly_exempt "${file#"$ROOT"/}" "$spec" && continue
-      if [ "${file#"$ROOT"/}" = "$SERVER_ADAPTER_FILE" ] && [ "$spec" = "$SERVER_ADAPTER_SPEC" ]; then
+      if [ "${file#"$ROOT"/}" = "$SERVER_ADAPTER_FILE" ] && is_server_adapter_spec "$spec"; then
         continue
       fi
       case "$spec" in
@@ -678,6 +692,10 @@ check_weak-reference-entry() {
 # #75 定案追加 PersonnelPasswordHistory（ADR 0015）。
 # #210 定案追加五张参照数据表（ADR 0016）：GeoDictSourceCode、GeoDictViolationType、
 # GeoDictDocument、GeoDictViolationTypeBasis、GeoDictJurisdiction。
+# #211 定案追加 18 张线索业务表（规格 F）：Clue、ClueSpatialObject、ClueSpatialPart、
+# ClueRequirementSnapshot、ClueItemValue、ClueItemGap、ClueInitialType、ClueTagLibrary、
+# ClueTag、ClueMaterial、ClueSpatialHit、ClueVerificationRun、ClueHandler、ClueAssignment、
+# ClueWithdrawal、ClueDisposition、ClueClosureReminder、ClueDesignationRequest。
 G1_MODELS=(
   MigrationProbe
   OrgUnit
@@ -702,6 +720,24 @@ G1_MODELS=(
   GeoDictDocument
   GeoDictViolationTypeBasis
   GeoDictJurisdiction
+  Clue
+  ClueSpatialObject
+  ClueSpatialPart
+  ClueRequirementSnapshot
+  ClueItemValue
+  ClueItemGap
+  ClueInitialType
+  ClueTagLibrary
+  ClueTag
+  ClueMaterial
+  ClueSpatialHit
+  ClueVerificationRun
+  ClueHandler
+  ClueAssignment
+  ClueWithdrawal
+  ClueDisposition
+  ClueClosureReminder
+  ClueDesignationRequest
 )
 check_g1-model-allowlist() {
   local schema="$BACKEND/prisma/schema.prisma" model in_schema extra missing fails=0
@@ -803,13 +839,15 @@ check_audit-facility-entry() {
 }
 
 # 规则 o（评审必修扩口径）：空间纪律机器兜底——backend/、packages/、integration/、e2e/
-# 全源码不得对两个空间模型 delegate 调任何 ORM 写。含必填 Unsupported 空间字段的模型走
+# 全源码不得对空间模型 delegate 调任何 ORM 写。含必填 Unsupported 空间字段的模型走
 # ORM 写会绕过 ST_Transform 统一口径（infra/VERSIONS.md 执行纪律 2），写一律 $queryRaw/ST_ 函数。
 # 扩口径三处：① 方法集补全（create/update 之外的 upsert/createMany/updateMany/
 # delete/deleteMany 同样是 ORM 写）；② 文件形态 = SCAN_CODE（.mjs/.cjs 种子与校验器、
 # .sh 用例内联 node 都能拿到 delegate）；③ 换行链式（prisma.geoDictLandBoundary 换行
 # .create(）折行后二次判定，单行已命中的文件不重复报。
-SPATIAL_MODEL='geoDictLandBoundary|geoDictSurveyPoint'
+# #211 扩口径：线索空间三表归 case 模块（规格 F），其中 clueSpatialPart（含 Unsupported
+# 空间字段）与 clueSpatialHit（命中集经空间函数算出）同样禁 ORM 写。
+SPATIAL_MODEL='geoDictLandBoundary|geoDictSurveyPoint|clueSpatialPart|clueSpatialHit'
 SPATIAL_ORM_METHOD='createManyAndReturn|createMany|create|upsert|updateMany|update|deleteMany|delete'
 SPATIAL_ORM_WRITE="(${SPATIAL_MODEL})[[:space:]]*\.[[:space:]]*(${SPATIAL_ORM_METHOD})[[:space:]]*\("
 check_spatial-no-orm-mutation() {

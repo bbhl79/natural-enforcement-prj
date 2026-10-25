@@ -18,6 +18,14 @@ interface HttpReply {
 export class ClueFormSchemaController {
   constructor(private readonly formSchema: ClueFormSchemaService) {}
 
+  /** 参照清单：来源编码与可选违法类型，供录入表单渲染规范选择控件。 */
+  @Get('clue/reference')
+  @UseGuards(SameOriginReadGuard)
+  async reference(@Res() res: HttpReply): Promise<void> {
+    const outcome = this.formSchema.reference();
+    res.status(outcome.status).json(outcome.body);
+  }
+
   @Get('clue/form-schema')
   @UseGuards(SameOriginReadGuard)
   async schema(@Query() query: FormSchemaQuery, @Res() res: HttpReply): Promise<void> {

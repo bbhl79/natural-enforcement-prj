@@ -148,6 +148,16 @@ write_probe_spatial-in-integration() {
     "}"
 }
 
+write_probe_clue-spatial-orm-write() {
+  # #211：线索空间部件归 case 模块（规格 F）。它含 Unsupported 空间字段，ORM 写同样绕过
+  # ST_Transform 口径（执行纪律 2），故空间纪律的模型集扩到它与命中集表。
+  tmp_write "backend/case/src/_structural-probe-clue-spatial.ts" \
+    "// 探针（临时，勿入库）：线索空间部件 ORM 写（执行纪律 2 禁止的形态）" \
+    "export function probe(prisma: { clueSpatialPart: { create(input: unknown): unknown } }) {" \
+    "  return prisma.clueSpatialPart.create({ data: { id: 'probe' } });" \
+    "}"
+}
+
 write_probe_audit-facility-entry() {
   tmp_write "integration/_structural-probe-audit.ts" \
     "// 探针（临时，勿入库）：包外引用留痕委托" \
@@ -161,6 +171,15 @@ write_probe_server-adapter-file() {
     "// 探针（临时，勿入库）：第二个文件引用身份数据库适配器" \
     "import { PrismaIdentityStore } from '../../identity/src/persistence/prisma-identity-store.ts';" \
     "export const store = PrismaIdentityStore;"
+}
+
+write_probe_case-adapter-file() {
+  # #211：案件聚合模块的线索表适配器同样只在启动包的装配根里被引用（豁免名单收紧到
+  # 文件 + specifier 两条）。名单外的第二个文件引用照样判红。
+  tmp_write "backend/server/src/_structural-probe-case-adapter.ts" \
+    "// 探针（临时，勿入库）：第二个文件引用案件聚合模块的数据库适配器" \
+    "import { PrismaClueStore } from '../../case/src/persistence/prisma-clue-store.ts';" \
+    "export const store = PrismaClueStore;"
 }
 
 write_probe_exempt-tightness() {
@@ -371,6 +390,7 @@ SPECS=(
   "exempt-tightness|module-public-entry|豁免名单外的深路径导入（豁免不放行整层）"
   "audit-facility-entry|audit-facility-entry|包外引用留痕委托"
   "server-adapter-file|module-public-entry|启动包第二个文件引用身份数据库适配器"
+  "case-adapter-file|module-public-entry|启动包第二个文件引用案件聚合数据库适配器"
   "compose-literal-secret|runtime-manifest|compose 写字面量密钥"
   "compose-unlisted-name|runtime-manifest|compose 引用清单外变量名"
   "ci-literal-secret|runtime-manifest|CI 密钥带 || 回落字面量"
@@ -397,6 +417,8 @@ SPECS=(
   "screenshot-full-set|screenshot-full-set|截图全集多出状态键之外的文件名"
   # #210 新增规则：参照数据只追加的机器兜底。
   "reference-data-no-mutation|reference-data-no-mutation|参照数据表就地改行（ADR 0016 只追加）"
+  # #211：线索空间三表归 case 模块，空间纪律的模型集扩到线索空间部件与命中集表。
+  "clue-spatial-orm-write|spatial-no-orm-mutation|线索空间部件 ORM 写（#211 新空间表禁 ORM 写）"
 )
 
 # ---------- 护栏①（#171）动态层：带违例的整闸全量运行，三族各取一条 ----------
