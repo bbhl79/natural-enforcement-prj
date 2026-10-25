@@ -22,6 +22,7 @@ import {
   DISPOSITION_RECORD_FROM_STATUS,
   REMINDER_RESOLUTIONS,
   WITHDRAW_FROM_STATUS,
+  WITHDRAW_REASONS,
   checkDispositionNote,
   checkReminderResolve,
   generateClosureReminders,
@@ -355,6 +356,16 @@ export class ClueClosureService {
         },
       };
     });
+  }
+
+  /**
+   * 撤回不派与结案提醒的界面口径：四项常用原因由服务端给，界面不另存一份。
+   */
+  async readOptions(): Promise<{ readonly status: 200; readonly body: unknown }> {
+    return {
+      status: 200,
+      body: { result: 'closure-options', withdrawReasons: [...WITHDRAW_REASONS] },
+    };
   }
 
   /** 不派视图：数据范围内当前「不派」、且当前操作者可撤回的线索。 */

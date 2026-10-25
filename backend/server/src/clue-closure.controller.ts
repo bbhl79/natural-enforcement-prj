@@ -81,6 +81,14 @@ export class ClueClosureController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  /** 撤回不派与结案提醒的界面口径（四项常用原因）。 */
+  @Get('closure-options')
+  @UseGuards(SameOriginReadGuard)
+  async options(@Req() req: AuthenticatedRequest, @Res() res: HttpReply): Promise<void> {
+    const outcome = await this.closure.readOptions();
+    res.status(outcome.status).json(outcome.body);
+  }
+
   /** 不派视图。 */
   @Get('held')
   @UseGuards(SameOriginReadGuard)

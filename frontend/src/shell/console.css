@@ -89,6 +89,8 @@
 .console .err{font-size:12px;color:var(--danger);margin-top:4px}
 .console .checks{display:flex;gap:14px;flex-wrap:wrap;padding-top:7px}
 .console .checks label{display:inline-flex;gap:5px;align-items:center}
+.console .checks-col{display:flex;flex-direction:column;gap:6px;padding:8px 0}
+.console .checks-col label{display:inline-flex;gap:5px;align-items:center}
 .console .kv{display:grid;grid-template-columns:110px 1fr;gap:8px 12px}
 .console .kv .k{color:var(--muted)}
 .console .filters{display:flex;gap:8px;align-items:center;margin-bottom:12px;flex-wrap:wrap}

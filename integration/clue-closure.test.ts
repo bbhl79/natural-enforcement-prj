@@ -583,6 +583,23 @@ describe('#217 结案提醒生成', () => {
   });
 });
 
+describe('#217 界面口径', () => {
+  it('四项常用原因由服务端给出，界面不另存一份', async () => {
+    const response = await fetch(`${baseUrl}/api/clues/closure-options`, {
+      method: 'GET',
+      headers: { cookie: await cookieOf('P-INTAKE-A') },
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { readonly withdrawReasons: readonly string[] };
+    expect(body.withdrawReasons).toEqual([
+      '同一地点不同违法',
+      '新增情况',
+      '原线索核查不属实需重派',
+      '误判重复',
+    ]);
+  });
+});
+
 describe('#217 结案提醒处理', () => {
   it('撤回不派再办：回待分派池、撤回行与提醒处理留痕齐备', async () => {
     const pair = await heldPair(92);
