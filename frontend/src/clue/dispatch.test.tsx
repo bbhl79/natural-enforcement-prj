@@ -312,7 +312,7 @@ afterEach(() => {
 describe('工作台三环节步骤条（#214）', () => {
   it('ws-existing-context：step3 带线索上下文打开，环节切换不丢线索', async () => {
     serve({
-      '/api/clues/clue-1/dispatch': [200, view()],
+      '/api/clues/clue-1/dispatch': [200, JSON.parse(JSON.stringify(view()))],
       '/api/org-units': TREE,
     });
     const { html } = await renderRoute(fresh(), '/workbench?step=3&clue=clue-1');
@@ -386,6 +386,8 @@ describe('移送（自然资源部门以外机关）', () => {
           onAssignOrg={() => undefined}
           onAssignPeople={() => undefined}
           onTransfer={() => undefined}
+          onDesignateRequest={() => undefined}
+          onDesignateReject={() => undefined}
         />,
       );
     const assignment = { orgUnitId: 'o1', orgName: '天河区分局', kind: 'initial', designate: false };
@@ -438,6 +440,7 @@ describe('报请指定管辖与指定锁', () => {
         onDecide={noop}
         onAssignOrg={noop}
         onAssignPeople={noop}
+        onTransfer={noop}
         onDesignateRequest={noop}
         onDesignateReject={noop}
       />,
