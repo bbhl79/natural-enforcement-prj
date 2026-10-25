@@ -33,3 +33,9 @@ export type {
   StreetFeature,
   StreetBoundaryOutcome,
 } from './street-port.ts';
+export {
+  CONFLICT_RESOLUTION_LABELS,
+  PLANNING_DISPATCH_GUIDANCE,
+  hasCaseByCasePlanningType,
+} from './planning-guidance.ts';
+export type { ConflictResolution, DispatchGuidance } from './planning-guidance.ts';
