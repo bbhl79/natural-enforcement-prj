@@ -6,6 +6,7 @@ import type {
   ClueItemsSupplementFailedReason,
   ClueOrgAssignedFailedReason,
   ClueRegisterFailedReason,
+  ClueGeometryUpdateFailedReason,
   ClueVerifyRetryFailedReason,
   CertUpdateFailedReason,
   AuthzDeniedReason,
@@ -158,6 +159,15 @@ export type AuditAppend =
   // 内业核查手动重跑（#213，规格 G）：动作词与新运行行同事务写入，detail 存新运行序号。
   | (AuditParties & { action: 'clue.verify-retried' })
   | (AuditParties & { action: 'clue.verify-retried'; outcome: 'failed'; reason: ClueVerifyRetryFailedReason })
+  // 疑似重复重绘（#212，规格 G）：动作词与新空间版本同事务写入，detail 存前后命中摘要。
+  | (AuditParties & { action: 'clue.geometry-updated' })
+  | (AuditParties & {
+    action: 'clue.geometry-updated';
+    outcome: 'failed';
+    reason: ClueGeometryUpdateFailedReason;
+  })
+  // 实名查阅（#212，规格 G）：只记查看事实，detail 存编号，不记明文。
+  | (AuditParties & { action: 'clue.reference-viewed' })
   // 分派决定与两步分派（#214，规格 G）：动作词与状态写入同事务，detail 存前后状态等结构化快照。
   | (AuditParties & { action: 'clue.dispatched' })
   | (AuditParties & { action: 'clue.dispatched'; outcome: 'failed'; reason: ClueDispatchDecideFailedReason })
