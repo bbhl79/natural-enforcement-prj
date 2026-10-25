@@ -52,6 +52,8 @@ export interface ClueItemGapRow {
   readonly required: boolean;
   readonly timing: string;
   readonly consequence: string;
+  /** 补齐时间。null 即仍未补齐。 */
+  readonly filledAt: Date | null;
 }
 
 /** 已登记材料行（文件已写入存储，这里只带版本引用）。 */
@@ -247,6 +249,43 @@ export class ClueVerificationRunningError extends Error {
     super('该线索已有进行中的核查');
     this.name = 'ClueVerificationRunningError';
   }
+}
+
+/** 线索详情行（基本信息与子项合集）。 */
+export interface ClueDetailRow {
+  readonly id: string;
+  readonly code: string;
+  readonly domain: string;
+  readonly sourceCode: string;
+  readonly status: string;
+  readonly verificationStatus: string;
+  readonly receivedAt: Date;
+  readonly registeredAt: Date;
+  readonly narrative: string;
+  readonly subjectUnknown: boolean;
+  readonly anonymityConfirmed: boolean;
+  readonly registeredBy: string;
+  readonly enteredOrgId: string;
+  readonly requirements: readonly ClueRequirementSnapshotRow[];
+  readonly gaps: readonly ClueItemGapRow[];
+  readonly values: readonly ClueItemValueRow[];
+  readonly tags: readonly { readonly name: string }[];
+  readonly initialTypes: readonly string[];
+}
+
+/** 一条线索的留痕行（不含 detail 字段）。查询走 $queryRaw 直查库表。 */
+export interface ClueTrailRow {
+  readonly id: string;
+  readonly createdAt: Date;
+  readonly action: string;
+  readonly outcome: string;
+  readonly actorCode: string | null;
+  readonly subjectCode: string | null;
+  readonly orgUnitId: string | null;
+  readonly opcode: string | null;
+  readonly resourceType: string | null;
+  readonly resourceId: string | null;
+  readonly reason: string | null;
 }
 
 /** 线索的核查上下文：编排与对象级校验要用的全部事实。 */
@@ -692,6 +731,13 @@ export interface ClueStore {
   /** 不派视图：读数据范围内的「不派」线索。 */
   listHeldClues(orgUnitIds: readonly string[]): Promise<readonly ClueHeldRow[]>;
   /**
+   * 历史关联命中（结案线索的空间重合）：对 closed 与 transferred_out 的线索按空间重合算出命中，
+   * 带回对方处置信息。不写命中表，仅查询展示用。
+   */
+  listHistoricalHits(clueId: string): Promise<readonly ClueHistoricalHit[]>;
+  /** 线索中心列表：按查询参数分页列出线索（不含反映人字段）。 */
+  listClues(query: ClueListQuery): Promise<ClueListPage>;
+  /**
    * 读移送编排上下文（编号、状态、登记机构、当前有效分派机构的接收机构）。
    * 对象级校验用：待分派池取登记机构，已派机构／已派承办人取承办机构。
    */
@@ -726,6 +772,50 @@ export interface ClueStore {
   insertDesignationRequest(write: ClueDesignationRequestWrite): Promise<ClueDesignationRequestInsert>;
   /** 关闭该线索的全部待处理报请（指定管辖批准或驳回）；返回关止的条数。 */
   closePendingDesignationRequests(write: ClueDesignationCloseWrite): Promise<number>;
+  /** 读线索详情（基本信息、要件快照、缺件、取值、标签、初步违法类型）。 */
+  readDetail(clueId: string): Promise<ClueDetailRow | null>;
+  /** 读线索的全部留痕（按创建时间倒序，经 $queryRaw 直查 audit_trail；不含 detail 字段）。 */
+  listTrail(clueId: string): Promise<readonly ClueTrailRow[]>;
+  /** 工作台卡片计数：按身份分类的卡片数字。 */
+  countWorkbenchCards(orgUnitIds: readonly string[]): Promise<WorkbenchCardCounts>;
+}
+
+/** 工作台卡片计数（#207）。按身份分类。 */
+export interface WorkbenchCardCounts {
+  frontline: {
+    /** 待分派决定：in_pool 或 pending_decision 的线索数。 */
+    pendingDecision: number;
+    /** 待派机构：org_assigned 的线索数。 */
+    orgAssigned: number;
+    /** 待派承办人：handler_assigned 的线索数。 */
+    handlerAssigned: number;
+    /** 不派线索：held 的线索数。 */
+    held: number;
+    /** 结案提醒：未处理 reminder 数。 */
+    reminders: number;
+    /** 待处理指定管辖：报请状态 pending。 */
+    designationPending: number;
+  };
+  leader: {
+    /** 待审核：法制审核 pending（#51 审批模块未实现，暂置 0）。 */
+    lawReview: number;
+    /** 待审批：行政审核／行政审批 pending（#51 审批模块未实现，暂置 0）。 */
+    approval: number;
+    /** 结案提醒：未处理 reminder 数。 */
+    reminders: number;
+    /** 待处理指定管辖：报请状态 pending。 */
+    designationPending: number;
+  };
+  supervision: {
+    /** 全部线索数。 */
+    total: number;
+    /** 待分派线索数：in_pool 或 pending_decision。 */
+    pendingDispatch: number;
+    /** 不派线索数：held。 */
+    held: number;
+    /** 已结案线索数：closed。 */
+    closed: number;
+  };
 }
 
 /** 停用机构待分派池线索行（管理端重新指定的候选清单）。 */
@@ -736,6 +826,50 @@ export interface CluePoolClueRow {
   readonly status: string;
   readonly domain: string;
   readonly registeredAt: Date;
+}
+
+/** 线索中心列表查询参数。 */
+export interface ClueListQuery {
+  readonly view: 'all' | 'assign' | 'held' | 'remind';
+  readonly page: number;
+  readonly size: number;
+  readonly keyword: string;
+  readonly domain: string;
+  readonly source: string;
+  readonly org: string;
+  readonly status: string;
+  readonly check: string;
+  readonly gap: string;
+  readonly from: string;
+  readonly to: string;
+  /** 操作者可见的机构 id 集合。entered_org_id 或当前承办机构在此集合内的线索可见。 */
+  readonly orgUnitIds: readonly string[];
+}
+
+/** 线索列表行（不含反映人字段）。 */
+export interface ClueListRow {
+  readonly id: string;
+  readonly code: string;
+  readonly domain: string;
+  readonly sourceCode: string;
+  readonly status: string;
+  readonly statusLabel: string;
+  readonly verificationStatus: string;
+  readonly verificationStatusLabel: string;
+  readonly narrative: string;
+  readonly registeredAt: Date;
+  /** 是否有未补齐缺件。 */
+  readonly hasGaps: boolean;
+  /** 标签名列表。 */
+  readonly tags: readonly string[];
+}
+
+/** 线索列表分页结果。 */
+export interface ClueListPage {
+  readonly rows: readonly ClueListRow[];
+  readonly total: number;
+  readonly page: number;
+  readonly size: number;
 }
 
 /** 移送编排上下文：登记与对象级校验要用的全部事实。 */
@@ -767,6 +901,29 @@ export interface ClueTransferWrite {
   readonly recordedAt: Date;
   /** 已写入存储的移送附件（材料行，选填 0..n）。 */
   readonly materials: readonly ClueMaterialRow[];
+}
+
+/** 历史关联命中（结案线索的空间重合）。不写命中表，仅查询展示。 */
+export interface ClueHistoricalHit {
+  readonly partId: string;
+  readonly partIndex: number;
+  readonly otherClueId: string;
+  readonly otherClueCode: string;
+  readonly otherPartId: string;
+  readonly otherPartIndex: number;
+  readonly selfRatio: number;
+  readonly otherRatio: number;
+  readonly intersectionArea: number;
+  readonly selfGeojson: string;
+  readonly otherGeojson: string;
+  /** 对方线索的主状态。 */
+  readonly otherStatus: string;
+  /** 处置类型：no-case | with-old | transfer。 */
+  readonly otherDisposition: string | null;
+  /** 处置说明。 */
+  readonly otherDispositionNote: string | null;
+  /** 处置时间。 */
+  readonly otherDisposedAt: Date | null;
 }
 
 /** 停用机构池重新指定的写入。 */

@@ -15,14 +15,17 @@ import { Prisma, type PrismaClient } from '../../../prisma/generated/prisma/clie
 import type { VerificationLayerResult } from '../clue/verification/port.ts';
 import { isAnonymousValue } from '../clue/registration/rules.ts';
 import {
+  CLUE_STATUS_LABELS,
   DUPLICATE_OVERLAP_THRESHOLD,
   NOT_COMPARABLE_CLUE_STATUSES,
 } from '../clue/duplicate/rules.ts';
+import { VERIFICATION_STATUS_LABELS } from '../clue/verification/status.ts';
 import { ClueIdempotencyConflictError, ClueVerificationRunningError } from './clue-store.ts';
 import type {
   ClueClosureReminderRow,
   ClueClosureReminderRowToWrite,
   ClueClosureReminderTarget,
+  ClueDetailRow,
   ClueDuplicateContext,
   ClueDuplicatePeer,
   ClueDecisionWrite,
@@ -39,6 +42,9 @@ import type {
   ClueHitSummary,
   ClueHitWrite,
   ClueIdempotencyRow,
+  ClueListPage,
+  ClueListQuery,
+  ClueListRow,
   ClueOrgAssignWrite,
   CluePeopleAssignWrite,
   CluePoolClueRow,
@@ -51,6 +57,7 @@ import type {
   ClueReminderResolveWrite,
   ClueSpatialPartRow,
   ClueStore,
+  ClueTrailRow,
   ClueVerificationArtifacts,
   ClueVerificationContext,
   ClueVerificationFinishWrite,
@@ -58,6 +65,8 @@ import type {
   ClueVerificationRunWrite,
   ClueWithdrawContext,
   ClueWithdrawWrite,
+  ClueHistoricalHit,
+  WorkbenchCardCounts,
 } from './clue-store.ts';
 
 /** Prisma 根客户端，或一个交互式事务客户端。 */
@@ -513,6 +522,7 @@ export class PrismaClueStore implements ClueStore {
       required: row.required,
       timing: row.timing,
       consequence: row.consequence,
+      filledAt: null,
     }));
   }
 
@@ -1390,7 +1400,355 @@ export class PrismaClueStore implements ClueStore {
     }));
   }
 
+  /**
+   * 历史关联命中：与结案线索（closed, transferred_out）的空间重合。
+   * 逐面比对逻辑与 computeHits 一致：面状、交集面积 > 0、任一方达到 60% 阈值即命中。
+   * 带回对方线索的处置信息（disposition、note、处置时间）。
+   * 不写命中表，仅查询展示用。
+   */
+  async listHistoricalHits(clueId: string): Promise<readonly ClueHistoricalHit[]> {
+    const object = await this.prisma.clueSpatialObject.findUnique({ where: { clueId } });
+    if (!object || object.kind !== 'face') return [];
+    const parts = await this.prisma.$queryRaw<
+      Array<{ id: string; part_index: number; geojson: string }>
+    >`
+      SELECT p.id, p.part_index, ST_AsGeoJSON(p.geom) AS geojson
+      FROM clue_spatial_part p
+      JOIN clue_spatial_object o ON o.id = p.spatial_object_id
+      WHERE o.clue_id = ${clueId}
+      ORDER BY p.part_index
+    `;
+    if (parts.length === 0) return [];
+    const payload = JSON.stringify(
+      parts.map((part) => ({ partIndex: part.part_index, id: part.id, geojson: part.geojson })),
+    );
+    const comparableStatuses = ['closed', 'transferred_out'];
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        part_index: number;
+        part_id: string;
+        clue_id: string;
+        clue_code: string;
+        clue_status: string;
+        other_part_id: string;
+        other_part_index: number;
+        inter_area: number;
+        self_area: number;
+        other_area: number;
+        self_geojson: string;
+        other_geojson: string;
+        disposition: string | null;
+        note: string | null;
+        recorded_at: Date | null;
+      }>
+    >`
+      WITH my_part AS (
+        SELECT (part->>'partIndex')::int AS part_index,
+               (part->>'id')::text AS part_id,
+               ST_Transform(ST_GeomFromGeoJSON(part->>'geojson'), ${TARGET_SRID}::integer) AS geom
+        FROM jsonb_array_elements(${payload}::jsonb) AS part
+      ),
+      other_part AS (
+        SELECT c.id AS clue_id, c.code AS clue_code, c.status AS clue_status,
+               p.id AS part_id, p.part_index, p.geom
+        FROM clue_spatial_part p
+        JOIN clue_spatial_object o ON o.id = p.spatial_object_id
+        JOIN clue c ON c.id = o.clue_id
+        WHERE o.kind = 'face'
+          AND c.status IN (${Prisma.join(comparableStatuses)})
+          AND c.id <> ${clueId}
+      ),
+      overlap AS (
+        SELECT mp.part_index, mp.part_id, op.clue_id, op.clue_code, op.clue_status,
+               op.part_id AS other_part_id, op.part_index AS other_part_index,
+               ST_Area(ST_Intersection(mp.geom, op.geom)::geography) AS inter_area,
+               ST_Area(mp.geom::geography) AS self_area,
+               ST_Area(op.geom::geography) AS other_area,
+               ST_AsGeoJSON(mp.geom) AS self_geojson,
+               ST_AsGeoJSON(op.geom) AS other_geojson
+        FROM my_part mp
+        JOIN other_part op ON ST_Intersects(mp.geom, op.geom)
+      )
+      SELECT ol.part_index, ol.part_id, ol.clue_id, ol.clue_code, ol.clue_status,
+             ol.other_part_id, ol.other_part_index,
+             ol.inter_area, ol.self_area, ol.other_area,
+             ol.self_geojson, ol.other_geojson,
+             d.disposition, d.note, d.recorded_at
+      FROM overlap ol
+      LEFT JOIN LATERAL (
+        SELECT disposition, note, recorded_at
+        FROM clue_disposition
+        WHERE clue_id = ol.clue_id
+        ORDER BY recorded_at DESC
+        LIMIT 1
+      ) d ON true
+      WHERE ol.inter_area > 0
+        AND (
+          ol.inter_area / NULLIF(ol.self_area, 0) >= ${DUPLICATE_OVERLAP_THRESHOLD}::double precision
+          OR ol.inter_area / NULLIF(ol.other_area, 0) >= ${DUPLICATE_OVERLAP_THRESHOLD}::double precision
+        )
+      ORDER BY ol.clue_code, ol.part_index
+    `;
+    return rows.map((row) => ({
+      partId: row.part_id,
+      partIndex: row.part_index,
+      otherClueId: row.clue_id,
+      otherClueCode: row.clue_code,
+      otherPartId: row.other_part_id,
+      otherPartIndex: row.other_part_index,
+      selfRatio: row.self_area > 0 ? row.inter_area / row.self_area : 0,
+      otherRatio: row.other_area > 0 ? row.inter_area / row.other_area : 0,
+      intersectionArea: row.inter_area,
+      selfGeojson: row.self_geojson,
+      otherGeojson: row.other_geojson,
+      otherStatus: row.clue_status,
+      otherDisposition: row.disposition,
+      otherDispositionNote: row.note,
+      otherDisposedAt: row.recorded_at,
+    }));
+  }
+
+  /** 线索中心列表：按查询参数分页列出线索（不含反映人字段）。 */
+  async listClues(query: ClueListQuery): Promise<ClueListPage> {
+    const { view, page, size, keyword, domain, source, org, status, check, gap, from, to, orgUnitIds } =
+      query;
+    const offset = (page - 1) * size;
+    const orgIds = Prisma.join([...orgUnitIds]);
+    const assignStatuses = Prisma.join([
+      'in_pool',
+      'pending_decision',
+      'org_assigned',
+      'handler_assigned',
+    ]);
+    const keywordPattern = keyword ? `%${keyword}%` : '';
+
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        code: string;
+        domain: string;
+        source_code: string;
+        status: string;
+        verification_status: string;
+        narrative: string;
+        registered_at: Date;
+        has_gaps: boolean;
+        tags: string[];
+        total: bigint;
+      }>
+    >`
+      SELECT c.id,
+             c.code,
+             c.domain,
+             c.source_code,
+             c.status,
+             c.verification_status,
+             c.narrative,
+             c.registered_at,
+             EXISTS(
+               SELECT 1 FROM clue_item_gap g
+               WHERE g.clue_id = c.id AND g.filled_at IS NULL
+             ) AS has_gaps,
+             COALESCE(tag.tags, ARRAY[]::text[]) AS tags,
+             COUNT(*) OVER() AS total
+      FROM clue c
+      LEFT JOIN (
+        SELECT ct.clue_id, array_agg(ct.name ORDER BY ct.name) AS tags
+        FROM clue_tag ct
+        GROUP BY ct.clue_id
+      ) tag ON tag.clue_id = c.id
+      WHERE (
+        c.entered_org_id IN (${orgIds})
+        OR EXISTS (
+          SELECT 1 FROM clue_assignment a
+          WHERE a.clue_id = c.id AND a.ended_at IS NULL AND a.org_unit_id IN (${orgIds})
+        )
+      )
+      AND (${keyword} = '' OR (
+        c.code ILIKE ${keywordPattern}
+        OR c.narrative ILIKE ${keywordPattern}
+        OR EXISTS (
+          SELECT 1 FROM clue_item_value v
+          WHERE v.clue_id = c.id
+            AND v.key = 'clue.party_name'
+            AND v.value ILIKE ${keywordPattern}
+        )
+        OR EXISTS (
+          SELECT 1 FROM clue_tag ct
+          WHERE ct.clue_id = c.id AND ct.name ILIKE ${keywordPattern}
+        )
+      ))
+      AND (${domain} = '' OR c.domain = ${domain})
+      AND (${source} = '' OR c.source_code = ${source})
+      AND (${org} = '' OR (
+        c.entered_org_id = ${org}
+        OR EXISTS (
+          SELECT 1 FROM clue_assignment a
+          WHERE a.clue_id = c.id AND a.ended_at IS NULL AND a.org_unit_id = ${org}
+        )
+      ))
+      AND (${status} = '' OR c.status = ${status})
+      AND (${check} = '' OR c.verification_status = ${check})
+      AND (${gap} = '' OR (
+        (${gap} = 'has_gap' AND EXISTS (
+          SELECT 1 FROM clue_item_gap g
+          WHERE g.clue_id = c.id AND g.filled_at IS NULL
+        ))
+        OR (${gap} = 'no_gap' AND NOT EXISTS (
+          SELECT 1 FROM clue_item_gap g
+          WHERE g.clue_id = c.id AND g.filled_at IS NULL
+        ))
+      ))
+      AND (${from} = '' OR c.registered_at >= ${from}::timestamptz)
+      AND (${to} = '' OR c.registered_at < (${to}::date + INTERVAL '1 day')::timestamptz)
+      AND CASE ${view}
+        WHEN 'assign' THEN c.status IN (${assignStatuses})
+        WHEN 'held' THEN c.status = 'held'
+        WHEN 'remind' THEN EXISTS (
+          SELECT 1 FROM clue_closure_reminder r
+          WHERE r.clue_id = c.id AND r.resolved_at IS NULL
+        )
+        ELSE TRUE
+      END
+      ORDER BY c.registered_at DESC, c.id DESC
+      LIMIT ${size} OFFSET ${offset}
+    `;
+
+    const total = rows.length > 0 ? Number(rows[0].total) : 0;
+
+    const listRows: ClueListRow[] = rows.map((row) => ({
+      id: row.id,
+      code: row.code,
+      domain: row.domain,
+      sourceCode: row.source_code,
+      status: row.status,
+      statusLabel: CLUE_STATUS_LABELS[row.status] ?? row.status,
+      verificationStatus: row.verification_status,
+      verificationStatusLabel:
+        VERIFICATION_STATUS_LABELS[row.verification_status as 'not_required' | 'running' | 'done' | 'failed'] ??
+        row.verification_status,
+      narrative: row.narrative,
+      registeredAt: row.registered_at,
+      hasGaps: row.has_gaps,
+      tags: row.tags ?? [],
+    }));
+
+    return { rows: listRows, total, page, size };
+  }
+
   /** 业务编号：取库内 sequence 的下一个值（迁移创建，不算 model）。 */
+
+  async readDetail(clueId: string): Promise<ClueDetailRow | null> {
+    const clue = await this.prisma.clue.findUnique({ where: { id: clueId } });
+    if (!clue) return null;
+
+    const [requirements, gaps, values, tags, types] = await Promise.all([
+      this.prisma.clueRequirementSnapshot.findMany({
+        where: { clueId },
+        orderBy: [{ layer: 'asc' }, { group: 'asc' }, { key: 'asc' }],
+      }),
+      this.prisma.clueItemGap.findMany({
+        where: { clueId },
+        orderBy: { key: 'asc' },
+      }),
+      this.prisma.clueItemValue.findMany({
+        where: { clueId },
+        orderBy: { key: 'asc' },
+      }),
+      this.prisma.clueTag.findMany({
+        where: { clueId },
+        orderBy: { name: 'asc' },
+        select: { name: true },
+      }),
+      this.prisma.clueInitialType.findMany({
+        where: { clueId },
+        orderBy: { typeCode: 'asc' },
+        select: { typeCode: true },
+      }),
+    ]);
+
+    return {
+      id: clue.id,
+      code: clue.code,
+      domain: clue.domain,
+      sourceCode: clue.sourceCode,
+      status: clue.status,
+      verificationStatus: clue.verificationStatus,
+      receivedAt: clue.receivedAt,
+      registeredAt: clue.registeredAt,
+      narrative: clue.narrative,
+      subjectUnknown: clue.subjectUnknown,
+      anonymityConfirmed: clue.anonymityConfirmed,
+      registeredBy: clue.registeredBy,
+      enteredOrgId: clue.enteredOrgId,
+      requirements: requirements.map((row) => ({
+        id: row.id,
+        key: row.key,
+        layer: row.layer,
+        group: row.group,
+        label: row.label,
+        required: row.required,
+        consequence: row.consequence,
+        timing: row.timing,
+        declarationVersion: row.declarationVersion,
+      })),
+      gaps: gaps.map((row) => ({
+        id: row.id,
+        key: row.key,
+        layer: row.layer,
+        label: row.label,
+        required: row.required,
+        timing: row.timing,
+        consequence: row.consequence,
+        filledAt: row.filledAt,
+      })),
+      values: values.map((row) => ({
+        id: row.id,
+        key: row.key,
+        value: row.value,
+      })),
+      tags: tags.map((row) => ({ name: row.name })),
+      initialTypes: types.map((row) => row.typeCode),
+    };
+  }
+
+  async listTrail(clueId: string): Promise<readonly ClueTrailRow[]> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        created_at: Date;
+        action: string;
+        outcome: string;
+        actor_code: string | null;
+        subject_code: string | null;
+        org_unit_id: string | null;
+        opcode: string | null;
+        resource_type: string | null;
+        resource_id: string | null;
+        reason: string | null;
+      }>
+    >`
+      SELECT id, created_at, action, outcome, actor_code, subject_code,
+             org_unit_id, opcode, resource_type, resource_id, reason
+      FROM audit_trail
+      WHERE resource_type = 'clue' AND resource_id = ${clueId}
+      ORDER BY created_at DESC
+    `;
+    return rows.map((row) => ({
+      id: row.id,
+      createdAt: row.created_at,
+      action: row.action,
+      outcome: row.outcome,
+      actorCode: row.actor_code,
+      subjectCode: row.subject_code,
+      orgUnitId: row.org_unit_id,
+      opcode: row.opcode,
+      resourceType: row.resource_type,
+      resourceId: row.resource_id,
+      reason: row.reason,
+    }));
+  }
+
   private async nextCode(): Promise<string> {
     const rows = await this.prisma.$queryRaw<Array<{ nextval: bigint }>>`
       SELECT nextval('clue_code_seq') AS nextval
@@ -1514,7 +1872,104 @@ export class PrismaClueStore implements ClueStore {
       otherGeojson: row.other_geojson,
     }));
   }
+
+  /** 工作台卡片计数：一次查询得出全部卡片数字（#207）。 */
+  async countWorkbenchCards(orgUnitIds: readonly string[]): Promise<WorkbenchCardCounts> {
+    if (orgUnitIds.length === 0) return ZERO_COUNTS;
+    const ids = Prisma.join([...orgUnitIds]);
+
+    const [clueCounts, reminderRow, designationRow] = await Promise.all([
+      this.prisma.$queryRaw<
+        Array<{
+          pending_decision: bigint;
+          org_assigned: bigint;
+          handler_assigned: bigint;
+          held: bigint;
+          total: bigint;
+          closed: bigint;
+        }>
+      >`
+        WITH scope AS (
+          SELECT c.id, c.status
+          FROM clue c
+          WHERE c.entered_org_id IN (${ids})
+             OR EXISTS (
+               SELECT 1 FROM clue_assignment a
+               WHERE a.clue_id = c.id AND a.ended_at IS NULL AND a.org_unit_id IN (${ids})
+             )
+        )
+        SELECT
+          COUNT(*) FILTER (WHERE status IN ('in_pool', 'pending_decision')) AS pending_decision,
+          COUNT(*) FILTER (WHERE status = 'org_assigned') AS org_assigned,
+          COUNT(*) FILTER (WHERE status = 'handler_assigned') AS handler_assigned,
+          COUNT(*) FILTER (WHERE status = 'held') AS held,
+          COUNT(*) AS total,
+          COUNT(*) FILTER (WHERE status = 'closed') AS closed
+        FROM scope
+      `,
+      this.prisma.$queryRaw<
+        Array<{ cnt: bigint }>
+      >`
+        SELECT COUNT(*) AS cnt
+        FROM clue_closure_reminder r
+        JOIN clue c ON c.id = r.clue_id
+        WHERE r.resolved_at IS NULL
+          AND (
+            c.entered_org_id IN (${ids})
+            OR EXISTS (
+              SELECT 1 FROM clue_assignment a
+              WHERE a.clue_id = c.id AND a.ended_at IS NULL AND a.org_unit_id IN (${ids})
+            )
+          )
+      `,
+      this.prisma.$queryRaw<
+        Array<{ cnt: bigint }>
+      >`
+        SELECT COUNT(*) AS cnt
+        FROM clue_designation_request d
+        WHERE d.status = 'pending'
+          AND d.reviewer_org_id IN (${ids})
+      `,
+    ]);
+
+    const c = clueCounts[0];
+    const reminders = Number(reminderRow[0].cnt);
+    const designationPending = Number(designationRow[0].cnt);
+    const pendingDecision = Number(c.pending_decision);
+    const held = Number(c.held);
+
+    return {
+      frontline: {
+        pendingDecision,
+        orgAssigned: Number(c.org_assigned),
+        handlerAssigned: Number(c.handler_assigned),
+        held,
+        reminders,
+        designationPending,
+      },
+      leader: {
+        // #51 审批模块未实现，待审核／待审批均暂置 0。
+        lawReview: 0,
+        approval: 0,
+        reminders,
+        designationPending,
+      },
+      supervision: {
+        total: Number(c.total),
+        pendingDispatch: pendingDecision,
+        held,
+        closed: Number(c.closed),
+      },
+    };
+  }
 }
+
+/** 工作台零计数常量（无可见机构时回）。 */
+const ZERO_COUNTS: WorkbenchCardCounts = {
+  frontline: { pendingDecision: 0, orgAssigned: 0, handlerAssigned: 0, held: 0, reminders: 0, designationPending: 0 },
+  leader: { lawReview: 0, approval: 0, reminders: 0, designationPending: 0 },
+  supervision: { total: 0, pendingDispatch: 0, held: 0, closed: 0 },
+};
 
 /** JSON 文本列解析。解析不出或不是对象即 null。 */
 function parseJson<T>(text: string | null): T | null {
