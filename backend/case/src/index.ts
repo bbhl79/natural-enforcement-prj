@@ -70,12 +70,19 @@ export {
   ClueVerificationRunningError,
 } from './persistence/clue-store.ts';
 export type {
+  ClueActiveAssignment,
+  ClueActiveHandler,
+  ClueDecisionWrite,
+  ClueDispatchContext,
+  ClueDispatchHit,
   ClueHitSummary,
   ClueHitWrite,
   ClueIdempotencyRow,
   ClueItemGapRow,
   ClueItemValueRow,
   ClueMaterialRow,
+  ClueOrgAssignWrite,
+  CluePeopleAssignWrite,
   ClueRegistrationOutcome,
   ClueRegistrationResult,
   ClueRegistrationWrite,
@@ -180,3 +187,25 @@ export type {
   FacePairBoldSide,
   FacePairRatios,
 } from './clue/duplicate/index.ts';
+// #214：分派决定与两步分派的领域规则、街道镇边界查询端口（辖区建议）。
+export {
+  CLUE_DISPATCH_RULE_CODES,
+  DECIDE_FROM_STATUS,
+  DUP_TERMINAL_STATUSES,
+  ORG_ASSIGN_FROM_STATUSES,
+  PEOPLE_ASSIGN_FROM_STATUS,
+  STREET_BOUNDARY_PORT,
+  STREET_UNAVAILABLE_REASONS,
+  createStreetBoundaryPort,
+  decideDispatch,
+  isOpenHit,
+} from './clue/dispatch/index.ts';
+export type {
+  DecideOutcome,
+  StreetBoundaryOutcome,
+  StreetBoundaryPart,
+  StreetBoundaryPort,
+  StreetBoundaryPortOptions,
+  StreetBoundaryRequest,
+  StreetFeature,
+} from './clue/dispatch/index.ts';

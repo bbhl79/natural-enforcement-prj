@@ -22,12 +22,16 @@ import {
 } from '@natural-enforcement/audit';
 import { STORAGE_PORT, createDefaultStoragePort, type StoragePort } from '@natural-enforcement/storage';
 import { QUEUE_PORT, createQueuePort, type QueuePort } from '@natural-enforcement/queue';
+import { listActiveJurisdictionRows } from '@natural-enforcement/geo-dict';
 import {
   ALL_LAYERS,
   CLUE_STORE,
   CLUE_VERIFICATION_PORT,
+  STREET_BOUNDARY_PORT,
   createLayerServiceVerificationPort,
+  createStreetBoundaryPort,
   type ClueVerificationPort,
+  type StreetBoundaryPort,
 } from '@natural-enforcement/case';
 import {
   BootstrapService,
@@ -52,6 +56,10 @@ import {
   CLUE_VERIFICATION_QUEUE_NAME,
   VERIFICATION_WORKER_ENABLED,
 } from './clue-verification.tokens.ts';
+import {
+  JURISDICTION_LOOKUP,
+  type JurisdictionLookup,
+} from './clue-suggestion.service.ts';
 import {
   LOGIN_DIRECTORY,
   type FailureSnapshot,
@@ -440,6 +448,10 @@ export interface ApplicationOverrides {
   queuePort?: QueuePort;
   /** 内业核查执行端口：默认按图层服务地址远程查询；测试可换成注入替身。 */
   clueVerificationPort?: ClueVerificationPort;
+  /** 街道镇边界查询端口：默认按运行参数远程查询；测试可换成注入替身。 */
+  streetBoundaryPort?: StreetBoundaryPort;
+  /** 辖区对应查询：默认读 geo_dict_jurisdiction（只追加表）；测试可覆写。 */
+  jurisdictionLookup?: JurisdictionLookup;
   /** 是否起核查 worker（#213）。默认不起；生产引导时打开。 */
   verificationWorker?: boolean;
 }
@@ -499,6 +511,21 @@ class PersistenceModule {
             overrides.clueVerificationPort ??
             createLayerServiceVerificationPort({ serviceUrls: readLayerServiceUrls() }),
         },
+        // 街道镇边界查询端口：默认按运行参数远程实时查询（辖区建议用，ADR 0021）。
+        {
+          provide: STREET_BOUNDARY_PORT,
+          useValue:
+            overrides.streetBoundaryPort ??
+            createStreetBoundaryPort({ serviceUrl: readLayerServiceUrls()['street-boundary'] }),
+        },
+        // 辖区对应查询：街道编码 → 机构（geo_dict_jurisdiction 只追加表取最新有效版）。
+        {
+          provide: JURISDICTION_LOOKUP,
+          useValue: overrides.jurisdictionLookup ?? {
+            findByStreetCodes: (codes: readonly string[]) =>
+              listActiveJurisdictionRows(prisma, codes),
+          },
+        },
         { provide: VERIFICATION_WORKER_ENABLED, useValue: overrides.verificationWorker ?? false },
         { provide: AUDIT_TRAIL_FACTORY, useValue: auditTrailFactory },
         { provide: AUDIT_TRAIL_PORT, useValue: auditTrailFactory.forClient(prisma) },
@@ -520,6 +547,8 @@ class PersistenceModule {
         STORAGE_PORT,
         QUEUE_PORT,
         CLUE_VERIFICATION_PORT,
+        STREET_BOUNDARY_PORT,
+        JURISDICTION_LOOKUP,
         VERIFICATION_WORKER_ENABLED,
         AUDIT_TRAIL_FACTORY,
         AUDIT_TRAIL_PORT,

@@ -1,7 +1,10 @@
 import type {
   AccountMaintenanceFailedReason,
   AuditTargetOrgBasis,
+  ClueDispatchDecideFailedReason,
+  ClueHandlerAssignedFailedReason,
   ClueItemsSupplementFailedReason,
+  ClueOrgAssignedFailedReason,
   ClueRegisterFailedReason,
   ClueGeometryUpdateFailedReason,
   ClueVerifyRetryFailedReason,
@@ -164,7 +167,16 @@ export type AuditAppend =
     reason: ClueGeometryUpdateFailedReason;
   })
   // 实名查阅（#212，规格 G）：只记查看事实，detail 存编号，不记明文。
-  | (AuditParties & { action: 'clue.reference-viewed' });
+  | (AuditParties & { action: 'clue.reference-viewed' })
+  // 分派决定与两步分派（#214，规格 G）：动作词与状态写入同事务，detail 存前后状态等结构化快照。
+  | (AuditParties & { action: 'clue.dispatched' })
+  | (AuditParties & { action: 'clue.dispatched'; outcome: 'failed'; reason: ClueDispatchDecideFailedReason })
+  | (AuditParties & { action: 'clue.held' })
+  | (AuditParties & { action: 'clue.held'; outcome: 'failed'; reason: ClueDispatchDecideFailedReason })
+  | (AuditParties & { action: 'clue.org-assigned' })
+  | (AuditParties & { action: 'clue.org-assigned'; outcome: 'failed'; reason: ClueOrgAssignedFailedReason })
+  | (AuditParties & { action: 'clue.handler-assigned' })
+  | (AuditParties & { action: 'clue.handler-assigned'; outcome: 'failed'; reason: ClueHandlerAssignedFailedReason });
 
 /**
  * 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。

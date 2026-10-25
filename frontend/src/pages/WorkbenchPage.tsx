@@ -1,8 +1,15 @@
 // 统一工作台（一级入口）。待办看板的取数与线索录入三环节的办理界面由后续业务范围接入，
 // 本页先给壳层：看板占位、录入三环节入口、以及按身份给出的角色说明。
+// #214：三环节步骤条走通——②内业核查与③分派决定带 clue 参数打开既有线索时，
+// 保留线索上下文续办；环节切换不丢线索。
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 
-import { useAppSelector } from '../hooks';
+import { ClueVerificationTab } from '../clue/ClueVerificationTab';
+import ClueDispatchSection from '../clue/ClueDispatchSection';
+import { loadVerification, retryVerification, type VerificationView } from '../clue/verification';
+import { useAppDispatch, useAppSelector } from '../hooks';
+import { ErrorCard } from '../shell/StatusPages';
 
 function quoted(roles: readonly string[]): string {
   const marks = roles.map((role) => `「${role}」`);
@@ -17,15 +24,54 @@ const STEPS = [
   { step: '3', label: '③ 分派决定', desc: '集中看到疑似重复与命中比例，完成决定并落到承办机构与承办人。' },
 ] as const;
 
+/** ②内业核查续办：带线索上下文打开既有线索的核查页签。 */
+function VerificationContinue({ clueId }: { readonly clueId: string }) {
+  const dispatch = useAppDispatch();
+  const [view, setView] = useState<VerificationView | null>(null);
+  const [error, setError] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const reload = useCallback(async () => {
+    try {
+      setView(await loadVerification(dispatch, clueId));
+      setError(false);
+    } catch {
+      setError(true);
+    }
+  }, [dispatch, clueId]);
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+  if (error) return <ErrorCard what="内业核查" onRetry={() => void reload()} />;
+  if (!view) return <div className="card" aria-busy="true">载入中…</div>;
+  return (
+    <ClueVerificationTab
+      view={view}
+      busy={busy}
+      onRetry={() => {
+        void (async () => {
+          setBusy(true);
+          const result = await retryVerification(dispatch, clueId);
+          setBusy(false);
+          if (result.ok) setView(result.body);
+        })();
+      }}
+    />
+  );
+}
+
 /**
  * 统一工作台。地址带 step=1|2|3 时进对应环节；不带时进待办看板。
+ * ②／③ 带 clue=<id> 时续办该线索，环节切换保留线索上下文。
  */
 export default function WorkbenchPage() {
   const operator = useAppSelector((root) => root.login.operator);
   const [params] = useSearchParams();
   const step = params.get('step') ?? '';
+  const clueId = params.get('clue') ?? '';
   if (!operator) return null;
   const current = STEPS.find((item) => item.step === step);
+  const stepTarget = (target: string) =>
+    clueId === '' ? `/workbench?step=${target}` : `/workbench?step=${target}&clue=${clueId}`;
   return (
     <>
       <div className="crumb"><b>统一工作台</b></div>
@@ -53,19 +99,41 @@ export default function WorkbenchPage() {
                 <Link
                   key={item.step}
                   className={item.step === step ? 'btn btn-sm btn-primary' : 'btn btn-sm'}
-                  to={`/workbench?step=${item.step}`}
+                  to={stepTarget(item.step)}
                 >
                   {item.label}
                 </Link>
               ))}
             </div>
           </div>
-          <div className="card">
-            <div className="empty">
-              <div className="t">本环节的办理界面尚未开放</div>
-              <div>线索录入三环节的表单、核查与分派办理在后续范围接入，入口与地址先在此定型。</div>
+          {step === '3' && clueId !== '' ? <ClueDispatchSection clueId={clueId} /> : null}
+          {step === '3' && clueId === '' ? (
+            <div className="card">
+              <div className="empty">
+                <div className="t">打开一条线索后开始分派决定</div>
+                <div>从待办看板或线索中心打开待分派决定的线索，这里集中展示疑似重复并完成派／不派。</div>
+              </div>
             </div>
-          </div>
+          ) : null}
+          {step === '2' && clueId !== '' ? <VerificationContinue clueId={clueId} /> : null}
+          {step === '2' && clueId === '' ? (
+            <div className="card">
+              <div className="empty">
+                <div className="t">打开一条线索后查看内业核查</div>
+                <div>土地类与矿产类线索保存后自动核查；没跑成时重跑提示一直挂到跑成，线索仍可分派。</div>
+              </div>
+            </div>
+          ) : null}
+          {step === '1' ? (
+            <div className="card">
+              <div className="empty">
+                <div className="t">线索登记</div>
+                <div>
+                  <Link className="btn btn-primary" to="/clue/register">进入线索登记</Link>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </>
       ) : (
         <>
