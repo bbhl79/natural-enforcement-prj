@@ -629,9 +629,11 @@ describe('#215 报请期间的锁与受理人处理', () => {
     expect(rows[0]?.status).toBe('rejected');
     expect(rows[0]?.decisionReason).toBe('经核仍属甲区管辖');
     expect(rows[0]?.decidedBy).toBe(hqClerkId);
-    const trail = await trailOf('clue.designate-rejected', registered.body.id ?? '');
+    // 成功留痕一条；同用例前面已因「驳回理由必填」留下一条失败留痕，故按 outcome 筛。
+    const trail = (await trailOf('clue.designate-rejected', registered.body.id ?? '')).filter(
+      (row) => row.outcome === 'succeeded',
+    );
     expect(trail).toHaveLength(1);
-    expect(trail[0]?.outcome).toBe('succeeded');
     expect(trail[0]?.detail).toContain(`"reviewerOrgId":"${hqId}"`);
 
     // 驳回后恢复正常办理：报请方可分派，且可再次报请。
