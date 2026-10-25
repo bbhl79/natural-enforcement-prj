@@ -459,6 +459,8 @@ declare -A ASSEMBLY_EXEMPT=(
   ["integration/session-opcodes.test.ts"]="../backend/identity/src/"
   # #210：参照数据种子、录入要件声明与 form-schema 接口的断言，同样直接装配三个模块的源码。
   ["integration/clue-form-schema.test.ts"]="../backend/case/src/ ../backend/geo-dict/src/ ../backend/identity/src/"
+  # #217：立案（filed）路径直调案件段的提醒生成内部服务，同样直接装配 case 与 identity 的源码。
+  ["integration/clue-closure.test.ts"]="../backend/case/src/ ../backend/identity/src/"
 )
 
 is_assembly_exempt() { # $1 = 相对 ROOT 路径, $2 = specifier

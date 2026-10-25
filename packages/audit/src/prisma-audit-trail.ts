@@ -32,6 +32,8 @@ import {
   CLUE_HANDLER_ASSIGNED_FAILED_REASONS,
   CLUE_ORG_ASSIGNED_FAILED_REASONS,
   CLUE_POOL_REASSIGNED_FAILED_REASONS,
+  CLUE_REMINDER_RESOLVED_FAILED_REASONS,
+  CLUE_WITHDRAWN_FAILED_REASONS,
   LOGIN_FAILED_REASONS,
   ORG_UNIT_DEACTIVATE_FAILED_REASONS,
   ORG_UNIT_REGISTER_FAILED_REASONS,
@@ -91,10 +93,12 @@ const FAILED_REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['clue.held', new Set<string>(CLUE_DISPATCH_DECIDE_FAILED_REASONS)],
   ['clue.org-assigned', new Set<string>(CLUE_ORG_ASSIGNED_FAILED_REASONS)],
   ['clue.handler-assigned', new Set<string>(CLUE_HANDLER_ASSIGNED_FAILED_REASONS)],
-  ['clue.disposition-recorded', new Set<string>(CLUE_DISPOSITION_RECORDED_FAILED_REASONS)],
   ['clue.pool-reassigned', new Set<string>(CLUE_POOL_REASSIGNED_FAILED_REASONS)],
   ['clue.designate-requested', new Set<string>(CLUE_DESIGNATE_REQUESTED_FAILED_REASONS)],
   ['clue.designate-rejected', new Set<string>(CLUE_DESIGNATE_REJECTED_FAILED_REASONS)],
+  ['clue.withdrawn', new Set<string>(CLUE_WITHDRAWN_FAILED_REASONS)],
+  ['clue.disposition-recorded', new Set<string>(CLUE_DISPOSITION_RECORDED_FAILED_REASONS)],
+  ['clue.reminder-resolved', new Set<string>(CLUE_REMINDER_RESOLVED_FAILED_REASONS)],
 ]);
 
 /** 后值只许出现在带后值的动作上，且这些动作必须带非空后值（#128）。 */

@@ -6,6 +6,8 @@ import { Suspense, useState } from 'react';
 import { Await, Link, useLoaderData, useRevalidator, useSearchParams } from 'react-router';
 
 import { useAppDispatch } from '../hooks';
+import ClueHeldSection from '../clue/ClueHeldSection';
+import ClueReminderSection from '../clue/ClueReminderSection';
 import { ClueDuplicateTab } from '../clue/ClueDuplicateTab';
 import { ClueVerificationTab } from '../clue/ClueVerificationTab';
 import { readReporter, type DuplicateView } from '../clue/duplicate';
@@ -84,6 +86,15 @@ export default function ClueCenterPage() {
           <div className="t">线索清单尚未开放</div>
           <div>线索的查询与详情办理在后续范围接入。登记已开放：点上面的「登记线索」按来源与法域逐层填。</div>
         </div>
+      </div>
+
+      <div className="card">
+        <div className="card-h">
+          办理面
+          <span className="hint">不派线索与结案提醒</span>
+        </div>
+        <ClueHeldSection />
+        <ClueReminderSection />
       </div>
 
       {clueId === '' ? null : (

@@ -845,8 +845,8 @@ model ClueClosureReminder {
   kind String
   /// 提醒对象线索（被撞上的对方线索）
   otherClueId String? @map("other_clue_id")
-  /// 应处理时限
-  dueAt DateTime @db.Timestamptz(6) @map("due_at")
+  /// 应处理时限（#217：本期无超期、催办或升级口径，时限不写）
+  dueAt DateTime? @db.Timestamptz(6) @map("due_at")
   /// 处理时间
   resolvedAt DateTime? @db.Timestamptz(6) @map("resolved_at")
   /// 处理结果

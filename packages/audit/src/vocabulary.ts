@@ -50,11 +50,14 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'clue.org-assigned',
   'clue.handler-assigned',
   // 移送与停用机构池重新指定（#216，规格 G）：登记移送、重新指定接收机构。
-  'clue.disposition-recorded',
   'clue.pool-reassigned',
   // 报请指定管辖（#215，规格 G）：下级报请；受理人驳回（批准由 clue.org-assigned 承载）。
   'clue.designate-requested',
   'clue.designate-rejected',
+  // 撤回不派与结案（#217，规格 G）：撤回不派、处置登记、提醒处理。
+  'clue.withdrawn',
+  'clue.disposition-recorded',
+  'clue.reminder-resolved',
 ] as const;
 
 /**
@@ -326,16 +329,33 @@ export const CLUE_HANDLER_ASSIGNED_FAILED_REASONS = [
 export type ClueHandlerAssignedFailedReason = (typeof CLUE_HANDLER_ASSIGNED_FAILED_REASONS)[number];
 
 /**
- * 移送登记被拒（outcome=failed）的原因（#216，规格 G）。
- * missing-disposition-fields 移送机关、文书编号或原因必填缺失；
- * invalid-letter-date 发函日期补录值不合规；
- * invalid-attachment 附件类型、真实内容、件数或字节数不合规（存储零写入）；
+ * 撤回不派被拒（outcome=failed）的原因（#217，规格 G）。
+ * missing-withdraw-reason 未勾原因（至少一项）；missing-withdraw-note 补充说明必填；
+ * invalid-withdraw-reason 勾选的原因不在四项常用原因之内；
+ * invalid-state 线索不在「不派」状态；concurrent-change 与并发写入冲突。
+ */
+export const CLUE_WITHDRAWN_FAILED_REASONS = [
+  'missing-withdraw-reason',
+  'missing-withdraw-note',
+  'invalid-withdraw-reason',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type ClueWithdrawnFailedReason = (typeof CLUE_WITHDRAWN_FAILED_REASONS)[number];
+
+/**
+ * 处置登记被拒（outcome=failed）的原因（#216 移送、#217 不予立案／随旧线索办结，规格 G）。
+ * 同一动作词承载两种处置入口，故原因取两侧并集：
+ * missing-disposition-fields 移送机关、文书编号或原因必填缺失（不予立案与随旧办结时为说明必填）；
+ * unsupported-disposition 本期不支持的处置类型；
+ * invalid-letter-date 发函日期补录值不合规（移送）；
+ * invalid-attachment 附件类型、真实内容、件数或字节数不合规（移送，存储零写入）；
  * designation-pending 存在未关闭的指定管辖报请，报请期间下级不能移送；
- * invalid-state 线索状态不允许移送；
- * concurrent-change 与并发写入冲突。
+ * invalid-state 线索状态不允许该处置；concurrent-change 与并发写入冲突。
  */
 export const CLUE_DISPOSITION_RECORDED_FAILED_REASONS = [
   'missing-disposition-fields',
+  'unsupported-disposition',
   'invalid-letter-date',
   'invalid-attachment',
   'designation-pending',
@@ -344,6 +364,24 @@ export const CLUE_DISPOSITION_RECORDED_FAILED_REASONS = [
 ] as const;
 export type ClueDispositionRecordedFailedReason =
   (typeof CLUE_DISPOSITION_RECORDED_FAILED_REASONS)[number];
+
+/**
+ * 结案提醒处理被拒（outcome=failed）的原因（#217，规格 G）。
+ * missing-withdraw-reason／missing-withdraw-note／invalid-withdraw-reason 选「撤回不派再办」时的原因与说明；
+ * missing-disposition-fields 选「随旧线索办结」时的说明必填；
+ * unsupported-disposition 处理结果不在二选一之内；
+ * invalid-state 提醒或线索状态不允许处理；concurrent-change 与并发写入冲突。
+ */
+export const CLUE_REMINDER_RESOLVED_FAILED_REASONS = [
+  'missing-withdraw-reason',
+  'missing-withdraw-note',
+  'invalid-withdraw-reason',
+  'missing-disposition-fields',
+  'unsupported-disposition',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type ClueReminderResolvedFailedReason = (typeof CLUE_REMINDER_RESOLVED_FAILED_REASONS)[number];
 
 /**
  * 停用机构池重新指定被拒（outcome=failed）的原因（#216，规格 G）。
@@ -413,6 +451,10 @@ export const AUDIT_DETAIL_ACTIONS = [
   'clue.held',
   'clue.org-assigned',
   'clue.handler-assigned',
+  // 撤回不派与结案（#217，规格 G）：撤回原因编码、处置类型、提醒 ID 与处理结果。
+  'clue.withdrawn',
+  'clue.disposition-recorded',
+  'clue.reminder-resolved',
   // 移送与停用机构池重新指定（#216，规格 G）：处置类型、移送机关、文书编号、发函日期、新接收机构。
   'clue.disposition-recorded',
   'clue.pool-reassigned',

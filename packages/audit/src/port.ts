@@ -11,7 +11,9 @@ import type {
   CluePoolReassignedFailedReason,
   ClueRegisterFailedReason,
   ClueGeometryUpdateFailedReason,
+  ClueReminderResolvedFailedReason,
   ClueVerifyRetryFailedReason,
+  ClueWithdrawnFailedReason,
   CertUpdateFailedReason,
   AuthzDeniedReason,
   LoginFailedReason,
@@ -181,9 +183,14 @@ export type AuditAppend =
   | (AuditParties & { action: 'clue.org-assigned'; outcome: 'failed'; reason: ClueOrgAssignedFailedReason })
   | (AuditParties & { action: 'clue.handler-assigned' })
   | (AuditParties & { action: 'clue.handler-assigned'; outcome: 'failed'; reason: ClueHandlerAssignedFailedReason })
-  // 移送与停用机构池重新指定（#216，规格 G）：处置类型、移送机关、文书编号；停用机构与新接收机构。
+  // 处置登记（#216 移送、#217 不予立案／随旧线索办结，规格 G）：同一动作词承载两种处置入口。
   | (AuditParties & { action: 'clue.disposition-recorded' })
-  | (AuditParties & { action: 'clue.disposition-recorded'; outcome: 'failed'; reason: ClueDispositionRecordedFailedReason })
+  | (AuditParties & {
+      action: 'clue.disposition-recorded';
+      outcome: 'failed';
+      reason: ClueDispositionRecordedFailedReason;
+    })
+  // 移送与停用机构池重新指定（#216，规格 G）：停用机构与新接收机构。
   | (AuditParties & { action: 'clue.pool-reassigned' })
   | (AuditParties & { action: 'clue.pool-reassigned'; outcome: 'failed'; reason: CluePoolReassignedFailedReason })
   // 报请指定管辖与驳回（#215，规格 G）：动作词与报请行同事务写入，detail 存报请机构、拟归属机构与受理机构。
@@ -198,6 +205,15 @@ export type AuditAppend =
       action: 'clue.designate-rejected';
       outcome: 'failed';
       reason: ClueDesignateRejectedFailedReason;
+    })
+  // 撤回不派与结案（#217，规格 G）：动作词与状态写入同事务，detail 存原因编码／提醒处理结果。
+  | (AuditParties & { action: 'clue.withdrawn' })
+  | (AuditParties & { action: 'clue.withdrawn'; outcome: 'failed'; reason: ClueWithdrawnFailedReason })
+  | (AuditParties & { action: 'clue.reminder-resolved' })
+  | (AuditParties & {
+      action: 'clue.reminder-resolved';
+      outcome: 'failed';
+      reason: ClueReminderResolvedFailedReason;
     });
 
 /**
