@@ -449,6 +449,7 @@ export class ClueRegistrationService {
         required: gap.required,
         timing: gap.timing,
         consequence: gap.consequence,
+        filledAt: null,
       })),
       initialTypes: request.types.map((typeCode) => ({ id: newUlid(), typeCode })),
       tags: request.tags.map((name) => ({ id: newUlid(), libraryId: newUlid(), name })),
