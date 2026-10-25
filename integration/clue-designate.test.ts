@@ -639,8 +639,10 @@ describe('#215 报请期间的锁与受理人处理', () => {
     // 驳回后恢复正常办理：报请方可分派，且可再次报请。
     const assigned = await assignOrg(registered.body.id ?? '', { orgUnitId: stationAId }, 'P-INTAKE-A');
     expect(assigned.status).toBe(200);
-    const again = await designateRequest(registered.body.id ?? '', { reason: '再报一次' }, 'P-INTAKE-A');
+    // 分派到甲所后线索的承办机构是甲所，按规格由承办机构内勤发起报请（受理人为甲区）。
+    const again = await designateRequest(registered.body.id ?? '', { reason: '再报一次' }, 'P-INTAKE-ST');
     expect(again.status).toBe(200);
+    expect(again.body.reviewerOrgId).toBe(deptAId);
   });
 
   it('没有待处理报请时驳回：409 invalid-state＋失败留痕', async () => {
