@@ -21,7 +21,14 @@ import {
   type Rejected,
 } from '@natural-enforcement/audit';
 import { STORAGE_PORT, createDefaultStoragePort, type StoragePort } from '@natural-enforcement/storage';
-import { CLUE_STORE } from '@natural-enforcement/case';
+import { QUEUE_PORT, createQueuePort, type QueuePort } from '@natural-enforcement/queue';
+import {
+  ALL_LAYERS,
+  CLUE_STORE,
+  CLUE_VERIFICATION_PORT,
+  createLayerServiceVerificationPort,
+  type ClueVerificationPort,
+} from '@natural-enforcement/case';
 import {
   BootstrapService,
   CredentialService,
@@ -41,6 +48,10 @@ import { PrismaClient, type Prisma } from '../../prisma/generated/prisma/client.
 
 import { AppModule } from './app.module.ts';
 import { CLOCK, type Clock } from './clock.ts';
+import {
+  CLUE_VERIFICATION_QUEUE_NAME,
+  VERIFICATION_WORKER_ENABLED,
+} from './clue-verification.tokens.ts';
 import {
   LOGIN_DIRECTORY,
   type FailureSnapshot,
@@ -425,6 +436,22 @@ export interface ApplicationOverrides {
   openItemsCounter?: OpenItemsCounter;
   /** 口令历史比对深度（ADR 0015，#132）。默认 5；测试可传 2。 */
   passwordHistoryDepth?: number;
+  /** 队列端口：默认走队列设施包的 BullMQ 适配；测试可换成记录投递的假端口。 */
+  queuePort?: QueuePort;
+  /** 内业核查执行端口：默认按图层服务地址远程查询；测试可换成注入替身。 */
+  clueVerificationPort?: ClueVerificationPort;
+  /** 是否起核查 worker（#213）。默认不起；生产引导时打开。 */
+  verificationWorker?: boolean;
+}
+
+/**
+ * 七类核查图层与街道镇边界的空间服务地址：运行参数，由部署环境供给
+ * （ADR 0008 轨道、ADR 0021）。地址不含密钥。未配置的层在核查时判查不成。
+ */
+function readLayerServiceUrls(): Record<string, string | undefined> {
+  const urls: Record<string, string | undefined> = {};
+  for (const layer of ALL_LAYERS) urls[layer.key] = process.env[layer.envName];
+  return urls;
 }
 
 class DisconnectPrisma implements OnModuleDestroy {
@@ -458,6 +485,21 @@ class PersistenceModule {
         { provide: CLUE_STORE, useValue: new PrismaClueStore(prisma) },
         // 存储端口：默认按运行参数建 RustFS 适配；测试可覆写成记录写的假端口。
         { provide: STORAGE_PORT, useValue: overrides.storagePort ?? createDefaultStoragePort() },
+        // 队列端口：业务任务队列，连接惰性（不投递就不连 Redis）。
+        {
+          provide: QUEUE_PORT,
+          useValue:
+            overrides.queuePort ??
+            createQueuePort({ queueName: CLUE_VERIFICATION_QUEUE_NAME }),
+        },
+        // 内业核查执行端口：默认按图层服务地址远程实时查询（ADR 0021）。
+        {
+          provide: CLUE_VERIFICATION_PORT,
+          useValue:
+            overrides.clueVerificationPort ??
+            createLayerServiceVerificationPort({ serviceUrls: readLayerServiceUrls() }),
+        },
+        { provide: VERIFICATION_WORKER_ENABLED, useValue: overrides.verificationWorker ?? false },
         { provide: AUDIT_TRAIL_FACTORY, useValue: auditTrailFactory },
         { provide: AUDIT_TRAIL_PORT, useValue: auditTrailFactory.forClient(prisma) },
         { provide: LOGIN_DIRECTORY, useValue: new PrismaLoginDirectory(prisma) },
@@ -476,6 +518,9 @@ class PersistenceModule {
         IDENTITY_STORE,
         CLUE_STORE,
         STORAGE_PORT,
+        QUEUE_PORT,
+        CLUE_VERIFICATION_PORT,
+        VERIFICATION_WORKER_ENABLED,
         AUDIT_TRAIL_FACTORY,
         AUDIT_TRAIL_PORT,
         UNIT_OF_WORK,
@@ -514,7 +559,8 @@ export async function createApplication(
 ): Promise<INestApplication> {
   const app = await NestFactory.create(
     BootModule.register(databaseUrl, clock, sessionCapacity, overrides),
-    { logger: false },
+    // 启动失败时把错误抛给调用方（而不是直接中止进程丢掉原因）：引导命令据此说明缺哪一项。
+    { logger: false, abortOnError: false },
   );
   const withCsrf = app as INestApplication & { enableCsrfProtection?: () => void };
   if (typeof withCsrf.enableCsrfProtection !== 'function') {
