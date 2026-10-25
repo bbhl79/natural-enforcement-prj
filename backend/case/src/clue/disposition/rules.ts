@@ -56,24 +56,31 @@ export type TransferAssessment =
  * 系统不按违法类型限制移送。
  */
 export function assessTransfer(input: {
-  readonly transferOrg: string;
-  readonly documentNo: string;
-  readonly reason: string;
+  /** 必填项可为缺省：缺字段与空串一律算「必填未填」。 */
+  readonly transferOrg?: string;
+  readonly documentNo?: string;
+  readonly reason?: string;
   /** 发函日期补录值（空串＝缺省北京当日）。 */
-  readonly letterDateRaw: string;
+  readonly letterDateRaw?: string;
   /** 北京当日（由时钟算出后传入，纯函数不自取时间）。 */
   readonly today: string;
 }): TransferAssessment {
+  // 字段缺失与空串同样算「必填未填」：缺字段要报规则码，不能抛异常。
   if (
-    input.transferOrg.trim() === '' ||
-    input.documentNo.trim() === '' ||
-    input.reason.trim() === ''
+    !isFilled(input.transferOrg) ||
+    !isFilled(input.documentNo) ||
+    !isFilled(input.reason)
   ) {
     return { ok: false, rule: 'missing-disposition-fields' };
   }
-  const raw = input.letterDateRaw.trim();
+  const raw = (input.letterDateRaw ?? '').trim();
   if (raw === '') return { ok: true, letterDate: input.today };
   const parsed = parseLetterDate(raw);
   if (parsed === null) return { ok: false, rule: 'invalid-letter-date' };
   return { ok: true, letterDate: parsed };
+}
+
+/** 必填字段是否已填：非字符串（缺失）与空白串都算未填。 */
+function isFilled(value: string | undefined): boolean {
+  return typeof value === 'string' && value.trim() !== '';
 }

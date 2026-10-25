@@ -61,6 +61,15 @@ class RecordingStorage {
   }
 }
 
+/**
+ * 某一步动作写入存储的件数。
+ * 登记本身会写一件空间源文件，故基线要在动作前取，断言只看该动作带来的增量。
+ * 用法：const before = storage.writes.length; …动作…; expect(writesSince(before)).toHaveLength(0);
+ */
+function writesSince(baseline: number): readonly { readonly fileKey: string; readonly byteSize: number }[] {
+  return storage.writes.slice(baseline);
+}
+
 /** 记录投递的假队列端口：不执行，核查停在「进行中」（核查没跑成不拦移送）。 */
 class RecordingQueue {
   readonly jobs: { jobName: string; payload: unknown }[] = [];
@@ -214,10 +223,10 @@ async function transfer(
   return { status: response.status, body: (await response.json()) as Record<string, unknown> };
 }
 
-/** 派机构。 */
+/** 派机构。同级机构不在操作者数据范围内，跨区指派须由上级内勤带 designate=true 执行。 */
 async function assignOrg(
   clueId: string,
-  input: { orgUnitId: string; expectedStatus?: string; reason?: string },
+  input: { orgUnitId: string; expectedStatus?: string; reason?: string; designate?: boolean },
   code: string,
 ): Promise<{ status: number; body: Record<string, unknown> }> {
   const response = await fetch(`${baseUrl}/api/clues/${clueId}/assign-org`, {
@@ -227,7 +236,7 @@ async function assignOrg(
       orgUnitId: input.orgUnitId,
       expectedStatus: input.expectedStatus ?? 'in_pool',
       reason: input.reason ?? '',
-      designate: false,
+      designate: input.designate ?? false,
     }),
   });
   return { status: response.status, body: (await response.json()) as Record<string, unknown> };
@@ -402,6 +411,7 @@ describe('#216 移送登记', () => {
   it('必填缺失：400 missing-disposition-fields＋失败留痕＋业务行不变＋存储零写入', async () => {
     const registered = await register({ polygon: geojsonPolygon(square(51)) });
     const clueId = registered.body.id ?? '';
+    const before = storage.writes.length;
 
     const outcome = await transfer(clueId, { transferOrg: '  ' });
     expect(outcome.status).toBe(400);
@@ -415,18 +425,24 @@ describe('#216 移送登记', () => {
     );
     expect(failed).toHaveLength(1);
     expect(failed[0]?.reason).toBe('missing-disposition-fields');
-    expect(storage.writes).toHaveLength(0);
+    expect(writesSince(before)).toHaveLength(0);
   });
 
   it('已派机构后由承办机构内勤移送；池所属机构内勤再移送 403', async () => {
     const registered = await register({ polygon: geojsonPolygon(square(52)) });
     const clueId = registered.body.id ?? '';
-    const assigned = await assignOrg(clueId, { orgUnitId: deptBId }, 'P-INTAKE-A');
+    // 目标乙区与甲区平级，不在甲区内勤数据范围内；跨区指派由市局内勤带 designate=true 执行。
+    const assigned = await assignOrg(
+      clueId,
+      { orgUnitId: deptBId, designate: true, reason: '指定乙区承办' },
+      'P-INTAKE-HQ',
+    );
     expect(assigned.status).toBe(200);
 
     const denied = await transfer(clueId, {}, 'P-INTAKE-A');
     expect(denied.status).toBe(403);
-    expect(denied.body.reason).toBe('permission-denied');
+    // 承办机构已是乙区，不在甲区内勤的数据范围内：第一层授权即按范围外拒绝。
+    expect(denied.body.reason).toBe('scope-denied');
     const clueAfterDeny = await cloned.prisma.clue.findUnique({ where: { id: clueId } });
     expect(clueAfterDeny?.status).toBe('org_assigned');
     expect(await cloned.prisma.clueDisposition.count({ where: { clueId } })).toBe(0);
@@ -437,7 +453,7 @@ describe('#216 移送登记', () => {
     expect(deniedTrail).toHaveLength(1);
     expect(deniedTrail[0]?.outcome).toBe('failed');
 
-    const outcome = await transfer(clueId, {}, 'P-INTAKE-B');
+    const outcome = await transfer(clueId, { expectedStatus: 'org_assigned' }, 'P-INTAKE-B');
     expect(outcome.status).toBe(200);
     const clue = await cloned.prisma.clue.findUnique({ where: { id: clueId } });
     expect(clue?.status).toBe('transferred_out');
@@ -536,12 +552,14 @@ describe('#216 移送登记', () => {
 describe('#216 移送附件与发函日期', () => {
   it('附件选填：0 件成功；2 件成功且材料行与存储写入一一对应', async () => {
     const bare = await register({ polygon: geojsonPolygon(square(60)) });
+    const bareBefore = storage.writes.length;
     const bareOutcome = await transfer(bare.body.id ?? '');
     expect(bareOutcome.status).toBe(200);
-    expect(storage.writes).toHaveLength(0);
+    expect(writesSince(bareBefore)).toHaveLength(0);
 
     const registered = await register({ polygon: geojsonPolygon(square(61)) });
     const clueId = registered.body.id ?? '';
+    const before = storage.writes.length;
     const outcome = await transfer(clueId, {
       attachments: [
         { name: '移送函.png', content: PNG_BYTES },
@@ -549,17 +567,21 @@ describe('#216 移送附件与发函日期', () => {
       ],
     });
     expect(outcome.status).toBe(200);
-    expect(storage.writes).toHaveLength(2);
-    expect(storage.writes[0]?.fileKey).toContain(`clue/${clueId}/transfer/`);
-    const materials = await cloned.prisma.clueMaterial.findMany({ where: { clueId } });
+    const written = writesSince(before);
+    expect(written).toHaveLength(2);
+    expect(written[0]?.fileKey).toContain(`clue/${clueId}/transfer/`);
+    // 登记本身会留一条空间源材料行，故这里只看移送挂上的附件行。
+    const materials = await cloned.prisma.clueMaterial.findMany({
+      where: { clueId, kind: 'attachment' },
+    });
     expect(materials).toHaveLength(2);
-    expect(materials.every((row) => row.kind === 'attachment')).toBe(true);
     expect(materials.map((row) => row.fileName).sort()).toEqual(['现场照片.png', '移送函.png']);
   });
 
   it('附件校验失败：400 non-compliant＋失败留痕 invalid-attachment＋存储零写入', async () => {
     const registered = await register({ polygon: geojsonPolygon(square(62)) });
     const clueId = registered.body.id ?? '';
+    const before = storage.writes.length;
     // 扩展名是 png，真实内容不是 PNG：魔数核对必失败。
     const fake = new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8]);
     const outcome = await transfer(clueId, {
@@ -570,11 +592,14 @@ describe('#216 移送附件与发函日期', () => {
       result: 'non-compliant',
       rules: ['attachment-content-mismatch'],
     });
-    expect(storage.writes).toHaveLength(0);
+    expect(writesSince(before)).toHaveLength(0);
     const clue = await cloned.prisma.clue.findUnique({ where: { id: clueId } });
     expect(clue?.status).toBe('in_pool');
     expect(await cloned.prisma.clueDisposition.count({ where: { clueId } })).toBe(0);
-    expect(await cloned.prisma.clueMaterial.count({ where: { clueId } })).toBe(0);
+    // 登记本身会留一条空间源材料行，故这里只看移送有没有挂上附件行。
+    expect(
+      await cloned.prisma.clueMaterial.count({ where: { clueId, kind: 'attachment' } }),
+    ).toBe(0);
     const failed = (await trailOf('clue.disposition-recorded', clueId)).filter(
       (row) => row.outcome === 'failed',
     );
@@ -595,10 +620,11 @@ describe('#216 移送附件与发函日期', () => {
   it('发函日期补录不合规：400 invalid-letter-date＋失败留痕＋存储零写入', async () => {
     const registered = await register({ polygon: geojsonPolygon(square(64)) });
     const clueId = registered.body.id ?? '';
+    const before = storage.writes.length;
     const outcome = await transfer(clueId, { letterDate: '2026-02-30' });
     expect(outcome.status).toBe(400);
     expect(outcome.body).toEqual({ result: 'non-compliant', rules: ['invalid-letter-date'] });
-    expect(storage.writes).toHaveLength(0);
+    expect(writesSince(before)).toHaveLength(0);
     const failed = (await trailOf('clue.disposition-recorded', clueId)).filter(
       (row) => row.outcome === 'failed',
     );
@@ -657,7 +683,9 @@ describe('#216 停用机构池重新指定', () => {
     const first = await register({ polygon: geojsonPolygon(square(71)), ...base });
     const second = await register({ polygon: geojsonPolygon(square(71)), ...base });
     expect(second.body.status).toBe('pending_decision');
-    const third = await register({ polygon: geojsonPolygon(square(72)), ...base });
+    // 决定步只对有命中的线索开放（待分派决定），故第三条也登记在同一位置以产生命中。
+    const third = await register({ polygon: geojsonPolygon(square(71)), ...base });
+    expect(third.body.status).toBe('pending_decision');
     const held = await decide(third.body.id ?? '', { decision: 'hold' }, 'P-216-ST-Y');
     expect(held.status).toBe(200);
     // 第四条：派出后停用，验证已派出的不能重新指定。

@@ -14,6 +14,7 @@ import { MAX_ATTACHMENT_BYTES } from '@natural-enforcement/case';
 import type { ActorRef } from '@natural-enforcement/identity';
 
 import { ClueDispositionService, type TransferUploadedFile } from './clue-disposition.service.ts';
+import { decodeMultipartFileName } from './multipart-file-name.ts';
 import type { AuthenticatedRequest } from './session.guard.ts';
 
 interface HttpReply {
@@ -94,7 +95,7 @@ export class ClueDispositionController {
 
 function toUploadedFile(file: UploadedFile): TransferUploadedFile {
   return {
-    fileName: file.originalname,
+    fileName: decodeMultipartFileName(file.originalname),
     contentType: file.mimetype,
     byteSize: file.size,
     content: new Uint8Array(file.buffer.buffer, file.buffer.byteOffset, file.buffer.byteLength),

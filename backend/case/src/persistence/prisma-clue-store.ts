@@ -968,6 +968,8 @@ export class PrismaClueStore implements ClueStore {
         registeredAt: row.registered_at,
       })),
     );
+  }
+
   async readPendingDesignationRequest(clueId: string): Promise<ClueDesignationRequestRow | null> {
     const row = await this.prisma.clueDesignationRequest.findFirst({
       where: { clueId, status: 'pending' },
