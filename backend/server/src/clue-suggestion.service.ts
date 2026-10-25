@@ -210,13 +210,13 @@ export class ClueSuggestionService {
     const districts = new Set<string>();
     for (const orgUnitId of orgUnitIds) {
       const path = await this.identity.findOrgUnitPathToRoot(orgUnitId);
+      // 根链自根向叶排列，末位是机构自身；取链上最深的区级祖先（即最近的区）。
+      let nearest: string | null = null;
       for (const id of path) {
         const org = await this.identity.findOrgUnitById(id);
-        if (org?.level === 'district') {
-          districts.add(id);
-          break;
-        }
+        if (org?.level === 'district') nearest = id;
       }
+      if (nearest !== null) districts.add(nearest);
     }
     return districts.size > 1;
   }

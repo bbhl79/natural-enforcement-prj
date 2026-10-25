@@ -41,6 +41,9 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'clue.items-supplemented',
   // 内业核查（#213，规格 G）：手动重跑。自动核查由业务表承载，不伪装成人为留痕。
   'clue.verify-retried',
+  // 疑似重复与实名查阅（#212，规格 G）：重绘成功与查阅实名事实。
+  'clue.geometry-updated',
+  'clue.reference-viewed',
   // 分派决定与两步分派（#214，规格 G）：决定（含已知晓）、派机构、派主办／协办。
   'clue.dispatched',
   'clue.held',
@@ -49,6 +52,9 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   // 移送与停用机构池重新指定（#216，规格 G）：登记移送、重新指定接收机构。
   'clue.disposition-recorded',
   'clue.pool-reassigned',
+  // 报请指定管辖（#215，规格 G）：下级报请；受理人驳回（批准由 clue.org-assigned 承载）。
+  'clue.designate-requested',
+  'clue.designate-rejected',
 ] as const;
 
 /**
@@ -259,6 +265,14 @@ export const CLUE_VERIFY_RETRY_FAILED_REASONS = ['invalid-state', 'concurrent-ch
 export type ClueVerifyRetryFailedReason = (typeof CLUE_VERIFY_RETRY_FAILED_REASONS)[number];
 
 /**
+ * 重绘被拒（outcome=failed）的原因（#212，规格 G）。
+ * invalid-state 线索不在待分派决定／待分派池、已派机构或已有活动核查；
+ * invalid-geometry 重绘的几何来源文件不合规。
+ */
+export const CLUE_GEOMETRY_UPDATE_FAILED_REASONS = ['invalid-state', 'invalid-geometry'] as const;
+export type ClueGeometryUpdateFailedReason = (typeof CLUE_GEOMETRY_UPDATE_FAILED_REASONS)[number];
+
+/**
  * 分派决定被拒（outcome=failed）的原因（#214，规格 G）。
  * complaint-must-dispatch 举报类线索只能派、不能选不派；
  * ack-required 存在未结案的疑似重复命中、派出前须点「已知晓」；
@@ -279,6 +293,7 @@ export type ClueDispatchDecideFailedReason = (typeof CLUE_DISPATCH_DECIDE_FAILED
  * missing-reassign-reason 重新分派与指定管辖的理由必填；
  * org-unit-deactivated 目标机构已停用；
  * designated-lock 指定管辖之后下级机构不能再重新分派；
+ * designation-pending 报请指定管辖期间下级机构不能分派、重新分派（#215，规格 D）；
  * invalid-state 线索状态不允许派机构；
  * concurrent-change 与并发写入冲突。
  */
@@ -287,6 +302,7 @@ export const CLUE_ORG_ASSIGNED_FAILED_REASONS = [
   'missing-reassign-reason',
   'org-unit-deactivated',
   'designated-lock',
+  'designation-pending',
   'invalid-state',
   'concurrent-change',
 ] as const;
@@ -296,12 +312,14 @@ export type ClueOrgAssignedFailedReason = (typeof CLUE_ORG_ASSIGNED_FAILED_REASO
  * 派主办／协办被拒（outcome=failed）的原因（#214，规格 G）。
  * missing-required-items 主办必填；
  * assignee-not-qualified 承办人已停用或不属于承办机构；
+ * designation-pending 报请指定管辖期间下级机构不能分派（#215，规格 D）；
  * invalid-state 线索不在已派机构状态；
  * concurrent-change 与并发写入冲突。
  */
 export const CLUE_HANDLER_ASSIGNED_FAILED_REASONS = [
   'missing-required-items',
   'assignee-not-qualified',
+  'designation-pending',
   'invalid-state',
   'concurrent-change',
 ] as const;
@@ -348,6 +366,39 @@ export type CluePoolReassignedFailedReason = (typeof CLUE_POOL_REASSIGNED_FAILED
 
 /**
  * 带结构化快照（detail）的动作（#211，规格 G）。
+ * 报请指定管辖被拒（outcome=failed）的原因（#215，规格 G）。
+ * missing-designate-reason 报请理由必填；
+ * org-unit-deactivated 拟归属机构已停用；
+ * invalid-state 线索不在可报请状态，或没有可受理的上级内勤；
+ * designation-pending 已有待处理的报请（含并发同报请被唯一索引挡下）；
+ * concurrent-change 与并发写入冲突。
+ */
+export const CLUE_DESIGNATE_REQUESTED_FAILED_REASONS = [
+  'missing-designate-reason',
+  'org-unit-deactivated',
+  'invalid-state',
+  'designation-pending',
+  'concurrent-change',
+] as const;
+export type ClueDesignateRequestedFailedReason =
+  (typeof CLUE_DESIGNATE_REQUESTED_FAILED_REASONS)[number];
+
+/**
+ * 驳回指定管辖报请被拒（outcome=failed）的原因（#215，规格 G）。
+ * missing-reject-reason 驳回理由必填；
+ * invalid-state 该线索没有待处理的报请，或操作人不是受理人；
+ * concurrent-change 与并发写入冲突。
+ */
+export const CLUE_DESIGNATE_REJECTED_FAILED_REASONS = [
+  'missing-reject-reason',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type ClueDesignateRejectedFailedReason =
+  (typeof CLUE_DESIGNATE_REJECTED_FAILED_REASONS)[number];
+
+/**
+ * 带结构化快照（detail）的动作（#211/#212/#213/#214/#215，规格 G）。
  * 线索动作把编号、当前命中集摘要、缺件键写进 detail，不占用 previousValue/nextValue/itemCount。
  * detail 只写不回：查阅接口不返回它。其余动作一律不带 detail。
  */
@@ -355,6 +406,8 @@ export const AUDIT_DETAIL_ACTIONS = [
   'clue.registered',
   'clue.items-supplemented',
   'clue.verify-retried',
+  'clue.geometry-updated',
+  'clue.reference-viewed',
   // 分派决定与两步分派（#214，规格 G）：前后状态、已知晓、原／新机构、指定管辖与承办人变更。
   'clue.dispatched',
   'clue.held',
@@ -363,5 +416,8 @@ export const AUDIT_DETAIL_ACTIONS = [
   // 移送与停用机构池重新指定（#216，规格 G）：处置类型、移送机关、文书编号、发函日期、新接收机构。
   'clue.disposition-recorded',
   'clue.pool-reassigned',
+  // 报请指定管辖（#215，规格 G）：报请机构、拟归属机构、受理机构；驳回记受理机构。
+  'clue.designate-requested',
+  'clue.designate-rejected',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];

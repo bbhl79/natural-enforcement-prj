@@ -7,6 +7,7 @@ import { Link, useSearchParams } from 'react-router';
 
 import { ClueVerificationTab } from '../clue/ClueVerificationTab';
 import ClueDispatchSection from '../clue/ClueDispatchSection';
+import { loadDesignationTodos, type DesignationTodoItem } from '../clue/dispatch';
 import { loadVerification, retryVerification, type VerificationView } from '../clue/verification';
 import { useAppDispatch, useAppSelector } from '../hooks';
 import { ErrorCard } from '../shell/StatusPages';
@@ -56,6 +57,36 @@ function VerificationContinue({ clueId }: { readonly clueId: string }) {
         })();
       }}
     />
+  );
+}
+
+/** 受理人待办：待处理的指定管辖报请（#215）；点开进③分派决定处理。 */
+function DesignationTodos() {
+  const dispatch = useAppDispatch();
+  const [items, setItems] = useState<readonly DesignationTodoItem[]>([]);
+  useEffect(() => {
+    void loadDesignationTodos(dispatch).then(setItems, () => setItems([]));
+  }, [dispatch]);
+  if (items.length === 0) return null;
+  return (
+    <div className="card" data-role="designation-todos">
+      <div className="card-h">
+        待处理的指定管辖报请
+        <span className="hint">{`${items.length} 项`}</span>
+      </div>
+      {items.map((item) => (
+        <div className="form-row" key={item.requestId} data-role="designation-todo">
+          <label>{item.clueCode}</label>
+          <div>
+            {`${item.requestingOrgName}报请：${item.reason}`}
+            {item.proposedOrgName ? `（拟归属：${item.proposedOrgName}）` : ''}{' '}
+            <Link className="btn btn-sm" to={`/workbench?step=3&clue=${item.clueId}`}>
+              处理
+            </Link>
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -137,6 +168,7 @@ export default function WorkbenchPage() {
         </>
       ) : (
         <>
+          <DesignationTodos />
           <div className="card">
             <div className="card-h">
               我的待办

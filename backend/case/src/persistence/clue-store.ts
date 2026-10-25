@@ -119,9 +119,14 @@ export interface ClueHitSummary {
   readonly otherClueCode: string;
   /** 对方的面对。 */
   readonly otherPartId: string;
+  readonly otherPartIndex: number;
   readonly selfRatio: number;
   readonly otherRatio: number;
   readonly intersectionArea: number;
+  /** 本线索该面的几何（EPSG:4490 GeoJSON 文本；对比查看用）。 */
+  readonly selfGeojson: string;
+  /** 对方该面的几何（EPSG:4490 GeoJSON 文本；对比查看用）。 */
+  readonly otherGeojson: string;
 }
 
 /** 命中集待写行（双向：对方线索也打上疑似重复标记）。 */
@@ -136,6 +141,61 @@ export interface ClueHitWrite {
   readonly selfRatio: number;
   readonly otherRatio: number;
   readonly intersectionArea: number;
+}
+
+/** 重算上下文：重绘与命中集替换要用的全部事实。 */
+export interface ClueDuplicateContext {
+  readonly clueId: string;
+  readonly code: string;
+  readonly domain: string;
+  /** 线索来源编码（决定步契约的来源大类判定用）。 */
+  readonly sourceCode: string;
+  /** 登记时间。 */
+  readonly registeredAt: Date;
+  /** 匿名线索附件已主动确认移除反映人身份信息。 */
+  readonly anonymityConfirmed: boolean;
+  /** 线索主状态。 */
+  readonly status: string;
+  /** 登记人（重绘仅限录入人本人）。 */
+  readonly registeredBy: string;
+  /** 登记机构。 */
+  readonly enteredOrgId: string;
+  /** 当前有效的接收机构（未派机构即空）。 */
+  readonly assignedOrgUnitIds: readonly string[];
+  /** 核查状态（活动核查即 running）。 */
+  readonly verificationStatus: string;
+  /** 几何形态：face | point。 */
+  readonly spatialKind: 'face' | 'point';
+  /** 当前空间部件（EPSG:4490 GeoJSON 文本）。 */
+  readonly parts: readonly {
+    readonly partId: string;
+    readonly partIndex: number;
+    readonly geojson: string;
+  }[];
+  /** 当前命中集（本线索视角；重算前的摘要）。 */
+  readonly hits: readonly ClueHitSummary[];
+  /** 当前命中集计算时间。 */
+  readonly dupComputedAt: Date | null;
+}
+
+/** 疑似重复对方的展示基础信息（含反映人取值，按权限在装配层脱敏）。 */
+export interface ClueDuplicatePeer {
+  readonly clueId: string;
+  readonly code: string;
+  readonly status: string;
+  readonly registeredAt: Date;
+  /** 线索来源编码。 */
+  readonly sourceCode: string;
+  /** 匿名线索附件已主动确认移除反映人身份信息。 */
+  readonly anonymityConfirmed: boolean;
+  /** 位置取值（clue.location；没有即 null）。 */
+  readonly location: string | null;
+  /** 反映人姓名取值（clue.reporter_name；没有即 null）。 */
+  readonly reporterName: string | null;
+  /** 反映人联系方式取值（clue.reporter_contact；没有即 null）。 */
+  readonly reporterContact: string | null;
+  /** 是否匿名（clue.reporter_anonymous 取值为「是」）。 */
+  readonly reporterAnonymous: boolean;
 }
 
 /** 登记结果。 */
@@ -354,6 +414,48 @@ export interface CluePeopleAssignWrite {
   readonly assignedAt: Date;
 }
 
+/** 指定管辖报请行。 */
+export interface ClueDesignationRequestRow {
+  readonly id: string;
+  readonly clueId: string;
+  readonly requestingOrgId: string;
+  /** 拟归属机构（可选；未选即 null）。 */
+  readonly proposedOrgId: string | null;
+  /** 受理机构（报请方与拟归属机构最近共同上级中有内勤的最近一级）。 */
+  readonly reviewerOrgId: string | null;
+  readonly reason: string;
+  /** 状态：pending | approved | rejected。 */
+  readonly status: string;
+  readonly decidedBy: string | null;
+  readonly decidedAt: Date | null;
+  /** 驳回理由（受理人填；批准时为空）。 */
+  readonly decisionReason: string | null;
+  readonly createdAt: Date;
+}
+
+/** 指定管辖报请的写入。 */
+export interface ClueDesignationRequestWrite {
+  readonly id: string;
+  readonly clueId: string;
+  readonly requestingOrgId: string;
+  readonly proposedOrgId: string | null;
+  readonly reviewerOrgId: string;
+  readonly reason: string;
+  readonly createdAt: Date;
+}
+
+/** 报请写入结果：写入成功；已有待处理报请（部分唯一索引挡下并发同报请）。 */
+export type ClueDesignationRequestInsert = 'inserted' | 'pending-exists';
+
+/** 关闭（批准或驳回）一条线索的全部待处理报请。 */
+export interface ClueDesignationCloseWrite {
+  readonly clueId: string;
+  readonly status: 'approved' | 'rejected';
+  readonly decidedBy: string;
+  readonly decisionReason: string | null;
+  readonly decidedAt: Date;
+}
+
 /** 线索存储端口。 */
 export interface ClueStore {
   /** 按幂等键查线索。 */
@@ -367,6 +469,31 @@ export interface ClueStore {
   insertRegistration(write: ClueRegistrationWrite): Promise<ClueRegistrationOutcome>;
   /** 写命中集：正反两个方向各一行，对方线索也打上疑似重复标记（不改对方状态）。 */
   insertHits(clueId: string, hits: readonly ClueHitWrite[]): Promise<void>;
+  /** 读疑似重复上下文（重绘与重算的对象级校验与前后摘要用）。 */
+  readDuplicateContext(clueId: string): Promise<ClueDuplicateContext | null>;
+  /** 读一条线索的当前命中集（本线索视角，对方编号带出来）。 */
+  listHitSummaries(clueId: string): Promise<ClueHitSummary[]>;
+  /**
+   * 以库内既有部件重算一条线索的命中集（重绘后的正式计算；不含自己）。
+   * 只算不写：调用方在同一写事务里经 replaceHitSet 整体替换。
+   */
+  computeHitsForClue(clueId: string): Promise<ClueHitSummary[]>;
+  /**
+   * 整体替换一条线索的命中集：先删掉涉及该线索的全部命中行（正向与反向），
+   * 再写入新命中集（正反两行），并把 dup_computed_at 推到当前时刻。零命中即清空。
+   */
+  replaceHitSet(clueId: string, hits: readonly ClueHitWrite[]): Promise<void>;
+  /**
+   * 重绘的空间写入：删掉旧部件、写入新部件，更新面数与 dup_computed_at。
+   * 涉及该线索的命中行须在同事务里先经 replaceHitSet 清掉（命中行外键挂部件）。
+   */
+  replaceSpatialParts(clueId: string, parts: readonly ClueSpatialPartRow[]): Promise<void>;
+  /** 更新线索主状态（重绘后按命中集重推：待分派决定／待分派池）。 */
+  updateClueStatus(clueId: string, status: string): Promise<void>;
+  /** 读一条线索的要件取值（键 → 文本取值；没有取值即 null）。 */
+  readItemValues(clueId: string): Promise<Readonly<Record<string, string | null>>>;
+  /** 批量读疑似重复对方的基础信息（编号、状态、登记时间、来源与反映人取值）。 */
+  readDuplicatePeers(peerIds: readonly string[]): Promise<ReadonlyMap<string, ClueDuplicatePeer>>;
   /** 读线索的登记机构（对象级校验的目标机构）。 */
   readClueOrgUnitId(clueId: string): Promise<string | null>;
   /** 读一条线索的未补齐缺件。 */
@@ -416,11 +543,6 @@ export interface ClueStore {
    */
   readTransferContext(clueId: string): Promise<ClueTransferContext | null>;
   /**
-   * 该线索有无未关闭的指定管辖报请（status='pending'）。
-   * 报请期间下级不能移送（409 designation-pending）；#215 落地后与其共用同一判定。
-   */
-  hasOpenDesignationRequest(clueId: string): Promise<boolean>;
-  /**
    * 登记移送：状态由 expectedStatus 条件更新为 transferred_out 终态
    * （仅 in_pool/org_assigned/handler_assigned 可移送），写处置行（disposition='transfer'），
    * 关止当前分派事实与承办人行（终态退出 OpenItems），挂已入库的移送附件材料行。
@@ -439,6 +561,17 @@ export interface ClueStore {
    * 返回 false 表示当前状态与 expectedStatus 不符（并发冲突），业务行不变。
    */
   reassignPool(write: CluePoolReassignWrite): Promise<boolean>;
+  /** 该线索当前待处理的指定管辖报请（无即 null）。报请期间的指定锁（designation-pending）由它判定。 */
+  readPendingDesignationRequest(clueId: string): Promise<ClueDesignationRequestRow | null>;
+  /** 全部待处理的指定管辖报请（受理人待办取数；量小，由调用方按受理机构过滤）。 */
+  listPendingDesignationRequests(): Promise<ClueDesignationRequestRow[]>;
+  /**
+   * 写入一条指定管辖报请。每条线索至多一条待处理报请：并发同报请被部分唯一索引挡下，
+   * 返回 'pending-exists'，调用方判 409 designation-pending。
+   */
+  insertDesignationRequest(write: ClueDesignationRequestWrite): Promise<ClueDesignationRequestInsert>;
+  /** 关闭该线索的全部待处理报请（指定管辖批准或驳回）；返回关止的条数。 */
+  closePendingDesignationRequests(write: ClueDesignationCloseWrite): Promise<number>;
 }
 
 /** 停用机构待分派池线索行（管理端重新指定的候选清单）。 */

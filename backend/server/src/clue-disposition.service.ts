@@ -211,7 +211,8 @@ export class ClueDispositionService {
       });
     }
     // 报请期间的锁：存在未关闭的指定管辖报请，下级不能移送。
-    if (await this.clues.hasOpenDesignationRequest(clueId)) {
+    // 判定与 #215 的指定锁同源：同一条报请行、同一 status='pending' 口径。
+    if ((await this.clues.readPendingDesignationRequest(clueId)) !== null) {
       return this.rejectTransfer(actor, actorCode, targetOrgId, clueId, {
         status: 409,
         result: 'invalid-state',

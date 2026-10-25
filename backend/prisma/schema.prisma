@@ -857,15 +857,17 @@ model ClueClosureReminder {
   @@map("clue_closure_reminder")
 }
 
-/// 指定管辖报请（下级报请上级指定管辖）
+/// 指定管辖报请（下级报请上级指定管辖；#215 规格 D）
 model ClueDesignationRequest {
   id String @id
   /// 所属线索
   clueId String @map("clue_id")
   /// 报请机构
   requestingOrgId String @map("requesting_org_id")
-  /// 拟归属机构
-  proposedOrgId String @map("proposed_org_id")
+  /// 拟归属机构（可选；为空时受理人为报请方直接上级内勤）
+  proposedOrgId String? @map("proposed_org_id")
+  /// 受理机构（报请方与拟归属机构最近共同上级中有内勤的最近一级）
+  reviewerOrgId String? @map("reviewer_org_id")
   /// 报请理由
   reason String
   /// 状态：pending | approved | rejected
@@ -873,6 +875,8 @@ model ClueDesignationRequest {
   /// 受理人
   decidedBy String? @map("decided_by")
   decidedAt DateTime? @db.Timestamptz(6) @map("decided_at")
+  /// 驳回理由（理由必填；自由文本留业务行，不进留痕）
+  decisionReason String? @map("decision_reason")
   createdAt  DateTime   @default(now()) @db.Timestamptz(6) @map("created_at")
 
   @@index([clueId, status])
