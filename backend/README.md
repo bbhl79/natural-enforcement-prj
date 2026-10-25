@@ -197,6 +197,24 @@ DELETE（复用 `reject_row_mutation`），应用层另由结构测试 `referenc
 | `ClueClosureReminder` | 结案提醒 | 不予立案、移送、立案时按当前命中集逐对生成 |
 | `ClueDesignationRequest` | 指定管辖报请 | 下级报请上级指定管辖。`status` 取 pending/approved/rejected |
 
+### 线索登记的接口（#211）
+
+| 接口 | 方法 | 说明 |
+|---|---|---|
+| `/api/clues` | POST | 线索登记。`multipart/form-data`：表单字段（`sourceCode`、`domain`、`types`、`tags`、`subjectUnknown`、`confirm`、`anonymityConfirmed`、`srid`、`values`）与文件项（`attachment` 多件、`spatial-source` 一件）一次提交。头 `Idempotency-Key` 必填 |
+| `/api/clues/:id/gaps/fill` | POST | 缺件补齐。请求体 `{ values: { "<要件键>": "<取值>" } }`：一次可补一项，也可一次补多项 |
+| `/api/clue/reference` | GET | 参照清单：线索来源编码与可选违法类型，供录入表单渲染规范选择控件 |
+
+登记的顺序（规格 E「上传方式」）：先完整校验表单与全部文件的真实内容，任一不通过即 4xx
+（失败留痕，存储零写入）；全部通过后逐件写入存储，最后在一个数据库事务里写业务行、
+材料关联与成功留痕。
+
+- 公共层与来源层阻断项缺失 → 400 `{result:'non-compliant', rules:[缺件键]}` ＋失败留痕，业务行不变。
+- 类型层缺件未确认 → 400（rules 是类型层要件键）；带 `confirm:true` 确认后保存 → 200，正文含常驻缺件清单。
+- 无缺件时保存成功 → 201，正文含编号、状态、缺件与正式命中。
+- 附件类型、真实内容、件数或字节数不合规 → 400；单件或合计超限 → 413。
+- 同一 `Idempotency-Key` 同报文 → 200（回首次结果）；异报文 → 409 `already-exists`。
+
 ## 测试装配层豁免（integration 层）
 
 `integration/` 不属于任何业务模块，它按 #47 的验收矩阵做跨模块装配：直接引各模块 `src`

@@ -18,6 +18,8 @@ import {
   type RequirementItem,
 } from '@natural-enforcement/case';
 import {
+  SOURCE_CODES,
+  VIOLATION_TYPES,
   findDocument,
   findSourceCode,
   findSourceGroupCode,
@@ -64,8 +66,43 @@ export type FormSchemaOutcome =
   | { readonly status: 200; readonly body: FormSchemaBody }
   | { readonly status: 400; readonly body: { readonly result: 'non-compliant'; readonly rules: readonly string[] } };
 
+/** 参照清单：线索来源编码与可选违法类型。前端按它渲染规范选择控件，不复制取值表。 */
+export interface ClueReferenceBody {
+  readonly result: 'listed';
+  readonly sources: readonly {
+    readonly code: string;
+    readonly name: string;
+    readonly group: string;
+  }[];
+  readonly types: readonly {
+    readonly code: string;
+    readonly name: string;
+    readonly domain: Domain;
+  }[];
+}
+
 @Injectable()
 export class ClueFormSchemaService {
+  /** 参照清单（只读）。取值表只此一份，前端按它渲染选择控件。 */
+  reference(): { readonly status: 200; readonly body: ClueReferenceBody } {
+    return {
+      status: 200,
+      body: {
+        result: 'listed',
+        sources: SOURCE_CODES.map((row) => ({
+          code: row.code,
+          name: row.name,
+          group: sourceGroupName(findSourceGroupCode(row.code) ?? row.code),
+        })),
+        types: VIOLATION_TYPES.filter((row) => row.selectable).map((row) => ({
+          code: row.code,
+          name: row.name,
+          domain: row.domain as Domain,
+        })),
+      },
+    };
+  }
+
   schema(query: FormSchemaQuery): FormSchemaOutcome {
     const sourceCode = typeof query.sourceCode === 'string' ? query.sourceCode.trim() : '';
     if (sourceCode === '') return bad(['missing-source-code']);
