@@ -214,7 +214,7 @@ describe('几何解析（土地/矿产＝面，测绘/规划＝点）', () => {
     expect(outcome.rule).toBe('spatial-geometry-type-rejected');
   });
 
-  it('点域只接受一个点位：多点拒绝', () => {
+  it('点域只接受一个点位：FeatureCollection 两个 Point 拒绝', () => {
     const outcome = parseSpatialSource({
       text: JSON.stringify({
         type: 'FeatureCollection',
@@ -224,6 +224,23 @@ describe('几何解析（土地/矿产＝面，测绘/规划＝点）', () => {
         ],
       }),
       domain: 'survey',
+      srid: ALLOWED_INPUT_SRID,
+    });
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.rule).toBe('spatial-geometry-type-rejected');
+  });
+
+  it('点域只接受一个点位：MultiPoint 拒绝（不管几个点）', () => {
+    const outcome = parseSpatialSource({
+      text: JSON.stringify({
+        type: 'MultiPoint',
+        coordinates: [
+          [113, 23],
+          [114, 24],
+        ],
+      }),
+      domain: 'planning',
       srid: ALLOWED_INPUT_SRID,
     });
     expect(outcome.ok).toBe(false);

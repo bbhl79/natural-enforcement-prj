@@ -268,7 +268,7 @@ export function ClueRegisterForm({
                 </option>
               ))}
             </select>
-            <div className="help">土地与矿产录面状几何，测绘与规划录点位。</div>
+            <div className="help">土地与矿产录面状几何。测绘与规划录点位：一条线索只对应一个点位，一个文件多个点或点面混合一律拒绝。</div>
           </div>
         </div>
         <div className="form-row" data-key="clue.initial_types">
