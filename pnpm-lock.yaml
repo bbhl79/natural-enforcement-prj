@@ -283,6 +283,9 @@ importers:
       '@natural-enforcement/identity':
         specifier: workspace:*
         version: link:../identity
+      '@natural-enforcement/queue':
+        specifier: workspace:*
+        version: link:../../packages/queue
       '@natural-enforcement/storage':
         specifier: workspace:*
         version: link:../../packages/storage

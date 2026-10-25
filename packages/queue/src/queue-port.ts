@@ -1,7 +1,7 @@
 // 队列接口的进程内装配（#213）：起 QueuePort，连接由本包内部构造。
 //
 // 调用方只给队列名与 Redis 地址；ioredis 只出现在本设施包内。
-// 连接用 lazyConnect：进程不投递任务就不连 Redis，测试与只读部署不受影响。
+// 连接是惰性的：进程不投递任务就不建队列、不连 Redis，测试与只读部署不受影响。
 import { Redis } from 'ioredis';
 
 import { createBullMqQueue } from './bullmq-queue.ts';
@@ -22,20 +22,31 @@ export interface QueuePortOptions {
 export function createQueuePort(options: QueuePortOptions = {}): QueuePort {
   const queueName = options.queueName ?? DEFAULT_QUEUE_NAME;
   const redisUrl = options.redisUrl ?? process.env.REDIS_URL ?? 'redis://127.0.0.1:6379';
-  const connection = new Redis(redisUrl, {
-    maxRetriesPerRequest: null,
-    lazyConnect: true,
-  });
-  connection.on('error', (error: Error) => {
-    console.error(`队列连接错误：${error.message}`);
-  });
-  const port = createBullMqQueue(queueName, connection);
+  let port: QueuePort | null = null;
+  let connection: Redis | null = null;
+
+  const open = (): QueuePort => {
+    if (port === null) {
+      connection = new Redis(redisUrl, {
+        maxRetriesPerRequest: null,
+        lazyConnect: true,
+      });
+      connection.on('error', (error: Error) => {
+        console.error(`队列连接错误：${error.message}`);
+      });
+      port = createBullMqQueue(queueName, connection);
+    }
+    return port;
+  };
+
   return {
-    enqueue: (jobName, payload, enqueueOptions) => port.enqueue(jobName, payload, enqueueOptions),
-    waitForCompletion: (ref, timeoutMs) => port.waitForCompletion(ref, timeoutMs),
+    enqueue: (jobName, payload, enqueueOptions) => open().enqueue(jobName, payload, enqueueOptions),
+    waitForCompletion: (ref, timeoutMs) => open().waitForCompletion(ref, timeoutMs),
     close: async () => {
-      await port.close();
-      connection.disconnect();
+      if (port !== null) await port.close();
+      connection?.disconnect();
+      port = null;
+      connection = null;
     },
   };
 }
