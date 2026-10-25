@@ -41,6 +41,9 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'clue.items-supplemented',
   // 内业核查（#213，规格 G）：手动重跑。自动核查由业务表承载，不伪装成人为留痕。
   'clue.verify-retried',
+  // 疑似重复与实名查阅（#212，规格 G）：重绘成功与查阅实名事实。
+  'clue.geometry-updated',
+  'clue.reference-viewed',
 ] as const;
 
 /**
@@ -251,7 +254,15 @@ export const CLUE_VERIFY_RETRY_FAILED_REASONS = ['invalid-state', 'concurrent-ch
 export type ClueVerifyRetryFailedReason = (typeof CLUE_VERIFY_RETRY_FAILED_REASONS)[number];
 
 /**
- * 带结构化快照（detail）的动作（#211，规格 G）。
+ * 重绘被拒（outcome=failed）的原因（#212，规格 G）。
+ * invalid-state 线索不在待分派决定／待分派池、已派机构或已有活动核查；
+ * invalid-geometry 重绘的几何来源文件不合规。
+ */
+export const CLUE_GEOMETRY_UPDATE_FAILED_REASONS = ['invalid-state', 'invalid-geometry'] as const;
+export type ClueGeometryUpdateFailedReason = (typeof CLUE_GEOMETRY_UPDATE_FAILED_REASONS)[number];
+
+/**
+ * 带结构化快照（detail）的动作（#211/#212/#213，规格 G）。
  * 线索动作把编号、当前命中集摘要、缺件键写进 detail，不占用 previousValue/nextValue/itemCount。
  * detail 只写不回：查阅接口不返回它。其余动作一律不带 detail。
  */
@@ -259,5 +270,7 @@ export const AUDIT_DETAIL_ACTIONS = [
   'clue.registered',
   'clue.items-supplemented',
   'clue.verify-retried',
+  'clue.geometry-updated',
+  'clue.reference-viewed',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];
