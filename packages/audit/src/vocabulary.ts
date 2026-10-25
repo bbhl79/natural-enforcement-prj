@@ -39,6 +39,8 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   // 线索登记（#211，规格 G）：登记成功与缺件补齐。
   'clue.registered',
   'clue.items-supplemented',
+  // 内业核查（#213，规格 G）：手动重跑。自动核查由业务表承载，不伪装成人为留痕。
+  'clue.verify-retried',
 ] as const;
 
 /**
@@ -241,9 +243,21 @@ export const CLUE_ITEMS_SUPPLEMENT_FAILED_REASONS = ['missing-required-items', '
 export type ClueItemsSupplementFailedReason = (typeof CLUE_ITEMS_SUPPLEMENT_FAILED_REASONS)[number];
 
 /**
+ * 手动重跑内业核查被拒（outcome=failed）的原因（#213，规格 G）。
+ * invalid-state 线索终态或该法域不设内业核查；
+ * concurrent-change 该线索已有进行中的核查（并发手动重跑）。
+ */
+export const CLUE_VERIFY_RETRY_FAILED_REASONS = ['invalid-state', 'concurrent-change'] as const;
+export type ClueVerifyRetryFailedReason = (typeof CLUE_VERIFY_RETRY_FAILED_REASONS)[number];
+
+/**
  * 带结构化快照（detail）的动作（#211，规格 G）。
  * 线索动作把编号、当前命中集摘要、缺件键写进 detail，不占用 previousValue/nextValue/itemCount。
  * detail 只写不回：查阅接口不返回它。其余动作一律不带 detail。
  */
-export const AUDIT_DETAIL_ACTIONS = ['clue.registered', 'clue.items-supplemented'] as const;
+export const AUDIT_DETAIL_ACTIONS = [
+  'clue.registered',
+  'clue.items-supplemented',
+  'clue.verify-retried',
+] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];

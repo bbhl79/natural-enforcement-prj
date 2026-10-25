@@ -51,6 +51,7 @@ import {
 } from '@natural-enforcement/identity';
 import { STORAGE_PORT, type StoragePort } from '@natural-enforcement/storage';
 
+import { ClueVerificationService } from './clue-verification.service.ts';
 import { LOGIN_DIRECTORY, type LoginDirectory } from './login-directory.ts';
 import { UNIT_OF_WORK, type UnitOfWork } from './unit-of-work.ts';
 
@@ -147,6 +148,7 @@ export class ClueRegistrationService {
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     @Inject(STORAGE_PORT) private readonly storage: StoragePort,
     private readonly access: AccessControlService,
+    private readonly verification: ClueVerificationService,
   ) {}
 
   async register(actor: ActorRef, request: ClueRegistrationRequest): Promise<ClueRegistrationOutcome> {
@@ -184,11 +186,11 @@ export class ClueRegistrationService {
     // 五、一个事务：业务行 + 材料关联 + 成功留痕。
     const write: ClueRegistrationWrite = { ...plan.write, materials };
     try {
-      return await this.uow.run(async (tx) => {
-        const outcome = await tx.clues.insertRegistration(write);
+      const outcome = await this.uow.run(async (tx): Promise<ClueRegistrationOutcome> => {
+        const inserted = await tx.clues.insertRegistration(write);
         await tx.clues.insertHits(
           plan.clueId,
-          outcome.hits.map((hit) => ({
+          inserted.hits.map((hit) => ({
             id: newUlid(),
             reverseId: newUlid(),
             partId: hit.partId,
@@ -202,10 +204,10 @@ export class ClueRegistrationService {
         const body: ClueRegistrationBody = {
           result: 'registered',
           id: plan.clueId,
-          code: outcome.code,
-          status: outcome.status,
+          code: inserted.code,
+          status: inserted.status,
           gaps: plan.gaps.map((gap) => ({ key: gap.key, label: gap.label })),
-          hits: outcome.hits.map((hit) => ({
+          hits: inserted.hits.map((hit) => ({
             otherClueId: hit.otherClueId,
             otherClueCode: hit.otherClueCode,
             selfRatio: hit.selfRatio,
@@ -217,8 +219,8 @@ export class ClueRegistrationService {
           action: 'clue.registered',
           ...this.parties(actor, account?.code ?? null, orgUnitId, plan.clueId),
           detail: JSON.stringify({
-            code: outcome.code,
-            status: outcome.status,
+            code: inserted.code,
+            status: inserted.status,
             hits: body.hits.map((hit) => ({
               otherClueCode: hit.otherClueCode,
               selfRatio: Number(hit.selfRatio.toFixed(1)),
@@ -229,6 +231,10 @@ export class ClueRegistrationService {
         });
         return { status: plan.gaps.length > 0 ? 200 : 201, body };
       });
+      // 六、录入保存成功后自动入队内业核查（不可跳过；测绘与规划不跑）。
+      // 投递失败时运行已置「没跑成」，重跑提示继续挂着，不影响登记结果。
+      await this.scheduleVerification(plan.clueId);
+      return outcome;
     } catch (error) {
       // 并发同幂等键：唯一约束挡住后来者，后来者回首次结果（异报文则 409）。
       if (error instanceof ClueIdempotencyConflictError) {
@@ -240,6 +246,15 @@ export class ClueRegistrationService {
         return { status: 409, body: { result: 'already-exists' } };
       }
       throw error;
+    }
+  }
+
+  /** 自动入队内业核查。投递失败只记日志：线索已保存，核查状态由运行行承载。 */
+  private async scheduleVerification(clueId: string): Promise<void> {
+    try {
+      await this.verification.scheduleAutomatic(clueId);
+    } catch (error) {
+      console.error(`内业核查自动入队失败（线索 ${clueId}）：${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

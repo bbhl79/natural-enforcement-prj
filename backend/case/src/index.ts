@@ -64,7 +64,11 @@ export type {
 } from './clue/requirements/index.ts';
 export { CaseModule } from './case.module.ts';
 // #211：线索持久化端口（Prisma 适配器在模块内，不经公共出口出）。
-export { CLUE_STORE, ClueIdempotencyConflictError } from './persistence/clue-store.ts';
+export {
+  CLUE_STORE,
+  ClueIdempotencyConflictError,
+  ClueVerificationRunningError,
+} from './persistence/clue-store.ts';
 export type {
   ClueHitSummary,
   ClueHitWrite,
@@ -80,4 +84,56 @@ export type {
   ClueSpatialPartRow,
   ClueSpatialWrite,
   ClueStore,
+  ClueVerificationArtifacts,
+  ClueVerificationContext,
+  ClueVerificationFinishWrite,
+  ClueVerificationRunRow,
+  ClueVerificationRunWrite,
 } from './persistence/clue-store.ts';
+// #213：内业核查的图层目录、状态口径、核查执行端口与报告组装。
+export {
+  ALL_LAYERS,
+  AUTO_VERIFICATION_ATTEMPTS,
+  AUTO_VERIFICATION_BACKOFF,
+  CLUE_VERIFICATION_PORT,
+  FAILURE_CATEGORIES,
+  LAYER_STATE_LABELS,
+  LAYER_STATES,
+  MANUAL_VERIFICATION_ATTEMPTS,
+  STREET_BOUNDARY_LAYER,
+  TERMINAL_CLUE_STATUSES,
+  UNAVAILABLE_REASONS,
+  VERIFICATION_DOMAINS,
+  VERIFICATION_LAYERS,
+  VERIFICATION_REPORT_VERSION,
+  VERIFICATION_RUN_STATUSES,
+  VERIFICATION_STATUSES,
+  VERIFICATION_STATUS_LABELS,
+  buildVerificationAnalysis,
+  buildVerificationReport,
+  createLayerServiceVerificationPort,
+  findVerificationLayer,
+  isTerminalClueStatus,
+  layerStateOf,
+  reportLayerOf,
+  requiresVerification,
+  spatialVersionOf,
+  verificationReportText,
+} from './clue/verification/index.ts';
+export type {
+  ClueVerificationPort,
+  FailureCategory,
+  LayerServiceVerificationOptions,
+  LayerState,
+  VerificationFeature,
+  VerificationLayer,
+  VerificationLayerResult,
+  VerificationOutcome,
+  VerificationPart,
+  VerificationReport,
+  VerificationReportInput,
+  VerificationReportLayer,
+  VerificationRequest,
+  VerificationRunStatus,
+  VerificationStatus,
+} from './clue/verification/index.ts';

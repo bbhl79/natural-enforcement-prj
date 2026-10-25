@@ -14,6 +14,7 @@
     "@natural-enforcement/deadline": "workspace:*",
     "@natural-enforcement/geo-dict": "workspace:*",
     "@natural-enforcement/identity": "workspace:*",
+    "@natural-enforcement/queue": "workspace:*",
     "@natural-enforcement/storage": "workspace:*",
     "@natural-enforcement/supervision": "workspace:*",
     "@nestjs/common": "12.1.2",
