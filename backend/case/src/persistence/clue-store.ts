@@ -7,6 +7,8 @@
 // 几何三表（空间对象、空间部件、命中集）的写入走 $queryRaw（执行纪律 2）：
 // 适配器里的几何读写经 case 内的空间写入口径，不经 ORM 写。
 
+import type { VerificationLayerResult } from '../clue/verification/port.ts';
+
 /** 注入令牌。 */
 export const CLUE_STORE = Symbol('CLUE_STORE');
 
@@ -179,6 +181,87 @@ export interface ClueGapFillOutcome {
   readonly remaining: readonly { readonly key: string; readonly label: string }[];
 }
 
+/** 核查执行中已有活动核查（每条线索至多一个）。 */
+export class ClueVerificationRunningError extends Error {
+  constructor() {
+    super('该线索已有进行中的核查');
+    this.name = 'ClueVerificationRunningError';
+  }
+}
+
+/** 线索的核查上下文：编排与对象级校验要用的全部事实。 */
+export interface ClueVerificationContext {
+  readonly clueId: string;
+  readonly code: string;
+  /** 法域：land／mineral 跑核查，survey／planning 不跑。 */
+  readonly domain: string;
+  /** 线索主状态。 */
+  readonly status: string;
+  /** 登记人（人员 id）。 */
+  readonly registeredBy: string;
+  /** 登记机构。 */
+  readonly enteredOrgId: string;
+  /** 线索归属的机构（登记机构与当前有效的接收机构）。对象级校验用。 */
+  readonly orgUnitIds: readonly string[];
+  /** 图斑总面积（平方米）。 */
+  readonly totalArea: number;
+  /** 空间部件（EPSG:4490 GeoJSON 文本）。 */
+  readonly parts: readonly {
+    readonly partId: string;
+    readonly partIndex: number;
+    readonly geojson: string;
+  }[];
+}
+
+/** 一次核查运行的产物引用（对象存储的文件版本引用）。 */
+export interface ClueVerificationArtifacts {
+  readonly report: { readonly fileKey: string; readonly versionId: string };
+  readonly analysis: { readonly fileKey: string; readonly versionId: string };
+}
+
+/** 起一次核查运行的写入内容。 */
+export interface ClueVerificationRunWrite {
+  readonly id: string;
+  readonly clueId: string;
+  readonly runNo: number;
+  /** 触发方式：auto（自动核查）｜manual（手动重跑）。 */
+  readonly trigger: 'auto' | 'manual';
+  readonly startedAt: Date;
+}
+
+/** 收尾一次运行的写入内容。 */
+export interface ClueVerificationFinishWrite {
+  readonly runId: string;
+  readonly status: 'done' | 'failed';
+  /** 已用尝试次数。 */
+  readonly attemptsUsed: number;
+  /** 失败类别：瞬时｜确定性；不失败即 null。 */
+  readonly failureCategory: 'transient' | 'deterministic' | null;
+  /** 缺图层（键）；不缺即空。 */
+  readonly missingLayers: readonly string[];
+  /** 每层事实（含服务地址、查询时间、要素标识与相交要素几何）。 */
+  readonly layers: readonly VerificationLayerResult[];
+  /** 产物引用；没跑成即 null。 */
+  readonly artifacts: ClueVerificationArtifacts | null;
+  readonly endedAt: Date;
+}
+
+/** 一次核查运行行。 */
+export interface ClueVerificationRunRow {
+  readonly id: string;
+  readonly clueId: string;
+  readonly runNo: number;
+  readonly status: 'running' | 'done' | 'failed';
+  readonly attemptsUsed: number;
+  readonly trigger: 'auto' | 'manual';
+  readonly failureCategory: 'transient' | 'deterministic' | null;
+  readonly missingLayers: readonly string[];
+  readonly layers: readonly VerificationLayerResult[];
+  readonly artifacts: ClueVerificationArtifacts | null;
+  readonly startedAt: Date;
+  readonly endedAt: Date | null;
+}
+
 /** 线索存储端口。 */
 export interface ClueStore {
   /** 按幂等键查线索。 */
@@ -198,4 +281,23 @@ export interface ClueStore {
   listOpenGaps(clueId: string): Promise<ClueItemGapRow[]>;
   /** 补齐：写取值并把对应缺件标为已补齐（缺件行保留为事实，清单随之外）。 */
   fillGaps(write: ClueGapFillWrite): Promise<ClueGapFillOutcome>;
+  /** 读线索的核查上下文（法域、状态、登记人、几何与图斑总面积）。 */
+  readVerificationContext(clueId: string): Promise<ClueVerificationContext | null>;
+  /** 该线索的下一个运行序号。 */
+  nextVerificationRunNo(clueId: string): Promise<number>;
+  /**
+   * 起一次核查运行：写运行行并把线索的核查状态置为进行中。
+   * 每条线索至多一个活动核查；已有活动核查即抛 ClueVerificationRunningError。
+   */
+  insertVerificationRun(write: ClueVerificationRunWrite): Promise<void>;
+  /** 读一次运行。 */
+  readVerificationRun(runId: string): Promise<ClueVerificationRunRow | null>;
+  /** 读线索的全部运行（序号倒序）。 */
+  listVerificationRuns(clueId: string): Promise<ClueVerificationRunRow[]>;
+  /** 收尾一次运行：写状态、尝试次数、失败类别、缺图层、每层事实与产物引用，并同步线索核查状态。 */
+  finishVerificationRun(write: ClueVerificationFinishWrite): Promise<void>;
+  /** 记一次已用尝试次数（自动重试的中间态：运行仍在进行中）。 */
+  recordVerificationAttempt(runId: string, attemptsUsed: number): Promise<void>;
+  /** 线索当前的主办与协办（对象级校验用）。 */
+  listActiveHandlers(clueId: string): Promise<readonly { personnelId: string; role: string }[]>;
 }

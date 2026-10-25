@@ -12,7 +12,8 @@
 
 import { Prisma, type PrismaClient } from '../../../prisma/generated/prisma/client.ts';
 
-import { ClueIdempotencyConflictError } from './clue-store.ts';
+import type { VerificationLayerResult } from '../clue/verification/port.ts';
+import { ClueIdempotencyConflictError, ClueVerificationRunningError } from './clue-store.ts';
 import type {
   ClueGapFillOutcome,
   ClueGapFillWrite,
@@ -25,6 +26,11 @@ import type {
   ClueRegistrationWrite,
   ClueSpatialPartRow,
   ClueStore,
+  ClueVerificationArtifacts,
+  ClueVerificationContext,
+  ClueVerificationFinishWrite,
+  ClueVerificationRunRow,
+  ClueVerificationRunWrite,
 } from './clue-store.ts';
 
 /** Prisma 根客户端，或一个交互式事务客户端。 */
@@ -310,6 +316,145 @@ export class PrismaClueStore implements ClueStore {
     };
   }
 
+  async readVerificationContext(clueId: string): Promise<ClueVerificationContext | null> {
+    const clue = await this.prisma.clue.findUnique({
+      where: { id: clueId },
+      select: {
+        id: true,
+        code: true,
+        domain: true,
+        status: true,
+        registeredBy: true,
+        enteredOrgId: true,
+      },
+    });
+    if (!clue) return null;
+    // 几何走 $queryRaw：几何列是 Unsupported 类型，ORM 取不出；面积按地理面积算（平方米）。
+    const parts = await this.prisma.$queryRaw<
+      Array<{ part_id: string; part_index: number; geojson: string }>
+    >`
+      SELECT p.id AS part_id, p.part_index, ST_AsGeoJSON(p.geom) AS geojson
+      FROM clue_spatial_part p
+      JOIN clue_spatial_object o ON o.id = p.spatial_object_id
+      WHERE o.clue_id = ${clueId}
+      ORDER BY p.part_index
+    `;
+    const areas = await this.prisma.$queryRaw<Array<{ total_area: number | null }>>`
+      SELECT SUM(ST_Area(p.geom::geography)) AS total_area
+      FROM clue_spatial_part p
+      JOIN clue_spatial_object o ON o.id = p.spatial_object_id
+      WHERE o.clue_id = ${clueId}
+    `;
+    return {
+      clueId: clue.id,
+      code: clue.code,
+      domain: clue.domain,
+      status: clue.status,
+      registeredBy: clue.registeredBy,
+      enteredOrgId: clue.enteredOrgId,
+      orgUnitIds: await this.readOwningOrgUnitIds(clue.id, clue.enteredOrgId),
+      totalArea: Number(areas[0]?.total_area ?? 0),
+      parts: parts.map((part) => ({
+        partId: part.part_id,
+        partIndex: part.part_index,
+        geojson: part.geojson,
+      })),
+    };
+  }
+
+  /** 线索归属的机构：登记机构与当前有效的接收机构。 */
+  private async readOwningOrgUnitIds(clueId: string, enteredOrgId: string): Promise<string[]> {
+    const rows = await this.prisma.clueAssignment.findMany({
+      where: { clueId, endedAt: null },
+      select: { orgUnitId: true },
+    });
+    return [...new Set([enteredOrgId, ...rows.map((row) => row.orgUnitId)])];
+  }
+
+  async nextVerificationRunNo(clueId: string): Promise<number> {
+    const rows = await this.prisma.$queryRaw<Array<{ next_no: number | bigint }>>`
+      SELECT COALESCE(MAX(run_no), 0) + 1 AS next_no
+      FROM clue_verification_run
+      WHERE clue_id = ${clueId}
+    `;
+    return Number(rows[0]?.next_no ?? 1);
+  }
+
+  async insertVerificationRun(write: ClueVerificationRunWrite): Promise<void> {
+    try {
+      await this.prisma.clueVerificationRun.create({
+        data: {
+          id: write.id,
+          clueId: write.clueId,
+          runNo: write.runNo,
+          status: 'running',
+          attemptsUsed: 0,
+          trigger: write.trigger,
+          startedAt: write.startedAt,
+        },
+      });
+    } catch (error) {
+      // 活动核查的部分唯一索引与运行序号的唯一约束都挡并发：调用方据此回 409。
+      if (isUniqueViolation(error)) throw new ClueVerificationRunningError();
+      throw error;
+    }
+    await this.prisma.clue.update({
+      where: { id: write.clueId },
+      data: { verificationStatus: 'running' },
+    });
+  }
+
+  async readVerificationRun(runId: string): Promise<ClueVerificationRunRow | null> {
+    const row = await this.prisma.clueVerificationRun.findUnique({ where: { id: runId } });
+    return row === null ? null : toRunRow(row);
+  }
+
+  async listVerificationRuns(clueId: string): Promise<ClueVerificationRunRow[]> {
+    const rows = await this.prisma.clueVerificationRun.findMany({
+      where: { clueId },
+      orderBy: { runNo: 'desc' },
+    });
+    return rows.map(toRunRow);
+  }
+
+  async finishVerificationRun(write: ClueVerificationFinishWrite): Promise<void> {
+    const updated = await this.prisma.clueVerificationRun.update({
+      where: { id: write.runId },
+      data: {
+        status: write.status,
+        attemptsUsed: write.attemptsUsed,
+        failureCategory: write.failureCategory,
+        missingLayers: write.missingLayers.length > 0 ? JSON.stringify(write.missingLayers) : null,
+        layersJson: write.layers.length > 0 ? JSON.stringify(write.layers) : null,
+        artifactsJson: write.artifacts === null ? null : JSON.stringify(write.artifacts),
+        endedAt: write.endedAt,
+      },
+      select: { clueId: true },
+    });
+    // 核查状态是正交属性：只改核查状态，不动线索主状态。
+    await this.prisma.clue.update({
+      where: { id: updated.clueId },
+      data: { verificationStatus: write.status === 'done' ? 'done' : 'failed' },
+    });
+  }
+
+  async recordVerificationAttempt(runId: string, attemptsUsed: number): Promise<void> {
+    await this.prisma.clueVerificationRun.update({
+      where: { id: runId },
+      data: { attemptsUsed },
+    });
+  }
+
+  async listActiveHandlers(
+    clueId: string,
+  ): Promise<readonly { personnelId: string; role: string }[]> {
+    const rows = await this.prisma.clueHandler.findMany({
+      where: { clueId, endedAt: null },
+      orderBy: { assignedAt: 'asc' },
+    });
+    return rows.map((row) => ({ personnelId: row.personnelId, role: row.role }));
+  }
+
   /** 业务编号：取库内 sequence 的下一个值（迁移创建，不算 model）。 */
   private async nextCode(): Promise<string> {
     const rows = await this.prisma.$queryRaw<Array<{ nextval: bigint }>>`
@@ -421,4 +566,62 @@ export class PrismaClueStore implements ClueStore {
       intersectionArea: row.inter_area,
     }));
   }
+}
+
+/** JSON 文本列解析。解析不出或不是对象即 null。 */
+function parseJson<T>(text: string | null): T | null {
+  if (text === null || text === '') return null;
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (typeof parsed !== 'object' || parsed === null) return null;
+    return parsed as T;
+  } catch {
+    return null;
+  }
+}
+
+/** 缺图层列：一组键。解析不出即空。 */
+function parseJsonArray(text: string | null): readonly string[] {
+  if (text === null || text === '') return [];
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is string => typeof item === 'string');
+  } catch {
+    return [];
+  }
+}
+
+/** 运行行 → 端口形状。状态与失败类别的取值由库内 CHECK 约束守着。 */
+function toRunRow(row: {
+  id: string;
+  clueId: string;
+  runNo: number;
+  status: string;
+  attemptsUsed: number;
+  trigger: string;
+  failureCategory: string | null;
+  missingLayers: string | null;
+  layersJson: string | null;
+  artifactsJson: string | null;
+  startedAt: Date;
+  endedAt: Date | null;
+}): ClueVerificationRunRow {
+  return {
+    id: row.id,
+    clueId: row.clueId,
+    runNo: row.runNo,
+    status: row.status as ClueVerificationRunRow['status'],
+    attemptsUsed: row.attemptsUsed,
+    trigger: row.trigger as ClueVerificationRunRow['trigger'],
+    failureCategory:
+      row.failureCategory === null
+        ? null
+        : (row.failureCategory as ClueVerificationRunRow['failureCategory']),
+    missingLayers: parseJsonArray(row.missingLayers),
+    layers: parseJson<VerificationLayerResult[]>(row.layersJson) ?? [],
+    artifacts: parseJson<ClueVerificationArtifacts>(row.artifactsJson),
+    startedAt: row.startedAt,
+    endedAt: row.endedAt,
+  };
 }

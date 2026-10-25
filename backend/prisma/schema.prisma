@@ -731,10 +731,16 @@ model ClueVerificationRun {
   runNo Int @map("run_no")
   /// 运行状态：running | done | failed
   status String @default("running")
-  /// 尝试次数（自动重试至多 3 次，共 4 次尝试）
-  attempts Int @default(1)
+  /// 已用尝试次数（自动核查至多 4 次尝试：首次加自动重试 3 次；手动重跑恒 1）
+  attemptsUsed Int @default(0) @map("attempts_used")
   /// 触发方式：auto | manual
   trigger String @default("auto")
+  /// 失败类别：transient（瞬时）| deterministic（确定性）；不失败即空
+  failureCategory String? @map("failure_category")
+  /// 缺图层（图层键数组的 JSON 文本）；不缺即空
+  missingLayers String? @map("missing_layers")
+  /// 每层事实的 JSON 文本（服务地址、查询时间、要素标识、相交要素几何、空间对象版本）
+  layersJson String? @map("layers_json")
   startedAt DateTime  @default(now()) @db.Timestamptz(6) @map("started_at")
   endedAt   DateTime? @db.Timestamptz(6) @map("ended_at")
   /// 产物引用（核查报告与分析图的文件版本引用，JSON 文本）
