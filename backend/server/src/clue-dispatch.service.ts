@@ -104,6 +104,8 @@ export interface DispatchView {
   readonly mayReassignOrg: boolean;
   /** 当前操作者能不能派主办／协办（承办机构内勤）。 */
   readonly mayAssignPeople: boolean;
+  /** 当前操作者能不能登记移送（池所属机构内勤／承办机构内勤；#216）。 */
+  readonly mayTransfer: boolean;
   /** 进行中的指定管辖报请（无即 null；#215）。 */
   readonly designation: DesignationRequestView | null;
   /** 当前操作者能不能发起报请指定管辖（本级机构内勤、可报请状态、无待处理报请）。 */
@@ -668,6 +670,7 @@ export class ClueDispatchService {
     mayAssignOrg: boolean;
     mayReassignOrg: boolean;
     mayAssignPeople: boolean;
+    mayTransfer: boolean;
     mayRequestDesignation: boolean;
     mayReviewDesignation: boolean;
     designationLocked: boolean;
@@ -698,6 +701,15 @@ export class ClueDispatchService {
       roles.includes('内勤') &&
       actorOrg !== null &&
       actorOrg === context.assignment.orgUnitId;
+    // 移送（#216）：待分派池取池所属机构内勤，已派机构／已派承办人取承办机构内勤。
+    const transferOrgId = context.assignment?.orgUnitId ?? context.enteredOrgId;
+    const mayTransfer =
+      (context.status === 'in_pool' ||
+        context.status === 'org_assigned' ||
+        context.status === 'handler_assigned') &&
+      roles.includes('内勤') &&
+      actorOrg !== null &&
+      actorOrg === transferOrgId;
     // 报请指定管辖（#215）：本级机构内勤、可报请状态、无待处理报请时可发起；
     // 受理机构内勤可处理；受理机构子树内的其他人被报请期间的指定锁拦下。
     const owningOrg =
@@ -721,6 +733,7 @@ export class ClueDispatchService {
       mayAssignOrg,
       mayReassignOrg,
       mayAssignPeople,
+      mayTransfer,
       mayRequestDesignation,
       mayReviewDesignation,
       designationLocked,
@@ -768,6 +781,7 @@ export class ClueDispatchService {
       mayAssignOrg: boolean;
       mayReassignOrg: boolean;
       mayAssignPeople: boolean;
+      mayTransfer: boolean;
       mayRequestDesignation: boolean;
       mayReviewDesignation: boolean;
       designationLocked: boolean;
@@ -843,6 +857,7 @@ export class ClueDispatchService {
       mayAssignOrg: affordance.mayAssignOrg,
       mayReassignOrg: affordance.mayReassignOrg,
       mayAssignPeople: affordance.mayAssignPeople,
+      mayTransfer: affordance.mayTransfer,
       designation,
       mayRequestDesignation: affordance.mayRequestDesignation,
       mayReviewDesignation: affordance.mayReviewDesignation,

@@ -16,6 +16,7 @@ import { MAX_ATTACHMENT_BYTES, type ClueFormValues } from '@natural-enforcement/
 import type { ActorRef } from '@natural-enforcement/identity';
 
 import { ClueRegistrationService, type ClueUploadedFile } from './clue-registration.service.ts';
+import { decodeMultipartFileName } from './multipart-file-name.ts';
 import type { AuthenticatedRequest } from './session.guard.ts';
 
 interface HttpReply {
@@ -131,7 +132,7 @@ function readValues(raw: unknown): ClueFormValues {
 
 function toUploadedFile(file: UploadedFile): ClueUploadedFile {
   return {
-    fileName: file.originalname,
+    fileName: decodeMultipartFileName(file.originalname),
     contentType: file.mimetype,
     byteSize: file.size,
     content: new Uint8Array(file.buffer),

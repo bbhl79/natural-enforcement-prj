@@ -4,9 +4,11 @@ import type {
   ClueDesignateRejectedFailedReason,
   ClueDesignateRequestedFailedReason,
   ClueDispatchDecideFailedReason,
+  ClueDispositionRecordedFailedReason,
   ClueHandlerAssignedFailedReason,
   ClueItemsSupplementFailedReason,
   ClueOrgAssignedFailedReason,
+  CluePoolReassignedFailedReason,
   ClueRegisterFailedReason,
   ClueGeometryUpdateFailedReason,
   ClueVerifyRetryFailedReason,
@@ -179,6 +181,11 @@ export type AuditAppend =
   | (AuditParties & { action: 'clue.org-assigned'; outcome: 'failed'; reason: ClueOrgAssignedFailedReason })
   | (AuditParties & { action: 'clue.handler-assigned' })
   | (AuditParties & { action: 'clue.handler-assigned'; outcome: 'failed'; reason: ClueHandlerAssignedFailedReason })
+  // 移送与停用机构池重新指定（#216，规格 G）：处置类型、移送机关、文书编号；停用机构与新接收机构。
+  | (AuditParties & { action: 'clue.disposition-recorded' })
+  | (AuditParties & { action: 'clue.disposition-recorded'; outcome: 'failed'; reason: ClueDispositionRecordedFailedReason })
+  | (AuditParties & { action: 'clue.pool-reassigned' })
+  | (AuditParties & { action: 'clue.pool-reassigned'; outcome: 'failed'; reason: CluePoolReassignedFailedReason })
   // 报请指定管辖与驳回（#215，规格 G）：动作词与报请行同事务写入，detail 存报请机构、拟归属机构与受理机构。
   | (AuditParties & { action: 'clue.designate-requested' })
   | (AuditParties & {

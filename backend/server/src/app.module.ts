@@ -16,6 +16,8 @@ import { ClueDesignationController } from './clue-designation.controller.ts';
 import { ClueDesignationService } from './clue-designation.service.ts';
 import { ClueDispatchController } from './clue-dispatch.controller.ts';
 import { ClueDispatchService } from './clue-dispatch.service.ts';
+import { ClueDispositionController } from './clue-disposition.controller.ts';
+import { ClueDispositionService } from './clue-disposition.service.ts';
 import { ClueFormSchemaController } from './clue-form-schema.controller.ts';
 import { ClueDuplicateController } from './clue-duplicate.controller.ts';
 import { ClueDuplicateService } from './clue-duplicate.service.ts';
@@ -67,6 +69,7 @@ import { SourceGate } from './source-gate.ts';
     ClueGeometryController,
     ClueDuplicateController,
     ClueDispatchController,
+    ClueDispositionController,
     ClueDesignationController,
   ],
   providers: [
@@ -82,6 +85,7 @@ import { SourceGate } from './source-gate.ts';
     ClueVerificationService,
     ClueSuggestionService,
     ClueDispatchService,
+    ClueDispositionService,
     ClueDesignationService,
     ClueVerificationWorker,
     ClueGeometryService,

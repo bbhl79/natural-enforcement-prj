@@ -537,6 +537,30 @@ export interface ClueStore {
    * 返回 false 表示当前状态与 expectedStatus 不符（并发冲突），业务行不变。
    */
   assignPeople(write: CluePeopleAssignWrite): Promise<boolean>;
+  /**
+   * 读移送编排上下文（编号、状态、登记机构、当前有效分派机构的接收机构）。
+   * 对象级校验用：待分派池取登记机构，已派机构／已派承办人取承办机构。
+   */
+  readTransferContext(clueId: string): Promise<ClueTransferContext | null>;
+  /**
+   * 登记移送：状态由 expectedStatus 条件更新为 transferred_out 终态
+   * （仅 in_pool/org_assigned/handler_assigned 可移送），写处置行（disposition='transfer'），
+   * 关止当前分派事实与承办人行（终态退出 OpenItems），挂已入库的移送附件材料行。
+   * 返回 false 表示当前状态与 expectedStatus 不符（并发冲突），业务行不变。
+   */
+  recordTransfer(write: ClueTransferWrite): Promise<boolean>;
+  /**
+   * 停用机构待分派池的未派出线索清单（in_pool/pending_decision/held，
+   * 登记时间倒序）：管理端重新指定的候选。
+   */
+  listPoolClues(orgUnitId: string): Promise<readonly CluePoolClueRow[]>;
+  /**
+   * 停用机构池重新指定：线索归属（entered_org_id）改为新接收机构，状态不变，
+   * 条件更新限 in_pool/pending_decision/held（未派出）并防并发冲突；
+   * 写入指定事实（ClueAssignment kind='pool-reassign'，designate=false，不加锁）。
+   * 返回 false 表示当前状态与 expectedStatus 不符（并发冲突），业务行不变。
+   */
+  reassignPool(write: CluePoolReassignWrite): Promise<boolean>;
   /** 该线索当前待处理的指定管辖报请（无即 null）。报请期间的指定锁（designation-pending）由它判定。 */
   readPendingDesignationRequest(clueId: string): Promise<ClueDesignationRequestRow | null>;
   /** 全部待处理的指定管辖报请（受理人待办取数；量小，由调用方按受理机构过滤）。 */
@@ -548,4 +572,59 @@ export interface ClueStore {
   insertDesignationRequest(write: ClueDesignationRequestWrite): Promise<ClueDesignationRequestInsert>;
   /** 关闭该线索的全部待处理报请（指定管辖批准或驳回）；返回关止的条数。 */
   closePendingDesignationRequests(write: ClueDesignationCloseWrite): Promise<number>;
+}
+
+/** 停用机构待分派池线索行（管理端重新指定的候选清单）。 */
+export interface CluePoolClueRow {
+  readonly clueId: string;
+  readonly code: string;
+  /** 主状态：in_pool | pending_decision | held。 */
+  readonly status: string;
+  readonly domain: string;
+  readonly registeredAt: Date;
+}
+
+/** 移送编排上下文：登记与对象级校验要用的全部事实。 */
+export interface ClueTransferContext {
+  readonly clueId: string;
+  readonly code: string;
+  /** 线索主状态。 */
+  readonly status: string;
+  /** 登记机构（待分派池的池所属机构）。 */
+  readonly enteredOrgId: string;
+  /** 当前有效分派事实的接收机构（已派机构／已派承办人时的承办机构）。 */
+  readonly assignmentOrgId: string | null;
+}
+
+/** 移送登记的写入。附件须先全部写入存储（校验失败存储零写入）。 */
+export interface ClueTransferWrite {
+  readonly clueId: string;
+  readonly expectedStatus: string;
+  readonly dispositionId: string;
+  /** 移送机关（自然资源部门以外机关）。 */
+  readonly transferredOrg: string;
+  /** 文书编号。 */
+  readonly documentNo: string;
+  /** 发函日期（YYYY-MM-DD，北京日历日）。 */
+  readonly letterDate: string;
+  /** 原因（自由文本，留业务行）。 */
+  readonly reason: string;
+  readonly recordedBy: string;
+  readonly recordedAt: Date;
+  /** 已写入存储的移送附件（材料行，选填 0..n）。 */
+  readonly materials: readonly ClueMaterialRow[];
+}
+
+/** 停用机构池重新指定的写入。 */
+export interface CluePoolReassignWrite {
+  readonly clueId: string;
+  readonly expectedStatus: string;
+  readonly assignmentId: string;
+  /** 新接收机构（须未停用）。 */
+  readonly orgUnitId: string;
+  /** 理由（必填，自由文本留业务行）。 */
+  readonly reason: string;
+  readonly assignedBy: string;
+  readonly assignedByOrgId: string;
+  readonly assignedAt: Date;
 }
