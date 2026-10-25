@@ -267,9 +267,17 @@ export function DecidePanel({
   view: DispatchView;
   busy: boolean;
   failure: string | null;
-  onDecide: (decision: 'dispatch' | 'hold', acknowledged: boolean) => void;
+  onDecide: (decision: 'dispatch' | 'hold', acknowledged: boolean, conflictResolution?: string, conflictBasis?: string) => void;
 }) {
   const hasOpenHits = view.hitGroups.some((group) => group.open);
+  const [conflictResolution, setConflictResolution] = useState('');
+  const [conflictBasis, setConflictBasis] = useState('');
+  const needsConflictResolution = view.hasCaseByCasePlanningType && !view.complaint;
+  const canDispatch =
+    !busy &&
+    (!needsConflictResolution ||
+      ((conflictResolution === 'handle-in-system' || conflictResolution === 'transfer-outside') &&
+        conflictBasis.trim() !== ''));
   return (
     <div className="card" data-role="decide-panel">
       <div className="card-h">
@@ -280,11 +288,64 @@ export function DecidePanel({
       {view.complaint ? (
         <div className="banner gray">群众举报及其下级的线索只能派、不能选不派；重合信息仍展示供参考。</div>
       ) : null}
+      {needsConflictResolution ? (
+        <div className="banner amber" data-role="conflict-banner">
+          该线索涉及规划类主体冲突待定项，派出前须选择办理方向并填写依据留痕。
+        </div>
+      ) : null}
       {hasOpenHits ? (
         <div className="banner amber">存在未结案的疑似重复命中：点「已知晓并派出」继续，或选「不派」。</div>
       ) : (
         <div className="banner gray">全部对方已结案，可直接派出；仍须由人完成决定。</div>
       )}
+      {needsConflictResolution ? (
+        <>
+          <div className="form-row">
+            <label>办理方向</label>
+            <div>
+              <label className="help" style={{ marginRight: 16 }}>
+                <input
+                  type="radio"
+                  name="conflict-resolution"
+                  value="handle-in-system"
+                  data-role="conflict-handle-in-system"
+                  checked={conflictResolution === 'handle-in-system'}
+                  onChange={(event) => setConflictResolution(event.target.value)}
+                  disabled={busy}
+                />
+                {' 本系统办理'}
+              </label>
+              <label className="help">
+                <input
+                  type="radio"
+                  name="conflict-resolution"
+                  value="transfer-outside"
+                  data-role="conflict-transfer-outside"
+                  checked={conflictResolution === 'transfer-outside'}
+                  onChange={(event) => setConflictResolution(event.target.value)}
+                  disabled={busy}
+                />
+                {' 移送系统外'}
+              </label>
+            </div>
+          </div>
+          <div className="form-row">
+            <label htmlFor="conflict-basis">依据（必填）</label>
+            <div>
+              <textarea
+                id="conflict-basis"
+                className="input"
+                rows={3}
+                value={conflictBasis}
+                onChange={(event) => setConflictBasis(event.target.value)}
+                data-role="conflict-basis"
+                disabled={busy}
+              />
+              <div className="help">填写法律依据与判断理由，留痕在审计记录中。</div>
+            </div>
+          </div>
+        </>
+      ) : null}
       <HitGroups view={view} />
       <div className="actions">
         {view.complaint ? null : (
@@ -302,8 +363,15 @@ export function DecidePanel({
           type="button"
           className="btn btn-primary"
           data-role="decide-dispatch"
-          disabled={busy}
-          onClick={() => onDecide('dispatch', hasOpenHits && !view.complaint)}
+          disabled={!canDispatch}
+          onClick={() =>
+            onDecide(
+              'dispatch',
+              hasOpenHits && !view.complaint,
+              needsConflictResolution ? conflictResolution : undefined,
+              needsConflictResolution ? conflictBasis.trim() : undefined,
+            )
+          }
         >
           {hasOpenHits && !view.complaint ? '已知晓并派出' : '派出'}
         </button>
@@ -602,7 +670,7 @@ export function ClueDispatchBody({
   orgOptions: readonly OrgOption[];
   busy: boolean;
   failure: string | null;
-  onDecide: (decision: 'dispatch' | 'hold', acknowledged: boolean) => void;
+  onDecide: (decision: 'dispatch' | 'hold', acknowledged: boolean, conflictResolution?: string, conflictBasis?: string) => void;
   onAssignOrg: (input: { orgUnitId: string; reason: string; designate: boolean }) => void;
   onAssignPeople: (input: { mainId: string; assistIds: readonly string[] }) => void;
   onTransfer: (input: { transferOrg: string; documentNo: string; letterDate: string; reason: string; attachments: readonly File[] }) => void;

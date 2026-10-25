@@ -23,6 +23,8 @@ interface DecideBody {
   readonly decision?: unknown;
   readonly acknowledged?: unknown;
   readonly expectedStatus?: unknown;
+  readonly conflictResolution?: unknown;
+  readonly conflictBasis?: unknown;
 }
 
 interface AssignOrgBody {
@@ -68,6 +70,8 @@ export class ClueDispatchController {
       decision: text(body?.decision),
       acknowledged: flag(body?.acknowledged),
       expectedStatus: text(body?.expectedStatus),
+      conflictResolution: text(body?.conflictResolution) || undefined,
+      conflictBasis: text(body?.conflictBasis) || undefined,
     });
     res.status(outcome.status).json(outcome.body);
   }

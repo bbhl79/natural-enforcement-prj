@@ -416,6 +416,8 @@ export interface ClueDispatchContext {
   readonly assignment: ClueActiveAssignment | null;
   readonly handlers: readonly ClueActiveHandler[];
   readonly hits: readonly ClueDispatchHit[];
+  /** 初步涉嫌违法类型编码列表（#207 P7：用于分派指导判定）。 */
+  readonly typeCodes: readonly string[];
 }
 
 /** 分派决定的写入。 */

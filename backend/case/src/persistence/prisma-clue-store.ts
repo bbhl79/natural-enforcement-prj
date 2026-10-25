@@ -754,6 +754,10 @@ export class PrismaClueStore implements ClueStore {
       WHERE h.clue_id = ${clueId}
       ORDER BY h.other_clue_id, h.spatial_part_id
     `;
+    const initialTypeRows = await this.prisma.clueInitialType.findMany({
+      where: { clueId },
+      select: { typeCode: true },
+    });
     return {
       clueId: clue.id,
       code: clue.code,
@@ -792,6 +796,7 @@ export class PrismaClueStore implements ClueStore {
         otherRatio: hit.other_ratio,
         intersectionArea: hit.intersection_area,
       })),
+      typeCodes: initialTypeRows.map((row) => row.typeCode),
     };
   }
 

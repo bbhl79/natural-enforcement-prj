@@ -81,6 +81,8 @@ function view(overrides: Partial<DispatchView> = {}): DispatchView {
     mayRequestDesignation: false,
     mayReviewDesignation: false,
     designationLocked: false,
+    typeCodes: [],
+    hasCaseByCasePlanningType: false,
     ...overrides,
   };
 }
@@ -471,5 +473,52 @@ describe('报请指定管辖与指定锁', () => {
     expect(dispatchFailureText({ result: 'invalid-state', reason: 'designation-pending' })).toContain('报请指定管辖');
     expect(dispatchFailureText({ result: 'invalid-state', reason: 'designated-lock' })).toContain('已指定管辖');
     expect(dispatchFailureText({ result: 'non-compliant', rules: ['missing-reject-reason'] })).toContain('驳回');
+  });
+});
+
+describe('个案判断规划类主体冲突待定（#207 P7）', () => {
+  it('存在个案判断项时显示主体冲突待定横幅与方向选择、依据必填', () => {
+    const html = renderToStaticMarkup(
+      <DecidePanel
+        view={view({ hasCaseByCasePlanningType: true, typeCodes: ['planning_build_without_permit'] })}
+        busy={false}
+        failure={null}
+        onDecide={() => undefined}
+      />,
+    );
+    expect(html).toContain('主体冲突待定');
+    expect(html).toContain('本系统办理');
+    expect(html).toContain('移送系统外');
+    expect(html).toContain('data-role="conflict-basis"');
+    expect(html).toContain('依据（必填）');
+    // 未选方向未填依据：派出按钮禁用。
+    expect(html).toMatch(/data-role="decide-dispatch"[^>]*disabled/);
+  });
+
+  it('举报必派时不出现主体冲突待定选项（举报只能派、不走个案判断出口）', () => {
+    const html = renderToStaticMarkup(
+      <DecidePanel
+        view={view({ complaint: true, hasCaseByCasePlanningType: true, typeCodes: ['planning_build_without_permit'] })}
+        busy={false}
+        failure={null}
+        onDecide={() => undefined}
+      />,
+    );
+    expect(html).not.toContain('主体冲突待定');
+    expect(html).not.toContain('本系统办理');
+    expect(html).not.toContain('移送系统外');
+  });
+
+  it('无个案判断项不出现主体冲突待定UI', () => {
+    const html = renderToStaticMarkup(
+      <DecidePanel view={view()} busy={false} failure={null} onDecide={() => undefined} />,
+    );
+    expect(html).not.toContain('主体冲突待定');
+  });
+
+  it('缺失冲突解决参数的失败文案', () => {
+    expect(dispatchFailureText({ result: 'non-compliant', rules: ['missing-conflict-resolution'] })).toContain('主体冲突待定');
+    expect(dispatchFailureText({ result: 'non-compliant', rules: ['missing-conflict-resolution'] })).toContain('办理方向');
+    expect(dispatchFailureText({ result: 'non-compliant', rules: ['missing-conflict-basis'] })).toContain('依据');
   });
 });

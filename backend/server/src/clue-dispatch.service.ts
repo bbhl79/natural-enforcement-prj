@@ -28,6 +28,7 @@ import {
   ORG_ASSIGN_FROM_STATUSES,
   PEOPLE_ASSIGN_FROM_STATUS,
   decideDispatch,
+  hasCaseByCasePlanningType,
   isOpenHit,
   type ClueDispatchContext,
   type ClueStore,
@@ -114,6 +115,10 @@ export interface DispatchView {
   readonly mayReviewDesignation: boolean;
   /** 报请期间的指定锁是否拦当前操作者（受理机构子树内、非受理机构本人）。 */
   readonly designationLocked: boolean;
+  /** 初步涉嫌违法类型编码列表（#207 P7）。 */
+  readonly typeCodes: readonly string[];
+  /** 是否存在需个案判断的规划类项（#207 P7）。 */
+  readonly hasCaseByCasePlanningType: boolean;
 }
 
 export type DispatchViewOutcome =
@@ -215,7 +220,13 @@ export class ClueDispatchService {
   async decide(
     actor: ActorRef,
     clueId: string,
-    input: { readonly decision: string; readonly acknowledged: boolean; readonly expectedStatus: string },
+    input: {
+      readonly decision: string;
+      readonly acknowledged: boolean;
+      readonly expectedStatus: string;
+      readonly conflictResolution?: string;
+      readonly conflictBasis?: string;
+    },
   ): Promise<DecideOutcome> {
     const context = await this.clues.readDispatchContext(clueId);
     if (!context) return { status: 404, body: { result: 'not-found' } };
@@ -270,6 +281,36 @@ export class ClueDispatchService {
       });
     }
 
+    // P7：个案判断 8 项在派时必须选方向和填依据。
+    if (decision === 'dispatch' && hasCaseByCasePlanningType(context.typeCodes)) {
+      const resolution = input.conflictResolution;
+      const basis = (input.conflictBasis ?? '').trim();
+      if (resolution !== 'handle-in-system' && resolution !== 'transfer-outside') {
+        return this.reject(actor, account?.code ?? null, actorOrgId, clueId, action, {
+          status: 400,
+          result: 'non-compliant',
+          rules: ['missing-conflict-resolution'],
+          reason: 'invalid-form',
+        });
+      }
+      if (basis === '') {
+        return this.reject(actor, account?.code ?? null, actorOrgId, clueId, action, {
+          status: 400,
+          result: 'non-compliant',
+          rules: ['missing-conflict-basis'],
+          reason: 'invalid-form',
+        });
+      }
+    }
+
+    const caseByCaseDetail =
+      decision === 'dispatch' && hasCaseByCasePlanningType(context.typeCodes)
+        ? {
+            conflictResolution: input.conflictResolution,
+            conflictBasis: (input.conflictBasis ?? '').trim(),
+          }
+        : null;
+
     // 决定与成功留痕同成同败；并发冲突回滚后另起事务写失败留痕。
     return this.uow.run(async (tx) => {
       const applied = await tx.clues.applyDecision({
@@ -293,6 +334,7 @@ export class ClueDispatchService {
             beforeStatus: context.status,
             afterStatus: decided.nextStatus,
             acknowledged: decision === 'dispatch' ? input.acknowledged : false,
+            ...(caseByCaseDetail ? { conflictResolution: caseByCaseDetail.conflictResolution, conflictBasis: caseByCaseDetail.conflictBasis } : {}),
           }),
         }),
       );
@@ -862,6 +904,8 @@ export class ClueDispatchService {
       mayRequestDesignation: affordance.mayRequestDesignation,
       mayReviewDesignation: affordance.mayReviewDesignation,
       designationLocked: affordance.designationLocked,
+        typeCodes: context.typeCodes,
+        hasCaseByCasePlanningType: hasCaseByCasePlanningType(context.typeCodes),
     };
   }
 

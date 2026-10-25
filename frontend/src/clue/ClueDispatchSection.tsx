@@ -69,6 +69,10 @@ export function dispatchFailureText(body: unknown): string {
         return '报请指定管辖须填写理由。';
       case 'missing-reject-reason':
         return '驳回报请须填写理由。';
+      case 'missing-conflict-resolution':
+        return '该线索涉及主体冲突待定项，请选择办理方向。';
+      case 'missing-conflict-basis':
+        return '该线索涉及主体冲突待定项，请填写依据。';
       default:
         return '提交未通过，请检查后再试。';
     }
@@ -129,8 +133,16 @@ export default function ClueDispatchSection({ clueId }: { readonly clueId: strin
       orgOptions={orgOptions}
       busy={busy}
       failure={failure}
-      onDecide={(decision, acknowledged) =>
-        void run(() => submitDecide(dispatch, clueId, { decision, acknowledged, expectedStatus: view.status }))
+      onDecide={(decision, acknowledged, conflictResolution, conflictBasis) =>
+        void run(() =>
+          submitDecide(dispatch, clueId, {
+            decision,
+            acknowledged,
+            expectedStatus: view.status,
+            conflictResolution,
+            conflictBasis,
+          }),
+        )
       }
       onAssignOrg={(input) =>
         void run(() =>

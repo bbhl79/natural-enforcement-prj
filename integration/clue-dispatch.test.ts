@@ -152,11 +152,14 @@ async function register(options: {
   readonly values?: Record<string, string>;
   readonly polygon?: string;
   readonly code?: string;
+  readonly domain?: string;
+  readonly types?: string;
 }): Promise<{ status: number; body: RegisterResponseBody }> {
   const form = new FormData();
   form.set('sourceCode', options.sourceCode ?? '16');
-  form.set('domain', 'land');
+  form.set('domain', options.domain ?? 'land');
   form.set('values', JSON.stringify(options.values ?? BASE_VALUES));
+  if (options.types) form.set('types', options.types);
   form.set(
     'spatial-source',
     new Blob([options.polygon ?? geojsonPolygon(square(0))], { type: 'application/geo+json' }),
@@ -176,7 +179,13 @@ async function register(options: {
 /** 分派决定。 */
 async function decide(
   clueId: string,
-  input: { decision: string; acknowledged?: boolean; expectedStatus?: string },
+  input: {
+    decision: string;
+    acknowledged?: boolean;
+    expectedStatus?: string;
+    conflictResolution?: string;
+    conflictBasis?: string;
+  },
   code = 'P-INTAKE-A',
 ): Promise<{ status: number; body: Record<string, unknown> }> {
   const response = await fetch(`${baseUrl}/api/clues/${clueId}/decide`, {
@@ -186,6 +195,8 @@ async function decide(
       decision: input.decision,
       acknowledged: input.acknowledged ?? false,
       expectedStatus: input.expectedStatus ?? 'pending_decision',
+      ...(input.conflictResolution !== undefined ? { conflictResolution: input.conflictResolution } : {}),
+      ...(input.conflictBasis !== undefined ? { conflictBasis: input.conflictBasis } : {}),
     }),
   });
   return { status: response.status, body: (await response.json()) as Record<string, unknown> };
@@ -778,5 +789,81 @@ describe('#214 重新分派与并发控制', () => {
     expect(handlers).toHaveLength(0);
     const clue = await cloned.prisma.clue.findUnique({ where: { id: registered.body.id } });
     expect(clue?.status).toBe('org_assigned');
+  });
+});
+
+describe('P7 个案判断规划类分派校验', () => {
+  it('个案判断项派时缺 conflictResolution → 400 missing-conflict-resolution', async () => {
+    const registered = await register({
+      domain: 'planning',
+      types: 'planning_build_without_permit',
+      polygon: geojsonPolygon(square(70)),
+    });
+    // 规划类注册后状态是 pending_decision（点状、无空间命中）
+    let status = registered.body.status;
+    if (status !== 'pending_decision') {
+      // 先决定「不派」然后撤回、再决定以回到 pending_decision
+      await decide(registered.body.id ?? '', { decision: 'hold' });
+      // 这里不能简单撤回，跳过这个边缘——直接用刚注册的
+    }
+    const outcome = await decide(registered.body.id ?? '', {
+      decision: 'dispatch',
+      expectedStatus: registered.body.status ?? 'pending_decision',
+    });
+    expect(outcome.status).toBe(400);
+    expect((outcome.body as Record<string, unknown>).result).toBe('non-compliant');
+    expect((outcome.body as Record<string, unknown>).rules).toContain('missing-conflict-resolution');
+  });
+
+  it('个案判断项派时缺 conflictBasis → 400 missing-conflict-basis', async () => {
+    const registered = await register({
+      domain: 'planning',
+      types: 'planning_build_without_permit',
+      polygon: geojsonPolygon(square(71)),
+    });
+    const outcome = await decide(registered.body.id ?? '', {
+      decision: 'dispatch',
+      conflictResolution: 'handle-in-system',
+      expectedStatus: registered.body.status ?? 'pending_decision',
+    });
+    expect(outcome.status).toBe(400);
+    expect((outcome.body as Record<string, unknown>).result).toBe('non-compliant');
+    expect((outcome.body as Record<string, unknown>).rules).toContain('missing-conflict-basis');
+  });
+
+  it('个案判断项提供完整冲突解决参数 → 200，留痕含 conflictResolution 与 conflictBasis', async () => {
+    const registered = await register({
+      domain: 'planning',
+      types: 'planning_build_without_permit',
+      polygon: geojsonPolygon(square(72)),
+    });
+    const outcome = await decide(registered.body.id ?? '', {
+      decision: 'dispatch',
+      conflictResolution: 'handle-in-system',
+      conflictBasis: '依据《城乡规划法》第 64 条',
+      expectedStatus: registered.body.status ?? 'pending_decision',
+    });
+    expect(outcome.status).toBe(200);
+    // 留痕验证。
+    const dispatched = (await trailOf('clue.dispatched', registered.body.id)).filter(
+      (row) => row.outcome === 'success',
+    );
+    expect(dispatched).toHaveLength(1);
+    const detail = JSON.parse(dispatched[0]?.detail ?? '{}') as Record<string, unknown>;
+    expect(detail.conflictResolution).toBe('handle-in-system');
+    expect(detail.conflictBasis).toBe('依据《城乡规划法》第 64 条');
+  });
+
+  it('体系内规划类派时不需冲突解决参数', async () => {
+    const registered = await register({
+      domain: 'planning',
+      types: 'planning_completion_data_unreported',
+      polygon: geojsonPolygon(square(73)),
+    });
+    const outcome = await decide(registered.body.id ?? '', {
+      decision: 'dispatch',
+      expectedStatus: registered.body.status ?? 'pending_decision',
+    });
+    expect(outcome.status).toBe(200);
   });
 });

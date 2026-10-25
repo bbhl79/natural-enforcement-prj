@@ -89,6 +89,10 @@ export interface DispatchView {
   readonly mayReviewDesignation: boolean;
   /** 报请期间的指定锁拦当前操作者（受理链条的下级）。 */
   readonly designationLocked: boolean;
+  /** 初步涉嫌违法类型编码列表（#207 P7）。 */
+  readonly typeCodes: readonly string[];
+  /** 是否存在需个案判断的规划类项（#207 P7）。 */
+  readonly hasCaseByCasePlanningType: boolean;
 }
 
 /** 进行中的指定管辖报请（#215）。 */
@@ -141,7 +145,13 @@ async function readResult(response: Response): Promise<DispatchActionResult> {
 export async function submitDecide(
   dispatch: ApiDispatch,
   clueId: string,
-  input: { readonly decision: 'dispatch' | 'hold'; readonly acknowledged: boolean; readonly expectedStatus: string },
+  input: {
+    readonly decision: 'dispatch' | 'hold';
+    readonly acknowledged: boolean;
+    readonly expectedStatus: string;
+    readonly conflictResolution?: string;
+    readonly conflictBasis?: string;
+  },
 ): Promise<DispatchActionResult> {
   const response = await apiFetch(dispatch, `/api/clues/${clueId}/decide`, {
     method: 'POST',
