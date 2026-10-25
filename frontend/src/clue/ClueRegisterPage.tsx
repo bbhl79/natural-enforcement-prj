@@ -309,6 +309,9 @@ export function ClueRegisterForm({
                   {control(item)}
                   {error ? <div className="err" data-error={item.key}>{error}</div> : null}
                   {item.condition ? <div className="help">{item.condition}</div> : null}
+                  {isTypeLayerKey(item.key) ? (
+                    <div className="help">类型层要件：缺项不拦登记，确认后保存并留作常驻缺件。</div>
+                  ) : null}
                   {basisOf(item)}
                 </div>
               </div>

@@ -133,6 +133,23 @@ describe('缺件判定（ADR 0018 三层叠加）', () => {
     expect(unknown.typeGaps).toEqual([]);
   });
 
+  it('条件表外的条件取成立这一保守方向：要件仍算必填、缺件仍进清单', () => {
+    const items: RequirementItem[] = [
+      {
+        key: 'type.mineral_demo.explore_license_no',
+        label: '勘查许可证号',
+        group: '许可资质与审批',
+        required: true,
+        timing: '录入时',
+        consequence: '阻断',
+        condition: '本行为主体是探矿权人',
+        basis: [],
+      },
+    ];
+    const result = assessGaps({ items, values: {}, sourceCode: '1', subjectUnknown: false });
+    expect(result.typeGaps.map((gap) => gap.key)).toEqual(['type.mineral_demo.explore_license_no']);
+  });
+
   it('位置由几何来源文件满足时不算缺件', () => {
     const items = buildFormSchemaItems({ sourceGroupCode: '1', typeCodes: [] });
     const result = assessGaps({

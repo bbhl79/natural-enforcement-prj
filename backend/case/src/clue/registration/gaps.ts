@@ -41,11 +41,18 @@ export interface GapAssessmentInput {
   readonly fileSatisfiedKeys?: readonly string[];
 }
 
-/** 条件项在给定来源下是否成立。声明里没有 condition 的项恒成立。 */
+/**
+ * 条件项在给定来源下是否成立。
+ * - 声明里没有 condition 的项恒成立。
+ * - 条件表里的项按来源编码判（巡查记录号、专项批次号）。
+ * - 条件表外的条件（如类型层「本行为主体是探矿权人」这类看事实的条件）本模块判不了：
+ *   取「成立」这一保守方向——要件仍算必填、缺件仍进清单，由承办人补齐后销账。
+ *   判「不成立」会让这类要件永远不进缺件清单，缺件就消失了。
+ */
 export function itemApplies(item: RequirementItem, sourceCode: string): boolean {
   if (item.condition === undefined) return true;
   const codes = CONDITIONAL_ITEM_SOURCE_CODES[item.key];
-  if (codes === undefined) return false;
+  if (codes === undefined) return true;
   return codes.includes(sourceCode);
 }
 

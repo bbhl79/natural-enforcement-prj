@@ -14,6 +14,7 @@ import {
   CLUE_REQUIREMENT_DECLARATION_VERSION,
   DOMAINS,
   buildFormSchemaItems,
+  itemApplies,
   type Domain,
   type RequirementItem,
 } from '@natural-enforcement/case';
@@ -124,7 +125,9 @@ export class ClueFormSchemaService {
     }
 
     const items = buildFormSchemaItems({ sourceGroupCode, typeCodes });
-    const groups = groupBy(items);
+    // 必填标记按来源求值：条件不成立的项（如非日常巡查时的巡查记录号）不算必填，
+    // 与后端缺件判定同一口径（ADR 0018「一份声明，两个用途」）。
+    const groups = groupBy(items, sourceCode);
     return {
       status: 200,
       body: {
@@ -134,7 +137,7 @@ export class ClueFormSchemaService {
         domain: domain as Domain,
         types,
         groups,
-        items: items.map(toItem),
+        items: items.map((item) => toItem(item, sourceCode)),
       },
     };
   }
@@ -170,12 +173,12 @@ function sourceGroupName(sourceGroupCode: string): string {
 }
 
 /** 依据带上门名。声明里只存文件编号与条号（ADR 0019）。 */
-function toItem(item: RequirementItem): FormSchemaItem {
+function toItem(item: RequirementItem, sourceCode: string): FormSchemaItem {
   return {
     key: item.key,
     label: item.label,
     group: item.group,
-    required: item.required,
+    required: item.required && itemApplies(item, sourceCode),
     timing: item.timing,
     consequence: item.consequence,
     ...(item.condition === undefined ? {} : { condition: item.condition }),
@@ -189,12 +192,13 @@ function toItem(item: RequirementItem): FormSchemaItem {
 }
 
 /** 按呈现栏名归并，栏名顺序按首次出现。 */
-function groupBy(items: readonly RequirementItem[]): FormSchemaGroup[] {
+function groupBy(items: readonly RequirementItem[], sourceCode: string): FormSchemaGroup[] {
   const groups = new Map<string, FormSchemaItem[]>();
   for (const item of items) {
+    const rendered = toItem(item, sourceCode);
     const bucket = groups.get(item.group);
-    if (bucket) bucket.push(toItem(item));
-    else groups.set(item.group, [toItem(item)]);
+    if (bucket) bucket.push(rendered);
+    else groups.set(item.group, [rendered]);
   }
   return [...groups].map(([name, groupItems]) => ({ name, items: groupItems }));
 }
