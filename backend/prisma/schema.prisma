@@ -783,6 +783,10 @@ model ClueAssignment {
   designate Boolean @default(false)
   /// 操作人
   assignedBy String @map("assigned_by")
+  /// 操作人当时所属机构（指定管辖锁判定「指定者或其上级可再调整」用；#214 前已存在的行为空）
+  assignedByOrgId String? @map("assigned_by_org_id")
+  /// 理由（重新分派与指定管辖必填；自由文本留业务行，不进留痕 detail）
+  reason String?
   assignedAt DateTime  @default(now()) @db.Timestamptz(6) @map("assigned_at")
   endedAt    DateTime? @db.Timestamptz(6) @map("ended_at")
   createdAt  DateTime   @default(now()) @db.Timestamptz(6) @map("created_at")

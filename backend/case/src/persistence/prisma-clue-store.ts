@@ -15,12 +15,16 @@ import { Prisma, type PrismaClient } from '../../../prisma/generated/prisma/clie
 import type { VerificationLayerResult } from '../clue/verification/port.ts';
 import { ClueIdempotencyConflictError, ClueVerificationRunningError } from './clue-store.ts';
 import type {
+  ClueDecisionWrite,
+  ClueDispatchContext,
   ClueGapFillOutcome,
   ClueGapFillWrite,
   ClueItemGapRow,
   ClueHitSummary,
   ClueHitWrite,
   ClueIdempotencyRow,
+  ClueOrgAssignWrite,
+  CluePeopleAssignWrite,
   ClueRegistrationOutcome,
   ClueRegistrationResult,
   ClueRegistrationWrite,
@@ -453,6 +457,175 @@ export class PrismaClueStore implements ClueStore {
       orderBy: { assignedAt: 'asc' },
     });
     return rows.map((row) => ({ personnelId: row.personnelId, role: row.role }));
+  }
+
+  async readDispatchContext(clueId: string): Promise<ClueDispatchContext | null> {
+    const clue = await this.prisma.clue.findUnique({ where: { id: clueId } });
+    if (!clue) return null;
+    const object = await this.prisma.clueSpatialObject.findUnique({
+      where: { clueId },
+    });
+    const parts = await this.prisma.$queryRaw<
+      Array<{ part_id: string; part_index: number; geojson: string }>
+    >`
+      SELECT p.id AS part_id, p.part_index, ST_AsGeoJSON(p.geom) AS geojson
+      FROM clue_spatial_part p
+      JOIN clue_spatial_object o ON o.id = p.spatial_object_id
+      WHERE o.clue_id = ${clueId}
+      ORDER BY p.part_index
+    `;
+    const areas = await this.prisma.$queryRaw<Array<{ total_area: number | null }>>`
+      SELECT SUM(ST_Area(p.geom::geography)) AS total_area
+      FROM clue_spatial_part p
+      JOIN clue_spatial_object o ON o.id = p.spatial_object_id
+      WHERE o.clue_id = ${clueId}
+    `;
+    const assignmentRow = await this.prisma.clueAssignment.findFirst({
+      where: { clueId, endedAt: null },
+      orderBy: { assignedAt: 'desc' },
+    });
+    const handlerRows = await this.prisma.clueHandler.findMany({
+      where: { clueId, endedAt: null },
+      orderBy: { assignedAt: 'asc' },
+    });
+    const hits = await this.prisma.$queryRaw<
+      Array<{
+        part_id: string;
+        part_index: number;
+        other_clue_id: string;
+        other_clue_code: string;
+        other_part_id: string;
+        other_status: string;
+        self_ratio: number;
+        other_ratio: number;
+        intersection_area: number;
+      }>
+    >`
+      SELECT h.spatial_part_id AS part_id,
+             p.part_index,
+             h.other_clue_id,
+             c.code AS other_clue_code,
+             h.other_part_id,
+             c.status AS other_status,
+             h.self_ratio,
+             h.other_ratio,
+             h.intersection_area
+      FROM clue_spatial_hit h
+      JOIN clue c ON c.id = h.other_clue_id
+      JOIN clue_spatial_part p ON p.id = h.spatial_part_id
+      WHERE h.clue_id = ${clueId}
+      ORDER BY h.other_clue_id, h.spatial_part_id
+    `;
+    return {
+      clueId: clue.id,
+      code: clue.code,
+      status: clue.status,
+      sourceCode: clue.sourceCode,
+      domain: clue.domain,
+      registeredBy: clue.registeredBy,
+      enteredOrgId: clue.enteredOrgId,
+      kind: object?.kind === 'point' ? 'point' : 'face',
+      totalArea: Number(areas[0]?.total_area ?? 0),
+      dupComputedAt: object?.dupComputedAt ?? null,
+      parts: parts.map((part) => ({
+        partId: part.part_id,
+        partIndex: part.part_index,
+        geojson: part.geojson,
+      })),
+      assignment:
+        assignmentRow === null
+          ? null
+          : {
+              orgUnitId: assignmentRow.orgUnitId,
+              kind: assignmentRow.kind,
+              designate: assignmentRow.designate,
+              assignedBy: assignmentRow.assignedBy,
+              assignedByOrgId: assignmentRow.assignedByOrgId,
+            },
+      handlers: handlerRows.map((row) => ({ personnelId: row.personnelId, role: row.role })),
+      hits: hits.map((hit) => ({
+        partId: hit.part_id,
+        partIndex: hit.part_index,
+        otherClueId: hit.other_clue_id,
+        otherClueCode: hit.other_clue_code,
+        otherPartId: hit.other_part_id,
+        otherStatus: hit.other_status,
+        selfRatio: hit.self_ratio,
+        otherRatio: hit.other_ratio,
+        intersectionArea: hit.intersection_area,
+      })),
+    };
+  }
+
+  async applyDecision(write: ClueDecisionWrite): Promise<boolean> {
+    // 条件更新：决定与并发写入冲突时这一笔不生效，调用方回 409 concurrent-change。
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      UPDATE clue SET status = ${write.nextStatus}
+      WHERE id = ${write.clueId} AND status = ${write.expectedStatus} AND status = 'pending_decision'
+      RETURNING id
+    `;
+    return rows.length > 0;
+  }
+
+  async assignOrg(write: ClueOrgAssignWrite): Promise<boolean> {
+    // 条件更新：派机构只允许从待分派池（首次）、已派机构或已派承办人（重新分派）出发；
+    // 并发冲突时这一笔不生效，调用方回 409 concurrent-change。
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      UPDATE clue SET status = 'org_assigned'
+      WHERE id = ${write.clueId}
+        AND status = ${write.expectedStatus}
+        AND status IN ('in_pool', 'org_assigned', 'handler_assigned')
+      RETURNING id
+    `;
+    if (rows.length === 0) return false;
+    const now = write.assignedAt;
+    await this.prisma.clueAssignment.updateMany({
+      where: { clueId: write.clueId, endedAt: null },
+      data: { endedAt: now },
+    });
+    // 换机构后原承办人不再承办：关止原承办人行。
+    await this.prisma.clueHandler.updateMany({
+      where: { clueId: write.clueId, endedAt: null },
+      data: { endedAt: now },
+    });
+    await this.prisma.clueAssignment.create({
+      data: {
+        id: write.assignmentId,
+        clueId: write.clueId,
+        orgUnitId: write.orgUnitId,
+        kind: write.kind,
+        designate: write.designate,
+        assignedBy: write.assignedBy,
+        assignedByOrgId: write.assignedByOrgId,
+        reason: write.reason,
+        assignedAt: now,
+      },
+    });
+    return true;
+  }
+
+  async assignPeople(write: CluePeopleAssignWrite): Promise<boolean> {
+    // 条件更新：派主办／协办只允许从已派机构出发；并发冲突时这一笔不生效。
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      UPDATE clue SET status = 'handler_assigned'
+      WHERE id = ${write.clueId} AND status = ${write.expectedStatus} AND status = 'org_assigned'
+      RETURNING id
+    `;
+    if (rows.length === 0) return false;
+    await this.prisma.clueHandler.updateMany({
+      where: { clueId: write.clueId, endedAt: null },
+      data: { endedAt: write.assignedAt },
+    });
+    await this.prisma.clueHandler.createMany({
+      data: write.handlers.map((handler) => ({
+        id: handler.id,
+        clueId: write.clueId,
+        personnelId: handler.personnelId,
+        role: handler.role,
+        assignedAt: write.assignedAt,
+      })),
+    });
+    return true;
   }
 
   /** 业务编号：取库内 sequence 的下一个值（迁移创建，不算 model）。 */

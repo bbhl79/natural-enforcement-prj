@@ -41,6 +41,11 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'clue.items-supplemented',
   // 内业核查（#213，规格 G）：手动重跑。自动核查由业务表承载，不伪装成人为留痕。
   'clue.verify-retried',
+  // 分派决定与两步分派（#214，规格 G）：决定（含已知晓）、派机构、派主办／协办。
+  'clue.dispatched',
+  'clue.held',
+  'clue.org-assigned',
+  'clue.handler-assigned',
 ] as const;
 
 /**
@@ -251,6 +256,55 @@ export const CLUE_VERIFY_RETRY_FAILED_REASONS = ['invalid-state', 'concurrent-ch
 export type ClueVerifyRetryFailedReason = (typeof CLUE_VERIFY_RETRY_FAILED_REASONS)[number];
 
 /**
+ * 分派决定被拒（outcome=failed）的原因（#214，规格 G）。
+ * complaint-must-dispatch 举报类线索只能派、不能选不派；
+ * ack-required 存在未结案的疑似重复命中、派出前须点「已知晓」；
+ * invalid-state 线索不在待分派决定等状态；
+ * concurrent-change 决定与并发写入冲突。
+ */
+export const CLUE_DISPATCH_DECIDE_FAILED_REASONS = [
+  'invalid-form',
+  'complaint-must-dispatch',
+  'ack-required',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type ClueDispatchDecideFailedReason = (typeof CLUE_DISPATCH_DECIDE_FAILED_REASONS)[number];
+
+/**
+ * 派机构（首次分派、重新分派、指定管辖）被拒（outcome=failed）的原因（#214，规格 G）。
+ * missing-reassign-reason 重新分派与指定管辖的理由必填；
+ * org-unit-deactivated 目标机构已停用；
+ * designated-lock 指定管辖之后下级机构不能再重新分派；
+ * invalid-state 线索状态不允许派机构；
+ * concurrent-change 与并发写入冲突。
+ */
+export const CLUE_ORG_ASSIGNED_FAILED_REASONS = [
+  'invalid-form',
+  'missing-reassign-reason',
+  'org-unit-deactivated',
+  'designated-lock',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type ClueOrgAssignedFailedReason = (typeof CLUE_ORG_ASSIGNED_FAILED_REASONS)[number];
+
+/**
+ * 派主办／协办被拒（outcome=failed）的原因（#214，规格 G）。
+ * missing-required-items 主办必填；
+ * assignee-not-qualified 承办人已停用或不属于承办机构；
+ * invalid-state 线索不在已派机构状态；
+ * concurrent-change 与并发写入冲突。
+ */
+export const CLUE_HANDLER_ASSIGNED_FAILED_REASONS = [
+  'missing-required-items',
+  'assignee-not-qualified',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type ClueHandlerAssignedFailedReason = (typeof CLUE_HANDLER_ASSIGNED_FAILED_REASONS)[number];
+
+/**
  * 带结构化快照（detail）的动作（#211，规格 G）。
  * 线索动作把编号、当前命中集摘要、缺件键写进 detail，不占用 previousValue/nextValue/itemCount。
  * detail 只写不回：查阅接口不返回它。其余动作一律不带 detail。
@@ -259,5 +313,10 @@ export const AUDIT_DETAIL_ACTIONS = [
   'clue.registered',
   'clue.items-supplemented',
   'clue.verify-retried',
+  // 分派决定与两步分派（#214，规格 G）：前后状态、已知晓、原／新机构、指定管辖与承办人变更。
+  'clue.dispatched',
+  'clue.held',
+  'clue.org-assigned',
+  'clue.handler-assigned',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];
