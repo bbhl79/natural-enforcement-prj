@@ -62,6 +62,7 @@ const EXPECTED_ALLOWANCES: Record<string, readonly string[]> = {
     'case.export',
     'doc.export',
     'clue.register',
+    'clue.dispatch.decide',
     'clue.withdraw.undo',
     'clue.disposition.record',
     'clue.reminder.resolve',

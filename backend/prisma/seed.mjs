@@ -98,6 +98,7 @@ const ROLE_ALLOWANCES = {
     "case.export",
     "doc.export",
     "clue.register",
+    "clue.dispatch.decide",
     "clue.withdraw.undo",
     "clue.disposition.record",
     "clue.reminder.resolve",

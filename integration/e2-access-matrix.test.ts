@@ -41,8 +41,11 @@ const ALLOWED: Record<string, readonly string[]> = {
   经办: [
     'case.open', 'doc.draft', 'doc.submit', 'case.reassign.submit',
     'legal.review.request', 'clue.read', 'case.read', 'doc.read', 'clue.export', 'case.export', 'doc.export',
-    'clue.register', 'clue.withdraw.undo', 'clue.disposition.record', 'clue.reminder.resolve',
-    'clue.item.supplement', 'clue.verify.retry', 'clue.reference.read', 'clue.geometry.update',
+    // #207 规格：由录入人走完录入→内业核查→分派决定，故经办持有决定步操作码；
+    // 对象级仍限「本人录入的线索」（见 clue-dispatch 用例）。
+    'clue.register', 'clue.dispatch.decide', 'clue.withdraw.undo', 'clue.disposition.record',
+    'clue.reminder.resolve', 'clue.item.supplement', 'clue.verify.retry', 'clue.reference.read',
+    'clue.geometry.update',
   ],
   法制审核: [
     'legal.opinion.draft', 'legal.opinion.submit', 'clue.read', 'case.read', 'doc.read',
