@@ -16,6 +16,10 @@ import type { VerificationLayerResult } from '../clue/verification/port.ts';
 import { ClueIdempotencyConflictError, ClueVerificationRunningError } from './clue-store.ts';
 import type {
   ClueDecisionWrite,
+  ClueDesignationCloseWrite,
+  ClueDesignationRequestInsert,
+  ClueDesignationRequestRow,
+  ClueDesignationRequestWrite,
   ClueDispatchContext,
   ClueGapFillOutcome,
   ClueGapFillWrite,
@@ -68,6 +72,35 @@ function isUniqueViolation(error: unknown): boolean {
     'code' in error &&
     (error as { code?: unknown }).code === 'P2002'
   );
+}
+
+/** 报请行端口形状（库行 → 端口行）。 */
+function designationRequestRow(row: {
+  id: string;
+  clueId: string;
+  requestingOrgId: string;
+  proposedOrgId: string | null;
+  reviewerOrgId: string | null;
+  reason: string;
+  status: string;
+  decidedBy: string | null;
+  decidedAt: Date | null;
+  decisionReason: string | null;
+  createdAt: Date;
+}): ClueDesignationRequestRow {
+  return {
+    id: row.id,
+    clueId: row.clueId,
+    requestingOrgId: row.requestingOrgId,
+    proposedOrgId: row.proposedOrgId,
+    reviewerOrgId: row.reviewerOrgId,
+    reason: row.reason,
+    status: row.status,
+    decidedBy: row.decidedBy,
+    decidedAt: row.decidedAt,
+    decisionReason: row.decisionReason,
+    createdAt: row.createdAt,
+  };
 }
 
 interface OverlapRow {
@@ -626,6 +659,59 @@ export class PrismaClueStore implements ClueStore {
       })),
     });
     return true;
+  }
+
+  async readPendingDesignationRequest(clueId: string): Promise<ClueDesignationRequestRow | null> {
+    const row = await this.prisma.clueDesignationRequest.findFirst({
+      where: { clueId, status: 'pending' },
+      orderBy: { createdAt: 'desc' },
+    });
+    return row === null ? null : designationRequestRow(row);
+  }
+
+  async listPendingDesignationRequests(): Promise<ClueDesignationRequestRow[]> {
+    const rows = await this.prisma.clueDesignationRequest.findMany({
+      where: { status: 'pending' },
+      orderBy: { createdAt: 'asc' },
+    });
+    return rows.map(designationRequestRow);
+  }
+
+  async insertDesignationRequest(
+    write: ClueDesignationRequestWrite,
+  ): Promise<ClueDesignationRequestInsert> {
+    try {
+      await this.prisma.clueDesignationRequest.create({
+        data: {
+          id: write.id,
+          clueId: write.clueId,
+          requestingOrgId: write.requestingOrgId,
+          proposedOrgId: write.proposedOrgId,
+          reviewerOrgId: write.reviewerOrgId,
+          reason: write.reason,
+          status: 'pending',
+          createdAt: write.createdAt,
+        },
+      });
+      return 'inserted';
+    } catch (error) {
+      // 每条线索至多一条待处理报请（部分唯一索引）：并发同报请判 409 designation-pending。
+      if (isUniqueViolation(error)) return 'pending-exists';
+      throw error;
+    }
+  }
+
+  async closePendingDesignationRequests(write: ClueDesignationCloseWrite): Promise<number> {
+    const result = await this.prisma.clueDesignationRequest.updateMany({
+      where: { clueId: write.clueId, status: 'pending' },
+      data: {
+        status: write.status,
+        decidedBy: write.decidedBy,
+        decisionReason: write.decisionReason,
+        decidedAt: write.decidedAt,
+      },
+    });
+    return result.count;
   }
 
   /** 业务编号：取库内 sequence 的下一个值（迁移创建，不算 model）。 */

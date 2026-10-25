@@ -1,4 +1,4 @@
-// 分派决定与两步分派（#214）。公共出口。
+// 分派决定与两步分派（#214）、报请指定管辖（#215）。公共出口。
 export {
   CLUE_DISPATCH_RULE_CODES,
   DECIDE_FROM_STATUS,
@@ -9,6 +9,17 @@ export {
   isOpenHit,
 } from './rules.ts';
 export type { DecideOutcome } from './rules.ts';
+export {
+  CLUE_DESIGNATE_REJECTED_FAILED_REASONS,
+  CLUE_DESIGNATE_REQUESTED_FAILED_REASONS,
+  CLUE_DESIGNATE_RULE_CODES,
+  DESIGNATE_REQUEST_FROM_STATUSES,
+  reviewerOrgCandidates,
+} from './designation.ts';
+export type {
+  ClueDesignateRejectedFailedReason,
+  ClueDesignateRequestedFailedReason,
+} from './designation.ts';
 export {
   STREET_BOUNDARY_PORT,
   STREET_UNAVAILABLE_REASONS,

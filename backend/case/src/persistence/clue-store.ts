@@ -354,6 +354,48 @@ export interface CluePeopleAssignWrite {
   readonly assignedAt: Date;
 }
 
+/** 指定管辖报请行。 */
+export interface ClueDesignationRequestRow {
+  readonly id: string;
+  readonly clueId: string;
+  readonly requestingOrgId: string;
+  /** 拟归属机构（可选；未选即 null）。 */
+  readonly proposedOrgId: string | null;
+  /** 受理机构（报请方与拟归属机构最近共同上级中有内勤的最近一级）。 */
+  readonly reviewerOrgId: string | null;
+  readonly reason: string;
+  /** 状态：pending | approved | rejected。 */
+  readonly status: string;
+  readonly decidedBy: string | null;
+  readonly decidedAt: Date | null;
+  /** 驳回理由（受理人填；批准时为空）。 */
+  readonly decisionReason: string | null;
+  readonly createdAt: Date;
+}
+
+/** 指定管辖报请的写入。 */
+export interface ClueDesignationRequestWrite {
+  readonly id: string;
+  readonly clueId: string;
+  readonly requestingOrgId: string;
+  readonly proposedOrgId: string | null;
+  readonly reviewerOrgId: string;
+  readonly reason: string;
+  readonly createdAt: Date;
+}
+
+/** 报请写入结果：写入成功；已有待处理报请（部分唯一索引挡下并发同报请）。 */
+export type ClueDesignationRequestInsert = 'inserted' | 'pending-exists';
+
+/** 关闭（批准或驳回）一条线索的全部待处理报请。 */
+export interface ClueDesignationCloseWrite {
+  readonly clueId: string;
+  readonly status: 'approved' | 'rejected';
+  readonly decidedBy: string;
+  readonly decisionReason: string | null;
+  readonly decidedAt: Date;
+}
+
 /** 线索存储端口。 */
 export interface ClueStore {
   /** 按幂等键查线索。 */
@@ -410,4 +452,15 @@ export interface ClueStore {
    * 返回 false 表示当前状态与 expectedStatus 不符（并发冲突），业务行不变。
    */
   assignPeople(write: CluePeopleAssignWrite): Promise<boolean>;
+  /** 该线索当前待处理的指定管辖报请（无即 null）。报请期间的指定锁（designation-pending）由它判定。 */
+  readPendingDesignationRequest(clueId: string): Promise<ClueDesignationRequestRow | null>;
+  /** 全部待处理的指定管辖报请（受理人待办取数；量小，由调用方按受理机构过滤）。 */
+  listPendingDesignationRequests(): Promise<ClueDesignationRequestRow[]>;
+  /**
+   * 写入一条指定管辖报请。每条线索至多一条待处理报请：并发同报请被部分唯一索引挡下，
+   * 返回 'pending-exists'，调用方判 409 designation-pending。
+   */
+  insertDesignationRequest(write: ClueDesignationRequestWrite): Promise<ClueDesignationRequestInsert>;
+  /** 关闭该线索的全部待处理报请（指定管辖批准或驳回）；返回关止的条数。 */
+  closePendingDesignationRequests(write: ClueDesignationCloseWrite): Promise<number>;
 }
