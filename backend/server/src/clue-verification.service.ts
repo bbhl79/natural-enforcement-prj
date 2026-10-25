@@ -249,11 +249,8 @@ export class ClueVerificationService {
       { runId, clueId } satisfies VerificationJobPayload,
       { attempts: MANUAL_VERIFICATION_ATTEMPTS },
     );
-    const view = await this.read(actor, clueId);
-    if (view.status !== 200) {
-      return { status: 409, body: { result: 'invalid-state', reason: 'invalid-state' } };
-    }
-    return view;
+    const runs = await this.clues.listVerificationRuns(clueId);
+    return { status: 200, body: await this.buildView(actor, context, account, runs) };
   }
 
   /**
@@ -363,28 +360,35 @@ export class ClueVerificationService {
       return { status: 403, body: { reason: error.reason } };
     }
     const runs = await this.clues.listVerificationRuns(clueId);
+    return { status: 200, body: await this.buildView(actor, context, account, runs) };
+  }
+
+  /** 组装核查视图：当前状态、历史运行与产物引用。 */
+  private async buildView(
+    actor: ActorRef,
+    context: ClueVerificationContext,
+    account: { readonly orgUnitId: string | null; readonly roles: readonly string[] } | null,
+    runs: readonly ClueVerificationRunRow[],
+  ): Promise<ClueVerificationView> {
     const required = requiresVerification(context.domain);
     const current = runs[0] ?? null;
     // 没有活动运行又没有结果时，状态即「没跑成」：重跑提示挂到跑成。
     const status = current?.status ?? (required ? 'failed' : 'not_required');
     const blocked = await this.retryBlockedReason(actor, context, account, required, current);
     return {
-      status: 200,
-      body: {
-        result: 'listed',
-        clueId,
-        code: context.code,
-        domain: context.domain,
-        required,
-        verificationStatus: status,
-        verificationStatusLabel: VERIFICATION_STATUS_LABELS[statusKey(status)],
-        clueStatus: context.status,
-        canRetry: blocked === null,
-        retryBlockedReason: blocked,
-        current: current === null ? null : toRunView(current),
-        runs: runs.map(toRunView),
-        artifacts: current?.artifacts ?? null,
-      },
+      result: 'listed',
+      clueId: context.clueId,
+      code: context.code,
+      domain: context.domain,
+      required,
+      verificationStatus: status,
+      verificationStatusLabel: VERIFICATION_STATUS_LABELS[statusKey(status)],
+      clueStatus: context.status,
+      canRetry: blocked === null,
+      retryBlockedReason: blocked,
+      current: current === null ? null : toRunView(current),
+      runs: runs.map(toRunView),
+      artifacts: current?.artifacts ?? null,
     };
   }
 
