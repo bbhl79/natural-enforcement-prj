@@ -245,6 +245,23 @@ describe('#210 录入要件声明（ADR 0018）', () => {
   });
 });
 
+describe('#211 参照清单', () => {
+  it('来源编码与可选违法类型各出一份，前端按它渲染规范选择控件', async () => {
+    const response = await fetch(`${baseUrl}/api/clue/reference`, {
+      headers: { cookie: await cookieOf('P-CLERK-A') },
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      sources: { code: string; name: string; group: string }[];
+      types: { code: string; name: string; domain: string }[];
+    };
+    expect(body.sources).toHaveLength(30);
+    expect(body.types).toHaveLength(94);
+    expect(body.sources.find((row) => row.code === '16')?.name).toBe('日常巡查');
+    expect(body.types.every((row) => row.domain !== '')).toBe(true);
+  });
+});
+
 describe('#210 form-schema 接口', () => {
   it('未登录取不到声明', async () => {
     const response = await fetch(`${baseUrl}/api/clue/form-schema?sourceCode=301&domain=land`);

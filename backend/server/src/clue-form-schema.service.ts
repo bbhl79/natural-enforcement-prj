@@ -14,10 +14,13 @@ import {
   CLUE_REQUIREMENT_DECLARATION_VERSION,
   DOMAINS,
   buildFormSchemaItems,
+  itemApplies,
   type Domain,
   type RequirementItem,
 } from '@natural-enforcement/case';
 import {
+  SOURCE_CODES,
+  VIOLATION_TYPES,
   findDocument,
   findSourceCode,
   findSourceGroupCode,
@@ -64,8 +67,43 @@ export type FormSchemaOutcome =
   | { readonly status: 200; readonly body: FormSchemaBody }
   | { readonly status: 400; readonly body: { readonly result: 'non-compliant'; readonly rules: readonly string[] } };
 
+/** 参照清单：线索来源编码与可选违法类型。前端按它渲染规范选择控件，不复制取值表。 */
+export interface ClueReferenceBody {
+  readonly result: 'listed';
+  readonly sources: readonly {
+    readonly code: string;
+    readonly name: string;
+    readonly group: string;
+  }[];
+  readonly types: readonly {
+    readonly code: string;
+    readonly name: string;
+    readonly domain: Domain;
+  }[];
+}
+
 @Injectable()
 export class ClueFormSchemaService {
+  /** 参照清单（只读）。取值表只此一份，前端按它渲染选择控件。 */
+  reference(): { readonly status: 200; readonly body: ClueReferenceBody } {
+    return {
+      status: 200,
+      body: {
+        result: 'listed',
+        sources: SOURCE_CODES.map((row) => ({
+          code: row.code,
+          name: row.name,
+          group: sourceGroupName(findSourceGroupCode(row.code) ?? row.code),
+        })),
+        types: VIOLATION_TYPES.filter((row) => row.selectable).map((row) => ({
+          code: row.code,
+          name: row.name,
+          domain: row.domain as Domain,
+        })),
+      },
+    };
+  }
+
   schema(query: FormSchemaQuery): FormSchemaOutcome {
     const sourceCode = typeof query.sourceCode === 'string' ? query.sourceCode.trim() : '';
     if (sourceCode === '') return bad(['missing-source-code']);
@@ -87,7 +125,9 @@ export class ClueFormSchemaService {
     }
 
     const items = buildFormSchemaItems({ sourceGroupCode, typeCodes });
-    const groups = groupBy(items);
+    // 必填标记按来源求值：条件不成立的项（如非日常巡查时的巡查记录号）不算必填，
+    // 与后端缺件判定同一口径（ADR 0018「一份声明，两个用途」）。
+    const groups = groupBy(items, sourceCode);
     return {
       status: 200,
       body: {
@@ -97,7 +137,7 @@ export class ClueFormSchemaService {
         domain: domain as Domain,
         types,
         groups,
-        items: items.map(toItem),
+        items: items.map((item) => toItem(item, sourceCode)),
       },
     };
   }
@@ -133,12 +173,12 @@ function sourceGroupName(sourceGroupCode: string): string {
 }
 
 /** 依据带上门名。声明里只存文件编号与条号（ADR 0019）。 */
-function toItem(item: RequirementItem): FormSchemaItem {
+function toItem(item: RequirementItem, sourceCode: string): FormSchemaItem {
   return {
     key: item.key,
     label: item.label,
     group: item.group,
-    required: item.required,
+    required: item.required && itemApplies(item, sourceCode),
     timing: item.timing,
     consequence: item.consequence,
     ...(item.condition === undefined ? {} : { condition: item.condition }),
@@ -152,12 +192,13 @@ function toItem(item: RequirementItem): FormSchemaItem {
 }
 
 /** 按呈现栏名归并，栏名顺序按首次出现。 */
-function groupBy(items: readonly RequirementItem[]): FormSchemaGroup[] {
+function groupBy(items: readonly RequirementItem[], sourceCode: string): FormSchemaGroup[] {
   const groups = new Map<string, FormSchemaItem[]>();
   for (const item of items) {
+    const rendered = toItem(item, sourceCode);
     const bucket = groups.get(item.group);
-    if (bucket) bucket.push(toItem(item));
-    else groups.set(item.group, [toItem(item)]);
+    if (bucket) bucket.push(rendered);
+    else groups.set(item.group, [rendered]);
   }
   return [...groups].map(([name, groupItems]) => ({ name, items: groupItems }));
 }

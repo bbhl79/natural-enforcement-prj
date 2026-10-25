@@ -36,6 +36,9 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'personnel.deactivated',
   'personnel.restored',
   'personnel.sessions-ended',
+  // 线索登记（#211，规格 G）：登记成功与缺件补齐。
+  'clue.registered',
+  'clue.items-supplemented',
 ] as const;
 
 /**
@@ -213,3 +216,34 @@ export type AuditNextValueAction = (typeof AUDIT_NEXT_VALUE_ACTIONS)[number];
  */
 export const AUDIT_TARGET_ORG_BASES = ['object', 'actor-fallback'] as const;
 export type AuditTargetOrgBasis = (typeof AUDIT_TARGET_ORG_BASES)[number];
+
+/**
+ * 登记线索被拒（outcome=failed）的原因（#211，规格 G）。
+ * missing-required-items 公共层或来源层阻断项缺失、类型层缺件未确认；
+ * invalid-form 来源、法域、类型编码或要件取值不合规；
+ * invalid-attachment 附件类型、真实内容、件数或字节数不合规；
+ * invalid-geometry 几何来源文件不合规。
+ */
+export const CLUE_REGISTER_FAILED_REASONS = [
+  'missing-required-items',
+  'invalid-form',
+  'invalid-attachment',
+  'invalid-geometry',
+] as const;
+export type ClueRegisterFailedReason = (typeof CLUE_REGISTER_FAILED_REASONS)[number];
+
+/**
+ * 补齐缺件被拒（outcome=failed）的原因（#211，规格 G）。
+ * missing-required-items 同一次提交里有一项补齐不合格（整单不保存）；
+ * invalid-form 提交值本身不合规。
+ */
+export const CLUE_ITEMS_SUPPLEMENT_FAILED_REASONS = ['missing-required-items', 'invalid-form'] as const;
+export type ClueItemsSupplementFailedReason = (typeof CLUE_ITEMS_SUPPLEMENT_FAILED_REASONS)[number];
+
+/**
+ * 带结构化快照（detail）的动作（#211，规格 G）。
+ * 线索动作把编号、当前命中集摘要、缺件键写进 detail，不占用 previousValue/nextValue/itemCount。
+ * detail 只写不回：查阅接口不返回它。其余动作一律不带 detail。
+ */
+export const AUDIT_DETAIL_ACTIONS = ['clue.registered', 'clue.items-supplemented'] as const;
+export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];

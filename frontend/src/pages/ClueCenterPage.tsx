@@ -17,6 +17,7 @@ export default function ClueCenterPage() {
           <h1>线索中心</h1>
           <div className="desc">全部登记的线索统一进这里，可按视图、筛选与关键词查询。</div>
         </div>
+        <Link className="btn btn-primary" to="/clue/register">登记线索</Link>
       </div>
       <div className="card">
         <div className="card-h">
@@ -38,7 +39,7 @@ export default function ClueCenterPage() {
         </div>
         <div className="empty">
           <div className="t">线索清单尚未开放</div>
-          <div>线索的登记、查询与详情办理在后续范围接入。当前可先用顶栏综合查询带关键词进入本页。</div>
+          <div>线索的查询与详情办理在后续范围接入。登记已开放：点上面的「登记线索」按来源与法域逐层填。</div>
         </div>
       </div>
     </>

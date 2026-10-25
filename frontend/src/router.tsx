@@ -23,6 +23,8 @@ import {
 } from './admin/personnel';
 import LoginPage from './login/LoginPage';
 import PasswordPage from './login/PasswordPage';
+import ClueRegisterPage from './clue/ClueRegisterPage';
+import { clueRegisterLoader } from './clue/registration';
 import ClueCenterPage from './pages/ClueCenterPage';
 import PlannedCenterPage from './pages/PlannedCenterPage';
 import WorkbenchPage from './pages/WorkbenchPage';
@@ -76,6 +78,12 @@ export function appRoutes(store: RouterStore): RouteObject[] {
                 { id: 'home', index: true, loader: homeRedirect },
                 { id: 'workbench', path: 'workbench', element: <WorkbenchPage /> },
                 { id: 'clue', path: 'clue', element: <ClueCenterPage /> },
+                {
+                  id: 'clue-register',
+                  path: 'clue/register',
+                  loader: clueRegisterLoader(store),
+                  element: <ClueRegisterPage />,
+                },
                 { id: 'case', path: 'case', element: <PlannedCenterPage primary="case" /> },
                 { id: 'case-onsite', path: 'case/onsite-check', element: <PlannedCenterPage primary="case" /> },
                 { id: 'case-trial', path: 'case/trial', element: <PlannedCenterPage primary="case" /> },

@@ -1,6 +1,8 @@
 import type {
   AccountMaintenanceFailedReason,
   AuditTargetOrgBasis,
+  ClueItemsSupplementFailedReason,
+  ClueRegisterFailedReason,
   CertUpdateFailedReason,
   AuthzDeniedReason,
   LoginFailedReason,
@@ -44,6 +46,11 @@ export interface AuditParties {
   itemCount?: number | null;
   /** 后值（#128）。只有 AUDIT_NEXT_VALUE_ACTIONS 里的动作带，其余为空。 */
   nextValue?: string | null;
+  /**
+   * 结构化快照（#211，规格 G）。只有 AUDIT_DETAIL_ACTIONS 里的动作带，其余为空。
+   * 只写不回：查阅接口不返回这一列。
+   */
+  detail?: string | null;
 }
 
 export type AuditAppend =
@@ -138,7 +145,12 @@ export type AuditAppend =
   })
   | (AuditParties & { action: 'personnel.restored' })
   | (AuditParties & { action: 'personnel.restored'; outcome: 'failed'; reason: PersonnelRestoreFailedReason })
-  | (AuditParties & { action: 'personnel.sessions-ended' });
+  | (AuditParties & { action: 'personnel.sessions-ended' })
+  // 线索登记（#211，规格 G）：动作词与业务事实同事务写入，detail 存结构化快照。
+  | (AuditParties & { action: 'clue.registered' })
+  | (AuditParties & { action: 'clue.registered'; outcome: 'failed'; reason: ClueRegisterFailedReason })
+  | (AuditParties & { action: 'clue.items-supplemented' })
+  | (AuditParties & { action: 'clue.items-supplemented'; outcome: 'failed'; reason: ClueItemsSupplementFailedReason });
 
 /**
  * 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。
