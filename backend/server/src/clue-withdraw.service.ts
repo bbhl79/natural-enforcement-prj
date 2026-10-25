@@ -79,20 +79,23 @@ export class ClueWithdrawService {
     const actorOrgId = account?.orgUnitId ?? '';
     const actorCode = account?.code ?? null;
 
-    // 授权第一层：操作码。拒绝时 authorize 自己写 authz.denied 留痕。
+    // 授权第一层：对象级（录入人本人、录入机构内勤、所撞既有线索承办机构内勤）。
+    // 有权人可跨机构（所撞旧线索的承办机构内勤），故范围判定取「据以行事的机构」，
+    // 不拿登记机构去套数据范围（否则承办机构内勤会被范围挡住）。
+    const actingOrgId = this.actingOrgId(actor, account, context);
+    if (actingOrgId === null) {
+      await this.deny(actor, actorCode, actorOrgId, clueId, context.enteredOrgId);
+      return { status: 403, body: { reason: 'permission-denied' } };
+    }
+    // 授权第二层：操作码。拒绝时 authorize 自己写 authz.denied 留痕。
     try {
-      await this.access.authorize(actor, WITHDRAW_OPCODE, context.enteredOrgId, {
+      await this.access.authorize(actor, WITHDRAW_OPCODE, actingOrgId, {
         resourceType: 'clue',
         resourceId: clueId,
       });
     } catch (error) {
       if (!isAccessDenied(error)) throw error;
       return { status: 403, body: { reason: error.reason } };
-    }
-    // 授权第二层：对象级（录入人本人、录入机构内勤、所撞既有线索承办机构内勤）。
-    if (!(await this.mayWithdraw(actor, account, context))) {
-      await this.deny(actor, actorCode, actorOrgId, clueId, context.enteredOrgId);
-      return { status: 403, body: { reason: 'permission-denied' } };
     }
     if (context.status !== input.expectedStatus) {
       return this.reject(actor, actorCode, actorOrgId, clueId, {
@@ -156,18 +159,24 @@ export class ClueWithdrawService {
     });
   }
 
-  /** 对象级权限：录入人本人；录入机构内勤；所撞既有线索承办机构内勤。 */
-  private async mayWithdraw(
+  /**
+   * 对象级权限与「据以行事的机构」：录入人本人（登记机构）、录入机构内勤（登记机构）、
+   * 所撞既有线索承办机构内勤（该承办机构）。无权即 null。
+   */
+  private actingOrgId(
     actor: ActorRef,
     account: { readonly orgUnitId: string | null; readonly roles: readonly string[] } | null,
     context: ClueWithdrawContext,
-  ): Promise<boolean> {
-    if (context.registeredBy === actor.personnelId) return true;
+  ): string | null {
+    if (context.registeredBy === actor.personnelId) return context.enteredOrgId;
     const roles = account?.roles ?? [];
     const actorOrg = account?.orgUnitId ?? null;
-    if (actorOrg === null || !roles.includes('内勤')) return false;
-    if (actorOrg === context.enteredOrgId) return true;
-    return context.hits.some((hit) => hit.otherHandlerOrgId !== null && hit.otherHandlerOrgId === actorOrg);
+    if (actorOrg === null || !roles.includes('内勤')) return null;
+    if (actorOrg === context.enteredOrgId) return context.enteredOrgId;
+    const hit = context.hits.find(
+      (item) => item.otherHandlerOrgId !== null && item.otherHandlerOrgId === actorOrg,
+    );
+    return hit?.otherHandlerOrgId ?? null;
   }
 
   /** 对象级拒绝：403 并写 authz.denied 留痕（回滚后另起事务写，#119 口径）。 */

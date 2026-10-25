@@ -325,11 +325,12 @@ export type ClueWithdrawnFailedReason = (typeof CLUE_WITHDRAWN_FAILED_REASONS)[n
 
 /**
  * 处置登记（不予立案／随旧线索办结）被拒（outcome=failed）的原因（#217，规格 G）。
- * missing-disposition-fields 说明必填；invalid-state 线索状态不允许登记；
- * concurrent-change 与并发写入冲突。
+ * missing-disposition-fields 说明必填；unsupported-disposition 本期不支持的处置类型（移送归 #216 接口）；
+ * invalid-state 线索状态不允许登记；concurrent-change 与并发写入冲突。
  */
 export const CLUE_DISPOSITION_RECORDED_FAILED_REASONS = [
   'missing-disposition-fields',
+  'unsupported-disposition',
   'invalid-state',
   'concurrent-change',
 ] as const;
@@ -338,14 +339,17 @@ export type ClueDispositionRecordedFailedReason =
 
 /**
  * 结案提醒处理被拒（outcome=failed）的原因（#217，规格 G）。
- * missing-withdraw-reason／missing-withdraw-note 选「撤回不派再办」时的原因与说明必填；
- * missing-disposition-fields 选「随旧线索办结」时的原因必填；
+ * missing-withdraw-reason／missing-withdraw-note／invalid-withdraw-reason 选「撤回不派再办」时的原因与说明；
+ * missing-disposition-fields 选「随旧线索办结」时的说明必填；
+ * unsupported-disposition 处理结果不在二选一之内；
  * invalid-state 提醒或线索状态不允许处理；concurrent-change 与并发写入冲突。
  */
 export const CLUE_REMINDER_RESOLVED_FAILED_REASONS = [
   'missing-withdraw-reason',
   'missing-withdraw-note',
+  'invalid-withdraw-reason',
   'missing-disposition-fields',
+  'unsupported-disposition',
   'invalid-state',
   'concurrent-change',
 ] as const;

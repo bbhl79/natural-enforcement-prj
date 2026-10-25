@@ -287,10 +287,11 @@ beforeAll(async () => {
   deptBId = await orgOf('ORG-DEPT-B');
   stationAId = await orgOf('ORG-STATION-A');
   await seedPerson('P-INTAKE-A', '甲区内勤', deptAId, ['内勤'], '13900003001');
+  await seedPerson('P-INTAKE-A2', '甲区内勤乙', deptAId, ['内勤'], '13900003006');
   await seedPerson('P-INTAKE-B', '乙区内勤', deptBId, ['内勤'], '13900003002');
   await seedPerson('P-INTAKE-ST', '甲所内勤', stationAId, ['内勤'], '13900003003');
   await seedPerson('P-HANDLER-ST1', '甲所经办甲', stationAId, ['经办'], '13900003004');
-  for (const code of ['P-INTAKE-A', 'P-INTAKE-B', 'P-INTAKE-ST', 'P-HANDLER-ST1']) {
+  for (const code of ['P-INTAKE-A', 'P-INTAKE-A2', 'P-INTAKE-B', 'P-INTAKE-ST', 'P-HANDLER-ST1']) {
     await cookieOf(code, INITIAL_PASSWORD);
   }
 }, 60_000);
@@ -329,13 +330,13 @@ describe('#217 撤回不派', () => {
   });
 
   it('录入机构内勤（非录入人）撤回：成功', async () => {
-    // 本机构经办录入并决定「不派」；同机构内勤（非录入人）撤回。
+    // 本机构内勤录入并决定「不派」；同机构另一名内勤（非录入人）撤回。
     await register({ polygon: geojsonPolygon(square(61)) });
-    const entered = await register({ polygon: geojsonPolygon(square(61)), code: 'P-CLERK-A' });
+    const entered = await register({ polygon: geojsonPolygon(square(61)) });
     expect(entered.body.status).toBe('pending_decision');
-    const held = await decide(entered.body.id ?? '', { decision: 'hold' }, 'P-CLERK-A');
+    const held = await decide(entered.body.id ?? '', { decision: 'hold' }, 'P-INTAKE-A');
     expect(held.status).toBe(200);
-    const outcome = await withdraw(entered.body.id ?? '', { reasonCodes: ['误判重复'] }, 'P-INTAKE-A');
+    const outcome = await withdraw(entered.body.id ?? '', { reasonCodes: ['误判重复'] }, 'P-INTAKE-A2');
     expect(outcome.status).toBe(200);
     const clue = await cloned.prisma.clue.findUnique({ where: { id: entered.body.id } });
     expect(clue?.status).toBe('in_pool');

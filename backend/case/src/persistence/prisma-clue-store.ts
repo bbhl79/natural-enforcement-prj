@@ -15,10 +15,15 @@ import { Prisma, type PrismaClient } from '../../../prisma/generated/prisma/clie
 import type { VerificationLayerResult } from '../clue/verification/port.ts';
 import { ClueIdempotencyConflictError, ClueVerificationRunningError } from './clue-store.ts';
 import type {
+  ClueClosureReminderRow,
+  ClueClosureReminderRowToWrite,
+  ClueClosureReminderTarget,
   ClueDecisionWrite,
+  ClueDispositionWrite,
   ClueDispatchContext,
   ClueGapFillOutcome,
   ClueGapFillWrite,
+  ClueHeldRow,
   ClueItemGapRow,
   ClueHitSummary,
   ClueHitWrite,
@@ -28,6 +33,7 @@ import type {
   ClueRegistrationOutcome,
   ClueRegistrationResult,
   ClueRegistrationWrite,
+  ClueReminderResolveWrite,
   ClueSpatialPartRow,
   ClueStore,
   ClueVerificationArtifacts,
@@ -687,9 +693,306 @@ export class PrismaClueStore implements ClueStore {
     // 撤回不派即回答了待处理的结案提醒：业务行随撤回一并了结（提醒由业务表承载，不加留痕）。
     await this.prisma.clueClosureReminder.updateMany({
       where: { clueId: write.clueId, resolvedAt: null },
-      data: { resolvedAt: write.withdrawnAt, resolution: 'withdrawn' },
+      data: { resolvedAt: write.withdrawnAt, resolution: 'withdraw' },
     });
     return true;
+  }
+
+  /**
+   * 结案提醒的待生成对：被结案的线索按当前命中集逐对找出撞上它且当前「不派」的线索。
+   * 命中集是双向的，两个方向都认（命中面对不逐面生成提醒，只逐对）。
+   */
+  async listClosureReminderTargets(closedClueId: string): Promise<readonly ClueClosureReminderTarget[]> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        clue_id: string;
+        clue_code: string;
+        other_clue_id: string;
+        other_clue_code: string;
+        other_status: string;
+      }>
+    >`
+      SELECT DISTINCT c.id AS clue_id,
+             c.code AS clue_code,
+             ${closedClueId}::text AS other_clue_id,
+             (SELECT code FROM clue WHERE id = ${closedClueId}::text) AS other_clue_code,
+             (SELECT status FROM clue WHERE id = ${closedClueId}::text) AS other_status
+      FROM clue c
+      JOIN clue_spatial_hit h
+        ON (h.clue_id = c.id AND h.other_clue_id = ${closedClueId}::text)
+        OR (h.clue_id = ${closedClueId}::text AND h.other_clue_id = c.id)
+      WHERE c.status = 'held'
+      ORDER BY c.code
+    `;
+    return rows.map((row) => ({
+      clueId: row.clue_id,
+      clueCode: row.clue_code,
+      otherClueId: row.other_clue_id,
+      otherClueCode: row.other_clue_code,
+      otherStatus: row.other_status,
+    }));
+  }
+
+  /** 写结案提醒行。本期无超期、催办或升级口径：时限不写（due_at 为空）。 */
+  async insertClosureReminders(rows: readonly ClueClosureReminderRowToWrite[]): Promise<void> {
+    for (const row of rows) {
+      await this.prisma.clueClosureReminder.create({
+        data: {
+          id: row.id,
+          clueId: row.clueId,
+          kind: row.kind,
+          otherClueId: row.otherClueId,
+          dueAt: null,
+          resolvedAt: null,
+          resolution: null,
+          createdAt: row.createdAt,
+        },
+      });
+    }
+  }
+
+  /**
+   * 处置登记：状态条件更新为终态并写入处置行。
+   * 起始状态由处置类型定死：不予立案仅已派承办人、随旧线索办结仅不派、移送三个状态都可。
+   */
+  async applyDisposition(write: ClueDispositionWrite): Promise<boolean> {
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      UPDATE clue SET status = ${write.nextStatus}
+      WHERE id = ${write.clueId}
+        AND status = ${write.expectedStatus}
+        AND (
+          (${write.disposition} = 'no-case' AND status = 'handler_assigned')
+          OR (${write.disposition} = 'with-old' AND status = 'held')
+          OR (${write.disposition} = 'transfer' AND status IN ('in_pool', 'org_assigned', 'handler_assigned'))
+        )
+      RETURNING id
+    `;
+    if (rows.length === 0) return false;
+    await this.prisma.clueDisposition.create({
+      data: {
+        id: write.dispositionId,
+        clueId: write.clueId,
+        disposition: write.disposition,
+        transferredOrg: write.transferredOrg,
+        documentNo: write.documentNo,
+        note: write.note,
+        recordedBy: write.recordedBy,
+        recordedAt: write.recordedAt,
+      },
+    });
+    return true;
+  }
+
+  async readClosureReminder(reminderId: string): Promise<ClueClosureReminderRow | null> {
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        clue_id: string;
+        clue_code: string;
+        kind: string;
+        other_clue_id: string | null;
+        other_clue_code: string | null;
+        other_status: string | null;
+        registered_by: string;
+        entered_org_id: string;
+        other_handler_org_id: string | null;
+        created_at: Date;
+        resolved_at: Date | null;
+        resolution: string | null;
+      }>
+    >`
+      SELECT r.id,
+             r.clue_id,
+             c.code AS clue_code,
+             r.kind,
+             r.other_clue_id,
+             oc.code AS other_clue_code,
+             oc.status AS other_status,
+             c.registered_by,
+             c.entered_org_id,
+             (
+               SELECT a.org_unit_id
+               FROM clue_assignment a
+               WHERE a.clue_id = r.other_clue_id AND a.ended_at IS NULL
+               ORDER BY a.assigned_at DESC
+               LIMIT 1
+             ) AS other_handler_org_id,
+             r.created_at,
+             r.resolved_at,
+             r.resolution
+      FROM clue_closure_reminder r
+      JOIN clue c ON c.id = r.clue_id
+      LEFT JOIN clue oc ON oc.id = r.other_clue_id
+      WHERE r.id = ${reminderId}
+    `;
+    const row = rows[0];
+    if (!row) return null;
+    return toReminderRow(row);
+  }
+
+  /** 未处理的结案提醒：按线索的数据范围（登记机构或承办机构在范围内）过滤。 */
+  async listPendingClosureReminders(
+    orgUnitIds: readonly string[],
+  ): Promise<readonly ClueClosureReminderRow[]> {
+    if (orgUnitIds.length === 0) return [];
+    const ids = Prisma.join([...orgUnitIds]);
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        clue_id: string;
+        clue_code: string;
+        kind: string;
+        other_clue_id: string | null;
+        other_clue_code: string | null;
+        other_status: string | null;
+        registered_by: string;
+        entered_org_id: string;
+        other_handler_org_id: string | null;
+        created_at: Date;
+        resolved_at: Date | null;
+        resolution: string | null;
+      }>
+    >`
+      SELECT r.id,
+             r.clue_id,
+             c.code AS clue_code,
+             r.kind,
+             r.other_clue_id,
+             oc.code AS other_clue_code,
+             oc.status AS other_status,
+             c.registered_by,
+             c.entered_org_id,
+             (
+               SELECT a.org_unit_id
+               FROM clue_assignment a
+               WHERE a.clue_id = r.other_clue_id AND a.ended_at IS NULL
+               ORDER BY a.assigned_at DESC
+               LIMIT 1
+             ) AS other_handler_org_id,
+             r.created_at,
+             r.resolved_at,
+             r.resolution
+      FROM clue_closure_reminder r
+      JOIN clue c ON c.id = r.clue_id
+      LEFT JOIN clue oc ON oc.id = r.other_clue_id
+      WHERE r.resolved_at IS NULL
+        AND (
+          c.entered_org_id IN (${ids})
+          OR EXISTS (
+            SELECT 1 FROM clue_assignment a
+            WHERE a.clue_id = c.id AND a.ended_at IS NULL AND a.org_unit_id IN (${ids})
+          )
+        )
+      ORDER BY r.created_at DESC, r.id DESC
+    `;
+    return rows.map(toReminderRow);
+  }
+
+  /**
+   * 提醒处理：撤回不派再办（回待分派池并写撤回行）或写明原因随旧线索办结（进 closed 并写处置行）；
+   * 同时了结该线索未处理的其余结案提醒（提醒挂在该线索上，线索离开「不派」即一并了结）。
+   */
+  async applyReminderResolution(write: ClueReminderResolveWrite): Promise<boolean> {
+    const nextStatus = write.resolution === 'withdraw' ? 'in_pool' : 'closed';
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      UPDATE clue SET status = ${nextStatus}
+      WHERE id = ${write.clueId} AND status = ${write.expectedStatus} AND status = 'held'
+      RETURNING id
+    `;
+    if (rows.length === 0) return false;
+    if (write.resolution === 'withdraw' && write.withdrawalId !== null) {
+      await this.prisma.clueWithdrawal.create({
+        data: {
+          id: write.withdrawalId,
+          clueId: write.clueId,
+          reasonCodes: [...write.reasonCodes],
+          note: write.note,
+          withdrawnBy: write.resolvedBy,
+          withdrawnAt: write.resolvedAt,
+        },
+      });
+    }
+    if (write.resolution === 'close-with-old' && write.dispositionId !== null) {
+      await this.prisma.clueDisposition.create({
+        data: {
+          id: write.dispositionId,
+          clueId: write.clueId,
+          disposition: 'with-old',
+          transferredOrg: null,
+          documentNo: null,
+          note: write.note,
+          recordedBy: write.resolvedBy,
+          recordedAt: write.resolvedAt,
+        },
+      });
+    }
+    await this.prisma.clueClosureReminder.updateMany({
+      where: { clueId: write.clueId, resolvedAt: null },
+      data: { resolvedAt: write.resolvedAt, resolution: write.resolution },
+    });
+    return true;
+  }
+
+  /** 不派视图：数据范围内当前「不派」的线索。 */
+  async listHeldClues(orgUnitIds: readonly string[]): Promise<readonly ClueHeldRow[]> {
+    if (orgUnitIds.length === 0) return [];
+    const ids = Prisma.join([...orgUnitIds]);
+    const rows = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        code: string;
+        status: string;
+        source_code: string;
+        domain: string;
+        registered_by: string;
+        entered_org_id: string;
+        registered_at: Date;
+        hit_codes: string[];
+        hit_handler_org_ids: string[];
+      }>
+    >`
+      SELECT c.id,
+             c.code,
+             c.status,
+             c.source_code,
+             c.domain,
+             c.registered_by,
+             c.entered_org_id,
+             c.registered_at,
+             COALESCE(hit.codes, ARRAY[]::text[]) AS hit_codes,
+             COALESCE(hit.handler_org_ids, ARRAY[]::text[]) AS hit_handler_org_ids
+      FROM clue c
+      LEFT JOIN (
+        SELECT h.clue_id,
+               array_agg(DISTINCT oc.code) AS codes,
+               array_agg(DISTINCT a.org_unit_id) FILTER (WHERE a.org_unit_id IS NOT NULL) AS handler_org_ids
+        FROM clue_spatial_hit h
+        JOIN clue oc ON oc.id = h.other_clue_id
+        LEFT JOIN clue_assignment a ON a.clue_id = h.other_clue_id AND a.ended_at IS NULL
+        GROUP BY h.clue_id
+      ) hit ON hit.clue_id = c.id
+      WHERE c.status = 'held'
+        AND (
+          c.entered_org_id IN (${ids})
+          OR EXISTS (
+            SELECT 1 FROM clue_assignment a
+            WHERE a.clue_id = c.id AND a.ended_at IS NULL AND a.org_unit_id IN (${ids})
+          )
+        )
+      ORDER BY c.registered_at DESC, c.id DESC
+    `;
+    return rows.map((row) => ({
+      id: row.id,
+      code: row.code,
+      status: row.status,
+      sourceCode: row.source_code,
+      domain: row.domain,
+      registeredBy: row.registered_by,
+      enteredOrgId: row.entered_org_id,
+      registeredAt: row.registered_at,
+      hitCodes: row.hit_codes ?? [],
+      hitHandlerOrgIds: row.hit_handler_org_ids ?? [],
+    }));
   }
 
   /** 业务编号：取库内 sequence 的下一个值（迁移创建，不算 model）。 */
@@ -860,5 +1163,38 @@ function toRunRow(row: {
     artifacts: parseJson<ClueVerificationArtifacts>(row.artifactsJson),
     startedAt: row.startedAt,
     endedAt: row.endedAt,
+  };
+}
+
+/** 结案提醒行 → 端口形状。 */
+function toReminderRow(row: {
+  id: string;
+  clue_id: string;
+  clue_code: string;
+  kind: string;
+  other_clue_id: string | null;
+  other_clue_code: string | null;
+  other_status: string | null;
+  registered_by: string;
+  entered_org_id: string;
+  other_handler_org_id: string | null;
+  created_at: Date;
+  resolved_at: Date | null;
+  resolution: string | null;
+}): ClueClosureReminderRow {
+  return {
+    id: row.id,
+    clueId: row.clue_id,
+    clueCode: row.clue_code,
+    kind: row.kind,
+    otherClueId: row.other_clue_id,
+    otherClueCode: row.other_clue_code,
+    otherStatus: row.other_status,
+    registeredBy: row.registered_by,
+    enteredOrgId: row.entered_org_id,
+    otherHandlerOrgId: row.other_handler_org_id,
+    createdAt: row.created_at,
+    resolvedAt: row.resolved_at,
+    resolution: row.resolution,
   };
 }

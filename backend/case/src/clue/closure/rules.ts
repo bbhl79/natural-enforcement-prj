@@ -73,3 +73,55 @@ export type DispositionNoteCheckOutcome = { readonly ok: true } | { readonly ok:
 export function checkDispositionNote(note: string): DispositionNoteCheckOutcome {
   return note.trim() === '' ? { ok: false } : { ok: true };
 }
+
+/** 处置类型对应的终态：不予立案与随旧线索办结进 closed；移送进 transferred_out。 */
+export const DISPOSITION_TERMINAL_STATUS: Readonly<Record<string, string>> = {
+  'no-case': 'closed',
+  'with-old': 'closed',
+  transfer: 'transferred_out',
+};
+
+/**
+ * 处置登记可用的起始状态：不予立案仅已派承办人；随旧线索办结仅「不派」；
+ * 移送可在待分派池、已派机构与已派承办人发起（规格 D 节）。
+ */
+export const DISPOSITION_FROM_STATUSES: Readonly<Record<string, readonly string[]>> = {
+  'no-case': [DISPOSITION_RECORD_FROM_STATUS],
+  'with-old': [WITHDRAW_FROM_STATUS],
+  transfer: ['in_pool', 'org_assigned', 'handler_assigned'],
+};
+
+/** 提醒处理的输入校验结果。 */
+export type ReminderResolveCheckOutcome =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly rule:
+        | 'missing-withdraw-reason'
+        | 'missing-withdraw-note'
+        | 'invalid-withdraw-reason'
+        | 'missing-disposition-fields'
+        | 'unsupported-disposition';
+    };
+
+/**
+ * 提醒处理校验（规格 D 节）：处理人二选一。
+ * 选「撤回不派再办」走撤回的四项原因与补充说明校验；
+ * 选「写明原因随旧线索办结」只要求说明必填。
+ */
+export function checkReminderResolve(input: {
+  readonly resolution: string;
+  readonly reasonCodes: readonly string[];
+  readonly note: string;
+}): ReminderResolveCheckOutcome {
+  if (input.resolution === 'withdraw') {
+    const checked = checkWithdrawInput({ reasonCodes: input.reasonCodes, note: input.note });
+    return checked.ok ? { ok: true } : { ok: false, rule: checked.rule };
+  }
+  if (input.resolution === 'close-with-old') {
+    return checkDispositionNote(input.note).ok
+      ? { ok: true }
+      : { ok: false, rule: 'missing-disposition-fields' };
+  }
+  return { ok: false, rule: 'unsupported-disposition' };
+}

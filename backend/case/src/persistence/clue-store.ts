@@ -372,6 +372,97 @@ export interface ClueWithdrawWrite {
   readonly withdrawnAt: Date;
 }
 
+/** 一对待提醒的线索对（「不派」的暂存线索 × 被结案的线索）。 */
+export interface ClueClosureReminderTarget {
+  /** 「不派」的暂存线索（提醒挂在它上面）。 */
+  readonly clueId: string;
+  readonly clueCode: string;
+  /** 被结案的线索。 */
+  readonly otherClueId: string;
+  readonly otherClueCode: string;
+  readonly otherStatus: string;
+}
+
+/** 结案提醒行（写入用）。 */
+export interface ClueClosureReminderRowToWrite {
+  readonly id: string;
+  readonly clueId: string;
+  readonly kind: 'no-case' | 'transfer' | 'case';
+  readonly otherClueId: string;
+  readonly createdAt: Date;
+}
+
+/** 一条结案提醒（列表与处理用）。 */
+export interface ClueClosureReminderRow {
+  readonly id: string;
+  /** 提醒挂着的线索（「不派」的暂存线索）。 */
+  readonly clueId: string;
+  readonly clueCode: string;
+  readonly kind: string;
+  /** 对方线索（被结案的那一条）。 */
+  readonly otherClueId: string | null;
+  readonly otherClueCode: string | null;
+  readonly otherStatus: string | null;
+  /** 暂存线索的登记人。 */
+  readonly registeredBy: string;
+  /** 暂存线索的登记机构。 */
+  readonly enteredOrgId: string;
+  /** 对方线索当前的承办机构（无有效分派即 null）。 */
+  readonly otherHandlerOrgId: string | null;
+  readonly createdAt: Date;
+  /** 处理时间（未处理即 null）。 */
+  readonly resolvedAt: Date | null;
+  /** 处理结果：withdraw（撤回不派再办）｜close-with-old（随旧线索办结）。 */
+  readonly resolution: string | null;
+}
+
+/** 处置登记的写入（不予立案、随旧线索办结、移送）。 */
+export interface ClueDispositionWrite {
+  readonly clueId: string;
+  readonly expectedStatus: string;
+  readonly dispositionId: string;
+  readonly disposition: 'no-case' | 'with-old' | 'transfer';
+  readonly transferredOrg: string | null;
+  readonly documentNo: string | null;
+  readonly note: string | null;
+  readonly recordedBy: string;
+  readonly recordedAt: Date;
+  /** 终态：closed（不予立案／随旧线索办结）｜transferred_out（移送）。 */
+  readonly nextStatus: 'closed' | 'transferred_out';
+}
+
+/** 提醒处理的写入（二选一：撤回不派再办｜写明原因随旧线索办结）。 */
+export interface ClueReminderResolveWrite {
+  readonly reminderId: string;
+  readonly clueId: string;
+  readonly expectedStatus: string;
+  readonly resolution: 'withdraw' | 'close-with-old';
+  /** 撤回不派再办时的撤回行 id（随旧线索办结时为空）。 */
+  readonly withdrawalId: string | null;
+  readonly reasonCodes: readonly string[];
+  readonly note: string;
+  /** 随旧线索办结时的处置行 id（撤回不派再办时为空）。 */
+  readonly dispositionId: string | null;
+  readonly resolvedBy: string;
+  readonly resolvedAt: Date;
+}
+
+/** 不派视图的一行（可撤回不派的线索）。 */
+export interface ClueHeldRow {
+  readonly id: string;
+  readonly code: string;
+  readonly status: string;
+  readonly sourceCode: string;
+  readonly domain: string;
+  readonly registeredBy: string;
+  readonly enteredOrgId: string;
+  readonly registeredAt: Date;
+  /** 撞上的对方线索编号（疑似重复命中）。 */
+  readonly hitCodes: readonly string[];
+  /** 对方线索当前的承办机构（其内勤是撤回不派的有权人之一）。 */
+  readonly hitHandlerOrgIds: readonly string[];
+}
+
 /** 派主办／协办的写入。 */
 export interface CluePeopleAssignWrite {
   readonly clueId: string;
@@ -448,4 +539,29 @@ export interface ClueStore {
    * 返回 false 表示当前状态与 expectedStatus 不符（并发冲突），业务行不变。
    */
   applyWithdrawal(write: ClueWithdrawWrite): Promise<boolean>;
+  /**
+   * 结案提醒的待生成对：被结案的线索按当前命中集逐对找到「不派」的对方。
+   * 与状态写入同一事务调用（调用方把事务内的存储实例传进来）。
+   */
+  listClosureReminderTargets(closedClueId: string): Promise<readonly ClueClosureReminderTarget[]>;
+  /** 写结案提醒行（技术主键由调用方给）。 */
+  insertClosureReminders(rows: readonly ClueClosureReminderRowToWrite[]): Promise<void>;
+  /**
+   * 处置登记：状态条件更新为终态并写入处置行。
+   * 起始状态由处置类型定死（不予立案仅已派承办人、随旧线索办结仅不派、移送三个状态）。
+   * 返回 false 表示当前状态不符（并发冲突或状态不允许），业务行不变。
+   */
+  applyDisposition(write: ClueDispositionWrite): Promise<boolean>;
+  /** 读一条结案提醒。 */
+  readClosureReminder(reminderId: string): Promise<ClueClosureReminderRow | null>;
+  /** 读未处理的结案提醒（按线索的数据范围过滤）。 */
+  listPendingClosureReminders(orgUnitIds: readonly string[]): Promise<readonly ClueClosureReminderRow[]>;
+  /**
+   * 提醒处理：撤回不派再办（回待分派池并写撤回行）或写明原因随旧线索办结（进 closed 并写处置行）；
+   * 同时了结该线索未处理的其余结案提醒。
+   * 返回 false 表示当前状态与 expectedStatus 不符（并发冲突），业务行不变。
+   */
+  applyReminderResolution(write: ClueReminderResolveWrite): Promise<boolean>;
+  /** 不派视图：读数据范围内的「不派」线索。 */
+  listHeldClues(orgUnitIds: readonly string[]): Promise<readonly ClueHeldRow[]>;
 }
