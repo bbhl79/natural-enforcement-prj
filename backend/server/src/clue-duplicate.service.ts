@@ -17,6 +17,7 @@ import type { AuditParties } from '@natural-enforcement/audit';
 import {
   CLUE_STATUS_LABELS,
   CLUE_STORE,
+  DISPOSITION_LABELS,
   POINT_NO_OVERLAP_NOTICE,
   doesSpatialOverlapJudgement,
   duplicateDecisionContract,
@@ -83,6 +84,23 @@ export interface DuplicateDecisionView {
   readonly ruleCodes: readonly string[];
 }
 
+/** 历史关联分组（结案线索的空间重合），折叠展示。 */
+export interface DuplicateHistoricalGroupView {
+  readonly otherClueId: string;
+  readonly otherClueCode: string;
+  readonly otherStatus: string;
+  readonly otherStatusLabel: string;
+  readonly anonymous: boolean;
+  readonly otherRegisteredAt: string;
+  readonly otherLocation: string | null;
+  /** 处置类型：no-case | with-old | transfer。 */
+  readonly disposition: string | null;
+  readonly dispositionLabel: string | null;
+  /** 处置时间。 */
+  readonly disposedAt: string | null;
+  readonly faces: readonly DuplicateFaceView[];
+}
+
 /** 疑似重复比对视图。 */
 export interface DuplicateView {
   readonly result: 'listed';
@@ -97,6 +115,8 @@ export interface DuplicateView {
   readonly dupComputedAt: string | null;
   readonly decision: DuplicateDecisionView;
   readonly groups: readonly DuplicateGroupView[];
+  /** 历史关联分组（结案线索的空间重合），折叠展示。 */
+  readonly historicalGroups: readonly DuplicateHistoricalGroupView[];
 }
 
 /** 实名查阅响应体（明文只从这里出）。 */
@@ -169,6 +189,43 @@ export class ClueDuplicateService {
       })),
     });
 
+    // 历史关联：结案线索（closed, transferred_out）的空间重合（不参与决定步、不写命中表）。
+    const historicalRawFaces: FacePair[] = [];
+    const histStatusByClue = new Map<string, string>();
+    const histDispByClue = new Map<
+      string,
+      { disposition: string | null; disposedAt: Date | null }
+    >();
+    if (context.spatialKind === 'face') {
+      const historicalHits = await this.clues.listHistoricalHits(clueId);
+      for (const hit of historicalHits) {
+        historicalRawFaces.push({
+          partId: hit.partId,
+          partIndex: hit.partIndex,
+          otherClueId: hit.otherClueId,
+          otherClueCode: hit.otherClueCode,
+          otherPartId: hit.otherPartId,
+          otherPartIndex: hit.otherPartIndex,
+          selfRatio: hit.selfRatio,
+          otherRatio: hit.otherRatio,
+          intersectionArea: hit.intersectionArea,
+        });
+        histStatusByClue.set(hit.otherClueId, hit.otherStatus);
+        histDispByClue.set(hit.otherClueId, {
+          disposition: hit.otherDisposition,
+          disposedAt: hit.otherDisposedAt,
+        });
+        geometryOf.set(`${hit.partId}:${hit.otherPartId}`, {
+          self: hit.selfGeojson,
+          other: hit.otherGeojson,
+        });
+      }
+    }
+    const historicalGroups = groupFacesByOtherClue(historicalRawFaces);
+    const histPeerIds = historicalGroups.map((g) => g.otherClueId);
+    const histPeers =
+      histPeerIds.length > 0 ? await this.clues.readDuplicatePeers(histPeerIds) : new Map();
+
     return {
       status: 200,
       body: {
@@ -221,6 +278,48 @@ export class ClueDuplicateService {
                 otherRatio: face.otherRatio,
                 intersectionArea: face.intersectionArea,
                 // 涉匿名分组不带几何：精确坐标不外泄。
+                selfGeojson: anonymous ? null : (geometry?.self ?? null),
+                otherGeojson: anonymous ? null : (geometry?.other ?? null),
+              };
+            }),
+          };
+        }),
+        historicalGroups: historicalGroups.map((group) => {
+          const peer = histPeers.get(group.otherClueId);
+          const anonymous = ownAnonymous || (peer?.reporterAnonymous ?? false);
+          const disp = histDispByClue.get(group.otherClueId);
+          const status = peer?.status ?? histStatusByClue.get(group.otherClueId) ?? '';
+          return {
+            otherClueId: group.otherClueId,
+            otherClueCode: group.otherClueCode,
+            otherStatus: status,
+            otherStatusLabel: CLUE_STATUS_LABELS[status] ?? status,
+            anonymous,
+            otherRegisteredAt:
+              peer === undefined
+                ? ''
+                : anonymous
+                  ? formatRegisteredAtMonth(peer.registeredAt)
+                  : formatRegisteredAtDay(peer.registeredAt),
+            otherLocation: anonymous
+              ? limitedLocation(peer?.location ?? null)
+              : (peer?.location ?? null),
+            disposition: disp?.disposition ?? null,
+            dispositionLabel:
+              disp?.disposition !== null && disp?.disposition !== undefined
+                ? (DISPOSITION_LABELS[disp.disposition] ?? disp.disposition)
+                : null,
+            disposedAt: disp?.disposedAt?.toISOString() ?? null,
+            faces: group.faces.map((face) => {
+              const geometry = geometryOf.get(`${face.partId}:${face.otherPartId}`);
+              return {
+                partId: face.partId,
+                partIndex: face.partIndex,
+                otherPartId: face.otherPartId,
+                otherPartIndex: face.otherPartIndex,
+                selfRatio: face.selfRatio,
+                otherRatio: face.otherRatio,
+                intersectionArea: face.intersectionArea,
                 selfGeojson: anonymous ? null : (geometry?.self ?? null),
                 otherGeojson: anonymous ? null : (geometry?.other ?? null),
               };

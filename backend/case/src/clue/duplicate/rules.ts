@@ -60,6 +60,13 @@ export const CLUE_STATUS_LABELS: Readonly<Record<string, string>> = {
   filed: '已立案',
 };
 
+/** 处置类型的中文说明（历史关联的对方处置展示用）。 */
+export const DISPOSITION_LABELS: Readonly<Record<string, string>> = {
+  'no-case': '不予立案',
+  'with-old': '随旧线索办结',
+  transfer: '移送',
+};
+
 /** 一个线索的状态是否参与比对（规格 B）。 */
 export function isComparableClueStatus(status: string): boolean {
   return !(NOT_COMPARABLE_CLUE_STATUSES as readonly string[]).includes(status);
