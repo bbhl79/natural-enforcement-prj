@@ -474,9 +474,6 @@ export class ClueDispositionService {
     actor: ActorRef,
     deactivatedOrgId: string,
   ): Promise<number> {
-    const account = await this.directory.findById(actor.personnelId);
-    const actorOrgId = account?.orgUnitId ?? '';
-    const actorCode = account?.code ?? null;
     const rootOrgId = await this.identity.findRootOrgUnitId();
     if (!rootOrgId) return 0;
     const rows = await this.clues.listPoolClues(deactivatedOrgId);
