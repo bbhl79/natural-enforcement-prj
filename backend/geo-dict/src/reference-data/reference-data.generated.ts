@@ -2119,3 +2119,24 @@ export const VIOLATION_TYPE_BASIS = [
 /** 辖区对应（街道（镇）编码 → 机构）。业务方未交付前为空表。 */
 export const JURISDICTION_ROWS = [
 ] as const;
+
+/** 规划类违法类型分派指导（#207 P7）。guidance: system-internal | case-by-case | external。 */
+export const DISPATCH_GUIDANCE = [
+  { typeCode: "planning_completion_data_unreported", guidance: "system-internal" },
+  { typeCode: "planning_compiler_beyond_qualification", guidance: "system-internal" },
+  { typeCode: "planning_compiler_without_qualification", guidance: "system-internal" },
+  { typeCode: "planning_compiler_fraud_practice", guidance: "system-internal" },
+  { typeCode: "planning_compiler_condition_lapsed", guidance: "system-internal" },
+  { typeCode: "planning_compiler_false_application", guidance: "system-internal" },
+  { typeCode: "planning_compiler_improper_obtain", guidance: "system-internal" },
+  { typeCode: "planning_compiler_certificate_transfer", guidance: "system-internal" },
+  { typeCode: "planning_compiler_credit_record", guidance: "system-internal" },
+  { typeCode: "planning_build_without_permit", guidance: "case-by-case" },
+  { typeCode: "planning_temporary_build", guidance: "case-by-case" },
+  { typeCode: "planning_heritage_approval_duty", guidance: "case-by-case" },
+  { typeCode: "planning_heritage_prohibited_activity", guidance: "case-by-case" },
+  { typeCode: "planning_heritage_building_deface", guidance: "case-by-case" },
+  { typeCode: "planning_heritage_destructive_impact", guidance: "case-by-case" },
+  { typeCode: "planning_heritage_building_damage", guidance: "case-by-case" },
+  { typeCode: "planning_heritage_signboard", guidance: "case-by-case" },
+] as const;

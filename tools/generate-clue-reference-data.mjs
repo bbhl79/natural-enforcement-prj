@@ -143,6 +143,16 @@ function readJurisdiction() {
   return rows.map(([code, name, orgCode, orgName]) => ({ code, name, orgCode, orgName }));
 }
 
+// ---- 规划类分派指导（#207 P7）----
+function readDispatchGuidance() {
+  const rows = tableRows(readDoc('planning-dispatch-guidance.md'), [
+    '类型编码',
+    '分派指导',
+    '附录出处',
+  ]);
+  return rows.map(([typeCode, guidance]) => ({ typeCode, guidance }));
+}
+
 // ---- 类型层草案（#181–#184，经 #192/#193/#195/#197/#198/#199 回改）----
 const REQUIREMENT_DRAFTS = [
   'land-violation-requirements.md',
@@ -257,7 +267,7 @@ function tsString(value) {
   return JSON.stringify(value);
 }
 
-function renderReferenceData(sourceCodes, violationTypes, documents, basisRows, jurisdictionRows) {
+function renderReferenceData(sourceCodes, violationTypes, documents, basisRows, jurisdictionRows, dispatchGuidanceRows) {
   const lines = [];
   lines.push('// 参照数据初值（生成文件，勿手工改）。');
   lines.push('// 由 tools/generate-clue-reference-data.mjs 从 docs/research/ 下的定稿底稿生成。');
@@ -309,6 +319,15 @@ function renderReferenceData(sourceCodes, violationTypes, documents, basisRows, 
   }
   lines.push('] as const;');
   lines.push('');
+  lines.push('/** 规划类违法类型分派指导（#207 P7）。guidance: system-internal | case-by-case | external。 */');
+  lines.push('export const DISPATCH_GUIDANCE = [');
+  for (const row of dispatchGuidanceRows) {
+    lines.push(
+      `  { typeCode: ${tsString(row.typeCode)}, guidance: ${tsString(row.guidance)} },`,
+    );
+  }
+  lines.push('] as const;');
+  lines.push('');
   return lines.join('\n');
 }
 
@@ -352,6 +371,7 @@ function build() {
   const violationTypes = readViolationTypes();
   const documents = readDocuments();
   const jurisdictionRows = readJurisdiction();
+  const dispatchGuidanceRows = readDispatchGuidance();
   const typeLayerItems = readTypeLayer();
 
   // 类型层依据：从类型层声明的「依据」栏归集到违法类型上，用途取「认定标准」。
@@ -375,7 +395,7 @@ function build() {
 
   return {
     reference:
-      renderReferenceData(sourceCodes, violationTypes, documents, basisRows, jurisdictionRows),
+      renderReferenceData(sourceCodes, violationTypes, documents, basisRows, jurisdictionRows, dispatchGuidanceRows),
     typeLayer: renderTypeLayer(typeLayerItems),
     counts: {
       sourceCodes: sourceCodes.length,

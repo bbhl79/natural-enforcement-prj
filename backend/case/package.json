@@ -11,6 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@natural-enforcement/geo-dict": "workspace:*",
     "@nestjs/common": "12.1.2"
   },
   "devDependencies": {

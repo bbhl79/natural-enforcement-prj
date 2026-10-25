@@ -8,6 +8,7 @@
 // 免去在业务代码里直连库。
 
 import {
+  DISPATCH_GUIDANCE,
   DOCUMENTS,
   JURISDICTION_ROWS,
   SOURCE_CODES,
@@ -16,6 +17,7 @@ import {
 } from './reference-data.generated.ts';
 
 export {
+  DISPATCH_GUIDANCE,
   DOCUMENTS,
   JURISDICTION_ROWS,
   SOURCE_CODES,
