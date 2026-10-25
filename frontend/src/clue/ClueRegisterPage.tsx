@@ -205,6 +205,10 @@ export function ClueRegisterForm({
           {result.gaps.length > 0 ? (
             <div>{`还有 ${result.gaps.length} 项要件待补齐：${result.gaps.map((gap) => gap.label).join('、')}`}</div>
           ) : null}
+          <div className="checks" style={{ marginTop: 8 }}>
+            <Link className="btn btn-sm" to={`/workbench?step=2&clue=${result.id}`}>进入内业核查</Link>
+            <Link className="btn btn-sm" to={`/workbench?step=3&clue=${result.id}`}>进入分派决定</Link>
+          </div>
         </div>
       ) : null}
       {failure && failure.status !== 400 ? (

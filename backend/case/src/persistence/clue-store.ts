@@ -262,6 +262,98 @@ export interface ClueVerificationRunRow {
   readonly endedAt: Date | null;
 }
 
+/** 线索当前的主办与协办（对象级校验用）。 */
+export interface ClueActiveHandler {
+  readonly personnelId: string;
+  readonly role: string;
+}
+
+/** 当前有效的分派事实（首次分派、重新分派或指定管辖）。 */
+export interface ClueActiveAssignment {
+  readonly orgUnitId: string;
+  /** 类别：initial | reassign | designate | pool-reassign。 */
+  readonly kind: string;
+  /** 是否指定管辖。 */
+  readonly designate: boolean;
+  /** 操作人（人员 id）。 */
+  readonly assignedBy: string;
+  /** 操作人当时所属机构（指定管辖锁判定用；旧行为空）。 */
+  readonly assignedByOrgId: string | null;
+}
+
+/** 一条命中（含对方线索状态：决定步只把未结案命中算作「须已知晓」）。 */
+export interface ClueDispatchHit {
+  readonly partId: string;
+  readonly partIndex: number;
+  readonly otherClueId: string;
+  readonly otherClueCode: string;
+  readonly otherPartId: string;
+  readonly otherStatus: string;
+  readonly selfRatio: number;
+  readonly otherRatio: number;
+  readonly intersectionArea: number;
+}
+
+/** 分派编排上下文：决定、派机构、派承办人与辖区建议要用的全部事实。 */
+export interface ClueDispatchContext {
+  readonly clueId: string;
+  readonly code: string;
+  readonly status: string;
+  readonly sourceCode: string;
+  readonly domain: string;
+  readonly registeredBy: string;
+  readonly enteredOrgId: string;
+  /** 几何形态：face | point。 */
+  readonly kind: 'face' | 'point';
+  /** 图斑总面积（平方米；点状为 0）。 */
+  readonly totalArea: number;
+  /** 命中集计算时间。 */
+  readonly dupComputedAt: Date | null;
+  readonly parts: readonly {
+    readonly partId: string;
+    readonly partIndex: number;
+    readonly geojson: string;
+  }[];
+  readonly assignment: ClueActiveAssignment | null;
+  readonly handlers: readonly ClueActiveHandler[];
+  readonly hits: readonly ClueDispatchHit[];
+}
+
+/** 分派决定的写入。 */
+export interface ClueDecisionWrite {
+  readonly clueId: string;
+  readonly expectedStatus: string;
+  readonly nextStatus: 'in_pool' | 'held';
+}
+
+/** 派机构的写入。 */
+export interface ClueOrgAssignWrite {
+  readonly clueId: string;
+  readonly expectedStatus: string;
+  readonly assignmentId: string;
+  readonly orgUnitId: string;
+  /** 类别：initial | reassign | designate。 */
+  readonly kind: 'initial' | 'reassign' | 'designate';
+  readonly designate: boolean;
+  readonly assignedBy: string;
+  readonly assignedByOrgId: string;
+  /** 理由（重新分派与指定管辖必填；自由文本留业务行，不进留痕）。 */
+  readonly reason: string | null;
+  readonly assignedAt: Date;
+}
+
+/** 派主办／协办的写入。 */
+export interface CluePeopleAssignWrite {
+  readonly clueId: string;
+  readonly expectedStatus: string;
+  readonly handlers: readonly {
+    readonly id: string;
+    readonly personnelId: string;
+    readonly role: 'main' | 'assist';
+  }[];
+  readonly assignedAt: Date;
+}
+
 /** 线索存储端口。 */
 export interface ClueStore {
   /** 按幂等键查线索。 */
@@ -300,4 +392,22 @@ export interface ClueStore {
   recordVerificationAttempt(runId: string, attemptsUsed: number): Promise<void>;
   /** 线索当前的主办与协办（对象级校验用）。 */
   listActiveHandlers(clueId: string): Promise<readonly { personnelId: string; role: string }[]>;
+  /** 读分派编排上下文（状态、来源、当前分派事实、承办人与命中集）。 */
+  readDispatchContext(clueId: string): Promise<ClueDispatchContext | null>;
+  /**
+   * 写分派决定：状态由 expectedStatus 条件更新为待分派池（派）或 held（不派）。
+   * 返回 false 表示当前状态与 expectedStatus 不符（并发冲突），业务行不变。
+   */
+  applyDecision(write: ClueDecisionWrite): Promise<boolean>;
+  /**
+   * 派机构（首次分派、重新分派、指定管辖）：状态条件更新为已派机构，
+   * 关止当前分派事实与承办人（重新分派时），写入新的分派事实行。
+   * 返回 false 表示当前状态与 expectedStatus 不符（并发冲突），业务行不变。
+   */
+  assignOrg(write: ClueOrgAssignWrite): Promise<boolean>;
+  /**
+   * 派主办／协办：状态条件更新为已派承办人，关止原承办人并写入新承办人行。
+   * 返回 false 表示当前状态与 expectedStatus 不符（并发冲突），业务行不变。
+   */
+  assignPeople(write: CluePeopleAssignWrite): Promise<boolean>;
 }

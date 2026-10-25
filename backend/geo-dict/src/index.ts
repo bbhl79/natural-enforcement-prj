@@ -29,4 +29,7 @@ export {
   findViolationType,
 } from './reference-data/index.ts';
 export type { DocumentRow, SourceCodeRow, ViolationTypeRow } from './reference-data/index.ts';
+// 辖区对应的运行期读取（#214 辖区建议）：街道编码 → 机构，只追加表取最新有效版。
+export { listActiveJurisdictionRows } from './reference-data/jurisdiction-lookup.ts';
+export type { JurisdictionRow } from './reference-data/jurisdiction-lookup.ts';
 export { GeoDictModule } from './geo-dict.module.ts';

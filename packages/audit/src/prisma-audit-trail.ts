@@ -24,6 +24,9 @@ import {
   CLUE_ITEMS_SUPPLEMENT_FAILED_REASONS,
   CLUE_REGISTER_FAILED_REASONS,
   CLUE_VERIFY_RETRY_FAILED_REASONS,
+  CLUE_DISPATCH_DECIDE_FAILED_REASONS,
+  CLUE_HANDLER_ASSIGNED_FAILED_REASONS,
+  CLUE_ORG_ASSIGNED_FAILED_REASONS,
   LOGIN_FAILED_REASONS,
   ORG_UNIT_DEACTIVATE_FAILED_REASONS,
   ORG_UNIT_REGISTER_FAILED_REASONS,
@@ -78,6 +81,10 @@ const FAILED_REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['clue.registered', new Set<string>(CLUE_REGISTER_FAILED_REASONS)],
   ['clue.items-supplemented', new Set<string>(CLUE_ITEMS_SUPPLEMENT_FAILED_REASONS)],
   ['clue.verify-retried', new Set<string>(CLUE_VERIFY_RETRY_FAILED_REASONS)],
+  ['clue.dispatched', new Set<string>(CLUE_DISPATCH_DECIDE_FAILED_REASONS)],
+  ['clue.held', new Set<string>(CLUE_DISPATCH_DECIDE_FAILED_REASONS)],
+  ['clue.org-assigned', new Set<string>(CLUE_ORG_ASSIGNED_FAILED_REASONS)],
+  ['clue.handler-assigned', new Set<string>(CLUE_HANDLER_ASSIGNED_FAILED_REASONS)],
 ]);
 
 /** 后值只许出现在带后值的动作上，且这些动作必须带非空后值（#128）。 */
