@@ -543,8 +543,29 @@ describe('#217 结案提醒生成', () => {
     expect(forThird).toHaveLength(0);
   });
 
-  it('立案（filed）路径直调提醒生成内部服务：逐对生成，且与状态写入同事务', async () => {
+  it('立案提醒特性开关默认关时不产生提醒（#207 P2）：kind=case 不生成', async () => {
     const pair = await heldPair(91);
+    await cloned.prisma.clue.update({
+      where: { id: pair.oldClueId },
+      data: { status: 'filed' },
+    });
+    // 不传 filedReminderEnabled，默认关
+    await uow.run(async (tx) => {
+      await generateClosureReminders(tx.clues, {
+        closedClueId: pair.oldClueId,
+        kind: 'case',
+        createdAt: new Date(),
+        newId: () => newUlid(),
+      });
+    });
+    const reminders = await cloned.prisma.clueClosureReminder.findMany({
+      where: { clueId: pair.heldClueId },
+    });
+    expect(reminders).toHaveLength(0);
+  });
+
+  it('立案提醒特性开关打开时行为不变（#207 P2）：逐对生成，且与状态写入同事务', async () => {
+    const pair = await heldPair(99);
     // 本期没有写入 filed 的接口：直改状态模拟案件段写入，再在同一事务调提醒生成服务。
     await cloned.prisma.clue.update({
       where: { id: pair.oldClueId },
@@ -558,6 +579,7 @@ describe('#217 结案提醒生成', () => {
           kind: 'case',
           createdAt: new Date(),
           newId: () => newUlid(),
+          filedReminderEnabled: true,
         });
         throw new Error('模拟案件段同事务回滚');
       }),
@@ -572,6 +594,7 @@ describe('#217 结案提醒生成', () => {
         kind: 'case',
         createdAt: new Date(),
         newId: () => newUlid(),
+        filedReminderEnabled: true,
       });
     });
     const reminders = await cloned.prisma.clueClosureReminder.findMany({

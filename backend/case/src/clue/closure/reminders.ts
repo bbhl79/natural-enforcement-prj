@@ -1,8 +1,11 @@
 // 结案提醒生成的内部服务（#217；规格 D 节）。
 //
-// 不予立案、移送、立案都按暂存线索的当前命中集逐对生成提醒，与状态写入同事务：
+// 不予立案、移送都按暂存线索的当前命中集逐对生成提醒，与状态写入同事务：
 // 被结案的那条线索，逐个找出撞上它且当前「不派」的线索，为每一对写一条提醒。
 // 提醒挂在「不派」的暂存线索上，对方是被结案的线索。
+//
+// 立案（kind='case'）的提醒生成受特性开关 filedReminderEnabled 控制（#207 P2）：
+// 开关关闭时 kind='case' 不生成提醒（本期不做立案后撞暂存线索提醒，等立案票一并定）。
 //
 // 本服务只依赖端口（ClueStore），技术主键由调用方注入（模块内不另起一份生成器）：
 // 调用方把事务内的存储实例传进来，提醒行与状态写入同成同败。
@@ -19,6 +22,12 @@ export interface ClosureReminderGeneration {
   readonly createdAt: Date;
   /** 技术主键生成（调用方注入）。 */
   readonly newId: () => string;
+  /**
+   * 立案提醒特性开关（#207 P2）。默认 false。
+   * true 时 kind='case' 正常生成提醒；false 时 kind='case' 不生成。
+   * no-case 与 transfer 不受此开关影响。
+   */
+  readonly filedReminderEnabled?: boolean;
 }
 
 /**
@@ -29,6 +38,8 @@ export async function generateClosureReminders(
   clues: ClueStore,
   generation: ClosureReminderGeneration,
 ): Promise<readonly string[]> {
+  // 立案提醒特性开关（#207 P2）：关闭时 kind='case' 不生成提醒。
+  if (generation.kind === 'case' && !generation.filedReminderEnabled) return [];
   const targets = await clues.listClosureReminderTargets(generation.closedClueId);
   if (targets.length === 0) return [];
   const rows = targets.map((target) => ({
