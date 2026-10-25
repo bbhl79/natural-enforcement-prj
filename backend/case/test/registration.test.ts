@@ -270,6 +270,15 @@ describe('附件校验（真实内容，不只看扩展名）', () => {
     expect(result.ok).toBe(true);
   });
 
+  it('JPEG 魔数对得上即通过', () => {
+    const result = validateAttachment({
+      fileName: '现场照片.jpg',
+      byteSize: JPEG_MAGIC.length + 8,
+      content: bytes(JPEG_MAGIC),
+    });
+    expect(result.ok).toBe(true);
+  });
+
   it('扩展名是 PNG 但内容不是图片即拒绝', () => {
     const result = validateAttachment({
       fileName: '假照片.png',

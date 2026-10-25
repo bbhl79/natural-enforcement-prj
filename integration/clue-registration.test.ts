@@ -40,7 +40,7 @@ class RecordingStorage {
     return { fileKey, versionId: `version-${this.writes.length}` };
   }
 
-  async readVersion(ref: { fileKey: string; versionId: string }): Promise<Uint8Array> {
+  async readVersion(): Promise<Uint8Array> {
     return new Uint8Array(0);
   }
 }
@@ -82,6 +82,18 @@ async function cookieOf(code: string): Promise<string> {
   return cookie;
 }
 
+/** 登记接口的响应体。 */
+interface RegisterResponseBody {
+  readonly result: string;
+  readonly id?: string;
+  readonly code?: string;
+  readonly status?: string;
+  readonly gaps?: { readonly key: string; readonly label: string }[];
+  readonly hits?: unknown[];
+  readonly rules?: string[];
+  readonly filled?: { readonly key: string; readonly label: string }[];
+}
+
 interface RegisterOptions {
   readonly code?: string;
   readonly idempotencyKey?: string;
@@ -96,7 +108,7 @@ interface RegisterOptions {
   readonly anonymityConfirmed?: boolean;
 }
 
-async function register(options: RegisterOptions = {}): Promise<{ status: number; body: any }> {
+async function register(options: RegisterOptions = {}): Promise<{ status: number; body: RegisterResponseBody }> {
   const code = options.code ?? 'P-CLERK-A';
   const form = new FormData();
   form.set('sourceCode', options.sourceCode ?? '16');
@@ -127,7 +139,7 @@ async function register(options: RegisterOptions = {}): Promise<{ status: number
     },
     body: form,
   });
-  return { status: response.status, body: await response.json() };
+  return { status: response.status, body: (await response.json()) as RegisterResponseBody };
 }
 
 interface TrailRow {
@@ -161,13 +173,13 @@ async function fillGaps(
   clueId: string,
   values: Record<string, string>,
   code = 'P-CLERK-A',
-): Promise<{ status: number; body: any }> {
+): Promise<{ status: number; body: RegisterResponseBody }> {
   const response = await fetch(`${baseUrl}/api/clues/${clueId}/gaps/fill`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', cookie: await cookieOf(code) },
     body: JSON.stringify({ values }),
   });
-  return { status: response.status, body: await response.json() };
+  return { status: response.status, body: (await response.json()) as RegisterResponseBody };
 }
 
 const BASE_VALUES = {
@@ -245,7 +257,7 @@ describe('#211 线索登记', () => {
     const result = await register({ values });
     expect(result.status).toBe(400);
     expect(result.body.result).toBe('non-compliant');
-    expect(result.body.rules).toContain('clue.finder');
+    expect(result.body.rules ?? []).toContain('clue.finder');
     expect(await cloned.prisma.clue.count()).toBe(before);
     expect(storage.writes).toHaveLength(0);
     const failed = (await trailOf('clue.registered')).filter((row) => row.outcome === 'failed');
@@ -261,7 +273,7 @@ describe('#211 线索登记', () => {
       polygon: geojsonPolygon(square(1)),
     });
     expect(unconfirmed.status).toBe(400);
-    expect(unconfirmed.body.rules.some((rule: string) => rule.startsWith('type.'))).toBe(true);
+    expect((unconfirmed.body.rules ?? []).some((rule) => rule.startsWith('type.'))).toBe(true);
 
     const confirmed = await register({
       types,
@@ -270,11 +282,25 @@ describe('#211 线索登记', () => {
       confirm: true,
     });
     expect(confirmed.status).toBe(200);
-    expect(confirmed.body.gaps.length).toBeGreaterThan(0);
-    expect(confirmed.body.gaps[0].key).toMatch(/^type\./);
+    expect(confirmed.body.gaps?.length ?? 0).toBeGreaterThan(0);
+    expect(confirmed.body.gaps?.[0]?.key ?? '').toMatch(/^type\./);
     const gaps = await cloned.prisma.clueItemGap.findMany({ where: { clueId: confirmed.body.id } });
-    expect(gaps.length).toBe(confirmed.body.gaps.length);
+    expect(gaps.length).toBe(confirmed.body.gaps?.length ?? 0);
     expect(gaps[0]?.filledAt).toBeNull();
+  });
+
+  it('合规附件随登记写入存储并落材料行', async () => {
+    const result = await register({
+      values: BASE_VALUES,
+      polygon: geojsonPolygon(square(30)),
+      attachments: [{ name: '现场照片.png', bytes: PNG_BYTES }],
+    });
+    expect(result.status).toBe(201);
+    const materials = await cloned.prisma.clueMaterial.findMany({
+      where: { clueId: result.body.id ?? '', kind: 'attachment' },
+    });
+    expect(materials).toHaveLength(1);
+    expect(storage.writes).toHaveLength(2);
   });
 
   it('附件类型不合规：400 + 存储零写入', async () => {
@@ -284,7 +310,7 @@ describe('#211 线索登记', () => {
       attachments: [{ name: '打包.zip', bytes: new Uint8Array([0x50, 0x4b, 0x03, 0x04]) }],
     });
     expect(result.status).toBe(400);
-    expect(result.body.rules).toContain('attachment-type-not-allowed');
+    expect(result.body.rules ?? []).toContain('attachment-type-not-allowed');
     expect(storage.writes).toHaveLength(0);
   });
 
@@ -294,7 +320,7 @@ describe('#211 线索登记', () => {
       polygon: JSON.stringify({ type: 'Point', coordinates: [113, 23] }),
     });
     expect(result.status).toBe(400);
-    expect(result.body.rules).toContain('spatial-geometry-type-rejected');
+    expect(result.body.rules ?? []).toContain('spatial-geometry-type-rejected');
     expect(storage.writes).toHaveLength(0);
   });
 
@@ -318,13 +344,14 @@ describe('#211 线索登记', () => {
   it('疑似重复：面状逐面命中，后登的进待分派决定，对方也挂上标记', async () => {
     const first = await register({ values: BASE_VALUES, polygon: geojsonPolygon(square(10)) });
     expect(first.status).toBe(201);
-    expect(first.body.hits).toEqual([]);
+    expect(first.body.hits ?? []).toEqual([]);
     const second = await register({ values: BASE_VALUES, polygon: geojsonPolygon(square(10)) });
     expect(second.status).toBe(201);
     expect(second.body.status).toBe('pending_decision');
-    expect(second.body.hits).toHaveLength(1);
-    expect(second.body.hits[0].otherClueCode).toBe(first.body.code);
-    expect(second.body.hits[0].selfRatio).toBeGreaterThanOrEqual(0.6);
+    const hits = second.body.hits ?? [];
+    expect(hits).toHaveLength(1);
+    expect((hits[0] as { otherClueCode: string }).otherClueCode).toBe(first.body.code);
+    expect((hits[0] as { selfRatio: number }).selfRatio).toBeGreaterThanOrEqual(0.6);
     const reverse = await cloned.prisma.clueSpatialHit.findMany({ where: { clueId: first.body.id } });
     expect(reverse).toHaveLength(1);
     expect(reverse[0]?.otherClueId).toBe(second.body.id);
@@ -347,8 +374,8 @@ describe('#211 线索登记', () => {
       body: form,
     });
     expect(response.status).toBe(400);
-    const body = await response.json();
-    expect(body.rules).toContain('idempotency-key-required');
+    const body = (await response.json()) as RegisterResponseBody;
+    expect(body.rules ?? []).toContain('idempotency-key-required');
   });
 });
 
@@ -361,15 +388,15 @@ describe('#211 缺件补齐', () => {
       confirm: true,
     });
     expect(registered.status).toBe(200);
-    const gaps = registered.body.gaps as { key: string; label: string }[];
+    const gaps = registered.body.gaps ?? [];
     expect(gaps.length).toBeGreaterThan(1);
     const first = gaps[0];
 
-    const filled = await fillGaps(registered.body.id, { [first.key]: '某机关' });
+    const filled = await fillGaps(registered.body.id ?? '', { [first.key]: '某机关' });
     expect(filled.status).toBe(200);
     expect(filled.body.result).toBe('supplemented');
-    expect(filled.body.filled.map((item: { key: string }) => item.key)).toEqual([first.key]);
-    expect(filled.body.gaps.map((item: { key: string }) => item.key)).not.toContain(first.key);
+    expect((filled.body.filled ?? []).map((item) => item.key)).toEqual([first.key]);
+    expect((filled.body.gaps ?? []).map((item) => item.key)).not.toContain(first.key);
 
     const rows = await cloned.prisma.clueItemGap.findMany({ where: { clueId: registered.body.id } });
     const row = rows.find((item) => item.key === first.key);
@@ -392,11 +419,11 @@ describe('#211 缺件补齐', () => {
       polygon: geojsonPolygon(square(21)),
       confirm: true,
     });
-    const gaps = registered.body.gaps as { key: string }[];
+    const gaps = registered.body.gaps ?? [];
     const submitted = Object.fromEntries(gaps.map((gap) => [gap.key, '补齐内容']));
-    const filled = await fillGaps(registered.body.id, submitted);
+    const filled = await fillGaps(registered.body.id ?? '', submitted);
     expect(filled.status).toBe(200);
-    expect(filled.body.gaps).toEqual([]);
+    expect(filled.body.gaps ?? []).toEqual([]);
     const open = await cloned.prisma.clueItemGap.count({
       where: { clueId: registered.body.id, filledAt: null },
     });
@@ -410,8 +437,8 @@ describe('#211 缺件补齐', () => {
       polygon: geojsonPolygon(square(22)),
       confirm: true,
     });
-    const gaps = registered.body.gaps as { key: string }[];
-    const result = await fillGaps(registered.body.id, {
+    const gaps = registered.body.gaps ?? [];
+    const result = await fillGaps(registered.body.id ?? '', {
       [gaps[0].key]: '这一项合格',
       'type.land_approve_without_authority.not_a_gap': '这一项不是缺件',
     });
@@ -434,8 +461,8 @@ describe('#211 缺件补齐', () => {
       polygon: geojsonPolygon(square(23)),
       confirm: true,
     });
-    const gaps = registered.body.gaps as { key: string }[];
-    const result = await fillGaps(registered.body.id, { [gaps[0].key]: '监督不能补' }, 'P-SUPER-B');
+    const gaps = registered.body.gaps ?? [];
+    const result = await fillGaps(registered.body.id ?? '', { [gaps[0].key]: '监督不能补' }, 'P-SUPER-B');
     expect(result.status).toBe(403);
   });
 });

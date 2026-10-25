@@ -108,7 +108,6 @@ export function ClueRegisterForm({
   const control = (item: FormSchemaItem): ReactNode => {
     const options = optionsOf(item);
     const id = `clue-${item.key.replace(/[^a-z0-9]+/gi, '-')}`;
-    const error = errorOf(item.key);
     const common = {
       id,
       className: options ? 'select' : 'input',
@@ -443,9 +442,6 @@ export default function ClueRegisterPage() {
   };
   const [params, setParams] = useSearchParams();
   const opcodes = useAppSelector((root) => root.login.operator?.opcodes ?? []);
-  const sourceCode = params.get('sourceCode') ?? '';
-  const domain = params.get('domain') ?? '';
-  const types = (params.get('types') ?? '').split(',').filter((value) => value !== '');
   const update = (next: Record<string, string>) => {
     const merged = new URLSearchParams(params);
     for (const [key, value] of Object.entries(next)) {
