@@ -52,6 +52,23 @@ export interface DuplicateDecisionView {
   readonly ruleCodes: readonly string[];
 }
 
+/** 一个历史关联的对方线索分组（P9 方案 B：结案/已移送线索的空间重合，仅作信息展示）。 */
+export interface DuplicateHistoricalGroupView {
+  readonly otherClueId: string;
+  readonly otherClueCode: string;
+  readonly otherStatus: string;
+  readonly otherStatusLabel: string;
+  readonly anonymous: boolean;
+  readonly otherRegisteredAt: string;
+  readonly otherLocation: string | null;
+  /** 处置类型：no-case | with-old | transfer。 */
+  readonly disposition: string | null;
+  readonly dispositionLabel: string | null;
+  /** 处置时间。 */
+  readonly disposedAt: string | null;
+  readonly faces: readonly DuplicateFaceView[];
+}
+
 /** 疑似重复比对视图。 */
 export interface DuplicateView {
   readonly result: string;
@@ -64,6 +81,8 @@ export interface DuplicateView {
   readonly dupComputedAt: string | null;
   readonly decision: DuplicateDecisionView;
   readonly groups: readonly DuplicateGroupView[];
+  /** 历史关联分组（结案/已移送线索的空间重合），折叠展示。 */
+  readonly historicalGroups: readonly DuplicateHistoricalGroupView[];
 }
 
 /** 取疑似重复比对视图。 */

@@ -15,6 +15,7 @@ import {
   ratioText,
   type DuplicateFaceView,
   type DuplicateGroupView,
+  type DuplicateHistoricalGroupView,
   type DuplicateView,
   type ReporterReadResult,
 } from './duplicate';
@@ -131,6 +132,50 @@ function GroupBlock({
   );
 }
 
+/** 一个历史关联分组（P9 方案 B：折叠展示，显示对方结论与处置）。 */
+function HistoricalGroupBlock({ group }: { readonly group: DuplicateHistoricalGroupView }) {
+  return (
+    <details className="dup-group">
+      <summary>
+        {`与 ${group.otherClueCode} 历史关联（${group.otherStatusLabel ?? group.otherStatus}）`}
+        <span className="tag gray">已结案</span>
+        {group.anonymous ? <span className="tag gray">涉匿名</span> : null}
+        <span className="hint">{`登记于 ${group.otherRegisteredAt}`}</span>
+      </summary>
+      <div className="dup-peer">
+        {group.dispositionLabel !== null ? (
+          <span className="tag gray">{`处置：${group.dispositionLabel}`}</span>
+        ) : null}
+        {group.disposedAt !== null ? (
+          <span className="tag gray">{`处置时间：${group.disposedAt.slice(0, 10)}`}</span>
+        ) : null}
+        {group.otherLocation !== null ? <span className="tag gray">{`位置：${group.otherLocation}`}</span> : null}
+        <span className="help">本组线索已结案或已移送，仅作信息展示，不拦分派、不要求「已知晓」。</span>
+      </div>
+      <table className="table">
+        <thead>
+          <tr>
+            <th>面对</th>
+            <th>占本线索</th>
+            <th>占对方</th>
+            <th>交集面积</th>
+          </tr>
+        </thead>
+        <tbody>
+          {group.faces.map((face) => (
+            <tr key={`${face.partId}:${face.otherPartId}`}>
+              <td>{`本线索第 ${face.partIndex + 1} 面 × 对方第 ${face.otherPartIndex + 1} 面`}</td>
+              <td>{ratioText(face.selfRatio)}</td>
+              <td>{ratioText(face.otherRatio)}</td>
+              <td>{areaMuText(face.intersectionArea)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </details>
+  );
+}
+
 /**
  * 疑似重复比对页签。
  * view 为比对视图；onReadReporter 取对方实名（服务端记查阅留痕）。
@@ -167,6 +212,22 @@ export function ClueDuplicateTab({
           <GroupBlock key={group.otherClueId} group={group} onReadReporter={onReadReporter} />
         ))
       )}
+
+      {view.spatialKind === 'point'
+        ? null
+        : view.historicalGroups && view.historicalGroups.length > 0
+          ? (
+            <div>
+              <div className="card-h" style={{ marginTop: 12 }}>
+                历史关联
+                <span className="hint">已结案或已移送的线索空间重合，仅作信息展示，不拦分派</span>
+              </div>
+              {view.historicalGroups.map((group) => (
+                <HistoricalGroupBlock key={group.otherClueId} group={group} />
+              ))}
+            </div>
+          )
+          : null}
     </div>
   );
 }
