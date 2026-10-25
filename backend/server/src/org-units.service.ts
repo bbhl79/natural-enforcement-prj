@@ -11,6 +11,7 @@ import {
   type OrgUnitRuleCode,
 } from '@natural-enforcement/identity';
 
+import { ClueDispositionService } from './clue-disposition.service.ts';
 import { UNIT_OF_WORK, type UnitOfWork } from './unit-of-work.ts';
 
 type Denial = { status: 403; body: { reason: DenyReason } };
@@ -110,6 +111,7 @@ export class OrgUnitsService {
   constructor(
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     private readonly orgUnits: OrgUnitService,
+    private readonly disposition: ClueDispositionService,
   ) {}
 
   async tree(actor: ActorRef): Promise<OrgTreeOutcome> {
@@ -166,25 +168,29 @@ export class OrgUnitsService {
   }
 
   async deactivate(actor: ActorRef, orgUnitId: string, sourceIp: string | null): Promise<DeactivateOutcome> {
-    return this.uow.run<DeactivateOutcome>(async (tx) => {
+    const outcome = await this.uow.run<DeactivateOutcome>(async (tx) => {
       try {
-        const outcome = await this.orgUnits.deactivateOrgUnit(actor, orgUnitId, tx, tx.audit, sourceIp);
-        if (outcome.result === 'invalid-state') {
-          return rejected<DeactivateOutcome>({ status: 409, body: deactivationRefusal(outcome.blocker) }, outcome.failure);
+        const result = await this.orgUnits.deactivateOrgUnit(actor, orgUnitId, tx, tx.audit, sourceIp);
+        if (result.result === 'invalid-state') {
+          return rejected<DeactivateOutcome>({ status: 409, body: deactivationRefusal(result.blocker) }, result.failure);
         }
         return {
           status: 200,
           body: {
-            result: outcome.result,
-            orgUnit: { id: outcome.orgUnit.id, deactivatedAt: (outcome.orgUnit.deactivatedAt as Date).toISOString() },
+            result: result.result,
+            orgUnit: { id: result.orgUnit.id, deactivatedAt: (result.orgUnit.deactivatedAt as Date).toISOString() },
           },
         };
       } catch (error) {
         if (!isAccessDenied(error)) throw error;
-        // 越权一律 403，响应只带拒绝原因，不暴露任何条数（#105）。
         const denial: Denial = { status: 403, body: { reason: error.reason } };
         return error.denial ? rejected<DeactivateOutcome>(denial, error.denial) : denial;
       }
     });
+    // 停用成功后：把该机构 in_pool／pending_decision／held 线索批量重指定到系统管理根机构（#207 P4）。
+    if (outcome.status === 200) {
+      await this.disposition.reassignDeactivatedOrgPool(actor, orgUnitId);
+    }
+    return outcome;
   }
 }

@@ -452,6 +452,34 @@ export class ClueDispositionService {
     });
   }
 
+  /**
+   * 停用机构池线索批量重指定（#207 P4）：系统管理停用机构后，把该机构下的
+   * in_pool／pending_decision／held 线索一并交系统管理根机构重新指定。
+   * 返回重指定条数。仍在审批中或已派出的线索不受影响。
+   */
+  async reassignDeactivatedOrgPool(
+    actor: ActorRef,
+    deactivatedOrgId: string,
+  ): Promise<number> {
+    const account = await this.directory.findById(actor.personnelId);
+    const actorOrgId = account?.orgUnitId ?? '';
+    const actorCode = account?.code ?? null;
+    const rootOrgId = await this.identity.findRootOrgUnitId();
+    if (!rootOrgId) return 0;
+    const rows = await this.clues.listPoolClues(deactivatedOrgId);
+    if (rows.length === 0) return 0;
+    let reassigned = 0;
+    for (const row of rows) {
+      const outcome = await this.reassignPool(actor, row.clueId, {
+        orgUnitId: rootOrgId,
+        expectedStatus: row.status,
+        reason: `机构 ${deactivatedOrgId} 已停用，池线索重新指定`,
+      });
+      if (outcome.status === 200) reassigned += 1;
+    }
+    return reassigned;
+  }
+
   /** 状态守卫：expectedStatus 不符即并发冲突；状态不在允许集合即 invalid-state。 */
   private stateGuard(
     actual: string,
