@@ -261,14 +261,14 @@ export class ClueDispositionService {
       if (!applied) {
         return rejected<ClueTransferOutcome>(
           { status: 409, body: { result: 'concurrent-change', reason: 'concurrent-change' } },
-          this.transferEntry(this.parties(actor, actorCode, targetOrgId, clueId), {
+          this.transferEntry(this.parties(actor, actorCode, targetOrgId, clueId, DISPOSITION_OPCODE), {
             outcome: 'failed',
             reason: 'concurrent-change',
           }),
         );
       }
       await tx.audit.append(
-        this.transferEntry(this.parties(actor, actorCode, targetOrgId, clueId), {
+        this.transferEntry(this.parties(actor, actorCode, targetOrgId, clueId, DISPOSITION_OPCODE), {
           detail: JSON.stringify({
             code: context.code,
             disposition: 'transfer',

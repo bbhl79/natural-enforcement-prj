@@ -2,9 +2,11 @@ import type {
   AccountMaintenanceFailedReason,
   AuditTargetOrgBasis,
   ClueDispatchDecideFailedReason,
+  ClueDispositionRecordedFailedReason,
   ClueHandlerAssignedFailedReason,
   ClueItemsSupplementFailedReason,
   ClueOrgAssignedFailedReason,
+  CluePoolReassignedFailedReason,
   ClueRegisterFailedReason,
   ClueVerifyRetryFailedReason,
   CertUpdateFailedReason,
@@ -166,7 +168,12 @@ export type AuditAppend =
   | (AuditParties & { action: 'clue.org-assigned' })
   | (AuditParties & { action: 'clue.org-assigned'; outcome: 'failed'; reason: ClueOrgAssignedFailedReason })
   | (AuditParties & { action: 'clue.handler-assigned' })
-  | (AuditParties & { action: 'clue.handler-assigned'; outcome: 'failed'; reason: ClueHandlerAssignedFailedReason });
+  | (AuditParties & { action: 'clue.handler-assigned'; outcome: 'failed'; reason: ClueHandlerAssignedFailedReason })
+  // 移送与停用机构池重新指定（#216，规格 G）：处置类型、移送机关、文书编号；停用机构与新接收机构。
+  | (AuditParties & { action: 'clue.disposition-recorded' })
+  | (AuditParties & { action: 'clue.disposition-recorded'; outcome: 'failed'; reason: ClueDispositionRecordedFailedReason })
+  | (AuditParties & { action: 'clue.pool-reassigned' })
+  | (AuditParties & { action: 'clue.pool-reassigned'; outcome: 'failed'; reason: CluePoolReassignedFailedReason });
 
 /**
  * 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。

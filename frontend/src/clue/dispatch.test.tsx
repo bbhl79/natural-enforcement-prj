@@ -68,6 +68,7 @@ function view(overrides: Partial<DispatchView> = {}): DispatchView {
     mayAssignOrg: false,
     mayReassignOrg: false,
     mayAssignPeople: false,
+    mayTransfer: false,
     ...overrides,
   };
 }
