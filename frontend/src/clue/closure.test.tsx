@@ -105,5 +105,6 @@ describe('失败与标签口径', () => {
     expect(reminderKindLabel('no-case')).toBe('不予立案');
     expect(reminderKindLabel('transfer')).toBe('移送');
     expect(reminderKindLabel('case')).toBe('立案');
+    expect(reminderKindLabel('other')).toBe('其他（行政处理事项，系统外办理）');
   });
 });

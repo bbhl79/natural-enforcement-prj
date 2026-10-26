@@ -73,6 +73,7 @@ export interface ClueCenterListQuery {
 
 /** 详情视图：基本信息、要件、缺件、取值、标签、违法类型与反映人脱敏信息。 */
 export interface ClueDetailView {
+  readonly id: string;
   readonly code: string;
   readonly domain: string;
   readonly sourceCode: string;
@@ -91,6 +92,8 @@ export interface ClueDetailView {
   readonly reporterContact: string | null;
   readonly tags: readonly string[];
   readonly initialTypes: readonly string[];
+  readonly latestDisposition: string | null;
+  readonly latestDispositionNote: string | null;
 }
 
 // ---- 补齐 ----
@@ -238,6 +241,7 @@ export class ClueCenterService {
     return {
       status: 200,
       body: {
+        id: clueId,
         code: detail.code,
         domain: detail.domain,
         sourceCode: detail.sourceCode,
@@ -262,6 +266,8 @@ export class ClueCenterService {
             : maskReporterContact(valueMap.get('clue.reporter_contact') ?? null),
         tags: detail.tags.map((tag) => tag.name),
         initialTypes: detail.initialTypes,
+        latestDisposition: detail.latestDisposition,
+        latestDispositionNote: detail.latestDispositionNote,
       },
     };
   }

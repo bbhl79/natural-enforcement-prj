@@ -17,15 +17,15 @@ import type { ClueStore } from '../../persistence/clue-store.ts';
 export interface ClosureReminderGeneration {
   /** 被结案的线索（不予立案、移送或立案的那一条）。 */
   readonly closedClueId: string;
-  /** 提醒类型：no-case（不予立案）｜transfer（移送）｜case（立案）。 */
-  readonly kind: 'no-case' | 'transfer' | 'case';
+  /** 提醒类型：no-case｜transfer｜case｜other（#229）。 */
+  readonly kind: 'no-case' | 'transfer' | 'case' | 'other';
   readonly createdAt: Date;
   /** 技术主键生成（调用方注入）。 */
   readonly newId: () => string;
   /**
    * 立案提醒特性开关（#207 P2）。默认 false。
    * true 时 kind='case' 正常生成提醒；false 时 kind='case' 不生成。
-   * no-case 与 transfer 不受此开关影响。
+   * no-case、transfer 与 other 不受此开关影响。
    */
   readonly filedReminderEnabled?: boolean;
 }

@@ -77,6 +77,7 @@ function view(overrides: Partial<DispatchView> = {}): DispatchView {
     mayReassignOrg: false,
     mayAssignPeople: false,
     mayTransfer: false,
+    mayRecordOther: false,
     designation: null,
     mayRequestDesignation: false,
     mayReviewDesignation: false,
@@ -206,6 +207,7 @@ describe('监督身份分派只读', () => {
           mayDecide: false,
           mayAssignOrg: false,
           mayTransfer: false,
+    mayRecordOther: false,
           mayRequestDesignation: false,
           ...overrides,
         })}
@@ -660,5 +662,52 @@ describe('个案判断规划类主体冲突待定（#207 P7）', () => {
     expect(dispatchFailureText({ result: 'non-compliant', rules: ['missing-conflict-resolution'] })).toContain('主体冲突待定');
     expect(dispatchFailureText({ result: 'non-compliant', rules: ['missing-conflict-resolution'] })).toContain('办理方向');
     expect(dispatchFailureText({ result: 'non-compliant', rules: ['missing-conflict-basis'] })).toContain('依据');
+  });
+});
+
+
+describe('其他处置（#229）', () => {
+  const assignment = {
+    orgUnitId: 'o1',
+    orgName: '甲',
+    kind: 'assign',
+    designate: false,
+  };
+
+  it('有 mayRecordOther 时在已派承办人展示其他面板', () => {
+    const html = renderToStaticMarkup(
+      <ClueDispatchBody
+        view={view({ status: 'handler_assigned', mayDecide: false, mayRecordOther: true, assignment })}
+        orgOptions={[]}
+        busy={false}
+        failure={null}
+        onDecide={() => undefined}
+        onAssignOrg={() => undefined}
+        onAssignPeople={() => undefined}
+        onTransfer={() => undefined}
+        onDesignateRequest={() => undefined}
+        onDesignateReject={() => undefined}
+      />,
+    );
+    expect(html).toContain('其他（行政处理事项，系统外办理）');
+    expect(html).toContain('登记其他');
+  });
+
+  it('无 mayRecordOther 不展示其他面板', () => {
+    const html = renderToStaticMarkup(
+      <ClueDispatchBody
+        view={view({ status: 'handler_assigned', mayDecide: false, mayRecordOther: false, assignment })}
+        orgOptions={[]}
+        busy={false}
+        failure={null}
+        onDecide={() => undefined}
+        onAssignOrg={() => undefined}
+        onAssignPeople={() => undefined}
+        onTransfer={() => undefined}
+        onDesignateRequest={() => undefined}
+        onDesignateReject={() => undefined}
+      />,
+    );
+    expect(html).not.toContain('data-role="other-disposition-panel"');
   });
 });

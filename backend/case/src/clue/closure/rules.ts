@@ -12,7 +12,7 @@ export const CLUE_CLOSURE_RULE_CODES = [
   'missing-withdraw-note',
   /** 勾选的撤回原因不在四项常用原因之内。 */
   'invalid-withdraw-reason',
-  /** 不予立案／随旧线索办结的说明必填。 */
+  /** 不予立案／随旧线索办结／其他的说明必填。 */
   'missing-disposition-fields',
   /** 本期不支持的处置类型（移送归 #216 接口）。 */
   'unsupported-disposition',
@@ -57,11 +57,11 @@ export function checkWithdrawInput(input: {
 /** 不予立案登记的线索状态（仅已派承办人可登记；核查运行或失败不阻止）。 */
 export const DISPOSITION_RECORD_FROM_STATUS = 'handler_assigned';
 
-/** 处置类型：不予立案 | 随旧线索办结 | 移送（移送的发起归 #216）。 */
-export const DISPOSITION_KINDS = ['no-case', 'with-old', 'transfer'] as const;
+/** 处置类型：不予立案 | 随旧线索办结 | 移送（#216）| 其他（#229）。 */
+export const DISPOSITION_KINDS = ['no-case', 'with-old', 'transfer', 'other'] as const;
 
-/** 结案提醒类型：不予立案 | 移送 | 立案。 */
-export const REMINDER_KINDS = ['no-case', 'transfer', 'case'] as const;
+/** 结案提醒类型：不予立案 | 移送 | 立案 | 其他（#229）。 */
+export const REMINDER_KINDS = ['no-case', 'transfer', 'case', 'other'] as const;
 
 /** 结案提醒的处理结果：撤回不派再办 | 随旧线索办结。 */
 export const REMINDER_RESOLUTIONS = ['withdraw', 'close-with-old'] as const;
@@ -74,20 +74,22 @@ export function checkDispositionNote(note: string): DispositionNoteCheckOutcome 
   return note.trim() === '' ? { ok: false } : { ok: true };
 }
 
-/** 处置类型对应的终态：不予立案与随旧线索办结进 closed；移送进 transferred_out。 */
+/** 处置类型对应的终态：不予立案／随旧线索办结／其他进 closed；移送进 transferred_out。 */
 export const DISPOSITION_TERMINAL_STATUS: Readonly<Record<string, string>> = {
   'no-case': 'closed',
   'with-old': 'closed',
+  other: 'closed',
   transfer: 'transferred_out',
 };
 
 /**
- * 处置登记可用的起始状态：不予立案仅已派承办人；随旧线索办结仅「不派」；
+ * 处置登记可用的起始状态：不予立案／其他仅已派承办人；随旧线索办结仅「不派」；
  * 移送可在待分派池、已派机构与已派承办人发起（规格 D 节）。
  */
 export const DISPOSITION_FROM_STATUSES: Readonly<Record<string, readonly string[]>> = {
   'no-case': [DISPOSITION_RECORD_FROM_STATUS],
   'with-old': [WITHDRAW_FROM_STATUS],
+  other: [DISPOSITION_RECORD_FROM_STATUS],
   transfer: ['in_pool', 'org_assigned', 'handler_assigned'],
 };
 

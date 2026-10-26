@@ -502,6 +502,169 @@ export function AssignOrgPanel({
   );
 }
 
+/** 其他（行政处理事项，系统外办理；#229）。理由必填；可同屏选填系统外移送。 */
+export function OtherDispositionPanel({
+  busy,
+  failure,
+  onSubmit,
+  readOnly = false,
+}: {
+  busy: boolean;
+  failure: string | null;
+  onSubmit: (input: {
+    readonly note: string;
+    readonly externalTransfer: null | {
+      readonly transferOrg: string;
+      readonly documentNo: string;
+      readonly letterDate: string;
+      readonly reason: string;
+      readonly attachments: readonly File[];
+    };
+  }) => void;
+  readOnly?: boolean;
+}) {
+  const [note, setNote] = useState('');
+  const [withTransfer, setWithTransfer] = useState(false);
+  const [transferOrg, setTransferOrg] = useState('');
+  const [documentNo, setDocumentNo] = useState('');
+  const [letterDate, setLetterDate] = useState('');
+  const [reason, setReason] = useState('');
+  const [attachments, setAttachments] = useState<readonly File[]>([]);
+  const today = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const transferReady =
+    !withTransfer ||
+    (transferOrg.trim() !== '' && documentNo.trim() !== '' && reason.trim() !== '');
+  return (
+    <div className="card" data-role="other-disposition-panel">
+      <div className="card-h">
+        其他（行政处理事项，系统外办理）
+        <span className="hint">{readOnly ? '监督身份只读' : '理由必填；登记后进已结案，退出比对与待办计数'}</span>
+      </div>
+      {failure ? <div className="banner danger" data-role="failure">{failure}</div> : null}
+      <div className="form-row">
+        <label htmlFor="other-note">理由</label>
+        <div>
+          <textarea
+            id="other-note"
+            className="input"
+            rows={3}
+            value={note}
+            disabled={readOnly}
+            onChange={(event) => setNote(event.target.value)}
+          />
+          <div className="help">行政处理事项在系统外办理的理由，必填。</div>
+        </div>
+      </div>
+      <div className="form-row">
+        <label htmlFor="other-with-transfer">系统外移送</label>
+        <div>
+          <label className="check">
+            <input
+              id="other-with-transfer"
+              type="checkbox"
+              checked={withTransfer}
+              disabled={readOnly}
+              onChange={(event) => setWithTransfer(event.target.checked)}
+            />
+            一并登记系统外移送（不分管辖／涉刑／党纪政务）
+          </label>
+        </div>
+      </div>
+      {withTransfer ? (
+        <>
+          <div className="form-row">
+            <label htmlFor="other-transfer-org">移送机关</label>
+            <div>
+              <input
+                id="other-transfer-org"
+                className="input"
+                value={transferOrg}
+                disabled={readOnly}
+                onChange={(event) => setTransferOrg(event.target.value)}
+              />
+            </div>
+          </div>
+          <div className="form-row">
+            <label htmlFor="other-transfer-doc">文书编号</label>
+            <div>
+              <input
+                id="other-transfer-doc"
+                className="input"
+                value={documentNo}
+                disabled={readOnly}
+                onChange={(event) => setDocumentNo(event.target.value)}
+              />
+            </div>
+          </div>
+          <div className="form-row">
+            <label htmlFor="other-transfer-date">发函日期</label>
+            <div>
+              <input
+                id="other-transfer-date"
+                className="input"
+                type="date"
+                value={letterDate}
+                disabled={readOnly}
+                onChange={(event) => setLetterDate(event.target.value)}
+              />
+              <div className="help">{`留空默认北京当日（${today}），允许补录。`}</div>
+            </div>
+          </div>
+          <div className="form-row">
+            <label htmlFor="other-transfer-reason">原因</label>
+            <div>
+              <input
+                id="other-transfer-reason"
+                className="input"
+                value={reason}
+                disabled={readOnly}
+                onChange={(event) => setReason(event.target.value)}
+              />
+            </div>
+          </div>
+          <div className="form-row">
+            <label htmlFor="other-transfer-files">附件</label>
+            <div>
+              <input
+                id="other-transfer-files"
+                type="file"
+                multiple
+                disabled={readOnly}
+                onChange={(event) => setAttachments(Array.from(event.target.files ?? []))}
+              />
+            </div>
+          </div>
+        </>
+      ) : null}
+      <div className="actions">
+        <button
+          type="button"
+          className="btn"
+          data-role="other-disposition-submit"
+          disabled={readOnly || busy || note.trim() === '' || !transferReady}
+          title={readOnly ? '监督身份只读' : undefined}
+          onClick={() =>
+            onSubmit({
+              note: note.trim(),
+              externalTransfer: withTransfer
+                ? {
+                    transferOrg: transferOrg.trim(),
+                    documentNo: documentNo.trim(),
+                    letterDate,
+                    reason: reason.trim(),
+                    attachments,
+                  }
+                : null,
+            })
+          }
+        >
+          登记其他
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** 移送（自然资源部门以外的机关；#216）。 */
 export function TransferPanel({
   busy,
@@ -711,6 +874,7 @@ export function ClueDispatchBody({
   onAssignOrg,
   onAssignPeople,
   onTransfer,
+  onOtherDisposition = () => undefined,
   onDesignateRequest,
   onDesignateReject,
   supervisorReadonly = false,
@@ -723,6 +887,16 @@ export function ClueDispatchBody({
   onAssignOrg: (input: { orgUnitId: string; reason: string; designate: boolean }) => void;
   onAssignPeople: (input: { mainId: string; assistIds: readonly string[] }) => void;
   onTransfer: (input: { transferOrg: string; documentNo: string; letterDate: string; reason: string; attachments: readonly File[] }) => void;
+  onOtherDisposition?: (input: {
+    readonly note: string;
+    readonly externalTransfer: null | {
+      readonly transferOrg: string;
+      readonly documentNo: string;
+      readonly letterDate: string;
+      readonly reason: string;
+      readonly attachments: readonly File[];
+    };
+  }) => void;
   onDesignateRequest: (input: { reason: string; proposedOrgId: string | null }) => void;
   onDesignateReject: (reason: string) => void;
   /** 监督且无经办、内勤角色：分派写操作全部禁用并说明原因。 */
@@ -735,6 +909,7 @@ export function ClueDispatchBody({
   // 报请另须没有进行中的报请（服务端 mayRequestDesignation 要求 designation === null）。
   const requestOrTransfer = view.status === 'in_pool' || assigned;
   const showTransfer = view.mayTransfer || (ro && requestOrTransfer);
+  const showOther = view.mayRecordOther || (ro && view.status === 'handler_assigned');
   const showPeople = view.mayAssignPeople || (ro && assigned);
   const showReassign = view.mayReassignOrg || (ro && assigned);
   const showDesignateRequest =
@@ -775,6 +950,9 @@ export function ClueDispatchBody({
         ) : null}
         {showTransfer ? (
           <TransferPanel busy={busy} failure={failure} onTransfer={onTransfer} readOnly={ro} />
+        ) : null}
+        {showOther ? (
+          <OtherDispositionPanel busy={busy} failure={failure} onSubmit={onOtherDisposition} readOnly={ro} />
         ) : null}
         {assigned && view.assignment ? (
           <div data-role="assigned">

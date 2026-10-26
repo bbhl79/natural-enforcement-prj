@@ -65,6 +65,7 @@ export const DISPOSITION_LABELS: Readonly<Record<string, string>> = {
   'no-case': '不予立案',
   'with-old': '随旧线索办结',
   transfer: '移送',
+  other: '其他（行政处理事项，系统外办理）',
 };
 
 /** 一个线索的状态是否参与比对（规格 B）。 */

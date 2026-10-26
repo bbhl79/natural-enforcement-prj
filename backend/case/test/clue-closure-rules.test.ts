@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   CLUE_CLOSURE_RULE_CODES,
+  DISPOSITION_FROM_STATUSES,
+  DISPOSITION_KINDS,
   DISPOSITION_RECORD_FROM_STATUS,
+  DISPOSITION_TERMINAL_STATUS,
   REMINDER_KINDS,
   REMINDER_RESOLUTIONS,
   WITHDRAW_FROM_STATUS,
@@ -63,6 +66,12 @@ describe('不予立案登记约束', () => {
     expect(DISPOSITION_RECORD_FROM_STATUS).toBe('handler_assigned');
   });
 
+  it('other 与 no-case 同起始状态、同进 closed（#229）', () => {
+    expect(DISPOSITION_KINDS).toContain('other');
+    expect(DISPOSITION_FROM_STATUSES.other).toEqual([DISPOSITION_RECORD_FROM_STATUS]);
+    expect(DISPOSITION_TERMINAL_STATUS.other).toBe('closed');
+  });
+
   it('处置说明必填', () => {
     expect(checkDispositionNote('')).toEqual({ ok: false });
     expect(checkDispositionNote('   ')).toEqual({ ok: false });
@@ -70,7 +79,7 @@ describe('不予立案登记约束', () => {
   });
 
   it('结案提醒类型与处理结果封闭', () => {
-    expect(REMINDER_KINDS).toEqual(['no-case', 'transfer', 'case']);
+    expect(REMINDER_KINDS).toEqual(['no-case', 'transfer', 'case', 'other']);
     expect(REMINDER_RESOLUTIONS).toEqual(['withdraw', 'close-with-old']);
     expect(CLUE_CLOSURE_RULE_CODES).toContain('missing-disposition-fields');
     expect(CLUE_CLOSURE_RULE_CODES).toContain('unsupported-disposition');

@@ -15,6 +15,8 @@ import {
   submitAssignPeople,
   submitDecide,
   submitTransfer,
+  submitOtherDisposition,
+  submitExternalTransfer,
   submitDesignateReject,
   submitDesignateRequest,
   type DispatchView,
@@ -53,7 +55,7 @@ export function dispatchFailureText(body: unknown): string {
       case 'assignee-not-qualified':
         return '承办人已停用或不属于承办机构。';
       case 'missing-disposition-fields':
-        return '移送机关、文书编号与原因必填。';
+        return '必填项未填：其他须填理由；系统外移送须填移送机关、文书编号与原因。';
       case 'invalid-letter-date':
         return '发函日期须为真实日历日（YYYY-MM-DD）。';
       case 'attachment-count-exceeded':
@@ -176,6 +178,17 @@ export default function ClueDispatchSection({ clueId }: { readonly clueId: strin
             expectedStatus: view.status,
           }),
         )
+      }
+      onOtherDisposition={(input) =>
+        void run(async () => {
+          const first = await submitOtherDisposition(dispatch, clueId, {
+            note: input.note,
+            expectedStatus: view.status,
+          });
+          if (!first.ok) return first;
+          if (input.externalTransfer === null) return first;
+          return submitExternalTransfer(dispatch, clueId, input.externalTransfer);
+        })
       }
       supervisorReadonly={supervisorReadonly}
     />

@@ -1,13 +1,15 @@
 // 移送与停用机构池重新指定接口（#216；规格 D 节、GLOSSARY）。
 //
 // POST /api/clues/:id/transfer        移送登记（multipart：表单字段 + 选填附件 0..n）
-// POST /api/clues/:id/pool-reassign   停用机构池重新指定（系统管理员）
+// POST /api/clues/:id/pool-reassign          停用机构池重新指定（系统管理员）
+// POST /api/clues/:id/external-transfers     系统外移送附加记录（#229）
+// GET  /api/clues/:id/external-transfers     系统外移送附加记录列表（#229）
 //
 // 移送表单字段：transferOrg（移送机关）、documentNo（文书编号）、letterDate（发函日期，
 // 空＝缺省北京当日）、reason（原因）、expectedStatus。文件项：attachment（选填 0..n）。
 // 校验不通过返回 400 non-compliant（rules 列校验码）＋失败留痕，附件校验失败存储零写入。
 
-import { Body, Controller, Param, Post, Req, Res, UploadedFiles, UseInterceptors } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req, Res, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileFieldsInterceptor } from '@nestjs/platform-express';
 
 import { MAX_ATTACHMENT_BYTES } from '@natural-enforcement/case';
@@ -15,6 +17,7 @@ import type { ActorRef } from '@natural-enforcement/identity';
 
 import { ClueDispositionService, type TransferUploadedFile } from './clue-disposition.service.ts';
 import { decodeMultipartFileName } from './multipart-file-name.ts';
+import { SameOriginReadGuard } from './same-origin-read.guard.ts';
 import type { AuthenticatedRequest } from './session.guard.ts';
 
 interface HttpReply {
@@ -89,6 +92,42 @@ export class ClueDispositionController {
       reason: text(body?.reason),
       expectedStatus: text(body?.expectedStatus),
     });
+    res.status(outcome.status).json(outcome.body);
+  }
+
+  /** 系统外移送附加记录（#229；须线索处置为 other；不改线索状态）。 */
+  @Post(':id/external-transfers')
+  @UseInterceptors(
+    FileFieldsInterceptor([{ name: 'attachment', maxCount: 20 }], {
+      limits: { fileSize: MAX_ATTACHMENT_BYTES, files: 20 },
+    }),
+  )
+  async attachExternalTransfer(
+    @Req() req: AuthenticatedRequest,
+    @Res() res: HttpReply,
+    @Param('id') id: string,
+    @Body() body: TransferBody,
+    @UploadedFiles() files: Record<string, UploadedFile[]> | undefined,
+  ): Promise<void> {
+    const outcome = await this.disposition.attachExternalTransfer(req.actor as ActorRef, id, {
+      transferOrg: text(body?.transferOrg),
+      documentNo: text(body?.documentNo),
+      letterDate: text(body?.letterDate),
+      reason: text(body?.reason),
+      attachments: (files?.['attachment'] ?? []).map(toUploadedFile),
+    });
+    res.status(outcome.status).json(outcome.body);
+  }
+
+  /** 系统外移送附加记录列表（#229）。 */
+  @Get(':id/external-transfers')
+  @UseGuards(SameOriginReadGuard)
+  async listExternalTransfers(
+    @Req() req: AuthenticatedRequest,
+    @Res() res: HttpReply,
+    @Param('id') id: string,
+  ): Promise<void> {
+    const outcome = await this.disposition.listExternalTransfers(req.actor as ActorRef, id);
     res.status(outcome.status).json(outcome.body);
   }
 }

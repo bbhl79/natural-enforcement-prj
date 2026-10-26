@@ -357,6 +357,9 @@ export interface ClueDetailRow {
   readonly values: readonly ClueItemValueRow[];
   readonly tags: readonly { readonly name: string }[];
   readonly initialTypes: readonly string[];
+  /** 最近一条处置（#229 详情展示用；无则 null）。 */
+  readonly latestDisposition: string | null;
+  readonly latestDispositionNote: string | null;
 }
 
 /** 一条线索的留痕行（不含 detail 字段）。查询走 $queryRaw 直查库表。 */
@@ -574,7 +577,7 @@ export interface ClueClosureReminderTarget {
 export interface ClueClosureReminderRowToWrite {
   readonly id: string;
   readonly clueId: string;
-  readonly kind: 'no-case' | 'transfer' | 'case';
+  readonly kind: 'no-case' | 'transfer' | 'case' | 'other';
   readonly otherClueId: string;
   readonly createdAt: Date;
 }
@@ -603,12 +606,43 @@ export interface ClueClosureReminderRow {
   readonly resolution: string | null;
 }
 
+/** 系统外移送附加记录写入（#229；不改线索状态）。 */
+export interface ClueExternalTransferWrite {
+  readonly id: string;
+  readonly clueId: string;
+  readonly transferredOrg: string;
+  readonly documentNo: string;
+  readonly letterDate: string;
+  readonly reason: string;
+  readonly recordedBy: string;
+  readonly recordedAt: Date;
+  readonly materials: readonly ClueMaterialRow[];
+}
+
+/** 系统外移送附加记录行（列表用）。 */
+export interface ClueExternalTransferRow {
+  readonly id: string;
+  readonly clueId: string;
+  readonly transferredOrg: string;
+  readonly documentNo: string;
+  readonly letterDate: string;
+  readonly reason: string;
+  readonly recordedBy: string;
+  readonly recordedAt: Date;
+  readonly attachments: readonly {
+    readonly id: string;
+    readonly fileName: string;
+    readonly contentType: string;
+    readonly byteSize: number;
+  }[];
+}
+
 /** 处置登记的写入（不予立案、随旧线索办结、移送）。 */
 export interface ClueDispositionWrite {
   readonly clueId: string;
   readonly expectedStatus: string;
   readonly dispositionId: string;
-  readonly disposition: 'no-case' | 'with-old' | 'transfer';
+  readonly disposition: 'no-case' | 'with-old' | 'transfer' | 'other';
   readonly transferredOrg: string | null;
   readonly documentNo: string | null;
   readonly note: string | null;
@@ -806,6 +840,12 @@ export interface ClueStore {
    * 返回 false 表示当前状态不符（并发冲突或状态不允许），业务行不变。
    */
   applyDisposition(write: ClueDispositionWrite): Promise<boolean>;
+  /** 线索是否已有 disposition=other 的处置行（#229 系统外移送前置条件）。 */
+  hasOtherDisposition(clueId: string): Promise<boolean>;
+  /** 写入系统外移送附加记录与附件（不改线索状态）。 */
+  insertExternalTransfer(write: ClueExternalTransferWrite): Promise<void>;
+  /** 列出线索的系统外移送附加记录。 */
+  listExternalTransfers(clueId: string): Promise<readonly ClueExternalTransferRow[]>;
   /** 读一条结案提醒。 */
   readClosureReminder(reminderId: string): Promise<ClueClosureReminderRow | null>;
   /** 读未处理的结案提醒（按线索的数据范围过滤）。 */

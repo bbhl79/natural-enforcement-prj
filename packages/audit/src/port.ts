@@ -5,6 +5,7 @@ import type {
   ClueDesignateRequestedFailedReason,
   ClueDispatchDecideFailedReason,
   ClueDispositionRecordedFailedReason,
+  ClueExternalTransferAttachedFailedReason,
   ClueHandlerAssignedFailedReason,
   ClueItemsSupplementFailedReason,
   ClueOrgAssignedFailedReason,
@@ -193,6 +194,13 @@ export type AuditAppend =
       action: 'clue.disposition-recorded';
       outcome: 'failed';
       reason: ClueDispositionRecordedFailedReason;
+    })
+  // 系统外移送附加记录（#229）：不改线索状态，成功／失败同行动作词。
+  | (AuditParties & { action: 'clue.external-transfer-attached' })
+  | (AuditParties & {
+      action: 'clue.external-transfer-attached';
+      outcome: 'failed';
+      reason: ClueExternalTransferAttachedFailedReason;
     })
   // 移送与停用机构池重新指定（#216，规格 G）：停用机构与新接收机构。
   | (AuditParties & { action: 'clue.pool-reassigned' })
