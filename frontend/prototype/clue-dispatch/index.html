@@ -1166,7 +1166,7 @@ function detail(l) {
   const bodyHtml = curTab === 'check' ? tabCheck : curTab === 'dup' ? tabDup : curTab === 'flow' ? tabFlow : tabBasic;
 
   return `<div class="drawer-mask" data-act="closeDetailMask">
-    <aside class="drawer" role="dialog" aria-label="线索详情抽屉">
+    <aside class="drawer-panel" role="dialog" aria-label="线索详情抽屉">
       <div class="drawer-head">
         <div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -1192,23 +1192,38 @@ function detail(l) {
 const poolOf = a => state.leads.filter(l => l.status === 'pool' && M.scope(a.org).includes(l.poolOrg));
 const orgSetOf = a => state.leads.filter(l => l.status === 'org-set' && l.handlerOrg === a.org);
 function pageDispatch() {
-  const a = actor(), isSup = a.role === '监督'; let h = '';
-  if (a.role !== '内勤') {
-    return h + `<div class="banner ${isSup ? 'amber' : 'gray'}"><b>${isSup ? '监督只读权限边界：无内勤分派与指定主办权限' : '待分派由内勤操作'}</b>。${isSup ? '市执法监督处/区分局执法科仅可查阅分派进度，不能执行「指定承办机构」「指定主办/协办人」「报请指定管辖」或「移送」。' : '请在顶部「身份」里切换到一位内勤（林晓燕、老陈、阿梅、小石）。'}
+  const a = actor(), isSup = a.role === '监督';
+  if (a.role !== '内勤' && !isSup) {
+    return `<div class="banner gray"><b>待分派由内勤操作</b>。请在顶部「身份」里切换到一位内勤（林晓燕、老陈、阿梅、小石）。
       <div style="margin-top:6px"><button class="btn btn-sm" disabled>确认分派承办机构（已禁用）</button> <button class="btn btn-sm" disabled>指定主办/协办人（已禁用）</button> <button class="btn btn-sm" disabled>报请指定管辖／移送（已禁用）</button></div></div>`;
   }
-  const p1 = poolOf(a), p2 = orgSetOf(a), sel = ui.sel && [...p1, ...p2].find(l => l.id === ui.sel);
-  const done = state.leads.filter(l => (l.status === 'assigned' || l.status === 'handling') && (a.org === 'sj' || (l.handlerOrg && M.scope(a.org).includes(l.handlerOrg))));
+  const inTree = id => !!id && M.scope(a.org).includes(id);
+  const p1 = isSup ? state.leads.filter(l => l.status === 'pool' && inTree(l.poolOrg)) : poolOf(a);
+  const p2 = isSup ? state.leads.filter(l => l.status === 'org-set' && inTree(l.handlerOrg)) : orgSetOf(a);
+  if (isSup && ![...p1, ...p2].some(l => l.id === ui.sel)) {
+    const first = p1[0] || p2[0];
+    if (first) ui.sel = first.id;
+  }
+  const sel = ui.sel && [...p1, ...p2].find(l => l.id === ui.sel);
+  const done = state.leads.filter(l => (l.status === 'assigned' || l.status === 'handling') && (a.org === 'sj' || (l.handlerOrg && inTree(l.handlerOrg))));
   const rows = (ls, title, click) => `<div class="card"><div class="card-h">${title}（${ls.length}）</div>${ls.length ? `<table class="table">${ls.map(l => `<tr class="${click === false ? '' : 'pick'} ${ui.sel === l.id ? 'sel' : ''}" ${click === false ? '' : `data-act="pick" data-id="${l.id}"`}><td class="mono">${l.id}</td><td>${domainN(l)}</td><td>${chips(l, 'dispatch')}</td></tr>`).join('')}</table>` : '<div class="help">空</div>'}</div>`;
+  const lock = isSup ? 'disabled' : '';
+  const roAct = isSup ? 'disabled title="监督身份只读，不可分派"' : '';
+  let h = '';
+  if (isSup) h += `<div class="banner amber" data-role="assign-readonly"><b>监督身份只读，不可分派</b>。市执法监督处与区分局执法科可查阅待分派、已派机构与办理中的进度，不能执行「指定承办机构」「指定主办／协办人」「报请指定管辖」或「移送」。</div>`;
   h += `<div style="display:grid;grid-template-columns:330px 1fr;gap:14px;align-items:start"><div>${rows(p1, '待分派（内勤池）')}${rows(p2, '已派机构待指定主办')}${rows(done, '核查办理中 / 已分派', false)}</div><div>`;
   if (!sel) return h + '<div class="banner gray">从左边选一条待分派或待指定主办的线索。</div></div></div>';
-  h += `<div class="card"><div class="card-h">线索 <span class="mono">${sel.id}</span> · ${domainN(sel)} ${chips(sel, 'dispatch')}</div>`;
-  if (sel.check === 'failed') h += `<div class="banner amber">重跑提示：内业核查后台已自动重试 3 次仍未成功。不影响分派，可以现在就派；录入人、本机构内勤、承办人也可手动点 <button class="btn btn-sm btn-line" ${M.canRerun(sel, state.actorId) ? '' : 'disabled'} data-act="rerun" data-id="${sel.id}">重跑内业核查</button>。</div>`;
+  h += `<div class="card"><div class="card-h">线索 <span class="mono">${sel.id}</span> · ${domainN(sel)} ${chips(sel, 'dispatch')}${isSup ? '<span class="hint">监督身份只读，不可分派</span>' : ''}</div>`;
+  if (sel.check === 'failed') {
+    const rerunOk = !isSup && M.canRerun(sel, state.actorId);
+    const rerunWhy = isSup ? '监督身份只读，不可分派' : '仅录入人、本机构内勤、承办人可手动重跑';
+    h += `<div class="banner amber">重跑提示：内业核查后台已自动重试 3 次仍未成功。不影响分派，可以现在就派；录入人、本机构内勤、承办人也可手动点 <button class="btn btn-sm btn-line" ${rerunOk ? `data-act="rerun" data-id="${sel.id}"` : `disabled title="${rerunWhy}"`}>重跑内业核查</button>。</div>`;
+  }
   if (sel.gaps.length && ui.gapDispatch) h += `<div class="banner blue">提示：类型层还缺 ${sel.gaps.length} 项（${sel.gaps.map(g => esc(g.label)).join('、')}）。只是提示，不影响分派。</div>`;
-  if (sel.status === 'org-set') { const ppl = M.PEOPLE[sel.handlerOrg];
-    h += `<div class="kv"><span class="k">承办机构</span><span>${orgN(sel.handlerOrg)}</span></div><div class="form-row" style="margin-top:10px"><label>主办人<span class="req">*</span></label><select class="select" data-t="lead" data-rr="1"><option value="">请选择</option>${ppl.map(x => `<option ${ui.tmp.lead === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
-      <div class="form-row"><label>协办人</label><div class="checks">${ppl.filter(x => x !== ui.tmp.lead).map(x => `<label><input type="checkbox" data-bind="assist" value="${x}" ${(ui.tmp.assist || []).includes(x) ? 'checked' : ''}>${x}</label>`).join('')}</div></div>
-      <button class="btn btn-primary" data-act="assignPeople">确认分派</button></div>`;
+  if (sel.status === 'org-set') { const ppl = M.PEOPLE[sel.handlerOrg] || [];
+    h += `<div class="kv"><span class="k">承办机构</span><span>${orgN(sel.handlerOrg)}</span></div><div class="form-row" style="margin-top:10px"><label>主办人<span class="req">*</span></label><select class="select" ${lock} ${isSup ? '' : 'data-t="lead" data-rr="1"'}><option value="">请选择</option>${ppl.map(x => `<option ${ui.tmp.lead === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+      <div class="form-row"><label>协办人</label><div class="checks">${ppl.filter(x => x !== ui.tmp.lead).map(x => `<label><input type="checkbox" ${lock} ${isSup ? '' : `data-bind="assist"`} value="${x}" ${(ui.tmp.assist || []).includes(x) ? 'checked' : ''}>${x}</label>`).join('')}</div></div>
+      <button class="btn btn-primary" ${isSup ? roAct : 'data-act="assignPeople"'}>确认分派</button>${isSup ? '<div class="small" style="color:var(--danger);font-weight:600;margin-top:6px">监督身份只读，不可分派</div>' : ''}</div>`;
     return h + '</div></div>'; }
   const locs = M.locate(sel.geometry), ds = M.districts(sel.geometry), survey = sel.domain === 'survey', fb = survey && ui.tmp.fb;
   const sugOrg = fb ? M.DISTRICT_ORG[ui.tmp.fbd || '天河区'] : (ds.length === 1 ? locs[0].cell.org : '');
@@ -1217,24 +1232,25 @@ function pageDispatch() {
     <span class="k">所在区</span><span>${fb ? esc(ui.tmp.fbd || '天河区') + '（兜底：内勤选）' : ds.map(x => `${x.d}${ds.length > 1 ? ' ' + pct(x.share) : ''}`).join('、')}</span>
     ${fb ? '' : `<span class="k">街道／所</span><span>${locs.map(x => `${x.cell.n}（${orgN(x.cell.org)}${ds.length > 1 ? ' ' + pct(x.share) : ''}）`).join('；')}</span>`}</div>`;
   if (ds.length > 1 && !fb) h += '<div class="banner gray" style="margin-top:8px">这块面跨区。系统只列出各区面积占比，不自动取最大区。拿不准时报共同上级走指定管辖。</div>';
-  if (survey) h += `<div class="note"><label><input type="checkbox" data-t="fb" data-rr="1" ${fb ? 'checked' : ''}> 难以确定违法行为发生地，改按注册地、办公地或户籍地</label>
-    ${fb ? `<div class="form-row" style="margin:8px 0 0"><label>所在区<span class="req">*</span></label><select class="select" data-t="fbd" data-rr="1">${['天河区', '白云区'].map(x => `<option ${(ui.tmp.fbd || '天河区') === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div><div class="form-row" style="margin:8px 0 0"><label>依据<span class="req">*</span></label><input class="input" data-t="fbb" value="${esc(ui.tmp.fbb || '')}" placeholder="如：单位注册地在白云区"></div>` : ''}</div>`;
-  h += `<div class="form-row" style="margin-top:10px"><label>承办机构<span class="req">*</span></label><div><select class="select" data-t="org" data-rr="1"><option value="">请选择</option>${Object.keys(M.ORGS).map(id => { const out = !inScope.includes(id); return `<option value="${id}" ${pick === id ? 'selected' : ''} ${out ? 'disabled' : ''}>${'　'.repeat(M.depth(id))}${M.ORGS[id].n}${out ? '（数据范围外，只能报请上级指定管辖）' : ''}</option>`; }).join('')}</select>
+  if (survey) h += `<div class="note"><label><input type="checkbox" ${lock} ${isSup ? '' : 'data-t="fb" data-rr="1"'} ${fb ? 'checked' : ''}> 难以确定违法行为发生地，改按注册地、办公地或户籍地</label>
+    ${fb ? `<div class="form-row" style="margin:8px 0 0"><label>所在区<span class="req">*</span></label><select class="select" ${lock} ${isSup ? '' : 'data-t="fbd" data-rr="1"'}>${['天河区', '白云区'].map(x => `<option ${(ui.tmp.fbd || '天河区') === x ? 'selected' : ''}>${x}</option>`).join('')}</select></div><div class="form-row" style="margin:8px 0 0"><label>依据<span class="req">*</span></label><input class="input" ${lock} ${isSup ? '' : 'data-t="fbb"'} value="${esc(ui.tmp.fbb || '')}" placeholder="${isSup ? '监督身份只读，不可分派' : '如：单位注册地在白云区'}"></div>` : ''}</div>`;
+  h += `<div class="form-row" style="margin-top:10px"><label>承办机构<span class="req">*</span></label><div><select class="select" ${lock} ${isSup ? '' : 'data-t="org" data-rr="1"'}><option value="">请选择</option>${Object.keys(M.ORGS).map(id => { const out = !inScope.includes(id); return `<option value="${id}" ${pick === id ? 'selected' : ''} ${!isSup && out ? 'disabled' : ''}>${'　'.repeat(M.depth(id))}${M.ORGS[id].n}${out ? '（数据范围外，只能报请上级指定管辖）' : ''}</option>`; }).join('')}</select>
     <div class="help">限本机构或数据范围内的下级。没有所的区，承办机构只能选区分局。</div></div></div>
-    <button class="btn btn-primary" ${pick && !sel.designateReq ? '' : 'disabled'} data-act="assignOrg">确认分派</button> <button class="btn" data-act="toggleX" data-k="req">不属本级管辖？报请上级指定管辖</button> <button class="btn" data-act="toggleX" data-k="ext">移送（自然资源部门以外机关）</button>`;
-  if (sel.designateReq) { const r = sel.designateReq; h += `<div class="banner amber" style="margin-top:10px">已报请 <b>${esc(orgN(r.to))}</b> 指定管辖${r.org ? `（拟归属 ${esc(orgN(r.org))}）` : ''}。理由：${esc(r.reason)}。报请期间本机构不能分派、重新分派或移送，由上级处理。</div>`; }
-  else if (ui.tmp.xopen === 'req') {
+    <button class="btn btn-primary" ${isSup ? roAct : (pick && !sel.designateReq ? 'data-act="assignOrg"' : 'disabled data-act="assignOrg"')}>确认分派</button> <button class="btn" ${isSup ? roAct : 'data-act="toggleX" data-k="req"'}>不属本级管辖？报请上级指定管辖</button> <button class="btn" ${isSup ? roAct : 'data-act="toggleX" data-k="ext"'}>移送（自然资源部门以外机关）</button>${isSup ? '<div class="small" style="color:var(--danger);font-weight:600;margin-top:6px">监督身份只读，不可分派</div>' : ''}`;
+  if (!isSup && sel.designateReq) { const r = sel.designateReq; h += `<div class="banner amber" style="margin-top:10px">已报请 <b>${esc(orgN(r.to))}</b> 指定管辖${r.org ? `（拟归属 ${esc(orgN(r.org))}）` : ''}。理由：${esc(r.reason)}。报请期间本机构不能分派、重新分派或移送，由上级处理。</div>`; }
+  else if (!isSup && ui.tmp.xopen === 'req') {
     h += `<div class="note" style="margin-top:10px"><div class="form-row" style="margin:0 0 8px"><label>拟归属机构</label><select class="select" data-t="xo" data-rr="1"><option value="">不选（报直接上级）</option>${Object.keys(M.ORGS).filter(id => id !== sel.poolOrg).map(id => `<option value="${id}" ${ui.tmp.xo === id ? 'selected' : ''}>${M.ORGS[id].n}</option>`).join('')}</select></div>
       <div class="form-row" style="margin:0 0 8px"><label>报请理由<span class="req">*</span></label><input class="input" data-t="xr" value="${esc(ui.tmp.xr || '')}" placeholder="必填：说明为什么不属本级管辖"></div>
       <div class="help">线索不直接进对方待分派池，由最近的共同上级指定承办机构。区分局之间、局与所之间不是不同机关，不走移送。</div>
       <button class="btn btn-sm btn-line" data-act="designateReq">确认报请</button></div>`; }
-  else if (ui.tmp.xopen === 'ext') {
+  else if (!isSup && ui.tmp.xopen === 'ext') {
     h += `<div class="note" style="margin-top:10px"><div class="help" style="margin:0 0 8px">只用于移送给自然资源部门以外的机关（如城管、镇政府、公安、纪检监察），线下发函，不区分管辖、涉刑、党纪政务。送出即办结本机关的环节，系统不等待对方接收。</div>
       <div class="form-row" style="margin:0 0 4px"><label>机关名称<span class="req">*</span></label><input class="input" data-t="xn" value="${esc(ui.tmp.xn || '')}" placeholder="如：某镇人民政府"></div>
       <div class="form-row" style="margin:0 0 4px"><label>移送书编号<span class="req">*</span></label><input class="input" data-t="xd" value="${esc(ui.tmp.xd || '')}"></div>
       <div class="form-row" style="margin:0 0 4px"><label>发函日期<span class="req">*</span></label><input class="input" type="date" data-t="xt" value="${esc(ui.tmp.xt || '')}"></div>
       <div class="form-row" style="margin:0 0 8px"><label>移送原因<span class="req">*</span></label><input class="input" data-t="xr" value="${esc(ui.tmp.xr || '')}"></div>
       <button class="btn btn-sm btn-line" data-act="transfer">确认移送</button></div>`; }
+  else if (isSup && sel.designateReq) { const r = sel.designateReq; h += `<div class="banner amber" style="margin-top:10px">已报请 <b>${esc(orgN(r.to))}</b> 指定管辖${r.org ? `（拟归属 ${esc(orgN(r.org))}）` : ''}。理由：${esc(r.reason)}。监督身份只读，不可分派，也不能在报请期间代为处理。</div>`; }
   return h + '</div></div></div>'; }
 
 function pageHeld() {
@@ -1269,6 +1285,7 @@ const SC = [
     ['重置；第一类：一线执法（林晓燕）查看统一工作台 6 卡待办看板', () => { A.reset(); A.actor({ id: 'lin' }); }],
     ['切第二类：天河区分局分管领导（周建军）查看本辖区调度与跨区报请看板', () => { A.actor({ id: 'zhou_jj' }); }],
     ['切第三类：市局执法监督处（郑国强）进入「线索中心」查看监督只读横幅与禁用边界', () => { A.actor({ id: 'he' }); A.go({ page: 'center', tab: 'all' }); }],
+    ['打开「待分派」：分派面板只读，确认分派、报请指定管辖与移送均禁用，并写明监督身份只读，不可分派', () => { A.actor({ id: 'he' }); A.go({ page: 'center', tab: 'assign' }); }],
     ['在线索中心按 6 维下拉筛选：法域＝土地类、来源＝102 卫片执法', () => { ui.primary = 'center'; ui.page = 'center'; ui.tab = 'all'; ui.fDomain = 'land'; ui.fSource = '102'; render(); }],
     ['点「重置筛选」恢复全量台账，展开 X-0412 触发监督实名举报受控留痕', () => { A.resetFilter(); A.locateInCenter({ id: 'X-0412' }); }]
   ] },
@@ -1481,8 +1498,8 @@ function pageCenter() {
   let h = `<div class="page-h" style="margin-bottom:8px"><div><h1 style="display:flex;align-items:center;gap:10px">线索中心 · 全量台账与分派流转中枢 ${catBadge}</h1><div class="desc">当前登录身份：<b>${esc(a.label || who(state.actorId))}</b> · 查询全部线索，按三类目标用户权限边界办理待分派、缺件补齐、撤回不派与旧线索结案提醒</div></div></div>`;
   if (isSup) {
     h += `<div class="banner err" style="border:1.5px solid #f04438;background:#fef3f2;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
-      <div style="font-size:13px;font-weight:700;color:#b42318">⚠️ 当前为监督只读汇总视图：无撤回不派 / 无手动重跑 / 无结案提醒处理权限</div>
-      <div class="small" style="color:#912018;font-weight:500">当前角色：${esc(a.label || who(state.actorId))} ｜ 所有经办按钮（撤回不派、手动重跑、指定主办、处理结案提醒、补齐缺件）均已置灰禁用并标注原因；开放全量检索与举报人实名受控留痕</div>
+      <div style="font-size:13px;font-weight:700;color:#b42318">⚠️ 当前为监督只读汇总视图：不可分派 / 无撤回不派 / 无手动重跑 / 无结案提醒处理权限</div>
+      <div class="small" style="color:#912018;font-weight:500">当前角色：${esc(a.label || who(state.actorId))} ｜ 监督身份只读，不可分派。分派、撤回不派、手动重跑、处理结案提醒、补齐缺件均已置灰禁用并写明原因；可查阅全量台账，查阅实名须留痕</div>
     </div>`;
   } else {
     h += `<div class="banner ${cat === 'leader' ? 'blue' : 'ok'}" style="padding:7px 12px;margin-bottom:8px;font-size:12px">
@@ -1785,6 +1802,58 @@ document.addEventListener('change', e => { const t = e.target, b = t.dataset.bin
   }
   if (t.dataset.f) { ui.draft.f[t.dataset.f] = t.value; if (t.dataset.rr) render(); return; }
   if (t.dataset.t) { ui.tmp[t.dataset.t] = t.type === 'checkbox' ? t.checked : t.value; if (t.dataset.t === 'org') ui.tmp.org = t.value || undefined; if (t.dataset.rr) render(); } });
+
+function openCenter(actorId, tab) {
+  state = M.reduce(state, { t: 'actor', id: actorId });
+  ui.primary = 'center'; ui.page = 'center'; ui.ws = false; ui.tab = tab;
+  ui.detailOpen = false; ui.guideOpen = false; ui.wsSection = 'board'; state.notice = null;
+}
+function openDrawer(actorId, leadId, tab) {
+  openCenter(actorId, 'all');
+  ui.sel = leadId; ui.focus = leadId; ui.detailOpen = true; ui.detailTab = tab;
+}
+function openBoard(actorId) {
+  state = M.reduce(state, { t: 'actor', id: actorId });
+  ui.primary = 'workbench'; ui.page = 'workbench'; ui.ws = false; ui.wsSection = 'board';
+  ui.step = 1; ui.detailOpen = false; ui.guideOpen = false; ui.focus = null; state.notice = null;
+}
+const SHOTS = {
+  'clue-held': () => openCenter('zhou', 'held'),
+  'clue-held-supervision': () => openCenter('he', 'held'),
+  'clue-remind': () => { openCenter('zhou', 'remind'); state = M.reduce(state, { t: 'closeLead', id: 'X-0398' }); state.notice = null; },
+  'clue-remind-empty': () => openCenter('zhou', 'remind'),
+  'clue-remind-resolve': () => {
+    openCenter('zhou', 'remind');
+    state = M.reduce(state, { t: 'closeLead', id: 'X-0398' });
+    ui.tmp.rs_R1 = [M.REASONS[0], M.REASONS[2]];
+    ui.tmp.rn_R1 = '原线索核查不属实，本条需重新派出核实';
+    state.notice = null;
+  },
+  'clue-dismiss': () => {
+    state = M.reduce(state, { t: 'actor', id: 'lin' });
+    ui.focus = 'X-0426'; ui.result = 'X-0426';
+    ui.primary = 'workbench'; ui.page = 'workbench'; ui.ws = true; ui.wsSection = 'flow'; ui.step = 3;
+    ui.detailOpen = false; ui.guideOpen = false; state.notice = null;
+  },
+  'clue-all': () => openCenter('lin', 'all'),
+  'clue-all-filtered': () => { openCenter('lin', 'all'); ui.fDomain = 'land'; ui.fSource = '102'; },
+  'clue-all-supervision': () => openCenter('he', 'all'),
+  'clue-assign-readonly': () => { openCenter('he', 'assign'); ui.sel = 'X-0422'; },
+  'drawer-basic-gaps': () => openDrawer('lin', 'X-0426', 'basic'),
+  'drawer-basic-reporter-masked': () => openDrawer('lin', 'X-0412', 'basic'),
+  'drawer-basic-reporter-entitled': () => openDrawer('chen', 'X-0412', 'basic'),
+  'drawer-basic-reporter-visible': () => { openDrawer('chen', 'X-0412', 'basic'); ui.audited['chen:X-0412'] = true; },
+  'drawer-basic-anon': () => openDrawer('lin', 'X-0398', 'basic'),
+  'drawer-flow': () => openDrawer('lin', 'X-0426', 'flow'),
+  'ws-board-frontline': () => openBoard('lin'),
+  'ws-board-leader': () => openBoard('zhou_jj'),
+  'ws-board-supervision': () => openBoard('he')
+};
+(function applyShot() {
+  const key = new URLSearchParams(location.search).get('shot');
+  const fn = key && SHOTS[key];
+  if (fn) fn();
+})();
 render();
 (function () {
   var s = document.createElement('script');
