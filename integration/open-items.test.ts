@@ -255,7 +255,7 @@ async function seedClue(input: {
   return id;
 }
 
-async function reassignClue(clueId: string, toOrgId: string, by: string, byOrg: string): Promise<void> {
+async function designateClue(clueId: string, toOrgId: string, by: string, byOrg: string): Promise<void> {
   const now = new Date();
   await cloned.prisma.$executeRaw`
     UPDATE clue_assignment SET ended_at = ${now}
@@ -265,7 +265,7 @@ async function reassignClue(clueId: string, toOrgId: string, by: string, byOrg: 
     INSERT INTO clue_assignment
       (id, clue_id, org_unit_id, kind, designate, assigned_by, assigned_by_org_id, reason, assigned_at)
     VALUES
-      (${newUlid()}, ${clueId}, ${toOrgId}, 'reassign', false,
+      (${newUlid()}, ${clueId}, ${toOrgId}, 'designate', true,
        ${by}, ${byOrg}, '改派测', ${now})
   `;
   await cloned.prisma.$executeRaw`
@@ -375,7 +375,7 @@ describe('#219 真实 OpenItems 计数（默认装配）', () => {
     expect(await deactivatedAtOf(station)).not.toBeNull();
   });
 
-  it('重新分派后：原机构可停用，新机构停用被拒', async () => {
+  it('指定管辖换机构后：原机构可停用，新机构停用被拒', async () => {
     const oldStation = await addUnit('station', org.deptA);
     const newStation = await addUnit('station', org.deptA);
     const clueId = await seedClue({
@@ -383,7 +383,7 @@ describe('#219 真实 OpenItems 计数（默认装配）', () => {
       status: 'org_assigned',
       assignmentOrgId: oldStation,
     });
-    await reassignClue(clueId, newStation, people.intakeA, org.deptA);
+    await designateClue(clueId, newStation, people.intakeA, org.deptA);
 
     const oldResp = await deactivate(PHONES.adminA, oldStation);
     expect(oldResp.status).toBe(200);

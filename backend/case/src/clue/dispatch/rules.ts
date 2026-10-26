@@ -33,6 +33,41 @@ export const ORG_ASSIGN_FROM_STATUSES = ['in_pool', 'org_assigned', 'handler_ass
 /** 派主办／协办允许的来源状态。 */
 export const PEOPLE_ASSIGN_FROM_STATUS = 'org_assigned';
 
+/** 已分派状态：派机构在这两种状态下是重新分派或指定管辖。 */
+const ASSIGNED_STATUSES: readonly string[] = ['org_assigned', 'handler_assigned'];
+
+/**
+ * 派机构的去向（#228）。成功时 orgUnitId 是要写入的承办机构；reassign 只携带当前承办机构，
+ * 所以重新分派不可能写出 previousOrgId ≠ orgUnitId 的成功记录。
+ */
+export type OrgAssignPlan =
+  | { readonly ok: true; readonly kind: 'initial' | 'reassign' | 'designate'; readonly orgUnitId: string }
+  | { readonly ok: false; readonly reason: 'designation-required'; readonly nextAction: 'clue.designate.request' };
+
+/**
+ * 派机构分流（#228；GLOSSARY「重新分派」「指定管辖」）。
+ *
+ * - designate=true：指定管辖，含上级主动指定与处理报请。
+ * - 待分派池：首次分派。
+ * - 已分派且 designate=false：只能留在当前承办机构；目标是另一机构的拒绝 designation-required，
+ *   出路是报请指定管辖（clue.designate.request）。
+ */
+export function planOrgAssign(input: {
+  readonly status: string;
+  readonly currentOrgId: string | null;
+  readonly targetOrgId: string;
+  readonly designate: boolean;
+}): OrgAssignPlan {
+  if (input.designate) return { ok: true, kind: 'designate', orgUnitId: input.targetOrgId };
+  if (!ASSIGNED_STATUSES.includes(input.status)) {
+    return { ok: true, kind: 'initial', orgUnitId: input.targetOrgId };
+  }
+  if (input.currentOrgId === null || input.currentOrgId !== input.targetOrgId) {
+    return { ok: false, reason: 'designation-required', nextAction: 'clue.designate.request' };
+  }
+  return { ok: true, kind: 'reassign', orgUnitId: input.currentOrgId };
+}
+
 /** 决定步结果。 */
 export type DecideOutcome =
   | { readonly ok: true; readonly nextStatus: 'in_pool' | 'held' }

@@ -11,6 +11,7 @@ import {
   createStreetBoundaryPort,
   decideDispatch,
   isOpenHit,
+  planOrgAssign,
 } from '../src/clue/dispatch/index.ts';
 
 describe('分派决定规则', () => {
@@ -62,6 +63,65 @@ describe('分派决定规则', () => {
     expect(CLUE_DISPATCH_RULE_CODES).toContain('complaint-must-dispatch');
     expect(CLUE_DISPATCH_RULE_CODES).toContain('ack-required');
     expect(CLUE_DISPATCH_RULE_CODES).toContain('missing-reassign-reason');
+  });
+});
+
+describe('派机构分流（#228：换机构一律经报请指定管辖）', () => {
+  const required = { ok: false, reason: 'designation-required', nextAction: 'clue.designate.request' };
+
+  it('待分派池首次分派照旧', () => {
+    expect(planOrgAssign({ status: 'in_pool', currentOrgId: null, targetOrgId: 'o-b', designate: false })).toEqual({
+      ok: true,
+      kind: 'initial',
+      orgUnitId: 'o-b',
+    });
+  });
+
+  it('已分派、designate=false、目标是另一机构：designation-required，出路是报请', () => {
+    for (const status of ['org_assigned', 'handler_assigned']) {
+      expect(planOrgAssign({ status, currentOrgId: 'o-a', targetOrgId: 'o-b', designate: false })).toEqual(required);
+      expect(planOrgAssign({ status, currentOrgId: null, targetOrgId: 'o-b', designate: false })).toEqual(required);
+    }
+  });
+
+  it('已分派、目标等于当前承办机构：同机构重新分派', () => {
+    expect(planOrgAssign({ status: 'handler_assigned', currentOrgId: 'o-a', targetOrgId: 'o-a', designate: false })).toEqual({
+      ok: true,
+      kind: 'reassign',
+      orgUnitId: 'o-a',
+    });
+  });
+
+  it('designate=true 指定管辖照旧（含上级主动指定）', () => {
+    for (const status of ['in_pool', 'org_assigned', 'handler_assigned']) {
+      expect(planOrgAssign({ status, currentOrgId: 'o-a', targetOrgId: 'o-b', designate: true })).toEqual({
+        ok: true,
+        kind: 'designate',
+        orgUnitId: 'o-b',
+      });
+    }
+  });
+
+  it('结构断言：任何输入下 reassign 去向写入的机构都等于当前承办机构', () => {
+    const orgs = [null, 'o-a', 'o-b'];
+    let reassigns = 0;
+    for (const status of [...ORG_ASSIGN_FROM_STATUSES, 'pending_decision', 'held']) {
+      for (const currentOrgId of orgs) {
+        for (const targetOrgId of ['o-a', 'o-b']) {
+          for (const designate of [false, true]) {
+            const plan = planOrgAssign({ status, currentOrgId, targetOrgId, designate });
+            if (plan.ok && plan.kind === 'reassign') {
+              reassigns += 1;
+              expect(plan.orgUnitId).toBe(currentOrgId);
+            }
+            if (!designate && currentOrgId !== targetOrgId && (status === 'org_assigned' || status === 'handler_assigned')) {
+              expect(plan).toEqual(required);
+            }
+          }
+        }
+      }
+    }
+    expect(reassigns).toBeGreaterThan(0);
   });
 });
 

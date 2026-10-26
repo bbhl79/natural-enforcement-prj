@@ -303,6 +303,7 @@ export type ClueDispatchDecideFailedReason = (typeof CLUE_DISPATCH_DECIDE_FAILED
  * org-unit-deactivated 目标机构已停用；
  * designated-lock 指定管辖之后下级机构不能再重新分派；
  * designation-pending 报请指定管辖期间下级机构不能分派、重新分派（#215，规格 D）；
+ * designation-required 已分派线索 designate=false 换到另一机构，须报请指定管辖（#228）；
  * invalid-state 线索状态不允许派机构；
  * concurrent-change 与并发写入冲突。
  */
@@ -312,6 +313,7 @@ export const CLUE_ORG_ASSIGNED_FAILED_REASONS = [
   'org-unit-deactivated',
   'designated-lock',
   'designation-pending',
+  'designation-required',
   'invalid-state',
   'concurrent-change',
 ] as const;

@@ -340,6 +340,46 @@ describe('两步分派面板', () => {
     expect(reassign).toContain('重新分派');
   });
 
+  it('已分派后重新分派不提供改机构：只剩当前承办机构，并引导报请指定管辖（#228）', () => {
+    const assignment = { orgUnitId: 'o1', orgName: '天河区分局', kind: 'initial', designate: false };
+    const html = renderToStaticMarkup(
+      <AssignOrgPanel
+        view={view({ status: 'org_assigned', assignment, mayReassignOrg: true })}
+        orgOptions={[
+          { orgUnitId: 'o1', name: '天河区分局' },
+          { orgUnitId: 'o2', name: '越秀区分局' },
+        ]}
+        reassigning
+        busy={false}
+        failure={null}
+        onAssign={() => undefined}
+      />,
+    );
+    expect(html).not.toContain('越秀区分局');
+    expect(html).toContain('天河区分局');
+    expect(html).toContain('data-role="reassign-designation-guide"');
+    expect(html).toContain('报请指定管辖');
+    expect(html).toMatch(/id="dispatch-org"[^>]*disabled|disabled[^>]*id="dispatch-org"/);
+
+    // 受理报请时默认勾选指定管辖：可选其他机构。
+    const reviewing = renderToStaticMarkup(
+      <AssignOrgPanel
+        view={view({ status: 'org_assigned', assignment })}
+        orgOptions={[
+          { orgUnitId: 'o1', name: '天河区分局' },
+          { orgUnitId: 'o2', name: '越秀区分局' },
+        ]}
+        reassigning
+        busy={false}
+        failure={null}
+        onAssign={() => undefined}
+        designateByDefault
+      />,
+    );
+    expect(reviewing).toContain('越秀区分局');
+    expect(reviewing).not.toContain('reassign-designation-guide');
+  });
+
   it('派主办／协办：主办必选、协办多选，候选不含已选主办', () => {
     const html = renderToStaticMarkup(
       <AssignPeoplePanel view={view()} busy={false} failure={null} onAssign={() => undefined} />,
@@ -569,6 +609,9 @@ describe('报请指定管辖与指定锁', () => {
   it('指定锁的失败文案', () => {
     expect(dispatchFailureText({ result: 'invalid-state', reason: 'designation-pending' })).toContain('报请指定管辖');
     expect(dispatchFailureText({ result: 'invalid-state', reason: 'designated-lock' })).toContain('已指定管辖');
+    expect(
+      dispatchFailureText({ result: 'invalid-state', reason: 'designation-required', nextAction: 'clue.designate.request' }),
+    ).toContain('报请指定管辖');
     expect(dispatchFailureText({ result: 'non-compliant', rules: ['missing-reject-reason'] })).toContain('驳回');
   });
 });

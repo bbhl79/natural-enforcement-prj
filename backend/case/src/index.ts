@@ -230,6 +230,7 @@ export {
   decideDispatch,
   hasCaseByCasePlanningType,
   isOpenHit,
+  planOrgAssign,
   reviewerOrgCandidates,
 } from './clue/dispatch/index.ts';
 export type {
@@ -238,6 +239,7 @@ export type {
   ConflictResolution,
   DecideOutcome,
   DispatchGuidance,
+  OrgAssignPlan,
   StreetBoundaryOutcome,
   StreetBoundaryPart,
   StreetBoundaryPort,
