@@ -1604,8 +1604,14 @@ export class PrismaClueStore implements ClueStore {
           WHERE g.clue_id = c.id AND g.filled_at IS NULL
         ))
       ))
-      AND (${from} = '' OR c.registered_at >= ${from}::timestamptz)
-      AND (${to} = '' OR c.registered_at < (${to}::date + INTERVAL '1 day')::timestamptz)
+      AND (
+        CAST(NULLIF(${from}, '') AS timestamptz) IS NULL
+        OR c.registered_at >= CAST(NULLIF(${from}, '') AS timestamptz)
+      )
+      AND (
+        CAST(NULLIF(${to}, '') AS date) IS NULL
+        OR c.registered_at < (CAST(NULLIF(${to}, '') AS date) + INTERVAL '1 day')::timestamptz
+      )
       AND CASE ${view}
         WHEN 'assign' THEN c.status IN (${assignStatuses})
         WHEN 'held' THEN c.status = 'held'
