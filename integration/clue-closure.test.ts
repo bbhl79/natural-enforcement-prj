@@ -1,15 +1,19 @@
-// #217 不予立案登记与结案提醒：权限（主办／协办本人或承办机构内勤）、状态约束
-// （仅已派承办人）、核查没跑成不阻止、提醒按当前命中集逐对生成（仅 held 线索）、
-// 提醒处理二选一与留痕，以及立案（filed）路径直调提醒生成内部服务的同事务口径。
+// #217／#226 结案提醒处理、其他 HTTP 路径旁路，以及 #226 不予立案：
+// HTTP disposition=no-case 一律拒绝；落点服务 recordNoCaseFromFilingApproval 直调验收；
+// 立案提醒 kind=case 恒生成（已删 filedReminderEnabled）。
 // 凡 4xx/403 用例同时断言「失败留痕存在、业务行不变」。
 import type { AddressInfo } from 'node:net';
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { generateClosureReminders } from '../backend/case/src/index.ts';
+import {
+  generateClosureReminders,
+  recordNoCaseFromFilingApproval,
+} from '../backend/case/src/index.ts';
 import { newUlid } from '../backend/identity/src/index.ts';
 
 import { createApplication } from '../backend/server/src/persistence.module.ts';
+import { ClueClosureService } from '../backend/server/src/clue-closure.service.ts';
 import { UNIT_OF_WORK, type UnitOfWork } from '../backend/server/src/unit-of-work.ts';
 import { openClonedDatabase, type ClonedDatabase } from './cloned-database.ts';
 
@@ -69,6 +73,7 @@ let storage = new RecordingStorage();
 let baseUrl = '';
 let closeApp: () => Promise<void> = async () => {};
 let uow: UnitOfWork;
+let closureService: ClueClosureService;
 const cookies = new Map<string, string>();
 const passwords = new Map<string, string>();
 
@@ -241,6 +246,45 @@ async function recordNoCase(
   return { status: response.status, body: (await response.json()) as Record<string, unknown> };
 }
 
+
+/** #226 落点：不符合立案条件（第 16 条至少一项）。 */
+function groundsReason(codes: readonly string[] = ['art16-2-no-violation-fact']) {
+  return { kind: 'non-filing-grounds' as const, grounds: [...codes], note: '核查后不符合立案条件' };
+}
+
+/** #226 落点：轻微三要素。 */
+function minorReason() {
+  return {
+    kind: 'minor-corrected-no-harm' as const,
+    minor: { confirmed: true as const, note: '违法行为轻微' },
+    timelyCorrection: { confirmed: true as const, note: '已及时纠正' },
+    noHarm: { confirmed: true as const, note: '没有造成危害后果' },
+  };
+}
+
+/** 直调落点服务（同事务写处置＋提醒＋留痕由 Nest 包装）。 */
+async function recordNoCaseFromFiling(
+  clueId: string,
+  input: {
+    reason?: unknown;
+    filingApprovalRef?: string;
+    expectedStatus?: string;
+    note?: string;
+    recordedBy?: string;
+  } = {},
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  const outcome = await closureService.recordNoCaseFromFiling({
+    clueId,
+    expectedStatus: input.expectedStatus ?? 'handler_assigned',
+    filingApprovalRef: input.filingApprovalRef ?? newUlid(),
+    reason: input.reason ?? groundsReason(),
+    recordedBy: input.recordedBy ?? handlerSt1Id,
+    note: input.note ?? '呈批批准不予立案',
+    actorCode: 'P-HANDLER-ST1',
+  });
+  return { status: outcome.status, body: outcome.body as Record<string, unknown> };
+}
+
 /** 结案提醒列表。 */
 async function listReminders(code = 'P-INTAKE-A'): Promise<{ status: number; body: Record<string, unknown> }> {
   const response = await fetch(`${baseUrl}/api/clues/reminders`, {
@@ -347,6 +391,7 @@ beforeAll(async () => {
   baseUrl = `http://127.0.0.1:${address.port}`;
   closeApp = () => app.close();
   uow = app.get<UnitOfWork>(UNIT_OF_WORK);
+  closureService = app.get(ClueClosureService);
 
   const orgOf = async (code: string) => {
     const org = await cloned.prisma.orgUnit.findUnique({ where: { code } });
@@ -378,10 +423,56 @@ beforeEach(() => {
   storage.writes.length = 0;
 });
 
-describe('#217 不予立案登记', () => {
-  it('主办本人登记：进终态、处置行与留痕齐备，并按命中集生成结案提醒', async () => {
+describe('#226 HTTP 拒绝直接登记不予立案', () => {
+  it('主办本人 disposition=no-case：400 filing-approval-required，业务行不变＋失败留痕', async () => {
     const pair = await heldPair(80);
     const outcome = await recordNoCase(pair.oldClueId);
+    expect(outcome.status).toBe(400);
+    expect(outcome.body.rules).toEqual(['filing-approval-required']);
+    const clue = await cloned.prisma.clue.findUnique({ where: { id: pair.oldClueId } });
+    expect(clue?.status).toBe('handler_assigned');
+    expect(await cloned.prisma.clueDisposition.findFirst({ where: { clueId: pair.oldClueId } })).toBeNull();
+    expect(await cloned.prisma.clueClosureReminder.findMany({ where: { clueId: pair.heldClueId } })).toHaveLength(0);
+    const failed = (await trailOf('clue.disposition-recorded', pair.oldClueId)).filter(
+      (row) => row.outcome === 'failed',
+    );
+    expect(failed).toHaveLength(1);
+    expect(failed[0]?.reason).toBe('filing-approval-required');
+  });
+
+  it('协办本人：同样拒绝', async () => {
+    const old = await register({ polygon: geojsonPolygon(square(81)) });
+    await assignOrg(old.body.id ?? '', { orgUnitId: stationAId });
+    const handler2 = await cloned.prisma.personnel.findUnique({ where: { code: 'P-HANDLER-ST2' } });
+    await assignPeople(old.body.id ?? '', {
+      mainId: handlerSt1Id,
+      assistIds: handler2 ? [handler2.id] : [],
+    });
+    const outcome = await recordNoCase(old.body.id ?? '', {}, 'P-HANDLER-ST2');
+    expect(outcome.status).toBe(400);
+    expect(outcome.body.rules).toEqual(['filing-approval-required']);
+    const clue = await cloned.prisma.clue.findUnique({ where: { id: old.body.id } });
+    expect(clue?.status).toBe('handler_assigned');
+  });
+
+  it('承办机构内勤：同样拒绝', async () => {
+    const old = await register({ polygon: geojsonPolygon(square(82)) });
+    await assignOrg(old.body.id ?? '', { orgUnitId: stationAId });
+    await assignPeople(old.body.id ?? '', { mainId: handlerSt1Id });
+    const outcome = await recordNoCase(old.body.id ?? '', {}, 'P-INTAKE-ST');
+    expect(outcome.status).toBe(400);
+    expect(outcome.body.rules).toEqual(['filing-approval-required']);
+  });
+});
+
+describe('#226 落点服务 recordNoCaseFromFiling', () => {
+  it('(a) handler_assigned → closed，处置＋呈批引用＋理由快照＋留痕＋kind=no-case 提醒', async () => {
+    const pair = await heldPair(83);
+    const filingRef = newUlid();
+    const outcome = await recordNoCaseFromFiling(pair.oldClueId, {
+      filingApprovalRef: filingRef,
+      reason: groundsReason(['art16-2-no-violation-fact', 'art16-5-beyond-limitation']),
+    });
     expect(outcome.status).toBe(200);
     expect(outcome.body.result).toBe('disposition-recorded');
     expect(outcome.body.status).toBe('closed');
@@ -391,120 +482,44 @@ describe('#217 不予立案登记', () => {
     expect(clue?.status).toBe('closed');
     const disposition = await cloned.prisma.clueDisposition.findFirst({ where: { clueId: pair.oldClueId } });
     expect(disposition?.disposition).toBe('no-case');
-    expect(disposition?.note).toBe('核查后查无违法事实，不予立案。');
+    expect(disposition?.filingApprovalRef).toBe(filingRef);
+    expect(disposition?.noCaseReasonJson).toContain('non-filing-grounds');
+    expect(disposition?.noCaseReasonJson).toContain('art16-2-no-violation-fact');
 
     const trail = (await trailOf('clue.disposition-recorded', pair.oldClueId)).filter(
       (row) => row.outcome === 'succeeded',
     );
     expect(trail).toHaveLength(1);
     expect(trail[0]?.detail).toContain('no-case');
+    expect(trail[0]?.detail).toContain(filingRef);
 
-    // 提醒挂在「不派」的暂存线索上，对方是被结案的旧线索。
     const reminders = await cloned.prisma.clueClosureReminder.findMany({
       where: { clueId: pair.heldClueId },
     });
     expect(reminders).toHaveLength(1);
     expect(reminders[0]?.kind).toBe('no-case');
     expect(reminders[0]?.otherClueId).toBe(pair.oldClueId);
-    expect(reminders[0]?.resolvedAt).toBeNull();
   });
 
-  it('协办本人登记：成功', async () => {
-    const old = await register({ polygon: geojsonPolygon(square(81)) });
-    const assigned = await assignOrg(old.body.id ?? '', { orgUnitId: stationAId });
-    expect(assigned.status).toBe(200);
-    const handler2 = await cloned.prisma.personnel.findUnique({ where: { code: 'P-HANDLER-ST2' } });
-    const people = await assignPeople(old.body.id ?? '', {
-      mainId: handlerSt1Id,
-      assistIds: handler2 ? [handler2.id] : [],
+  it('(b) 三要素齐全成功', async () => {
+    const pair = await heldPair(84);
+    const outcome = await recordNoCaseFromFiling(pair.oldClueId, { reason: minorReason() });
+    expect(outcome.status).toBe(200);
+    const disposition = await cloned.prisma.clueDisposition.findFirst({ where: { clueId: pair.oldClueId } });
+    expect(disposition?.noCaseReasonJson).toContain('minor-corrected-no-harm');
+  });
+
+  it('非 handler_assigned → 409 invalid-state＋失败留痕', async () => {
+    const alone = await register({ polygon: geojsonPolygon(square(85)) });
+    await assignOrg(alone.body.id ?? '', { orgUnitId: stationAId });
+    const outcome = await recordNoCaseFromFiling(alone.body.id ?? '', {
+      expectedStatus: 'org_assigned',
     });
-    expect(people.status).toBe(200);
-    const outcome = await recordNoCase(old.body.id ?? '', {}, 'P-HANDLER-ST2');
-    expect(outcome.status).toBe(200);
-    const clue = await cloned.prisma.clue.findUnique({ where: { id: old.body.id } });
-    expect(clue?.status).toBe('closed');
-  });
-
-  it('承办机构内勤登记：成功', async () => {
-    const old = await register({ polygon: geojsonPolygon(square(82)) });
-    await assignOrg(old.body.id ?? '', { orgUnitId: stationAId });
-    await assignPeople(old.body.id ?? '', { mainId: handlerSt1Id });
-    const outcome = await recordNoCase(old.body.id ?? '', {}, 'P-INTAKE-ST');
-    expect(outcome.status).toBe(200);
-    const clue = await cloned.prisma.clue.findUnique({ where: { id: old.body.id } });
-    expect(clue?.status).toBe('closed');
-  });
-
-  it('核查没跑成不阻止不予立案：成功', async () => {
-    const old = await register({ polygon: geojsonPolygon(square(83)) });
-    await assignOrg(old.body.id ?? '', { orgUnitId: stationAId });
-    await assignPeople(old.body.id ?? '', { mainId: handlerSt1Id });
-    await cloned.prisma.clue.update({
-      where: { id: old.body.id ?? '' },
-      data: { verificationStatus: 'failed' },
-    });
-    const outcome = await recordNoCase(old.body.id ?? '', {});
-    expect(outcome.status).toBe(200);
-    const clue = await cloned.prisma.clue.findUnique({ where: { id: old.body.id } });
-    expect(clue?.status).toBe('closed');
-  });
-
-  it('无权人（乙区内勤）：403＋authz.denied，业务行不变', async () => {
-    const old = await register({ polygon: geojsonPolygon(square(84)) });
-    await assignOrg(old.body.id ?? '', { orgUnitId: stationAId });
-    await assignPeople(old.body.id ?? '', { mainId: handlerSt1Id });
-    const outcome = await recordNoCase(old.body.id ?? '', {}, 'P-INTAKE-B');
-    expect(outcome.status).toBe(403);
-    expect(outcome.body.reason).toBe('permission-denied');
-    const clue = await cloned.prisma.clue.findUnique({ where: { id: old.body.id } });
-    expect(clue?.status).toBe('handler_assigned');
-    expect(await cloned.prisma.clueDisposition.findFirst({ where: { clueId: old.body.id } })).toBeNull();
-    const denied = await trailOf('authz.denied', old.body.id ?? '');
-    expect(denied.length).toBeGreaterThan(0);
-  });
-
-  it('监督登记：403，业务行不变', async () => {
-    const old = await register({ polygon: geojsonPolygon(square(85)) });
-    await assignOrg(old.body.id ?? '', { orgUnitId: stationAId });
-    await assignPeople(old.body.id ?? '', { mainId: handlerSt1Id });
-    const outcome = await recordNoCase(old.body.id ?? '', {}, 'P-SUPER-B');
-    expect(outcome.status).toBe(403);
-    const clue = await cloned.prisma.clue.findUnique({ where: { id: old.body.id } });
-    expect(clue?.status).toBe('handler_assigned');
-    expect(await trailOf('clue.disposition-recorded', old.body.id ?? '')).toHaveLength(0);
-  });
-
-  it('缺说明：400 non-compliant＋失败留痕，业务行不变', async () => {
-    const old = await register({ polygon: geojsonPolygon(square(86)) });
-    await assignOrg(old.body.id ?? '', { orgUnitId: stationAId });
-    await assignPeople(old.body.id ?? '', { mainId: handlerSt1Id });
-    const outcome = await recordNoCase(old.body.id ?? '', { note: '  ' });
-    expect(outcome.status).toBe(400);
-    expect(outcome.body.rules).toEqual(['missing-disposition-fields']);
-    const clue = await cloned.prisma.clue.findUnique({ where: { id: old.body.id } });
-    expect(clue?.status).toBe('handler_assigned');
-    expect(await cloned.prisma.clueDisposition.findFirst({ where: { clueId: old.body.id } })).toBeNull();
-    const failed = (await trailOf('clue.disposition-recorded', old.body.id ?? '')).filter(
-      (row) => row.outcome === 'failed',
-    );
-    expect(failed).toHaveLength(1);
-    expect(failed[0]?.reason).toBe('missing-disposition-fields');
-  });
-
-  it('非「已派承办人」状态登记：409 invalid-state＋失败留痕', async () => {
-    // 已派机构但未派承办人：承办机构内勤有权，但状态不允许登记。
-    const alone = await register({ polygon: geojsonPolygon(square(87)) });
-    const assigned = await assignOrg(alone.body.id ?? '', { orgUnitId: stationAId });
-    expect(assigned.status).toBe(200);
-    const outcome = await recordNoCase(
-      alone.body.id ?? '',
-      { expectedStatus: 'org_assigned' },
-      'P-INTAKE-ST',
-    );
     expect(outcome.status).toBe(409);
     expect(outcome.body.result).toBe('invalid-state');
     const clue = await cloned.prisma.clue.findUnique({ where: { id: alone.body.id } });
     expect(clue?.status).toBe('org_assigned');
+    expect(await cloned.prisma.clueDisposition.findFirst({ where: { clueId: alone.body.id } })).toBeNull();
     const failed = (await trailOf('clue.disposition-recorded', alone.body.id ?? '')).filter(
       (row) => row.outcome === 'failed',
     );
@@ -512,19 +527,81 @@ describe('#217 不予立案登记', () => {
     expect(failed[0]?.reason).toBe('invalid-state');
   });
 
-  it('移送类型本期不受理：400 unsupported-disposition＋失败留痕', async () => {
+  it('核查失败不阻止落点', async () => {
+    const old = await register({ polygon: geojsonPolygon(square(86)) });
+    await assignOrg(old.body.id ?? '', { orgUnitId: stationAId });
+    await assignPeople(old.body.id ?? '', { mainId: handlerSt1Id });
+    await cloned.prisma.clue.update({
+      where: { id: old.body.id ?? '' },
+      data: { verificationStatus: 'failed' },
+    });
+    const outcome = await recordNoCaseFromFiling(old.body.id ?? '');
+    expect(outcome.status).toBe(200);
+    const clue = await cloned.prisma.clue.findUnique({ where: { id: old.body.id } });
+    expect(clue?.status).toBe('closed');
+  });
+
+  it('(a)(b) 皆空拒绝', async () => {
+    const old = await register({ polygon: geojsonPolygon(square(87)) });
+    await assignOrg(old.body.id ?? '', { orgUnitId: stationAId });
+    await assignPeople(old.body.id ?? '', { mainId: handlerSt1Id });
+    const outcome = await recordNoCaseFromFiling(old.body.id ?? '', { reason: {} });
+    expect(outcome.status).toBe(400);
+    expect(outcome.body.rules).toEqual(['invalid-no-case-reason']);
+    expect(await cloned.prisma.clueDisposition.findFirst({ where: { clueId: old.body.id } })).toBeNull();
+  });
+
+  it('混选拒绝', async () => {
     const old = await register({ polygon: geojsonPolygon(square(88)) });
     await assignOrg(old.body.id ?? '', { orgUnitId: stationAId });
     await assignPeople(old.body.id ?? '', { mainId: handlerSt1Id });
-    const outcome = await recordNoCase(old.body.id ?? '', { disposition: 'transfer' });
+    const outcome = await recordNoCaseFromFiling(old.body.id ?? '', {
+      reason: {
+        kind: 'non-filing-grounds',
+        grounds: ['art16-1-no-clear-actor'],
+        minor: { confirmed: true, note: 'x' },
+      },
+    });
     expect(outcome.status).toBe(400);
-    expect(outcome.body.rules).toEqual(['unsupported-disposition']);
-    const clue = await cloned.prisma.clue.findUnique({ where: { id: old.body.id } });
+    expect(outcome.body.rules).toEqual(['invalid-no-case-reason']);
+  });
+
+  it('仅部分三要素拒绝', async () => {
+    const old = await register({ polygon: geojsonPolygon(square(89)) });
+    await assignOrg(old.body.id ?? '', { orgUnitId: stationAId });
+    await assignPeople(old.body.id ?? '', { mainId: handlerSt1Id });
+    const outcome = await recordNoCaseFromFiling(old.body.id ?? '', {
+      reason: {
+        kind: 'minor-corrected-no-harm',
+        minor: { confirmed: true, note: '轻微' },
+        timelyCorrection: { confirmed: true, note: '已改正' },
+      },
+    });
+    expect(outcome.status).toBe(400);
+    expect(outcome.body.rules).toEqual(['invalid-no-case-reason']);
+  });
+
+  it('同事务：人为回滚则处置与提醒全无', async () => {
+    const pair = await heldPair(70);
+    await expect(
+      uow.run(async (tx) => {
+        const outcome = await recordNoCaseFromFilingApproval(tx.clues, {
+          clueId: pair.oldClueId,
+          expectedStatus: 'handler_assigned',
+          filingApprovalRef: newUlid(),
+          reason: groundsReason(),
+          recordedBy: handlerSt1Id,
+          recordedAt: new Date(),
+          newId: () => newUlid(),
+        });
+        expect(outcome.ok).toBe(true);
+        throw new Error('模拟案件段同事务回滚');
+      }),
+    ).rejects.toThrow('模拟案件段同事务回滚');
+    expect(await cloned.prisma.clueDisposition.findFirst({ where: { clueId: pair.oldClueId } })).toBeNull();
+    expect(await cloned.prisma.clueClosureReminder.findMany({ where: { clueId: pair.heldClueId } })).toHaveLength(0);
+    const clue = await cloned.prisma.clue.findUnique({ where: { id: pair.oldClueId } });
     expect(clue?.status).toBe('handler_assigned');
-    const failed = (await trailOf('clue.disposition-recorded', old.body.id ?? '')).filter(
-      (row) => row.outcome === 'failed',
-    );
-    expect(failed[0]?.reason).toBe('unsupported-disposition');
   });
 });
 
@@ -534,7 +611,7 @@ describe('#217 结案提醒生成', () => {
     // 第三条线索也撞上，但状态不是 held（待分派决定）。
     const third = await register({ polygon: geojsonPolygon(square(90)) });
     expect(third.body.status).toBe('pending_decision');
-    const outcome = await recordNoCase(pair.oldClueId);
+    const outcome = await recordNoCaseFromFiling(pair.oldClueId);
     expect(outcome.status).toBe(200);
     expect(outcome.body.reminderCount).toBe(1);
     const forThird = await cloned.prisma.clueClosureReminder.findMany({
@@ -543,35 +620,12 @@ describe('#217 结案提醒生成', () => {
     expect(forThird).toHaveLength(0);
   });
 
-  it('立案提醒特性开关默认关时不产生提醒（#207 P2）：kind=case 不生成', async () => {
+  it('立案提醒恒生成（#226）：kind=case 逐对生成，与状态写入同事务', async () => {
     const pair = await heldPair(91);
     await cloned.prisma.clue.update({
       where: { id: pair.oldClueId },
       data: { status: 'filed' },
     });
-    // 不传 filedReminderEnabled，默认关
-    await uow.run(async (tx) => {
-      await generateClosureReminders(tx.clues, {
-        closedClueId: pair.oldClueId,
-        kind: 'case',
-        createdAt: new Date(),
-        newId: () => newUlid(),
-      });
-    });
-    const reminders = await cloned.prisma.clueClosureReminder.findMany({
-      where: { clueId: pair.heldClueId },
-    });
-    expect(reminders).toHaveLength(0);
-  });
-
-  it('立案提醒特性开关打开时行为不变（#207 P2）：逐对生成，且与状态写入同事务', async () => {
-    const pair = await heldPair(99);
-    // 本期没有写入 filed 的接口：直改状态模拟案件段写入，再在同一事务调提醒生成服务。
-    await cloned.prisma.clue.update({
-      where: { id: pair.oldClueId },
-      data: { status: 'filed' },
-    });
-    // 同事务：事务回滚时提醒一并回滚。
     await expect(
       uow.run(async (tx) => {
         await generateClosureReminders(tx.clues, {
@@ -579,7 +633,6 @@ describe('#217 结案提醒生成', () => {
           kind: 'case',
           createdAt: new Date(),
           newId: () => newUlid(),
-          filedReminderEnabled: true,
         });
         throw new Error('模拟案件段同事务回滚');
       }),
@@ -594,7 +647,6 @@ describe('#217 结案提醒生成', () => {
         kind: 'case',
         createdAt: new Date(),
         newId: () => newUlid(),
-        filedReminderEnabled: true,
       });
     });
     const reminders = await cloned.prisma.clueClosureReminder.findMany({
@@ -626,7 +678,7 @@ describe('#217 界面口径', () => {
 describe('#217 结案提醒处理', () => {
   it('撤回不派再办：回待分派池、撤回行与提醒处理留痕齐备', async () => {
     const pair = await heldPair(92);
-    await recordNoCase(pair.oldClueId);
+    await recordNoCaseFromFiling(pair.oldClueId);
     const reminders = await cloned.prisma.clueClosureReminder.findMany({
       where: { clueId: pair.heldClueId },
     });
@@ -657,7 +709,7 @@ describe('#217 结案提醒处理', () => {
 
   it('写明原因随旧线索办结：进 closed、处置行与提醒处理留痕齐备', async () => {
     const pair = await heldPair(93);
-    await recordNoCase(pair.oldClueId);
+    await recordNoCaseFromFiling(pair.oldClueId);
     const reminders = await cloned.prisma.clueClosureReminder.findMany({
       where: { clueId: pair.heldClueId },
     });
@@ -683,7 +735,7 @@ describe('#217 结案提醒处理', () => {
 
   it('选撤回不派再办但缺原因：400＋失败留痕，线索仍在「不派」', async () => {
     const pair = await heldPair(94);
-    await recordNoCase(pair.oldClueId);
+    await recordNoCaseFromFiling(pair.oldClueId);
     const reminders = await cloned.prisma.clueClosureReminder.findMany({
       where: { clueId: pair.heldClueId },
     });
@@ -702,7 +754,7 @@ describe('#217 结案提醒处理', () => {
 
   it('选随旧线索办结但缺说明：400＋失败留痕', async () => {
     const pair = await heldPair(95);
-    await recordNoCase(pair.oldClueId);
+    await recordNoCaseFromFiling(pair.oldClueId);
     const reminders = await cloned.prisma.clueClosureReminder.findMany({
       where: { clueId: pair.heldClueId },
     });
@@ -718,7 +770,7 @@ describe('#217 结案提醒处理', () => {
 
   it('无权人处理提醒：403＋authz.denied，线索仍在「不派」', async () => {
     const pair = await heldPair(96);
-    await recordNoCase(pair.oldClueId);
+    await recordNoCaseFromFiling(pair.oldClueId);
     const reminders = await cloned.prisma.clueClosureReminder.findMany({
       where: { clueId: pair.heldClueId },
     });
@@ -733,7 +785,7 @@ describe('#217 结案提醒处理', () => {
 
   it('监督处理提醒：403，业务行不变', async () => {
     const pair = await heldPair(97);
-    await recordNoCase(pair.oldClueId);
+    await recordNoCaseFromFiling(pair.oldClueId);
     const reminders = await cloned.prisma.clueClosureReminder.findMany({
       where: { clueId: pair.heldClueId },
     });
@@ -745,7 +797,7 @@ describe('#217 结案提醒处理', () => {
 
   it('提醒列表与不派视图：只在数据范围内返回，且给出可办理标记', async () => {
     const pair = await heldPair(98);
-    await recordNoCase(pair.oldClueId);
+    await recordNoCaseFromFiling(pair.oldClueId);
     const reminders = await listReminders();
     expect(reminders.status).toBe(200);
     const rows = (reminders.body.reminders ?? []) as Array<{
