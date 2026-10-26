@@ -379,6 +379,13 @@ write_probe_screenshot-full-set() {
     "// 探针（临时，勿入库）：截图全集外的文件名"
 }
 
+
+write_probe_ui-copy-discipline() {
+  # #220：界面文案禁「捞回」。生产源码字面量出现即红。
+  tmp_write "frontend/src/__probe_ui_copy.tsx" \
+    "export const probeLabel = '捞回';"
+}
+
 SPECS=(
   "frontend-boundary|frontend-boundary|前端直连库（@prisma/client）"
   "spatial-orm-chain|spatial-no-orm-mutation|空间模型 ORM 写（换行链式）"
@@ -415,6 +422,7 @@ SPECS=(
   "supervision-deps|supervision-deps|supervision 表外依赖业务模块 approval"
   "weak-reference-entry|weak-reference-entry|跨域弱引用入口名未从 shield 导入"
   "screenshot-full-set|screenshot-full-set|截图全集多出状态键之外的文件名"
+  "ui-copy-discipline|ui-copy-discipline|界面文案字面量出现「捞回」（#220）"
   # #210 新增规则：参照数据只追加的机器兜底。
   "reference-data-no-mutation|reference-data-no-mutation|参照数据表就地改行（ADR 0016 只追加）"
   # #211：线索空间三表归 case 模块，空间纪律的模型集扩到线索空间部件与命中集表。

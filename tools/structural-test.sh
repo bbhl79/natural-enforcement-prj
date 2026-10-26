@@ -192,6 +192,7 @@ RULES=(
   user-lock-assertions
   frontend-router-mode
   screenshot-full-set
+  ui-copy-discipline
 )
 # 共用辅助函数（非规则，不进 RULES，#171 显式声明）：check_row 是 6 条 *-deps 规则
 # 共用的矩阵行实现。红探针的接线完整性护栏按「check_ 函数集 == RULES ∪ HELPERS」核对，
@@ -1184,6 +1185,29 @@ check_screenshot-full-set() {
   fi
   if [ "$fails" -eq 0 ]; then
     note_ok "screenshot-full-set：docs/screens 各票顶层截图并集 $(wc -l <<<"$have" | xargs) 个文件名，全在 v0.4 的 $(wc -l <<<"$want_v04" | xargs) 键与 #207 的 $(wc -l <<<"$want_207" | xargs) 键之内；#207 的 62 键齐套"
+  fi
+}
+
+# 规则（#207／#220）：界面文案纪律。frontend/src 生产源码（排除 *.test.*／*.spec.*）的
+# 字符串字面量不得出现「捞回」、Issue 号样式（#加 2–4 位数字）、`区块 [A-E]`。
+# 注释里的「禁用／禁止」说明不计入（只扫引号字面量）。自动判定只看源码集合；渲染结果
+# 由前端单测（router／shell／closure）补充。
+check_ui-copy-discipline() {
+  local file base line fails=0
+  while IFS= read -r file; do
+    base="${file##*/}"
+    case "$base" in
+      *.test.ts|*.test.tsx|*.spec.ts|*.spec.tsx) continue ;;
+    esac
+    # 只扫引号字面量：注释里的「禁用捞回」说明不计入。
+    while IFS= read -r line; do
+      note_fail "ui-copy-discipline：界面文案禁词 ${file#"$ROOT"/} → ${line}"
+      fails=$((fails + 1))
+    done < <(grep -nE "(['\"\`])([^'\"\`]*(捞回|区块[[:space:]]*[A-E]|#[0-9]{2,4})[^'\"\`]*)\1" "$file" 2>/dev/null \
+      | grep -Ev "禁用|禁止|不得|勿写|不出现|not\.toContain|not\.toMatch" || true)
+  done < <(find "$ROOT/frontend/src" -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.css' \) "${SCAN_CODE[@]}")
+  if [ "$fails" -eq 0 ]; then
+    note_ok "ui-copy-discipline：frontend/src 生产源码字面量无「捞回」、Issue 号样式、区块 [A-E]"
   fi
 }
 
