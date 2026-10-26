@@ -241,6 +241,55 @@ describe('监督身份分派只读', () => {
     expect(html).toMatch(/data-role="decide-hold"[^>]*disabled|disabled[^>]*data-role="decide-hold"/);
     expect(html).toMatch(/data-role="decide-dispatch"[^>]*disabled|disabled[^>]*data-role="decide-dispatch"/);
     expect(html).toContain('监督身份只读，不可分派');
+    // 决定步不在服务端报请／移送状态里。
+    expect(html).not.toContain('data-role="designate-request-panel"');
+    expect(html).not.toContain('data-role="transfer-panel"');
+  });
+
+  it('已派机构与已派承办人仍展示报请和移送，写控件禁用', () => {
+    const assignment = { orgUnitId: 'o1', orgName: '天河区分局', kind: 'initial', designate: false };
+    const disabled = (html: string, attr: string) => {
+      const tag = html.match(new RegExp(`<[^>]*${attr}[^>]*>`))?.[0] ?? '';
+      expect(tag).toContain('disabled');
+    };
+    for (const status of ['org_assigned', 'handler_assigned'] as const) {
+      const html = body({ status, assignment });
+      expect(html).toContain('data-role="assign-readonly"');
+      expect(html).toContain('监督身份只读，不可分派');
+      expect(html).toContain('data-role="designate-request-panel"');
+      expect(html).toContain('data-role="transfer-panel"');
+      disabled(html, 'id="designate-reason"');
+      disabled(html, 'id="designate-proposed"');
+      disabled(html, 'data-role="designate-request"');
+      disabled(html, 'id="transfer-org"');
+      disabled(html, 'id="transfer-doc-no"');
+      disabled(html, 'id="transfer-letter-date"');
+      disabled(html, 'id="transfer-reason"');
+      disabled(html, 'data-role="transfer-attachments"');
+      disabled(html, 'data-role="transfer-submit"');
+    }
+  });
+
+  it('已有进行中的报请时不展示报请入口，移送面板仍只读可见', () => {
+    const html = body({
+      status: 'org_assigned',
+      assignment: { orgUnitId: 'o1', orgName: '天河区分局', kind: 'initial', designate: false },
+      designation: {
+        requestId: 'r1',
+        requestingOrgId: 'org-a',
+        requestingOrgName: '第一执法支队',
+        proposedOrgId: null,
+        proposedOrgName: null,
+        reviewerOrgId: 'org-hq',
+        reviewerOrgName: '自然执法总队',
+        reason: '该地不属本级管辖',
+        createdAt: '2026-10-25T01:00:00.000Z',
+      },
+    });
+    expect(html).not.toContain('data-role="designate-request-panel"');
+    expect(html).toContain('data-role="designate-review-panel"');
+    expect(html).toContain('data-role="transfer-panel"');
+    expect(html).toMatch(/data-role="transfer-submit"[^>]*disabled|disabled[^>]*data-role="transfer-submit"/);
   });
 });
 

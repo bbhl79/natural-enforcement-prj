@@ -720,9 +720,15 @@ export function ClueDispatchBody({
 }): ReactNode {
   const ro = supervisorReadonly;
   const assigned = view.status === 'org_assigned' || view.status === 'handler_assigned';
-  const showTransfer = view.mayTransfer || (ro && (view.status === 'in_pool' || assigned));
+  // 与服务端一致：报请取 ORG_ASSIGN_FROM_STATUSES，移送取 mayTransfer。
+  // 两者都是待分派池、已派机构、已派承办人。监督只读按此展示，写控件禁用。
+  // 报请另须没有进行中的报请（服务端 mayRequestDesignation 要求 designation === null）。
+  const requestOrTransfer = view.status === 'in_pool' || assigned;
+  const showTransfer = view.mayTransfer || (ro && requestOrTransfer);
   const showPeople = view.mayAssignPeople || (ro && assigned);
   const showReassign = view.mayReassignOrg || (ro && assigned);
+  const showDesignateRequest =
+    view.mayRequestDesignation || (ro && requestOrTransfer && view.designation === null);
   return (
     <>
       <div className="card">
@@ -792,7 +798,7 @@ export function ClueDispatchBody({
             designateByDefault
           />
         ) : null}
-        {(view.mayRequestDesignation || (ro && view.status === 'in_pool' && view.designation === null)) ? (
+        {showDesignateRequest ? (
           <DesignateRequestPanel
             busy={busy}
             failure={failure}
