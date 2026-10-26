@@ -488,7 +488,20 @@ export class ClueDispatchService {
     }
 
     // 分派事实与成功留痕同成同败；并发冲突回滚后另起事务写失败留痕。
+    // 派机构与停用共用机构行锁（#219）：写 assignOrg 前对目标（及改派时的原承办）FOR UPDATE；
+    // 两机构时按 id 字典序加锁，避免与停用／对向改派死锁。锁序仍遵守 人员→机构→根。
     return this.uow.run(async (tx) => {
+      const previousOrgId = context.assignment?.orgUnitId ?? null;
+      const lockIds =
+        previousOrgId != null && previousOrgId !== orgUnitId
+          ? [previousOrgId, orgUnitId].sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+          : [orgUnitId];
+      for (const lockId of lockIds) {
+        const locked = await tx.store.lockOrgUnit(lockId, 'update');
+        if (!locked) {
+          return { status: 404, body: { result: 'not-found' as const } };
+        }
+      }
       const applied = await tx.clues.assignOrg({
         clueId,
         expectedStatus: input.expectedStatus,

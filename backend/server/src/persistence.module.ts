@@ -37,7 +37,6 @@ import {
   BootstrapService,
   CredentialService,
   IDENTITY_STORE,
-  NO_OPEN_ITEMS,
   OPEN_ITEMS_COUNTER,
   PASSWORD_HISTORY_DEPTH,
   PASSWORD_HISTORY_DEPTH_TOKEN,
@@ -46,6 +45,7 @@ import {
   type BootstrapRequest,
   type OpenItemsCounter,
 } from '@natural-enforcement/identity';
+import { prismaOpenItemsCounter } from './open-items-counter.ts';
 import { PrismaClueStore } from '../../case/src/persistence/prisma-clue-store.ts';
 import { PrismaIdentityStore } from '../../identity/src/persistence/prisma-identity-store.ts';
 import { PrismaClient, type Prisma } from '../../prisma/generated/prisma/client.ts';
@@ -440,7 +440,7 @@ export interface ApplicationOverrides {
   auditTrailFactory?: AuditTrailFactory;
   /** 存储端口：默认走存储设施包的 RustFS 适配；测试可换成记录写的假端口。 */
   storagePort?: StoragePort;
-  /** 接缝③：承办中事项计数。默认恒为 0（#124）。 */
+  /** 接缝③：承办中事项计数。默认真实线索未办结计数（#219）；测试可覆写。 */
   openItemsCounter?: OpenItemsCounter;
   /** 口令历史比对深度（ADR 0015，#132）。默认 5；测试可传 2。 */
   passwordHistoryDepth?: number;
@@ -533,7 +533,7 @@ class PersistenceModule {
         { provide: SESSION_STORE, useValue: new PrismaSessionStore(prisma) },
         { provide: REMEMBER_ME_STORE, useValue: new PrismaRememberMeStore(prisma, prisma) },
         { provide: UNIT_OF_WORK, useValue: new PrismaUnitOfWork(prisma, auditTrailFactory) },
-        { provide: OPEN_ITEMS_COUNTER, useValue: overrides.openItemsCounter ?? NO_OPEN_ITEMS },
+        { provide: OPEN_ITEMS_COUNTER, useValue: overrides.openItemsCounter ?? prismaOpenItemsCounter },
         { provide: PASSWORD_HISTORY_DEPTH_TOKEN, useValue: overrides.passwordHistoryDepth ?? PASSWORD_HISTORY_DEPTH },
         {
           provide: DisconnectPrisma,

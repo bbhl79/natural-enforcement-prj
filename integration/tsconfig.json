@@ -13,6 +13,7 @@
     "../backend/prisma/**/*.ts",
     "../backend/server/src/main.ts",
     "../backend/server/src/persistence.module.ts",
+    "../backend/server/src/open-items-counter.ts",
     "../backend/server/src/bootstrap-command.ts"
   ]
 }
