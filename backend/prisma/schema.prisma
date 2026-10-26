@@ -723,6 +723,36 @@ model StorageObjectQuarantine {
   @@map("storage_object_quarantine")
 }
 
+/// 保密报告工单（#225）：对已隔离对象生成，状态 pending_report／reported／receipted。
+/// 一个隔离对象至多一张工单（quarantineId 唯一，双向关联）。只提醒不代发；无销毁状态。
+model SecrecyReportTicket {
+  id String @id
+  /// 关联的隔离登记
+  quarantineId String @unique @map("quarantine_id")
+  /// 待报 pending_report | 已报 reported | 已回执 receipted
+  status String @default("pending_report")
+  /// 时限提醒的责任人（人员 id）
+  responsiblePersonnelId String @map("responsible_personnel_id")
+  /// 生成人（人员 id）
+  createdBy String @map("created_by")
+  createdAt DateTime @db.Timestamptz(6) @map("created_at")
+  /// 报告时限到期时刻（发现时刻＋24 小时）
+  reportDueAt DateTime @db.Timestamptz(6) @map("report_due_at")
+  reportedBy String? @map("reported_by")
+  reportedAt DateTime? @db.Timestamptz(6) @map("reported_at")
+  /// 报告说明（人工登记）
+  reportNote String? @map("report_note")
+  /// 保密部门指令摘要（人工录入）
+  instructionSummary String? @map("instruction_summary")
+  receiptFileKey String? @map("receipt_file_key")
+  receiptVersionId String? @map("receipt_version_id")
+  receiptFileName String? @map("receipt_file_name")
+  receiptedBy String? @map("receipted_by")
+  receiptedAt DateTime? @db.Timestamptz(6) @map("receipted_at")
+
+  @@map("secrecy_report_ticket")
+}
+
 /// 疑似重复命中（规格 B：每个合格面对一行，只存当前命中集，重算整体替换）
 /// 禁 ORM create/update：命中集经空间函数算出，几何口径不走 ORM 写入路径。
 model ClueSpatialHit {

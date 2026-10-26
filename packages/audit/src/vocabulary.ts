@@ -60,6 +60,10 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'clue.reminder-resolved',
   // 涉密误传隔离（#224）：标记成功。简述进 detail，不占用 previousValue。
   'storage.quarantined',
+  // 保密报告工单（#225）：生成、登记已报、录入回执。只提醒不代发；无销毁动作。
+  'storage.secrecy-report-created',
+  'storage.secrecy-report-reported',
+  'storage.secrecy-report-receipted',
 ] as const;
 
 /**
@@ -415,6 +419,40 @@ export const STORAGE_QUARANTINED_FAILED_REASONS = [
 ] as const;
 export type StorageQuarantinedFailedReason = (typeof STORAGE_QUARANTINED_FAILED_REASONS)[number];
 
+/**
+ * 保密报告工单生成被拒（#225）。
+ * not-quarantined 对象未隔离；already-exists 该隔离对象已有工单。
+ */
+export const STORAGE_SECRECY_REPORT_CREATED_FAILED_REASONS = ['not-quarantined', 'already-exists'] as const;
+export type StorageSecrecyReportCreatedFailedReason =
+  (typeof STORAGE_SECRECY_REPORT_CREATED_FAILED_REASONS)[number];
+
+/**
+ * 登记已报被拒（#225）。
+ * missing-report-note 报告说明必填；invalid-state 不在待报；concurrent-change 条件更新落空。
+ */
+export const STORAGE_SECRECY_REPORT_REPORTED_FAILED_REASONS = [
+  'missing-report-note',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type StorageSecrecyReportReportedFailedReason =
+  (typeof STORAGE_SECRECY_REPORT_REPORTED_FAILED_REASONS)[number];
+
+/**
+ * 录入回执被拒（#225）。
+ * missing-instruction-summary 指令摘要必填；missing-receipt-attachment 回执附件必传；
+ * invalid-state 不在已报；concurrent-change 条件更新落空。
+ */
+export const STORAGE_SECRECY_REPORT_RECEIPTED_FAILED_REASONS = [
+  'missing-instruction-summary',
+  'missing-receipt-attachment',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type StorageSecrecyReportReceiptedFailedReason =
+  (typeof STORAGE_SECRECY_REPORT_RECEIPTED_FAILED_REASONS)[number];
+
 
 /**
  * 带结构化快照（detail）的动作（#211，规格 G）。
@@ -477,5 +515,9 @@ export const AUDIT_DETAIL_ACTIONS = [
   'clue.designate-rejected',
   // 涉密误传隔离（#224）：对象 id、简述。
   'storage.quarantined',
+  // 保密报告工单（#225）：工单 id、对象 id、状态迁移与人工录入内容。
+  'storage.secrecy-report-created',
+  'storage.secrecy-report-reported',
+  'storage.secrecy-report-receipted',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];

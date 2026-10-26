@@ -47,6 +47,8 @@ import { PersonnelCertController } from './personnel-cert.controller.ts';
 import { PersonnelCertsService } from './personnel-cert.service.ts';
 import { PersonnelController } from './personnel.controller.ts';
 import { PersonnelProfilesService } from './personnel-profiles.service.ts';
+import { SecrecyReportController } from './secrecy-report.controller.ts';
+import { SecrecyReportService } from './secrecy-report.service.ts';
 import { SessionGuard } from './session.guard.ts';
 import { SourceGate } from './source-gate.ts';
 import { StorageQuarantineController } from './storage-quarantine.controller.ts';
@@ -85,6 +87,7 @@ import { WorkbenchService } from './workbench.service.ts';
     ClueDispositionController,
     ClueDesignationController,
     StorageQuarantineController,
+    SecrecyReportController,
     WorkbenchController,
   ],
   providers: [
@@ -105,6 +108,7 @@ import { WorkbenchService } from './workbench.service.ts';
     ClueDispositionService,
     ClueDesignationService,
     StorageQuarantineService,
+    SecrecyReportService,
     ClueVerificationWorker,
     ClueGeometryService,
     ClueDuplicateService,

@@ -92,6 +92,68 @@ export interface StorageObjectQuarantineWrite {
 }
 
 
+/** 保密报告工单关联的隔离对象（#225）。enteredOrgId 为所属线索登记机构（权限锚点；非线索对象为 null）。 */
+export interface SecrecyReportObject {
+  readonly quarantineId: string;
+  readonly fileKey: string;
+  readonly versionId: string;
+  readonly materialId: string | null;
+  readonly clueId: string | null;
+  readonly enteredOrgId: string | null;
+  readonly discoveredBy: string;
+  readonly discoveredAt: Date;
+  readonly summary: string;
+}
+
+/** 保密报告工单行（#225）。status 取 pending_report／reported／receipted。 */
+export interface SecrecyReportTicketRow {
+  readonly id: string;
+  readonly status: string;
+  readonly responsiblePersonnelId: string;
+  readonly createdBy: string;
+  readonly createdAt: Date;
+  readonly reportDueAt: Date;
+  readonly reportedBy: string | null;
+  readonly reportedAt: Date | null;
+  readonly reportNote: string | null;
+  readonly instructionSummary: string | null;
+  readonly receiptFileKey: string | null;
+  readonly receiptVersionId: string | null;
+  readonly receiptFileName: string | null;
+  readonly receiptedBy: string | null;
+  readonly receiptedAt: Date | null;
+  readonly object: SecrecyReportObject;
+}
+
+/** 生成工单（#225）。同一隔离对象已有工单时返回 already-exists。 */
+export interface SecrecyReportTicketWrite {
+  readonly id: string;
+  readonly quarantineId: string;
+  readonly responsiblePersonnelId: string;
+  readonly createdBy: string;
+  readonly createdAt: Date;
+  readonly reportDueAt: Date;
+}
+
+/** 登记已报（#225）：条件更新 pending_report → reported。 */
+export interface SecrecyReportReportedWrite {
+  readonly id: string;
+  readonly reportedBy: string;
+  readonly reportedAt: Date;
+  readonly reportNote: string;
+}
+
+/** 录入保密部门指令摘要与回执附件（#225）：条件更新 reported → receipted。 */
+export interface SecrecyReportReceiptWrite {
+  readonly id: string;
+  readonly instructionSummary: string;
+  readonly receiptFileKey: string;
+  readonly receiptVersionId: string;
+  readonly receiptFileName: string;
+  readonly receiptedBy: string;
+  readonly receiptedAt: Date;
+}
+
 /** 空间部件行。几何以 GeoJSON 文本给出：坐标转换在库内做（4326 → 4490）。 */
 export interface ClueSpatialPartRow {
   readonly id: string;
@@ -775,6 +837,20 @@ export interface ClueStore {
   isObjectQuarantined(fileKey: string, versionId: string): Promise<boolean>;
   /** #224：写入隔离登记；同对象已存在返回 already-quarantined。 */
   insertObjectQuarantine(write: StorageObjectQuarantineWrite): Promise<'written' | 'already-quarantined'>;
+  /** #225：按材料 id 取隔离对象；未隔离返回 null。 */
+  findQuarantinedObjectByMaterial(materialId: string): Promise<SecrecyReportObject | null>;
+  /** #225：生成保密报告工单；同一隔离对象已有工单返回 already-exists。 */
+  insertSecrecyReportTicket(write: SecrecyReportTicketWrite): Promise<'written' | 'already-exists'>;
+  /** #225：按工单 id 取工单（含关联隔离对象）。 */
+  findSecrecyReportTicket(id: string): Promise<SecrecyReportTicketRow | null>;
+  /** #225：按隔离登记 id 取工单（对象 → 工单反向关联）。 */
+  findSecrecyReportTicketByQuarantine(quarantineId: string): Promise<SecrecyReportTicketRow | null>;
+  /** #225：责任人名下的待报工单（时限提醒数据源），按到期时刻升序。 */
+  listPendingSecrecyReports(responsiblePersonnelId: string): Promise<readonly SecrecyReportTicketRow[]>;
+  /** #225：登记已报；状态不是 pending_report 时不写并返回 false。 */
+  markSecrecyReportReported(write: SecrecyReportReportedWrite): Promise<boolean>;
+  /** #225：录入回执；状态不是 reported 时不写并返回 false。 */
+  markSecrecyReportReceipted(write: SecrecyReportReceiptWrite): Promise<boolean>;
   /**
    * 登记移送：状态由 expectedStatus 条件更新为 transferred_out 终态
    * （仅 in_pool/org_assigned/handler_assigned 可移送），写处置行（disposition='transfer'），

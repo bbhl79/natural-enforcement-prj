@@ -138,6 +138,8 @@ const EXPECTED_ALLOWANCES: Record<string, readonly string[]> = {
     'clue.pool.reassign',
     // #224：涉密误传标记／隔离。只给系统管理。
     'storage.quarantine.mark',
+    // #225：保密报告工单。只给系统管理。
+    'storage.secrecy-report.manage',
   ],
 };
 

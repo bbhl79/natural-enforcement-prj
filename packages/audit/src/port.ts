@@ -15,6 +15,9 @@ import type {
   ClueVerifyRetryFailedReason,
   ClueWithdrawnFailedReason,
   StorageQuarantinedFailedReason,
+  StorageSecrecyReportCreatedFailedReason,
+  StorageSecrecyReportReportedFailedReason,
+  StorageSecrecyReportReceiptedFailedReason,
   CertUpdateFailedReason,
   AuthzDeniedReason,
   LoginFailedReason,
@@ -222,6 +225,25 @@ export type AuditAppend =
       action: 'storage.quarantined';
       outcome: 'failed';
       reason: StorageQuarantinedFailedReason;
+    })
+  // 保密报告工单（#225）：生成、登记已报、录入回执；detail 存工单 id、对象 id 与人工录入内容。
+  | (AuditParties & { action: 'storage.secrecy-report-created' })
+  | (AuditParties & {
+      action: 'storage.secrecy-report-created';
+      outcome: 'failed';
+      reason: StorageSecrecyReportCreatedFailedReason;
+    })
+  | (AuditParties & { action: 'storage.secrecy-report-reported' })
+  | (AuditParties & {
+      action: 'storage.secrecy-report-reported';
+      outcome: 'failed';
+      reason: StorageSecrecyReportReportedFailedReason;
+    })
+  | (AuditParties & { action: 'storage.secrecy-report-receipted' })
+  | (AuditParties & {
+      action: 'storage.secrecy-report-receipted';
+      outcome: 'failed';
+      reason: StorageSecrecyReportReceiptedFailedReason;
     });
 
 /**

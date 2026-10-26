@@ -91,6 +91,11 @@ export type {
   ClueMaterialRow,
   ClueMaterialQuarantineTarget,
   StorageObjectQuarantineWrite,
+  SecrecyReportObject,
+  SecrecyReportTicketRow,
+  SecrecyReportTicketWrite,
+  SecrecyReportReportedWrite,
+  SecrecyReportReceiptWrite,
   ClueOrgAssignWrite,
   CluePeopleAssignWrite,
   CluePoolClueRow,
@@ -240,6 +245,22 @@ export type {
   StreetBoundaryRequest,
   StreetFeature,
 } from './clue/dispatch/index.ts';
+// #225：保密报告工单的领域规则（三态状态机、默认 24h 时限、提醒计算）。
+export {
+  SECRECY_REPORT_DEADLINE_HOURS,
+  SECRECY_REPORT_STATUSES,
+  SECRECY_REPORT_STATUS_LABELS,
+  SECRECY_REPORT_TRANSITIONS,
+  checkSecrecyReportTransition,
+  secrecyReportDueAt,
+  secrecyReportReminder,
+} from './secrecy-report/index.ts';
+export type {
+  SecrecyReportReminder,
+  SecrecyReportStatus,
+  SecrecyReportTransition,
+  SecrecyReportTransitionCheck,
+} from './secrecy-report/index.ts';
 // #217：撤回不派与结案的领域规则（四项原因、说明必填、状态门槛）与提醒生成内部服务。
 export {
   CLUE_CLOSURE_RULE_CODES,

@@ -116,6 +116,8 @@ for (const code of [
   'authz.binding.approve',
   // #224：涉密误传标记／隔离。只给系统管理；对象级再收窄到目标所属根机构。
   'storage.quarantine.mark',
+  // #225：保密报告工单（生成、登记已报、录入回执、时限提醒）。只给系统管理；对象级同 #224 收窄到根机构。
+  'storage.secrecy-report.manage',
 ]) {
   ADMIN_OPCODES[code] = entry('none', false, false);
 }

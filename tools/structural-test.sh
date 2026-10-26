@@ -698,7 +698,7 @@ check_weak-reference-entry() {
 # #211 定案追加 18 张线索业务表（规格 F）：Clue、ClueSpatialObject、ClueSpatialPart、
 # ClueRequirementSnapshot、ClueItemValue、ClueItemGap、ClueInitialType、ClueTagLibrary、
 # ClueTag、ClueMaterial、ClueSpatialHit、ClueVerificationRun、ClueHandler、ClueAssignment、
-# ClueWithdrawal、ClueDisposition、ClueClosureReminder、ClueDesignationRequest、StorageObjectQuarantine（#224）。
+# ClueWithdrawal、ClueDisposition、ClueClosureReminder、ClueDesignationRequest、StorageObjectQuarantine（#224）、SecrecyReportTicket（#225）。
 G1_MODELS=(
   MigrationProbe
   OrgUnit
@@ -742,6 +742,7 @@ G1_MODELS=(
   ClueClosureReminder
   ClueDesignationRequest
   StorageObjectQuarantine
+  SecrecyReportTicket
 )
 check_g1-model-allowlist() {
   local schema="$BACKEND/prisma/schema.prisma" model in_schema extra missing fails=0

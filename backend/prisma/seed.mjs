@@ -175,6 +175,8 @@ const ROLE_ALLOWANCES = {
     "clue.pool.reassign",
     // #224：涉密误传标记／隔离。只给系统管理；对象级再收窄到目标所属根机构。
     "storage.quarantine.mark",
+    // #225：保密报告工单。只给系统管理；对象级同 #224 收窄到目标所属根机构。
+    "storage.secrecy-report.manage",
   ],
 };
 

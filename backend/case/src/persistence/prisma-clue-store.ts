@@ -52,6 +52,11 @@ import type {
   ClueTransferContext,
   ClueMaterialQuarantineTarget,
   StorageObjectQuarantineWrite,
+  SecrecyReportObject,
+  SecrecyReportTicketRow,
+  SecrecyReportTicketWrite,
+  SecrecyReportReportedWrite,
+  SecrecyReportReceiptWrite,
   ClueTransferWrite,
   ClueRegistrationOutcome,
   ClueRegistrationResult,
@@ -2035,6 +2040,92 @@ export class PrismaClueStore implements ClueStore {
     }
   }
 
+  async findQuarantinedObjectByMaterial(materialId: string): Promise<SecrecyReportObject | null> {
+    const rows = await this.prisma.$queryRaw<QuarantineObjectSqlRow[]>`
+      SELECT q.id AS quarantine_id, q.file_key, q.version_id, q.material_id, q.clue_id,
+             c.entered_org_id, q.discovered_by, q.discovered_at, q.summary
+      FROM storage_object_quarantine q
+      LEFT JOIN clue c ON c.id = q.clue_id
+      WHERE q.material_id = ${materialId}
+      LIMIT 1
+    `;
+    const row = rows[0];
+    return row ? toSecrecyReportObject(row) : null;
+  }
+
+  async insertSecrecyReportTicket(write: SecrecyReportTicketWrite): Promise<'written' | 'already-exists'> {
+    // ON CONFLICT 不中断外层交互式事务；同一隔离对象至多一张工单。
+    const inserted = await this.prisma.$executeRaw`
+      INSERT INTO secrecy_report_ticket
+        (id, quarantine_id, status, responsible_personnel_id, created_by, created_at, report_due_at)
+      VALUES
+        (${write.id}, ${write.quarantineId}, 'pending_report', ${write.responsiblePersonnelId},
+         ${write.createdBy}, ${write.createdAt}, ${write.reportDueAt})
+      ON CONFLICT (quarantine_id) DO NOTHING
+    `;
+    return inserted === 1 ? 'written' : 'already-exists';
+  }
+
+  async findSecrecyReportTicket(id: string): Promise<SecrecyReportTicketRow | null> {
+    const rows = await this.prisma.$queryRaw<SecrecyReportSqlRow[]>`
+      SELECT ${SECRECY_REPORT_COLUMNS}
+      FROM secrecy_report_ticket t
+      INNER JOIN storage_object_quarantine q ON q.id = t.quarantine_id
+      LEFT JOIN clue c ON c.id = q.clue_id
+      WHERE t.id = ${id}
+      LIMIT 1
+    `;
+    const row = rows[0];
+    return row ? toSecrecyReportTicket(row) : null;
+  }
+
+  async findSecrecyReportTicketByQuarantine(quarantineId: string): Promise<SecrecyReportTicketRow | null> {
+    const rows = await this.prisma.$queryRaw<SecrecyReportSqlRow[]>`
+      SELECT ${SECRECY_REPORT_COLUMNS}
+      FROM secrecy_report_ticket t
+      INNER JOIN storage_object_quarantine q ON q.id = t.quarantine_id
+      LEFT JOIN clue c ON c.id = q.clue_id
+      WHERE t.quarantine_id = ${quarantineId}
+      LIMIT 1
+    `;
+    const row = rows[0];
+    return row ? toSecrecyReportTicket(row) : null;
+  }
+
+  async listPendingSecrecyReports(responsiblePersonnelId: string): Promise<readonly SecrecyReportTicketRow[]> {
+    const rows = await this.prisma.$queryRaw<SecrecyReportSqlRow[]>`
+      SELECT ${SECRECY_REPORT_COLUMNS}
+      FROM secrecy_report_ticket t
+      INNER JOIN storage_object_quarantine q ON q.id = t.quarantine_id
+      LEFT JOIN clue c ON c.id = q.clue_id
+      WHERE t.responsible_personnel_id = ${responsiblePersonnelId}
+        AND t.status = 'pending_report'
+      ORDER BY t.report_due_at ASC, t.id ASC
+    `;
+    return rows.map(toSecrecyReportTicket);
+  }
+
+  async markSecrecyReportReported(write: SecrecyReportReportedWrite): Promise<boolean> {
+    const updated = await this.prisma.$executeRaw`
+      UPDATE secrecy_report_ticket
+      SET status = 'reported', reported_by = ${write.reportedBy}, reported_at = ${write.reportedAt},
+          report_note = ${write.reportNote}
+      WHERE id = ${write.id} AND status = 'pending_report'
+    `;
+    return updated === 1;
+  }
+
+  async markSecrecyReportReceipted(write: SecrecyReportReceiptWrite): Promise<boolean> {
+    const updated = await this.prisma.$executeRaw`
+      UPDATE secrecy_report_ticket
+      SET status = 'receipted', instruction_summary = ${write.instructionSummary},
+          receipt_file_key = ${write.receiptFileKey}, receipt_version_id = ${write.receiptVersionId},
+          receipt_file_name = ${write.receiptFileName}, receipted_by = ${write.receiptedBy},
+          receipted_at = ${write.receiptedAt}
+      WHERE id = ${write.id} AND status = 'reported'
+    `;
+    return updated === 1;
+  }
 }
 
 /** 工作台零计数常量（无可见机构时回）。 */
@@ -2132,5 +2223,79 @@ function toReminderRow(row: {
     createdAt: row.created_at,
     resolvedAt: row.resolved_at,
     resolution: row.resolution,
+  };
+}
+
+/** #225：工单查询的 SQL 行形状。 */
+interface QuarantineObjectSqlRow {
+  quarantine_id: string;
+  file_key: string;
+  version_id: string;
+  material_id: string | null;
+  clue_id: string | null;
+  entered_org_id: string | null;
+  discovered_by: string;
+  discovered_at: Date;
+  summary: string;
+}
+
+interface SecrecyReportSqlRow extends QuarantineObjectSqlRow {
+  id: string;
+  status: string;
+  responsible_personnel_id: string;
+  created_by: string;
+  created_at: Date;
+  report_due_at: Date;
+  reported_by: string | null;
+  reported_at: Date | null;
+  report_note: string | null;
+  instruction_summary: string | null;
+  receipt_file_key: string | null;
+  receipt_version_id: string | null;
+  receipt_file_name: string | null;
+  receipted_by: string | null;
+  receipted_at: Date | null;
+}
+
+const SECRECY_REPORT_COLUMNS = Prisma.sql`
+  t.id, t.status, t.responsible_personnel_id, t.created_by, t.created_at, t.report_due_at,
+  t.reported_by, t.reported_at, t.report_note, t.instruction_summary,
+  t.receipt_file_key, t.receipt_version_id, t.receipt_file_name, t.receipted_by, t.receipted_at,
+  q.id AS quarantine_id, q.file_key, q.version_id, q.material_id, q.clue_id,
+  c.entered_org_id, q.discovered_by, q.discovered_at, q.summary
+`;
+
+function toSecrecyReportObject(row: QuarantineObjectSqlRow): SecrecyReportObject {
+  return {
+    quarantineId: row.quarantine_id,
+    fileKey: row.file_key,
+    versionId: row.version_id,
+    materialId: row.material_id,
+    clueId: row.clue_id,
+    enteredOrgId: row.entered_org_id,
+    discoveredBy: row.discovered_by,
+    discoveredAt: row.discovered_at,
+    summary: row.summary,
+  };
+}
+
+function toSecrecyReportTicket(row: SecrecyReportSqlRow): SecrecyReportTicketRow {
+  return {
+    id: row.id,
+    status: row.status,
+    responsiblePersonnelId: row.responsible_personnel_id,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    reportDueAt: row.report_due_at,
+    reportedBy: row.reported_by,
+    reportedAt: row.reported_at,
+    reportNote: row.report_note,
+    instructionSummary: row.instruction_summary,
+    receiptFileKey: row.receipt_file_key,
+    receiptVersionId: row.receipt_version_id,
+    receiptFileName: row.receipt_file_name,
+    receiptedBy: row.receipted_by,
+    receiptedAt: row.receipted_at,
+    object: toSecrecyReportObject(row),
   };
 }
