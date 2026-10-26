@@ -1,6 +1,6 @@
 // #216 移送与停用机构池重新指定。
 // 断言打在克隆库上：移送登记（必填校验、发函日期缺省与补录、附件选填 0..n、
-// 存储零写入、transferred_out 终态、退出比对、报请期间的锁）、池重新指定
+// 存储零写入、transferred_out 终态、退出比对、报请期间的锁、held 命中结案提醒）、池重新指定
 // （系统管理员、理由必填、目标须未停用、只接已停用池机构的未派出线索、不加锁）。
 // 凡 4xx/403 用例同时断言「失败留痕存在、业务行不变」。
 import type { AddressInfo } from 'node:net';
@@ -546,6 +546,34 @@ describe('#216 移送登记', () => {
     const fourth = await register({ polygon: geojsonPolygon(square(58)) });
     expect((fourth.body.hits ?? []).length).toBeGreaterThan(0);
     expect(third.body.status).toBe('in_pool');
+  });
+
+  it('移送成功后对 held 命中生成结案提醒（kind=transfer，与不予立案同口径）', async () => {
+    const old = await register({ polygon: geojsonPolygon(square(59)) });
+    expect(old.body.status).toBe('in_pool');
+    const colliding = await register({ polygon: geojsonPolygon(square(59)) });
+    expect(colliding.body.status).toBe('pending_decision');
+    const held = await decide(colliding.body.id ?? '', { decision: 'hold' });
+    expect(held.status).toBe(200);
+
+    const outcome = await transfer(old.body.id ?? '');
+    expect(outcome.status).toBe(200);
+    expect(outcome.body.result).toBe('transferred-out');
+
+    const reminders = await cloned.prisma.clueClosureReminder.findMany({
+      where: { clueId: colliding.body.id ?? '' },
+    });
+    expect(reminders).toHaveLength(1);
+    expect(reminders[0]?.kind).toBe('transfer');
+    expect(reminders[0]?.otherClueId).toBe(old.body.id);
+    expect(reminders[0]?.resolvedAt).toBeNull();
+
+    const trail = (await trailOf('clue.disposition-recorded', old.body.id ?? '')).filter(
+      (row) => row.outcome === 'succeeded',
+    );
+    expect(trail).toHaveLength(1);
+    expect(trail[0]?.detail).toContain('"reminderCount":1');
+    expect(trail[0]?.detail).toContain('transfer');
   });
 });
 

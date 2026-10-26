@@ -4,7 +4,7 @@
 // 已派机构／已派承办人发起；对所有违法类型开放，不区分管辖、涉刑、党纪政务三类。
 // 移送机关、文书编号、原因必填；发函日期默认北京当日、允许补录；附件选填 0..n。
 // 先完整校验表单与全部附件的真实内容（任一不通过即 4xx、存储零写入），再逐件写存储，
-// 最后在一个事务里写终态、处置行与成功留痕。登记后进 transferred_out 终态，退出比对与 OpenItems。
+// 最后在一个事务里写终态、处置行、结案提醒与成功留痕。登记后进 transferred_out 终态，退出比对与 OpenItems；按暂存线索的当前命中集逐对生成结案提醒（kind=transfer，与不予立案同口径）。
 //
 // 停用机构池重新指定：系统管理员把已停用机构待分派池里未派出的线索（待分派池、
 // 待分派决定、不派）重新指定给未停用机构；理由必填，写指定事实（kind='pool-reassign'），
@@ -29,6 +29,7 @@ import {
   TRANSFER_FROM_STATUSES,
   assessTransfer,
   beijingDateOf,
+  generateClosureReminders,
   validateAttachmentSet,
   contentDigest,
   type ClueMaterialRow,
@@ -244,7 +245,7 @@ export class ClueDispositionService {
       });
     }
 
-    // 终态、处置行与成功留痕同成同败；并发冲突回滚后另起事务写失败留痕。
+    // 终态、处置行、结案提醒与成功留痕同成同败；并发冲突回滚后另起事务写失败留痕。
     const now = this.clock.now();
     return this.uow.run(async (tx) => {
       const applied = await tx.clues.recordTransfer({
@@ -268,6 +269,13 @@ export class ClueDispositionService {
           }),
         );
       }
+      // 结案提醒与状态写入同事务：按暂存线索的当前命中集逐对生成（kind=transfer）。
+      const reminderIds = await generateClosureReminders(tx.clues, {
+        closedClueId: clueId,
+        kind: 'transfer',
+        createdAt: now,
+        newId: () => newUlid(),
+      });
       await tx.audit.append(
         this.transferEntry(this.parties(actor, actorCode, targetOrgId, clueId, DISPOSITION_OPCODE), {
           detail: JSON.stringify({
@@ -276,6 +284,7 @@ export class ClueDispositionService {
             transferredOrg: input.transferOrg.trim(),
             documentNo: input.documentNo.trim(),
             letterDate: assessed.letterDate,
+            reminderCount: reminderIds.length,
           }),
         }),
       );
