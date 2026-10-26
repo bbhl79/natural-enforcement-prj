@@ -29,6 +29,8 @@ import {
 } from './orgTree';
 import PoolReassignPanel from './PoolReassignPanel';
 import { POOL_REASSIGN } from './poolReassign';
+import QuarantineMarkPanel from './QuarantineMarkPanel';
+import { canMarkQuarantine } from './quarantineMark';
 
 const REGISTER = 'org.unit.register';
 const RENAME = 'org.unit.rename';
@@ -602,6 +604,7 @@ export function OrgTreeView({
                 .map((unit) => ({ id: unit.id, name: unit.name }))}
             />
           ) : null}
+          {canMarkQuarantine(opcodes, tree, selected) ? <QuarantineMarkPanel /> : null}
         </div>
       </div>
       {dialog?.kind === 'create' ? (
