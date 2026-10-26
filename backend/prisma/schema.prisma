@@ -689,9 +689,12 @@ model ClueMaterial {
   byteSize Int @map("byte_size")
   /// 内容摘要（sha256 十六进制）
   digest String
+  /// 系统外移送附加记录（#229；普通附件为空）
+  externalTransferId String? @map("external_transfer_id")
   createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
 
   @@index([clueId])
+  @@index([externalTransferId])
   @@map("clue_material")
 }
 
@@ -876,7 +879,7 @@ model ClueDisposition {
   id String @id
   /// 所属线索
   clueId String @map("clue_id")
-  /// 处置类型：no-case | with-old | transfer
+  /// 处置类型：no-case | with-old | transfer | other（#229）
   disposition String
   /// 移送机关（自然资源部门以外机关）
   transferredOrg String? @map("transferred_org")
@@ -899,7 +902,7 @@ model ClueClosureReminder {
   id String @id
   /// 所属线索
   clueId String @map("clue_id")
-  /// 提醒类型：no-case | transfer | case
+  /// 提醒类型：no-case | transfer | case | other（#229）
   kind String
   /// 提醒对象线索（被撞上的对方线索）
   otherClueId String? @map("other_clue_id")
@@ -913,6 +916,28 @@ model ClueClosureReminder {
 
   @@index([clueId, resolvedAt])
   @@map("clue_closure_reminder")
+}
+
+/// 系统外移送附加记录（#229）：挂在处置为 other 的线索上，不改线索状态、不跟踪回执。
+/// 必填项与移送相同；不分管辖／涉刑／党纪政务三类，无类型字段。
+model ClueExternalTransfer {
+  id String @id
+  /// 所属线索（须已有 disposition=other 的处置行）
+  clueId String @map("clue_id")
+  /// 移送机关（自然资源部门以外机关）
+  transferredOrg String @map("transferred_org")
+  /// 文书编号
+  documentNo String @map("document_no")
+  /// 发函日期（默认北京当日，可补录）
+  letterDate DateTime @db.Timestamptz(6) @map("letter_date")
+  /// 原因
+  reason String
+  recordedBy String   @map("recorded_by")
+  recordedAt DateTime @default(now()) @db.Timestamptz(6) @map("recorded_at")
+  createdAt  DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([clueId])
+  @@map("clue_external_transfer")
 }
 
 /// 指定管辖报请（下级报请上级指定管辖；#215 规格 D）

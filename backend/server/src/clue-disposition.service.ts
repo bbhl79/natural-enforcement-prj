@@ -1,4 +1,4 @@
-// 移送与停用机构池重新指定（#216；规格 D 节、GLOSSARY）。
+// 移送、停用机构池重新指定（#216）与系统外移送附加记录（#229；规格 D 节、GLOSSARY）。
 //
 // 移送（自然资源部门以外的机关）：池所属机构内勤在待分派池、承办机构内勤在
 // 已派机构／已派承办人发起；对所有违法类型开放，不区分管辖、涉刑、党纪政务三类。
@@ -21,6 +21,7 @@ import {
   type AuditParties,
   type AuthzDeniedEntry,
   type ClueDispositionRecordedFailedReason,
+  type ClueExternalTransferAttachedFailedReason,
   type CluePoolReassignedFailedReason,
 } from '@natural-enforcement/audit';
 import {
@@ -118,6 +119,62 @@ export type CluePoolReassignOutcome =
       readonly status: 409;
       readonly body: { readonly result: 'invalid-state' | 'concurrent-change'; readonly reason: string };
     };
+
+/** 系统外移送附加记录请求（#229）。 */
+export interface ClueExternalTransferRequest {
+  readonly transferOrg: string;
+  readonly documentNo: string;
+  readonly letterDate: string;
+  readonly reason: string;
+  readonly attachments: readonly TransferUploadedFile[];
+}
+
+/** 系统外移送附加记录结果。 */
+export type ClueExternalTransferOutcome =
+  | {
+      readonly status: 200;
+      readonly body: {
+        readonly result: 'external-transfer-attached';
+        readonly clueId: string;
+        readonly code: string;
+        readonly transferId: string;
+        readonly letterDate: string;
+        readonly status: string;
+      };
+    }
+  | { readonly status: 400; readonly body: { readonly result: 'non-compliant'; readonly rules: readonly string[] } }
+  | { readonly status: 403; readonly body: { readonly reason: DenyReason } }
+  | { readonly status: 404; readonly body: { readonly result: 'not-found' } }
+  | {
+      readonly status: 409;
+      readonly body: { readonly result: 'invalid-state' | 'concurrent-change'; readonly reason: string };
+    };
+
+/** 系统外移送列表结果。 */
+export type ClueExternalTransferListOutcome =
+  | {
+      readonly status: 200;
+      readonly body: {
+        readonly result: 'external-transfers';
+        readonly clueId: string;
+        readonly transfers: readonly {
+          readonly id: string;
+          readonly transferredOrg: string;
+          readonly documentNo: string;
+          readonly letterDate: string;
+          readonly reason: string;
+          readonly recordedAt: string;
+          readonly attachments: readonly {
+            readonly id: string;
+            readonly fileName: string;
+            readonly contentType: string;
+            readonly byteSize: number;
+          }[];
+        }[];
+      };
+    }
+  | { readonly status: 403; readonly body: { readonly reason: DenyReason } }
+  | { readonly status: 404; readonly body: { readonly result: 'not-found' } };
 
 /** 停用机构待分派池线索（管理端清单行）。 */
 export interface PoolClueItem {
@@ -499,7 +556,227 @@ export class ClueDispositionService {
     return reassigned;
   }
 
-  /** 状态守卫：expectedStatus 不符即并发冲突；状态不在允许集合即 invalid-state。 */
+  /**
+   * 系统外移送附加记录（#229）：线索须已有 disposition=other；不改线索状态。
+   * 操作人与 other 相同：主办／协办本人或承办机构内勤。
+   */
+  async attachExternalTransfer(
+    actor: ActorRef,
+    clueId: string,
+    input: ClueExternalTransferRequest,
+  ): Promise<ClueExternalTransferOutcome> {
+    const context = await this.clues.readDispatchContext(clueId);
+    if (!context) return { status: 404, body: { result: 'not-found' } };
+    const account = await this.directory.findById(actor.personnelId);
+    const actorOrgId = account?.orgUnitId ?? '';
+    const actorCode = account?.code ?? null;
+    const assignment = context.assignment;
+
+    const actingOrgId = this.handlerOrgId(actor, account, context);
+    if (actingOrgId === null) {
+      await this.deny(actor, actorCode, actorOrgId, DISPOSITION_OPCODE, clueId, assignment?.orgUnitId ?? context.enteredOrgId);
+      return { status: 403, body: { reason: 'permission-denied' } };
+    }
+    try {
+      await this.access.authorize(actor, DISPOSITION_OPCODE, actingOrgId, {
+        resourceType: 'clue',
+        resourceId: clueId,
+      });
+    } catch (error) {
+      if (!isAccessDenied(error)) throw error;
+      return { status: 403, body: { reason: error.reason } };
+    }
+
+    const assessed = assessTransfer({
+      transferOrg: input.transferOrg,
+      documentNo: input.documentNo,
+      reason: input.reason,
+      letterDateRaw: input.letterDate,
+      today: beijingDateOf(this.clock.now()),
+    });
+    if (!assessed.ok) {
+      return this.rejectExternal(actor, actorCode, actorOrgId, clueId, {
+        status: 400,
+        result: 'non-compliant',
+        rules: [assessed.rule],
+        reason: assessed.rule,
+      });
+    }
+    const attachments = input.attachments.map((file) => ({
+      fileName: file.fileName,
+      byteSize: file.byteSize,
+      content: file.content,
+    }));
+    const attachmentCheck = validateAttachmentSet(attachments);
+    if (!attachmentCheck.ok) {
+      return this.rejectExternal(actor, actorCode, actorOrgId, clueId, {
+        status: 400,
+        result: 'non-compliant',
+        rules: [attachmentCheck.rule],
+        reason: 'invalid-attachment',
+      });
+    }
+    if (!(await this.clues.hasOtherDisposition(clueId))) {
+      return this.rejectExternal(actor, actorCode, actorOrgId, clueId, {
+        status: 409,
+        result: 'invalid-state',
+        rules: [],
+        reason: 'invalid-state',
+      });
+    }
+
+    const transferId = newUlid();
+    const materials: ClueMaterialRow[] = [];
+    let index = 0;
+    for (const file of input.attachments) {
+      index += 1;
+      const fileKey = `clue/${clueId}/external-transfer/${transferId}/${index}-${sanitizeFileName(file.fileName)}`;
+      const ref = await this.storage.putVersion(fileKey, file.content);
+      materials.push({
+        id: newUlid(),
+        kind: 'attachment',
+        fileKey: ref.fileKey,
+        versionId: ref.versionId,
+        fileName: file.fileName,
+        contentType: file.contentType,
+        byteSize: file.byteSize,
+        digest: contentDigest(file.content),
+      });
+    }
+
+    const now = this.clock.now();
+    return this.uow.run(async (tx) => {
+      // 事务内再核一次：避免并发把 other 处置冲掉后仍写入。
+      if (!(await tx.clues.hasOtherDisposition(clueId))) {
+        return rejected<ClueExternalTransferOutcome>(
+          { status: 409, body: { result: 'invalid-state', reason: 'invalid-state' } },
+          {
+            action: 'clue.external-transfer-attached',
+            outcome: 'failed',
+            reason: 'invalid-state',
+            ...this.parties(actor, actorCode, actorOrgId, clueId, DISPOSITION_OPCODE),
+          },
+        );
+      }
+      await tx.clues.insertExternalTransfer({
+        id: transferId,
+        clueId,
+        transferredOrg: input.transferOrg.trim(),
+        documentNo: input.documentNo.trim(),
+        letterDate: assessed.letterDate,
+        reason: input.reason.trim(),
+        recordedBy: actor.personnelId,
+        recordedAt: now,
+        materials,
+      });
+      await tx.audit.append({
+        action: 'clue.external-transfer-attached',
+        ...this.parties(actor, actorCode, actorOrgId, clueId, DISPOSITION_OPCODE),
+        detail: JSON.stringify({
+          code: context.code,
+          transferId,
+          transferredOrg: input.transferOrg.trim(),
+          documentNo: input.documentNo.trim(),
+          letterDate: assessed.letterDate,
+        }),
+      });
+      return {
+        status: 200,
+        body: {
+          result: 'external-transfer-attached' as const,
+          clueId,
+          code: context.code,
+          transferId,
+          letterDate: assessed.letterDate,
+          status: context.status,
+        },
+      };
+    });
+  }
+
+  /** 系统外移送附加记录列表（只读；须有 clue.read）。 */
+  async listExternalTransfers(actor: ActorRef, clueId: string): Promise<ClueExternalTransferListOutcome> {
+    const context = await this.clues.readDispatchContext(clueId);
+    if (!context) return { status: 404, body: { result: 'not-found' } };
+    const account = await this.directory.findById(actor.personnelId);
+    const actorOrgId = account?.orgUnitId ?? '';
+    try {
+      await this.access.authorize(actor, 'clue.read', actorOrgId, {
+        resourceType: 'clue',
+        resourceId: clueId,
+      });
+    } catch (error) {
+      if (!isAccessDenied(error)) throw error;
+      return { status: 403, body: { reason: error.reason } };
+    }
+    const rows = await this.clues.listExternalTransfers(clueId);
+    return {
+      status: 200,
+      body: {
+        result: 'external-transfers',
+        clueId,
+        transfers: rows.map((row) => ({
+          id: row.id,
+          transferredOrg: row.transferredOrg,
+          documentNo: row.documentNo,
+          letterDate: row.letterDate,
+          reason: row.reason,
+          recordedAt: row.recordedAt.toISOString(),
+          attachments: row.attachments,
+        })),
+      },
+    };
+  }
+
+  /** 主办／协办本人或承办机构内勤（与 other 处置同口径）。 */
+  private handlerOrgId(
+    actor: ActorRef,
+    account: { readonly orgUnitId: string | null; readonly roles: readonly string[] } | null,
+    context: {
+      readonly handlers: readonly { readonly personnelId: string; readonly role: string }[];
+      readonly assignment: { readonly orgUnitId: string } | null;
+    },
+  ): string | null {
+    const assignment = context.assignment;
+    if (assignment === null) return null;
+    if (context.handlers.some((handler) => handler.personnelId === actor.personnelId)) {
+      return assignment.orgUnitId;
+    }
+    const roles = account?.roles ?? [];
+    if (!roles.includes('内勤')) return null;
+    if (account?.orgUnitId !== assignment.orgUnitId) return null;
+    return assignment.orgUnitId;
+  }
+
+  private async rejectExternal(
+    actor: ActorRef,
+    actorCode: string | null,
+    orgUnitId: string,
+    clueId: string,
+    rejection: Rejection,
+  ): Promise<ClueExternalTransferOutcome> {
+    const outcome: ClueExternalTransferOutcome =
+      rejection.status === 400
+        ? { status: 400, body: { result: 'non-compliant', rules: rejection.rules } }
+        : {
+            status: 409,
+            body: {
+              result: rejection.result as 'invalid-state' | 'concurrent-change',
+              reason: rejection.reason,
+            },
+          };
+    await this.uow.run(async () =>
+      rejected<ClueExternalTransferOutcome>(outcome, {
+        action: 'clue.external-transfer-attached',
+        outcome: 'failed',
+        reason: rejection.reason as ClueExternalTransferAttachedFailedReason,
+        ...this.parties(actor, actorCode, orgUnitId, clueId, DISPOSITION_OPCODE),
+      }),
+    );
+    return outcome;
+  }
+
+    /** 状态守卫：expectedStatus 不符即并发冲突；状态不在允许集合即 invalid-state。 */
   private stateGuard(
     actual: string,
     expected: string,

@@ -81,6 +81,8 @@ export interface DispatchView {
   readonly mayAssignPeople: boolean;
   /** 能不能登记移送（池所属机构内勤／承办机构内勤；#216）。 */
   readonly mayTransfer: boolean;
+  /** 能不能登记其他（#229；主办／协办本人或承办机构内勤）。 */
+  readonly mayRecordOther: boolean;
   /** 进行中的指定管辖报请（#215；无即 null）。 */
   readonly designation: DesignationRequestView | null;
   /** 当前操作者可发起报请指定管辖。 */
@@ -303,4 +305,70 @@ export function suggestionEmptyText(view: SuggestionView): string | null {
   if (view.suggestions.length > 0) return null;
   if (view.unavailableReason === null) return null;
   return '暂无辖区建议（街道边界服务或辖区对应未就绪），可手工选择机构分派。';
+}
+
+
+/** 其他（行政处理事项，系统外办理；#229）。理由必填，进 closed。 */
+export async function submitOtherDisposition(
+  dispatch: ApiDispatch,
+  clueId: string,
+  input: { readonly note: string; readonly expectedStatus: string },
+): Promise<DispatchActionResult> {
+  const response = await apiFetch(dispatch, `/api/clues/${clueId}/disposition`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ disposition: 'other', note: input.note, expectedStatus: input.expectedStatus }),
+  });
+  return readResult(response);
+}
+
+/** 系统外移送附加记录（#229；须处置为 other）。 */
+export async function submitExternalTransfer(
+  dispatch: ApiDispatch,
+  clueId: string,
+  input: {
+    readonly transferOrg: string;
+    readonly documentNo: string;
+    readonly letterDate: string;
+    readonly reason: string;
+    readonly attachments: readonly File[];
+  },
+): Promise<DispatchActionResult> {
+  const form = new FormData();
+  form.append('transferOrg', input.transferOrg);
+  form.append('documentNo', input.documentNo);
+  form.append('letterDate', input.letterDate);
+  form.append('reason', input.reason);
+  for (const file of input.attachments) form.append('attachment', file);
+  const response = await apiFetch(dispatch, `/api/clues/${clueId}/external-transfers`, {
+    method: 'POST',
+    body: form,
+  });
+  return readResult(response);
+}
+
+export interface ExternalTransferItem {
+  readonly id: string;
+  readonly transferredOrg: string;
+  readonly documentNo: string;
+  readonly letterDate: string;
+  readonly reason: string;
+  readonly recordedAt: string;
+  readonly attachments: readonly {
+    readonly id: string;
+    readonly fileName: string;
+    readonly contentType: string;
+    readonly byteSize: number;
+  }[];
+}
+
+/** 系统外移送附加记录列表。 */
+export async function loadExternalTransfers(
+  dispatch: ApiDispatch,
+  clueId: string,
+): Promise<readonly ExternalTransferItem[]> {
+  const response = await apiFetch(dispatch, `/api/clues/${clueId}/external-transfers`);
+  if (!response.ok) throw new Error(`系统外移送列表取数失败（${response.status}）`);
+  const body = (await response.json()) as { readonly transfers?: readonly ExternalTransferItem[] };
+  return body.transfers ?? [];
 }

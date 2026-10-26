@@ -58,6 +58,8 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'clue.withdrawn',
   'clue.disposition-recorded',
   'clue.reminder-resolved',
+  // 系统外移送附加记录（#229）：不改线索状态，各自留痕。
+  'clue.external-transfer-attached',
   // 涉密误传隔离（#224）：标记成功。简述进 detail，不占用 previousValue。
   'storage.quarantined',
   // 保密报告工单（#225）：生成、登记已报、录入回执。只提醒不代发；无销毁动作。
@@ -374,6 +376,24 @@ export type ClueDispositionRecordedFailedReason =
   (typeof CLUE_DISPOSITION_RECORDED_FAILED_REASONS)[number];
 
 /**
+ * 系统外移送附加记录被拒（outcome=failed）的原因（#229）。
+ * missing-disposition-fields／invalid-letter-date 复用 assessTransfer；
+ * invalid-attachment 附件不合规；
+ * invalid-state 线索处置不是 other；concurrent-change 与并发写入冲突。
+ */
+export const CLUE_EXTERNAL_TRANSFER_ATTACHED_FAILED_REASONS = [
+  'missing-disposition-fields',
+  'invalid-letter-date',
+  'invalid-attachment',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type ClueExternalTransferAttachedFailedReason =
+  (typeof CLUE_EXTERNAL_TRANSFER_ATTACHED_FAILED_REASONS)[number];
+
+
+
+/**
  * 结案提醒处理被拒（outcome=failed）的原因（#217，规格 G）。
  * missing-withdraw-reason／missing-withdraw-note／invalid-withdraw-reason 选「撤回不派再办」时的原因与说明；
  * missing-disposition-fields 选「随旧线索办结」时的说明必填；
@@ -509,6 +529,7 @@ export const AUDIT_DETAIL_ACTIONS = [
   'clue.withdrawn',
   'clue.disposition-recorded',
   'clue.reminder-resolved',
+  'clue.external-transfer-attached',
   // 移送与停用机构池重新指定（#216，规格 G）：处置类型、移送机关、文书编号、发函日期、新接收机构。
   'clue.disposition-recorded',
   'clue.pool-reassigned',

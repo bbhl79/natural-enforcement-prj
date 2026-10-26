@@ -55,6 +55,7 @@ const OPERATION_OF_ACTION: Readonly<Record<string, string>> = {
   'bootstrap.admin-registered': '建立首个系统管理人员',
   'audit.viewed': '查阅管理台留痕',
   'audit.exported': '导出管理台留痕',
+  'clue.external-transfer-attached': '登记系统外移送',
   'storage.quarantined': '标记涉密误传',
   'storage.secrecy-report-created': '生成保密报告工单',
   'storage.secrecy-report-reported': '登记保密报告已报',

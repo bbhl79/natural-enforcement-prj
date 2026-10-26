@@ -60,6 +60,8 @@ export interface ClueDetail {
   readonly gaps: readonly ClueGap[];
   readonly tags: readonly string[];
   readonly initialTypes: readonly string[];
+  readonly latestDisposition: string | null;
+  readonly latestDispositionNote: string | null;
   readonly reporterName: string | null;
   readonly reporterContact: string | null;
 }

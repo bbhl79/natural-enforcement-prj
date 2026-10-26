@@ -290,6 +290,8 @@ export type {
   ClueClosureReminderRowToWrite,
   ClueClosureReminderTarget,
   ClueDispositionWrite,
+  ClueExternalTransferWrite,
+  ClueExternalTransferRow,
   ClueHeldRow,
   ClueReminderResolveWrite,
   ClueWithdrawContext,

@@ -1,4 +1,4 @@
-// 不予立案登记、结案提醒生成与提醒处理（#217；规格 D 节、GLOSSARY）。
+// 不予立案／其他（#229）登记、结案提醒生成与提醒处理（#217／#229；规格 D 节、GLOSSARY）。
 //
 // 不予立案：仅已派承办人（handler_assigned）可登记；主办／协办本人或承办机构内勤可操作；
 // 核查运行中或没跑成都不阻止。登记后线索进终态（closed），处置事实写入 ClueDisposition，
@@ -112,8 +112,9 @@ export class ClueClosureService {
   ) {}
 
   /**
-   * 不予立案登记：仅已派承办人可登记，主办／协办本人或承办机构内勤可操作。
+   * 不予立案／其他登记：仅已派承办人可登记，主办／协办本人或承办机构内勤可操作。
    * 核查运行中或没跑成都不阻止（核查状态是正交属性，本方法不读它）。
+   * other（#229）理由必填，进 closed，提醒 kind=other。
    */
   async recordNoCase(
     actor: ActorRef,
@@ -144,8 +145,8 @@ export class ClueClosureService {
       return { status: 403, body: { reason: error.reason } };
     }
 
-    // 规则：处置类型本期只受理不予立案（移送归 #216 的接口）；说明必填。
-    if (input.disposition !== 'no-case') {
+    // 规则：本期受理不予立案与其他（#229）；移送归 #216 接口。说明／理由必填。
+    if (input.disposition !== 'no-case' && input.disposition !== 'other') {
       return this.rejectDisposition(actor, actorCode, actorOrgId, clueId, {
         status: 400,
         result: 'non-compliant',
@@ -168,6 +169,9 @@ export class ClueClosureService {
       return this.rejectDisposition(actor, actorCode, actorOrgId, clueId, guard);
     }
 
+    const disposition = input.disposition as 'no-case' | 'other';
+    const reminderKind = disposition === 'other' ? 'other' : 'no-case';
+
     // 处置事实、终态、结案提醒与成功留痕同成同败；并发冲突回滚后另起事务写失败留痕。
     return this.uow.run(async (tx) => {
       const recordedAt = new Date();
@@ -175,7 +179,7 @@ export class ClueClosureService {
         clueId,
         expectedStatus: input.expectedStatus,
         dispositionId: newUlid(),
-        disposition: 'no-case',
+        disposition,
         transferredOrg: null,
         documentNo: null,
         note: input.note.trim(),
@@ -195,9 +199,10 @@ export class ClueClosureService {
         );
       }
       // 结案提醒与状态写入同事务：按暂存线索的当前命中集逐对生成。
+      // other 用新提醒类型 other（#229），不复用 no-case。
       const reminderIds = await generateClosureReminders(tx.clues, {
         closedClueId: clueId,
-        kind: 'no-case',
+        kind: reminderKind,
         createdAt: recordedAt,
         newId: () => newUlid(),
       });
@@ -206,7 +211,7 @@ export class ClueClosureService {
         ...this.parties(actor, actorCode, actorOrgId, clueId, DISPOSITION_OPCODE),
         detail: JSON.stringify({
           code: context.code,
-          disposition: 'no-case',
+          disposition,
           reminderCount: reminderIds.length,
         }),
       });

@@ -34,6 +34,8 @@ import type {
   ClueDesignationRequestRow,
   ClueDesignationRequestWrite,
   ClueDispositionWrite,
+  ClueExternalTransferWrite,
+  ClueExternalTransferRow,
   ClueDispatchContext,
   ClueGapFillOutcome,
   ClueGapFillWrite,
@@ -1170,7 +1172,7 @@ export class PrismaClueStore implements ClueStore {
 
   /**
    * 处置登记：状态条件更新为终态并写入处置行。
-   * 起始状态由处置类型定死：不予立案仅已派承办人、随旧线索办结仅不派、移送三个状态都可。
+   * 起始状态由处置类型定死：不予立案／其他仅已派承办人、随旧线索办结仅不派、移送三个状态都可。
    */
   async applyDisposition(write: ClueDispositionWrite): Promise<boolean> {
     const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
@@ -1180,6 +1182,7 @@ export class PrismaClueStore implements ClueStore {
         AND (
           (${write.disposition} = 'no-case' AND status = 'handler_assigned')
           OR (${write.disposition} = 'with-old' AND status = 'held')
+          OR (${write.disposition} = 'other' AND status = 'handler_assigned')
           OR (${write.disposition} = 'transfer' AND status IN ('in_pool', 'org_assigned', 'handler_assigned'))
         )
       RETURNING id
@@ -1200,7 +1203,86 @@ export class PrismaClueStore implements ClueStore {
     return true;
   }
 
-  async readClosureReminder(reminderId: string): Promise<ClueClosureReminderRow | null> {
+  async hasOtherDisposition(clueId: string): Promise<boolean> {
+    const row = await this.prisma.clueDisposition.findFirst({
+      where: { clueId, disposition: 'other' },
+      select: { id: true },
+    });
+    return row !== null;
+  }
+
+  async insertExternalTransfer(write: ClueExternalTransferWrite): Promise<void> {
+    await this.prisma.clueExternalTransfer.create({
+      data: {
+        id: write.id,
+        clueId: write.clueId,
+        transferredOrg: write.transferredOrg,
+        documentNo: write.documentNo,
+        letterDate: new Date(`${write.letterDate}T00:00:00.000+08:00`),
+        reason: write.reason,
+        recordedBy: write.recordedBy,
+        recordedAt: write.recordedAt,
+      },
+    });
+    if (write.materials.length > 0) {
+      await this.prisma.clueMaterial.createMany({
+        data: write.materials.map((material) => ({
+          id: material.id,
+          clueId: write.clueId,
+          kind: material.kind,
+          fileKey: material.fileKey,
+          versionId: material.versionId,
+          fileName: material.fileName,
+          contentType: material.contentType,
+          byteSize: material.byteSize,
+          digest: material.digest,
+          externalTransferId: write.id,
+        })),
+      });
+    }
+  }
+
+  async listExternalTransfers(clueId: string): Promise<readonly ClueExternalTransferRow[]> {
+    const rows = await this.prisma.clueExternalTransfer.findMany({
+      where: { clueId },
+      orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
+    });
+    if (rows.length === 0) return [];
+    const materials = await this.prisma.clueMaterial.findMany({
+      where: { externalTransferId: { in: rows.map((row) => row.id) } },
+      orderBy: { createdAt: 'asc' },
+    });
+    const byTransfer = new Map<string, typeof materials>();
+    for (const material of materials) {
+      const key = material.externalTransferId ?? '';
+      const list = byTransfer.get(key) ?? [];
+      list.push(material);
+      byTransfer.set(key, list);
+    }
+    return rows.map((row) => {
+      const letter = row.letterDate;
+      const letterDate = new Date(letter.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const attachments = (byTransfer.get(row.id) ?? []).map((material) => ({
+        id: material.id,
+        fileName: material.fileName,
+        contentType: material.contentType,
+        byteSize: material.byteSize,
+      }));
+      return {
+        id: row.id,
+        clueId: row.clueId,
+        transferredOrg: row.transferredOrg,
+        documentNo: row.documentNo,
+        letterDate,
+        reason: row.reason,
+        recordedBy: row.recordedBy,
+        recordedAt: row.recordedAt,
+        attachments,
+      };
+    });
+  }
+
+    async readClosureReminder(reminderId: string): Promise<ClueClosureReminderRow | null> {
     const rows = await this.prisma.$queryRaw<
       Array<{
         id: string;
@@ -1660,7 +1742,7 @@ export class PrismaClueStore implements ClueStore {
     const clue = await this.prisma.clue.findUnique({ where: { id: clueId } });
     if (!clue) return null;
 
-    const [requirements, gaps, values, tags, types] = await Promise.all([
+    const [requirements, gaps, values, tags, types, latestDispositionRow] = await Promise.all([
       this.prisma.clueRequirementSnapshot.findMany({
         where: { clueId },
         orderBy: [{ layer: 'asc' }, { group: 'asc' }, { key: 'asc' }],
@@ -1682,6 +1764,11 @@ export class PrismaClueStore implements ClueStore {
         where: { clueId },
         orderBy: { typeCode: 'asc' },
         select: { typeCode: true },
+      }),
+      this.prisma.clueDisposition.findFirst({
+        where: { clueId },
+        orderBy: [{ recordedAt: 'desc' }, { id: 'desc' }],
+        select: { disposition: true, note: true },
       }),
     ]);
 
@@ -1727,6 +1814,8 @@ export class PrismaClueStore implements ClueStore {
       })),
       tags: tags.map((row) => ({ name: row.name })),
       initialTypes: types.map((row) => row.typeCode),
+      latestDisposition: latestDispositionRow?.disposition ?? null,
+      latestDispositionNote: latestDispositionRow?.note ?? null,
     };
   }
 

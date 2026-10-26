@@ -152,6 +152,8 @@ export function reminderKindLabel(kind: string): string {
       return '移送';
     case 'case':
       return '立案';
+    case 'other':
+      return '其他（行政处理事项，系统外办理）';
     default:
       return kind;
   }
