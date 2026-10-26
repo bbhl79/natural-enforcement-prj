@@ -245,7 +245,7 @@ code="$(request "$work/clerk-session.body" "$work/clerk-session.hdr" /api/auth/s
 [ "$code" = "200" ] || fail "经办会话查询状态码是 ${code}：$(cat "$work/clerk-session.body")"
 grep -q "\"code\":\"${CLERK_CODE}\"" "$work/clerk-session.body" || fail "会话不是经办：$(cat "$work/clerk-session.body")"
 grep -q '"passwordChangeRequired":false' "$work/clerk-session.body" || fail "经办改密后仍强制改密：$(cat "$work/clerk-session.body")"
-grep -q '"clue.verify.start"' "$work/clerk-session.body" || fail "经办会话没有启动核查码：$(cat "$work/clerk-session.body")"
+grep -q '"clue.verify.retry"' "$work/clerk-session.body" || fail "经办会话没有重试核查码（clue.verify.start 本期不授权，#210）：$(cat "$work/clerk-session.body")"
 # 资格由证件三列推导（identity 的 hasEnforcementQualification，fail-closed）；库行是它的事实源。
 cert_row="$(psql_db "$DAY_DB" -tA -c "SELECT enforcement_cert_no || '/' || enforcement_cert_status || '/' || (enforcement_cert_expires_on IS NOT NULL)
   FROM personnel WHERE code = '${CLERK_CODE}'")"

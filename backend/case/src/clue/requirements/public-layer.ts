@@ -1,0 +1,85 @@
+// 公共层录入要件（ADR 0018；#24 决议第五节「公共要件（每条线索都填）」）。
+// 八项，每条线索都填。后果为阻断的项缺失时阻断线索录入。
+// 依据按 ADR 0019 写「文件编号 + 条号」：规程是 doc_002，自然资源行政处罚办法是 doc_061。
+// 「实务」「契约 §3.7」不是规范性文件，留在 basisNote。
+
+import type { RequirementItem } from './types.ts';
+
+/** 公共层要件项。顺序即表单呈现顺序。 */
+export const PUBLIC_LAYER_ITEMS: readonly RequirementItem[] = [
+  {
+    key: 'clue.source',
+    label: '线索来源（编码单选）',
+    group: '线索基本信息',
+    required: true,
+    timing: '录入时',
+    consequence: '阻断',
+    basis: [{ document: 'doc_002', article: '2.4' }],
+  },
+  {
+    key: 'clue.domain',
+    label: '法域',
+    group: '线索基本信息',
+    required: true,
+    timing: '录入时',
+    consequence: '阻断',
+    basis: [{ document: 'doc_061', article: '第 2 条' }],
+  },
+  {
+    key: 'clue.location',
+    label: '位置（空间对象，CGCS2000）',
+    group: '线索基本信息',
+    required: true,
+    timing: '录入时',
+    consequence: '阻断',
+    basis: [],
+    basisNote: '契约 §3.7（线索必有空间对象 1:1）',
+  },
+  {
+    key: 'clue.received_at',
+    label: '收到或发现的时间',
+    group: '线索基本信息',
+    required: true,
+    timing: '录入时',
+    consequence: '阻断',
+    basis: [{ document: 'doc_002', article: '2.2.1(2)' }],
+  },
+  {
+    key: 'clue.narrative',
+    label: '反映的情况',
+    group: '线索基本信息',
+    required: true,
+    timing: '录入时',
+    consequence: '阻断',
+    basis: [{ document: 'doc_002', article: '2.2.1(2)(3)' }],
+  },
+  {
+    key: 'clue.initial_types',
+    label: '初步涉嫌违法类型（多值，可空）',
+    group: '线索基本信息',
+    required: false,
+    timing: '只提示',
+    consequence: '提示',
+    basis: [{ document: 'doc_002', article: '附录 A–D' }],
+  },
+  {
+    key: 'clue.materials',
+    label: '随附材料',
+    group: '材料与标签',
+    required: false,
+    timing: '只提示',
+    consequence: '提示',
+    basis: [],
+    basisNote: '实务',
+  },
+  {
+    key: 'clue.tags',
+    label: '标签（一组词）',
+    group: '材料与标签',
+    required: false,
+    timing: '只提示',
+    consequence: '提示',
+    basis: [],
+    basisNote: '实务',
+  },
+];

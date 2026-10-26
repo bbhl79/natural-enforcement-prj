@@ -1,5 +1,7 @@
-// 路由（#105「前端：路由与应用壳」）：react-router data 模式，createBrowserRouter + RouterProvider。
+// 路由（#105「前端：路由与应用壳」、#207 H 节路由契约、#209 执行票）：
+// react-router data 模式，createBrowserRouter + RouterProvider。
 // 根 loader 只取会话并按 #91 规则跳转，不做授权判断；页面 loader 只取数。
+// 一级入口地址定型：/workbench、/clue、/case、/supervise、/admin；「/」重定向 /workbench。
 import { createBrowserRouter, redirect, type LoaderFunctionArgs, type RouteObject } from 'react-router';
 
 import AdminHomePage from './admin/AdminHomePage';
@@ -21,7 +23,12 @@ import {
 } from './admin/personnel';
 import LoginPage from './login/LoginPage';
 import PasswordPage from './login/PasswordPage';
-import WorkbenchPage, { workbenchLoader } from './pages/WorkbenchPage';
+import ClueRegisterPage from './clue/ClueRegisterPage';
+import { clueCenterLoader } from './clue/center';
+import { clueRegisterLoader } from './clue/registration';
+import ClueCenterPage from './pages/ClueCenterPage';
+import PlannedCenterPage from './pages/PlannedCenterPage';
+import WorkbenchPage from './pages/WorkbenchPage';
 import { authRedirect } from './routing';
 import AppShell, { AppShellError } from './shell/AppShell';
 import RootLayout from './shell/RootLayout';
@@ -41,6 +48,11 @@ export function rootLoader(store: RouterStore) {
     if (target) throw redirect(target);
     return null;
   };
+}
+
+/** 「/」重定向到统一工作台。 */
+export function homeRedirect() {
+  return redirect('/workbench');
 }
 
 export function appRoutes(store: RouterStore): RouteObject[] {
@@ -64,7 +76,29 @@ export function appRoutes(store: RouterStore): RouteObject[] {
               element: <AppShell />,
               errorElement: <AppShellError />,
               children: [
-                { id: 'workbench', index: true, loader: workbenchLoader(store), element: <WorkbenchPage /> },
+                { id: 'home', index: true, loader: homeRedirect },
+                { id: 'workbench', path: 'workbench', element: <WorkbenchPage /> },
+                {
+                  id: 'clue',
+                  path: 'clue',
+                  loader: clueCenterLoader(store),
+                  element: <ClueCenterPage />,
+                },
+                {
+                  id: 'clue-register',
+                  path: 'clue/register',
+                  loader: clueRegisterLoader(store),
+                  element: <ClueRegisterPage />,
+                },
+                { id: 'case', path: 'case', element: <PlannedCenterPage primary="case" /> },
+                { id: 'case-onsite', path: 'case/onsite-check', element: <PlannedCenterPage primary="case" /> },
+                { id: 'case-trial', path: 'case/trial', element: <PlannedCenterPage primary="case" /> },
+                { id: 'supervise', path: 'supervise', element: <PlannedCenterPage primary="supervise" /> },
+                {
+                  id: 'supervise-review',
+                  path: 'supervise/review',
+                  element: <PlannedCenterPage primary="supervise" />,
+                },
                 { id: 'admin-home', path: 'admin', loader: adminHomeLoader(store), element: <AdminHomePage /> },
                 { id: 'org-tree', path: 'admin/org-units', loader: orgTreeLoader(store), element: <OrgTreePage /> },
                 {
@@ -83,6 +117,8 @@ export function appRoutes(store: RouterStore): RouteObject[] {
                 },
                 { id: 'personnel-new', path: 'admin/personnel/new', loader: personnelCreateLoader(store), element: <PersonnelCreatePage /> },
                 { id: 'personnel-card', path: 'admin/personnel/:id', loader: personnelCardLoader(store), element: <PersonnelCardPage /> },
+                { id: 'admin-roles', path: 'admin/roles', element: <PlannedCenterPage primary="admin" /> },
+                { id: 'admin-reference', path: 'admin/reference', element: <PlannedCenterPage primary="admin" /> },
                 { id: 'not-found', path: '*', element: <NotFoundPage /> },
               ],
             },

@@ -1,6 +1,19 @@
 import type {
   AccountMaintenanceFailedReason,
   AuditTargetOrgBasis,
+  ClueDesignateRejectedFailedReason,
+  ClueDesignateRequestedFailedReason,
+  ClueDispatchDecideFailedReason,
+  ClueDispositionRecordedFailedReason,
+  ClueHandlerAssignedFailedReason,
+  ClueItemsSupplementFailedReason,
+  ClueOrgAssignedFailedReason,
+  CluePoolReassignedFailedReason,
+  ClueRegisterFailedReason,
+  ClueGeometryUpdateFailedReason,
+  ClueReminderResolvedFailedReason,
+  ClueVerifyRetryFailedReason,
+  ClueWithdrawnFailedReason,
   CertUpdateFailedReason,
   AuthzDeniedReason,
   LoginFailedReason,
@@ -44,6 +57,11 @@ export interface AuditParties {
   itemCount?: number | null;
   /** 后值（#128）。只有 AUDIT_NEXT_VALUE_ACTIONS 里的动作带，其余为空。 */
   nextValue?: string | null;
+  /**
+   * 结构化快照（#211，规格 G）。只有 AUDIT_DETAIL_ACTIONS 里的动作带，其余为空。
+   * 只写不回：查阅接口不返回这一列。
+   */
+  detail?: string | null;
 }
 
 export type AuditAppend =
@@ -138,7 +156,65 @@ export type AuditAppend =
   })
   | (AuditParties & { action: 'personnel.restored' })
   | (AuditParties & { action: 'personnel.restored'; outcome: 'failed'; reason: PersonnelRestoreFailedReason })
-  | (AuditParties & { action: 'personnel.sessions-ended' });
+  | (AuditParties & { action: 'personnel.sessions-ended' })
+  // 线索登记（#211，规格 G）：动作词与业务事实同事务写入，detail 存结构化快照。
+  | (AuditParties & { action: 'clue.registered' })
+  | (AuditParties & { action: 'clue.registered'; outcome: 'failed'; reason: ClueRegisterFailedReason })
+  | (AuditParties & { action: 'clue.items-supplemented' })
+  | (AuditParties & { action: 'clue.items-supplemented'; outcome: 'failed'; reason: ClueItemsSupplementFailedReason })
+  // 内业核查手动重跑（#213，规格 G）：动作词与新运行行同事务写入，detail 存新运行序号。
+  | (AuditParties & { action: 'clue.verify-retried' })
+  | (AuditParties & { action: 'clue.verify-retried'; outcome: 'failed'; reason: ClueVerifyRetryFailedReason })
+  // 疑似重复重绘（#212，规格 G）：动作词与新空间版本同事务写入，detail 存前后命中摘要。
+  | (AuditParties & { action: 'clue.geometry-updated' })
+  | (AuditParties & {
+    action: 'clue.geometry-updated';
+    outcome: 'failed';
+    reason: ClueGeometryUpdateFailedReason;
+  })
+  // 实名查阅（#212，规格 G）：只记查看事实，detail 存编号，不记明文。
+  | (AuditParties & { action: 'clue.reference-viewed' })
+  // 分派决定与两步分派（#214，规格 G）：动作词与状态写入同事务，detail 存前后状态等结构化快照。
+  | (AuditParties & { action: 'clue.dispatched' })
+  | (AuditParties & { action: 'clue.dispatched'; outcome: 'failed'; reason: ClueDispatchDecideFailedReason })
+  | (AuditParties & { action: 'clue.held' })
+  | (AuditParties & { action: 'clue.held'; outcome: 'failed'; reason: ClueDispatchDecideFailedReason })
+  | (AuditParties & { action: 'clue.org-assigned' })
+  | (AuditParties & { action: 'clue.org-assigned'; outcome: 'failed'; reason: ClueOrgAssignedFailedReason })
+  | (AuditParties & { action: 'clue.handler-assigned' })
+  | (AuditParties & { action: 'clue.handler-assigned'; outcome: 'failed'; reason: ClueHandlerAssignedFailedReason })
+  // 处置登记（#216 移送、#217 不予立案／随旧线索办结，规格 G）：同一动作词承载两种处置入口。
+  | (AuditParties & { action: 'clue.disposition-recorded' })
+  | (AuditParties & {
+      action: 'clue.disposition-recorded';
+      outcome: 'failed';
+      reason: ClueDispositionRecordedFailedReason;
+    })
+  // 移送与停用机构池重新指定（#216，规格 G）：停用机构与新接收机构。
+  | (AuditParties & { action: 'clue.pool-reassigned' })
+  | (AuditParties & { action: 'clue.pool-reassigned'; outcome: 'failed'; reason: CluePoolReassignedFailedReason })
+  // 报请指定管辖与驳回（#215，规格 G）：动作词与报请行同事务写入，detail 存报请机构、拟归属机构与受理机构。
+  | (AuditParties & { action: 'clue.designate-requested' })
+  | (AuditParties & {
+      action: 'clue.designate-requested';
+      outcome: 'failed';
+      reason: ClueDesignateRequestedFailedReason;
+    })
+  | (AuditParties & { action: 'clue.designate-rejected' })
+  | (AuditParties & {
+      action: 'clue.designate-rejected';
+      outcome: 'failed';
+      reason: ClueDesignateRejectedFailedReason;
+    })
+  // 撤回不派与结案（#217，规格 G）：动作词与状态写入同事务，detail 存原因编码／提醒处理结果。
+  | (AuditParties & { action: 'clue.withdrawn' })
+  | (AuditParties & { action: 'clue.withdrawn'; outcome: 'failed'; reason: ClueWithdrawnFailedReason })
+  | (AuditParties & { action: 'clue.reminder-resolved' })
+  | (AuditParties & {
+      action: 'clue.reminder-resolved';
+      outcome: 'failed';
+      reason: ClueReminderResolvedFailedReason;
+    });
 
 /**
  * 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。

@@ -12,7 +12,6 @@ import { describe, it } from 'vitest';
 //   L5 超十日：归立案超时提醒与打标切片（一期不建立案）。
 describe('USER LOCK 断言登记', () => {
   it.todo('USER-LOCK-L1 听证申请期：待实现');
-  it.todo('USER-LOCK-L2 线索分派前自动核查：待实现');
   it.todo('USER-LOCK-L3 应听证不得自免：待实现');
   it.todo('USER-LOCK-L4 037：待实现');
   it.todo('USER-LOCK-L5 超十日：待实现');

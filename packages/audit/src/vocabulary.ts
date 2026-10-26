@@ -36,6 +36,28 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'personnel.deactivated',
   'personnel.restored',
   'personnel.sessions-ended',
+  // 线索登记（#211，规格 G）：登记成功与缺件补齐。
+  'clue.registered',
+  'clue.items-supplemented',
+  // 内业核查（#213，规格 G）：手动重跑。自动核查由业务表承载，不伪装成人为留痕。
+  'clue.verify-retried',
+  // 疑似重复与实名查阅（#212，规格 G）：重绘成功与查阅实名事实。
+  'clue.geometry-updated',
+  'clue.reference-viewed',
+  // 分派决定与两步分派（#214，规格 G）：决定（含已知晓）、派机构、派主办／协办。
+  'clue.dispatched',
+  'clue.held',
+  'clue.org-assigned',
+  'clue.handler-assigned',
+  // 移送与停用机构池重新指定（#216，规格 G）：登记移送、重新指定接收机构。
+  'clue.pool-reassigned',
+  // 报请指定管辖（#215，规格 G）：下级报请；受理人驳回（批准由 clue.org-assigned 承载）。
+  'clue.designate-requested',
+  'clue.designate-rejected',
+  // 撤回不派与结案（#217，规格 G）：撤回不派、处置登记、提醒处理。
+  'clue.withdrawn',
+  'clue.disposition-recorded',
+  'clue.reminder-resolved',
 ] as const;
 
 /**
@@ -213,3 +235,231 @@ export type AuditNextValueAction = (typeof AUDIT_NEXT_VALUE_ACTIONS)[number];
  */
 export const AUDIT_TARGET_ORG_BASES = ['object', 'actor-fallback'] as const;
 export type AuditTargetOrgBasis = (typeof AUDIT_TARGET_ORG_BASES)[number];
+
+/**
+ * 登记线索被拒（outcome=failed）的原因（#211，规格 G）。
+ * missing-required-items 公共层或来源层阻断项缺失、类型层缺件未确认；
+ * invalid-form 来源、法域、类型编码或要件取值不合规；
+ * invalid-attachment 附件类型、真实内容、件数或字节数不合规；
+ * invalid-geometry 几何来源文件不合规。
+ */
+export const CLUE_REGISTER_FAILED_REASONS = [
+  'missing-required-items',
+  'invalid-form',
+  'invalid-attachment',
+  'invalid-geometry',
+] as const;
+export type ClueRegisterFailedReason = (typeof CLUE_REGISTER_FAILED_REASONS)[number];
+
+/**
+ * 补齐缺件被拒（outcome=failed）的原因（#211，规格 G）。
+ * missing-required-items 同一次提交里有一项补齐不合格（整单不保存）；
+ * invalid-form 提交值本身不合规。
+ */
+export const CLUE_ITEMS_SUPPLEMENT_FAILED_REASONS = ['missing-required-items', 'invalid-form'] as const;
+export type ClueItemsSupplementFailedReason = (typeof CLUE_ITEMS_SUPPLEMENT_FAILED_REASONS)[number];
+
+/**
+ * 手动重跑内业核查被拒（outcome=failed）的原因（#213，规格 G）。
+ * invalid-state 线索终态或该法域不设内业核查；
+ * concurrent-change 该线索已有进行中的核查（并发手动重跑）。
+ */
+export const CLUE_VERIFY_RETRY_FAILED_REASONS = ['invalid-state', 'concurrent-change'] as const;
+export type ClueVerifyRetryFailedReason = (typeof CLUE_VERIFY_RETRY_FAILED_REASONS)[number];
+
+/**
+ * 重绘被拒（outcome=failed）的原因（#212，规格 G）。
+ * invalid-state 线索不在待分派决定／待分派池、已派机构或已有活动核查；
+ * invalid-geometry 重绘的几何来源文件不合规。
+ */
+export const CLUE_GEOMETRY_UPDATE_FAILED_REASONS = ['invalid-state', 'invalid-geometry'] as const;
+export type ClueGeometryUpdateFailedReason = (typeof CLUE_GEOMETRY_UPDATE_FAILED_REASONS)[number];
+
+/**
+ * 分派决定被拒（outcome=failed）的原因（#214，规格 G）。
+ * complaint-must-dispatch 举报类线索只能派、不能选不派；
+ * ack-required 存在未结案的疑似重复命中、派出前须点「已知晓」；
+ * invalid-state 线索不在待分派决定等状态；
+ * concurrent-change 决定与并发写入冲突。
+ */
+export const CLUE_DISPATCH_DECIDE_FAILED_REASONS = [
+  'invalid-form',
+  'complaint-must-dispatch',
+  'ack-required',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type ClueDispatchDecideFailedReason = (typeof CLUE_DISPATCH_DECIDE_FAILED_REASONS)[number];
+
+/**
+ * 派机构（首次分派、重新分派、指定管辖）被拒（outcome=failed）的原因（#214，规格 G）。
+ * missing-reassign-reason 重新分派与指定管辖的理由必填；
+ * org-unit-deactivated 目标机构已停用；
+ * designated-lock 指定管辖之后下级机构不能再重新分派；
+ * designation-pending 报请指定管辖期间下级机构不能分派、重新分派（#215，规格 D）；
+ * invalid-state 线索状态不允许派机构；
+ * concurrent-change 与并发写入冲突。
+ */
+export const CLUE_ORG_ASSIGNED_FAILED_REASONS = [
+  'invalid-form',
+  'missing-reassign-reason',
+  'org-unit-deactivated',
+  'designated-lock',
+  'designation-pending',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type ClueOrgAssignedFailedReason = (typeof CLUE_ORG_ASSIGNED_FAILED_REASONS)[number];
+
+/**
+ * 派主办／协办被拒（outcome=failed）的原因（#214，规格 G）。
+ * missing-required-items 主办必填；
+ * assignee-not-qualified 承办人已停用或不属于承办机构；
+ * designation-pending 报请指定管辖期间下级机构不能分派（#215，规格 D）；
+ * invalid-state 线索不在已派机构状态；
+ * concurrent-change 与并发写入冲突。
+ */
+export const CLUE_HANDLER_ASSIGNED_FAILED_REASONS = [
+  'missing-required-items',
+  'assignee-not-qualified',
+  'designation-pending',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type ClueHandlerAssignedFailedReason = (typeof CLUE_HANDLER_ASSIGNED_FAILED_REASONS)[number];
+
+/**
+ * 撤回不派被拒（outcome=failed）的原因（#217，规格 G）。
+ * missing-withdraw-reason 未勾原因（至少一项）；missing-withdraw-note 补充说明必填；
+ * invalid-withdraw-reason 勾选的原因不在四项常用原因之内；
+ * invalid-state 线索不在「不派」状态；concurrent-change 与并发写入冲突。
+ */
+export const CLUE_WITHDRAWN_FAILED_REASONS = [
+  'missing-withdraw-reason',
+  'missing-withdraw-note',
+  'invalid-withdraw-reason',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type ClueWithdrawnFailedReason = (typeof CLUE_WITHDRAWN_FAILED_REASONS)[number];
+
+/**
+ * 处置登记被拒（outcome=failed）的原因（#216 移送、#217 不予立案／随旧线索办结，规格 G）。
+ * 同一动作词承载两种处置入口，故原因取两侧并集：
+ * missing-disposition-fields 移送机关、文书编号或原因必填缺失（不予立案与随旧办结时为说明必填）；
+ * unsupported-disposition 本期不支持的处置类型；
+ * invalid-letter-date 发函日期补录值不合规（移送）；
+ * invalid-attachment 附件类型、真实内容、件数或字节数不合规（移送，存储零写入）；
+ * designation-pending 存在未关闭的指定管辖报请，报请期间下级不能移送；
+ * invalid-state 线索状态不允许该处置；concurrent-change 与并发写入冲突。
+ */
+export const CLUE_DISPOSITION_RECORDED_FAILED_REASONS = [
+  'missing-disposition-fields',
+  'unsupported-disposition',
+  'invalid-letter-date',
+  'invalid-attachment',
+  'designation-pending',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type ClueDispositionRecordedFailedReason =
+  (typeof CLUE_DISPOSITION_RECORDED_FAILED_REASONS)[number];
+
+/**
+ * 结案提醒处理被拒（outcome=failed）的原因（#217，规格 G）。
+ * missing-withdraw-reason／missing-withdraw-note／invalid-withdraw-reason 选「撤回不派再办」时的原因与说明；
+ * missing-disposition-fields 选「随旧线索办结」时的说明必填；
+ * unsupported-disposition 处理结果不在二选一之内；
+ * invalid-state 提醒或线索状态不允许处理；concurrent-change 与并发写入冲突。
+ */
+export const CLUE_REMINDER_RESOLVED_FAILED_REASONS = [
+  'missing-withdraw-reason',
+  'missing-withdraw-note',
+  'invalid-withdraw-reason',
+  'missing-disposition-fields',
+  'unsupported-disposition',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type ClueReminderResolvedFailedReason = (typeof CLUE_REMINDER_RESOLVED_FAILED_REASONS)[number];
+
+/**
+ * 停用机构池重新指定被拒（outcome=failed）的原因（#216，规格 G）。
+ * missing-reassign-reason 理由必填；
+ * org-unit-required 目标机构必填；
+ * org-unit-deactivated 目标机构已停用；
+ * org-unit-not-deactivated 线索所在池机构未停用（对象级限已停用机构的未派出线索）；
+ * invalid-state 线索状态不允许重新指定；
+ * concurrent-change 与并发写入冲突。
+ */
+export const CLUE_POOL_REASSIGNED_FAILED_REASONS = [
+  'missing-reassign-reason',
+  'org-unit-required',
+  'org-unit-deactivated',
+  'org-unit-not-deactivated',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type CluePoolReassignedFailedReason = (typeof CLUE_POOL_REASSIGNED_FAILED_REASONS)[number];
+
+/**
+ * 带结构化快照（detail）的动作（#211，规格 G）。
+ * 报请指定管辖被拒（outcome=failed）的原因（#215，规格 G）。
+ * missing-designate-reason 报请理由必填；
+ * org-unit-deactivated 拟归属机构已停用；
+ * invalid-state 线索不在可报请状态，或没有可受理的上级内勤；
+ * designation-pending 已有待处理的报请（含并发同报请被唯一索引挡下）；
+ * concurrent-change 与并发写入冲突。
+ */
+export const CLUE_DESIGNATE_REQUESTED_FAILED_REASONS = [
+  'missing-designate-reason',
+  'org-unit-deactivated',
+  'invalid-state',
+  'designation-pending',
+  'concurrent-change',
+] as const;
+export type ClueDesignateRequestedFailedReason =
+  (typeof CLUE_DESIGNATE_REQUESTED_FAILED_REASONS)[number];
+
+/**
+ * 驳回指定管辖报请被拒（outcome=failed）的原因（#215，规格 G）。
+ * missing-reject-reason 驳回理由必填；
+ * invalid-state 该线索没有待处理的报请，或操作人不是受理人；
+ * concurrent-change 与并发写入冲突。
+ */
+export const CLUE_DESIGNATE_REJECTED_FAILED_REASONS = [
+  'missing-reject-reason',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type ClueDesignateRejectedFailedReason =
+  (typeof CLUE_DESIGNATE_REJECTED_FAILED_REASONS)[number];
+
+/**
+ * 带结构化快照（detail）的动作（#211/#212/#213/#214/#215，规格 G）。
+ * 线索动作把编号、当前命中集摘要、缺件键写进 detail，不占用 previousValue/nextValue/itemCount。
+ * detail 只写不回：查阅接口不返回它。其余动作一律不带 detail。
+ */
+export const AUDIT_DETAIL_ACTIONS = [
+  'clue.registered',
+  'clue.items-supplemented',
+  'clue.verify-retried',
+  'clue.geometry-updated',
+  'clue.reference-viewed',
+  // 分派决定与两步分派（#214，规格 G）：前后状态、已知晓、原／新机构、指定管辖与承办人变更。
+  'clue.dispatched',
+  'clue.held',
+  'clue.org-assigned',
+  'clue.handler-assigned',
+  // 撤回不派与结案（#217，规格 G）：撤回原因编码、处置类型、提醒 ID 与处理结果。
+  'clue.withdrawn',
+  'clue.disposition-recorded',
+  'clue.reminder-resolved',
+  // 移送与停用机构池重新指定（#216，规格 G）：处置类型、移送机关、文书编号、发函日期、新接收机构。
+  'clue.disposition-recorded',
+  'clue.pool-reassigned',
+  // 报请指定管辖（#215，规格 G）：报请机构、拟归属机构、受理机构；驳回记受理机构。
+  'clue.designate-requested',
+  'clue.designate-rejected',
+] as const;
+export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];

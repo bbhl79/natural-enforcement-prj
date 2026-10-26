@@ -96,6 +96,11 @@
 #                           （create/createMany/upsert/update/updateMany/delete/deleteMany，
 #                           含换行链式）——含必填空间字段的模型禁用 ORM 写
 #                           （infra/VERSIONS.md 执行纪律 2），写一律走 $queryRaw/ST_ 函数
+#   reference-data-no-mutation 参照数据只追加的机器兜底（#210）：五张参照数据表
+#                           （geoDictSourceCode / geoDictViolationType / geoDictDocument /
+#                           geoDictViolationTypeBasis / geoDictJurisdiction）的 delegate
+#                           只许 insert，不许 update/updateMany/delete/deleteMany/upsert
+#                           （ADR 0016：改参照数据＝追加新版本，不许就地改行或删行）
 #   runtime-manifest        运行参数清单（ADR 0008、#80、#120）：infra/docker-compose.yml 与
 #                           .github/workflows/ci.yml 里的变量名必须登记在 infra/runtime.env；
 #                           密钥只许引用变量（compose）或 secrets（CI），不许字面量、默认值、
@@ -107,10 +112,14 @@
 #                           data 模式（createBrowserRouter + RouterProvider）。前端源码出现
 #                           声明式 <BrowserRouter>/<HashRouter>，或任何 package.json、源码、
 #                           vite 配置引用框架模式开发插件 @react-router/dev 即失败
-#   screenshot-full-set     截图全集文件名集合（#105「截图验收（loop ⑥c）」、#134 收口）：
-#                           docs/screens/<票>/ 顶层 *.png 的并集，与原型 v0.4 状态键
+#   screenshot-full-set     截图全集文件名集合（#105「截图验收（loop ⑥c）」、#134 收口、#207 换全集、#220 齐套）：
+#                           docs/screens/<票>/ 顶层 *.png 的并集，不得越出状态键全集，也不得缺键。
+#                           状态键全集 = 原型 v0.4 的 78 键
 #                           （frontend/prototype/admin-console/screens/*.png，除 overview.png）
-#                           完全相等。自动判定只比文件名集合；画面一致由逐图人查（各票 README 与 PR）
+#                           ∪ #207 协议第 I 节的 62 键（docs/screens/keys-207.txt）。
+#                           v0.4 时代缺键判红；#207 的 62 键缺键同样判红（#220 收口）。
+#                           文件名越出全集判红。compare/、extra/ 不计入实有集合。
+#                           自动判定只比文件名集合；画面一致由逐图人查（各票 README 与 PR）
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
@@ -122,9 +131,23 @@ QUEUE_DIR="$ROOT/packages/queue"
 STORAGE_DIR="$ROOT/packages/storage"
 # 留痕设施包（ADR 0012）：auditTrail 委托的唯一合法出现位置
 AUDIT_DIR="$ROOT/packages/audit"
-# ADR 0004：启动包里只有这一个文件可以直接引用身份模块的数据库适配器
+# ADR 0004：启动包里只有这一个文件可以直接引用各业务模块的数据库适配器
+# （#52 身份组织；#211 案件聚合的线索表适配器）。名单是文件 + specifier 白名单：
+# 名单外的深路径导入照样判红（红探针有负例证据）。
 SERVER_ADAPTER_FILE="backend/server/src/persistence.module.ts"
-SERVER_ADAPTER_SPEC="../../identity/src/persistence/prisma-identity-store.ts"
+SERVER_ADAPTER_SPECS=(
+  "../../identity/src/persistence/prisma-identity-store.ts"
+  "../../case/src/persistence/prisma-clue-store.ts"
+)
+
+# 该 specifier 是否在适配器豁免名单内。
+is_server_adapter_spec() { # $1 = specifier
+  local spec
+  for spec in "${SERVER_ADAPTER_SPECS[@]}"; do
+    [ "$spec" = "$1" ] && return 0
+  done
+  return 1
+}
 
 # 业务模块清单（定案命名，#47/#51）：模块名 → 源码目录（相对 ROOT）
 MODULES=(identity geo-dict case approval supervision deadline)
@@ -164,10 +187,12 @@ RULES=(
   storage-facility-entry
   audit-facility-entry
   spatial-no-orm-mutation
+  reference-data-no-mutation
   runtime-manifest
   user-lock-assertions
   frontend-router-mode
   screenshot-full-set
+  ui-copy-discipline
 )
 # 共用辅助函数（非规则，不进 RULES，#171 显式声明）：check_row 是 6 条 *-deps 规则
 # 共用的矩阵行实现。红探针的接线完整性护栏按「check_ 函数集 == RULES ∪ HELPERS」核对，
@@ -433,6 +458,10 @@ declare -A ASSEMBLY_EXEMPT=(
   ["integration/tx-audit-seam.test.ts"]="../backend/identity/src/"
   # #122：会话操作码清单与授权判定的等价性断言，同样直接装配 AccessControlService
   ["integration/session-opcodes.test.ts"]="../backend/identity/src/"
+  # #210：参照数据种子、录入要件声明与 form-schema 接口的断言，同样直接装配三个模块的源码。
+  ["integration/clue-form-schema.test.ts"]="../backend/case/src/ ../backend/geo-dict/src/ ../backend/identity/src/"
+  # #217：立案（filed）路径直调案件段的提醒生成内部服务，同样直接装配 case 与 identity 的源码。
+  ["integration/clue-closure.test.ts"]="../backend/case/src/ ../backend/identity/src/"
 )
 
 is_assembly_exempt() { # $1 = 相对 ROOT 路径, $2 = specifier
@@ -584,7 +613,7 @@ check_module-public-entry() {
     [ -n "$specs" ] || continue
     while IFS= read -r spec; do
       is_assembly_exempt "${file#"$ROOT"/}" "$spec" && continue
-      if [ "${file#"$ROOT"/}" = "$SERVER_ADAPTER_FILE" ] && [ "$spec" = "$SERVER_ADAPTER_SPEC" ]; then
+      if [ "${file#"$ROOT"/}" = "$SERVER_ADAPTER_FILE" ] && is_server_adapter_spec "$spec"; then
         continue
       fi
       case "$spec" in
@@ -664,6 +693,12 @@ check_weak-reference-entry() {
 # #96 去掉人员表旧 role 列。字段见 schema.prisma 与 backend/README.md「权限与留痕」。
 # #128（#105 岗位标记 A1）追加 PersonnelPost，记入 PR 供 #47 G1 定案。
 # #75 定案追加 PersonnelPasswordHistory（ADR 0015）。
+# #210 定案追加五张参照数据表（ADR 0016）：GeoDictSourceCode、GeoDictViolationType、
+# GeoDictDocument、GeoDictViolationTypeBasis、GeoDictJurisdiction。
+# #211 定案追加 18 张线索业务表（规格 F）：Clue、ClueSpatialObject、ClueSpatialPart、
+# ClueRequirementSnapshot、ClueItemValue、ClueItemGap、ClueInitialType、ClueTagLibrary、
+# ClueTag、ClueMaterial、ClueSpatialHit、ClueVerificationRun、ClueHandler、ClueAssignment、
+# ClueWithdrawal、ClueDisposition、ClueClosureReminder、ClueDesignationRequest。
 G1_MODELS=(
   MigrationProbe
   OrgUnit
@@ -683,6 +718,29 @@ G1_MODELS=(
   PersonnelPasswordHistory
   GeoDictLandBoundary
   GeoDictSurveyPoint
+  GeoDictSourceCode
+  GeoDictViolationType
+  GeoDictDocument
+  GeoDictViolationTypeBasis
+  GeoDictJurisdiction
+  Clue
+  ClueSpatialObject
+  ClueSpatialPart
+  ClueRequirementSnapshot
+  ClueItemValue
+  ClueItemGap
+  ClueInitialType
+  ClueTagLibrary
+  ClueTag
+  ClueMaterial
+  ClueSpatialHit
+  ClueVerificationRun
+  ClueHandler
+  ClueAssignment
+  ClueWithdrawal
+  ClueDisposition
+  ClueClosureReminder
+  ClueDesignationRequest
 )
 check_g1-model-allowlist() {
   local schema="$BACKEND/prisma/schema.prisma" model in_schema extra missing fails=0
@@ -784,13 +842,15 @@ check_audit-facility-entry() {
 }
 
 # 规则 o（评审必修扩口径）：空间纪律机器兜底——backend/、packages/、integration/、e2e/
-# 全源码不得对两个空间模型 delegate 调任何 ORM 写。含必填 Unsupported 空间字段的模型走
+# 全源码不得对空间模型 delegate 调任何 ORM 写。含必填 Unsupported 空间字段的模型走
 # ORM 写会绕过 ST_Transform 统一口径（infra/VERSIONS.md 执行纪律 2），写一律 $queryRaw/ST_ 函数。
 # 扩口径三处：① 方法集补全（create/update 之外的 upsert/createMany/updateMany/
 # delete/deleteMany 同样是 ORM 写）；② 文件形态 = SCAN_CODE（.mjs/.cjs 种子与校验器、
 # .sh 用例内联 node 都能拿到 delegate）；③ 换行链式（prisma.geoDictLandBoundary 换行
 # .create(）折行后二次判定，单行已命中的文件不重复报。
-SPATIAL_MODEL='geoDictLandBoundary|geoDictSurveyPoint'
+# #211 扩口径：线索空间三表归 case 模块（规格 F），其中 clueSpatialPart（含 Unsupported
+# 空间字段）与 clueSpatialHit（命中集经空间函数算出）同样禁 ORM 写。
+SPATIAL_MODEL='geoDictLandBoundary|geoDictSurveyPoint|clueSpatialPart|clueSpatialHit'
 SPATIAL_ORM_METHOD='createManyAndReturn|createMany|create|upsert|updateMany|update|deleteMany|delete'
 SPATIAL_ORM_WRITE="(${SPATIAL_MODEL})[[:space:]]*\.[[:space:]]*(${SPATIAL_ORM_METHOD})[[:space:]]*\("
 check_spatial-no-orm-mutation() {
@@ -811,6 +871,35 @@ check_spatial-no-orm-mutation() {
   done < <(find "$BACKEND" "$ROOT/packages" "$ROOT/integration" "$ROOT/e2e" "${SCAN_CODE[@]}")
   if [ "$hits" -eq 0 ]; then
     note_ok "spatial-no-orm-mutation：backend + packages + integration + e2e 全源码无空间模型 ORM 写调用（执行纪律 2 机器兜底）"
+  fi
+}
+
+# 规则（#210 新增）：参照数据只追加的机器兜底——五张参照数据表（ADR 0016）的 delegate
+# 只许 insert（create/createMany），不许 update / updateMany / delete / deleteMany / upsert。
+# 库层触发器已拒 UPDATE 与 DELETE（reject_row_mutation），本规则补的是应用层那一道：
+# 改参照数据只能追加新版本，不许就地改行、不许删行、不许 upsert 顶掉旧版本。
+# 形态与 spatial-no-orm-mutation 同款：SCAN_CODE 范围 + 换行链式二次判定。
+REFERENCE_MODEL='geoDictSourceCode|geoDictViolationType|geoDictDocument|geoDictViolationTypeBasis|geoDictJurisdiction'
+REFERENCE_ORM_METHOD='upsert|updateMany|update|deleteMany|delete'
+REFERENCE_ORM_WRITE="(${REFERENCE_MODEL})[[:space:]]*\.[[:space:]]*(${REFERENCE_ORM_METHOD})[[:space:]]*\("
+check_reference-data-no-mutation() {
+  local hits=0 file lines line
+  while IFS= read -r file; do
+    lines="$(grep -En -e "$REFERENCE_ORM_WRITE" "$file" 2>/dev/null)"
+    if [ -n "$lines" ]; then
+      while IFS= read -r line; do
+        note_fail "reference-data-no-mutation：参照数据表 ORM 改写调用 ${file#"$ROOT"/}:${line%%:*}（ADR 0016 只追加：改参照数据＝追加新版本，不许就地改行或删行）"
+        hits=$((hits + 1))
+      done <<< "$lines"
+      continue
+    fi
+    if tr '\n' ' ' < "$file" | grep -qE "$REFERENCE_ORM_WRITE"; then
+      note_fail "reference-data-no-mutation：${file#"$ROOT"/} 折行后检出参照数据表 ORM 改写（换行链式形态）"
+      hits=$((hits + 1))
+    fi
+  done < <(find "$BACKEND" "$ROOT/packages" "$ROOT/integration" "$ROOT/e2e" "${SCAN_CODE[@]}")
+  if [ "$hits" -eq 0 ]; then
+    note_ok "reference-data-no-mutation：backend + packages + integration + e2e 全源码无参照数据表 ORM 改写调用（ADR 0016 只追加）"
   fi
 }
 
@@ -1044,39 +1133,81 @@ check_frontend-router-mode() {
   fi
 }
 
-# 规则（#134 收口，#105「截图验收（loop ⑥c）」）：截图全集文件名集合与 v0.4 的 78 个状态键完全相等。
-# 应有集合 = 原型 v0.4 状态截图（screens/*.png，除改动总览 overview.png；diff/ 对照不计）。
+# 规则（#134 收口，#105「截图验收（loop ⑥c）」；#207 换全集，#220 齐套）：
+# 截图全集 = 两个时代的状态键并集：
+#   v0.4 时代（已收口，#122–#134 出齐）：原型 frontend/prototype/admin-console/screens/*.png
+#     的 78 键（除改动总览 overview.png）。这批键一张不少，已出的图也不许撤走。
+#   #207 时代（#207 协议第 I 节定义的 62 键，本全集定义处）：docs/screens/keys-207.txt。
+#     #220 起这 62 键缺一即红。已出的图不许越出两个时代的并集。
 # 实有集合 = docs/screens/<票>/ 顶层 *.png 的并集（compare/、extra/ 等子目录是对照与单测验收图，不计）。
-# 自动判定只比文件名集合；画面是否与 v0.4 一致由前端交互设计工程师逐图自查、Lei Hu gate② 签收。
+# 自动判定只比文件名集合；画面是否与原型一致由前端交互设计工程师逐图自查、Lei Hu gate② 签收。
 SCREENS_WANT_DIR="$ROOT/frontend/prototype/admin-console/screens"
 SCREENS_HAVE_DIR="$ROOT/docs/screens"
+SCREENS_KEYS_207="$ROOT/docs/screens/keys-207.txt"
 check_screenshot-full-set() {
-  local fails=0 want have missing extra
-  if [ ! -d "$SCREENS_WANT_DIR" ] || [ ! -d "$SCREENS_HAVE_DIR" ]; then
-    note_fail "screenshot-full-set：缺少原型截图目录或 docs/screens 目录"
+  local fails=0 want_v04 want_207 want have missing extra pending
+  if [ ! -d "$SCREENS_WANT_DIR" ] || [ ! -d "$SCREENS_HAVE_DIR" ] || [ ! -f "$SCREENS_KEYS_207" ]; then
+    note_fail "screenshot-full-set：缺少原型截图目录、docs/screens 目录或 #207 状态键清单"
     return
   fi
-  want="$(find "$SCREENS_WANT_DIR" -maxdepth 1 -type f -name '*.png' ! -name 'overview.png' -printf '%f\n' | sort)"
-  have="$(find "$SCREENS_HAVE_DIR" -mindepth 2 -maxdepth 2 -type f -name '*.png' -printf '%f\n' | sort -u)"
+  # 三份清单一律按 LC_ALL=C 排序，comm 的两边必须同序同序则。
+  # keys-207.txt 记的是状态键本身（不带扩展名，与 #207 协议第 I 节代码块逐字一致），
+  # 比对时补上 .png 才与文件名同形。
+  want_v04="$(find "$SCREENS_WANT_DIR" -maxdepth 1 -type f -name '*.png' ! -name 'overview.png' -printf '%f\n' | LC_ALL=C sort)"
+  want_207="$(grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "$SCREENS_KEYS_207" | sed 's/$/.png/' | LC_ALL=C sort)"
+  want="$(printf '%s\n%s\n' "$want_v04" "$want_207" | LC_ALL=C sort -u)"
+  have="$(find "$SCREENS_HAVE_DIR" -mindepth 2 -maxdepth 2 -type f -name '*.png' -printf '%f\n' | LC_ALL=C sort -u)"
   # 本机 comm 是 uutils 实现，不吃 herestring 参数；比较失败必须显式判红，不许静默放过。
-  if ! missing="$(comm -23 <(printf '%s\n' "$want") <(printf '%s\n' "$have"))"; then
+  # comm 的序检查跟当前 locale 走。清单按 C 序排，比较也固定 C 序，避免 UTF-8 下误判未排序。
+  if ! extra="$(LC_ALL=C comm -13 <(printf '%s\n' "$want") <(printf '%s\n' "$have"))"; then
     note_fail "screenshot-full-set：全集与状态键的集合比较执行失败"
     return
   fi
-  if ! extra="$(comm -13 <(printf '%s\n' "$want") <(printf '%s\n' "$have"))"; then
+  if ! missing="$(LC_ALL=C comm -23 <(printf '%s\n' "$want_v04") <(printf '%s\n' "$have"))"; then
+    note_fail "screenshot-full-set：全集与状态键的集合比较执行失败"
+    return
+  fi
+  if ! pending="$(LC_ALL=C comm -23 <(printf '%s\n' "$want_207") <(printf '%s\n' "$have"))"; then
     note_fail "screenshot-full-set：全集与状态键的集合比较执行失败"
     return
   fi
   if [ -n "$missing" ]; then
-    note_fail "screenshot-full-set：全集缺状态键：$(tr '\n' ' ' <<<"$missing")"
+    note_fail "screenshot-full-set：v0.4 收口时代缺状态键：$(tr '\n' ' ' <<<"$missing")"
     fails=1
   fi
   if [ -n "$extra" ]; then
-    note_fail "screenshot-full-set：全集多出 v0.4 之外的文件名：$(tr '\n' ' ' <<<"$extra")"
+    note_fail "screenshot-full-set：全集多出状态键之外的文件名：$(tr '\n' ' ' <<<"$extra")"
+    fails=1
+  fi
+  if [ -n "$pending" ]; then
+    note_fail "screenshot-full-set：#207 键缺：$(tr '\n' ' ' <<<"$pending")"
     fails=1
   fi
   if [ "$fails" -eq 0 ]; then
-    note_ok "screenshot-full-set：docs/screens 各票顶层截图并集 $(wc -l <<<"$have" | xargs) 个文件名，与 v0.4 状态键完全相等"
+    note_ok "screenshot-full-set：docs/screens 各票顶层截图并集 $(wc -l <<<"$have" | xargs) 个文件名，全在 v0.4 的 $(wc -l <<<"$want_v04" | xargs) 键与 #207 的 $(wc -l <<<"$want_207" | xargs) 键之内；#207 的 62 键齐套"
+  fi
+}
+
+# 规则（#207／#220）：界面文案纪律。frontend/src 生产源码（排除 *.test.*／*.spec.*）的
+# 字符串字面量不得出现「捞回」、Issue 号样式（#加 2–4 位数字）、`区块 [A-E]`。
+# 注释里的「禁用／禁止」说明不计入（只扫引号字面量）。自动判定只看源码集合；渲染结果
+# 由前端单测（router／shell／closure）补充。
+check_ui-copy-discipline() {
+  local file base line fails=0
+  while IFS= read -r file; do
+    base="${file##*/}"
+    case "$base" in
+      *.test.ts|*.test.tsx|*.spec.ts|*.spec.tsx) continue ;;
+    esac
+    # 只扫引号字面量：注释里的「禁用捞回」说明不计入。
+    while IFS= read -r line; do
+      note_fail "ui-copy-discipline：界面文案禁词 ${file#"$ROOT"/} → ${line}"
+      fails=$((fails + 1))
+    done < <(grep -nE "(['\"\`])([^'\"\`]*(捞回|区块[[:space:]]*[A-E]|#[0-9]{2,4})[^'\"\`]*)\1" "$file" 2>/dev/null \
+      | grep -Ev "禁用|禁止|不得|勿写|不出现|not\.toContain|not\.toMatch" || true)
+  done < <(find "$ROOT/frontend/src" -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.css' \) "${SCAN_CODE[@]}")
+  if [ "$fails" -eq 0 ]; then
+    note_ok "ui-copy-discipline：frontend/src 生产源码字面量无「捞回」、Issue 号样式、区块 [A-E]"
   fi
 }
 

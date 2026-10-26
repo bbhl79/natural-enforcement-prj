@@ -102,7 +102,7 @@ describe('路由守卫（#91 页面路径约定）', () => {
   ])('已登录且 next 不合规（%s）→ 首页', async (_label, next) => {
     serve(person(['经办'], CLERK));
     const { router } = await renderRoute(fresh(), `/auth/login?next=${next}`);
-    expect(router.state.location.pathname).toBe('/');
+    expect(router.state.location.pathname).toBe('/workbench');
   });
 
   it('会话查询失败：显示「暂时无法确认登录状态」，不改写地址', async () => {
@@ -123,50 +123,133 @@ describe('路由守卫（#91 页面路径约定）', () => {
   });
 });
 
+describe('一级五总入口与路由定型（#207 导航锁、#209 执行票）', () => {
+  it('「/」重定向统一工作台', async () => {
+    serve(person(['经办'], CLERK));
+    const { router, html } = await renderRoute(fresh(), '/');
+    expect(router.state.location.pathname).toBe('/workbench');
+    expect(html).toContain('统一工作台');
+  });
+
+  it('顶栏五个一级入口齐全，键位与顺序固定', async () => {
+    serve(person(['系统管理'], [...CLERK, ...ADMIN]), ADMIN_ROUTES);
+    const { html } = await renderRoute(fresh(), '/workbench');
+    const primaries = html.match(/data-primary="[a-z]+"/g) ?? [];
+    expect(primaries).toEqual([
+      'data-primary="workbench"',
+      'data-primary="clue"',
+      'data-primary="case"',
+      'data-primary="supervise"',
+      'data-primary="admin"',
+    ]);
+  });
+
+  it('无系统管理权限：顶栏不渲染「系统管理」，页面上也不作说明', async () => {
+    serve(person(['经办'], CLERK));
+    const { html } = await renderRoute(fresh(), '/workbench');
+    expect(html).not.toContain('data-primary="admin"');
+    expect(html).not.toContain('系统管理');
+  });
+
+  it('内勤反例：持有 org.tree.read 也看不到「系统管理」一级（#105:178）', async () => {
+    serve(person(['内勤'], INTAKE));
+    const { html } = await renderRoute(fresh(), '/workbench');
+    expect(html).not.toContain('data-primary="admin"');
+    expect(html).not.toContain('系统管理');
+  });
+
+  it('有管理码：顶栏出现「系统管理」一级', async () => {
+    serve(person(['系统管理'], [...CLERK, ...ADMIN]), ADMIN_ROUTES);
+    const { html } = await renderRoute(fresh(), '/workbench');
+    expect(html).toContain('data-primary="admin"');
+    expect(html).toContain('系统管理');
+  });
+
+  it('二级侧栏随一级切换', async () => {
+    serve(person(['经办'], CLERK));
+    const clue = await renderRoute(fresh(), '/clue');
+    expect(clue.html).toContain('data-menu="clue-all"');
+    expect(clue.html).not.toContain('data-menu="step-register"');
+    const workbench = await renderRoute(fresh(), '/workbench');
+    expect(workbench.html).toContain('data-menu="board"');
+    expect(workbench.html).toContain('data-menu="step-register"');
+    expect(workbench.html).not.toContain('data-menu="clue-all"');
+  });
+
+  it('案件中心、统筹督导的二级是规划中占位，带规划中标记', async () => {
+    serve(person(['经办'], CLERK));
+    const casePage = await renderRoute(fresh(), '/case');
+    expect(casePage.html).toContain('data-menu="case-onsite"');
+    expect(casePage.html).toContain('data-menu="case-trial"');
+    expect(casePage.html).toContain('规划中');
+    const supervise = await renderRoute(fresh(), '/supervise');
+    expect(supervise.html).toContain('data-menu="supervise-review"');
+    expect(supervise.html).toContain('规划中');
+  });
+
+  it('综合查询在顶栏，人人可用，提交后进入线索中心并带关键词', async () => {
+    serve(person(['经办'], CLERK));
+    const { html } = await renderRoute(fresh(), '/workbench');
+    expect(html).toContain('aria-label="综合查询"');
+    expect(html).toContain('class="global-search"');
+    // 综合查询不占一级：顶栏一级只有五个。
+    expect(html.match(/data-primary="/g) ?? []).toHaveLength(4);
+  });
+
+  it('线索中心的关键词、视图与筛选可入 URL', async () => {
+    serve(person(['经办'], CLERK));
+    const { router, html } = await renderRoute(fresh(), '/clue?q=%E7%BA%A2%E7%BA%BF&view=assign');
+    expect(router.state.location.pathname).toBe('/clue');
+    expect(html).toContain('关键词：红线');
+    expect(html).toContain('待分派 / 已分派');
+  });
+
+  it('规划中占位页只给提示，不进真实业务', async () => {
+    serve(person(['经办'], CLERK));
+    const { html } = await renderRoute(fresh(), '/case/onsite-check');
+    expect(html).toContain('现场核查与立案呈批');
+    expect(html).toContain('规划中');
+    // 界面文案纪律：可见文字里不出现票号、Issue 号与「捞回」。
+    const text = html.replace(/<[^>]*>/g, ' ');
+    expect(text).not.toMatch(/#[0-9]+/);
+    expect(text).not.toMatch(/Issue/i);
+    expect(text).not.toContain('捞回');
+  });
+});
+
 describe('应用壳与菜单（P1）', () => {
-  it('兼任：两区菜单并集，工作台提示不用换登录标识', async () => {
-    serve(person(['经办', '系统管理'], [...CLERK, ...ADMIN]));
-    const { html } = await renderRoute(fresh(), '/');
-    expect(html).toContain('>业务办理</div>');
-    expect(html).toContain('>管理台</div>');
-    for (const label of ['工作台', '线索', '案件', '管理台首页', '机构', '人员', '被锁人员', '管理台留痕']) {
-      expect(html).toContain(`<span class="dot"></span>${label}</a>`);
-    }
+  it('兼任：一级入口齐全，工作台提示不用换登录标识', async () => {
+    serve(person(['经办', '系统管理'], [...CLERK, ...ADMIN]), ADMIN_ROUTES);
+    const { html } = await renderRoute(fresh(), '/workbench');
     expect(html).toContain('你同时担任「经办」和「系统管理」');
     expect(html).toContain('天河区分局 · 经办、系统管理');
-    expect(html).toContain('我的待办<span class="hint">业务区内容不在本样板范围，仅占位</span>');
-    expect(html).toContain('业务工作台由线索、案件等切片提供');
-    expect(html).not.toContain('暂无待办');
+    expect(html).toContain('我的待办');
   });
 
-  it('无管理权：没有管理台一区', async () => {
+  it('无管理权：没有管理台入口', async () => {
     serve(person(['经办'], CLERK));
-    const { html } = await renderRoute(fresh(), '/');
-    expect(html).not.toContain('>管理台</div>');
-    expect(html).not.toContain('管理台首页');
-    expect(html).toContain('你的角色不含管理权，所以没有「管理台」一区。');
-  });
-
-  it('内勤反例：持有 org.tree.read 也没有管理台一区（#105:178，P1 noadmin）', async () => {
-    serve(person(['内勤'], INTAKE));
-    const { html } = await renderRoute(fresh(), '/');
-    expect(html).not.toContain('>管理台</div>');
+    const { html } = await renderRoute(fresh(), '/workbench');
     expect(html).not.toContain('管理台首页');
     expect(html).not.toContain('data-menu="org"');
-    expect(html).toContain('你的角色不含管理权，所以没有「管理台」一区。');
   });
 
-  it('只有管理码：打开首页直接进管理台首页', async () => {
+  it('内勤反例：持有 org.tree.read 也没有管理台入口（#105:178，P1 noadmin）', async () => {
+    serve(person(['内勤'], INTAKE));
+    const { html } = await renderRoute(fresh(), '/workbench');
+    expect(html).not.toContain('管理台首页');
+    expect(html).not.toContain('data-menu="org"');
+  });
+
+  it('只有管理码：顶栏五个一级都在，系统管理因有码而出现', async () => {
     serve(person(['系统管理'], ADMIN), ADMIN_ROUTES);
-    const { router, html } = await renderRoute(fresh(), '/');
-    expect(router.state.location.pathname).toBe('/admin');
-    expect(html).not.toContain('>业务办理</div>');
-    expect(html).toContain('nav-item active" data-menu="admin"');
+    const { html } = await renderRoute(fresh(), '/workbench');
+    expect(html).toContain('data-primary="admin"');
+    expect(html.match(/data-primary="/g) ?? []).toHaveLength(5);
   });
 
   it('距口令到期 ≤7 天显示横幅', async () => {
     serve(person(['经办'], CLERK, { daysRemaining: 3 }));
-    const { html } = await renderRoute(fresh(), '/');
+    const { html } = await renderRoute(fresh(), '/workbench');
     expect(html).toContain('口令还剩 3 天到期');
     expect(html).toContain('关闭');
   });
@@ -315,8 +398,8 @@ describe('管理台首页（P3）', () => {
     serve(person(['经办'], CLERK));
     const denied = await renderRoute(fresh(), '/admin');
     expect(denied.html).toContain('你没有查看管理台的权限');
-    expect(denied.html).toContain('data-menu="home"');
-    expect(denied.html).not.toContain('nav-item active');
+    expect(denied.html).not.toContain('data-menu="admin-home"');
+    expect(denied.html).not.toContain('class="nav-item active"');
 
     // 管理台首页对本人可见，但页面取数 403 → 壳内整页无权限页（P2 forbidden），左导同样不高亮。
     const store = fresh();
@@ -330,8 +413,8 @@ describe('管理台首页（P3）', () => {
     await settled(router);
     const forbidden = renderRouter(store, router);
     expect(forbidden).toContain('你没有权限打开这个页面');
-    expect(forbidden).toContain('data-menu="admin"');
-    expect(forbidden).not.toContain('nav-item active');
+    expect(forbidden).toContain('data-menu="admin-home"');
+    expect(forbidden).not.toContain('class="nav-item active"');
   });
 
   it('延迟数据里拒绝的 403 与 loader 抛出的 403 都被认作无权限', () => {

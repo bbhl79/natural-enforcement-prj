@@ -1,8 +1,8 @@
-// 承办中事项计数端口（#105「未办结前提怎么落」，#124；新增接缝③）。
+// 承办中事项计数端口（#105「未办结前提怎么落」，#124；接缝③）。
 // 停用机构前要数以本机构为承办机构、尚未办结的线索和案件（Lei Hu 2026-10-17 22:14，A2）。
-// 一期没有线索和案件表，本期接恒为 0 的实现；测试注入返回非零的实现。
-// 线索、案件切片上线时接上真实查询，并保证「指定承办机构」与「停用机构」不能并发穿过
-//（同一把机构锁或等效约束，由线索切片落实）。只数本机构承办的事项，不数下级机构的。
+// 真实实现在启动包装配（#219 prismaOpenItemsCounter）：当前有效分派 + 非 closed／transferred_out；
+// filed 计入；不递归下级；案件一期仍 0。派机构与停用共用机构行锁，避免并发漏计。
+// 本文件仍导出恒 0 的 NO_OPEN_ITEMS，供 identity 单测与显式注入。
 
 import type { IdentityTransaction } from '../persistence/identity-store.ts';
 
@@ -22,7 +22,7 @@ export interface OpenItemsCounter {
 
 export const OPEN_ITEMS_COUNTER = Symbol('OPEN_ITEMS_COUNTER');
 
-/** 本期实现：恒为 0。 */
+/** 恒为 0：identity 单测与显式注入用。默认装配已换真实实现（#219）。 */
 export const NO_OPEN_ITEMS: OpenItemsCounter = {
   countOpenItems: async () => ({ clues: 0, cases: 0 }),
 };

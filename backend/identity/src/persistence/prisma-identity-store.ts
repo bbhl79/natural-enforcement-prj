@@ -207,14 +207,17 @@ export class PrismaIdentityStore implements IdentityStore {
 
   /** 祖先链（含自身），自根向叶；目标机构不存在时返回空链（调用方按越权处理） */
   async findOrgUnitPathToRoot(orgUnitId: string): Promise<string[]> {
+    // depth 0 是机构自身，向上每层加一；按 depth 倒排即自根向叶。
+    // 递归 CTE 的自然产出顺序是自叶向根，与本方法对外承诺的次序相反，
+    // 共同祖先（公共前缀）一类的算法会因此取错链，故此处显式定序。
     const rows = await this.prisma.$queryRaw<{ id: string }[]>`
       WITH RECURSIVE up AS (
-        SELECT id, parent_id FROM org_unit WHERE id = ${orgUnitId}
+        SELECT id, parent_id, 0 AS depth FROM org_unit WHERE id = ${orgUnitId}
         UNION ALL
-        SELECT parent.id, parent.parent_id
+        SELECT parent.id, parent.parent_id, child.depth + 1
         FROM org_unit parent JOIN up child ON parent.id = child.parent_id
       )
-      SELECT id FROM up`;
+      SELECT id FROM up ORDER BY depth DESC`;
     return rows.map((row) => row.id);
   }
 

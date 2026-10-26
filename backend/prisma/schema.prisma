@@ -321,6 +321,9 @@ model AuditTrail {
   itemCount          Int?      @map("item_count")
   // 后值（#128）：personnel.post-granted 写标记取值。其余动作为空。
   nextValue          String?   @map("next_value")
+  /// 结构化快照（#211，规格 G）：只写不回。线索动作把编号、当前命中集摘要、缺件键写在这里，
+  /// 不占用 previousValue/nextValue/itemCount。自由文本理由留业务行，不进留痕。
+  detail             String?
   /// 授权拒绝行的目标机构（#119 修正，ADR 0011）：查阅范围按它套。其他动作为空。
   targetOrgUnitId    String?   @map("target_org_unit_id")
   /// 目标机构从哪来：object = 对象所属机构；actor-fallback = 对象机构解析不出，取操作者当时任职机构。
@@ -359,4 +362,523 @@ model GeoDictSurveyPoint {
   createdAt  DateTime                           @default(now()) @map("created_at")
 
   @@map("geo_dict_survey_point")
+}
+
+// ---- 参照数据（#210；ADR 0016 参照数据随种子只追加写入）----
+// 五张表只追加：库层触发器拒 UPDATE 与 DELETE（复用 reject_row_mutation），
+// 与留痕表同一口径。业务唯一键 =「业务编码 + 版本」，种子按它判幂等。
+// 每一版带出处（source）与启用状态（status）；停用某编码 = 追加一版标 inactive，不改旧行。
+// 上一级显式存「上级编码」，不按编码前缀推断（ADR 0016「上下级与出处」）。
+// 引用钉版本：指向别的参照数据时存那一版的技术主键，并另存展示快照。
+
+/// 线索来源编码（#24 定稿 30 项：5 大类 + 20 二级 + 5 三级）。
+/// parent_code 显式存上级编码（1/5/22/3/21 为大类，其余挂其下）。
+model GeoDictSourceCode {
+  id         String   @id
+  code       String
+  version    Int
+  name       String
+  parentCode String?  @map("parent_code")
+  source     String
+  status     String   @default("active")
+  createdAt  DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([code, version])
+  @@index([code])
+  @@map("geo_dict_source_code")
+}
+
+/// 违法类型编码（#203 定稿：94 个可选具体违法行为 + 19 个不可选大类）。
+/// domain 取 land | mineral | survey | planning（ADR 0020 法域短码）。
+/// selectable 为 false 的是大类分组行：录入时不可选，不进要件键。
+model GeoDictViolationType {
+  id         String   @id
+  code       String
+  version    Int
+  name       String
+  domain     String
+  parentCode String?  @map("parent_code")
+  selectable Boolean  @default(true)
+  appendix   String?  // 附录序号出处（ADR 0020：序号只作出处属性，不进编码）
+  source     String
+  status     String   @default("active")
+  createdAt  DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  basis GeoDictViolationTypeBasis[]
+
+  @@unique([code, version])
+  @@index([code])
+  @@map("geo_dict_violation_type")
+}
+
+/// 依据文件表（#203 定稿 80 份；ADR 0019）。
+/// hierarchy_level 取效力层级九档，validity_status 取效力状态三值（GLOSSARY）。
+model GeoDictDocument {
+  id              String   @id
+  code            String
+  version         Int
+  name            String
+  hierarchyLevel  String   @map("hierarchy_level")
+  validityStatus  String   @map("validity_status")
+  note            String?
+  source          String
+  status          String   @default("active")
+  createdAt       DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  basis GeoDictViolationTypeBasis[]
+
+  @@unique([code, version])
+  @@index([code])
+  @@map("geo_dict_document")
+}
+
+/// 违法类型的依据引用（ADR 0019）：文件编号 + 条号，指向文件表；用途写在引用处。
+/// 引用钉版本：violation_type_id 与 document_id 指向那一版的技术主键；
+/// 展示用的编码与名称随行冻结快照，改版不影响已引用的旧行。
+model GeoDictViolationTypeBasis {
+  id                String             @id
+  violationTypeId   String             @map("violation_type_id")
+  violationType     GeoDictViolationType @relation(fields: [violationTypeId], references: [id])
+  violationTypeCode String             @map("violation_type_code")
+  violationTypeName String             @map("violation_type_name")
+  documentId        String             @map("document_id")
+  document          GeoDictDocument    @relation(fields: [documentId], references: [id])
+  documentCode      String             @map("document_code")
+  documentName      String             @map("document_name")
+  articleNo         String             @map("article_no")
+  purpose           String             // 依据用途四类：处罚 | 裁量基准 | 移送处分 | 认定标准
+  createdAt         DateTime           @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([violationTypeId, documentId, articleNo, purpose])
+  @@index([violationTypeId])
+  @@index([documentId])
+  @@map("geo_dict_violation_type_basis")
+}
+
+/// 辖区对应（GLOSSARY）：最小单元是街道或镇，一个单元归属一个所或区分局。
+/// 只存「街道编码 → 机构」，不按法域区分，不是有权查处机关映射表。
+/// 引用街道编码并保存编码快照；机构侧存机构编码与名称快照（机构改名不影响已冻结的对应）。
+model GeoDictJurisdiction {
+  id        String   @id
+  code      String
+  version   Int
+  name      String
+  orgCode   String   @map("org_code")
+  orgName   String   @map("org_name")
+  source    String
+  status    String   @default("active")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([code, version])
+  @@index([code])
+  @@map("geo_dict_jurisdiction")
+}
+
+// ---- 线索登记（#211；ADR 0018 三层要件、规格 B 几何与疑似重复、规格 E 录入与文件）----
+// 18 张表归 case 模块。空间三表（ClueSpatialObject／ClueSpatialPart／ClueSpatialHit）是线索业务事实，
+// 几何读写在 case 内走 $queryRaw（执行纪律 2：含必填空间字段的模型禁 ORM create/update）。
+// 与 #54 的 GeoDictLandBoundary／GeoDictSurveyPoint 不复用、不替代、不改动。
+// 主键形制 = #16 §1.1：ULID（26 位大写 Crockford Base32），应用侧生成，schema 层只声明 String。
+
+/// 线索（一条线索一行）
+model Clue {
+  // 主键形制同 GeoDictLandBoundary：ULID（#16 §1.1），应用侧生成。
+  id     String @id
+  /// 业务编号（GLOSSARY「业务编号」）：与主键分离，永不充当引用键。
+  /// 取值来自 PostgreSQL sequence clue_code_seq（迁移创建，不算 model），形如 CL0000000001。
+  code   String @unique
+  /// 线索来源编码（GeoDictSourceCode.code 快照，#24）
+  sourceCode String @map("source_code")
+  /// 法域短码：land | mineral | survey | planning（ADR 0020）。一条线索一个法域。
+  domain String
+  /// 接收时间
+  receivedAt DateTime @map("received_at") @db.Timestamptz(6)
+  /// 简要经过（叙事摘要）
+  narrative String
+  /// 当事人不明（GLOSSARY）：独立标记，不拦登记与分派
+  subjectUnknown Boolean @default(false) @map("subject_unknown")
+  /// 匿名线索附件已主动确认移除反映人身份信息（规格 E）
+  anonymityConfirmed Boolean @default(false) @map("anonymity_confirmed")
+  /// 主状态（规格 A 八值）：pending_decision | in_pool | org_assigned | handler_assigned
+  /// | held | transferred_out | closed | filed
+  status String @default("in_pool")
+  /// 核查状态：not_required | running | done | failed（正交属性，不进三级校验）
+  verificationStatus String @default("not_required") @map("verification_status")
+  /// 登记人（人员 id）
+  registeredBy String @map("registered_by")
+  /// 登记人所属机构（可见范围锚点之一）
+  enteredOrgId String @map("entered_org_id")
+  /// 幂等键（客户端每次登记生成，必填）。绑定会话与操作者，同 key 异报文即 409。
+  idempotencyKey String @unique @map("idempotency_key")
+  /// 请求摘要（规格 E：幂等键与请求摘要同存两列，不新增表）
+  requestDigest String @map("request_digest")
+  /// 幂等键绑定的会话 id
+  sessionId String @map("session_id")
+  /// 登记时间
+  registeredAt DateTime @default(now()) @db.Timestamptz(6) @map("registered_at")
+
+  @@index([status])
+  @@index([registeredAt])
+  @@map("clue")
+}
+
+/// 空间对象（GLOSSARY：线索持有 1..1 空间对象，逻辑对象可含 N 个几何部件）
+model ClueSpatialObject {
+  id String @id
+  /// 所属线索（1:1）
+  clueId String @unique @map("clue_id")
+  /// 法域短码（决定几何形态：land/mineral 面，survey/planning 点）
+  domain String
+  /// 几何形态：face | point
+  kind String
+  /// 几何部件数（面部件数；点状恒为 1）
+  partCount Int @default(0) @map("part_count")
+  /// 命中集计算时间（规格 B：每条线索只存当前命中集与本时间，重算整体替换）
+  dupComputedAt DateTime? @db.Timestamptz(6) @map("dup_computed_at")
+  createdAt   DateTime      @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@map("clue_spatial_object")
+}
+
+/// 空间部件（面部件／点部件）。形制沿用 GeoDictLandBoundary：geom 为 EPSG:4490、
+/// source_srid + source_geom 保留来源坐标；禁 ORM create/update，几何读写走 $queryRaw。
+model ClueSpatialPart {
+  id String @id
+  /// 所属空间对象
+  spatialObjectId String @map("spatial_object_id")
+  /// 部件序号（同一空间对象内从 0 递增）
+  partIndex Int @map("part_index")
+  geom Unsupported("geometry(Geometry,4490)")
+  sourceSrid Int                                 @map("source_srid")
+  sourceGeom Unsupported("geometry")
+  createdAt  DateTime                            @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([spatialObjectId, partIndex])
+  @@index([spatialObjectId])
+  @@map("clue_spatial_part")
+}
+
+/// 录入要件快照（规格 E：登记时快照要件键集合，老线索按登记当时判断）
+model ClueRequirementSnapshot {
+  id String @id
+  /// 所属线索
+  clueId String @map("clue_id")
+  /// 要件键（ADR 0018）
+  key String
+  /// 层：public | source | type
+  layer String
+  /// 分组（公共组／来源组／类型组）
+  group String
+  /// 中文要件名（快照）
+  label String
+  /// 是否必填
+  required Boolean
+  /// 缺件后果：阻断 | 警告 | 提示
+  consequence String
+  /// 时机：录入时 | 核查前补齐 | 只提示
+  timing String
+  /// 要件声明版本（登记当时的声明）
+  declarationVersion String @map("declaration_version")
+  createdAt         DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([clueId, key])
+  @@index([clueId])
+  @@map("clue_requirement_snapshot")
+}
+
+/// 要件取值（登记时逐键落值）
+model ClueItemValue {
+  id String @id
+  /// 所属线索
+  clueId String @map("clue_id")
+  /// 要件键
+  key String
+  /// 文本取值
+  value String?
+  /// 结构化取值（JSON 文本）
+  valueJson String? @map("value_json")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([clueId, key])
+  @@index([clueId])
+  @@map("clue_item_value")
+}
+
+/// 缺件（类型层缺件为常驻事实行；补齐后清单消失，行仍保留）
+model ClueItemGap {
+  id String @id
+  /// 所属线索
+  clueId String @map("clue_id")
+  /// 缺件键
+  key String
+  /// 层：public | source | type
+  layer String
+  /// 中文要件名
+  label String
+  /// 是否必填
+  required Boolean
+  /// 时机：录入时 | 核查前补齐 | 只提示
+  timing String
+  /// 缺件后果：阻断 | 警告 | 提示
+  consequence String
+  /// 补齐时间（为空即仍缺）
+  filledAt DateTime? @db.Timestamptz(6) @map("filled_at")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([clueId, key])
+  @@index([clueId, filledAt])
+  @@map("clue_item_gap")
+}
+
+/// 初步涉嫌违法类型（GLOSSARY：可空、可多个；取值取自违法类型清单）
+model ClueInitialType {
+  id String @id
+  /// 所属线索
+  clueId String @map("clue_id")
+  /// 违法类型编码（GeoDictViolationType.code，ADR 0020）
+  typeCode String @map("type_code")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([clueId, typeCode])
+  @@index([clueId])
+  @@map("clue_initial_type")
+}
+
+/// 标签库（GLOSSARY：各人建的标签在同一个标签库里，谁都能用；库里没有的当场新建）
+model ClueTagLibrary {
+  id String @id
+  /// 标签名（库内唯一）
+  name String @unique
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@map("clue_tag_library")
+}
+
+/// 线索标签（登记时 create-on-use，随登记留痕）
+model ClueTag {
+  id String @id
+  /// 所属线索
+  clueId String @map("clue_id")
+  /// 标签库行
+  libraryId String @map("library_id")
+  /// 标签名（快照）
+  name String
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([clueId, name])
+  @@index([clueId])
+  @@map("clue_tag")
+}
+
+/// 已登记材料（规格 E：只在登记事务中写入，没有待关联状态；含 GeoJSON 来源文件）
+model ClueMaterial {
+  id String @id
+  /// 所属线索
+  clueId String @map("clue_id")
+  /// 材料类别：attachment（普通附件） | spatial-source（几何来源文件）
+  kind String
+  /// 存储文件键
+  fileKey String @map("file_key")
+  /// 存储版本引用
+  versionId String @map("version_id")
+  /// 原始文件名
+  fileName String @map("file_name")
+  /// 内容类型
+  contentType String @map("content_type")
+  /// 字节数
+  byteSize Int @map("byte_size")
+  /// 内容摘要（sha256 十六进制）
+  digest String
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([clueId])
+  @@map("clue_material")
+}
+
+/// 疑似重复命中（规格 B：每个合格面对一行，只存当前命中集，重算整体替换）
+/// 禁 ORM create/update：命中集经空间函数算出，几何口径不走 ORM 写入路径。
+model ClueSpatialHit {
+  id String @id
+  /// 本线索
+  clueId String @map("clue_id")
+  /// 本线索的面对
+  spatialPartId String @map("spatial_part_id")
+  /// 对方线索
+  otherClueId String @map("other_clue_id")
+  /// 对方的面对
+  otherPartId String @map("other_part_id")
+  /// 占本线索该面的比例（0..1）
+  selfRatio Float @map("self_ratio")
+  /// 占对方该面的比例（0..1）
+  otherRatio Float @map("other_ratio")
+  /// 交集面积（平方米，geography 面积）
+  intersectionArea Float @map("intersection_area")
+  /// 计算时间
+  computedAt DateTime @default(now()) @db.Timestamptz(6) @map("computed_at")
+
+  @@unique([clueId, spatialPartId, otherClueId, otherPartId])
+  @@index([clueId])
+  @@index([otherClueId])
+  @@map("clue_spatial_hit")
+}
+
+/// 内业核查运行（土地／矿产录入保存后自动入队；点状不跑）
+model ClueVerificationRun {
+  id String @id
+  /// 所属线索
+  clueId String @map("clue_id")
+  /// 运行序号（同一线索从 1 递增）
+  runNo Int @map("run_no")
+  /// 运行状态：running | done | failed
+  status String @default("running")
+  /// 已用尝试次数（自动核查至多 4 次尝试：首次加自动重试 3 次；手动重跑恒 1）
+  attemptsUsed Int @default(0) @map("attempts_used")
+  /// 触发方式：auto | manual
+  trigger String @default("auto")
+  /// 失败类别：transient（瞬时）| deterministic（确定性）；不失败即空
+  failureCategory String? @map("failure_category")
+  /// 缺图层（图层键数组的 JSON 文本）；不缺即空
+  missingLayers String? @map("missing_layers")
+  /// 每层事实的 JSON 文本（服务地址、查询时间、要素标识、相交要素几何、空间对象版本）
+  layersJson String? @map("layers_json")
+  startedAt DateTime  @default(now()) @db.Timestamptz(6) @map("started_at")
+  endedAt   DateTime? @db.Timestamptz(6) @map("ended_at")
+  /// 产物引用（核查报告与分析图的文件版本引用，JSON 文本）
+  artifactsJson String? @map("artifacts_json")
+  createdAt     DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([clueId, runNo])
+  @@index([clueId])
+  @@map("clue_verification_run")
+}
+
+/// 承办人（主办／协办）
+model ClueHandler {
+  id String @id
+  /// 所属线索
+  clueId String @map("clue_id")
+  /// 承办人（人员 id）
+  personnelId String @map("personnel_id")
+  /// 角色：main（主办） | assist（协办）
+  role String
+  assignedAt DateTime  @default(now()) @db.Timestamptz(6) @map("assigned_at")
+  endedAt    DateTime? @db.Timestamptz(6) @map("ended_at")
+  createdAt  DateTime   @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([clueId, personnelId, role])
+  @@index([clueId])
+  @@map("clue_handler")
+}
+
+/// 分派事实（首次分派、重新分派、指定管辖、系统管理员重新指定都并入本表）
+model ClueAssignment {
+  id String @id
+  /// 所属线索
+  clueId String @map("clue_id")
+  /// 接收机构
+  orgUnitId String @map("org_unit_id")
+  /// 类别：initial | reassign | designate | pool-reassign
+  kind String
+  /// 是否指定管辖（上级指定）
+  designate Boolean @default(false)
+  /// 操作人
+  assignedBy String @map("assigned_by")
+  /// 操作人当时所属机构（指定管辖锁判定「指定者或其上级可再调整」用；#214 前已存在的行为空）
+  assignedByOrgId String? @map("assigned_by_org_id")
+  /// 理由（重新分派与指定管辖必填；自由文本留业务行，不进留痕 detail）
+  reason String?
+  assignedAt DateTime  @default(now()) @db.Timestamptz(6) @map("assigned_at")
+  endedAt    DateTime? @db.Timestamptz(6) @map("ended_at")
+  createdAt  DateTime   @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([clueId])
+  @@map("clue_assignment")
+}
+
+/// 撤回不派（GLOSSARY：撤回不派＝常用原因勾选＋必填说明）
+model ClueWithdrawal {
+  id String @id
+  /// 所属线索
+  clueId String @map("clue_id")
+  /// 撤回原因编码（数组列，至少一项）
+  reasonCodes String[] @map("reason_codes")
+  /// 补充说明（必填）
+  note String
+  /// 操作人
+  withdrawnBy String @map("withdrawn_by")
+  withdrawnAt DateTime @default(now()) @db.Timestamptz(6) @map("withdrawn_at")
+  createdAt   DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([clueId])
+  @@map("clue_withdrawal")
+}
+
+/// 处置（不予立案、随旧线索办结、移送）
+model ClueDisposition {
+  id String @id
+  /// 所属线索
+  clueId String @map("clue_id")
+  /// 处置类型：no-case | with-old | transfer
+  disposition String
+  /// 移送机关（自然资源部门以外机关）
+  transferredOrg String? @map("transferred_org")
+  /// 文书编号
+  documentNo String? @map("document_no")
+  /// 移送发函日期（#216：默认北京当日、允许补录；仅移送的处置行有值）
+  letterDate DateTime? @db.Timestamptz(6) @map("letter_date")
+  /// 说明
+  note String?
+  recordedBy String   @map("recorded_by")
+  recordedAt DateTime @default(now()) @db.Timestamptz(6) @map("recorded_at")
+  createdAt  DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([clueId])
+  @@map("clue_disposition")
+}
+
+/// 结案提醒（不予立案、移送、立案时按当前命中集逐对生成）
+model ClueClosureReminder {
+  id String @id
+  /// 所属线索
+  clueId String @map("clue_id")
+  /// 提醒类型：no-case | transfer | case
+  kind String
+  /// 提醒对象线索（被撞上的对方线索）
+  otherClueId String? @map("other_clue_id")
+  /// 应处理时限（#217：本期无超期、催办或升级口径，时限不写）
+  dueAt DateTime? @db.Timestamptz(6) @map("due_at")
+  /// 处理时间
+  resolvedAt DateTime? @db.Timestamptz(6) @map("resolved_at")
+  /// 处理结果
+  resolution String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([clueId, resolvedAt])
+  @@map("clue_closure_reminder")
+}
+
+/// 指定管辖报请（下级报请上级指定管辖；#215 规格 D）
+model ClueDesignationRequest {
+  id String @id
+  /// 所属线索
+  clueId String @map("clue_id")
+  /// 报请机构
+  requestingOrgId String @map("requesting_org_id")
+  /// 拟归属机构（可选；为空时受理人为报请方直接上级内勤）
+  proposedOrgId String? @map("proposed_org_id")
+  /// 受理机构（报请方与拟归属机构最近共同上级中有内勤的最近一级）
+  reviewerOrgId String? @map("reviewer_org_id")
+  /// 报请理由
+  reason String
+  /// 状态：pending | approved | rejected
+  status String @default("pending")
+  /// 受理人
+  decidedBy String? @map("decided_by")
+  decidedAt DateTime? @db.Timestamptz(6) @map("decided_at")
+  /// 驳回理由（理由必填；自由文本留业务行，不进留痕）
+  decisionReason String? @map("decision_reason")
+  createdAt  DateTime   @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([clueId, status])
+  @@map("clue_designation_request")
 }

@@ -14,12 +14,26 @@ import { newAuditId } from './ulid.ts';
 import {
   AUDIT_ACTIONS,
   AUDIT_COUNTED_ACTIONS,
+  AUDIT_DETAIL_ACTIONS,
   AUDIT_NEXT_VALUE_ACTIONS,
   AUDIT_TARGET_ORG_BASES,
   ACCOUNT_MAINTENANCE_FAILED_REASONS,
   AUDIT_SUCCEEDED_ACTIONS,
   AUTHZ_DENIED_REASONS,
   CERT_UPDATE_FAILED_REASONS,
+  CLUE_ITEMS_SUPPLEMENT_FAILED_REASONS,
+  CLUE_REGISTER_FAILED_REASONS,
+  CLUE_GEOMETRY_UPDATE_FAILED_REASONS,
+  CLUE_VERIFY_RETRY_FAILED_REASONS,
+  CLUE_DESIGNATE_REJECTED_FAILED_REASONS,
+  CLUE_DESIGNATE_REQUESTED_FAILED_REASONS,
+  CLUE_DISPATCH_DECIDE_FAILED_REASONS,
+  CLUE_DISPOSITION_RECORDED_FAILED_REASONS,
+  CLUE_HANDLER_ASSIGNED_FAILED_REASONS,
+  CLUE_ORG_ASSIGNED_FAILED_REASONS,
+  CLUE_POOL_REASSIGNED_FAILED_REASONS,
+  CLUE_REMINDER_RESOLVED_FAILED_REASONS,
+  CLUE_WITHDRAWN_FAILED_REASONS,
   LOGIN_FAILED_REASONS,
   ORG_UNIT_DEACTIVATE_FAILED_REASONS,
   ORG_UNIT_REGISTER_FAILED_REASONS,
@@ -43,6 +57,7 @@ const ACTIONS = new Set<string>(AUDIT_ACTIONS);
 const COUNTED = new Set<string>(AUDIT_COUNTED_ACTIONS);
 const NEXT_VALUE_ACTIONS = new Set<string>(AUDIT_NEXT_VALUE_ACTIONS);
 const TARGET_BASES = new Set<string>(AUDIT_TARGET_ORG_BASES);
+const DETAIL_ACTIONS = new Set<string>(AUDIT_DETAIL_ACTIONS);
 
 /** 带原因的动作及其封闭原因表。不在表里的动作不许带原因。 */
 const REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
@@ -70,6 +85,20 @@ const FAILED_REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['cert.updated', new Set<string>(CERT_UPDATE_FAILED_REASONS)],
   ['account.unlocked', new Set<string>(ACCOUNT_MAINTENANCE_FAILED_REASONS)],
   ['account.password-reset', new Set<string>(ACCOUNT_MAINTENANCE_FAILED_REASONS)],
+  ['clue.registered', new Set<string>(CLUE_REGISTER_FAILED_REASONS)],
+  ['clue.items-supplemented', new Set<string>(CLUE_ITEMS_SUPPLEMENT_FAILED_REASONS)],
+  ['clue.verify-retried', new Set<string>(CLUE_VERIFY_RETRY_FAILED_REASONS)],
+  ['clue.geometry-updated', new Set<string>(CLUE_GEOMETRY_UPDATE_FAILED_REASONS)],
+  ['clue.dispatched', new Set<string>(CLUE_DISPATCH_DECIDE_FAILED_REASONS)],
+  ['clue.held', new Set<string>(CLUE_DISPATCH_DECIDE_FAILED_REASONS)],
+  ['clue.org-assigned', new Set<string>(CLUE_ORG_ASSIGNED_FAILED_REASONS)],
+  ['clue.handler-assigned', new Set<string>(CLUE_HANDLER_ASSIGNED_FAILED_REASONS)],
+  ['clue.pool-reassigned', new Set<string>(CLUE_POOL_REASSIGNED_FAILED_REASONS)],
+  ['clue.designate-requested', new Set<string>(CLUE_DESIGNATE_REQUESTED_FAILED_REASONS)],
+  ['clue.designate-rejected', new Set<string>(CLUE_DESIGNATE_REJECTED_FAILED_REASONS)],
+  ['clue.withdrawn', new Set<string>(CLUE_WITHDRAWN_FAILED_REASONS)],
+  ['clue.disposition-recorded', new Set<string>(CLUE_DISPOSITION_RECORDED_FAILED_REASONS)],
+  ['clue.reminder-resolved', new Set<string>(CLUE_REMINDER_RESOLVED_FAILED_REASONS)],
 ]);
 
 /** 后值只许出现在带后值的动作上，且这些动作必须带非空后值（#128）。 */
@@ -129,6 +158,21 @@ function assertItemCount(action: string, itemCount: unknown): void {
 }
 
 /**
+ * 结构化快照（#211，规格 G）：只有带快照的动作许带 detail，其余一律不带。
+ * 带就必须有值（空快照等于没写）。
+ */
+function assertDetail(action: string, detail: unknown): void {
+  if (!DETAIL_ACTIONS.has(action)) {
+    if (detail != null) throw new AuditVocabularyError(`动作 ${action} 不带结构化快照，收到：${String(detail)}`);
+    return;
+  }
+  if (detail == null) return;
+  if (typeof detail !== 'string' || detail === '') {
+    throw new AuditVocabularyError(`动作 ${action} 的结构化快照须为非空文本`);
+  }
+}
+
+/**
  * 授权拒绝行的目标机构（#119 修正，ADR 0011）。
  * 调用方没给时取操作者机构并记 actor-fallback。其他动作两列都空。
  */
@@ -164,9 +208,11 @@ export class PrismaAuditTrail implements AuditTrailPort {
     const reason = 'reason' in entry ? entry.reason : null;
     const itemCount = 'itemCount' in entry ? (entry.itemCount ?? null) : null;
     const nextValue = 'nextValue' in entry ? entry.nextValue ?? null : null;
+    const detail = 'detail' in entry ? entry.detail ?? null : null;
     assertVocabulary(entry.action, outcome, reason);
     assertItemCount(entry.action, itemCount);
     assertNextValue(entry.action, nextValue);
+    assertDetail(entry.action, detail);
     const target = targetOf(entry);
     await this.db.auditTrail.create({
       data: {
@@ -186,6 +232,7 @@ export class PrismaAuditTrail implements AuditTrailPort {
         previousValue: entry.previousValue ?? null,
         itemCount,
         nextValue,
+        detail,
         targetOrgUnitId: target.targetOrgUnitId,
         targetOrgUnitBasis: target.targetOrgUnitBasis,
       },

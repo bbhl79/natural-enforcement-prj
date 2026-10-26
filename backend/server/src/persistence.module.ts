@@ -20,11 +20,23 @@ import {
   type AuditTrailFactory,
   type Rejected,
 } from '@natural-enforcement/audit';
+import { STORAGE_PORT, createDefaultStoragePort, type StoragePort } from '@natural-enforcement/storage';
+import { QUEUE_PORT, createQueuePort, type QueuePort } from '@natural-enforcement/queue';
+import { listActiveJurisdictionRows } from '@natural-enforcement/geo-dict';
+import {
+  ALL_LAYERS,
+  CLUE_STORE,
+  CLUE_VERIFICATION_PORT,
+  STREET_BOUNDARY_PORT,
+  createLayerServiceVerificationPort,
+  createStreetBoundaryPort,
+  type ClueVerificationPort,
+  type StreetBoundaryPort,
+} from '@natural-enforcement/case';
 import {
   BootstrapService,
   CredentialService,
   IDENTITY_STORE,
-  NO_OPEN_ITEMS,
   OPEN_ITEMS_COUNTER,
   PASSWORD_HISTORY_DEPTH,
   PASSWORD_HISTORY_DEPTH_TOKEN,
@@ -33,11 +45,21 @@ import {
   type BootstrapRequest,
   type OpenItemsCounter,
 } from '@natural-enforcement/identity';
+import { prismaOpenItemsCounter } from './open-items-counter.ts';
+import { PrismaClueStore } from '../../case/src/persistence/prisma-clue-store.ts';
 import { PrismaIdentityStore } from '../../identity/src/persistence/prisma-identity-store.ts';
 import { PrismaClient, type Prisma } from '../../prisma/generated/prisma/client.ts';
 
 import { AppModule } from './app.module.ts';
 import { CLOCK, type Clock } from './clock.ts';
+import {
+  CLUE_VERIFICATION_QUEUE_NAME,
+  VERIFICATION_WORKER_ENABLED,
+} from './clue-verification.tokens.ts';
+import {
+  JURISDICTION_LOOKUP,
+  type JurisdictionLookup,
+} from './clue-suggestion.service.ts';
 import {
   LOGIN_DIRECTORY,
   type FailureSnapshot,
@@ -407,6 +429,7 @@ class PrismaUnitOfWork implements UnitOfWork {
       remember: new PrismaRememberMeStore(client, null),
       audit: this.factory.forClient(client),
       auditReader: new PrismaAuditTrailReader(client as unknown as AuditTrailReadClient),
+      clues: new PrismaClueStore(client),
     };
   }
 }
@@ -415,10 +438,32 @@ class PrismaUnitOfWork implements UnitOfWork {
 export interface ApplicationOverrides {
   /** 接缝①：覆写留痕工厂，例如「业务写完后抛错」。 */
   auditTrailFactory?: AuditTrailFactory;
-  /** 接缝③：承办中事项计数。默认恒为 0（#124）。 */
+  /** 存储端口：默认走存储设施包的 RustFS 适配；测试可换成记录写的假端口。 */
+  storagePort?: StoragePort;
+  /** 接缝③：承办中事项计数。默认真实线索未办结计数（#219）；测试可覆写。 */
   openItemsCounter?: OpenItemsCounter;
   /** 口令历史比对深度（ADR 0015，#132）。默认 5；测试可传 2。 */
   passwordHistoryDepth?: number;
+  /** 队列端口：默认走队列设施包的 BullMQ 适配；测试可换成记录投递的假端口。 */
+  queuePort?: QueuePort;
+  /** 内业核查执行端口：默认按图层服务地址远程查询；测试可换成注入替身。 */
+  clueVerificationPort?: ClueVerificationPort;
+  /** 街道镇边界查询端口：默认按运行参数远程查询；测试可换成注入替身。 */
+  streetBoundaryPort?: StreetBoundaryPort;
+  /** 辖区对应查询：默认读 geo_dict_jurisdiction（只追加表）；测试可覆写。 */
+  jurisdictionLookup?: JurisdictionLookup;
+  /** 是否起核查 worker（#213）。默认不起；生产引导时打开。 */
+  verificationWorker?: boolean;
+}
+
+/**
+ * 七类核查图层与街道镇边界的空间服务地址：运行参数，由部署环境供给
+ * （ADR 0008 轨道、ADR 0021）。地址不含密钥。未配置的层在核查时判查不成。
+ */
+function readLayerServiceUrls(): Record<string, string | undefined> {
+  const urls: Record<string, string | undefined> = {};
+  for (const layer of ALL_LAYERS) urls[layer.key] = process.env[layer.envName];
+  return urls;
 }
 
 class DisconnectPrisma implements OnModuleDestroy {
@@ -449,13 +494,46 @@ class PersistenceModule {
         { provide: SESSION_CAPACITY, useValue: sessionCapacity },
         { provide: PRISMA, useValue: prisma },
         { provide: IDENTITY_STORE, useValue: new PrismaIdentityStore(prisma) },
+        { provide: CLUE_STORE, useValue: new PrismaClueStore(prisma) },
+        // 存储端口：默认按运行参数建 RustFS 适配；测试可覆写成记录写的假端口。
+        { provide: STORAGE_PORT, useValue: overrides.storagePort ?? createDefaultStoragePort() },
+        // 队列端口：业务任务队列，连接惰性（不投递就不连 Redis）。
+        {
+          provide: QUEUE_PORT,
+          useValue:
+            overrides.queuePort ??
+            createQueuePort({ queueName: CLUE_VERIFICATION_QUEUE_NAME }),
+        },
+        // 内业核查执行端口：默认按图层服务地址远程实时查询（ADR 0021）。
+        {
+          provide: CLUE_VERIFICATION_PORT,
+          useValue:
+            overrides.clueVerificationPort ??
+            createLayerServiceVerificationPort({ serviceUrls: readLayerServiceUrls() }),
+        },
+        // 街道镇边界查询端口：默认按运行参数远程实时查询（辖区建议用，ADR 0021）。
+        {
+          provide: STREET_BOUNDARY_PORT,
+          useValue:
+            overrides.streetBoundaryPort ??
+            createStreetBoundaryPort({ serviceUrl: readLayerServiceUrls()['street-boundary'] }),
+        },
+        // 辖区对应查询：街道编码 → 机构（geo_dict_jurisdiction 只追加表取最新有效版）。
+        {
+          provide: JURISDICTION_LOOKUP,
+          useValue: overrides.jurisdictionLookup ?? {
+            findByStreetCodes: (codes: readonly string[]) =>
+              listActiveJurisdictionRows(prisma, codes),
+          },
+        },
+        { provide: VERIFICATION_WORKER_ENABLED, useValue: overrides.verificationWorker ?? false },
         { provide: AUDIT_TRAIL_FACTORY, useValue: auditTrailFactory },
         { provide: AUDIT_TRAIL_PORT, useValue: auditTrailFactory.forClient(prisma) },
         { provide: LOGIN_DIRECTORY, useValue: new PrismaLoginDirectory(prisma) },
         { provide: SESSION_STORE, useValue: new PrismaSessionStore(prisma) },
         { provide: REMEMBER_ME_STORE, useValue: new PrismaRememberMeStore(prisma, prisma) },
         { provide: UNIT_OF_WORK, useValue: new PrismaUnitOfWork(prisma, auditTrailFactory) },
-        { provide: OPEN_ITEMS_COUNTER, useValue: overrides.openItemsCounter ?? NO_OPEN_ITEMS },
+        { provide: OPEN_ITEMS_COUNTER, useValue: overrides.openItemsCounter ?? prismaOpenItemsCounter },
         { provide: PASSWORD_HISTORY_DEPTH_TOKEN, useValue: overrides.passwordHistoryDepth ?? PASSWORD_HISTORY_DEPTH },
         {
           provide: DisconnectPrisma,
@@ -465,6 +543,13 @@ class PersistenceModule {
       ],
       exports: [
         IDENTITY_STORE,
+        CLUE_STORE,
+        STORAGE_PORT,
+        QUEUE_PORT,
+        CLUE_VERIFICATION_PORT,
+        STREET_BOUNDARY_PORT,
+        JURISDICTION_LOOKUP,
+        VERIFICATION_WORKER_ENABLED,
         AUDIT_TRAIL_FACTORY,
         AUDIT_TRAIL_PORT,
         UNIT_OF_WORK,
@@ -503,7 +588,8 @@ export async function createApplication(
 ): Promise<INestApplication> {
   const app = await NestFactory.create(
     BootModule.register(databaseUrl, clock, sessionCapacity, overrides),
-    { logger: false },
+    // 启动失败时把错误抛给调用方（而不是直接中止进程丢掉原因）：引导命令据此说明缺哪一项。
+    { logger: false, abortOnError: false },
   );
   const withCsrf = app as INestApplication & { enableCsrfProtection?: () => void };
   if (typeof withCsrf.enableCsrfProtection !== 'function') {

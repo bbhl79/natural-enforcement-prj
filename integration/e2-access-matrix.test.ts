@@ -30,10 +30,22 @@ const SEED_PASSWORD = 'Seed-pass-52';
 
 /** #71 决议允许行。不从种子源码推导。 */
 const ALLOWED: Record<string, readonly string[]> = {
-  内勤: ['org.tree.read', 'clue.org.assign', 'clue.handler.assign', 'case.reassign.submit', 'clue.read', 'case.read', 'doc.read'],
+  // #210：11 个线索操作码进允许行；clue.verify.start 保留名册条目但移除本期种子授权。
+  内勤: [
+    'org.tree.read', 'clue.org.assign', 'clue.handler.assign', 'case.reassign.submit',
+    'clue.read', 'case.read', 'doc.read',
+    'clue.register', 'clue.dispatch.decide', 'clue.withdraw.undo', 'clue.disposition.record',
+    'clue.reminder.resolve', 'clue.item.supplement', 'clue.verify.retry', 'clue.reference.read',
+    'clue.geometry.update', 'clue.designate.request',
+  ],
   经办: [
-    'clue.verify.start', 'case.open', 'doc.draft', 'doc.submit', 'case.reassign.submit',
+    'case.open', 'doc.draft', 'doc.submit', 'case.reassign.submit',
     'legal.review.request', 'clue.read', 'case.read', 'doc.read', 'clue.export', 'case.export', 'doc.export',
+    // #207 规格：由录入人走完录入→内业核查→分派决定，故经办持有决定步操作码；
+    // 对象级仍限「本人录入的线索」（见 clue-dispatch 用例）。
+    'clue.register', 'clue.dispatch.decide', 'clue.withdraw.undo', 'clue.disposition.record',
+    'clue.reminder.resolve', 'clue.item.supplement', 'clue.verify.retry', 'clue.reference.read',
+    'clue.geometry.update',
   ],
   法制审核: [
     'legal.opinion.draft', 'legal.opinion.submit', 'clue.read', 'case.read', 'doc.read',
@@ -60,6 +72,8 @@ const ALLOWED: Record<string, readonly string[]> = {
     'personnel.profile.deactivate', 'personnel.profile.restore', 'personnel.sessions.end',
     'personnel.locked.read', 'personnel.locked.release', 'personnel.password.reset', 'personnel.profile.export',
     'audit.admin.read', 'audit.admin.export', 'authz.binding.submit', 'authz.binding.approve',
+    // #210：只给系统管理。
+    'clue.pool.reassign',
   ],
 };
 
@@ -211,7 +225,9 @@ describe('操作码授权', () => {
         await expectDenied(access.authorize(actor, opcode, target), 'permission-denied');
       }
     }
-    expect(allowed.size).toBe(0);
+    // #210：clue.verify.start 保留名册条目但本期不授任何角色（人工路径统一走 clue.verify.retry），
+    // 故名册里唯一没有角色持有的码就是它。
+    expect([...allowed].sort()).toEqual(['clue.verify.start']);
   }, 120_000);
 
   it('名册外的操作码得 permission-denied', async () => {
@@ -326,7 +342,7 @@ describe('操作码授权', () => {
   });
 
   it('A2：执法证过期的经办仍可放行，上下文没有执法资格，名册把启动核查标为查操作的人', async () => {
-    const context = await access.authorize(auth(clerkBId), 'clue.verify.start', deptBId);
+    const context = await access.authorize(auth(clerkBId), 'clue.verify.retry', deptBId);
     expect(context.hasEnforcementQualification).toBe(false);
     expect(JSON.stringify(context)).not.toContain('CERT-EXPIRED-B');
     expect(opcodeRequirements('clue.verify.start')).toMatchObject({
@@ -388,12 +404,12 @@ describe('操作码授权', () => {
       },
     });
     // 通用授权不因资格拒绝：放行照旧，上下文报告没有资格（#64）。
-    const revoked = await access.authorize(auth(created.id), 'clue.verify.start', deptAId);
+    const revoked = await access.authorize(auth(created.id), 'clue.verify.retry', deptAId);
     expect(revoked.hasEnforcementQualification).toBe(false);
     expect(JSON.stringify(revoked)).not.toContain('CERT-REVOKED');
     // 资格每次授权时读取（ADR 0003）：状态改回「有效」即恢复资格。
     await prisma.personnel.update({ where: { id: created.id }, data: { enforcementCertStatus: 'valid' } });
-    const restored = await access.authorize(auth(created.id), 'clue.verify.start', deptAId);
+    const restored = await access.authorize(auth(created.id), 'clue.verify.retry', deptAId);
     expect(restored.hasEnforcementQualification).toBe(true);
   });
 

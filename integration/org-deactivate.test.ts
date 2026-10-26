@@ -366,6 +366,55 @@ describe('四种拒绝：409 invalid-state，失败留痕存在，机构仍未�
     expect(await deactivatedAtOf(station)).not.toBeNull();
   });
 
+  it('#207 P4：停用机构下 in_pool／pending_decision／held 线索自动重指定到根机构', async () => {
+    const station = await addUnit('station', org.deptA);
+    const sourceCode = (await cloned.prisma.$queryRaw<Array<{ code: string }>>`
+      SELECT code FROM geo_dict_source_code ORDER BY code LIMIT 1
+    `)[0]?.code ?? 'SW-1';
+    const adminPersonnel = String(people.root);
+
+    // 在 station 下分别建 in_pool、pending_decision、held 各一条线索。
+    const clueIds: string[] = [];
+    const statuses = ['in_pool', 'pending_decision', 'held'] as const;
+    for (let idx = 0; idx < statuses.length; idx += 1) {
+      const status = statuses[idx] as string;
+      const id = newUlid();
+      const code = `P4-${id.slice(-12)}`;
+      await cloned.prisma.$executeRaw`
+        INSERT INTO clue (id, code, source_code, domain, received_at, narrative,
+          registered_by, entered_org_id, idempotency_key, request_digest, session_id,
+          status, registered_at)
+        VALUES (${id}, ${code}, ${sourceCode}, 'land', NOW(), 'P4 测试',
+          ${adminPersonnel}, ${station}, ${`ik-${newUlid()}`}, '{}', ${`sk-${newUlid()}`},
+          ${status}, NOW())
+      `;
+      clueIds.push(id);
+    }
+
+    // 停用 station（用根机构系统管理员 root）。
+    const response = await deactivate(PHONES.root, station);
+    expect(response.status).toBe(200);
+    expect(await deactivatedAtOf(station)).not.toBeNull();
+
+    // 三条线索的 entered_org_id 均应变为根机构。
+    for (const clueId of clueIds) {
+      const clue = await cloned.prisma.$queryRaw<Array<{ entered_org_id: string }>>`
+        SELECT entered_org_id FROM clue WHERE id = ${clueId}
+      `;
+      expect(clue[0]?.entered_org_id).toBe(org.hq);
+    }
+
+    // 指定事实（kind='pool-reassign'）已写入。
+    const assignments = await cloned.prisma.$queryRaw<Array<{ clue_id: string }>>`
+      SELECT clue_id FROM clue_assignment
+      WHERE kind = 'pool-reassign'
+    `;
+    const assignedIds = new Set(assignments.map((a) => a.clue_id));
+    for (const clueId of clueIds) {
+      expect(assignedIds.has(clueId)).toBe(true);
+    }
+  });
+
   it('几条同时不满足只返回第一条：下级 + 任职 + 未办结 → 下级；任职 + 未办结 → 任职', async () => {
     const district = await addUnit('district', org.hq);
     await addUnit('station', district);

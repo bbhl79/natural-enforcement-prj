@@ -8,12 +8,14 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@natural-enforcement/audit": "workspace:*",
     "@natural-enforcement/approval": "workspace:*",
+    "@natural-enforcement/audit": "workspace:*",
     "@natural-enforcement/case": "workspace:*",
     "@natural-enforcement/deadline": "workspace:*",
     "@natural-enforcement/geo-dict": "workspace:*",
     "@natural-enforcement/identity": "workspace:*",
+    "@natural-enforcement/queue": "workspace:*",
+    "@natural-enforcement/storage": "workspace:*",
     "@natural-enforcement/supervision": "workspace:*",
     "@nestjs/common": "12.1.2",
     "@nestjs/core": "12.1.2",

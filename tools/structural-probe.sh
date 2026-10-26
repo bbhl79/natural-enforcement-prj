@@ -121,6 +121,15 @@ write_probe_g1-model-allowlist() {
     "}"
 }
 
+write_probe_reference-data-no-mutation() {
+  # #210：参照数据只追加（ADR 0016）。就地改行即违例；改参照数据只能追加新版本。
+  tmp_write "backend/geo-dict/src/_structural-probe-reference.ts" \
+    "// 探针（临时，勿入库）：参照数据表就地改行（ADR 0016 只追加）" \
+    "export function probe(prisma: { geoDictSourceCode: { update(input: unknown): unknown } }) {" \
+    "  return prisma.geoDictSourceCode.update({ where: { id: 'probe' }, data: { name: 'probe' } });" \
+    "}"
+}
+
 write_probe_queue-in-integration() {
   # C7 扩范围证据：integration 层同样在设施入口规则范围内（装配层不豁免形态类规则）
   tmp_write "integration/_structural-probe.ts" \
@@ -139,6 +148,16 @@ write_probe_spatial-in-integration() {
     "}"
 }
 
+write_probe_clue-spatial-orm-write() {
+  # #211：线索空间部件归 case 模块（规格 F）。它含 Unsupported 空间字段，ORM 写同样绕过
+  # ST_Transform 口径（执行纪律 2），故空间纪律的模型集扩到它与命中集表。
+  tmp_write "backend/case/src/_structural-probe-clue-spatial.ts" \
+    "// 探针（临时，勿入库）：线索空间部件 ORM 写（执行纪律 2 禁止的形态）" \
+    "export function probe(prisma: { clueSpatialPart: { create(input: unknown): unknown } }) {" \
+    "  return prisma.clueSpatialPart.create({ data: { id: 'probe' } });" \
+    "}"
+}
+
 write_probe_audit-facility-entry() {
   tmp_write "integration/_structural-probe-audit.ts" \
     "// 探针（临时，勿入库）：包外引用留痕委托" \
@@ -152,6 +171,15 @@ write_probe_server-adapter-file() {
     "// 探针（临时，勿入库）：第二个文件引用身份数据库适配器" \
     "import { PrismaIdentityStore } from '../../identity/src/persistence/prisma-identity-store.ts';" \
     "export const store = PrismaIdentityStore;"
+}
+
+write_probe_case-adapter-file() {
+  # #211：案件聚合模块的线索表适配器同样只在启动包的装配根里被引用（豁免名单收紧到
+  # 文件 + specifier 两条）。名单外的第二个文件引用照样判红。
+  tmp_write "backend/server/src/_structural-probe-case-adapter.ts" \
+    "// 探针（临时，勿入库）：第二个文件引用案件聚合模块的数据库适配器" \
+    "import { PrismaClueStore } from '../../case/src/persistence/prisma-clue-store.ts';" \
+    "export const store = PrismaClueStore;"
 }
 
 write_probe_exempt-tightness() {
@@ -345,10 +373,17 @@ write_probe_weak-reference-entry() {
 }
 
 write_probe_screenshot-full-set() {
-  # 截图全集多出 v0.4 状态键之外的文件名。规则只比文件名，不校验 PNG 格式与画面。
+  # 截图全集多出状态键之外的文件名。规则只比文件名，不校验 PNG 格式与画面。
   # 落点是 docs/screens 深度 2 的新目录，cleanup 连空目录一并删掉，树回到干净状态。
   tmp_write "docs/screens/_structural-probe/probe-extra.png" \
     "// 探针（临时，勿入库）：截图全集外的文件名"
+}
+
+
+write_probe_ui-copy-discipline() {
+  # #220：界面文案禁「捞回」。生产源码字面量出现即红。
+  tmp_write "frontend/src/__probe_ui_copy.tsx" \
+    "export const probeLabel = '捞回';"
 }
 
 SPECS=(
@@ -362,6 +397,7 @@ SPECS=(
   "exempt-tightness|module-public-entry|豁免名单外的深路径导入（豁免不放行整层）"
   "audit-facility-entry|audit-facility-entry|包外引用留痕委托"
   "server-adapter-file|module-public-entry|启动包第二个文件引用身份数据库适配器"
+  "case-adapter-file|module-public-entry|启动包第二个文件引用案件聚合数据库适配器"
   "compose-literal-secret|runtime-manifest|compose 写字面量密钥"
   "compose-unlisted-name|runtime-manifest|compose 引用清单外变量名"
   "ci-literal-secret|runtime-manifest|CI 密钥带 || 回落字面量"
@@ -385,7 +421,12 @@ SPECS=(
   "storage-facility-entry|storage-facility-entry|业务侧裸依赖存储 SDK @aws-sdk/client-s3"
   "supervision-deps|supervision-deps|supervision 表外依赖业务模块 approval"
   "weak-reference-entry|weak-reference-entry|跨域弱引用入口名未从 shield 导入"
-  "screenshot-full-set|screenshot-full-set|截图全集多出 v0.4 之外的文件名"
+  "screenshot-full-set|screenshot-full-set|截图全集多出状态键之外的文件名"
+  "ui-copy-discipline|ui-copy-discipline|界面文案字面量出现「捞回」（#220）"
+  # #210 新增规则：参照数据只追加的机器兜底。
+  "reference-data-no-mutation|reference-data-no-mutation|参照数据表就地改行（ADR 0016 只追加）"
+  # #211：线索空间三表归 case 模块，空间纪律的模型集扩到线索空间部件与命中集表。
+  "clue-spatial-orm-write|spatial-no-orm-mutation|线索空间部件 ORM 写（#211 新空间表禁 ORM 写）"
 )
 
 # ---------- 护栏①（#171）动态层：带违例的整闸全量运行，三族各取一条 ----------

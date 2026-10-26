@@ -4,7 +4,7 @@ import { isRouteErrorResponse, Link, useLocation, useRevalidator, useRouteError 
 
 import { useAppDispatch } from '../hooks';
 import { acknowledgeSessionEnd } from '../login/loginSlice';
-import { LOGIN_PATH, withNext } from '../routing';
+import { HOME_PATH, LOGIN_PATH, withNext } from '../routing';
 import { SideNavSkeleton } from './SideNav';
 import Topbar from './Topbar';
 
@@ -93,7 +93,7 @@ export function ForbiddenPage() {
         <div className="code">403</div>
         <h2>你没有权限打开这个页面</h2>
         <p>这个页面需要的权限不在你当前的角色里。如工作需要，请联系本单位的系统管理人员调整角色。</p>
-        <Link className="btn btn-primary" to="/">回到工作台</Link>
+        <Link className="btn btn-primary" to={HOME_PATH}>回到工作台</Link>
       </div>
     </div>
   );
@@ -107,7 +107,7 @@ export function NotFoundPage() {
         <div className="code">404</div>
         <h2>没有找到这个页面</h2>
         <p>地址可能输错了，或页面已经调整。请从左侧导航进入。</p>
-        <Link className="btn btn-primary" to="/">回到工作台</Link>
+        <Link className="btn btn-primary" to={HOME_PATH}>回到工作台</Link>
       </div>
     </div>
   );
@@ -136,7 +136,7 @@ export function DeniedCard({ what }: { what: string }) {
         <div className="t">{`你没有查看${what}的权限`}</div>
         <div>如工作需要，请联系本单位的系统管理人员调整角色。</div>
         <div style={{ marginTop: 14 }}>
-          <Link className="btn" to="/">回到工作台</Link>
+          <Link className="btn" to={HOME_PATH}>回到工作台</Link>
         </div>
       </div>
     </div>

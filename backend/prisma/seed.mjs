@@ -1,12 +1,24 @@
-// dev db seed：迁移探针（#49）+ 参照种子（#92）+ 开发测试夹具（#52）。
+// dev db seed：迁移探针（#49）+ 参照种子（#92）+ 参照数据种子（#210）+ 开发测试夹具（#52）。
 // 幂等纪律（dev db 全语义只增不改，毁数入口只有 dev db reset）：按业务键判存在即跳过。
 // 参照种子（七个角色、操作码名册、允许行）在所有环境写入。允许行以 GitHub issue #71 决议为准。
+// 参照数据种子（ADR 0016：线索来源编码、违法类型编码、依据文件、类型依据、辖区对应）在所有环境写入，
+// 以「业务编码 + 版本」为键，只追加；库里同一键的内容与仓库种子不一致时种子报错退出，不覆盖。
 // 开发测试夹具（机构与人员）只在非生产环境写入。生产环境设置 NODE_ENV=production。
 // 夹具人员不写旧 role 列。角色经人员—角色写入。手机号有值。passwordChangedAt 留空。
 // 口令散列 = argon2 0.45.1（infra/VERSIONS.md 身份行；种子运行即预编译二进制实测腿之一）。
 import { PrismaClient } from "./generated/prisma/client.ts";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { hash } from "argon2";
+// 参照数据初值（#210）：生成文件，由 tools/generate-clue-reference-data.mjs 从定稿底稿产出。
+// 本目录是种子通道，按 #47 装配形态直接引空间字典模块的内部路径（结构测试 module-public-entry
+// 对 backend/prisma/seed.mjs 不参与判定）。
+import {
+  DOCUMENTS,
+  JURISDICTION_ROWS,
+  SOURCE_CODES,
+  VIOLATION_TYPES,
+  VIOLATION_TYPE_BASIS,
+} from "../geo-dict/src/reference-data/index.ts";
 
 // ULID 生成（#16 §1.1 主键形制：48bit 毫秒时间 + 80bit 随机，26 位大写 Crockford Base32）。
 // 与 backend/identity/src/domain/ulid.ts 同规则，但种子通道不 import 模块代码：
@@ -48,6 +60,11 @@ if (existing) {
 // 执法证登记（#105「执法证（#85）」，#133）：personnel.cert.update 只给系统管理。
 // 人员编辑与调岗（#105，#129）：personnel.profile.update 只给系统管理，调岗和改角色并入这一条，岗位标记的维护也用它。
 // 人员停用、恢复与结束全部会话（#105，#130）：personnel.profile.deactivate、personnel.profile.restore、personnel.sessions.end 只给系统管理。
+// #210 新增 11 个线索操作码的允许行（#207 协议 A 节「操作码终稿」）。
+// 内勤：派机构、派主办、报请指定管辖、分派决定、处置、提醒处理、补齐、手动重跑、实名查阅、重绘、登记。
+// 经办：一线录入、撤回不派、处置、补齐、手动重跑、实名查阅、重绘。
+// 系统管理：只给 clue.pool.reassign（为停用机构的待分派池线索重新指定接收机构）。
+// 监督无写权限，也不给实名查阅（监督看脱敏视图）。
 const ROLE_ALLOWANCES = {
   内勤: [
     "org.tree.read",
@@ -57,9 +74,18 @@ const ROLE_ALLOWANCES = {
     "clue.read",
     "case.read",
     "doc.read",
+    "clue.register",
+    "clue.dispatch.decide",
+    "clue.withdraw.undo",
+    "clue.disposition.record",
+    "clue.reminder.resolve",
+    "clue.item.supplement",
+    "clue.verify.retry",
+    "clue.reference.read",
+    "clue.geometry.update",
+    "clue.designate.request",
   ],
   经办: [
-    "clue.verify.start",
     "case.open",
     "doc.draft",
     "doc.submit",
@@ -71,6 +97,15 @@ const ROLE_ALLOWANCES = {
     "clue.export",
     "case.export",
     "doc.export",
+    "clue.register",
+    "clue.dispatch.decide",
+    "clue.withdraw.undo",
+    "clue.disposition.record",
+    "clue.reminder.resolve",
+    "clue.item.supplement",
+    "clue.verify.retry",
+    "clue.reference.read",
+    "clue.geometry.update",
   ],
   法制审核: [
     "legal.opinion.draft",
@@ -135,8 +170,16 @@ const ROLE_ALLOWANCES = {
     "audit.admin.export",
     "authz.binding.submit",
     "authz.binding.approve",
+    // #210：只给系统管理（为停用机构的待分派池线索重新指定接收机构）。不复用 clue.org.assign，
+    // 那会把全部分派权授给系统管理，违背 ADR 0009「角色按职责」。
+    "clue.pool.reassign",
   ],
 };
+
+// 名册里有、本期不授任何角色的操作码（#210）：clue.verify.start 保留名册条目，
+// 但移除本期种子授权——人工路径统一走 clue.verify.retry。
+// 名册条目仍要落成权限行（操作码名册随参照种子写进 Permission 表），只是不给允许行。
+const CATALOG_ONLY_PERMISSIONS = ["clue.verify.start"];
 
 // 参照种子按「存在即已初始化」判断，含已失效的行（#103 评审）。
 // 管理员撤销的角色、操作码或允许行，再次播种不恢复；重新授权只能经显式管理动作。
@@ -170,7 +213,7 @@ for (const name of Object.keys(ROLE_ALLOWANCES)) {
   roleIds.set(name, await seedRole(name));
 }
 const permissionIds = new Map();
-for (const code of new Set(Object.values(ROLE_ALLOWANCES).flat())) {
+for (const code of new Set([...Object.values(ROLE_ALLOWANCES).flat(), ...CATALOG_ONLY_PERMISSIONS])) {
   permissionIds.set(code, await seedPermission(code));
 }
 for (const [name, codes] of Object.entries(ROLE_ALLOWANCES)) {
@@ -179,7 +222,196 @@ for (const [name, codes] of Object.entries(ROLE_ALLOWANCES)) {
     await seedAllow(role, permissionIds.get(code));
   }
 }
+
+// #210：clue.verify.start 保留名册条目但移除本期种子授权。
+// 允许行旧行只失效不删除（#96）：把仍生效的允许行标为失效，不物理删除。
+const revokedCodes = ["clue.verify.start"];
+for (const code of revokedCodes) {
+  const permission = permissionIds.get(code);
+  if (!permission) continue;
+  for (const role of roleIds.values()) {
+    if (!role.active) continue;
+    const found = await prisma.rolePermission.findFirst({
+      where: { roleId: role.id, permissionId: permission.id, deactivatedAt: null },
+    });
+    if (!found) continue;
+    await prisma.rolePermission.update({
+      where: { id: found.id },
+      data: { deactivatedAt: new Date() },
+    });
+    console.log(`参照种子：移除允许行 ${code}（本期不授权，人工路径走 clue.verify.retry）。`);
+  }
+}
 console.log("参照种子已写入或已存在。");
+
+// ---- 参照数据种子（#210；ADR 0016 参照数据随种子只追加写入）----
+// 五张表：线索来源编码、违法类型编码、依据文件、违法类型依据、辖区对应。
+// 键 =「业务编码 + 版本」。本轮全部是第 1 版；改数据的方式是追加新版本，不改旧行。
+// 库里同一键的内容与仓库种子不一致时，种子报错退出，不覆盖（ADR 0016「幂等」）。
+const REFERENCE_VERSION = 1;
+const REFERENCE_SOURCE = {
+  sourceCode: "Lei Hu 提供，2026-10-17（#24 线索来源编码表）",
+  violationType: "#203 违法类型编码表（定稿）",
+  document: "#203 依据文件表（草案初值，效力层级与状态待 #42 复核）",
+  basis: "#203 类型层草案依据栏归集（用途取认定标准）",
+  jurisdiction: "业务方交付",
+};
+
+/**
+ * 只追加写一行。
+ * @param delegate Prisma 委托
+ * @param businessKey 业务唯一键（业务编码 + 版本，或引用四元组）
+ * @param expected 该行应当有的内容（逐字段核对）
+ * @param create 建行数据（不含 id）
+ */
+async function seedReferenceRow(delegate, businessKey, expected, create) {
+  const found = await delegate.findFirst({ where: businessKey });
+  if (found) {
+    for (const [field, value] of Object.entries(expected)) {
+      if (found[field] !== value) {
+        throw new Error(
+          `参照数据与仓库种子不一致：${JSON.stringify(businessKey)} 的 ${field} 库里是 ${found[field]}，种子是 ${value}；参照数据只追加，不覆盖`,
+        );
+      }
+    }
+    return found;
+  }
+  return await delegate.create({ data: { id: newUlid(), ...create } });
+}
+
+// 线索来源编码（30 项：5 大类 + 20 二级 + 5 三级）。
+const sourceCodeIds = new Map();
+for (const row of SOURCE_CODES) {
+  const seeded = await seedReferenceRow(
+    prisma.geoDictSourceCode,
+    { code: row.code, version: REFERENCE_VERSION },
+    { name: row.name, parentCode: row.parentCode, status: "active" },
+    {
+      code: row.code,
+      version: REFERENCE_VERSION,
+      name: row.name,
+      parentCode: row.parentCode,
+      source: REFERENCE_SOURCE.sourceCode,
+      status: "active",
+    },
+  );
+  sourceCodeIds.set(row.code, seeded.id);
+}
+console.log(`参照数据：线索来源编码 ${sourceCodeIds.size} 项。`);
+
+// 违法类型编码（94 个可选具体违法行为 + 19 个不可选大类）。
+const violationTypeIds = new Map();
+for (const row of VIOLATION_TYPES) {
+  const seeded = await seedReferenceRow(
+    prisma.geoDictViolationType,
+    { code: row.code, version: REFERENCE_VERSION },
+    {
+      name: row.name,
+      domain: row.domain,
+      parentCode: row.parentCode,
+      selectable: row.selectable,
+      appendix: row.appendix,
+      status: "active",
+    },
+    {
+      code: row.code,
+      version: REFERENCE_VERSION,
+      name: row.name,
+      domain: row.domain,
+      parentCode: row.parentCode,
+      selectable: row.selectable,
+      appendix: row.appendix,
+      source: REFERENCE_SOURCE.violationType,
+      status: "active",
+    },
+  );
+  violationTypeIds.set(row.code, seeded.id);
+}
+console.log(`参照数据：违法类型编码 ${violationTypeIds.size} 项。`);
+
+// 依据文件表（80 份；效力层级九档、效力状态三值）。
+const documentIds = new Map();
+const documentNames = new Map();
+for (const row of DOCUMENTS) {
+  const seeded = await seedReferenceRow(
+    prisma.geoDictDocument,
+    { code: row.code, version: REFERENCE_VERSION },
+    {
+      name: row.name,
+      hierarchyLevel: row.hierarchyLevel,
+      validityStatus: row.validityStatus,
+      note: row.note,
+      status: "active",
+    },
+    {
+      code: row.code,
+      version: REFERENCE_VERSION,
+      name: row.name,
+      hierarchyLevel: row.hierarchyLevel,
+      validityStatus: row.validityStatus,
+      note: row.note,
+      source: REFERENCE_SOURCE.document,
+      status: "active",
+    },
+  );
+  documentIds.set(row.code, seeded.id);
+  documentNames.set(row.code, row.name);
+}
+console.log(`参照数据：依据文件 ${documentIds.size} 份。`);
+
+// 违法类型的依据引用（文件编号 + 条号 + 用途；引用钉版本，展示名随行冻结）。
+const typeNames = new Map(VIOLATION_TYPES.map((row) => [row.code, row.name]));
+let basisCount = 0;
+for (const row of VIOLATION_TYPE_BASIS) {
+  const violationTypeId = violationTypeIds.get(row.typeCode);
+  const documentId = documentIds.get(row.documentCode);
+  if (!violationTypeId || !documentId) {
+    throw new Error(`依据引用指向不存在的编码：${row.typeCode} → ${row.documentCode}`);
+  }
+  await seedReferenceRow(
+    prisma.geoDictViolationTypeBasis,
+    { violationTypeId, documentId, articleNo: row.articleNo, purpose: row.purpose },
+    {
+      violationTypeCode: row.typeCode,
+      violationTypeName: typeNames.get(row.typeCode),
+      documentCode: row.documentCode,
+      documentName: documentNames.get(row.documentCode),
+    },
+    {
+      violationTypeId,
+      violationTypeCode: row.typeCode,
+      violationTypeName: typeNames.get(row.typeCode),
+      documentId,
+      documentCode: row.documentCode,
+      documentName: documentNames.get(row.documentCode),
+      articleNo: row.articleNo,
+      purpose: row.purpose,
+    },
+  );
+  basisCount += 1;
+}
+console.log(`参照数据：违法类型依据 ${basisCount} 条。`);
+
+// 辖区对应（街道（镇）编码 → 机构）。业务方尚未交付，当前为空表；交付后随本种子只追加写入。
+let jurisdictionCount = 0;
+for (const row of JURISDICTION_ROWS) {
+  await seedReferenceRow(
+    prisma.geoDictJurisdiction,
+    { code: row.code, version: REFERENCE_VERSION },
+    { name: row.name, orgCode: row.orgCode, orgName: row.orgName, status: "active" },
+    {
+      code: row.code,
+      version: REFERENCE_VERSION,
+      name: row.name,
+      orgCode: row.orgCode,
+      orgName: row.orgName,
+      source: REFERENCE_SOURCE.jurisdiction,
+      status: "active",
+    },
+  );
+  jurisdictionCount += 1;
+}
+console.log(`参照数据：辖区对应 ${jurisdictionCount} 行。`);
 
 // ---- 开发测试夹具（#52；与 integration/e2-access-matrix.test.ts 的 code 约定同步）----
 // NODE_ENV=production 时不写入。夹具不进入生产库。

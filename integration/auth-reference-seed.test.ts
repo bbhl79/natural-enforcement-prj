@@ -28,6 +28,8 @@ function newUlid(): string {
 
 /** #71 决议表。键是角色名。值是该角色的操作码。 */
 const EXPECTED_ALLOWANCES: Record<string, readonly string[]> = {
+  // #210：11 个线索操作码进允许行。clue.verify.start 保留名册条目但移除本期种子授权
+  // （人工路径统一走 clue.verify.retry），故不出现在任何角色的允许行里。
   内勤: [
     'org.tree.read',
     'clue.org.assign',
@@ -36,9 +38,18 @@ const EXPECTED_ALLOWANCES: Record<string, readonly string[]> = {
     'clue.read',
     'case.read',
     'doc.read',
+    'clue.register',
+    'clue.dispatch.decide',
+    'clue.withdraw.undo',
+    'clue.disposition.record',
+    'clue.reminder.resolve',
+    'clue.item.supplement',
+    'clue.verify.retry',
+    'clue.reference.read',
+    'clue.geometry.update',
+    'clue.designate.request',
   ],
   经办: [
-    'clue.verify.start',
     'case.open',
     'doc.draft',
     'doc.submit',
@@ -50,6 +61,15 @@ const EXPECTED_ALLOWANCES: Record<string, readonly string[]> = {
     'clue.export',
     'case.export',
     'doc.export',
+    'clue.register',
+    'clue.dispatch.decide',
+    'clue.withdraw.undo',
+    'clue.disposition.record',
+    'clue.reminder.resolve',
+    'clue.item.supplement',
+    'clue.verify.retry',
+    'clue.reference.read',
+    'clue.geometry.update',
   ],
   法制审核: [
     'legal.opinion.draft',
@@ -114,6 +134,8 @@ const EXPECTED_ALLOWANCES: Record<string, readonly string[]> = {
     'audit.admin.export',
     'authz.binding.submit',
     'authz.binding.approve',
+    // #210：只给系统管理（为停用机构的待分派池线索重新指定接收机构）。
+    'clue.pool.reassign',
   ],
 };
 
@@ -169,9 +191,11 @@ async function expectReferenceSeed(client: PrismaClient): Promise<void> {
   for (const role of roles) expect(role.id).toMatch(ULID);
 
   const permissions = await client.permission.findMany({ where: { deactivatedAt: null } });
-  const expectedOpcodes = sorted(
-    [...new Set(Object.values(EXPECTED_ALLOWANCES).flat())],
-  );
+  const expectedOpcodes = sorted([
+    ...new Set(Object.values(EXPECTED_ALLOWANCES).flat()),
+    // #210：clue.verify.start 保留名册条目但本期不授任何角色，仍要落成权限行。
+    'clue.verify.start',
+  ]);
   expect(permissions.map((permission) => permission.code).sort()).toEqual(expectedOpcodes);
   for (const permission of permissions) expect(permission.id).toMatch(ULID);
 
