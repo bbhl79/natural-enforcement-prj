@@ -5,20 +5,22 @@ import { prismaOpenItemsCounter } from './open-items-counter.ts';
 
 describe('prismaOpenItemsCounter', () => {
   it('按机构 id 查询并把 COUNT 映射为 clues；cases 恒 0', async () => {
-    const queryRaw = vi.fn(async () => [{ n: 3 }]);
+    const queryRaw = vi.fn(
+      async (strings: TemplateStringsArray, ...values: unknown[]) => {
+        expect(strings.join(' ')).toContain('clue_assignment');
+        expect(strings.join(' ')).toContain('ended_at IS NULL');
+        expect(strings.join(' ')).toContain('closed');
+        expect(strings.join(' ')).toContain('transferred_out');
+        expect(values[0]).toBe('org-1');
+        return [{ n: 3 }];
+      },
+    );
     const result = await prismaOpenItemsCounter.countOpenItems('org-1', {
       store: {} as never,
       client: { $queryRaw: queryRaw },
     });
     expect(result).toEqual({ clues: 3, cases: 0 });
     expect(queryRaw).toHaveBeenCalledTimes(1);
-    const strings = queryRaw.mock.calls[0]?.[0] as TemplateStringsArray;
-    const sql = strings.join('?');
-    expect(sql).toContain('clue_assignment');
-    expect(sql).toContain('ended_at IS NULL');
-    expect(sql).toContain('closed');
-    expect(sql).toContain('transferred_out');
-    expect(queryRaw.mock.calls[0]?.[1]).toBe('org-1');
   });
 
   it('查询无行时 clues 为 0', async () => {
