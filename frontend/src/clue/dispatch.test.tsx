@@ -196,6 +196,54 @@ describe('辖区建议（不自动派）', () => {
   });
 });
 
+describe('监督身份分派只读', () => {
+  const noop = () => undefined;
+  const body = (overrides: Partial<DispatchView> = {}) =>
+    renderToStaticMarkup(
+      <ClueDispatchBody
+        view={view({
+          status: 'in_pool',
+          mayDecide: false,
+          mayAssignOrg: false,
+          mayTransfer: false,
+          mayRequestDesignation: false,
+          ...overrides,
+        })}
+        orgOptions={[{ orgUnitId: 'org-a', name: '甲所' }]}
+        busy={false}
+        failure={null}
+        onDecide={noop}
+        onAssignOrg={noop}
+        onAssignPeople={noop}
+        onTransfer={noop}
+        onDesignateRequest={noop}
+        onDesignateReject={noop}
+        supervisorReadonly
+      />,
+    );
+
+  it('待分派面板仍展示，派机构、报请与移送全部禁用并说明原因', () => {
+    const html = body();
+    expect(html).toContain('data-role="assign-readonly"');
+    expect(html).toContain('监督身份只读，不可分派');
+    expect(html).toContain('data-role="assign-org-panel"');
+    expect(html).toContain('data-role="transfer-panel"');
+    expect(html).toContain('data-role="designate-request-panel"');
+    expect(html).toMatch(/data-role="assign-org"[^>]*disabled|disabled[^>]*data-role="assign-org"/);
+    expect(html).toMatch(/data-role="transfer-submit"[^>]*disabled|disabled[^>]*data-role="transfer-submit"/);
+    expect(html).toMatch(/data-role="designate-request"[^>]*disabled|disabled[^>]*data-role="designate-request"/);
+    expect(html).not.toContain('待分派池的线索由本机构内勤派出');
+  });
+
+  it('待分派决定的派与不派一并禁用', () => {
+    const html = body({ status: 'pending_decision', mayDecide: false });
+    expect(html).toContain('data-role="decide-panel"');
+    expect(html).toMatch(/data-role="decide-hold"[^>]*disabled|disabled[^>]*data-role="decide-hold"/);
+    expect(html).toMatch(/data-role="decide-dispatch"[^>]*disabled|disabled[^>]*data-role="decide-dispatch"/);
+    expect(html).toContain('监督身份只读，不可分派');
+  });
+});
+
 describe('两步分派面板', () => {
   it('首次派机构不渲染理由输入；重新分派渲染理由必填输入', () => {
     const initial = renderToStaticMarkup(

@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { apiFetch } from '../api';
-import { useAppDispatch } from '../hooks';
+import { useAppDispatch, useAppSelector } from '../hooks';
 import { ErrorCard } from '../shell/StatusPages';
 import { ClueDispatchBody, type OrgOption } from './ClueDispatchPanel';
 import {
@@ -92,6 +92,8 @@ export function dispatchFailureText(body: unknown): string {
 /** 分派办理（工作台③）。 */
 export default function ClueDispatchSection({ clueId }: { readonly clueId: string }) {
   const dispatch = useAppDispatch();
+  const roles = useAppSelector((root) => root.login.operator?.roles) ?? [];
+  const supervisorReadonly = roles.includes('监督') && !roles.includes('内勤') && !roles.includes('经办');
   const [view, setView] = useState<DispatchView | null>(null);
   const [orgOptions, setOrgOptions] = useState<readonly OrgOption[]>([]);
   const [error, setError] = useState(false);
@@ -174,6 +176,7 @@ export default function ClueDispatchSection({ clueId }: { readonly clueId: strin
           }),
         )
       }
+      supervisorReadonly={supervisorReadonly}
     />
   );
 }
