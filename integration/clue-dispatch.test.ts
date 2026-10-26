@@ -797,87 +797,62 @@ describe('#214 重新分派与并发控制', () => {
   });
 });
 
+/**
+ * P7 夹具：规划类点状线索注册后直接进 in_pool，走不到分派决定步。
+ * 这里在注册之后把线索行直接置为 pending_decision，只测决定步的校验，不改注册分流。
+ */
+async function seedClueAtPendingDecision(types: string, point: { lng: number; lat: number }): Promise<string> {
+  const registered = await register({
+    domain: 'planning',
+    types,
+    polygon: geojsonPoint(point.lng, point.lat),
+    // 类型层「录入时」必填项：只有违法建设类要填在建／已建成，其他类型填了反而是无效项。
+    values:
+      types === 'planning_build_without_permit'
+        ? { ...BASE_VALUES, 'type.planning_build_without_permit.build_stage': '已建成' }
+        : BASE_VALUES,
+  });
+  expect(registered.status, JSON.stringify(registered.body)).toBe(201);
+  const clueId = registered.body.id ?? '';
+  await cloned.prisma.clue.update({ where: { id: clueId }, data: { status: 'pending_decision' } });
+  return clueId;
+}
+
 describe('P7 个案判断规划类分派校验', () => {
-  // 规划类为点状线索，注册后直接进入 in_pool 而非 pending_decision，
-  // 分派决定步（decide）在 in_pool 状态下不可用。
-  // case-by-case 校验在前端 DecidePanel 与服务端 decide() 中的实现已完成，
-  // 完整集成测试需待规划类支持面状几何或分派决定步覆盖 in_pool 状态后再补。
-  it.skip('个案判断项派时缺 conflictResolution → 400 missing-conflict-resolution', async () => {
-    await register({
-      domain: 'planning',
-      types: 'planning_build_without_permit',
-      polygon: geojsonPoint(113, 23),
-    });
-    const second = await register({
-      idempotencyKey: 'p7-test-1',
-      domain: 'planning',
-      types: 'planning_build_without_permit',
-      polygon: geojsonPoint(113, 23),
-    });
-    const outcome = await decide(second.body.id ?? '', {
-      decision: 'dispatch',
-      expectedStatus: 'pending_decision',
-    });
+  it('个案判断项派时缺 conflictResolution → 400 missing-conflict-resolution，业务行不变', async () => {
+    const clueId = await seedClueAtPendingDecision('planning_build_without_permit', { lng: 113, lat: 23 });
+    const outcome = await decide(clueId, { decision: 'dispatch' });
     expect(outcome.status).toBe(400);
+    expect(outcome.body.rules).toEqual(['missing-conflict-resolution']);
+    const clue = await cloned.prisma.clue.findUnique({ where: { id: clueId } });
+    expect(clue?.status).toBe('pending_decision');
   });
 
-  it.skip('个案判断项派时缺 conflictBasis → 400 missing-conflict-basis', async () => {
-    await register({
-      domain: 'planning',
-      types: 'planning_build_without_permit',
-      polygon: geojsonPoint(113.1, 23.1),
-    });
-    const second = await register({
-      idempotencyKey: 'p7-test-2',
-      domain: 'planning',
-      types: 'planning_build_without_permit',
-      polygon: geojsonPoint(113.1, 23.1),
-    });
-    const outcome = await decide(second.body.id ?? '', {
-      decision: 'dispatch',
-      conflictResolution: 'handle-in-system',
-      expectedStatus: 'pending_decision',
-    });
+  it('个案判断项派时缺 conflictBasis → 400 missing-conflict-basis，业务行不变', async () => {
+    const clueId = await seedClueAtPendingDecision('planning_build_without_permit', { lng: 113.1, lat: 23.1 });
+    const outcome = await decide(clueId, { decision: 'dispatch', conflictResolution: 'handle-in-system' });
     expect(outcome.status).toBe(400);
+    expect(outcome.body.rules).toEqual(['missing-conflict-basis']);
+    const clue = await cloned.prisma.clue.findUnique({ where: { id: clueId } });
+    expect(clue?.status).toBe('pending_decision');
   });
 
-  it.skip('个案判断项提供完整冲突解决参数 → 200', async () => {
-    await register({
-      domain: 'planning',
-      types: 'planning_build_without_permit',
-      polygon: geojsonPoint(113.2, 23.2),
-    });
-    const second = await register({
-      idempotencyKey: 'p7-test-3',
-      domain: 'planning',
-      types: 'planning_build_without_permit',
-      polygon: geojsonPoint(113.2, 23.2),
-    });
-    const outcome = await decide(second.body.id ?? '', {
+  it('个案判断项提供完整冲突解决参数 → 200，进入待分派池', async () => {
+    const clueId = await seedClueAtPendingDecision('planning_build_without_permit', { lng: 113.2, lat: 23.2 });
+    const outcome = await decide(clueId, {
       decision: 'dispatch',
       conflictResolution: 'handle-in-system',
       conflictBasis: '依据《城乡规划法》第 64 条',
-      expectedStatus: 'pending_decision',
     });
     expect(outcome.status).toBe(200);
+    // 「派」只把线索放进待分派池，派机构是下一步。
+    const clue = await cloned.prisma.clue.findUnique({ where: { id: clueId } });
+    expect(clue?.status).toBe('in_pool');
   });
 
-  it.skip('体系内规划类派时不需冲突解决参数', async () => {
-    await register({
-      domain: 'planning',
-      types: 'planning_completion_data_unreported',
-      polygon: geojsonPoint(113.3, 23.3),
-    });
-    const second = await register({
-      idempotencyKey: 'p7-test-4',
-      domain: 'planning',
-      types: 'planning_completion_data_unreported',
-      polygon: geojsonPoint(113.3, 23.3),
-    });
-    const outcome = await decide(second.body.id ?? '', {
-      decision: 'dispatch',
-      expectedStatus: 'pending_decision',
-    });
+  it('体系内规划类派时不需冲突解决参数', async () => {
+    const clueId = await seedClueAtPendingDecision('planning_completion_data_unreported', { lng: 113.3, lat: 23.3 });
+    const outcome = await decide(clueId, { decision: 'dispatch' });
     expect(outcome.status).toBe(200);
   });
 });
