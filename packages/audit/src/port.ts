@@ -14,6 +14,7 @@ import type {
   ClueReminderResolvedFailedReason,
   ClueVerifyRetryFailedReason,
   ClueWithdrawnFailedReason,
+  StorageQuarantinedFailedReason,
   CertUpdateFailedReason,
   AuthzDeniedReason,
   LoginFailedReason,
@@ -214,6 +215,13 @@ export type AuditAppend =
       action: 'clue.reminder-resolved';
       outcome: 'failed';
       reason: ClueReminderResolvedFailedReason;
+    })
+  // 涉密误传隔离（#224）：成功／失败同行动作词；detail 存对象 id 与简述。
+  | (AuditParties & { action: 'storage.quarantined' })
+  | (AuditParties & {
+      action: 'storage.quarantined';
+      outcome: 'failed';
+      reason: StorageQuarantinedFailedReason;
     });
 
 /**

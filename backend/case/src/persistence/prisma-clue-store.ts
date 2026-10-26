@@ -50,6 +50,8 @@ import type {
   CluePoolClueRow,
   CluePoolReassignWrite,
   ClueTransferContext,
+  ClueMaterialQuarantineTarget,
+  StorageObjectQuarantineWrite,
   ClueTransferWrite,
   ClueRegistrationOutcome,
   ClueRegistrationResult,
@@ -1973,6 +1975,66 @@ export class PrismaClueStore implements ClueStore {
       },
     };
   }
+  async findMaterialQuarantineTarget(materialId: string): Promise<ClueMaterialQuarantineTarget | null> {
+    const rows = await this.prisma.$queryRaw<
+      {
+        material_id: string;
+        clue_id: string;
+        entered_org_id: string;
+        file_key: string;
+        version_id: string;
+        file_name: string;
+      }[]
+    >`
+      SELECT m.id AS material_id, m.clue_id, c.entered_org_id, m.file_key, m.version_id, m.file_name
+      FROM clue_material m
+      INNER JOIN clue c ON c.id = m.clue_id
+      WHERE m.id = ${materialId}
+      LIMIT 1
+    `;
+    const row = rows[0];
+    if (!row) return null;
+    return {
+      materialId: row.material_id,
+      clueId: row.clue_id,
+      enteredOrgId: row.entered_org_id,
+      fileKey: row.file_key,
+      versionId: row.version_id,
+      fileName: row.file_name,
+    };
+  }
+
+  async isObjectQuarantined(fileKey: string, versionId: string): Promise<boolean> {
+    const rows = await this.prisma.$queryRaw<{ ok: number }[]>`
+      SELECT 1 AS ok
+      FROM storage_object_quarantine
+      WHERE file_key = ${fileKey} AND version_id = ${versionId}
+      LIMIT 1
+    `;
+    return rows.length > 0;
+  }
+
+  async insertObjectQuarantine(
+    write: StorageObjectQuarantineWrite,
+  ): Promise<'written' | 'already-quarantined'> {
+    try {
+      await this.prisma.$executeRaw`
+        INSERT INTO storage_object_quarantine
+          (id, file_key, version_id, material_id, clue_id, summary, discovered_by, discovered_at, status)
+        VALUES
+          (${write.id}, ${write.fileKey}, ${write.versionId}, ${write.materialId}, ${write.clueId},
+           ${write.summary}, ${write.discoveredBy}, ${write.discoveredAt}, 'quarantined')
+      `;
+      return 'written';
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      if (msg.includes('23505') || msg.includes('storage_object_quarantine_object_uidx')) {
+        return 'already-quarantined';
+      }
+      throw error;
+    }
+  }
+
 }
 
 /** 工作台零计数常量（无可见机构时回）。 */

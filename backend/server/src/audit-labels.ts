@@ -55,6 +55,7 @@ const OPERATION_OF_ACTION: Readonly<Record<string, string>> = {
   'bootstrap.admin-registered': '建立首个系统管理人员',
   'audit.viewed': '查阅管理台留痕',
   'audit.exported': '导出管理台留痕',
+  'storage.quarantined': '标记涉密误传',
 };
 
 const OPERATION_OF_OPCODE: Readonly<Record<string, string>> = {
@@ -76,6 +77,7 @@ const OPERATION_OF_OPCODE: Readonly<Record<string, string>> = {
   'org.unit.register': '新建下级机构',
   'org.unit.rename': '机构改名',
   'org.unit.deactivate': '停用机构',
+  'storage.quarantine.mark': '标记涉密误传',
 };
 
 const DENIED_RESULT: Readonly<Record<string, string>> = {

@@ -68,6 +68,30 @@ export interface ClueMaterialRow {
   readonly digest: string;
 }
 
+
+/** 材料隔离目标（#224）：材料行 + 线索登记机构（权限锚点）。 */
+export interface ClueMaterialQuarantineTarget {
+  readonly materialId: string;
+  readonly clueId: string;
+  readonly enteredOrgId: string;
+  readonly fileKey: string;
+  readonly versionId: string;
+  readonly fileName: string;
+}
+
+/** 写入隔离登记（#224）。已存在同对象行时返回 already-quarantined。 */
+export interface StorageObjectQuarantineWrite {
+  readonly id: string;
+  readonly fileKey: string;
+  readonly versionId: string;
+  readonly materialId: string | null;
+  readonly clueId: string | null;
+  readonly summary: string;
+  readonly discoveredBy: string;
+  readonly discoveredAt: Date;
+}
+
+
 /** 空间部件行。几何以 GeoJSON 文本给出：坐标转换在库内做（4326 → 4490）。 */
 export interface ClueSpatialPartRow {
   readonly id: string;
@@ -744,6 +768,13 @@ export interface ClueStore {
    * 对象级校验用：待分派池取登记机构，已派机构／已派承办人取承办机构。
    */
   readTransferContext(clueId: string): Promise<ClueTransferContext | null>;
+
+  /** #224：按材料 id 取隔离目标（含线索登记机构）。 */
+  findMaterialQuarantineTarget(materialId: string): Promise<ClueMaterialQuarantineTarget | null>;
+  /** #224：对象是否已标 quarantined。 */
+  isObjectQuarantined(fileKey: string, versionId: string): Promise<boolean>;
+  /** #224：写入隔离登记；同对象已存在返回 already-quarantined。 */
+  insertObjectQuarantine(write: StorageObjectQuarantineWrite): Promise<'written' | 'already-quarantined'>;
   /**
    * 登记移送：状态由 expectedStatus 条件更新为 transferred_out 终态
    * （仅 in_pool/org_assigned/handler_assigned 可移送），写处置行（disposition='transfer'），

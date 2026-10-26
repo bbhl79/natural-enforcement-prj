@@ -89,6 +89,8 @@ export type {
   ClueListQuery,
   ClueListRow,
   ClueMaterialRow,
+  ClueMaterialQuarantineTarget,
+  StorageObjectQuarantineWrite,
   ClueOrgAssignWrite,
   CluePeopleAssignWrite,
   CluePoolClueRow,

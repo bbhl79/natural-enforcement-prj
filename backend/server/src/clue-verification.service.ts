@@ -51,6 +51,7 @@ import { NonRetryableError, QUEUE_PORT, type QueuePort } from '@natural-enforcem
 import { STORAGE_PORT, type StoragePort } from '@natural-enforcement/storage';
 
 import { LOGIN_DIRECTORY, type LoginDirectory } from './login-directory.ts';
+import { QuarantinedObjectError, StorageQuarantineService } from './storage-quarantine.service.ts';
 import { UNIT_OF_WORK, type UnitOfWork } from './unit-of-work.ts';
 
 const RETRY_OPCODE = 'clue.verify.retry';
@@ -149,6 +150,7 @@ export class ClueVerificationService {
     @Inject(STORAGE_PORT) private readonly storage: StoragePort,
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     private readonly access: AccessControlService,
+    private readonly quarantine: StorageQuarantineService,
   ) {}
 
   /**
@@ -399,7 +401,7 @@ export class ClueVerificationService {
     kind: 'report' | 'analysis',
   ): Promise<
     | { readonly status: 200; readonly body: Uint8Array; readonly contentType: string }
-    | { readonly status: 403; readonly body: { readonly reason: DenyReason } }
+    | { readonly status: 403; readonly body: { readonly reason: DenyReason | 'object-quarantined' } }
     | { readonly status: 404; readonly body: { readonly result: 'not-found' } }
   > {
     const context = await this.clues.readVerificationContext(clueId);
@@ -419,6 +421,14 @@ export class ClueVerificationService {
       return { status: 404, body: { result: 'not-found' } };
     }
     const ref = kind === 'report' ? done.artifacts.report : done.artifacts.analysis;
+    try {
+      await this.quarantine.assertReadable(ref);
+    } catch (error) {
+      if (error instanceof QuarantinedObjectError) {
+        return { status: 403, body: { reason: 'object-quarantined' } };
+      }
+      throw error;
+    }
     const content = await this.storage.readVersion(ref);
     return {
       status: 200,

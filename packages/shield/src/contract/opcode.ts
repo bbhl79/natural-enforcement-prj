@@ -114,6 +114,8 @@ for (const code of [
   'audit.admin.export',
   'authz.binding.submit',
   'authz.binding.approve',
+  // #224：涉密误传标记／隔离。只给系统管理；对象级再收窄到目标所属根机构。
+  'storage.quarantine.mark',
 ]) {
   ADMIN_OPCODES[code] = entry('none', false, false);
 }

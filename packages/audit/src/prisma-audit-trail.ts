@@ -32,6 +32,7 @@ import {
   CLUE_HANDLER_ASSIGNED_FAILED_REASONS,
   CLUE_ORG_ASSIGNED_FAILED_REASONS,
   CLUE_POOL_REASSIGNED_FAILED_REASONS,
+  STORAGE_QUARANTINED_FAILED_REASONS,
   CLUE_REMINDER_RESOLVED_FAILED_REASONS,
   CLUE_WITHDRAWN_FAILED_REASONS,
   LOGIN_FAILED_REASONS,
@@ -99,6 +100,7 @@ const FAILED_REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['clue.withdrawn', new Set<string>(CLUE_WITHDRAWN_FAILED_REASONS)],
   ['clue.disposition-recorded', new Set<string>(CLUE_DISPOSITION_RECORDED_FAILED_REASONS)],
   ['clue.reminder-resolved', new Set<string>(CLUE_REMINDER_RESOLVED_FAILED_REASONS)],
+  ['storage.quarantined', new Set<string>(STORAGE_QUARANTINED_FAILED_REASONS)],
 ]);
 
 /** 后值只许出现在带后值的动作上，且这些动作必须带非空后值（#128）。 */

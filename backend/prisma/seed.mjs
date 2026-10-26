@@ -173,6 +173,8 @@ const ROLE_ALLOWANCES = {
     // #210：只给系统管理（为停用机构的待分派池线索重新指定接收机构）。不复用 clue.org.assign，
     // 那会把全部分派权授给系统管理，违背 ADR 0009「角色按职责」。
     "clue.pool.reassign",
+    // #224：涉密误传标记／隔离。只给系统管理；对象级再收窄到目标所属根机构。
+    "storage.quarantine.mark",
   ],
 };
 

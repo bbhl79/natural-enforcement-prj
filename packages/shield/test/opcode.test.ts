@@ -63,6 +63,7 @@ const ADMIN_OPCODES = [
   'audit.admin.export',
   'authz.binding.submit',
   'authz.binding.approve',
+  'storage.quarantine.mark',
 ] as const;
 
 /** #210 新增的 11 个线索操作码（#207 协议 A 节「操作码终稿」）。 */
@@ -261,12 +262,13 @@ describe('#210 新增 11 个线索操作码', () => {
     }
   });
 
-  it('补齐要件、手动重跑、实名查阅、报请指定管辖不改变主状态', () => {
+  it('补齐要件、手动重跑、实名查阅、报请指定管辖、涉密误传隔离不改变主状态', () => {
     for (const code of [
       'clue.item.supplement',
       'clue.verify.retry',
       'clue.reference.read',
       'clue.designate.request',
+      'storage.quarantine.mark',
     ]) {
       expect(opcodeRequirements(code)?.changesPrimaryState, code).toBe(false);
     }

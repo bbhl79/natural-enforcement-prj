@@ -136,6 +136,8 @@ const EXPECTED_ALLOWANCES: Record<string, readonly string[]> = {
     'authz.binding.approve',
     // #210：只给系统管理（为停用机构的待分派池线索重新指定接收机构）。
     'clue.pool.reassign',
+    // #224：涉密误传标记／隔离。只给系统管理。
+    'storage.quarantine.mark',
   ],
 };
 

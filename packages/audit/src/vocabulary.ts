@@ -58,6 +58,8 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'clue.withdrawn',
   'clue.disposition-recorded',
   'clue.reminder-resolved',
+  // 涉密误传隔离（#224）：标记成功。简述进 detail，不占用 previousValue。
+  'storage.quarantined',
 ] as const;
 
 /**
@@ -403,6 +405,18 @@ export const CLUE_POOL_REASSIGNED_FAILED_REASONS = [
 export type CluePoolReassignedFailedReason = (typeof CLUE_POOL_REASSIGNED_FAILED_REASONS)[number];
 
 /**
+ * 涉密误传隔离被拒（outcome=failed）的原因（#224）。
+ * missing-summary 简述必填；
+ * already-quarantined 对象已隔离（幂等拒绝，写失败留痕）；
+ */
+export const STORAGE_QUARANTINED_FAILED_REASONS = [
+  'missing-summary',
+  'already-quarantined',
+] as const;
+export type StorageQuarantinedFailedReason = (typeof STORAGE_QUARANTINED_FAILED_REASONS)[number];
+
+
+/**
  * 带结构化快照（detail）的动作（#211，规格 G）。
  * 报请指定管辖被拒（outcome=failed）的原因（#215，规格 G）。
  * missing-designate-reason 报请理由必填；
@@ -461,5 +475,7 @@ export const AUDIT_DETAIL_ACTIONS = [
   // 报请指定管辖（#215，规格 G）：报请机构、拟归属机构、受理机构；驳回记受理机构。
   'clue.designate-requested',
   'clue.designate-rejected',
+  // 涉密误传隔离（#224）：对象 id、简述。
+  'storage.quarantined',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];
