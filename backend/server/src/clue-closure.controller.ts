@@ -1,6 +1,6 @@
-// 不予立案登记与结案提醒接口（#217；规格 D 节）。
+// 其他（#229）登记与结案提醒接口（#217／#226／#229；规格 D 节）。
 //
-// POST /api/clues/:id/disposition          不予立案／其他（#229）登记（仅已派承办人；主办／协办本人或承办机构内勤）
+// POST /api/clues/:id/disposition          其他登记（#229）；disposition=no-case 一律拒绝（#226）
 // GET  /api/clues/reminders                结案提醒列表（未处理）
 // POST /api/clues/reminders/:id/resolve    提醒处理（二选一：撤回不派再办｜写明原因随旧线索办结）
 // GET  /api/clues/held                     不派视图（可撤回不派的线索）
@@ -40,7 +40,7 @@ const texts = (value: unknown): string[] =>
 export class ClueClosureController {
   constructor(private readonly closure: ClueClosureService) {}
 
-  /** 不予立案／其他（#229）登记。 */
+  /** 其他（#229）登记；disposition=no-case 拒绝（#226）。 */
   @Post(':id/disposition')
   async recordNoCase(
     @Req() req: AuthenticatedRequest,

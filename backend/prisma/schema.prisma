@@ -889,6 +889,10 @@ model ClueDisposition {
   letterDate DateTime? @db.Timestamptz(6) @map("letter_date")
   /// 说明
   note String?
+  /// 立案呈批引用主键（#226：仅 no-case 经呈批落点有值；#16 跨域引用用主键）
+  filingApprovalRef String? @map("filing_approval_ref")
+  /// 不予立案理由快照 JSON（#226：两类互斥；仅 no-case 经呈批落点有值）
+  noCaseReasonJson String? @map("no_case_reason_json")
   recordedBy String   @map("recorded_by")
   recordedAt DateTime @default(now()) @db.Timestamptz(6) @map("recorded_at")
   createdAt  DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
