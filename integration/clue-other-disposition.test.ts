@@ -416,4 +416,14 @@ describe('#229 系统外移送附加记录', () => {
     expect(transfers[0]).not.toHaveProperty('type');
     expect(transfers[0]).not.toHaveProperty('transferType');
   });
+
+  it('跨机构读系统外移送列表 403', async () => {
+    // 有 clue.read 的乙区内勤，对甲所承办线索列表移送：须按线索机构授权，回 403。
+    const clueId = await assignedAlone(211);
+    expect((await recordOther(clueId)).status).toBe(200);
+    expect((await attachExternal(clueId)).status).toBe(200);
+    const listed = await listExternal(clueId, 'P-229-IB');
+    expect(listed.status).toBe(403);
+    expect(listed.body.reason).toBe('scope-denied');
+  });
 });

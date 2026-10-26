@@ -698,10 +698,10 @@ export class ClueDispositionService {
   async listExternalTransfers(actor: ActorRef, clueId: string): Promise<ClueExternalTransferListOutcome> {
     const context = await this.clues.readDispatchContext(clueId);
     if (!context) return { status: 404, body: { result: 'not-found' } };
-    const account = await this.directory.findById(actor.personnelId);
-    const actorOrgId = account?.orgUnitId ?? '';
+    // 与 readDetail／listTrail 一致：按线索机构授权，不能用操作者机构。
+    const targetOrgId = context.assignment?.orgUnitId ?? context.enteredOrgId;
     try {
-      await this.access.authorize(actor, 'clue.read', actorOrgId, {
+      await this.access.authorize(actor, 'clue.read', targetOrgId, {
         resourceType: 'clue',
         resourceId: clueId,
       });
