@@ -74,6 +74,10 @@ const ALLOWED: Record<string, readonly string[]> = {
     'audit.admin.read', 'audit.admin.export', 'authz.binding.submit', 'authz.binding.approve',
     // #210：只给系统管理。
     'clue.pool.reassign',
+    // #224：涉密误传标记／隔离。只给系统管理。
+    'storage.quarantine.mark',
+    // #225：保密报告工单。只给系统管理。
+    'storage.secrecy-report.manage',
   ],
 };
 

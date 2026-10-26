@@ -695,6 +695,64 @@ model ClueMaterial {
   @@map("clue_material")
 }
 
+/// 涉密误传隔离登记（#224）：按 storage 对象（fileKey+versionId）标 quarantined。
+/// 原 WORM 对象仍保留；本表不表达物理删除。一期状态仅 quarantined。
+model StorageObjectQuarantine {
+  id String @id
+  /// 存储文件键
+  fileKey String @map("file_key")
+  /// 存储版本引用
+  versionId String @map("version_id")
+  /// 来源材料（可空：非材料对象亦可隔离）
+  materialId String? @map("material_id")
+  /// 所属线索（权限锚点；可空）
+  clueId String? @map("clue_id")
+  /// 发现人填写的简述
+  summary String
+  /// 发现人（人员 id）
+  discoveredBy String @map("discovered_by")
+  /// 发现时间
+  discoveredAt DateTime @map("discovered_at") @db.Timestamptz(6)
+  /// 一期仅 quarantined
+  status String @default("quarantined")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([fileKey, versionId])
+  @@index([materialId])
+  @@index([clueId])
+  @@map("storage_object_quarantine")
+}
+
+/// 保密报告工单（#225）：对已隔离对象生成，状态 pending_report／reported／receipted。
+/// 一个隔离对象至多一张工单（quarantineId 唯一，双向关联）。只提醒不代发；无销毁状态。
+model SecrecyReportTicket {
+  id String @id
+  /// 关联的隔离登记
+  quarantineId String @unique @map("quarantine_id")
+  /// 待报 pending_report | 已报 reported | 已回执 receipted
+  status String @default("pending_report")
+  /// 时限提醒的责任人（人员 id）
+  responsiblePersonnelId String @map("responsible_personnel_id")
+  /// 生成人（人员 id）
+  createdBy String @map("created_by")
+  createdAt DateTime @db.Timestamptz(6) @map("created_at")
+  /// 报告时限到期时刻（发现时刻＋24 小时）
+  reportDueAt DateTime @db.Timestamptz(6) @map("report_due_at")
+  reportedBy String? @map("reported_by")
+  reportedAt DateTime? @db.Timestamptz(6) @map("reported_at")
+  /// 报告说明（人工登记）
+  reportNote String? @map("report_note")
+  /// 保密部门指令摘要（人工录入）
+  instructionSummary String? @map("instruction_summary")
+  receiptFileKey String? @map("receipt_file_key")
+  receiptVersionId String? @map("receipt_version_id")
+  receiptFileName String? @map("receipt_file_name")
+  receiptedBy String? @map("receipted_by")
+  receiptedAt DateTime? @db.Timestamptz(6) @map("receipted_at")
+
+  @@map("secrecy_report_ticket")
+}
+
 /// 疑似重复命中（规格 B：每个合格面对一行，只存当前命中集，重算整体替换）
 /// 禁 ORM create/update：命中集经空间函数算出，几何口径不走 ORM 写入路径。
 model ClueSpatialHit {
