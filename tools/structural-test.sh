@@ -112,13 +112,13 @@
 #                           data 模式（createBrowserRouter + RouterProvider）。前端源码出现
 #                           声明式 <BrowserRouter>/<HashRouter>，或任何 package.json、源码、
 #                           vite 配置引用框架模式开发插件 @react-router/dev 即失败
-#   screenshot-full-set     截图全集文件名集合（#105「截图验收（loop ⑥c）」、#134 收口、#207 换全集）：
-#                           docs/screens/<票>/ 顶层 *.png 的并集，不得越出状态键全集。
+#   screenshot-full-set     截图全集文件名集合（#105「截图验收（loop ⑥c）」、#134 收口、#207 换全集、#220 齐套）：
+#                           docs/screens/<票>/ 顶层 *.png 的并集，不得越出状态键全集，也不得缺键。
 #                           状态键全集 = 原型 v0.4 的 78 键
 #                           （frontend/prototype/admin-console/screens/*.png，除 overview.png）
 #                           ∪ #207 协议第 I 节的 62 键（docs/screens/keys-207.txt）。
-#                           v0.4 时代那批键一张不少（缺即红）；#207 时代那批由各执行票分票出图，
-#                           齐套判定留到 #220「全集收尾」收口。
+#                           v0.4 时代缺键判红；#207 的 62 键缺键同样判红（#220 收口）。
+#                           文件名越出全集判红。compare/、extra/ 不计入实有集合。
 #                           自动判定只比文件名集合；画面一致由逐图人查（各票 README 与 PR）
 set -uo pipefail
 
@@ -1132,13 +1132,12 @@ check_frontend-router-mode() {
   fi
 }
 
-# 规则（#134 收口，#105「截图验收（loop ⑥c）」；#207 换全集，#209 起分票交付）：
+# 规则（#134 收口，#105「截图验收（loop ⑥c）」；#207 换全集，#220 齐套）：
 # 截图全集 = 两个时代的状态键并集：
 #   v0.4 时代（已收口，#122–#134 出齐）：原型 frontend/prototype/admin-console/screens/*.png
 #     的 78 键（除改动总览 overview.png）。这批键一张不少，已出的图也不许撤走。
-#   #207 时代（#207 协议第 I 节定义的 62 键，本全集定义处）：docs/screens/keys-207.txt，
-#     由 #209 起各执行票分票出图。本规则只判两条：已出的图不许越出全集；v0.4 时代不许缺键。
-#     62 键的齐套判定由 #220「全集收尾」收口时把缺口一并纳入判红。
+#   #207 时代（#207 协议第 I 节定义的 62 键，本全集定义处）：docs/screens/keys-207.txt。
+#     #220 起这 62 键缺一即红。已出的图不许越出两个时代的并集。
 # 实有集合 = docs/screens/<票>/ 顶层 *.png 的并集（compare/、extra/ 等子目录是对照与单测验收图，不计）。
 # 自动判定只比文件名集合；画面是否与原型一致由前端交互设计工程师逐图自查、Lei Hu gate② 签收。
 SCREENS_WANT_DIR="$ROOT/frontend/prototype/admin-console/screens"
@@ -1158,15 +1157,16 @@ check_screenshot-full-set() {
   want="$(printf '%s\n%s\n' "$want_v04" "$want_207" | LC_ALL=C sort -u)"
   have="$(find "$SCREENS_HAVE_DIR" -mindepth 2 -maxdepth 2 -type f -name '*.png' -printf '%f\n' | LC_ALL=C sort -u)"
   # 本机 comm 是 uutils 实现，不吃 herestring 参数；比较失败必须显式判红，不许静默放过。
-  if ! extra="$(comm -13 <(printf '%s\n' "$want") <(printf '%s\n' "$have"))"; then
+  # comm 的序检查跟当前 locale 走。清单按 C 序排，比较也固定 C 序，避免 UTF-8 下误判未排序。
+  if ! extra="$(LC_ALL=C comm -13 <(printf '%s\n' "$want") <(printf '%s\n' "$have"))"; then
     note_fail "screenshot-full-set：全集与状态键的集合比较执行失败"
     return
   fi
-  if ! missing="$(comm -23 <(printf '%s\n' "$want_v04") <(printf '%s\n' "$have"))"; then
+  if ! missing="$(LC_ALL=C comm -23 <(printf '%s\n' "$want_v04") <(printf '%s\n' "$have"))"; then
     note_fail "screenshot-full-set：全集与状态键的集合比较执行失败"
     return
   fi
-  if ! pending="$(comm -23 <(printf '%s\n' "$want_207") <(printf '%s\n' "$have"))"; then
+  if ! pending="$(LC_ALL=C comm -23 <(printf '%s\n' "$want_207") <(printf '%s\n' "$have"))"; then
     note_fail "screenshot-full-set：全集与状态键的集合比较执行失败"
     return
   fi
@@ -1178,8 +1178,12 @@ check_screenshot-full-set() {
     note_fail "screenshot-full-set：全集多出状态键之外的文件名：$(tr '\n' ' ' <<<"$extra")"
     fails=1
   fi
+  if [ -n "$pending" ]; then
+    note_fail "screenshot-full-set：#207 键缺：$(tr '\n' ' ' <<<"$pending")"
+    fails=1
+  fi
   if [ "$fails" -eq 0 ]; then
-    note_ok "screenshot-full-set：docs/screens 各票顶层截图并集 $(wc -l <<<"$have" | xargs) 个文件名，全在 v0.4 的 $(wc -l <<<"$want_v04" | xargs) 键与 #207 的 $(wc -l <<<"$want_207" | xargs) 键之内；#207 键待出 $(wc -l <<<"$pending" | xargs) 个"
+    note_ok "screenshot-full-set：docs/screens 各票顶层截图并集 $(wc -l <<<"$have" | xargs) 个文件名，全在 v0.4 的 $(wc -l <<<"$want_v04" | xargs) 键与 #207 的 $(wc -l <<<"$want_207" | xargs) 键之内；#207 的 62 键齐套"
   fi
 }
 

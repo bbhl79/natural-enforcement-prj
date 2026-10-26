@@ -87,7 +87,7 @@ BullMQ/RustFS SDK），不引用 backend 内部路径（含 `../../backend/…` 
 | `runtime-manifest` | 非矩阵行：运行参数清单（ADR 0008、#80、#120）。`infra/docker-compose.yml` 与 `.github/workflows/ci.yml` 里的变量名必须登记在 `infra/runtime.env`；密钥只许引用变量（compose）或 secrets（CI），不许字面量、默认值、回落值，也不许出现清单里密钥的夹具值 |
 | `user-lock-assertions` | 非矩阵行：锁清单断言（#105「锁清单」、#111、#120）。`docs/user-lock.md` 每节带一个断言编号；测试代码里必须有标题以该编号开头的 it/test（含 it.todo「待实现」登记）；测试里出现清单外编号同样判红 |
 | `frontend-router-mode` | 非矩阵行：前端路由模式（#105「前端：路由与应用壳」、#122）。react-router 只用 data 模式（createBrowserRouter + RouterProvider）；前端源码出现声明式 `<BrowserRouter>`/`<HashRouter>`，或任何 package.json、源码、vite 配置引用框架模式开发插件 `@react-router/dev` 即失败 |
-| `screenshot-full-set` | 截图全集文件名集合（#105「截图验收（loop ⑥c）」、#134 收口、#207 换全集）：`docs/screens/<票>/` 顶层 `*.png` 的并集不得越出状态键全集。状态键全集 = 原型 v0.4 的 78 键（`frontend/prototype/admin-console/screens/*.png`，除 `overview.png`）∪ #207 协议第 I 节的 62 键（`docs/screens/keys-207.txt`）。v0.4 时代那批键一张不少（缺即红）；#207 时代那批由各执行票分票出图，齐套判定留到 #220「全集收尾」收口。自动判定只比文件名集合；画面一致由逐图人查（各票 README 与 PR） |
+| `screenshot-full-set` | 截图全集文件名集合（#105「截图验收（loop ⑥c）」、#134 收口、#207 换全集、#220 齐套）：`docs/screens/<票>/` 顶层 `*.png` 的并集不得越出状态键全集，也不得缺键。状态键全集 = 原型 v0.4 的 78 键（`frontend/prototype/admin-console/screens/*.png`，除 `overview.png`）∪ #207 协议第 I 节的 62 键（`docs/screens/keys-207.txt`）。v0.4 缺键判红；#207 的 62 键缺键判红；文件名越出全集判红。`compare/`、`extra/` 不计。自动判定只比文件名集合；画面一致由逐图人查（各票 README 与 PR） |
 
 ## 认证记录（#69）
 
