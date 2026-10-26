@@ -6,10 +6,12 @@
 // 但仍由人完成决定。决定「派」进待分派池，「不派」进 held。
 //
 // 两步分派：接收侧内勤派机构（clue.org.assign，首次分派／重新分派／指定管辖），
-// 承办机构内勤再派主办／协办（clue.handler.assign）。重新分派换机构由原承办机构内勤
-// 或上级内勤执行，理由必填、留痕、不经审批、不限次数；指定管辖之后下级不能再重新分派
-// （409 designated-lock）。状态写动作带 expectedStatus，冲突 409 concurrent-change，
-// 失败一方有失败留痕、业务行不变。
+// 承办机构内勤再派主办／协办（clue.handler.assign）。线索阶段换到另一机构一律经报请
+// 指定管辖（#228）：已分派后 designate=false 只能在当前承办机构内重新分派（原承办机构
+// 内勤或上级内勤，理由必填、留痕），目标是另一机构的 409 designation-required，出路是
+// 报请指定管辖（clue.designate.request）；上级以 designate=true 指定管辖（含主动指定）
+// 照旧。指定管辖之后下级不能再重新分派（409 designated-lock）。状态写动作带
+// expectedStatus，冲突 409 concurrent-change，失败一方有失败留痕、业务行不变。
 
 import { Inject, Injectable } from '@nestjs/common';
 
@@ -30,6 +32,7 @@ import {
   decideDispatch,
   hasCaseByCasePlanningType,
   isOpenHit,
+  planOrgAssign,
   type ClueDispatchContext,
   type ClueStore,
 } from '@natural-enforcement/case';
@@ -158,7 +161,15 @@ export type AssignOrgOutcome =
   | { readonly status: 400; readonly body: { readonly result: 'non-compliant'; readonly rules: readonly string[] } }
   | { readonly status: 403; readonly body: { readonly reason: DenyReason } }
   | { readonly status: 404; readonly body: { readonly result: 'not-found' } }
-  | { readonly status: 409; readonly body: { readonly result: 'invalid-state' | 'concurrent-change'; readonly reason: string } };
+  | {
+      readonly status: 409;
+      readonly body: {
+        readonly result: 'invalid-state' | 'concurrent-change';
+        readonly reason: string;
+        /** designation-required 时给出路：报请指定管辖。 */
+        readonly nextAction?: 'clue.designate.request';
+      };
+    };
 
 /** 派主办／协办结果。 */
 export type AssignPeopleOutcome =
@@ -182,6 +193,7 @@ interface Rejection {
   readonly result: 'non-compliant' | 'invalid-state' | 'concurrent-change';
   readonly rules: readonly string[];
   readonly reason: string;
+  readonly nextAction?: 'clue.designate.request';
 }
 
 @Injectable()
@@ -345,7 +357,7 @@ export class ClueDispatchService {
     });
   }
 
-  /** 派机构（首次分派、重新分派、指定管辖；理由必填、留痕、不限次数）。 */
+  /** 派机构（首次分派、同机构重新分派、指定管辖；换到另一机构须报请指定管辖，#228）。 */
   async assignOrg(
     actor: ActorRef,
     clueId: string,
@@ -404,7 +416,12 @@ export class ClueDispatchService {
     const reassigning =
       context.status === 'org_assigned' || context.status === 'handler_assigned';
     const reason = input.reason.trim();
-    let kind: 'initial' | 'reassign' | 'designate' = reassigning ? 'reassign' : 'initial';
+    const plan = planOrgAssign({
+      status: context.status,
+      currentOrgId: context.assignment?.orgUnitId ?? null,
+      targetOrgId: orgUnitId,
+      designate: input.designate,
+    });
 
     if (input.designate) {
       // 指定管辖：上级内勤以 designate=true 指定下级机构承办（首次分派或重新分派时都可执行）。
@@ -418,7 +435,6 @@ export class ClueDispatchService {
           reason: 'invalid-form',
         });
       }
-      kind = 'designate';
       if (reassigning && context.assignment) {
         // 重新分派理由必填。
         if (reason === '') {
@@ -486,6 +502,17 @@ export class ClueDispatchService {
         return { status: 403, body: { reason: 'permission-denied' } };
       }
     }
+    // 换到另一机构（#228）：一律经报请指定管辖；排在理由、指定管辖锁、对象级校验之后。
+    if (!plan.ok) {
+      return this.rejectOrg(actor, actorCode, actorOrgId, clueId, {
+        status: 409,
+        result: 'invalid-state',
+        rules: [],
+        reason: plan.reason,
+        nextAction: plan.nextAction,
+      });
+    }
+    const { kind, orgUnitId: assignedOrgId } = plan;
 
     // 分派事实与成功留痕同成同败；并发冲突回滚后另起事务写失败留痕。
     // 派机构与停用共用机构行锁（#219）：写 assignOrg 前对目标（及改派时的原承办）FOR UPDATE；
@@ -493,9 +520,9 @@ export class ClueDispatchService {
     return this.uow.run(async (tx) => {
       const previousOrgId = context.assignment?.orgUnitId ?? null;
       const lockIds =
-        previousOrgId != null && previousOrgId !== orgUnitId
-          ? [previousOrgId, orgUnitId].sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
-          : [orgUnitId];
+        previousOrgId != null && previousOrgId !== assignedOrgId
+          ? [previousOrgId, assignedOrgId].sort((left, right) => (left < right ? -1 : left > right ? 1 : 0))
+          : [assignedOrgId];
       for (const lockId of lockIds) {
         const locked = await tx.store.lockOrgUnit(lockId, 'update');
         if (!locked) {
@@ -506,7 +533,7 @@ export class ClueDispatchService {
         clueId,
         expectedStatus: input.expectedStatus,
         assignmentId: newUlid(),
-        orgUnitId,
+        orgUnitId: assignedOrgId,
         kind,
         designate: kind === 'designate',
         assignedBy: actor.personnelId,
@@ -531,7 +558,7 @@ export class ClueDispatchService {
         detail: JSON.stringify({
           code: context.code,
           previousOrgId: context.assignment?.orgUnitId ?? null,
-          orgUnitId,
+          orgUnitId: assignedOrgId,
           kind,
           designate: kind === 'designate',
         }),
@@ -553,7 +580,7 @@ export class ClueDispatchService {
           clueId,
           code: context.code,
           status: 'org_assigned',
-          orgUnitId,
+          orgUnitId: assignedOrgId,
           orgName: target.name,
         },
       };
@@ -1000,6 +1027,7 @@ export class ClueDispatchService {
             body: {
               result: rejection.result as 'invalid-state' | 'concurrent-change',
               reason: rejection.reason,
+              ...(rejection.nextAction ? { nextAction: rejection.nextAction } : {}),
             },
           };
     await this.uow.run(async () =>

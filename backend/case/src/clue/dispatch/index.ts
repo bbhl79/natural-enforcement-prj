@@ -7,8 +7,9 @@ export {
   PEOPLE_ASSIGN_FROM_STATUS,
   decideDispatch,
   isOpenHit,
+  planOrgAssign,
 } from './rules.ts';
-export type { DecideOutcome } from './rules.ts';
+export type { DecideOutcome, OrgAssignPlan } from './rules.ts';
 export {
   CLUE_DESIGNATE_REJECTED_FAILED_REASONS,
   CLUE_DESIGNATE_REQUESTED_FAILED_REASONS,

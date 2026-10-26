@@ -1,6 +1,7 @@
 // #214 分派决定与两步分派、重新分派与并发控制。
 // 断言打在克隆库上：决定（默认不派／已知晓／举报必派）、两步分派（派机构→派主办协办）、
-// 重新分派（理由必填、指定管辖锁）、expectedStatus 并发冲突，以及监督写操作 403。
+// 重新分派（理由必填、指定管辖锁；#228 换机构一律 409 designation-required）、
+// expectedStatus 并发冲突，以及监督写操作 403。
 // 凡 4xx/403 用例同时断言「失败留痕存在、业务行不变」。
 import type { AddressInfo } from 'node:net';
 
@@ -631,7 +632,7 @@ describe('#214 两步分派', () => {
 });
 
 describe('#214 重新分派与并发控制', () => {
-  it('重新分派：上级内勤换机构须填理由，留痕并关止原承办人，不限次数', async () => {
+  it('重新分派：上级内勤在原承办机构内重新分派须填理由，留痕并关止原承办人', async () => {
     const registered = await register({ polygon: geojsonPolygon(square(60)) });
     await assignOrg(registered.body.id ?? '', { orgUnitId: stationAId }, 'P-INTAKE-A');
     await assignPeople(
@@ -654,10 +655,10 @@ describe('#214 重新分派与并发控制', () => {
     expect(failed).toHaveLength(1);
     expect(failed[0]?.reason).toBe('missing-reassign-reason');
 
-    // 上级内勤（甲区）重新分派回本机构。
+    // 上级内勤（甲区）在原承办机构（甲所）内重新分派。
     const outcome = await assignOrg(
       registered.body.id ?? '',
-      { orgUnitId: deptAId, expectedStatus: 'handler_assigned', reason: '所里人手不足' },
+      { orgUnitId: stationAId, expectedStatus: 'handler_assigned', reason: '所里人手不足' },
       'P-INTAKE-A',
     );
     expect(outcome.status).toBe(200);
@@ -671,6 +672,7 @@ describe('#214 重新分派与并发控制', () => {
     expect(assignments).toHaveLength(2);
     expect(assignments[0]?.endedAt).not.toBeNull();
     expect(assignments[1]?.kind).toBe('reassign');
+    expect(assignments[1]?.orgUnitId).toBe(stationAId);
     expect(assignments[1]?.reason).toBe('所里人手不足');
     // 原承办人行已关止。
     const handlers = await cloned.prisma.clueHandler.findMany({
@@ -684,21 +686,30 @@ describe('#214 重新分派与并发控制', () => {
     expect(trail[0]?.detail).toContain('"kind":"reassign"');
   });
 
-  it('原承办机构内勤自己也能重新分派（只能指向本人数据范围内的机构）', async () => {
+  it('原承办机构内勤 designate=false 改到下属所：409 designation-required，承办机构不变、分派行不新增、失败留痕一行（#228）', async () => {
     const registered = await register({ polygon: geojsonPolygon(square(61)) });
-    // 先派给甲区（甲区内勤的承办机构），再由甲区内勤在所辖范围内改派甲所。
-    await assignOrg(registered.body.id ?? '', { orgUnitId: deptAId }, 'P-INTAKE-A');
+    const clueId = registered.body.id ?? '';
+    await assignOrg(clueId, { orgUnitId: deptAId }, 'P-INTAKE-A');
+    const before = await cloned.prisma.clueAssignment.count({ where: { clueId } });
     const outcome = await assignOrg(
-      registered.body.id ?? '',
+      clueId,
       { orgUnitId: stationAId, expectedStatus: 'org_assigned', reason: '交由甲所承办' },
       'P-INTAKE-A',
     );
-    expect(outcome.status).toBe(200);
-    expect(outcome.body.status).toBe('org_assigned');
-    const assignments = await cloned.prisma.clueAssignment.findMany({
-      where: { clueId: registered.body.id },
+    expect(outcome.status).toBe(409);
+    expect(outcome.body).toEqual({
+      result: 'invalid-state',
+      reason: 'designation-required',
+      nextAction: 'clue.designate.request',
     });
-    expect(assignments.filter((row) => row.kind === 'reassign')).toHaveLength(1);
+    const clue = await cloned.prisma.clue.findUnique({ where: { id: clueId } });
+    expect(clue?.status).toBe('org_assigned');
+    const current = await cloned.prisma.clueAssignment.findFirst({ where: { clueId, endedAt: null } });
+    expect(current?.orgUnitId).toBe(deptAId);
+    expect(await cloned.prisma.clueAssignment.count({ where: { clueId } })).toBe(before);
+    const failed = (await trailOf('clue.org-assigned', clueId)).filter((row) => row.outcome === 'failed');
+    expect(failed).toHaveLength(1);
+    expect(failed[0]?.reason).toBe('designation-required');
     // 甲区内勤不能把线索重派到数据范围外的乙区。
     const outside = await assignOrg(
       registered.body.id ?? '',
@@ -707,6 +718,38 @@ describe('#214 重新分派与并发控制', () => {
     );
     expect(outside.status).toBe(403);
     expect(outside.body.reason).toBe('scope-denied');
+  });
+
+  it('上级内勤 designate=false 把线索从甲区改到同级的乙区：409 designation-required；designate=true 主动指定照旧（#228）', async () => {
+    const registered = await register({ polygon: geojsonPolygon(square(65)) });
+    const clueId = registered.body.id ?? '';
+    await assignOrg(clueId, { orgUnitId: deptAId }, 'P-INTAKE-A');
+    const before = await cloned.prisma.clueAssignment.count({ where: { clueId } });
+    const moved = await assignOrg(
+      clueId,
+      { orgUnitId: deptBId, expectedStatus: 'org_assigned', reason: '改由乙区承办' },
+      'P-INTAKE-HQ',
+    );
+    expect(moved.status).toBe(409);
+    expect(moved.body.reason).toBe('designation-required');
+    expect(moved.body.nextAction).toBe('clue.designate.request');
+    const current = await cloned.prisma.clueAssignment.findFirst({ where: { clueId, endedAt: null } });
+    expect(current?.orgUnitId).toBe(deptAId);
+    expect(await cloned.prisma.clueAssignment.count({ where: { clueId } })).toBe(before);
+    const failed = (await trailOf('clue.org-assigned', clueId)).filter((row) => row.outcome === 'failed');
+    expect(failed).toHaveLength(1);
+    expect(failed[0]?.reason).toBe('designation-required');
+
+    // 上级不经报请以 designate=true 主动指定：保留现行为（#228 评论确认）。
+    const designated = await assignOrg(
+      clueId,
+      { orgUnitId: deptBId, expectedStatus: 'org_assigned', reason: '市局指定乙区', designate: true },
+      'P-INTAKE-HQ',
+    );
+    expect(designated.status).toBe(200);
+    const after = await cloned.prisma.clueAssignment.findFirst({ where: { clueId, endedAt: null } });
+    expect(after?.orgUnitId).toBe(deptBId);
+    expect(after?.kind).toBe('designate');
   });
 
   it('指定管辖：上级内勤 designate=true 指定下级；指定之后下级重新分派 409 designated-lock', async () => {
@@ -750,6 +793,21 @@ describe('#214 重新分派与并发控制', () => {
       'P-INTAKE-HQ',
     );
     expect(byDesignator.status).toBe(200);
+  });
+
+  it('红探针：assign-org 成功的 reassign 留痕一律 previousOrgId = orgUnitId（#228）', async () => {
+    const rows = await cloned.prisma.$queryRaw<TrailRow[]>`
+      SELECT action, outcome, reason, detail, resource_id
+      FROM audit_trail
+      WHERE action = 'clue.org-assigned' AND outcome = 'succeeded'
+    `;
+    const reassigns = rows
+      .map((row) => JSON.parse(row.detail ?? '{}') as { kind?: string; previousOrgId?: string | null; orgUnitId?: string })
+      .filter((detail) => detail.kind === 'reassign');
+    expect(reassigns.length).toBeGreaterThan(0);
+    for (const detail of reassigns) {
+      expect(detail.previousOrgId).toBe(detail.orgUnitId);
+    }
   });
 
   it('并发控制：派机构 expectedStatus 不符 409 concurrent-change＋失败留痕，业务行不变', async () => {

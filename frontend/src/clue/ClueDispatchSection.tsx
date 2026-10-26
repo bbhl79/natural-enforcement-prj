@@ -81,6 +81,7 @@ export function dispatchFailureText(body: unknown): string {
   if (value.result === 'invalid-state') {
     if (value.reason === 'designation-pending') return '该线索正在报请指定管辖：报请期间不能分派、重新分派或移送。';
     if (value.reason === 'designated-lock') return '该线索已指定管辖：仅指定者或其上级可再调整。';
+    if (value.reason === 'designation-required') return '已分派的线索不能直接改派其他机构：请发起「报请指定管辖」，由上级指定承办机构。';
     if (value.reason === 'org-unit-deactivated') return '目标机构已停用，不能接收线索。';
     if (value.reason === 'designation-pending') return '该线索已报请指定管辖：受理期间不能移送。';
     return '当前状态不能执行该操作。';

@@ -430,26 +430,36 @@ export function AssignOrgPanel({
   const [reason, setReason] = useState('');
   const [designate, setDesignate] = useState(designateByDefault);
   const suggested = new Set(view.suggestion.suggestions.map((item) => item.orgUnitId));
+  // #228：已分派后不勾指定管辖只能留在当前承办机构；换机构走报请指定管辖。
+  const current = reassigning && !designate ? view.assignment : null;
+  const options = current ? [{ orgUnitId: current.orgUnitId, name: current.orgName }] : orgOptions;
+  const selected = current ? current.orgUnitId : orgUnitId;
   return (
     <div className="card" data-role="assign-org-panel">
       <div className="card-h">
         {reassigning ? '重新分派' : '派机构'}
-        <span className="hint">{readOnly ? '监督身份只读，不可分派' : reassigning ? '理由必填、留痕、不限次数' : '接收侧内勤派机构'}</span>
+        <span className="hint">{readOnly ? '监督身份只读，不可分派' : reassigning ? '同一承办机构内重新分派，理由必填、留痕' : '接收侧内勤派机构'}</span>
       </div>
       {failure ? <div className="banner danger" data-role="failure">{failure}</div> : null}
       <SuggestionList view={view} />
       <div className="form-row">
         <label htmlFor="dispatch-org">承办机构</label>
         <div>
-          <select id="dispatch-org" className="select" value={orgUnitId} disabled={readOnly} onChange={(event) => setOrgUnitId(event.target.value)}>
+          <select id="dispatch-org" className="select" value={selected} disabled={readOnly || current !== null} onChange={(event) => setOrgUnitId(event.target.value)}>
             <option value="">请选择机构</option>
-            {orgOptions.map((org) => (
+            {options.map((org) => (
               <option key={org.orgUnitId} value={org.orgUnitId}>
                 {suggested.has(org.orgUnitId) ? `${org.name}（辖区建议）` : org.name}
               </option>
             ))}
           </select>
-          <div className="help">只能派给本人数据范围内的机构；线索不属本级管辖的，报请上级指定管辖。</div>
+          {current ? (
+            <div className="help" data-role="reassign-designation-guide">
+              已分派的线索不能直接改派其他机构：换机构请发起「报请指定管辖」；上级指定请勾选「指定管辖」。
+            </div>
+          ) : (
+            <div className="help">只能派给本人数据范围内的机构；线索不属本级管辖的，报请上级指定管辖。</div>
+          )}
         </div>
       </div>
       {reassigning || designateByDefault ? (
@@ -471,9 +481,9 @@ export function AssignOrgPanel({
           type="button"
           className="btn btn-primary"
           data-role="assign-org"
-          disabled={readOnly || busy || orgUnitId === ''}
+          disabled={readOnly || busy || selected === ''}
           title={readOnly ? '监督身份只读，不可分派' : undefined}
-          onClick={() => onAssign({ orgUnitId, reason: reason.trim(), designate })}
+          onClick={() => onAssign({ orgUnitId: selected, reason: reason.trim(), designate })}
         >
           {reassigning ? '重新分派' : '派出机构'}
         </button>
