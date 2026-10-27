@@ -85,13 +85,14 @@ describe('迁移表常量', () => {
     expect(CASE_TERMINAL_STATUSES).toEqual(['withdrawn', 'closed', 'finalized']);
   });
 
-  it('非法迁移 X01 到 X32 连续登记；X32 不实现；X12 白名单含阅读、导出、T27、结案后回证', () => {
+  it('非法迁移 X01 到 X33 连续登记；X32、X33 不实现；X12 白名单含阅读、导出、T27、结案后回证', () => {
     expect(ILLEGAL_MIGRATIONS.map((item) => item.id)).toEqual(
-      Array.from({ length: 32 }, (_, index) => `X${String(index + 1).padStart(2, '0')}`),
+      Array.from({ length: 33 }, (_, index) => `X${String(index + 1).padStart(2, '0')}`),
     );
     expect(ILLEGAL_MIGRATIONS.find((item) => item.id === 'X02')?.enforcement).toBe('engine');
     expect(ILLEGAL_MIGRATIONS.find((item) => item.id === 'X03')?.enforcement).toBe('engine');
     expect(ILLEGAL_MIGRATIONS.find((item) => item.id === 'X32')?.enforcement).toBe('none');
+    expect(ILLEGAL_MIGRATIONS.find((item) => item.id === 'X33')?.enforcement).toBe('none');
     expect(ILLEGAL_MIGRATIONS.find((item) => item.id === 'X31')?.enforcement).toBe('filing');
     expect(X12_WHITELIST.map((item) => item.id)).toEqual(['read', 'export', 'T27', 'post-close-receipt']);
     expect(isX12Whitelisted('T28')).toBe(false);
@@ -319,7 +320,7 @@ describe('引擎 409 分支', () => {
 });
 
 const AUTHORITY_OF: Readonly<Record<GuardAuthority, readonly string[]>> = {
-  system: ['X01', 'X02', 'X04', 'X12', 'X13', 'X15', 'X16', 'X17', 'X18', 'X23', 'X24', 'X25', 'X28', 'X29', 'X31', 'X32'],
+  system: ['X01', 'X02', 'X04', 'X12', 'X13', 'X15', 'X16', 'X17', 'X18', 'X23', 'X24', 'X25', 'X28', 'X29', 'X31', 'X32', 'X33'],
   law: ['X05', 'X07', 'X09', 'X14'],
   regulation: ['X06', 'X08', 'X11', 'X20', 'X27', 'X30'],
   normative: ['X03', 'X10', 'X19', 'X21', 'X22', 'X26'],

@@ -1,7 +1,10 @@
 // 案件状态机常量（#235）。
 // 法定环节、主状态、环节实例状态：#27/6409848362。
 // 迁移表：基线 #27/6409849007，修订 #27/6410091980，批2 追加 T09a（#27/6431079838）。
-// 非法迁移：X01–X30 同修订；X31 由 #234 实现并在此登记；X32 只登记（#27/6431079838 Q10）。
+// 非法迁移：X01–X30 同修订；X31 由 #234 实现并在此登记；X32 只登记（#27/6431326688 改写）；X33 回避声明守卫只登记（#27/6443123771）。
+// X 分两类口径（#267，#27/6443175238）。纯系统完整性守卫（authority 为 system，与法律依据无关）一律 409。
+// 带依据层级的 X 按 authority 定。userLock 非空，或 law、regulation，阻断（409）。normative、internal 降为警告（200）。
+// X03、X10、X19、X21、X22、X26 为 normative，结果是警告。待法制确认后再议升级，不在本目录升为阻断。
 // X12 白名单以 #235 正文及评论 6431387386 为准。
 // #235 启用 T01、T02。#236 启用 T03–T07。其余边仍关闭。
 
@@ -191,14 +194,14 @@ export const TRANSITIONS: readonly TransitionEdge[] = [
     guard: 'closeout',
   }),
   edge('T08', stage('E02'), enter('E04', 'drafting', { completeStage: 'E03' }), '调查报告呈批批准：E03 完成，进入 E04'),
-  edge('T09', stage('E04'), enter('E02', 'drafting', { reenter: true }), '审理意见补充调查：E02 再次进入'),
-  edge('T09a', stage('E04'), { kind: 'branch', note: '负责人支持审理意见则走 T09；支持承办人员则按决定进入 T10、T11 或 T12' }, '审理异议呈批'),
+  edge('T09', stage('E04'), enter('E02', 'drafting', { reenter: true }), '审理意见签出为补充调查或修改纠正：E02 再次进入'),
+  edge('T09a', stage('E04'), { kind: 'branch', note: '负责人支持审理意见则走 T09；支持承办人员则按决定进入 T10、T11 或 T12' }, '审理异议呈批（审理意见为补充调查或修改纠正）'),
   edge('T10', stage('E04'), { kind: 'branch', note: '未命中必审进入 E05 拟制中；命中必审转 T10a' }, '审理通过，拟处罚'),
   edge('T10a', stage('E04'), enter('E07', 'drafting'), '告知前法制审核'),
   edge('T10b', stage('E07'), enter('E05', 'drafting'), '告知前法制审核通过，进入 E05'),
   edge('T10c', stage('E07'), { kind: 'branch', note: '法审不通过：改后重送，视情况回 E04，或提请 E08 后回 E07' }, '告知前法制审核不通过'),
   edge('T11', stage('E04'), { kind: 'branch', note: '未命中必审时进入 E05 或直接 E09；命中必审转 T10a' }, '审理通过，拟不予处罚'),
-  edge('T12', stage('E04'), enter('E09', 'drafting'), '审理认定违法事实不成立，进入不予处罚决定'),
+  edge('T12', stage('E04'), enter('E09', 'drafting'), '审理认定违法事实不成立或已过追诉时效，进入不予处罚决定'),
   edge('T13', stage('E05'), { kind: 'same' }, '告知书送达，进入告知等待'),
   edge('T14', { kind: 'marker', marker: 'notice-waiting' }, enter('E09', 'drafting'), '告知等待结束，进入决定拟制'),
   edge('T14a', { kind: 'marker', marker: 'notice-waiting' }, { kind: 'branch', note: '清除视为放弃，转 T15' }, '视为放弃后在决定前要求听证'),
@@ -217,13 +220,27 @@ export const TRANSITIONS: readonly TransitionEdge[] = [
   edge('T21', stage('E07'), { kind: 'branch', note: '决定审批链作废，E09 回到拟制中；视情况回 E04 或提请 E08' }, '法制审核不通过'),
   edge('T22', stage('E08'), { kind: 'branch', note: '回 E07 再进入一次，或进入领导审批' }, '集体讨论记录入卷'),
   edge('T23', { kind: 'marker', marker: 'leadership' }, enter('E09', 'completed'), '领导审批通过，决定书生效'),
-  edge('T24', stage('E09'), enter('E10', 'completed'), '上传送达回证，送达完成'),
+  edge('T24', stage('E09'), enter('E10', 'completed'), '上传送达回证，或记录公告送达的原因和经过并附公告材料，送达完成'),
   edge('T25', stage('E10'), enter('E11', 'drafting'), '处罚案件执行记载'),
-  edge('T26', [stage('E10'), stage('E11')], { kind: 'main', status: 'closed' }, '结案呈批批准：已结案'),
+  // 处罚支：E10 经执行记载进入 E11 后结案。不予处罚支：E10 直接结案。边仍关闭。
+  edge(
+    'T26',
+    [stage('E10'), stage('E11')],
+    { kind: 'main', status: 'closed' },
+    '结案呈批批准：处罚支由 E10 经执行记载进入 E11 后结案；不予处罚支由 E10 直接结案。已结案即办结，不等定型',
+  ),
   edge('T27', main('closed', 'withdrawn'), { kind: 'main', status: 'finalized' }, '归档审批通过：已定型'),
   edge('T28', main('finalized'), { kind: 'main', status: 'finalized' }, '受控重开后再定型（主干不启用）'),
   edge('T29', { kind: 'span', start: 'E02', end: 'E11' }, { kind: 'same' }, '涉刑或党纪政务移送：当前环节不变'),
-  edge('T30', { kind: 'side', name: 'criminal-transfer' }, { kind: 'same' }, '记载公安、检察的决定'),
+  edge(
+    'T30',
+    { kind: 'side', name: 'criminal-transfer' },
+    {
+      kind: 'branch',
+      note: '人工出口二选一。A 回 E02，次序号加 1，回流 reenter。B 呈批结案。不自动恢复，不自动回流。',
+    },
+    '记载公安、检察的决定。A 须写明违法状态是否仍未消除及处罚依据。B 须写理由。',
+  ),
   edge('T31', { kind: 'after', stage: 'E10' }, { kind: 'branch', note: '撤销原决定书，加受控重开；是否回流由主办决定' }, '决定书事实被推翻（主干不启用）'),
   edge('T32', { kind: 'span', start: 'E05', end: 'E09' }, enter('E05', 'drafting', { reenter: true }), '重新比对后撤销原告知，E05 再进入'),
   edge('T33', { kind: 'any-handled' }, { kind: 'same' }, '改派呈批批准：环节不变'),
@@ -284,7 +301,7 @@ export const ILLEGAL_MIGRATIONS: readonly IllegalMigration[] = [
   { id: 'X03', summary: '待收尾状态下，除撤案、结案呈批外的任何迁移', citation: '规程 4.3.3(4)', outlet: '只可走撤案呈批或结案呈批', enforcement: 'engine', authority: 'normative' },
   { id: 'X04', summary: '调查未终结就进入审理', citation: '办法第29条＋第30条（推定）', outlet: '先完成调查终结', enforcement: 'none', authority: 'system' },
   { id: 'X05', summary: '拟处罚，但告知书未送达就作出处罚决定', citation: '行政处罚法第 44 条', outlet: '先送达告知书', enforcement: 'none', authority: 'law' },
-  { id: 'X06', summary: '告知期限未满就作出处罚决定', citation: '#111 L1', outlet: '待告知期限届满', enforcement: 'none', authority: 'regulation' },
+  { id: 'X06', summary: '告知期限未满就作出处罚决定（当事人书面明确放弃并记载的除外，R-4）', citation: '#111 L1；#27/6431452071；#247/6431446119', outlet: '待告知期限届满', enforcement: 'none', authority: 'regulation' },
   {
     id: 'X07',
     summary: '应听证的情形未发听证告知',
@@ -310,23 +327,32 @@ export const ILLEGAL_MIGRATIONS: readonly IllegalMigration[] = [
   { id: 'X13', summary: '立案后修改承办机构', citation: '#40 Q29', outlet: '承办机构在立案时锁定，不能修改', enforcement: 'engine', authority: 'system' },
   { id: 'X14', summary: '改派后承办人员少于两人', citation: '规程 2.6；行政处罚法第 42 条', outlet: '改派后承办人员须不少于两人', enforcement: 'none', authority: 'law' },
   { id: 'X15', summary: '审理开始后走撤案，或调查中走不予处罚（事实不成立）', citation: '#40/6228984565 P2；Q2', outlet: '按当前环节走对应出口', enforcement: 'none', authority: 'system' },
-  { id: 'X16', summary: '定案文书引用未入卷证据仍签发', citation: '#111 L4', outlet: '先把引用的证据入卷', enforcement: 'none', authority: 'system', userLock: '#111 L4' },
+  { id: 'X16', summary: '定案文书引用未入卷证据仍签发（含经回避效力认定为无效的材料）', citation: '#111 L4', outlet: '先把引用的证据入卷', enforcement: 'none', authority: 'system', userLock: '#111 L4' },
   { id: 'X17', summary: '监督角色的写操作推进主状态', citation: '#71/6169639094；GLOSSARY「监督」', outlet: '请由有权办理人操作，监督不能推进主状态', enforcement: 'engine', authority: 'system' },
   { id: 'X18', summary: '同一案件同时有两条进行中的审批链', citation: '#31/6233001360 Q12', outlet: '先办结或撤回当前审批链', enforcement: 'engine', authority: 'system' },
   { id: 'X19', summary: '未经立案呈批批准就登记或不予立案', citation: '规程 2.4；#31/6233001360 Q4a', outlet: '须经立案呈批批准', enforcement: 'none', authority: 'normative' },
   { id: 'X20', summary: '调查取证笔录在场承办人员少于两人仍保存', citation: '办法第17条第2款＋行政处罚法第42条；笔录记载在场人员属实现口径', outlet: '笔录在场承办人员须不少于两人', enforcement: 'none', authority: 'regulation' },
-  { id: 'X21', summary: '带去重标记的线索单独立案', citation: '#27/6409981777', outlet: '同组附加来源线索，或改判独立', enforcement: 'none', authority: 'normative' },
-  { id: 'X22', summary: '本案主办或协办签出审理意见', citation: '规程 5.1', outlet: '由非本案承办人员签出', enforcement: 'none', authority: 'normative' },
+  { id: 'X21', summary: '带去重标记的线索单独立案（二期）', citation: '#27/6409981777', outlet: '同组附加来源线索，或改判独立', enforcement: 'none', authority: 'normative' },
+  { id: 'X22', summary: '本案主办或协办（含已改派换下的）签出审理意见', citation: '规程 5.1', outlet: '由非本案承办人员签出', enforcement: 'none', authority: 'normative' },
   { id: 'X23', summary: '未持行政审核角色的人签出审理意见', citation: '#27/6410042773', outlet: '由持行政审核角色的人签出', enforcement: 'none', authority: 'system' },
-  { id: 'X24', summary: '勾选跨承办机构的附加来源线索', citation: '#27/6410046390', outlet: '附加来源线索须与本案同一承办机构', enforcement: 'none', authority: 'system' },
-  { id: 'X25', summary: '对已并入本案的去重组线索再提单独立案', citation: '#27/6410046390', outlet: '已并入的线索不能再立独立案', enforcement: 'none', authority: 'system' },
+  { id: 'X24', summary: '勾选跨承办机构的附加来源线索（二期）', citation: '#27/6410046390', outlet: '附加来源线索须与本案同一承办机构', enforcement: 'none', authority: 'system' },
+  { id: 'X25', summary: '对已并入本案的去重组线索再提单独立案（二期）', citation: '#27/6410046390', outlet: '已并入的线索不能再立独立案', enforcement: 'none', authority: 'system' },
   { id: 'X26', summary: '命中必审但未经告知前法审就批准告知书', citation: '规程7.1／8.2；设计加严，非规定要求', outlet: '先完成告知前法制审核且摘要覆盖', enforcement: 'none', authority: 'normative' },
   { id: 'X27', summary: '进入听证程序但听证后未再审即进入领导审批', citation: '粤府令第294号第33条＋处罚法第58条（二）', outlet: '听证后再审后才能进入领导审批', enforcement: 'none', authority: 'regulation' },
   { id: 'X28', summary: '自动复开已终止的听证', citation: '#90/6410046818', outlet: '须由当事人重新申请', enforcement: 'none', authority: 'system' },
-  { id: 'X29', summary: '立案批准后未走受控重开就取消自动关联', citation: '#27/6410077358', outlet: '须走受控重开', enforcement: 'none', authority: 'system' },
+  { id: 'X29', summary: '立案批准后未走受控重开就取消自动关联或改判独立（二期）', citation: '#27/6410077358', outlet: '须走受控重开', enforcement: 'none', authority: 'system' },
   { id: 'X30', summary: '不予立案理由不合规', citation: '#226/6410041963', outlet: '两类理由择一且选完整', enforcement: 'none', authority: 'regulation' },
   { id: 'X31', summary: '线索上有在途立案呈批时做其他处置', citation: '#27/6431079838 Q9', outlet: '先撤回立案呈批', enforcement: 'filing', authority: 'system' },
-  { id: 'X32', summary: '非被指定审理人签出审理意见', citation: '#27/6431079838 Q10', outlet: '须由被指定的审理人签出', enforcement: 'none', authority: 'system' },
+  { id: 'X32', summary: '非被指定审理人（或组织审理的承办机构负责人本人）签出审理意见', citation: '#27/6431079838 Q10；#27/6431326688（改写）', outlet: '须由被指定的审理人，或组织审理的承办机构负责人本人签出', enforcement: 'none', authority: 'system' },
+  // X33 只登记，不接到迁移。现有 409 仍由 assertCanSign 拒绝。拦截点：E04 签出（T09–T12）、E07 签出（T10b、T10c、T20、T21）、决定审批链（T18、T23）。
+  {
+    id: 'X33',
+    summary: '回避声明守卫：人员利害关系处于声明或生效状态时签出审理意见、法审意见或决定',
+    citation: '#27/6443123771；#27/6430922951 Q2；#40/6430922449',
+    outlet: '等待回避决定',
+    enforcement: 'none',
+    authority: 'system',
+  },
 ];
 
 const ILLEGAL_BY_ID = new Map(ILLEGAL_MIGRATIONS.map((item) => [item.id, item]));
