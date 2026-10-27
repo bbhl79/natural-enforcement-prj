@@ -25,6 +25,7 @@ import {
   type ClueOrgAssignedFailedReason,
 } from '@natural-enforcement/audit';
 import {
+  CASE_STORE,
   CLUE_STORE,
   DECIDE_FROM_STATUS,
   ORG_ASSIGN_FROM_STATUSES,
@@ -34,6 +35,7 @@ import {
   isOpenHit,
   planOrgAssign,
   type ClueDispatchContext,
+  type CaseStore,
   type ClueStore,
 } from '@natural-enforcement/case';
 import { findSourceCode, findSourceGroupCode } from '@natural-enforcement/geo-dict';
@@ -196,6 +198,8 @@ interface Rejection {
   readonly rules: readonly string[];
   readonly reason: string;
   readonly nextAction?: 'clue.designate.request';
+  /** #234 X31：出路文案。 */
+  readonly outlet?: string;
 }
 
 @Injectable()
@@ -203,6 +207,7 @@ export class ClueDispatchService {
   constructor(
     @Inject(LOGIN_DIRECTORY) private readonly directory: LoginDirectory,
     @Inject(CLUE_STORE) private readonly clues: ClueStore,
+    @Inject(CASE_STORE) private readonly cases: CaseStore,
     @Inject(IDENTITY_STORE) private readonly identity: IdentityStore,
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     private readonly access: AccessControlService,
@@ -405,6 +410,15 @@ export class ClueDispatchService {
     const pendingGuard = await this.designationPendingGuard(actorOrgId, clueId);
     if (pendingGuard) {
       return this.rejectOrg(actor, actorCode, actorOrgId, clueId, pendingGuard);
+    }
+    if (await this.cases.hasPendingFilingApproval(clueId)) {
+      return this.rejectOrg(actor, actorCode, actorOrgId, clueId, {
+        status: 409,
+        result: 'invalid-state',
+        rules: [],
+        reason: 'filing-approval-pending',
+        outlet: '先撤回立案呈批',
+      });
     }
     if (target.deactivatedAt !== null) {
       return this.rejectOrg(actor, actorCode, actorOrgId, clueId, {
@@ -634,6 +648,15 @@ export class ClueDispatchService {
     const pendingGuard = await this.designationPendingGuard(actorOrgId, clueId);
     if (pendingGuard) {
       return this.rejectPeople(actor, actorCode, actorOrgId, clueId, pendingGuard);
+    }
+    if (await this.cases.hasPendingFilingApproval(clueId)) {
+      return this.rejectPeople(actor, actorCode, actorOrgId, clueId, {
+        status: 409,
+        result: 'invalid-state',
+        rules: [],
+        reason: 'filing-approval-pending',
+        outlet: '先撤回立案呈批',
+      });
     }
     const mainId = input.mainId.trim();
     if (mainId === '') {
@@ -1042,6 +1065,7 @@ export class ClueDispatchService {
               result: rejection.result as 'invalid-state' | 'concurrent-change',
               reason: rejection.reason,
               ...(rejection.nextAction ? { nextAction: rejection.nextAction } : {}),
+              ...(rejection.outlet ? { outlet: rejection.outlet } : {}),
             },
           };
     await this.uow.run(async () =>
@@ -1071,6 +1095,7 @@ export class ClueDispatchService {
             body: {
               result: rejection.result as 'invalid-state' | 'concurrent-change',
               reason: rejection.reason,
+              ...(rejection.outlet ? { outlet: rejection.outlet } : {}),
             },
           };
     await this.uow.run(async () =>

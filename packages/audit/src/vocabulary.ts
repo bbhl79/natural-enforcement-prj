@@ -66,6 +66,14 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'storage.secrecy-report-created',
   'storage.secrecy-report-reported',
   'storage.secrecy-report-receipted',
+  // 立案呈批与案件（#234）。
+  'case.filing-drafted',
+  'case.filing-submitted',
+  'case.filing-reviewed',
+  'case.filing-approved',
+  'case.filing-returned',
+  'case.filing-withdrawn',
+  'case.opened',
 ] as const;
 
 /**
@@ -317,6 +325,8 @@ export const CLUE_ORG_ASSIGNED_FAILED_REASONS = [
   'designation-pending',
   'designation-required',
   'invalid-state',
+    /** #234：立案呈批在途，须先撤回。 */
+  'filing-approval-pending',
   'concurrent-change',
 ] as const;
 export type ClueOrgAssignedFailedReason = (typeof CLUE_ORG_ASSIGNED_FAILED_REASONS)[number];
@@ -334,6 +344,8 @@ export const CLUE_HANDLER_ASSIGNED_FAILED_REASONS = [
   'assignee-not-qualified',
   'designation-pending',
   'invalid-state',
+    /** #234：立案呈批在途，须先撤回。 */
+  'filing-approval-pending',
   'concurrent-change',
 ] as const;
 export type ClueHandlerAssignedFailedReason = (typeof CLUE_HANDLER_ASSIGNED_FAILED_REASONS)[number];
@@ -379,6 +391,8 @@ export const CLUE_DISPOSITION_RECORDED_FAILED_REASONS = [
   /** #226：不予立案理由皆空、混选或第十六条末款三项未全确认。 */
   'invalid-no-case-reason',
   /** #226：落点服务缺呈批引用主键。 */
+    /** #234：立案呈批在途，须先撤回。 */
+  'filing-approval-pending',
   'missing-filing-approval-ref',
 ] as const;
 export type ClueDispositionRecordedFailedReason =
@@ -499,6 +513,8 @@ export const CLUE_DESIGNATE_REQUESTED_FAILED_REASONS = [
   'org-unit-deactivated',
   'invalid-state',
   'designation-pending',
+    /** #234：立案呈批在途，须先撤回。 */
+  'filing-approval-pending',
   'concurrent-change',
 ] as const;
 export type ClueDesignateRequestedFailedReason =
@@ -523,6 +539,76 @@ export type ClueDesignateRejectedFailedReason =
  * 线索动作把编号、当前命中集摘要、缺件键写进 detail，不占用 previousValue/nextValue/itemCount。
  * detail 只写不回：查阅接口不返回它。其余动作一律不带 detail。
  */
+
+/**
+ * 立案呈批拟制被拒（#234）。
+ * invalid-conclusion／invalid-no-case-reason 正文不合规；
+ * filing-approval-pending 同线索已有未批准呈批；
+ * invalid-state 线索不在已派承办人，或拟制人不是当前主办／协办；
+ * concurrent-change 乐观并发落空。
+ */
+export const CASE_FILING_DRAFTED_FAILED_REASONS = [
+  'invalid-conclusion',
+  'invalid-no-case-reason',
+  'filing-approval-pending',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type CaseFilingDraftedFailedReason = (typeof CASE_FILING_DRAFTED_FAILED_REASONS)[number];
+
+/**
+ * 立案呈批提交被拒（#234／R-8 定案 C）。
+ * party-unknown 立案结论无明确当事人；invalid-no-case-reason 不予立案理由不合规（X30）；
+ * invalid-state 呈批不在拟制中；concurrent-change 乐观并发落空。
+ */
+export const CASE_FILING_SUBMITTED_FAILED_REASONS = [
+  'party-unknown',
+  'invalid-conclusion',
+  'invalid-no-case-reason',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type CaseFilingSubmittedFailedReason = (typeof CASE_FILING_SUBMITTED_FAILED_REASONS)[number];
+
+/** 立案呈批行政审核被拒（#234）。 */
+export const CASE_FILING_REVIEWED_FAILED_REASONS = ['invalid-state', 'concurrent-change'] as const;
+export type CaseFilingReviewedFailedReason = (typeof CASE_FILING_REVIEWED_FAILED_REASONS)[number];
+
+/**
+ * 立案呈批批准被拒（#234）。
+ * handlers-not-qualified／party-unknown／invalid-state 守卫命中；
+ * invalid-no-case-reason 不予立案理由不合规；concurrent-change 乐观并发落空。
+ */
+export const CASE_FILING_APPROVED_FAILED_REASONS = [
+  'handlers-not-qualified',
+  'party-unknown',
+  'invalid-conclusion',
+  'invalid-no-case-reason',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type CaseFilingApprovedFailedReason = (typeof CASE_FILING_APPROVED_FAILED_REASONS)[number];
+
+/** 立案呈批退回被拒（#234）。missing-return-reason 退回理由必填。 */
+export const CASE_FILING_RETURNED_FAILED_REASONS = [
+  'missing-return-reason',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type CaseFilingReturnedFailedReason = (typeof CASE_FILING_RETURNED_FAILED_REASONS)[number];
+
+/** 立案呈批撤回被拒（#234）。missing-withdraw-reason 撤回理由必填。 */
+export const CASE_FILING_WITHDRAWN_FAILED_REASONS = [
+  'missing-withdraw-reason',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type CaseFilingWithdrawnFailedReason = (typeof CASE_FILING_WITHDRAWN_FAILED_REASONS)[number];
+
+/** 案件建立被拒（#234；与批准同事务，通常不单独出现）。 */
+export const CASE_OPENED_FAILED_REASONS = ['invalid-state', 'concurrent-change'] as const;
+export type CaseOpenedFailedReason = (typeof CASE_OPENED_FAILED_REASONS)[number];
+
 export const AUDIT_DETAIL_ACTIONS = [
   'clue.registered',
   'clue.items-supplemented',
@@ -551,5 +637,13 @@ export const AUDIT_DETAIL_ACTIONS = [
   'storage.secrecy-report-created',
   'storage.secrecy-report-reported',
   'storage.secrecy-report-receipted',
+  // 立案呈批与案件（#234）。
+  'case.filing-drafted',
+  'case.filing-submitted',
+  'case.filing-reviewed',
+  'case.filing-approved',
+  'case.filing-returned',
+  'case.filing-withdrawn',
+  'case.opened',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];

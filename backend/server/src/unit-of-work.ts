@@ -1,7 +1,7 @@
 // 事务前置（#105「事务前置」，#119）：管理动作的业务行与留痕同成同败。
 // 本文件只定类型和令牌。Prisma 实现在 persistence.module.ts 装配。
 import type { AuditTrailPort, AuditTrailReader, Rejected } from '@natural-enforcement/audit';
-import type { ClueStore } from '@natural-enforcement/case';
+import type { CaseStore, ClueStore } from '@natural-enforcement/case';
 import type { IdentityTransaction } from '@natural-enforcement/identity';
 
 import type { LoginDirectory } from './login-directory.ts';
@@ -22,6 +22,8 @@ export interface TxScope extends IdentityTransaction {
   auditReader: AuditTrailReader;
   /** 线索存储（#211）：写同一事务连接，业务行与留痕同成同败。 */
   clues: ClueStore;
+  /** 立案呈批与案件最小模型（#234）。 */
+  cases: CaseStore;
 }
 
 export interface UnitOfWork {

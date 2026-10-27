@@ -60,6 +60,13 @@ const OPERATION_OF_ACTION: Readonly<Record<string, string>> = {
   'storage.secrecy-report-created': '生成保密报告工单',
   'storage.secrecy-report-reported': '登记保密报告已报',
   'storage.secrecy-report-receipted': '录入保密部门回执',
+  'case.filing-drafted': '拟制立案呈批',
+  'case.filing-submitted': '提交立案呈批',
+  'case.filing-reviewed': '审核立案呈批',
+  'case.filing-approved': '批准立案呈批',
+  'case.filing-returned': '退回立案呈批',
+  'case.filing-withdrawn': '撤回立案呈批',
+  'case.opened': '立案',
 };
 
 const OPERATION_OF_OPCODE: Readonly<Record<string, string>> = {

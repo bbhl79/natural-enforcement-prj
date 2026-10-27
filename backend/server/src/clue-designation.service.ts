@@ -23,10 +23,12 @@ import {
   type ClueDesignateRequestedFailedReason,
 } from '@natural-enforcement/audit';
 import {
+  CASE_STORE,
   CLUE_STORE,
   DESIGNATE_REQUEST_FROM_STATUSES,
   reviewerOrgCandidates,
   type ClueDispatchContext,
+  type CaseStore,
   type ClueStore,
 } from '@natural-enforcement/case';
 import {
@@ -119,6 +121,7 @@ export class ClueDesignationService {
   constructor(
     @Inject(LOGIN_DIRECTORY) private readonly directory: LoginDirectory,
     @Inject(CLUE_STORE) private readonly clues: ClueStore,
+    @Inject(CASE_STORE) private readonly cases: CaseStore,
     @Inject(IDENTITY_STORE) private readonly identity: IdentityStore,
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     private readonly access: AccessControlService,
@@ -183,6 +186,15 @@ export class ClueDesignationService {
       }
     } else {
       proposedOrgId = null;
+    }
+    // #234 X31：立案呈批在途时不能报请指定管辖。
+    if (await this.cases.hasPendingFilingApproval(clueId)) {
+      return this.rejectRequest(actor, actorCode, actorOrgId, clueId, {
+        status: 409,
+        result: 'invalid-state',
+        rules: [],
+        reason: 'filing-approval-pending',
+      });
     }
     // 已有待处理报请：报请期间的锁同样拦发起方重复报请。
     if (await this.clues.readPendingDesignationRequest(clueId) !== null) {
