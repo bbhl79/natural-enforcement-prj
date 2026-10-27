@@ -2,15 +2,24 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  FILING_GAP_RULE_KEY,
   buildCaseOpening,
   canTakeFilingStep,
   checkFilingContent,
   checkFilingGuards,
   checkFilingParty,
+  classifyFilingGaps,
+  filingGapWarnings,
   filingStatusAfter,
   isFilingApprovalPending,
   type FilingHandlerFact,
 } from '../src/filing/index.ts';
+import {
+  PUBLIC_LAYER_ITEMS,
+  SOURCE_LAYER_GROUPS,
+  TYPE_LAYER_ITEMS,
+  type RequirementItem,
+} from '../src/index.ts';
 
 const grounds = { kind: 'non-filing-grounds', grounds: ['art16-2-no-violation-fact'] };
 const minor = {
@@ -144,6 +153,115 @@ describe('checkFilingGuards（T01／T02 守卫）', () => {
       basis: '处罚办法第 16 条（一）',
     });
     expect(checkFilingGuards({ ...base, subjectUnknown: true })?.reason).toBe('party-unknown');
+  });
+});
+
+describe('立案缺件守卫（#257 Q24＋缺口-Q33）', () => {
+  const all: RequirementItem[] = [
+    ...PUBLIC_LAYER_ITEMS,
+    ...SOURCE_LAYER_GROUPS.flatMap((group) => group.items),
+    ...TYPE_LAYER_ITEMS,
+  ];
+  const item = (key: string): RequirementItem => {
+    const found = all.find((entry) => entry.key === key);
+    if (!found) throw new Error(`缺少要件键 ${key}`);
+    return found;
+  };
+
+  it('law 或 regulation 的阻断项进 blocks', () => {
+    const out = classifyFilingGaps([
+      item('type.survey_qualification_none.certificate_status'),
+      item('type.survey_map_review_missing.map_is_simple'),
+    ]);
+    expect(out.blocks.map((entry) => entry.key)).toEqual([
+      'type.survey_qualification_none.certificate_status',
+      'type.survey_map_review_missing.map_is_simple',
+    ]);
+    expect(out.warnings).toEqual([]);
+  });
+
+  it('4 组 137 键标 provisional：层级 normative 仍阻断', () => {
+    const keys = [
+      'type.survey_qualification_none.party_identity',
+      'type.survey_qualification_fraud.application_records',
+      'type.survey_quality_unqualified.quality_defect_items',
+      'type.planning_build_without_permit.design_review_decision',
+    ];
+    for (const key of keys) {
+      const entry = item(key);
+      expect(entry.consequence).toBe('阻断');
+      expect(entry.authority).toBe('normative');
+      expect(entry.provisional).toBe(true);
+    }
+    const out = classifyFilingGaps(keys.map(item));
+    expect(out.blocks.map((entry) => entry.key)).toEqual(keys);
+    expect(out.warnings).toEqual([]);
+  });
+
+  it('14 键降为警告：不阻断，进 warnings', () => {
+    const keys = [
+      'clue.finder',
+      'clue.patrol_no',
+      'clue.assign_doc_no',
+      'clue.assign_org',
+      'clue.transfer_doc_no',
+      'clue.transfer_org',
+      'clue.reporter_anonymous',
+      'clue.verifiable_basis',
+      'clue.opinion_source',
+      'clue.opinion_published_at',
+      'type.survey_qualification_none.survey_activity_type',
+      'type.survey_qualification_exceed_scope.permitted_scope',
+      'type.survey_qualification_fraud.certificate_grade',
+      'clue.location',
+    ];
+    for (const key of keys) {
+      expect(item(key).consequence).toBe('警告');
+    }
+    const out = classifyFilingGaps(keys.map(item));
+    expect(out.blocks).toEqual([]);
+    expect(out.warnings.map((entry) => entry.key)).toEqual(keys);
+  });
+
+  it('normative、internal、system 的阻断项只警告（不靠 provisional 例外）', () => {
+    const base = {
+      key: 'type.demo.authority_warn',
+      label: '演示项',
+      group: '违法事实',
+      required: true,
+      timing: '录入时' as const,
+      consequence: '阻断' as const,
+      basis: [],
+    };
+    for (const authority of ['normative', 'internal', 'system'] as const) {
+      const out = classifyFilingGaps([{ ...base, authority }]);
+      expect(out.blocks).toEqual([]);
+      expect(out.warnings.map((entry) => entry.key)).toEqual([base.key]);
+    }
+  });
+
+  it('罚款基数缺失只警告，不阻断立案', () => {
+    const out = classifyFilingGaps([item('type.land_transfer_illegal.price_payment')]);
+    expect(out.blocks).toEqual([]);
+    expect(out.warnings.map((entry) => entry.key)).toEqual(['type.land_transfer_illegal.price_payment']);
+  });
+
+  it('提示项不进守卫', () => {
+    expect(classifyFilingGaps([item('type.survey_qualification_none.map_service_flag')])).toEqual({
+      blocks: [],
+      warnings: [],
+    });
+  });
+
+  it('警告项共用 FILING-GAP 规则键，逐项列 message', () => {
+    const notes = filingGapWarnings([item('clue.finder')]);
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toMatchObject({
+      level: 'warn',
+      code: FILING_GAP_RULE_KEY,
+      authority: 'internal',
+    });
+    expect(notes[0]?.message).toContain('clue.finder');
   });
 });
 

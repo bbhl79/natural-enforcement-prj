@@ -590,10 +590,12 @@ export type CaseFilingDraftedFailedReason = (typeof CASE_FILING_DRAFTED_FAILED_R
  */
 export const CASE_FILING_SUBMITTED_FAILED_REASONS = [
   'party-unknown',
+  'missing-required-items',
   'invalid-conclusion',
   'invalid-no-case-reason',
   'invalid-state',
   'concurrent-change',
+  'advisory',
 ] as const;
 export type CaseFilingSubmittedFailedReason = (typeof CASE_FILING_SUBMITTED_FAILED_REASONS)[number];
 
@@ -609,6 +611,7 @@ export type CaseFilingReviewedFailedReason = (typeof CASE_FILING_REVIEWED_FAILED
 export const CASE_FILING_APPROVED_FAILED_REASONS = [
   'handlers-not-qualified',
   'party-unknown',
+  'missing-required-items',
   'invalid-conclusion',
   'invalid-no-case-reason',
   'invalid-state',

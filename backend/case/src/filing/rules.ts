@@ -6,6 +6,8 @@
 // 以及批准·立案（T01）时案件最小字段的组装。接口层只负责喂事实、把结果映射成 HTTP。
 
 import { checkNoCaseReason, type NoCaseReason } from '../clue/closure/rules.ts';
+import type { RequirementItem } from '../clue/requirements/types.ts';
+import type { GuardResult } from '../state-machine/guard.ts';
 
 /** 呈批结论：立案 | 不予立案（#27 批2 Q8：一期只设两项）。 */
 export const FILING_CONCLUSIONS = ['file', 'no-case'] as const;
@@ -189,6 +191,55 @@ export function checkFilingGuards(input: FilingGuardInput): FilingGuardHit | nul
     };
   }
   return checkFilingParty(input);
+}
+
+/** 立案呈批缺件守卫（#257）：规则键、原因码与出口。 */
+export const FILING_GAP_RULE_KEY = 'FILING-GAP';
+export const FILING_GAP_REASON = 'missing-required-items';
+export const FILING_GAP_OUTLET = '先补齐线索要件，或改拟不予立案';
+
+/**
+ * 立案呈批缺件分类（Q24＋缺口-Q33）。
+ * 缺件后果为阻断的项：依据为 law、regulation，或标 provisional 的临时例外，阻断；
+ * 其余依据层级（normative、internal、system）只警告。
+ * 缺件后果本就是警告的项（含 14 键降级后的项）进警告；提示不进守卫。
+ */
+export interface FilingGapClassification {
+  readonly blocks: readonly RequirementItem[];
+  readonly warnings: readonly RequirementItem[];
+}
+
+export function classifyFilingGaps(items: readonly RequirementItem[]): FilingGapClassification {
+  const blocks: RequirementItem[] = [];
+  const warnings: RequirementItem[] = [];
+  for (const item of items) {
+    if (item.consequence === '提示') continue;
+    if (item.consequence === '阻断') {
+      if (item.provisional === true || item.authority === 'law' || item.authority === 'regulation') {
+        blocks.push(item);
+      } else {
+        warnings.push(item);
+      }
+      continue;
+    }
+    warnings.push(item);
+  }
+  return { blocks, warnings };
+}
+
+/** 警告项转 #258 警告通道（同一规则键，逐项列在 message）。 */
+export function filingGapWarnings(items: readonly RequirementItem[]): GuardResult[] {
+  return items.map((item) => {
+    const basis = item.basis[0];
+    const citation = basis ? `${basis.document} ${basis.article}`.trim() : undefined;
+    return {
+      level: 'warn',
+      code: FILING_GAP_RULE_KEY,
+      message: `线索要件缺件：${item.label}（${item.key}）`,
+      authority: item.authority,
+      ...(citation ? { citation } : {}),
+    };
+  });
 }
 
 /** 案件主状态「办理中」（#27 第 1／2 条 三、案件主状态）。 */

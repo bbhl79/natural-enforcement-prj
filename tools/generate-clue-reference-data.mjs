@@ -224,6 +224,69 @@ function parseBasis(cell) {
   return { entries, notes };
 }
 
+// ---- 依据层级回填（#257）----
+// 文书表九档归五档：法律、司法解释计 law；行政法规、部门规章、地方性法规、地方政府规章计
+// regulation；部门规范性文件、地方政府规范性文件计 normative。internal、system 只用于
+// 没有文书的系统字段，文书表里没有对应档。
+const AUTHORITY_BY_HIERARCHY = {
+  法律: 'law',
+  司法解释: 'law',
+  行政法规: 'regulation',
+  部门规章: 'regulation',
+  省级地方性法规: 'regulation',
+  设区的市地方性法规: 'regulation',
+  地方政府规章: 'regulation',
+  部门规范性文件: 'normative',
+  地方政府规范性文件: 'normative',
+};
+
+const AUTHORITY_RANK = { law: 5, regulation: 4, normative: 3, internal: 2, system: 1 };
+
+/** 文书编号 → 依据层级。效力层级不在映射里即报错，不静默落档。 */
+function documentAuthorities(documents) {
+  const map = new Map();
+  for (const document of documents) {
+    const authority = AUTHORITY_BY_HIERARCHY[document.hierarchyLevel];
+    if (!authority) {
+      throw new Error(`文书 ${document.code} 的效力层级不在五档映射：${document.hierarchyLevel}`);
+    }
+    map.set(document.code, authority);
+  }
+  return map;
+}
+
+/** 组内最高层级：law > regulation > normative > internal > system。 */
+function maxAuthority(authorities) {
+  let best = null;
+  for (const authority of authorities) {
+    if (best === null || AUTHORITY_RANK[authority] > AUTHORITY_RANK[best]) best = authority;
+  }
+  return best;
+}
+
+// #257 缺口-Q33：规程位阶待法制确认的 4 组保持阻断，标 provisional。
+// 键为「依据里的文书集合（去重排序）」。其他组不得比照。
+const PROVISIONAL_GROUP_DOC_SETS = new Map([
+  ['doc_002', '待法制确认规程位阶'],
+  ['doc_002|doc_028', '待法制确认规程位阶'],
+  ['doc_002|doc_038', '待法制确认规程位阶'],
+  ['doc_002|doc_069', '待法制确认规程位阶'],
+]);
+
+// #257 缺口-Q33：依据层级只有规范性文件的 3 组 13 键，缺件后果由阻断改为警告。
+const WARN_DOWNGRADE_DOC_SETS = new Set(['doc_028|doc_029', 'doc_025|doc_028']);
+
+// #257 要件依据四项：G194 与 doc_044／045／047 查不到的键保持非阻断，标 provisional。
+const PROVISIONAL_KEYS = new Set([
+  'type.land_approve_without_authority.criminal_referral_check',
+  'type.survey_secret_geo_info_no_register.management_system',
+  'type.survey_secret_geo_info_no_register.license_record',
+  'type.survey_custodian_refuse_provide.secret_approval',
+]);
+
+// 只有自由文本依据的类型层键（G265）：文书表无文书可定档。
+const AUTHORITY_BY_FREE_TEXT_KEY = new Map([['type.land_transfer_collective.pilot_area', 'internal']]);
+
 /** 必填性归一：主取值必填／选填；条件说明留在 condition 里，不改主取值。 */
 function parseRequired(raw) {
   const text = raw.trim();
@@ -234,7 +297,7 @@ function parseRequired(raw) {
   return { required: true, condition: text };
 }
 
-function readTypeLayer() {
+function readTypeLayer(documentAuthority) {
   const items = [];
   for (const draft of REQUIREMENT_DRAFTS) {
     const markdown = readDoc(draft);
@@ -249,10 +312,23 @@ function readTypeLayer() {
       if (cells.length !== 7) {
         throw new Error(`${draft} 的要件行不是 7 列：${line}`);
       }
-      const [key, label, group, requiredRaw, timing, consequence, basisCell] = cells;
+      const [key, label, group, requiredRaw, timing, consequenceRaw, basisCell] = cells;
       const { required, condition } = parseRequired(requiredRaw);
       const { entries, notes } = parseBasis(basisCell);
-      const item = { key, label, group, required, timing, consequence, basis: entries };
+      const documents = [...new Set(entries.map((entry) => entry.document))].sort();
+      const docSet = documents.join('|');
+      const authority =
+        maxAuthority(documents.map((document) => documentAuthority.get(document))) ??
+        AUTHORITY_BY_FREE_TEXT_KEY.get(key) ??
+        'internal';
+      let consequence = consequenceRaw;
+      if (WARN_DOWNGRADE_DOC_SETS.has(docSet) && consequence === '阻断') consequence = '警告';
+      const item = { key, label, group, required, timing, consequence, authority, basis: entries };
+      if (PROVISIONAL_GROUP_DOC_SETS.has(docSet) && consequence === '阻断') {
+        item.provisional = true;
+        notes.push(PROVISIONAL_GROUP_DOC_SETS.get(docSet));
+      }
+      if (PROVISIONAL_KEYS.has(key)) item.provisional = true;
       if (condition !== null) item.condition = condition;
       if (notes.length > 0) item.basisNote = notes.join('；');
       items.push(item);
@@ -350,7 +426,9 @@ function renderTypeLayer(items) {
       `required: ${item.required}`,
       `timing: ${tsString(item.timing)}`,
       `consequence: ${tsString(item.consequence)}`,
+      `authority: ${tsString(item.authority)}`,
     ];
+    if (item.provisional === true) parts.push('provisional: true');
     if (item.condition !== undefined) parts.push(`condition: ${tsString(item.condition)}`);
     const basis = item.basis
       .map((entry) => `{ document: ${tsString(entry.document)}, article: ${tsString(entry.article)} }`)
@@ -372,7 +450,7 @@ function build() {
   const documents = readDocuments();
   const jurisdictionRows = readJurisdiction();
   const dispatchGuidanceRows = readDispatchGuidance();
-  const typeLayerItems = readTypeLayer();
+  const typeLayerItems = readTypeLayer(documentAuthorities(documents));
 
   // 类型层依据：从类型层声明的「依据」栏归集到违法类型上，用途取「认定标准」。
   // 「处罚」「裁量基准」「移送处分」三类依据尚未定稿（#203 留言：未做），后续按只追加补版本。

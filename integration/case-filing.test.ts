@@ -1,4 +1,5 @@
 // #234 立案呈批：11 条验收（含事务回滚）＋ R-8 定案 C（提交／批准拦当事人）。
+import { randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -203,12 +204,74 @@ async function draftNoCase(clueId: string, code = 'P-HANDLER-F1') {
   });
 }
 
-async function submit(approvalId: string, code = 'P-HANDLER-F1') {
-  return postJson(`/api/filing-approvals/${approvalId}/submit`, code);
+async function submit(approvalId: string, code = 'P-HANDLER-F1', body: unknown = {}) {
+  return postJson(`/api/filing-approvals/${approvalId}/submit`, code, body);
 }
 
-async function approve(approvalId: string, code = 'P-APPROVE-HQ') {
-  return postJson(`/api/filing-approvals/${approvalId}/approve`, code, { opinion: '同意' });
+async function approve(approvalId: string, code = 'P-APPROVE-HQ', body: unknown = { opinion: '同意' }) {
+  return postJson(`/api/filing-approvals/${approvalId}/approve`, code, body);
+}
+
+function geojsonPoint(offset: number): string {
+  return JSON.stringify({
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [114 + offset, 23] },
+    properties: {},
+  });
+}
+
+/** 带初步违法类型登记；类型层缺件用 confirm 接受为常驻事实。 */
+async function registerTyped(typeCode: string, domain: 'land' | 'survey'): Promise<{ id: string; code: string }> {
+  offset += 1;
+  const current = offset;
+  const form = new FormData();
+  form.set('sourceCode', '16');
+  form.set('domain', domain);
+  form.set('types', typeCode);
+  form.set('confirm', 'true');
+  form.set(
+    'values',
+    JSON.stringify({
+      'clue.received_at': '2026-10-25',
+      'clue.narrative': '巡查发现涉嫌违法线索',
+      'clue.finder': '巡查员',
+      'clue.patrol_no': `XC-257-${current}`,
+    }),
+  );
+  form.set(
+    'spatial-source',
+    new Blob([domain === 'survey' ? geojsonPoint(current) : geojsonPolygon(square(current))], {
+      type: 'application/geo+json',
+    }),
+    'area.geojson',
+  );
+  const response = await fetch(`${baseUrl}/api/clues`, {
+    method: 'POST',
+    headers: {
+      cookie: await cookieOf('P-INTAKE-A'),
+      'idempotency-key': `filing-257-${current}-${randomUUID()}`,
+    },
+    body: form,
+  });
+  expect([200, 201]).toContain(response.status);
+  return (await response.json()) as { id: string; code: string };
+}
+
+/** 给全部必填类型项写取值，只留下 except 里的键不填。 */
+async function fillTypeItems(clueId: string, except: readonly string[] = []): Promise<void> {
+  const rows = await cloned.prisma.clueRequirementSnapshot.findMany({
+    where: { clueId, required: true },
+    select: { key: true },
+  });
+  const existing = new Set(
+    (await cloned.prisma.clueItemValue.findMany({ where: { clueId }, select: { key: true } })).map(
+      (row) => row.key,
+    ),
+  );
+  const data = rows
+    .filter((row) => row.key.startsWith('type.') && !existing.has(row.key) && !except.includes(row.key))
+    .map((row) => ({ id: randomUUID(), clueId, key: row.key, value: '测试值' }));
+  if (data.length > 0) await cloned.prisma.clueItemValue.createMany({ data });
 }
 
 interface TrailRow {
@@ -619,5 +682,104 @@ describe('#238 立案呈批不批改走 R 编码', () => {
       receiverId: handlerMainId,
     });
     expect(returned.status).toBe(403);
+  });
+});
+
+describe('#257 立案缺件层级守卫（Q24＋缺口-Q33）', () => {
+  async function typedClue(typeCode: string, domain: 'land' | 'survey'): Promise<{ id: string; code: string }> {
+    const registered = await registerTyped(typeCode, domain);
+    await toHandlerAssigned(registered.id);
+    return registered;
+  }
+
+  it('提交：law 层类型缺件 → 409，呈批仍拟制中', async () => {
+    const { id } = await typedClue('survey_qualification_none', 'survey');
+    await fillTypeItems(id, ['type.survey_qualification_none.certificate_status']);
+    const drafted = await draftFile(id, ['张三']);
+    const approvalId = String(drafted.body.approvalId);
+
+    const blocked = await submit(approvalId);
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.reason).toBe('missing-required-items');
+    expect(blocked.body.ruleKeys).toContain('type.survey_qualification_none.certificate_status');
+    const approval = await cloned.prisma.filingApproval.findUniqueOrThrow({ where: { id: approvalId } });
+    expect(approval.status).toBe('drafting');
+  });
+
+  it('提交：G001 provisional 阻断键缺件仍 409', async () => {
+    const { id } = await typedClue('survey_qualification_none', 'survey');
+    await fillTypeItems(id, ['type.survey_qualification_none.party_identity']);
+    const drafted = await draftFile(id, ['张三']);
+    const approvalId = String(drafted.body.approvalId);
+
+    const blocked = await submit(approvalId);
+    expect(blocked.status).toBe(409);
+    expect(blocked.body.ruleKeys).toContain('type.survey_qualification_none.party_identity');
+  });
+
+  it('提交与批准：normative 警告项返回 warnings，确认后继续并写留痕', async () => {
+    const { id } = await typedClue('survey_qualification_fraud', 'survey');
+    await fillTypeItems(id, ['type.survey_qualification_fraud.certificate_grade']);
+    const drafted = await draftFile(id, ['张三']);
+    const approvalId = String(drafted.body.approvalId);
+
+    const warnedSubmit = await submit(approvalId);
+    expect(warnedSubmit.status).toBe(200);
+    expect(warnedSubmit.body.result).toBe('warnings');
+    const submitWarnings = warnedSubmit.body.warnings as Array<{ ruleKey: string; message: string }>;
+    expect(submitWarnings.map((row) => row.ruleKey)).toEqual(['FILING-GAP']);
+    expect(submitWarnings[0]?.message).toContain('type.survey_qualification_fraud.certificate_grade');
+    const stillDrafting = await cloned.prisma.filingApproval.findUniqueOrThrow({ where: { id: approvalId } });
+    expect(stillDrafting.status).toBe('drafting');
+
+    const submitted = await submit(approvalId, 'P-HANDLER-F1', { confirmedRuleKeys: ['FILING-GAP'] });
+    expect(submitted.status).toBe(200);
+    expect(submitted.body.result).toBe('filing-submitted');
+    const submitConfirm = (await trailOf('case.rule-confirmed', id)).find((row) =>
+      String(row.detail ?? '').includes('"step":"filing:submit"'),
+    );
+    expect(submitConfirm).toBeTruthy();
+
+    const warnedApprove = await approve(approvalId);
+    expect(warnedApprove.status).toBe(200);
+    expect(warnedApprove.body.result).toBe('warnings');
+    expect((warnedApprove.body.warnings as Array<{ ruleKey: string }>).map((row) => row.ruleKey)).toEqual([
+      'FILING-GAP',
+    ]);
+    const stillPending = await cloned.prisma.filingApproval.findUniqueOrThrow({ where: { id: approvalId } });
+    expect(stillPending.status).toBe('pending_approval');
+
+    const approved = await approve(approvalId, 'P-APPROVE-HQ', {
+      opinion: '同意',
+      confirmedRuleKeys: ['FILING-GAP'],
+    });
+    expect(approved.status).toBe(200);
+    expect(approved.body.conclusion).toBe('file');
+    expect((await cloned.prisma.clue.findUniqueOrThrow({ where: { id } })).status).toBe('filed');
+    const approveConfirm = (await trailOf('case.rule-confirmed', id)).find((row) =>
+      String(row.detail ?? '').includes('"step":"filing:T01"'),
+    );
+    expect(approveConfirm).toBeTruthy();
+  });
+
+  it('罚款基数缺失不阻断立案：提交与批准只警告，确认后立案', async () => {
+    const { id } = await typedClue('land_transfer_illegal', 'land');
+    await fillTypeItems(id, ['type.land_transfer_illegal.price_payment']);
+    const drafted = await draftFile(id, ['张三']);
+    const approvalId = String(drafted.body.approvalId);
+
+    const warnedSubmit = await submit(approvalId);
+    expect(warnedSubmit.status).toBe(200);
+    expect(warnedSubmit.body.result).toBe('warnings');
+    expect((warnedSubmit.body.warnings as Array<{ message: string }>)[0]?.message).toContain('price_payment');
+
+    const submitted = await submit(approvalId, 'P-HANDLER-F1', { confirmedRuleKeys: ['FILING-GAP'] });
+    expect(submitted.status).toBe(200);
+    const approved = await approve(approvalId, 'P-APPROVE-HQ', {
+      opinion: '同意',
+      confirmedRuleKeys: ['FILING-GAP'],
+    });
+    expect(approved.status).toBe(200);
+    expect((await cloned.prisma.clue.findUniqueOrThrow({ where: { id } })).status).toBe('filed');
   });
 });

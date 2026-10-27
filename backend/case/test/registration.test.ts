@@ -11,6 +11,7 @@ import {
   assessGaps,
   buildFormSchemaItems,
   contentDigest,
+  missingRequiredItems,
   parseSpatialSource,
   requestDigest,
   validateAttachment,
@@ -46,11 +47,8 @@ describe('缺件判定（ADR 0018 三层叠加）', () => {
       subjectUnknown: false,
       fileSatisfiedKeys: ['clue.source', 'clue.domain', 'clue.location'],
     });
-    expect(result.blocking.map((gap) => gap.key)).toEqual([
-      'clue.received_at',
-      'clue.narrative',
-      'clue.finder',
-    ]);
+    // #257：clue.finder 等来源层键降为警告（G020），不再阻断登记。
+    expect(result.blocking.map((gap) => gap.key)).toEqual(['clue.received_at', 'clue.narrative']);
   });
 
   it('条件项只在条件成立时才算缺件：日常巡查要巡查记录号', () => {
@@ -61,10 +59,10 @@ describe('缺件判定（ADR 0018 三层叠加）', () => {
       subjectUnknown: false,
       fileSatisfiedKeys: ['clue.source', 'clue.domain', 'clue.location'],
     };
-    const patrol = assessGaps({ ...base, sourceCode: '16' });
-    expect(patrol.blocking.map((gap) => gap.key)).toContain('clue.patrol_no');
-    const discovery = assessGaps({ ...base, sourceCode: '1' });
-    expect(discovery.blocking.map((gap) => gap.key)).not.toContain('clue.patrol_no');
+    const patrol = missingRequiredItems({ ...base, sourceCode: '16' });
+    expect(patrol.map((item) => item.key)).toContain('clue.patrol_no');
+    const discovery = missingRequiredItems({ ...base, sourceCode: '1' });
+    expect(discovery.map((item) => item.key)).not.toContain('clue.patrol_no');
   });
 
   it('类型层缺件不阻断登记，只落常驻缺件清单', () => {
@@ -124,6 +122,7 @@ describe('缺件判定（ADR 0018 三层叠加）', () => {
         required: true,
         timing: '录入时',
         consequence: '阻断',
+        authority: 'normative',
         basis: [],
       },
     ];
@@ -142,6 +141,7 @@ describe('缺件判定（ADR 0018 三层叠加）', () => {
         required: true,
         timing: '录入时',
         consequence: '阻断',
+        authority: 'normative',
         condition: '本行为主体是探矿权人',
         basis: [],
       },
@@ -152,14 +152,19 @@ describe('缺件判定（ADR 0018 三层叠加）', () => {
 
   it('位置由几何来源文件满足时不算缺件', () => {
     const items = buildFormSchemaItems({ sourceGroupCode: '1', typeCodes: [] });
-    const result = assessGaps({
+    const base = {
       items,
       values: { 'clue.received_at': '2026-10-25', 'clue.narrative': '现场发现', 'clue.finder': '张三' },
       sourceCode: '1',
       subjectUnknown: false,
-      fileSatisfiedKeys: ['clue.source', 'clue.domain'],
+    };
+    const satisfied = missingRequiredItems({
+      ...base,
+      fileSatisfiedKeys: ['clue.source', 'clue.domain', 'clue.location'],
     });
-    expect(result.blocking.map((gap) => gap.key)).toEqual(['clue.location']);
+    expect(satisfied.map((item) => item.key)).not.toContain('clue.location');
+    const missing = missingRequiredItems({ ...base, fileSatisfiedKeys: ['clue.source', 'clue.domain'] });
+    expect(missing.map((item) => item.key)).toContain('clue.location');
   });
 });
 

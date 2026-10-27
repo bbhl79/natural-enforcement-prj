@@ -26,6 +26,15 @@ export const RULE_PARAMETERS: readonly RuleParameter[] = [
     citation: '规程 4.3.3(4)',
     reasonRequired: false,
   },
+  // #257：立案呈批缺件的警告项。逐项缺件写进 warnings 的 message，确认键共用一个。
+  {
+    ruleKey: 'FILING-GAP',
+    version: '1',
+    level: 'warn',
+    message: '线索要件缺件',
+    citation: null,
+    reasonRequired: false,
+  },
 ];
 
 const BY_KEY = new Map(RULE_PARAMETERS.map((item) => [item.ruleKey, item]));
