@@ -1295,30 +1295,25 @@ function groupsOf(rows: readonly DeadlineRow[]): DeadlineRow[][] {
 function parseStored(kind: string, contentJson: string | null): ExtendContent | PeriodContent | null {
   if (!contentJson) return null;
   try {
-    const parsed = JSON.parse(contentJson) as { kind?: unknown };
-    if (parsed.kind !== kind) return null;
-    if (kind === 'extend') return parseExtend(parsed);
-    if (kind === 'period') return parsePeriod(parsed);
+    const parsed: unknown = JSON.parse(contentJson);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const record = parsed as Record<string, unknown>;
+    if (record.kind !== kind) return null;
+    if (kind === 'extend') return parseExtend(record);
+    if (kind === 'period') return parsePeriod(record);
     return null;
   } catch {
     return null;
   }
 }
 
-function parseExtend(value: { readonly days?: unknown; readonly reason?: unknown }): ExtendContent | null {
+function parseExtend(value: Record<string, unknown>): ExtendContent | null {
   if (typeof value.days !== 'number' || typeof value.reason !== 'string') return null;
   if (!checkExtension(value.days, value.reason).ok) return null;
   return { kind: 'extend', days: value.days, reason: value.reason.trim() };
 }
 
-function parsePeriod(value: {
-  readonly eventKind?: unknown;
-  readonly reason?: unknown;
-  readonly basisLabel?: unknown;
-  readonly startedOn?: unknown;
-  readonly endedOn?: unknown;
-  readonly backfill?: unknown;
-}): PeriodContent | null {
+function parsePeriod(value: Record<string, unknown>): PeriodContent | null {
   const checked = checkManualPeriod({
     eventKind: typeof value.eventKind === 'string' ? value.eventKind : '',
     reason: typeof value.reason === 'string' ? value.reason : '',
