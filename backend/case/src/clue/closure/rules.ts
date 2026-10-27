@@ -81,7 +81,8 @@ export function checkDispositionNote(note: string): DispositionNoteCheckOutcome 
 }
 
 /**
- * 处罚办法第 16 条（一）–（五）固定编码（#226）：勾选表示该项立案条件不成立。
+ * 处罚办法第十六条（一）–（五）固定编码（#226）：勾选表示该项立案条件未满足。
+ * 标签逐字取第十六条（一）–（五）原文（立案条件本身），不改写为否定句。
  * 不自由文本替代条款本身；标签仅供展示与快照。
  */
 export const NON_FILING_GROUND_CODES = [
@@ -95,11 +96,11 @@ export const NON_FILING_GROUND_CODES = [
 export type NonFilingGroundCode = (typeof NON_FILING_GROUND_CODES)[number];
 
 export const NON_FILING_GROUND_LABELS: Readonly<Record<NonFilingGroundCode, string>> = {
-  'art16-1-no-clear-actor': '无明确的行为人',
-  'art16-2-no-violation-fact': '无违反自然资源管理法律法规的事实',
-  'art16-3-no-legal-liability': '依法不应当追究法律责任',
-  'art16-4-not-our-jurisdiction': '不属于本部门管辖',
-  'art16-5-beyond-limitation': '违法行为已超过追诉时效',
+  'art16-1-no-clear-actor': '有明确的行为人',
+  'art16-2-no-violation-fact': '有违反自然资源管理法律法规的事实',
+  'art16-3-no-legal-liability': '依照自然资源管理法律法规应当追究法律责任',
+  'art16-4-not-our-jurisdiction': '属于本部门管辖',
+  'art16-5-beyond-limitation': '违法行为没有超过追诉时效',
 };
 
 /** 轻微＋及时纠正＋无危害后果三要素字段名。 */
