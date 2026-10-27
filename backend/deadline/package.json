@@ -2,12 +2,19 @@
   "name": "@natural-enforcement/deadline",
   "version": "0.0.0",
   "private": true,
-  "description": "期限预警模块（#51 空壳：NestJS 模块声明 + 领域占位，无业务实体——G1 不可扩大）",
+  "description": "期限模块（#246：工作日历、到期日、四维锚点）",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
   },
+  "scripts": {
+    "test": "vitest run"
+  },
   "dependencies": {
     "@nestjs/common": "12.1.2"
+  },
+  "devDependencies": {
+    "typescript": "6.0.2",
+    "vitest": "5.0.3"
   }
 }

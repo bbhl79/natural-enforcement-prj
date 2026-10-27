@@ -719,6 +719,8 @@ check_weak-reference-entry() {
 # CaseStageInvalidation、CaseStageSignature、CaseMaterial。
 # #236 追加违法记录、笔录、收尾呈批、期限事件与告知记录：CaseViolationRecord、CaseInquiryRecord、
 # CaseProcedureApproval、CaseProcedureVersion、CaseProcedureStep、CaseDeadlineEvent、CasePartyNotice。
+# #246 追加期限行、期间事件、期限呈批与后装工作日历：CaseDeadlineRow、CasePeriodEvent、
+# CaseDeadlineApproval、CaseDeadlineApprovalVersion、CaseDeadlineApprovalStep、DeadlineCalendarInstall。
 G1_MODELS=(
   MigrationProbe
   OrgUnit
@@ -789,6 +791,12 @@ G1_MODELS=(
   CaseProcedureStep
   CaseDeadlineEvent
   CasePartyNotice
+  CaseDeadlineRow
+  CasePeriodEvent
+  CaseDeadlineApproval
+  CaseDeadlineApprovalVersion
+  CaseDeadlineApprovalStep
+  DeadlineCalendarInstall
 )
 check_g1-model-allowlist() {
   local schema="$BACKEND/prisma/schema.prisma" model in_schema extra missing fails=0

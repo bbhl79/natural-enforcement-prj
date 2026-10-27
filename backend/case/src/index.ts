@@ -394,6 +394,15 @@ export type {
   ViolationVoidWrite,
   DeadlineEventRow,
   DeadlineEventWrite,
+  DeadlineRow,
+  DeadlineRowWrite,
+  PeriodEventRow,
+  PeriodEventWrite,
+  DeadlineApprovalRow,
+  DeadlineDraftWrite,
+  DeadlineStepWrite,
+  CalendarInstallRow,
+  CalendarInstallWrite,
 } from './persistence/case-store.ts';
 // #238：退回原因、退回点、接收人与退回计划。
 export {

@@ -32,6 +32,11 @@ export function SuspendDraftForm({ extendTogether }: { extendTogether: boolean }
 export function InvestigationPanel({ view }: { view: InvestigationView }) {
   return (
     <section data-role="investigation">
+      <p>
+        <a data-role="deadline-link" href={`/case/${view.id}/deadline`}>
+          查看期限
+        </a>
+      </p>
       {view.entries.inquiry ? <h2>笔录登记</h2> : null}
       {view.entries.violation ? <h2>违法记录登记与作废</h2> : null}
       {view.entries.suspend ? (

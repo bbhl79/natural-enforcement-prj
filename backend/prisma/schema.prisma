@@ -1393,3 +1393,119 @@ model CasePartyNotice {
   @@index([caseId])
   @@map("case_party_notice")
 }
+
+/// 期限行（#246）。四维锚点加修订号唯一。只追加，不覆盖旧行。
+model CaseDeadlineRow {
+  id String @id
+  caseId String @map("case_id")
+  ruleKey String @map("rule_key")
+  entrySeq Int @map("entry_seq")
+  procedureNode String @map("procedure_node")
+  startingDocument String? @map("starting_document")
+  /// continue 继续消耗 | restart 重新起算
+  consumption String
+  ruleVersion String @map("rule_version")
+  dayCount Int @map("day_count")
+  /// calendar 日历日 | working 工作日
+  dayBasis String @map("day_basis")
+  partyFacing Boolean @map("party_facing")
+  extensionAllowance Int? @map("extension_allowance")
+  startedOn DateTime @db.Date @map("started_on")
+  dueOn DateTime? @db.Date @map("due_on")
+  needsManualConfirmation Boolean @default(false) @map("needs_manual_confirmation")
+  confirmationTrace String? @map("confirmation_trace")
+  /// open 未届满 | expired 已届满 | deemed-waived 视为放弃
+  rowStatus String @default("open") @map("row_status")
+  revisionNo Int @default(0) @map("revision_no")
+  calendarVersion String @map("calendar_version")
+  clamped Boolean @default(false)
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([caseId, ruleKey, entrySeq, procedureNode, revisionNo])
+  @@index([caseId])
+  @@map("case_deadline_row")
+}
+
+/// 期间事件（#246）。只追加。未批准的人工登记不写本表。
+model CasePeriodEvent {
+  id String @id
+  caseId String @map("case_id")
+  kind String
+  /// system 系统 | manual 人工
+  source String
+  basisLabel String @map("basis_label")
+  basisNote String @map("basis_note")
+  reason String?
+  startedOn DateTime? @db.Date @map("started_on")
+  endedOn DateTime? @db.Date @map("ended_on")
+  extensionDays Int? @map("extension_days")
+  backfill Boolean @default(false)
+  /// effective 已生效
+  status String
+  approvalId String? @map("approval_id")
+  actorId String @map("actor_id")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_period_event")
+}
+
+/// 延长与期间事件呈批（#246）。一条案件至多一张未批准呈批。
+model CaseDeadlineApproval {
+  id String @id
+  caseId String @map("case_id")
+  /// extend 延长 | period 期间事件
+  kind String
+  drafterId String @map("drafter_id")
+  /// drafting | pending_review | pending_approval | approved
+  status String @default("drafting")
+  adminReview String? @map("admin_review")
+  currentVersionNo Int @default(0) @map("current_version_no")
+  approvalChainId String? @map("approval_chain_id")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt DateTime @default(now()) @db.Timestamptz(6) @map("updated_at")
+
+  @@index([caseId])
+  @@map("case_deadline_approval")
+}
+
+/// 期限呈批正文版本（追加式）。
+model CaseDeadlineApprovalVersion {
+  id String @id
+  approvalId String @map("approval_id")
+  versionNo Int @map("version_no")
+  contentJson String @map("content_json")
+  createdBy String @map("created_by")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([approvalId, versionNo])
+  @@map("case_deadline_approval_version")
+}
+
+/// 期限呈批步骤（追加式）。
+model CaseDeadlineApprovalStep {
+  id String @id
+  approvalId String @map("approval_id")
+  versionNo Int @map("version_no")
+  step String
+  actorId String @map("actor_id")
+  opinion String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([approvalId])
+  @@map("case_deadline_approval_step")
+}
+
+/// 后装入的工作日历年份（#246）。不覆盖代码里的 2026 年常量。
+model DeadlineCalendarInstall {
+  id String @id
+  version String
+  year Int
+  holidays String[]
+  makeupWorkdays String[] @map("makeup_workdays")
+  sourceUrl String @map("source_url")
+  installedBy String @map("installed_by")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@map("deadline_calendar_install")
+}

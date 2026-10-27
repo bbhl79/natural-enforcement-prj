@@ -58,9 +58,9 @@ describe('迁移表常量', () => {
     }
   });
 
-  it('启用 T01、T02 与调查收尾 T03 至 T07，且已启用的边声明了守卫', () => {
+  it('启用 T01、T02、调查收尾 T03 至 T07 与 T34，且已启用的边声明了守卫', () => {
     const enabled = TRANSITIONS.filter((item) => item.enabled).map((item) => item.id);
-    expect(enabled).toEqual(['T01', 'T02', 'T03', 'T04', 'T05', 'T06', 'T07']);
+    expect(enabled).toEqual(['T01', 'T02', 'T03', 'T04', 'T05', 'T06', 'T07', 'T34']);
     for (const item of TRANSITIONS) {
       if (!item.enabled) continue;
       expect(item.guard).not.toBe('none');
