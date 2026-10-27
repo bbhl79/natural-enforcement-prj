@@ -1,8 +1,8 @@
-// 不予立案／其他（#229）登记、结案提醒生成与提醒处理（#217／#229；规格 D 节、GLOSSARY）。
+// 其他（#229）登记、不予立案落点（#226）、结案提醒生成与提醒处理（#217／#226／#229）。
 //
-// 不予立案：仅已派承办人（handler_assigned）可登记；主办／协办本人或承办机构内勤可操作；
-// 核查运行中或没跑成都不阻止。登记后线索进终态（closed），处置事实写入 ClueDisposition，
-// 并按暂存线索的当前命中集逐对生成结案提醒（与状态写入同事务）。
+// #226：HTTP POST disposition=no-case 一律拒绝（filing-approval-required）；不予立案只经
+// recordNoCaseFromFiling（非 HTTP、不授角色）由案件段立案呈批同一事务调用。
+// other（#229）仍走本服务 HTTP 路径：仅已派承办人；主办／协办本人或承办机构内勤。
 //
 // 结案提醒：提醒挂在「不派」的暂存线索上，对方是被结案的线索。处理人二选一——
 // 撤回不派再办（回待分派池，写撤回行）或写明原因随旧线索办结（进 closed，写处置行）。
@@ -26,6 +26,7 @@ import {
   checkDispositionNote,
   checkReminderResolve,
   generateClosureReminders,
+  recordNoCaseFromFilingApproval,
   type ClueStore,
 } from '@natural-enforcement/case';
 import {
@@ -112,9 +113,9 @@ export class ClueClosureService {
   ) {}
 
   /**
-   * 不予立案／其他登记：仅已派承办人可登记，主办／协办本人或承办机构内勤可操作。
-   * 核查运行中或没跑成都不阻止（核查状态是正交属性，本方法不读它）。
-   * other（#229）理由必填，进 closed，提醒 kind=other。
+   * HTTP 处置登记入口：仅受理 other（#229）。
+   * disposition=no-case 一律 400 filing-approval-required（#226），业务行不变、写失败留痕。
+   * other：仅已派承办人，主办／协办本人或承办机构内勤；核查正交不阻止。
    */
   async recordNoCase(
     actor: ActorRef,
@@ -145,8 +146,18 @@ export class ClueClosureService {
       return { status: 403, body: { reason: error.reason } };
     }
 
-    // 规则：本期受理不予立案与其他（#229）；移送归 #216 接口。说明／理由必填。
-    if (input.disposition !== 'no-case' && input.disposition !== 'other') {
+    // #226：HTTP 直接登记不予立案一律拒绝（须经立案呈批落点服务）。
+    if (input.disposition === 'no-case') {
+      return this.rejectDisposition(actor, actorCode, actorOrgId, clueId, {
+        status: 400,
+        result: 'non-compliant',
+        rules: ['filing-approval-required'],
+        reason: 'filing-approval-required',
+      });
+    }
+
+    // 规则：本期 HTTP 只受理其他（#229）；移送归 #216 接口。理由必填。
+    if (input.disposition !== 'other') {
       return this.rejectDisposition(actor, actorCode, actorOrgId, clueId, {
         status: 400,
         result: 'non-compliant',
@@ -169,9 +180,6 @@ export class ClueClosureService {
       return this.rejectDisposition(actor, actorCode, actorOrgId, clueId, guard);
     }
 
-    const disposition = input.disposition as 'no-case' | 'other';
-    const reminderKind = disposition === 'other' ? 'other' : 'no-case';
-
     // 处置事实、终态、结案提醒与成功留痕同成同败；并发冲突回滚后另起事务写失败留痕。
     return this.uow.run(async (tx) => {
       const recordedAt = new Date();
@@ -179,7 +187,7 @@ export class ClueClosureService {
         clueId,
         expectedStatus: input.expectedStatus,
         dispositionId: newUlid(),
-        disposition,
+        disposition: 'other',
         transferredOrg: null,
         documentNo: null,
         note: input.note.trim(),
@@ -198,11 +206,10 @@ export class ClueClosureService {
           },
         );
       }
-      // 结案提醒与状态写入同事务：按暂存线索的当前命中集逐对生成。
-      // other 用新提醒类型 other（#229），不复用 no-case。
+      // other 用提醒类型 other（#229），不复用 no-case。
       const reminderIds = await generateClosureReminders(tx.clues, {
         closedClueId: clueId,
-        kind: reminderKind,
+        kind: 'other',
         createdAt: recordedAt,
         newId: () => newUlid(),
       });
@@ -211,7 +218,7 @@ export class ClueClosureService {
         ...this.parties(actor, actorCode, actorOrgId, clueId, DISPOSITION_OPCODE),
         detail: JSON.stringify({
           code: context.code,
-          disposition,
+          disposition: 'other',
           reminderCount: reminderIds.length,
         }),
       });
@@ -223,6 +230,95 @@ export class ClueClosureService {
           code: context.code,
           status: 'closed',
           reminderCount: reminderIds.length,
+        },
+      };
+    });
+  }
+
+  /**
+   * 不予立案落点（#226）：非 HTTP、不授角色。
+   * 供案件段立案呈批 doc.approve（结论为不予立案）同一事务调用；IT 直接调本方法验证。
+   * 成功写处置＋呈批引用＋理由快照＋closed＋kind=no-case 提醒＋成功留痕；失败写失败留痕、业务行不变。
+   */
+  async recordNoCaseFromFiling(
+    input: {
+      readonly clueId: string;
+      readonly expectedStatus: string;
+      readonly filingApprovalRef: string;
+      readonly reason: unknown;
+      readonly recordedBy: string;
+      readonly note?: string | null;
+      readonly actorCode?: string | null;
+      readonly orgUnitId?: string;
+    },
+  ): Promise<DispositionOutcome> {
+    const context = await this.clues.readDispatchContext(input.clueId);
+    if (!context) return { status: 404, body: { result: 'not-found' } };
+    const actorCode = input.actorCode ?? null;
+    const orgUnitId = input.orgUnitId ?? context.assignment?.orgUnitId ?? context.enteredOrgId;
+    const parties = {
+      actorId: input.recordedBy,
+      actorCode,
+      subjectPersonnelId: null,
+      subjectCode: null,
+      orgUnitId,
+      sourceIp: null,
+      opcode: null as string | null,
+      resourceType: 'clue' as const,
+      resourceId: input.clueId,
+    };
+
+    return this.uow.run(async (tx) => {
+      const recordedAt = new Date();
+      const outcome = await recordNoCaseFromFilingApproval(tx.clues, {
+        clueId: input.clueId,
+        expectedStatus: input.expectedStatus,
+        filingApprovalRef: input.filingApprovalRef,
+        reason: input.reason,
+        recordedBy: input.recordedBy,
+        recordedAt,
+        newId: () => newUlid(),
+        note: input.note,
+      });
+      if (!outcome.ok) {
+        const status = outcome.reason === 'invalid-state' || outcome.reason === 'concurrent-change' ? 409 : 400;
+        return rejected<DispositionOutcome>(
+          status === 400
+            ? { status: 400, body: { result: 'non-compliant', rules: outcome.rules } }
+            : {
+                status: 409,
+                body: {
+                  result: outcome.reason as 'invalid-state' | 'concurrent-change',
+                  reason: outcome.reason,
+                },
+              },
+          {
+            action: 'clue.disposition-recorded',
+            outcome: 'failed',
+            reason: outcome.reason as ClueDispositionRecordedFailedReason,
+            ...parties,
+          },
+        );
+      }
+      await tx.audit.append({
+        action: 'clue.disposition-recorded',
+        ...parties,
+        detail: JSON.stringify({
+          code: context.code,
+          disposition: 'no-case',
+          filingApprovalRef: outcome.filingApprovalRef,
+          reason: outcome.reason,
+          reminderCount: outcome.reminderIds.length,
+        }),
+      });
+      return {
+        status: 200,
+        body: {
+          result: 'disposition-recorded' as const,
+          clueId: input.clueId,
+          code: context.code,
+          status: 'closed',
+          reminderCount: outcome.reminderIds.length,
         },
       };
     });

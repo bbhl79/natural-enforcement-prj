@@ -356,11 +356,14 @@ export type ClueWithdrawnFailedReason = (typeof CLUE_WITHDRAWN_FAILED_REASONS)[n
 /**
  * 处置登记被拒（outcome=failed）的原因（#216 移送、#217 不予立案／随旧线索办结，规格 G）。
  * 同一动作词承载两种处置入口，故原因取两侧并集：
- * missing-disposition-fields 移送机关、文书编号或原因必填缺失（不予立案与随旧办结时为说明必填）；
+ * missing-disposition-fields 移送机关、文书编号或原因必填缺失（随旧办结／其他时为说明必填）；
  * unsupported-disposition 本期不支持的处置类型；
  * invalid-letter-date 发函日期补录值不合规（移送）；
  * invalid-attachment 附件类型、真实内容、件数或字节数不合规（移送，存储零写入）；
  * designation-pending 存在未关闭的指定管辖报请，报请期间下级不能移送；
+ * filing-approval-required HTTP 直接登记不予立案被拒（#226，须经立案呈批）；
+ * invalid-no-case-reason 不予立案理由皆空、混选或第十六条末款三项未全确认（#226）；
+ * missing-filing-approval-ref 落点服务缺呈批引用主键（#226）；
  * invalid-state 线索状态不允许该处置；concurrent-change 与并发写入冲突。
  */
 export const CLUE_DISPOSITION_RECORDED_FAILED_REASONS = [
@@ -371,6 +374,12 @@ export const CLUE_DISPOSITION_RECORDED_FAILED_REASONS = [
   'designation-pending',
   'invalid-state',
   'concurrent-change',
+  /** #226：HTTP 直接登记不予立案被拒，须经立案呈批。 */
+  'filing-approval-required',
+  /** #226：不予立案理由皆空、混选或第十六条末款三项未全确认。 */
+  'invalid-no-case-reason',
+  /** #226：落点服务缺呈批引用主键。 */
+  'missing-filing-approval-ref',
 ] as const;
 export type ClueDispositionRecordedFailedReason =
   (typeof CLUE_DISPOSITION_RECORDED_FAILED_REASONS)[number];

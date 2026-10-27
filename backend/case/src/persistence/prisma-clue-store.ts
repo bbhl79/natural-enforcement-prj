@@ -1196,6 +1196,8 @@ export class PrismaClueStore implements ClueStore {
         transferredOrg: write.transferredOrg,
         documentNo: write.documentNo,
         note: write.note,
+        filingApprovalRef: write.filingApprovalRef ?? null,
+        noCaseReasonJson: write.noCaseReasonJson ?? null,
         recordedBy: write.recordedBy,
         recordedAt: write.recordedAt,
       },

@@ -650,6 +650,10 @@ export interface ClueDispositionWrite {
   readonly recordedAt: Date;
   /** 终态：closed（不予立案／随旧线索办结）｜transferred_out（移送）。 */
   readonly nextStatus: 'closed' | 'transferred_out';
+  /** #226：呈批引用主键（仅 no-case 经呈批落点）。 */
+  readonly filingApprovalRef?: string | null;
+  /** #226：不予立案理由快照 JSON（仅 no-case 经呈批落点）。 */
+  readonly noCaseReasonJson?: string | null;
 }
 
 /** 提醒处理的写入（二选一：撤回不派再办｜写明原因随旧线索办结）。 */
