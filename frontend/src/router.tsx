@@ -28,6 +28,8 @@ import ClueRegisterPage from './clue/ClueRegisterPage';
 import { clueCenterLoader } from './clue/center';
 import { clueRegisterLoader } from './clue/registration';
 import ClueCenterPage from './pages/ClueCenterPage';
+import CaseDeadlinePage from './case/CaseDeadlinePage';
+import { deadlineLoader } from './case/deadline';
 import CaseInvestigationPage from './case/CaseInvestigationPage';
 import { investigationLoader } from './case/investigation';
 import PlannedCenterPage from './pages/PlannedCenterPage';
@@ -99,6 +101,12 @@ export function appRoutes(store: RouterStore): RouteObject[] {
                   path: 'case/:caseId/investigation',
                   loader: investigationLoader(store),
                   element: <CaseInvestigationPage />,
+                },
+                {
+                  id: 'case-deadline',
+                  path: 'case/:caseId/deadline',
+                  loader: deadlineLoader(store),
+                  element: <CaseDeadlinePage />,
                 },
                 { id: 'case-onsite', path: 'case/onsite-check', element: <PlannedCenterPage primary="case" /> },
                 { id: 'case-trial', path: 'case/trial', element: <PlannedCenterPage primary="case" /> },

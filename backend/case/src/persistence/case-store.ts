@@ -508,6 +508,20 @@ export interface CaseStore {
   insertDeadlineEvent(write: DeadlineEventWrite): Promise<void>;
   listPartyNotices(caseId: string): Promise<readonly PartyNoticeRow[]>;
   insertPartyNotice(write: PartyNoticeWrite): Promise<void>;
+  /** 本案期限行，按修订号升序。 */
+  listDeadlineRows(caseId: string): Promise<readonly DeadlineRow[]>;
+  /** 全部期限行。换日历时修订未届满的工作日期限。 */
+  listAllDeadlineRows(): Promise<readonly DeadlineRow[]>;
+  /** 四维加修订号已存在时返回 false，不插入。 */
+  insertDeadlineRow(write: DeadlineRowWrite): Promise<boolean>;
+  listPeriodEvents(caseId: string): Promise<readonly PeriodEventRow[]>;
+  insertPeriodEvent(write: PeriodEventWrite): Promise<void>;
+  readOpenDeadlineApproval(caseId: string): Promise<DeadlineApprovalRow | null>;
+  readDeadlineApproval(approvalId: string): Promise<DeadlineApprovalRow | null>;
+  saveDeadlineDraft(write: DeadlineDraftWrite): Promise<boolean>;
+  applyDeadlineStep(write: DeadlineStepWrite): Promise<boolean>;
+  listCalendarInstalls(): Promise<readonly CalendarInstallRow[]>;
+  insertCalendarInstall(write: CalendarInstallWrite): Promise<void>;
 }
 
 /** 违法记录。作废只改状态和作废字段，不删行。 */
@@ -646,6 +660,117 @@ export interface DeadlineEventWrite {
   readonly entrySeq: number;
   readonly transitionCode: string;
   readonly actorId: string;
+  readonly createdAt: Date;
+}
+
+/** 期限行。日期是公历日文本。 */
+export interface DeadlineRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly ruleKey: string;
+  readonly entrySeq: number;
+  readonly procedureNode: string;
+  readonly startingDocument: string | null;
+  readonly consumption: string;
+  readonly ruleVersion: string;
+  readonly dayCount: number;
+  readonly dayBasis: string;
+  readonly partyFacing: boolean;
+  readonly extensionAllowance: number | null;
+  readonly startedOn: string;
+  readonly dueOn: string | null;
+  readonly needsManualConfirmation: boolean;
+  readonly confirmationTrace: string | null;
+  readonly rowStatus: string;
+  readonly revisionNo: number;
+  readonly calendarVersion: string;
+  readonly clamped: boolean;
+}
+
+export type DeadlineRowWrite = DeadlineRow;
+
+export interface PeriodEventRow {
+  readonly id: string;
+  readonly kind: string;
+  readonly source: string;
+  readonly basisLabel: string;
+  readonly basisNote: string;
+  readonly reason: string | null;
+  readonly startedOn: string | null;
+  readonly endedOn: string | null;
+  readonly extensionDays: number | null;
+  readonly backfill: boolean;
+  readonly status: string;
+  readonly approvalId: string | null;
+}
+
+export interface PeriodEventWrite {
+  readonly id: string;
+  readonly caseId: string;
+  readonly kind: string;
+  readonly source: string;
+  readonly basisLabel: string;
+  readonly basisNote: string;
+  readonly reason: string | null;
+  readonly startedOn: string | null;
+  readonly endedOn: string | null;
+  readonly extensionDays: number | null;
+  readonly backfill: boolean;
+  readonly status: string;
+  readonly approvalId: string | null;
+  readonly actorId: string;
+  readonly createdAt: Date;
+}
+
+export interface DeadlineApprovalRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly kind: string;
+  readonly status: string;
+  readonly adminReview: string | null;
+  readonly currentVersionNo: number;
+  readonly drafterId: string;
+  readonly approvalChainId: string | null;
+  readonly contentJson: string | null;
+}
+
+export interface DeadlineDraftWrite {
+  readonly approvalId: string;
+  readonly caseId: string;
+  readonly kind: string;
+  readonly drafterId: string;
+  readonly isNew: boolean;
+  readonly expectedVersionNo: number;
+  readonly versionId: string;
+  readonly contentJson: string;
+  readonly at: Date;
+}
+
+export interface DeadlineStepWrite {
+  readonly approvalId: string;
+  readonly expectedStatus: string;
+  readonly nextStatus: string;
+  readonly adminReview?: string;
+  readonly approvalChainId?: string | null;
+  readonly stepId: string;
+  readonly step: string;
+  readonly versionNo: number;
+  readonly actorId: string;
+  readonly opinion: string | null;
+  readonly at: Date;
+}
+
+export interface CalendarInstallRow {
+  readonly version: string;
+  readonly year: number;
+  readonly holidays: readonly string[];
+  readonly makeupWorkdays: readonly string[];
+  readonly sourceUrl: string;
+}
+
+export interface CalendarInstallWrite extends CalendarInstallRow {
+  readonly id: string;
+  readonly installedBy: string;
   readonly createdAt: Date;
 }
 

@@ -79,6 +79,11 @@ const OPERATION_OF_ACTION: Readonly<Record<string, string>> = {
   'case.procedure-approved': '批准调查收尾呈批',
   'case.procedure-returned': '退回调查收尾呈批',
   'case.party-notice-recorded': '登记书面告知',
+  'deadline.drafted': '拟制期限呈批',
+  'deadline.submitted': '提交期限呈批',
+  'deadline.reviewed': '审核期限呈批',
+  'deadline.approved': '批准期限呈批',
+  'deadline.recorded': '登记期限',
   'case.comparison-recorded': '登记新旧比对判定',
   'case.comparison-refused': '登记新旧比对判定',
 };

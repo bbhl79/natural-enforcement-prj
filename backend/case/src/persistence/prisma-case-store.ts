@@ -18,10 +18,19 @@ import type {
   CaseReassignmentRow,
   CaseReassignmentWrite,
   CaseView,
-  ComparisonJudgmentRow,
-  ComparisonJudgmentWrite,
+  CalendarInstallRow,
+  CalendarInstallWrite,
+  DeadlineApprovalRow,
+  DeadlineDraftWrite,
   DeadlineEventRow,
   DeadlineEventWrite,
+  DeadlineRow,
+  DeadlineRowWrite,
+  DeadlineStepWrite,
+  PeriodEventRow,
+  PeriodEventWrite,
+  ComparisonJudgmentRow,
+  ComparisonJudgmentWrite,
   HandlerReplacementWrite,
   HandlerStintRow,
   MaterialEffectivenessRow,
@@ -891,6 +900,238 @@ export class PrismaCaseStore implements CaseStore {
     });
   }
 
+  async listDeadlineRows(caseId: string): Promise<readonly DeadlineRow[]> {
+    const rows = await this.prisma.caseDeadlineRow.findMany({
+      where: { caseId },
+      orderBy: [{ revisionNo: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map(toDeadlineRow);
+  }
+
+  async listAllDeadlineRows(): Promise<readonly DeadlineRow[]> {
+    const rows = await this.prisma.caseDeadlineRow.findMany({
+      orderBy: [{ caseId: 'asc' }, { revisionNo: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map(toDeadlineRow);
+  }
+
+  async insertDeadlineRow(write: DeadlineRowWrite): Promise<boolean> {
+    try {
+      await this.prisma.caseDeadlineRow.create({
+        data: {
+          id: write.id,
+          caseId: write.caseId,
+          ruleKey: write.ruleKey,
+          entrySeq: write.entrySeq,
+          procedureNode: write.procedureNode,
+          startingDocument: write.startingDocument,
+          consumption: write.consumption,
+          ruleVersion: write.ruleVersion,
+          dayCount: write.dayCount,
+          dayBasis: write.dayBasis,
+          partyFacing: write.partyFacing,
+          extensionAllowance: write.extensionAllowance,
+          startedOn: civilToDate(write.startedOn),
+          dueOn: write.dueOn === null ? null : civilToDate(write.dueOn),
+          needsManualConfirmation: write.needsManualConfirmation,
+          confirmationTrace: write.confirmationTrace,
+          rowStatus: write.rowStatus,
+          revisionNo: write.revisionNo,
+          calendarVersion: write.calendarVersion,
+          clamped: write.clamped,
+        },
+      });
+      return true;
+    } catch (error) {
+      if (isUniqueConflict(error)) return false;
+      throw error;
+    }
+  }
+
+  async listPeriodEvents(caseId: string): Promise<readonly PeriodEventRow[]> {
+    const rows = await this.prisma.casePeriodEvent.findMany({
+      where: { caseId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      kind: row.kind,
+      source: row.source,
+      basisLabel: row.basisLabel,
+      basisNote: row.basisNote,
+      reason: row.reason,
+      startedOn: row.startedOn === null ? null : dateToCivil(row.startedOn),
+      endedOn: row.endedOn === null ? null : dateToCivil(row.endedOn),
+      extensionDays: row.extensionDays,
+      backfill: row.backfill,
+      status: row.status,
+      approvalId: row.approvalId,
+    }));
+  }
+
+  async insertPeriodEvent(write: PeriodEventWrite): Promise<void> {
+    await this.prisma.casePeriodEvent.create({
+      data: {
+        id: write.id,
+        caseId: write.caseId,
+        kind: write.kind,
+        source: write.source,
+        basisLabel: write.basisLabel,
+        basisNote: write.basisNote,
+        reason: write.reason,
+        startedOn: write.startedOn === null ? null : civilToDate(write.startedOn),
+        endedOn: write.endedOn === null ? null : civilToDate(write.endedOn),
+        extensionDays: write.extensionDays,
+        backfill: write.backfill,
+        status: write.status,
+        approvalId: write.approvalId,
+        actorId: write.actorId,
+        createdAt: write.createdAt,
+      },
+    });
+  }
+
+  async readOpenDeadlineApproval(caseId: string): Promise<DeadlineApprovalRow | null> {
+    const row = await this.prisma.caseDeadlineApproval.findFirst({
+      where: { caseId, status: { not: 'approved' } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!row) return null;
+    return this.withDeadlineContent(row);
+  }
+
+  async readDeadlineApproval(approvalId: string): Promise<DeadlineApprovalRow | null> {
+    const row = await this.prisma.caseDeadlineApproval.findUnique({ where: { id: approvalId } });
+    if (!row) return null;
+    return this.withDeadlineContent(row);
+  }
+
+  async saveDeadlineDraft(write: DeadlineDraftWrite): Promise<boolean> {
+    const versionNo = write.isNew ? 1 : write.expectedVersionNo + 1;
+    if (write.isNew) {
+      const inserted = await this.prisma.$queryRaw<Array<{ id: string }>>`
+        INSERT INTO case_deadline_approval (
+          id, case_id, kind, drafter_id, status, current_version_no, created_at, updated_at
+        )
+        VALUES (
+          ${write.approvalId}, ${write.caseId}, ${write.kind}, ${write.drafterId},
+          'drafting', 1, ${write.at}, ${write.at}
+        )
+        ON CONFLICT (case_id) WHERE status <> 'approved' DO NOTHING
+        RETURNING id
+      `;
+      if (inserted.length === 0) return false;
+    } else {
+      const updated = await this.prisma.$queryRaw<Array<{ id: string }>>`
+        UPDATE case_deadline_approval
+        SET kind = ${write.kind},
+            current_version_no = current_version_no + 1,
+            updated_at = ${write.at}
+        WHERE id = ${write.approvalId}
+          AND status = 'drafting'
+          AND current_version_no = ${write.expectedVersionNo}
+        RETURNING id
+      `;
+      if (updated.length === 0) return false;
+    }
+    await this.prisma.caseDeadlineApprovalVersion.create({
+      data: {
+        id: write.versionId,
+        approvalId: write.approvalId,
+        versionNo,
+        contentJson: write.contentJson,
+        createdBy: write.drafterId,
+        createdAt: write.at,
+      },
+    });
+    return true;
+  }
+
+  async applyDeadlineStep(write: DeadlineStepWrite): Promise<boolean> {
+    const data: {
+      status: string;
+      updatedAt: Date;
+      adminReview?: string;
+      approvalChainId?: string | null;
+    } = { status: write.nextStatus, updatedAt: write.at };
+    if (write.adminReview !== undefined) data.adminReview = write.adminReview;
+    if (write.approvalChainId !== undefined) data.approvalChainId = write.approvalChainId;
+    const updated = await this.prisma.caseDeadlineApproval.updateMany({
+      where: { id: write.approvalId, status: write.expectedStatus },
+      data,
+    });
+    if (updated.count === 0) return false;
+    await this.prisma.caseDeadlineApprovalStep.create({
+      data: {
+        id: write.stepId,
+        approvalId: write.approvalId,
+        versionNo: write.versionNo,
+        step: write.step,
+        actorId: write.actorId,
+        opinion: write.opinion,
+        createdAt: write.at,
+      },
+    });
+    return true;
+  }
+
+  async listCalendarInstalls(): Promise<readonly CalendarInstallRow[]> {
+    const rows = await this.prisma.deadlineCalendarInstall.findMany({
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((row) => ({
+      version: row.version,
+      year: row.year,
+      holidays: row.holidays,
+      makeupWorkdays: row.makeupWorkdays,
+      sourceUrl: row.sourceUrl,
+    }));
+  }
+
+  async insertCalendarInstall(write: CalendarInstallWrite): Promise<void> {
+    await this.prisma.deadlineCalendarInstall.create({
+      data: {
+        id: write.id,
+        version: write.version,
+        year: write.year,
+        holidays: [...write.holidays],
+        makeupWorkdays: [...write.makeupWorkdays],
+        sourceUrl: write.sourceUrl,
+        installedBy: write.installedBy,
+        createdAt: write.createdAt,
+      },
+    });
+  }
+
+  private async withDeadlineContent(row: {
+    id: string;
+    caseId: string;
+    kind: string;
+    status: string;
+    adminReview: string | null;
+    currentVersionNo: number;
+    drafterId: string;
+    approvalChainId: string | null;
+  }): Promise<DeadlineApprovalRow> {
+    const version =
+      row.currentVersionNo > 0
+        ? await this.prisma.caseDeadlineApprovalVersion.findUnique({
+            where: { approvalId_versionNo: { approvalId: row.id, versionNo: row.currentVersionNo } },
+          })
+        : null;
+    return {
+      id: row.id,
+      caseId: row.caseId,
+      kind: row.kind,
+      status: row.status,
+      adminReview: row.adminReview,
+      currentVersionNo: row.currentVersionNo,
+      drafterId: row.drafterId,
+      approvalChainId: row.approvalChainId,
+      contentJson: version?.contentJson ?? null,
+    };
+  }
+
   private async withProcedureContent(row: {
     id: string;
     caseId: string;
@@ -960,6 +1201,60 @@ function toHistory(row: {
     fromJson: row.fromJson,
     toJson: row.toJson,
     createdAt: row.createdAt,
+  };
+}
+
+function civilToDate(iso: string): Date {
+  return new Date(`${iso}T00:00:00.000Z`);
+}
+
+function dateToCivil(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
+function toDeadlineRow(row: {
+  id: string;
+  caseId: string;
+  ruleKey: string;
+  entrySeq: number;
+  procedureNode: string;
+  startingDocument: string | null;
+  consumption: string;
+  ruleVersion: string;
+  dayCount: number;
+  dayBasis: string;
+  partyFacing: boolean;
+  extensionAllowance: number | null;
+  startedOn: Date;
+  dueOn: Date | null;
+  needsManualConfirmation: boolean;
+  confirmationTrace: string | null;
+  rowStatus: string;
+  revisionNo: number;
+  calendarVersion: string;
+  clamped: boolean;
+}): DeadlineRow {
+  return {
+    id: row.id,
+    caseId: row.caseId,
+    ruleKey: row.ruleKey,
+    entrySeq: row.entrySeq,
+    procedureNode: row.procedureNode,
+    startingDocument: row.startingDocument,
+    consumption: row.consumption,
+    ruleVersion: row.ruleVersion,
+    dayCount: row.dayCount,
+    dayBasis: row.dayBasis,
+    partyFacing: row.partyFacing,
+    extensionAllowance: row.extensionAllowance,
+    startedOn: dateToCivil(row.startedOn),
+    dueOn: row.dueOn === null ? null : dateToCivil(row.dueOn),
+    needsManualConfirmation: row.needsManualConfirmation,
+    confirmationTrace: row.confirmationTrace,
+    rowStatus: row.rowStatus,
+    revisionNo: row.revisionNo,
+    calendarVersion: row.calendarVersion,
+    clamped: row.clamped,
   };
 }
 
