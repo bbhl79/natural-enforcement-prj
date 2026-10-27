@@ -79,6 +79,8 @@ const OPERATION_OF_ACTION: Readonly<Record<string, string>> = {
   'case.procedure-approved': '批准调查收尾呈批',
   'case.procedure-returned': '退回调查收尾呈批',
   'case.party-notice-recorded': '登记书面告知',
+  'case.comparison-recorded': '登记新旧比对判定',
+  'case.comparison-refused': '登记新旧比对判定',
 };
 
 const OPERATION_OF_OPCODE: Readonly<Record<string, string>> = {

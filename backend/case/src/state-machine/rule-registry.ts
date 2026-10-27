@@ -1,7 +1,13 @@
 // #258／Q21：规则键注册表。判定留在代码里。这里只放带版本号的参数。
 // 业务票的具体警告（X10、X22、X26 等）不在本票登记。
+// #271：新旧比对的 Q31 警告登记为 CMP-01。它不是 X 编号，附录 A 未占号。
 
 import type { GuardLevel, GuardResult } from './guard.ts';
+
+/** Q31 施行日当天警告的规则键。 */
+export const Q31_RULE_KEY = 'CMP-01';
+/** Q31 警告原文（#42 关票第二节、#256 §6 第 4 条）。 */
+export const Q31_WARNING_MESSAGE = '施行日当天批准，适用哪一版请法制部门确认';
 
 /** 一期参数。级别、依据、文案、是否必填理由。阈值留空表示这条没有阈值。 */
 export interface RuleParameter {
@@ -32,6 +38,14 @@ export const RULE_PARAMETERS: readonly RuleParameter[] = [
     version: '1',
     level: 'warn',
     message: '线索要件缺件',
+    citation: null,
+    reasonRequired: false,
+  },
+  {
+    ruleKey: Q31_RULE_KEY,
+    version: '1',
+    level: 'warn',
+    message: Q31_WARNING_MESSAGE,
     citation: null,
     reasonRequired: false,
   },

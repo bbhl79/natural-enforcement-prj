@@ -50,7 +50,15 @@ export type {
   TransitionSubject,
   WarningGate,
 } from './engine.ts';
-export { RULE_PARAMETERS, confirmationGap, findRuleParameter, ruleRefsFor, toWarning } from './rule-registry.ts';
+export {
+  Q31_RULE_KEY,
+  Q31_WARNING_MESSAGE,
+  RULE_PARAMETERS,
+  confirmationGap,
+  findRuleParameter,
+  ruleRefsFor,
+  toWarning,
+} from './rule-registry.ts';
 export type {
   ConfirmationGap,
   ConfirmedRuleRef,

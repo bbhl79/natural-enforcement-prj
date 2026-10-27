@@ -27,8 +27,10 @@ import {
   ALL_LAYERS,
   CASE_STORE,
   CLUE_STORE,
+  EFFECTIVE_DAY_ATTRIBUTION_V1,
   LIMITATION_DISCOVERY_EXIT_V1,
   SUSPENSION_CLOCK_PARAMETER,
+  type EffectiveDayAttribution,
   type LimitationDiscoveryExit,
   CLUE_VERIFICATION_PORT,
   STREET_BOUNDARY_PORT,
@@ -56,6 +58,7 @@ import { PrismaIdentityStore } from '../../identity/src/persistence/prisma-ident
 import { PrismaClient, type Prisma } from '../../prisma/generated/prisma/client.ts';
 
 import { AppModule } from './app.module.ts';
+import { COMPARISON_EFFECTIVE_DAY } from './case-comparison.service.ts';
 import { FILING_ADMIN_REVIEW } from './case-filing.service.ts';
 import { LIMITATION_DISCOVERY_EXIT, SUSPENSION_CLOCK } from './investigation.service.ts';
 import { CLOCK, type Clock } from './clock.ts';
@@ -466,6 +469,8 @@ export interface ApplicationOverrides {
   filingAdminReview?: 'skip' | 'one-level';
   /** 追诉时效发现时点到出口的映射（#236）。默认用带版本号的常量。 */
   limitationDiscoveryExit?: LimitationDiscoveryExit;
+  /** 施行日当天归属（#271）。默认带版本但不设归属；测试可覆写。 */
+  compareEffectiveDay?: EffectiveDayAttribution;
 }
 
 /**
@@ -517,6 +522,8 @@ class PersistenceModule {
           provide: LIMITATION_DISCOVERY_EXIT,
           useValue: overrides.limitationDiscoveryExit ?? LIMITATION_DISCOVERY_EXIT_V1,
         },
+        // 施行日当天归属（#271）：cfg.rule.* 带版本配置项，法制部门确认前不设默认。
+        { provide: COMPARISON_EFFECTIVE_DAY, useValue: overrides.compareEffectiveDay ?? EFFECTIVE_DAY_ATTRIBUTION_V1 },
         // 存储端口：默认按运行参数建 RustFS 适配；测试可覆写成记录写的假端口。
         { provide: STORAGE_PORT, useValue: overrides.storagePort ?? createDefaultStoragePort() },
         // 队列端口：业务任务队列，连接惰性（不投递就不连 Redis）。
@@ -570,6 +577,7 @@ class PersistenceModule {
         FILING_ADMIN_REVIEW,
         SUSPENSION_CLOCK,
         LIMITATION_DISCOVERY_EXIT,
+        COMPARISON_EFFECTIVE_DAY,
         STORAGE_PORT,
         QUEUE_PORT,
         CLUE_VERIFICATION_PORT,
