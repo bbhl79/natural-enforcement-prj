@@ -261,6 +261,7 @@ export class CaseConflictService {
     if (!isDecisionConclusion(input.conclusion)) {
       return this.failDecide(actor, account, view.handlingOrgId, caseId, 'invalid-conclusion');
     }
+    const conclusion = input.conclusion;
     const reason = input.reason.trim();
     if (reason === '') {
       return this.failDecide(actor, account, view.handlingOrgId, caseId, 'missing-reason');
@@ -288,7 +289,7 @@ export class CaseConflictService {
     const at = this.clock.now();
     const decisionId = newUlid();
     const nextId = newUlid();
-    const nextStatus = statusAfterDecision(input.conclusion);
+    const nextStatus = statusAfterDecision(conclusion);
     return this.uow.run(async (tx) => {
       const ok = await tx.cases.appendPersonConflictDecision({
         id: decisionId,
@@ -328,7 +329,7 @@ export class CaseConflictService {
         previousValue: 'declared',
         detail: JSON.stringify({
           lineageId,
-          conclusion: input.conclusion,
+          conclusion,
           status: nextStatus,
         }),
       });
@@ -339,8 +340,8 @@ export class CaseConflictService {
           caseId,
           lineageId,
           decisionId,
-          conclusion: input.conclusion,
-          conclusionName: DECISION_CONCLUSION_NAMES[input.conclusion],
+          conclusion,
+          conclusionName: DECISION_CONCLUSION_NAMES[conclusion],
           status: nextStatus,
           statusName: CONFLICT_STATUS_NAMES[nextStatus],
         },
@@ -365,6 +366,7 @@ export class CaseConflictService {
     if (!isInvestigationKind(input.kind)) {
       return this.failInvestigation(actor, account, view.handlingOrgId, caseId, 'invalid-kind');
     }
+    const kind = input.kind;
     const summary = input.summary.trim();
     if (summary === '') {
       return this.failInvestigation(actor, account, view.handlingOrgId, caseId, 'missing-summary');
@@ -376,14 +378,14 @@ export class CaseConflictService {
         id,
         caseId,
         personnelId: actor.personnelId,
-        kind: input.kind,
+        kind,
         summary,
         createdAt: at,
       });
       await tx.audit.append({
         action: 'case.investigation-recorded',
         ...this.parties(actor, account, view.handlingOrgId, caseId, DECLARE_OPCODE, actor.personnelId, account?.code ?? null),
-        detail: JSON.stringify({ entryId: id, kind: input.kind }),
+        detail: JSON.stringify({ entryId: id, kind }),
       });
       return {
         status: 200 as const,
@@ -391,8 +393,8 @@ export class CaseConflictService {
           result: 'investigation-recorded',
           caseId,
           entryId: id,
-          kind: input.kind,
-          kindName: INVESTIGATION_KIND_NAMES[input.kind],
+          kind,
+          kindName: INVESTIGATION_KIND_NAMES[kind],
         },
       };
     });
