@@ -76,6 +76,8 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'case.opened',
   // 案件状态机（#235）：成功推进、只读警告与被拒都记这一动作。
   'case.transitioned',
+  // 退回（#238）：成功落退回记录；失败不改业务行。
+  'case.returned',
   // 调查环节与收尾（#236）。呈批、批准、退回与失败都记这些动作。
   'case.inquiry-recorded',
   'case.violation-recorded',
@@ -601,9 +603,15 @@ export const CASE_FILING_APPROVED_FAILED_REASONS = [
 ] as const;
 export type CaseFilingApprovedFailedReason = (typeof CASE_FILING_APPROVED_FAILED_REASONS)[number];
 
-/** 立案呈批退回被拒（#234）。missing-return-reason 退回理由必填。 */
+/** 立案呈批退回被拒（#234，#238 改为 R 代码）。missing-return-reason 退回原因必填。 */
 export const CASE_FILING_RETURNED_FAILED_REASONS = [
   'missing-return-reason',
+  'missing-return-note',
+  'missing-return-target',
+  'missing-receiver',
+  'return-target-not-allowed',
+  'external-return',
+  'receiver-not-allowed',
   'invalid-state',
   'concurrent-change',
 ] as const;
@@ -637,6 +645,22 @@ export const CASE_TRANSITIONED_FAILED_REASONS = [
   'procedure-required',
 ] as const;
 export type CaseTransitionedFailedReason = (typeof CASE_TRANSITIONED_FAILED_REASONS)[number];
+
+/** 案件退回被拒（#238）。 */
+export const CASE_RETURNED_FAILED_REASONS = [
+  'missing-return-reason',
+  'missing-return-note',
+  'missing-return-target',
+  'missing-receiver',
+  'return-target-not-allowed',
+  'transition-disabled',
+  'external-return',
+  'receiver-not-allowed',
+  'signature-invalidated',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type CaseReturnedFailedReason = (typeof CASE_RETURNED_FAILED_REASONS)[number];
 
 /** 调查环节与收尾被拒（#236）。九个动作共用这一张原因表。 */
 export const CASE_INVESTIGATION_FAILED_REASONS = [
@@ -713,6 +737,7 @@ export const AUDIT_DETAIL_ACTIONS = [
   'case.filing-withdrawn',
   'case.opened',
   'case.transitioned',
+  'case.returned',
   'case.inquiry-recorded',
   'case.violation-recorded',
   'case.violation-voided',

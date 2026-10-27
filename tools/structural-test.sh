@@ -468,6 +468,8 @@ declare -A ASSEMBLY_EXEMPT=(
   ["integration/clue-closure.test.ts"]="../backend/case/src/ ../backend/identity/src/"
   # #235：再次进入用状态机公共出口的 nextEntrySeq 与 CaseStore.appendStageInstance。
   ["integration/case-state-machine.test.ts"]="../backend/case/src/ ../backend/identity/src/"
+  # #238：退回用例只用身份公共出口 index.ts 的 newUlid。与 #235 同口径。
+  ["integration/case-return.test.ts"]="../backend/identity/src/index.ts"
 )
 
 is_assembly_exempt() { # $1 = 相对 ROOT 路径, $2 = specifier
@@ -708,6 +710,8 @@ check_weak-reference-entry() {
 # #234 追加立案呈批与案件最小模型六张表（#27 T01／T02、#16）：FilingApproval、FilingApprovalVersion、
 # FilingApprovalStep、CaseRecord、CaseSourceClue、CaseHandler。
 # #235 追加环节实例、迁移历史、审批链：CaseStageInstance、CaseTransition、CaseApprovalChain。
+# #238 追加审批意见、退回记录、环节失效、签字、材料：CaseApprovalOpinion、CaseReturn、
+# CaseStageInvalidation、CaseStageSignature、CaseMaterial。
 # #236 追加违法记录、笔录、收尾呈批、期限事件与告知记录：CaseViolationRecord、CaseInquiryRecord、
 # CaseProcedureApproval、CaseProcedureVersion、CaseProcedureStep、CaseDeadlineEvent、CasePartyNotice。
 G1_MODELS=(
@@ -764,6 +768,11 @@ G1_MODELS=(
   CaseStageInstance
   CaseTransition
   CaseApprovalChain
+  CaseApprovalOpinion
+  CaseReturn
+  CaseStageInvalidation
+  CaseStageSignature
+  CaseMaterial
   CaseViolationRecord
   CaseInquiryRecord
   CaseProcedureApproval

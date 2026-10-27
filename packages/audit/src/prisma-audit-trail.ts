@@ -48,6 +48,7 @@ import {
   CASE_INVESTIGATION_ACTIONS,
   CASE_INVESTIGATION_FAILED_REASONS,
   CASE_OPENED_FAILED_REASONS,
+  CASE_RETURNED_FAILED_REASONS,
   CASE_TRANSITIONED_FAILED_REASONS,
   LOGIN_FAILED_REASONS,
   ORG_UNIT_DEACTIVATE_FAILED_REASONS,
@@ -127,6 +128,7 @@ const FAILED_REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['case.filing-withdrawn', new Set<string>(CASE_FILING_WITHDRAWN_FAILED_REASONS)],
   ['case.opened', new Set<string>(CASE_OPENED_FAILED_REASONS)],
   ['case.transitioned', new Set<string>(CASE_TRANSITIONED_FAILED_REASONS)],
+  ['case.returned', new Set<string>(CASE_RETURNED_FAILED_REASONS)],
   ...CASE_INVESTIGATION_ACTIONS.map(
     (action) => [action, new Set<string>(CASE_INVESTIGATION_FAILED_REASONS)] as const,
   ),
