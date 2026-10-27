@@ -2,9 +2,10 @@
 // 法定环节、主状态、环节实例状态：#27/6409848362。
 // 迁移表：基线 #27/6409849007，修订 #27/6410091980，批2 追加 T09a（#27/6431079838）。
 // 非法迁移：X01–X30 同修订；X31 由 #234 实现并在此登记；X32 只登记（#27/6431079838 Q10）。
-// X12 白名单以 #235 正文及评论 6431387386 为准。本票只启用 T01、T02。
+// X12 白名单以 #235 正文及评论 6431387386 为准。
+// #235 启用 T01、T02。#236 启用 T03–T07。其余边仍关闭。
 
-import type { GuardResult } from './guard.ts';
+import { GUARD_AUTHORITIES, type GuardAuthority, type GuardResult } from './guard.ts';
 
 /** 法定环节 E01–E13。次序即清单次序，不能配置。 */
 export const CASE_STAGE_CODES = [
@@ -116,7 +117,7 @@ export type ToSpec =
   | { readonly kind: 'branch'; readonly note: string };
 
 /** 已启用边的守卫名。none 表示显式声明本边无额外守卫（通用守卫仍跑）。 */
-export const TRANSITION_GUARDS = ['filing', 'none'] as const;
+export const TRANSITION_GUARDS = ['filing', 'closeout', 'none'] as const;
 export type TransitionGuard = (typeof TRANSITION_GUARDS)[number];
 
 export interface TransitionEdge {
@@ -168,13 +169,27 @@ export const TRANSITIONS: readonly TransitionEdge[] = [
     enabled: true,
     guard: 'filing',
   }),
-  edge('T03', stage('E02'), { kind: 'overlay', suspended: true }, '中止呈批批准：E02 加中止标记'),
+  edge('T03', stage('E02'), { kind: 'overlay', suspended: true }, '中止呈批批准：E02 加中止标记', {
+    enabled: true,
+    guard: 'closeout',
+  }),
   edge('T04', stage('E02'), { kind: 'overlay', suspended: false }, '恢复呈批批准：去掉中止标记', {
+    enabled: true,
+    guard: 'closeout',
     requiresSuspended: true,
   }),
-  edge('T05', stage('E02'), { kind: 'main', status: 'terminated_pending' }, '终止调查呈批批准：调查已终止·待收尾'),
-  edge('T06', main('terminated_pending'), { kind: 'main', status: 'withdrawn' }, '撤销立案呈批批准：已撤案'),
-  edge('T07', main('terminated_pending'), { kind: 'main', status: 'closed' }, '待收尾结案呈批批准：已结案'),
+  edge('T05', stage('E02'), { kind: 'main', status: 'terminated_pending' }, '终止调查呈批批准：调查已终止·待收尾', {
+    enabled: true,
+    guard: 'closeout',
+  }),
+  edge('T06', main('terminated_pending'), { kind: 'main', status: 'withdrawn' }, '撤销立案呈批批准：已撤案', {
+    enabled: true,
+    guard: 'closeout',
+  }),
+  edge('T07', main('terminated_pending'), { kind: 'main', status: 'closed' }, '待收尾结案呈批批准：已结案', {
+    enabled: true,
+    guard: 'closeout',
+  }),
   edge('T08', stage('E02'), enter('E04', 'drafting', { completeStage: 'E03' }), '调查报告呈批批准：E03 完成，进入 E04'),
   edge('T09', stage('E04'), enter('E02', 'drafting', { reenter: true }), '审理意见补充调查：E02 再次进入'),
   edge('T09a', stage('E04'), { kind: 'branch', note: '负责人支持审理意见则走 T09；支持承办人员则按决定进入 T10、T11 或 T12' }, '审理异议呈批'),
@@ -257,41 +272,61 @@ export interface IllegalMigration {
   readonly outlet: string;
   /** engine＝本票守卫；filing＝#234 已实现；none＝只登记。 */
   readonly enforcement: IllegalEnforcement;
+  /** 依据层级（#255）。必填。漏标由 unannotatedMigrationIds 判红。 */
+  readonly authority: GuardAuthority;
+  /** 明文要求阻断的锁定出处。非空时引擎保持 block，不因层级降为警告。 */
+  readonly userLock?: string;
 }
 
 export const ILLEGAL_MIGRATIONS: readonly IllegalMigration[] = [
-  { id: 'X01', summary: '没有关联线索就立案', citation: '#16', outlet: '先关联来源线索', enforcement: 'none' },
-  { id: 'X02', summary: '中止期间推进到调查终结及以后', citation: '办法第 27 条；#17', outlet: '先恢复调查', enforcement: 'none' },
-  { id: 'X03', summary: '待收尾状态下，除撤案、结案呈批外的任何迁移', citation: '规程 4.3.3(4)', outlet: '只可走撤案呈批或结案呈批', enforcement: 'none' },
-  { id: 'X04', summary: '调查未终结就进入审理', citation: '办法第 29 条', outlet: '先完成调查终结', enforcement: 'none' },
-  { id: 'X05', summary: '拟处罚，但告知书未送达就作出处罚决定', citation: '行政处罚法第 44 条', outlet: '先送达告知书', enforcement: 'none' },
-  { id: 'X06', summary: '告知期限未满就作出处罚决定', citation: '#111 L1', outlet: '待告知期限届满', enforcement: 'none' },
-  { id: 'X07', summary: '应听证的情形未发听证告知', citation: '#111 L3', outlet: '先发听证告知', enforcement: 'none' },
-  { id: 'X08', summary: '必审未审、审核未通过或摘要不一致就进入领导审批', citation: '行政处罚法第 58 条；处罚办法第 32 条', outlet: '先完成法制审核且摘要覆盖当前决定文书', enforcement: 'none' },
-  { id: 'X09', summary: '须集体讨论而未讨论就进入领导审批', citation: '规程 7.1 末款；行政处罚法第 57 条第 2 款', outlet: '先完成集体讨论', enforcement: 'none' },
-  { id: 'X10', summary: '处罚决定未送达就执行记载或结案', citation: '规程第 9 章', outlet: '先送达处罚决定', enforcement: 'none' },
-  { id: 'X11', summary: '须移送党纪政务、刑事而未移送就结案', citation: '办法第 46 条末款', outlet: '先完成应当的移送', enforcement: 'none' },
-  { id: 'X12', summary: '已撤案、已结案、已定型后的业务写操作（白名单除外）', citation: 'immutability §2 第 4 点；#235 评论 6431387386', outlet: '终态后仅可阅读、导出；归档走 T27；结案后回证按白名单上传', enforcement: 'engine' },
-  { id: 'X13', summary: '立案后修改承办机构', citation: '#40 Q29', outlet: '承办机构在立案时锁定，不能修改', enforcement: 'engine' },
-  { id: 'X14', summary: '改派后承办人员少于两人', citation: '规程 2.6；行政处罚法第 42 条', outlet: '改派后承办人员须不少于两人', enforcement: 'none' },
-  { id: 'X15', summary: '审理开始后走撤案，或调查中走不予处罚（事实不成立）', citation: '#40/6228984565 P2；Q2', outlet: '按当前环节走对应出口', enforcement: 'none' },
-  { id: 'X16', summary: '定案文书引用未入卷证据仍签发', citation: '#111 L4', outlet: '先把引用的证据入卷', enforcement: 'none' },
-  { id: 'X17', summary: '监督角色的写操作推进主状态', citation: '#71/6169639094；GLOSSARY「监督」', outlet: '请由有权办理人操作，监督不能推进主状态', enforcement: 'engine' },
-  { id: 'X18', summary: '同一案件同时有两条进行中的审批链', citation: '#31/6233001360 Q12', outlet: '先办结或撤回当前审批链', enforcement: 'engine' },
-  { id: 'X19', summary: '未经立案呈批批准就登记或不予立案', citation: '规程 2.4；#31/6233001360 Q4a', outlet: '须经立案呈批批准', enforcement: 'none' },
-  { id: 'X20', summary: '调查取证笔录在场承办人员少于两人仍保存', citation: '处罚办法第 17 条第 2 款', outlet: '笔录在场承办人员须不少于两人', enforcement: 'none' },
-  { id: 'X21', summary: '带去重标记的线索单独立案', citation: '#27/6409981777', outlet: '同组附加来源线索，或改判独立', enforcement: 'none' },
-  { id: 'X22', summary: '本案主办或协办签出审理意见', citation: '规程 5.1', outlet: '由非本案承办人员签出', enforcement: 'none' },
-  { id: 'X23', summary: '未持行政审核角色的人签出审理意见', citation: '#27/6410042773', outlet: '由持行政审核角色的人签出', enforcement: 'none' },
-  { id: 'X24', summary: '勾选跨承办机构的附加来源线索', citation: '#27/6410046390', outlet: '附加来源线索须与本案同一承办机构', enforcement: 'none' },
-  { id: 'X25', summary: '对已并入本案的去重组线索再提单独立案', citation: '#27/6410046390', outlet: '已并入的线索不能再立独立案', enforcement: 'none' },
-  { id: 'X26', summary: '命中必审但未经告知前法审就批准告知书', citation: '#90/6409982661', outlet: '先完成告知前法制审核且摘要覆盖', enforcement: 'none' },
-  { id: 'X27', summary: '进入听证程序但听证后未再审即进入领导审批', citation: '#90/6410046818', outlet: '听证后再审后才能进入领导审批', enforcement: 'none' },
-  { id: 'X28', summary: '自动复开已终止的听证', citation: '#90/6410046818', outlet: '须由当事人重新申请', enforcement: 'none' },
-  { id: 'X29', summary: '立案批准后未走受控重开就取消自动关联', citation: '#27/6410077358', outlet: '须走受控重开', enforcement: 'none' },
-  { id: 'X30', summary: '不予立案理由不合规', citation: '#226/6410041963', outlet: '两类理由择一且选完整', enforcement: 'none' },
-  { id: 'X31', summary: '线索上有在途立案呈批时做其他处置', citation: '#27/6431079838 Q9', outlet: '先撤回立案呈批', enforcement: 'filing' },
-  { id: 'X32', summary: '非被指定审理人签出审理意见', citation: '#27/6431079838 Q10', outlet: '须由被指定的审理人签出', enforcement: 'none' },
+  { id: 'X01', summary: '没有关联线索就立案', citation: '#16', outlet: '先关联来源线索', enforcement: 'none', authority: 'system' },
+  { id: 'X02', summary: '中止期间推进到调查终结及以后', citation: '办法第27条（推定）', outlet: '先恢复调查', enforcement: 'engine', authority: 'system' },
+  { id: 'X03', summary: '待收尾状态下，除撤案、结案呈批外的任何迁移', citation: '规程 4.3.3(4)', outlet: '只可走撤案呈批或结案呈批', enforcement: 'engine', authority: 'normative' },
+  { id: 'X04', summary: '调查未终结就进入审理', citation: '办法第29条＋第30条（推定）', outlet: '先完成调查终结', enforcement: 'none', authority: 'system' },
+  { id: 'X05', summary: '拟处罚，但告知书未送达就作出处罚决定', citation: '行政处罚法第 44 条', outlet: '先送达告知书', enforcement: 'none', authority: 'law' },
+  { id: 'X06', summary: '告知期限未满就作出处罚决定', citation: '#111 L1', outlet: '待告知期限届满', enforcement: 'none', authority: 'regulation' },
+  {
+    id: 'X07',
+    summary: '应听证的情形未发听证告知',
+    citation: '处罚法第44、62条＋粤府令第294号第17条',
+    outlet: '先发听证告知',
+    enforcement: 'none',
+    authority: 'law',
+    userLock: '#111 L3',
+  },
+  // X08 的两层仍是同一条登记。拆开要新增拒绝码，本票不新增。整条标 regulation。摘要不一致一层待工程主管拆分。
+  {
+    id: 'X08',
+    summary: '必审未审、审核未通过或摘要不一致就进入领导审批',
+    citation: '处罚法第58条＋办法第32条第1款＋监督规定第21条第1款',
+    outlet: '先完成法制审核且摘要覆盖当前决定文书',
+    enforcement: 'none',
+    authority: 'regulation',
+  },
+  { id: 'X09', summary: '须集体讨论而未讨论就进入领导审批', citation: '规程 7.1 末款；行政处罚法第 57 条第 2 款', outlet: '先完成集体讨论', enforcement: 'none', authority: 'law' },
+  { id: 'X10', summary: '处罚决定未送达就执行记载或结案', citation: '规程第 9 章', outlet: '先送达处罚决定', enforcement: 'none', authority: 'normative' },
+  { id: 'X11', summary: '须移送党纪政务、刑事而未移送就结案', citation: '办法第46条末款', outlet: '先完成应当的移送', enforcement: 'none', authority: 'regulation' },
+  { id: 'X12', summary: '已撤案、已结案、已定型后的业务写操作（白名单除外）', citation: 'immutability §2 第 4 点；#235 评论 6431387386', outlet: '终态后仅可阅读、导出；归档走 T27；结案后回证按白名单上传', enforcement: 'engine', authority: 'system' },
+  { id: 'X13', summary: '立案后修改承办机构', citation: '#40 Q29', outlet: '承办机构在立案时锁定，不能修改', enforcement: 'engine', authority: 'system' },
+  { id: 'X14', summary: '改派后承办人员少于两人', citation: '规程 2.6；行政处罚法第 42 条', outlet: '改派后承办人员须不少于两人', enforcement: 'none', authority: 'law' },
+  { id: 'X15', summary: '审理开始后走撤案，或调查中走不予处罚（事实不成立）', citation: '#40/6228984565 P2；Q2', outlet: '按当前环节走对应出口', enforcement: 'none', authority: 'system' },
+  { id: 'X16', summary: '定案文书引用未入卷证据仍签发', citation: '#111 L4', outlet: '先把引用的证据入卷', enforcement: 'none', authority: 'system', userLock: '#111 L4' },
+  { id: 'X17', summary: '监督角色的写操作推进主状态', citation: '#71/6169639094；GLOSSARY「监督」', outlet: '请由有权办理人操作，监督不能推进主状态', enforcement: 'engine', authority: 'system' },
+  { id: 'X18', summary: '同一案件同时有两条进行中的审批链', citation: '#31/6233001360 Q12', outlet: '先办结或撤回当前审批链', enforcement: 'engine', authority: 'system' },
+  { id: 'X19', summary: '未经立案呈批批准就登记或不予立案', citation: '规程 2.4；#31/6233001360 Q4a', outlet: '须经立案呈批批准', enforcement: 'none', authority: 'normative' },
+  { id: 'X20', summary: '调查取证笔录在场承办人员少于两人仍保存', citation: '办法第17条第2款＋行政处罚法第42条；笔录记载在场人员属实现口径', outlet: '笔录在场承办人员须不少于两人', enforcement: 'none', authority: 'regulation' },
+  { id: 'X21', summary: '带去重标记的线索单独立案', citation: '#27/6409981777', outlet: '同组附加来源线索，或改判独立', enforcement: 'none', authority: 'normative' },
+  { id: 'X22', summary: '本案主办或协办签出审理意见', citation: '规程 5.1', outlet: '由非本案承办人员签出', enforcement: 'none', authority: 'normative' },
+  { id: 'X23', summary: '未持行政审核角色的人签出审理意见', citation: '#27/6410042773', outlet: '由持行政审核角色的人签出', enforcement: 'none', authority: 'system' },
+  { id: 'X24', summary: '勾选跨承办机构的附加来源线索', citation: '#27/6410046390', outlet: '附加来源线索须与本案同一承办机构', enforcement: 'none', authority: 'system' },
+  { id: 'X25', summary: '对已并入本案的去重组线索再提单独立案', citation: '#27/6410046390', outlet: '已并入的线索不能再立独立案', enforcement: 'none', authority: 'system' },
+  { id: 'X26', summary: '命中必审但未经告知前法审就批准告知书', citation: '规程7.1／8.2；设计加严，非规定要求', outlet: '先完成告知前法制审核且摘要覆盖', enforcement: 'none', authority: 'normative' },
+  { id: 'X27', summary: '进入听证程序但听证后未再审即进入领导审批', citation: '粤府令第294号第33条＋处罚法第58条（二）', outlet: '听证后再审后才能进入领导审批', enforcement: 'none', authority: 'regulation' },
+  { id: 'X28', summary: '自动复开已终止的听证', citation: '#90/6410046818', outlet: '须由当事人重新申请', enforcement: 'none', authority: 'system' },
+  { id: 'X29', summary: '立案批准后未走受控重开就取消自动关联', citation: '#27/6410077358', outlet: '须走受控重开', enforcement: 'none', authority: 'system' },
+  { id: 'X30', summary: '不予立案理由不合规', citation: '#226/6410041963', outlet: '两类理由择一且选完整', enforcement: 'none', authority: 'regulation' },
+  { id: 'X31', summary: '线索上有在途立案呈批时做其他处置', citation: '#27/6431079838 Q9', outlet: '先撤回立案呈批', enforcement: 'filing', authority: 'system' },
+  { id: 'X32', summary: '非被指定审理人签出审理意见', citation: '#27/6431079838 Q10', outlet: '须由被指定的审理人签出', enforcement: 'none', authority: 'system' },
 ];
 
 const ILLEGAL_BY_ID = new Map(ILLEGAL_MIGRATIONS.map((item) => [item.id, item]));
@@ -300,6 +335,27 @@ export function findIllegal(id: string): IllegalMigration | null {
   return ILLEGAL_BY_ID.get(id) ?? null;
 }
 
-export function block(code: string, message: string, citation?: string): GuardResult {
-  return { level: 'block', code, message, ...(citation ? { citation } : {}) };
+/** 登记表里 authority 缺失或不在五级之内的编号。空数组表示通过。漏标必须非空，供红探针判红。 */
+export function unannotatedMigrationIds(
+  rows: readonly { readonly id: string; readonly authority?: string | null }[],
+): string[] {
+  const allowed = new Set<string>(GUARD_AUTHORITIES);
+  return rows.filter((row) => typeof row.authority !== 'string' || !allowed.has(row.authority)).map((row) => row.id);
+}
+
+export function block(
+  code: string,
+  message: string,
+  authority: GuardAuthority,
+  citation?: string,
+  userLock?: string,
+): GuardResult {
+  return {
+    level: 'block',
+    code,
+    message,
+    authority,
+    ...(citation ? { citation } : {}),
+    ...(userLock ? { userLock } : {}),
+  };
 }

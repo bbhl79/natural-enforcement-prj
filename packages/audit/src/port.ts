@@ -7,6 +7,8 @@ import type {
   CaseFilingReviewedFailedReason,
   CaseFilingSubmittedFailedReason,
   CaseFilingWithdrawnFailedReason,
+  CaseInvestigationAction,
+  CaseInvestigationFailedReason,
   CaseOpenedFailedReason,
   CaseReturnedFailedReason,
   CaseTransitionedFailedReason,
@@ -280,6 +282,8 @@ export type AuditAppend =
   | (AuditParties & { action: 'case.transitioned'; outcome: 'failed'; reason: CaseTransitionedFailedReason })
   | (AuditParties & { action: 'case.returned' })
   | (AuditParties & { action: 'case.returned'; outcome: 'failed'; reason: CaseReturnedFailedReason })
+  | (AuditParties & { action: CaseInvestigationAction })
+  | (AuditParties & { action: CaseInvestigationAction; outcome: 'failed'; reason: CaseInvestigationFailedReason })
 ;
 
 /**

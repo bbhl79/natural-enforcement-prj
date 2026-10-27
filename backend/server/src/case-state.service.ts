@@ -37,16 +37,21 @@ const TRANSITION_OPCODE = 'doc.approve';
 const CHAIN_OPCODE = 'doc.submit';
 const CHAIN_KIND = /^[a-z0-9-]{1,40}$/;
 
+const PROCEDURE_TRANSITIONS = new Set(['T03', 'T04', 'T05', 'T06', 'T07']);
+
 const FAIL_REASONS = new Set<string>([
   'transition-disabled',
   'invalid-state',
   'unknown-transition',
+  'X02',
+  'X03',
   'X12',
   'X13',
   'X17',
   'X18',
   'advisory',
   'concurrent-change',
+  'procedure-required',
 ]);
 
 export type CaseStateHttpOutcome =
@@ -101,6 +106,14 @@ export class CaseStateService {
       subject: { ...loaded.subject, proposedHandlingOrgId: input.handlingOrgId },
     });
     if (!decision.ok) return this.settle(actor, actorCode, loaded.view.handlingOrgId, caseId, decision);
+    if (PROCEDURE_TRANSITIONS.has(input.transitionId)) {
+      return this.fail(actor, actorCode, loaded.view.handlingOrgId, caseId, TRANSITION_OPCODE, {
+        reason: 'procedure-required',
+        message: '该迁移须经呈批表批准',
+        citation: null,
+        outlet: '请走对应呈批表',
+      });
+    }
     const effects = decision.effects;
     const at = this.clock.now();
     return this.uow.run(async (tx) => {
@@ -138,6 +151,7 @@ export class CaseStateService {
           stage: effects.currentStage,
           stageEntrySeq: effects.stageEntrySeq,
           status: effects.mainStatus,
+          suspended: effects.suspended ?? loaded.view.suspended,
         });
         if (!moved) {
           return rejected<CaseStateHttpOutcome>(
@@ -176,7 +190,7 @@ export class CaseStateService {
     const gate = await this.gateWrite(actor, actorCode, CHAIN_OPCODE, loaded, caseId);
     if (gate) return gate;
     const decision = decideTransition({
-      operation: { kind: 'open-approval-chain' },
+      operation: { kind: 'open-approval-chain', chainKind: input.kind },
       subject: loaded.subject,
     });
     if (!decision.ok) {
@@ -235,7 +249,7 @@ export class CaseStateService {
         mainStatus: view.status,
         stage: view.currentStage,
         stageEntrySeq: view.stageEntrySeq,
-        suspended: false,
+        suspended: view.suspended,
         markers: [],
         clueStatus: clue?.status ?? null,
         handlingOrgId: view.handlingOrgId,
@@ -399,6 +413,7 @@ function presentCase(view: CaseView): Record<string, unknown> {
     currentStage: view.currentStage,
     stageName,
     stageEntrySeq: view.stageEntrySeq,
+    suspended: view.suspended,
     instances: view.instances.map((row) => ({
       id: row.id,
       stage: row.stage,

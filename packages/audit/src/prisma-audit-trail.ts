@@ -45,6 +45,8 @@ import {
   CASE_FILING_REVIEWED_FAILED_REASONS,
   CASE_FILING_SUBMITTED_FAILED_REASONS,
   CASE_FILING_WITHDRAWN_FAILED_REASONS,
+  CASE_INVESTIGATION_ACTIONS,
+  CASE_INVESTIGATION_FAILED_REASONS,
   CASE_OPENED_FAILED_REASONS,
   CASE_RETURNED_FAILED_REASONS,
   CASE_TRANSITIONED_FAILED_REASONS,
@@ -127,6 +129,9 @@ const FAILED_REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['case.opened', new Set<string>(CASE_OPENED_FAILED_REASONS)],
   ['case.transitioned', new Set<string>(CASE_TRANSITIONED_FAILED_REASONS)],
   ['case.returned', new Set<string>(CASE_RETURNED_FAILED_REASONS)],
+  ...CASE_INVESTIGATION_ACTIONS.map(
+    (action) => [action, new Set<string>(CASE_INVESTIGATION_FAILED_REASONS)] as const,
+  ),
 ]);
 
 /** 后值只许出现在带后值的动作上，且这些动作必须带非空后值（#128）。 */

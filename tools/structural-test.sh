@@ -190,6 +190,7 @@ RULES=(
   spatial-no-orm-mutation
   reference-data-no-mutation
   case-history-append-only
+  investigation-record-no-delete
   runtime-manifest
   user-lock-assertions
   frontend-router-mode
@@ -711,6 +712,8 @@ check_weak-reference-entry() {
 # #235 追加环节实例、迁移历史、审批链：CaseStageInstance、CaseTransition、CaseApprovalChain。
 # #238 追加审批意见、退回记录、环节失效、签字、材料：CaseApprovalOpinion、CaseReturn、
 # CaseStageInvalidation、CaseStageSignature、CaseMaterial。
+# #236 追加违法记录、笔录、收尾呈批、期限事件与告知记录：CaseViolationRecord、CaseInquiryRecord、
+# CaseProcedureApproval、CaseProcedureVersion、CaseProcedureStep、CaseDeadlineEvent、CasePartyNotice。
 G1_MODELS=(
   MigrationProbe
   OrgUnit
@@ -770,6 +773,13 @@ G1_MODELS=(
   CaseStageInvalidation
   CaseStageSignature
   CaseMaterial
+  CaseViolationRecord
+  CaseInquiryRecord
+  CaseProcedureApproval
+  CaseProcedureVersion
+  CaseProcedureStep
+  CaseDeadlineEvent
+  CasePartyNotice
 )
 check_g1-model-allowlist() {
   local schema="$BACKEND/prisma/schema.prisma" model in_schema extra missing fails=0
@@ -956,6 +966,40 @@ check_case-history-append-only() {
   done < <(find "$BACKEND" "$ROOT/packages" "$ROOT/integration" "$ROOT/e2e" "${SCAN_CODE[@]}")
   if [ "$hits" -eq 0 ]; then
     note_ok "case-history-append-only：backend + packages + integration + e2e 全源码无环节实例或迁移历史 ORM 改写调用（#235 只追加）"
+  fi
+}
+
+# 规则（#236）：违法记录与笔录不物理删除。作废只改状态。ORM delete 与 SQL DELETE FROM 都拒绝。
+INVESTIGATION_RECORD_MODEL='caseViolationRecord|caseInquiryRecord'
+INVESTIGATION_RECORD_ORM_METHOD='deleteMany|delete'
+INVESTIGATION_RECORD_ORM_WRITE="(${INVESTIGATION_RECORD_MODEL})[[:space:]]*\.[[:space:]]*(${INVESTIGATION_RECORD_ORM_METHOD})[[:space:]]*\("
+INVESTIGATION_RECORD_SQL='DELETE[[:space:]]+FROM[[:space:]]+(case_violation_record|case_inquiry_record)'
+check_investigation-record-no-delete() {
+  local hits=0 file lines line sql
+  while IFS= read -r file; do
+    lines="$(grep -En -e "$INVESTIGATION_RECORD_ORM_WRITE" "$file" 2>/dev/null || true)"
+    sql="$(grep -En -e "$INVESTIGATION_RECORD_SQL" "$file" 2>/dev/null || true)"
+    if [ -n "$lines" ]; then
+      while IFS= read -r line; do
+        note_fail "investigation-record-no-delete：违法记录或笔录被删除 ${file#"$ROOT"/}:${line%%:*}（#236 不物理删除）"
+        hits=$((hits + 1))
+      done <<< "$lines"
+      continue
+    fi
+    if [ -n "$sql" ]; then
+      while IFS= read -r line; do
+        note_fail "investigation-record-no-delete：违法记录或笔录被删除 ${file#"$ROOT"/}:${line%%:*}（#236 不物理删除）"
+        hits=$((hits + 1))
+      done <<< "$sql"
+      continue
+    fi
+    if tr '\n' ' ' < "$file" | grep -qE "$INVESTIGATION_RECORD_ORM_WRITE"; then
+      note_fail "investigation-record-no-delete：${file#"$ROOT"/} 折行后检出违法记录或笔录删除（换行链式形态）"
+      hits=$((hits + 1))
+    fi
+  done < <(find "$BACKEND" "$ROOT/packages" "$ROOT/integration" "$ROOT/e2e" "${SCAN_CODE[@]}")
+  if [ "$hits" -eq 0 ]; then
+    note_ok "investigation-record-no-delete：backend + packages + integration + e2e 全源码无违法记录或笔录删除（#236 不物理删除）"
   fi
 }
 

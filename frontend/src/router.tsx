@@ -27,6 +27,8 @@ import ClueRegisterPage from './clue/ClueRegisterPage';
 import { clueCenterLoader } from './clue/center';
 import { clueRegisterLoader } from './clue/registration';
 import ClueCenterPage from './pages/ClueCenterPage';
+import CaseInvestigationPage from './case/CaseInvestigationPage';
+import { investigationLoader } from './case/investigation';
 import PlannedCenterPage from './pages/PlannedCenterPage';
 import WorkbenchPage from './pages/WorkbenchPage';
 import { authRedirect } from './routing';
@@ -91,6 +93,12 @@ export function appRoutes(store: RouterStore): RouteObject[] {
                   element: <ClueRegisterPage />,
                 },
                 { id: 'case', path: 'case', element: <PlannedCenterPage primary="case" /> },
+                {
+                  id: 'case-investigation',
+                  path: 'case/:caseId/investigation',
+                  loader: investigationLoader(store),
+                  element: <CaseInvestigationPage />,
+                },
                 { id: 'case-onsite', path: 'case/onsite-check', element: <PlannedCenterPage primary="case" /> },
                 { id: 'case-trial', path: 'case/trial', element: <PlannedCenterPage primary="case" /> },
                 { id: 'supervise', path: 'supervise', element: <PlannedCenterPage primary="supervise" /> },

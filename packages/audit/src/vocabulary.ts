@@ -78,6 +78,16 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'case.transitioned',
   // 退回（#238）：成功落退回记录；失败不改业务行。
   'case.returned',
+  // 调查环节与收尾（#236）。呈批、批准、退回与失败都记这些动作。
+  'case.inquiry-recorded',
+  'case.violation-recorded',
+  'case.violation-voided',
+  'case.procedure-drafted',
+  'case.procedure-submitted',
+  'case.procedure-reviewed',
+  'case.procedure-approved',
+  'case.procedure-returned',
+  'case.party-notice-recorded',
 ] as const;
 
 /**
@@ -624,12 +634,15 @@ export const CASE_TRANSITIONED_FAILED_REASONS = [
   'transition-disabled',
   'invalid-state',
   'unknown-transition',
+  'X02',
+  'X03',
   'X12',
   'X13',
   'X17',
   'X18',
   'advisory',
   'concurrent-change',
+  'procedure-required',
 ] as const;
 export type CaseTransitionedFailedReason = (typeof CASE_TRANSITIONED_FAILED_REASONS)[number];
 
@@ -648,6 +661,44 @@ export const CASE_RETURNED_FAILED_REASONS = [
   'concurrent-change',
 ] as const;
 export type CaseReturnedFailedReason = (typeof CASE_RETURNED_FAILED_REASONS)[number];
+
+/** 调查环节与收尾被拒（#236）。九个动作共用这一张原因表。 */
+export const CASE_INVESTIGATION_FAILED_REASONS = [
+  'invalid-state',
+  'invalid-kind',
+  'invalid-reason',
+  'invalid-withdraw-reason',
+  'branch-not-open',
+  'missing-return-reason',
+  'missing-void-reason',
+  'not-main-handler',
+  'hearing-started',
+  'post-hearing-limitation',
+  'transition-disabled',
+  'unknown-transition',
+  'X02',
+  'X03',
+  'X12',
+  'X13',
+  'X17',
+  'X18',
+  'X20',
+  'concurrent-change',
+] as const;
+export type CaseInvestigationFailedReason = (typeof CASE_INVESTIGATION_FAILED_REASONS)[number];
+
+export const CASE_INVESTIGATION_ACTIONS = [
+  'case.inquiry-recorded',
+  'case.violation-recorded',
+  'case.violation-voided',
+  'case.procedure-drafted',
+  'case.procedure-submitted',
+  'case.procedure-reviewed',
+  'case.procedure-approved',
+  'case.procedure-returned',
+  'case.party-notice-recorded',
+] as const;
+export type CaseInvestigationAction = (typeof CASE_INVESTIGATION_ACTIONS)[number];
 
 export const AUDIT_DETAIL_ACTIONS = [
   'clue.registered',
@@ -687,5 +738,14 @@ export const AUDIT_DETAIL_ACTIONS = [
   'case.opened',
   'case.transitioned',
   'case.returned',
+  'case.inquiry-recorded',
+  'case.violation-recorded',
+  'case.violation-voided',
+  'case.procedure-drafted',
+  'case.procedure-submitted',
+  'case.procedure-reviewed',
+  'case.procedure-approved',
+  'case.procedure-returned',
+  'case.party-notice-recorded',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];
