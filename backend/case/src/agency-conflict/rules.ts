@@ -35,8 +35,13 @@ export function agencyConflictMarked(marks: readonly AgencyConflictMark[]): bool
  * 机关层利害关系不阻断任何闸口。
  * 签出、呈批、迁移都得到 false。调用方不得把本函数的结果当成拒绝条件。
  */
-export function agencyConflictBlocks(_gate: AgencyConflictGate): false {
-  return false;
+export function agencyConflictBlocks(gate: AgencyConflictGate): false {
+  switch (gate) {
+    case 'sign':
+    case 'submission':
+    case 'transition':
+      return false;
+  }
 }
 
 /** 已勾选时给出提示与出路。未勾选时两者都空。 */
