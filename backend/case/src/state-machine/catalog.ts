@@ -226,7 +226,15 @@ export const TRANSITIONS: readonly TransitionEdge[] = [
   edge('T27', main('closed', 'withdrawn'), { kind: 'main', status: 'finalized' }, '归档审批通过：已定型'),
   edge('T28', main('finalized'), { kind: 'main', status: 'finalized' }, '受控重开后再定型（主干不启用）'),
   edge('T29', { kind: 'span', start: 'E02', end: 'E11' }, { kind: 'same' }, '涉刑或党纪政务移送：当前环节不变'),
-  edge('T30', { kind: 'side', name: 'criminal-transfer' }, { kind: 'same' }, '记载公安、检察的决定'),
+  edge(
+    'T30',
+    { kind: 'side', name: 'criminal-transfer' },
+    {
+      kind: 'branch',
+      note: '人工出口二选一。A 回 E02，次序号加 1，回流 reenter。B 呈批结案。不自动恢复，不自动回流。',
+    },
+    '记载公安、检察的决定。A 须写明违法状态是否仍未消除及处罚依据。B 须写理由。',
+  ),
   edge('T31', { kind: 'after', stage: 'E10' }, { kind: 'branch', note: '撤销原决定书，加受控重开；是否回流由主办决定' }, '决定书事实被推翻（主干不启用）'),
   edge('T32', { kind: 'span', start: 'E05', end: 'E09' }, enter('E05', 'drafting', { reenter: true }), '重新比对后撤销原告知，E05 再进入'),
   edge('T33', { kind: 'any-handled' }, { kind: 'same' }, '改派呈批批准：环节不变'),
