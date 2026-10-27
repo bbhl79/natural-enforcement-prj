@@ -95,6 +95,10 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'case.procedure-approved',
   'case.procedure-returned',
   'case.party-notice-recorded',
+  // 改派呈批与材料效力认定（#239）。发起、批准、逐件认定各记一行。
+  'case.reassignment-submitted',
+  'case.reassignment-approved',
+  'case.material-effectivity-recorded',
 ] as const;
 
 /**
@@ -739,6 +743,73 @@ export const CASE_INVESTIGATION_FAILED_REASONS = [
 ] as const;
 export type CaseInvestigationFailedReason = (typeof CASE_INVESTIGATION_FAILED_REASONS)[number];
 
+/**
+ * 改派呈批发起被拒（#239）。missing-reason 原因空或不在封闭集；missing-reason-note 其他原因缺说明；
+ * invalid-proposal 名单形态不合规；not-handler-or-clerk 发起人既非承办人又非 N5 内勤；
+ * conflict-decision-required 回避原因未引用回避决定；conflict-decision-not-effective 引用的决定不是生效回避；
+ * handler-not-eligible 拟任人员已停用或不持经办；handler-out-of-scope 拟任人员不在承办机构子树；
+ * X14 人数不足或缺执法资格。其余为引擎守卫与并发。
+ */
+export const CASE_REASSIGNMENT_SUBMITTED_FAILED_REASONS = [
+  'missing-reason',
+  'missing-reason-note',
+  'invalid-proposal',
+  'not-handler-or-clerk',
+  'conflict-decision-required',
+  'conflict-decision-not-effective',
+  'handler-not-eligible',
+  'handler-out-of-scope',
+  'X14',
+  'X03',
+  'X12',
+  'X13',
+  'X17',
+  'X18',
+  'transition-disabled',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type CaseReassignmentSubmittedFailedReason =
+  (typeof CASE_REASSIGNMENT_SUBMITTED_FAILED_REASONS)[number];
+
+/**
+ * 改派呈批批准被拒（#239）。invalid-state 不在待批准；conflict-decider-mismatch 批准人与回避决定人不一致；
+ * 其余同发起侧的名单、决定与引擎守卫。
+ */
+export const CASE_REASSIGNMENT_APPROVED_FAILED_REASONS = [
+  'invalid-state',
+  'conflict-decision-required',
+  'conflict-decision-not-effective',
+  'conflict-decider-mismatch',
+  'handler-not-eligible',
+  'handler-out-of-scope',
+  'X14',
+  'X03',
+  'X12',
+  'X13',
+  'X17',
+  'X18',
+  'transition-disabled',
+  'concurrent-change',
+] as const;
+export type CaseReassignmentApprovedFailedReason =
+  (typeof CASE_REASSIGNMENT_APPROVED_FAILED_REASONS)[number];
+
+/**
+ * 材料效力认定被拒（#239）。missing-reason 理由为空；invalid-conclusion 结论不在三值；
+ * unknown-material 材料不属本案；not-main-handler 不是当前主办；invalid-state 没有生效的回避改派。
+ */
+export const CASE_MATERIAL_EFFECTIVITY_FAILED_REASONS = [
+  'missing-reason',
+  'invalid-conclusion',
+  'unknown-material',
+  'not-main-handler',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type CaseMaterialEffectivityFailedReason =
+  (typeof CASE_MATERIAL_EFFECTIVITY_FAILED_REASONS)[number];
+
 export const CASE_INVESTIGATION_ACTIONS = [
   'case.inquiry-recorded',
   'case.violation-recorded',
@@ -804,5 +875,9 @@ export const AUDIT_DETAIL_ACTIONS = [
   'case.procedure-approved',
   'case.procedure-returned',
   'case.party-notice-recorded',
+  // 改派呈批与材料效力认定（#239）：改派原因、原／新承办人员、认定结论与材料。
+  'case.reassignment-submitted',
+  'case.reassignment-approved',
+  'case.material-effectivity-recorded',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];
