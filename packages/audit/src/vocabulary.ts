@@ -76,6 +76,10 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'case.opened',
   // 案件状态机（#235）：成功推进、只读警告与被拒都记这一动作。
   'case.transitioned',
+  // 人员层利害关系（#237）。登记声明、回避决定、调查继续登记。签出被拒只记失败。
+  'case.conflict-declared',
+  'case.conflict-decided',
+  'case.investigation-recorded',
 ] as const;
 
 /**
@@ -87,6 +91,8 @@ export type PasswordRejectedReason = (typeof PASSWORD_REJECTED_REASONS)[number];
 
 export const AUDIT_ACTIONS = [
   ...AUDIT_SUCCEEDED_ACTIONS,
+  // 人员层签出被拒（#237）：只记失败。
+  'case.sign-refused',
   // 口令被拒（ADR 0015，#132）：只记失败。
   'account.password-rejected',
   'login.failed',
@@ -625,6 +631,45 @@ export const CASE_TRANSITIONED_FAILED_REASONS = [
 ] as const;
 export type CaseTransitionedFailedReason = (typeof CASE_TRANSITIONED_FAILED_REASONS)[number];
 
+/**
+ * 登记人员层利害关系被拒（#237）。
+ * missing-reason 理由为空；invalid-source 来源不在封闭集；
+ * self-mismatch 本人申请的对象不是操作者；unknown-person 对象人员不存在；
+ * conflict-pending 该人已有声明或生效记录。
+ */
+export const CASE_CONFLICT_DECLARED_FAILED_REASONS = [
+  'missing-reason',
+  'invalid-source',
+  'self-mismatch',
+  'unknown-person',
+  'conflict-pending',
+] as const;
+export type CaseConflictDeclaredFailedReason = (typeof CASE_CONFLICT_DECLARED_FAILED_REASONS)[number];
+
+/**
+ * 作出回避决定被拒（#237）。
+ * missing-reason 理由为空；invalid-conclusion 结论不在回避／驳回；
+ * invalid-state 声明链不在「声明」；decider-mismatch 决定人席位与申请方式不匹配；
+ * concurrent-change 该链已有决定。
+ */
+export const CASE_CONFLICT_DECIDED_FAILED_REASONS = [
+  'missing-reason',
+  'invalid-conclusion',
+  'invalid-state',
+  'decider-mismatch',
+  'concurrent-change',
+] as const;
+export type CaseConflictDecidedFailedReason = (typeof CASE_CONFLICT_DECIDED_FAILED_REASONS)[number];
+
+/** 调查继续登记被拒（#237）。missing-summary 摘要为空；invalid-kind 不是笔录或违法记录。 */
+export const CASE_INVESTIGATION_RECORDED_FAILED_REASONS = ['missing-summary', 'invalid-kind'] as const;
+export type CaseInvestigationRecordedFailedReason =
+  (typeof CASE_INVESTIGATION_RECORDED_FAILED_REASONS)[number];
+
+/** 签出被拒（#237）。conflict-active 该人有声明或生效的人员层利害关系。 */
+export const CASE_SIGN_REFUSED_REASONS = ['conflict-active'] as const;
+export type CaseSignRefusedReason = (typeof CASE_SIGN_REFUSED_REASONS)[number];
+
 export const AUDIT_DETAIL_ACTIONS = [
   'clue.registered',
   'clue.items-supplemented',
@@ -662,5 +707,9 @@ export const AUDIT_DETAIL_ACTIONS = [
   'case.filing-withdrawn',
   'case.opened',
   'case.transitioned',
+  'case.conflict-declared',
+  'case.conflict-decided',
+  'case.investigation-recorded',
+  'case.sign-refused',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];

@@ -4,6 +4,7 @@
 // 一级入口地址定型：/workbench、/clue、/case、/supervise、/admin；「/」重定向 /workbench。
 import { createBrowserRouter, redirect, type LoaderFunctionArgs, type RouteObject } from 'react-router';
 
+import CaseConflictPage from './case/CaseConflictPage';
 import AdminHomePage from './admin/AdminHomePage';
 import { adminHomeLoader } from './admin/adminHome';
 import AuditPage from './admin/AuditPage';
@@ -93,6 +94,7 @@ export function appRoutes(store: RouterStore): RouteObject[] {
                 { id: 'case', path: 'case', element: <PlannedCenterPage primary="case" /> },
                 { id: 'case-onsite', path: 'case/onsite-check', element: <PlannedCenterPage primary="case" /> },
                 { id: 'case-trial', path: 'case/trial', element: <PlannedCenterPage primary="case" /> },
+                { id: 'case-conflict', path: 'case/:caseId', element: <CaseConflictPage /> },
                 { id: 'supervise', path: 'supervise', element: <PlannedCenterPage primary="supervise" /> },
                 {
                   id: 'supervise-review',
