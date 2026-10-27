@@ -284,6 +284,7 @@ export type AuditAppend =
   | (AuditParties & { action: 'case.opened'; outcome: 'failed'; reason: CaseOpenedFailedReason })
   | (AuditParties & { action: 'case.transitioned' })
   | (AuditParties & { action: 'case.transitioned'; outcome: 'failed'; reason: CaseTransitionedFailedReason })
+  | (AuditParties & { action: 'case.rule-confirmed' })
   | (AuditParties & { action: 'case.conflict-declared' })
   | (AuditParties & { action: 'case.conflict-declared'; outcome: 'failed'; reason: CaseConflictDeclaredFailedReason })
   | (AuditParties & { action: 'case.conflict-decided' })

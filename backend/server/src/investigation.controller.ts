@@ -3,6 +3,7 @@
 import { Body, Controller, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import type { ActorRef } from '@natural-enforcement/identity';
 
+import { readConfirmation } from './case-rule-confirmation.ts';
 import { InvestigationService } from './investigation.service.ts';
 import { SameOriginReadGuard } from './same-origin-read.guard.ts';
 import type { AuthenticatedRequest } from './session.guard.ts';
@@ -92,16 +93,35 @@ export class InvestigationController {
     @Req() req: AuthenticatedRequest,
     @Res() res: HttpReply,
     @Param('id') id: string,
-    @Body() body: { readonly kind?: unknown; readonly reason?: unknown; readonly extendTogether?: unknown },
+    @Body() body: {
+      readonly kind?: unknown;
+      readonly reason?: unknown;
+      readonly extendTogether?: unknown;
+      readonly confirmedRuleKeys?: unknown;
+      readonly confirmReasons?: unknown;
+    },
   ): Promise<void> {
-    const outcome = await this.investigation.saveDraft(req.actor as ActorRef, id, body);
+    const confirmation = readConfirmation(body);
+    const outcome = await this.investigation.saveDraft(req.actor as ActorRef, id, {
+      kind: body.kind,
+      reason: body.reason,
+      extendTogether: body.extendTogether,
+      confirmedRuleKeys: confirmation.confirmedRuleKeys,
+      confirmReasons: confirmation.confirmReasons,
+    });
     res.status(outcome.status).json(outcome.body);
   }
 
   @Post('api/procedures/:id/submit')
   @UseGuards(SameOriginReadGuard)
-  async submit(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {
-    const outcome = await this.investigation.submit(req.actor as ActorRef, id);
+  async submit(
+    @Req() req: AuthenticatedRequest,
+    @Res() res: HttpReply,
+    @Param('id') id: string,
+    @Body() body: { readonly confirmedRuleKeys?: unknown; readonly confirmReasons?: unknown },
+  ): Promise<void> {
+    const confirmation = readConfirmation(body);
+    const outcome = await this.investigation.submit(req.actor as ActorRef, id, confirmation);
     res.status(outcome.status).json(outcome.body);
   }
 
@@ -125,10 +145,17 @@ export class InvestigationController {
     @Req() req: AuthenticatedRequest,
     @Res() res: HttpReply,
     @Param('id') id: string,
-    @Body() body: { readonly opinion?: unknown },
+    @Body() body: {
+      readonly opinion?: unknown;
+      readonly confirmedRuleKeys?: unknown;
+      readonly confirmReasons?: unknown;
+    },
   ): Promise<void> {
+    const confirmation = readConfirmation(body);
     const outcome = await this.investigation.approve(req.actor as ActorRef, id, {
       opinion: typeof body.opinion === 'string' ? body.opinion : null,
+      confirmedRuleKeys: confirmation.confirmedRuleKeys,
+      confirmReasons: confirmation.confirmReasons,
     });
     res.status(outcome.status).json(outcome.body);
   }

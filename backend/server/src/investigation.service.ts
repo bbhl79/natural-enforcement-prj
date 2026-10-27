@@ -18,12 +18,15 @@ import {
   INQUIRY_OFFICER_CITATION,
   PARTY_NOTICE_PROMPT,
   PROCEDURE_TRANSITION,
+  X03_WARN_MESSAGE,
+  applyWarningGate,
   canTakeFilingStep,
   checkInquiryOfficers,
   checkLimitationDiscoveryExit,
   checkProcedureContent,
   checkProcedureState,
   checkVoidViolation,
+  classifyIllegal,
   decideTransition,
   filingStatusAfter,
   findIllegal,
@@ -38,7 +41,9 @@ import {
   type FilingAdminReview,
   type LimitationDiscoveryExit,
   type ProcedureContent,
+  type RuleConfirmation,
   type SuspensionClockParameter,
+  type TransitionDecision,
   type TransitionSubject,
 } from '@natural-enforcement/case';
 import {
@@ -51,6 +56,7 @@ import {
 } from '@natural-enforcement/identity';
 
 import { FILING_ADMIN_REVIEW } from './case-filing.service.ts';
+import { appendRuleConfirmation, ruleKeyBody, warningBody } from './case-rule-confirmation.ts';
 import { persistTransitionEffects } from './case-transition-write.ts';
 import { CLOCK, type Clock } from './clock.ts';
 import { LOGIN_DIRECTORY, type LoginDirectory } from './login-directory.ts';
@@ -394,7 +400,13 @@ export class InvestigationService {
   async saveDraft(
     actor: ActorRef,
     caseId: string,
-    input: { readonly kind?: unknown; readonly reason?: unknown; readonly extendTogether?: unknown },
+    input: {
+      readonly kind?: unknown;
+      readonly reason?: unknown;
+      readonly extendTogether?: unknown;
+      readonly confirmedRuleKeys?: readonly string[];
+      readonly confirmReasons?: Readonly<Record<string, string>>;
+    },
   ): Promise<InvestigationHttpOutcome> {
     const prepared = await this.prepare(actor, caseId, DRAFT_OPCODE, 'case.procedure-drafted', true);
     if ('status' in prepared) return prepared;
@@ -437,11 +449,21 @@ export class InvestigationService {
           },
         );
       }
+      const parties = this.parties(prepared, caseId, DRAFT_OPCODE);
       await tx.audit.append({
         action: 'case.procedure-drafted',
-        ...this.parties(prepared, caseId, DRAFT_OPCODE),
+        ...parties,
         detail: JSON.stringify({ caseId, approvalId, kind: checked.content.kind }),
       });
+      if (checked.confirmation) {
+        await appendRuleConfirmation(tx.audit, {
+          parties,
+          confirmation: checked.confirmation,
+          at,
+          step: `procedure-draft:${checked.content.kind}`,
+          confirmReasons: input.confirmReasons,
+        });
+      }
       return {
         status: 200 as const,
         body: {
@@ -456,7 +478,14 @@ export class InvestigationService {
     });
   }
 
-  async submit(actor: ActorRef, approvalId: string): Promise<InvestigationHttpOutcome> {
+  async submit(
+    actor: ActorRef,
+    approvalId: string,
+    input: {
+      readonly confirmedRuleKeys?: readonly string[];
+      readonly confirmReasons?: Readonly<Record<string, string>>;
+    } = {},
+  ): Promise<InvestigationHttpOutcome> {
     const loaded = await this.loadProcedure(approvalId);
     if (!loaded) return { status: 404, body: { result: 'not-found' } };
     const prepared = await this.prepare(actor, loaded.approval.caseId, SUBMIT_OPCODE, 'case.procedure-submitted', true);
@@ -479,14 +508,20 @@ export class InvestigationService {
         outlet: '重新保存呈批稿',
       });
     }
-    const guarded = await this.guardContent(prepared, content, 'case.procedure-submitted', SUBMIT_OPCODE);
-    if (guarded) return guarded;
+    const guarded = await this.guardContent(prepared, content, 'case.procedure-submitted', SUBMIT_OPCODE, input);
+    if ('status' in guarded) return guarded;
     const other = await this.cases.countInFlightApprovals(loaded.approval.caseId);
     const decision = decideTransition({
       operation: { kind: 'open-approval-chain', chainKind: content.kind },
       subject: await this.subjectOf(prepared.view, prepared.roles, other),
+      confirmedRuleKeys: input.confirmedRuleKeys,
+      confirmReasons: input.confirmReasons,
     });
     if (!decision.ok) {
+      if (decision.httpStatus === 400) return { status: 400, body: ruleKeyBody(decision) };
+      if (decision.httpStatus === 200) {
+        return this.holdWarning(prepared, 'case.procedure-submitted', SUBMIT_OPCODE, decision);
+      }
       return this.fail(prepared, 'case.procedure-submitted', SUBMIT_OPCODE, {
         httpStatus: 409,
         reason: decision.reason,
@@ -495,6 +530,7 @@ export class InvestigationService {
         basis: decision.citation,
       });
     }
+    const confirmation = decision.confirmation ?? guarded.confirmation;
     const nextStatus = filingStatusAfter('submit', this.adminReview);
     const at = this.clock.now();
     const chainId = newUlid();
@@ -541,11 +577,21 @@ export class InvestigationService {
           },
         );
       }
+      const parties = this.parties(prepared, loaded.approval.caseId, SUBMIT_OPCODE);
       await tx.audit.append({
         action: 'case.procedure-submitted',
-        ...this.parties(prepared, loaded.approval.caseId, SUBMIT_OPCODE),
+        ...parties,
         detail: JSON.stringify({ caseId: loaded.approval.caseId, approvalId, kind: content.kind, chainId }),
       });
+      if (confirmation) {
+        await appendRuleConfirmation(tx.audit, {
+          parties,
+          confirmation,
+          at,
+          step: `procedure-submit:${content.kind}`,
+          confirmReasons: input.confirmReasons,
+        });
+      }
       return {
         status: 200 as const,
         body: { result: 'procedure-submitted', approvalId, caseId: loaded.approval.caseId, status: nextStatus },
@@ -635,7 +681,15 @@ export class InvestigationService {
     });
   }
 
-  async approve(actor: ActorRef, approvalId: string, input: { readonly opinion: string | null }): Promise<InvestigationHttpOutcome> {
+  async approve(
+    actor: ActorRef,
+    approvalId: string,
+    input: {
+      readonly opinion: string | null;
+      readonly confirmedRuleKeys?: readonly string[];
+      readonly confirmReasons?: Readonly<Record<string, string>>;
+    },
+  ): Promise<InvestigationHttpOutcome> {
     const loaded = await this.loadProcedure(approvalId);
     if (!loaded) return { status: 404, body: { result: 'not-found' } };
     const prepared = await this.prepare(actor, loaded.approval.caseId, APPROVE_OPCODE, 'case.procedure-approved', false);
@@ -657,22 +711,29 @@ export class InvestigationService {
         outlet: '退回后重新保存',
       });
     }
-    const guarded = await this.guardContent(prepared, content, 'case.procedure-approved', APPROVE_OPCODE);
-    if (guarded) return guarded;
+    const guarded = await this.guardContent(prepared, content, 'case.procedure-approved', APPROVE_OPCODE, input);
+    if ('status' in guarded) return guarded;
     const other = Math.max(0, (await this.cases.countInFlightApprovals(loaded.approval.caseId)) - (loaded.approval.approvalChainId ? 1 : 0));
     const decision = decideTransition({
       operation: { kind: 'transition', transitionId: PROCEDURE_TRANSITION[content.kind] },
       subject: await this.subjectOf(prepared.view, prepared.roles, other),
+      confirmedRuleKeys: input.confirmedRuleKeys,
+      confirmReasons: input.confirmReasons,
     });
     if (!decision.ok) {
+      if (decision.httpStatus === 400) return { status: 400, body: ruleKeyBody(decision) };
+      if (decision.httpStatus === 200) {
+        return this.holdWarning(prepared, 'case.procedure-approved', APPROVE_OPCODE, decision);
+      }
       return this.fail(prepared, 'case.procedure-approved', APPROVE_OPCODE, {
-        httpStatus: decision.httpStatus === 200 ? 409 : 409,
+        httpStatus: 409,
         reason: decision.reason,
         message: decision.message,
         outlet: 'outlet' in decision ? decision.outlet : '该呈批不能批准',
         basis: decision.citation,
       });
     }
+    const confirmation = decision.confirmation ?? guarded.confirmation;
     const effects = decision.effects;
     if (effects.kind !== 'advance' || !effects.currentStage || !effects.mainStatus || effects.stageEntrySeq === null || !effects.transitionCode) {
       return this.fail(prepared, 'case.procedure-approved', APPROVE_OPCODE, {
@@ -797,11 +858,21 @@ export class InvestigationService {
         ...this.parties(prepared, caseId, APPROVE_OPCODE),
         detail: JSON.stringify({ caseId, approvalId, kind: content.kind, transitionId: effects.transitionCode }),
       });
+      const transitionParties = this.parties(prepared, caseId, APPROVE_OPCODE);
       await tx.audit.append({
         action: 'case.transitioned',
-        ...this.parties(prepared, caseId, APPROVE_OPCODE),
+        ...transitionParties,
         detail: JSON.stringify({ caseId, transitionId: effects.transitionCode, approvalId }),
       });
+      if (confirmation) {
+        await appendRuleConfirmation(tx.audit, {
+          parties: transitionParties,
+          confirmation,
+          at,
+          step: `procedure-approve:${effects.transitionCode}`,
+          confirmReasons: input.confirmReasons,
+        });
+      }
       return {
         status: 200 as const,
         body: {
@@ -880,8 +951,17 @@ export class InvestigationService {
 
   private async checkDraft(
     prepared: Prepared,
-    input: { readonly kind?: unknown; readonly reason?: unknown; readonly extendTogether?: unknown },
-  ): Promise<{ readonly content: ProcedureContent } | InvestigationHttpOutcome> {
+    input: {
+      readonly kind?: unknown;
+      readonly reason?: unknown;
+      readonly extendTogether?: unknown;
+      readonly confirmedRuleKeys?: readonly string[];
+      readonly confirmReasons?: Readonly<Record<string, string>>;
+    },
+  ): Promise<
+    | { readonly content: ProcedureContent; readonly confirmation: RuleConfirmation | null }
+    | InvestigationHttpOutcome
+  > {
     const checked = checkProcedureContent({
       kind: typeof input.kind === 'string' ? input.kind : '',
       reason: input.reason,
@@ -895,9 +975,9 @@ export class InvestigationService {
         outlet: 'outlet' in checked.hit ? checked.hit.outlet : '按枚举重选',
       });
     }
-    const guarded = await this.guardContent(prepared, checked.content, 'case.procedure-drafted', DRAFT_OPCODE);
-    if (guarded) return guarded;
-    return { content: checked.content };
+    const guarded = await this.guardContent(prepared, checked.content, 'case.procedure-drafted', DRAFT_OPCODE, input);
+    if ('status' in guarded) return guarded;
+    return { content: checked.content, confirmation: guarded.confirmation };
   }
 
   private async guardContent(
@@ -905,7 +985,11 @@ export class InvestigationService {
     content: ProcedureContent,
     action: CaseInvestigationAction,
     opcode: string,
-  ): Promise<InvestigationHttpOutcome | null> {
+    input: {
+      readonly confirmedRuleKeys?: readonly string[];
+      readonly confirmReasons?: Readonly<Record<string, string>>;
+    } = {},
+  ): Promise<InvestigationHttpOutcome | { readonly confirmation: RuleConfirmation | null }> {
     const limited = checkLimitationDiscoveryExit({
       stage: prepared.view.currentStage,
       kind: content.kind,
@@ -930,6 +1014,19 @@ export class InvestigationService {
       suspended: prepared.view.suspended,
     });
     if (!state.ok) {
+      if (state.hit.reason === 'X03') {
+        const classified = classifyIllegal('X03', X03_WARN_MESSAGE);
+        if (!classified.ok && classified.httpStatus === 200) {
+          const gate = applyWarningGate({
+            notes: classified.advisories,
+            confirmedRuleKeys: input.confirmedRuleKeys,
+            confirmReasons: input.confirmReasons,
+          });
+          if (gate.kind === 'reject') return { status: 400, body: ruleKeyBody(gate.decision) };
+          if (gate.kind === 'hold') return this.holdWarning(prepared, action, opcode, gate.decision);
+          return { confirmation: gate.confirmation };
+        }
+      }
       return this.fail(prepared, action, opcode, {
         httpStatus: 409,
         reason: state.hit.reason,
@@ -938,7 +1035,33 @@ export class InvestigationService {
         basis: 'citation' in state.hit ? state.hit.citation : null,
       });
     }
-    return null;
+    const idle = applyWarningGate({
+      notes: [],
+      confirmedRuleKeys: input.confirmedRuleKeys,
+      confirmReasons: input.confirmReasons,
+    });
+    if (idle.kind === 'reject') return { status: 400, body: ruleKeyBody(idle.decision) };
+    return { confirmation: null };
+  }
+
+  private holdWarning(
+    prepared: Prepared,
+    action: CaseInvestigationAction,
+    opcode: string,
+    decision: Extract<TransitionDecision, { httpStatus: 200 }>,
+  ): Promise<InvestigationHttpOutcome> {
+    const reason = (FAIL_REASONS.has(decision.reason) ? decision.reason : 'invalid-state') as CaseInvestigationFailedReason;
+    return this.uow.run(async () =>
+      rejected(
+        { status: 200 as const, body: warningBody(decision.warnings) },
+        {
+          action,
+          outcome: 'failed',
+          reason,
+          ...this.parties(prepared, prepared.view.id, opcode),
+        },
+      ),
+    );
   }
 
   private async requireInvestigation(

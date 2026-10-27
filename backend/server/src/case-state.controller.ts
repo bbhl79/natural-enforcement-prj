@@ -3,6 +3,7 @@
 import { Body, Controller, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import type { ActorRef } from '@natural-enforcement/identity';
 
+import { readConfirmation } from './case-rule-confirmation.ts';
 import { CaseStateService } from './case-state.service.ts';
 import { SameOriginReadGuard } from './same-origin-read.guard.ts';
 import type { AuthenticatedRequest } from './session.guard.ts';
@@ -29,11 +30,19 @@ export class CaseStateController {
     @Req() req: AuthenticatedRequest,
     @Res() res: HttpReply,
     @Param('id') id: string,
-    @Body() body: { readonly transitionId?: unknown; readonly handlingOrgId?: unknown },
+    @Body() body: {
+      readonly transitionId?: unknown;
+      readonly handlingOrgId?: unknown;
+      readonly confirmedRuleKeys?: unknown;
+      readonly confirmReasons?: unknown;
+    },
   ): Promise<void> {
+    const confirmation = readConfirmation(body);
     const outcome = await this.states.transition(req.actor as ActorRef, id, {
       transitionId: typeof body.transitionId === 'string' ? body.transitionId : '',
       handlingOrgId: typeof body.handlingOrgId === 'string' ? body.handlingOrgId : null,
+      confirmedRuleKeys: confirmation.confirmedRuleKeys,
+      confirmReasons: confirmation.confirmReasons,
     });
     res.status(outcome.status).json(outcome.body);
   }
@@ -44,10 +53,17 @@ export class CaseStateController {
     @Req() req: AuthenticatedRequest,
     @Res() res: HttpReply,
     @Param('id') id: string,
-    @Body() body: { readonly kind?: unknown },
+    @Body() body: {
+      readonly kind?: unknown;
+      readonly confirmedRuleKeys?: unknown;
+      readonly confirmReasons?: unknown;
+    },
   ): Promise<void> {
+    const confirmation = readConfirmation(body);
     const outcome = await this.states.openApprovalChain(req.actor as ActorRef, id, {
       kind: typeof body.kind === 'string' ? body.kind : '',
+      confirmedRuleKeys: confirmation.confirmedRuleKeys,
+      confirmReasons: confirmation.confirmReasons,
     });
     res.status(outcome.status).json(outcome.body);
   }

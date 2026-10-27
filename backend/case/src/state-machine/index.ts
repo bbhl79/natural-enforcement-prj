@@ -32,7 +32,15 @@ export type {
   TransitionGuard,
   X12WhitelistId,
 } from './catalog.ts';
-export { buildTransitionEffects, decideTransition, matchesFrom, nextEntrySeq } from './engine.ts';
+export {
+  X03_WARN_MESSAGE,
+  applyWarningGate,
+  buildTransitionEffects,
+  classifyIllegal,
+  decideTransition,
+  matchesFrom,
+  nextEntrySeq,
+} from './engine.ts';
 export type {
   PlannedInstance,
   StageInstanceFact,
@@ -40,6 +48,15 @@ export type {
   TransitionEffects,
   TransitionOperation,
   TransitionSubject,
+  WarningGate,
 } from './engine.ts';
+export { RULE_PARAMETERS, confirmationGap, findRuleParameter, ruleRefsFor, toWarning } from './rule-registry.ts';
+export type {
+  ConfirmationGap,
+  ConfirmedRuleRef,
+  RuleConfirmation,
+  RuleParameter,
+  WarningItem,
+} from './rule-registry.ts';
 export { GUARD_AUTHORITIES, GUARD_LEVELS } from './guard.ts';
 export type { GuardAuthority, GuardLevel, GuardResult } from './guard.ts';

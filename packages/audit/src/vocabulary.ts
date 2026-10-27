@@ -76,6 +76,8 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'case.opened',
   // 案件状态机（#235）：成功推进、只读警告与被拒都记这一动作。
   'case.transitioned',
+  // 两段式确认（#258）：确认成功后只追加。不改业务行的首次警告仍走原动作的失败留痕。
+  'case.rule-confirmed',
   // 人员层利害关系（#237）。登记声明、回避决定、调查继续登记。签出被拒只记失败。
   // 机关层勾选（#263）复用 case.conflict-declared，不另增留痕动作。
   'case.conflict-declared',
@@ -787,6 +789,7 @@ export const AUDIT_DETAIL_ACTIONS = [
   'case.filing-withdrawn',
   'case.opened',
   'case.transitioned',
+  'case.rule-confirmed',
   'case.conflict-declared',
   'case.conflict-decided',
   'case.investigation-recorded',

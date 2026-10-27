@@ -17,6 +17,7 @@ import {
   type ClueStore,
   type TransitionDecision,
   type TransitionSubject,
+  type WarningItem,
 } from '@natural-enforcement/case';
 import {
   AccessControlService,
@@ -28,6 +29,7 @@ import {
 } from '@natural-enforcement/identity';
 
 import { CLOCK, type Clock } from './clock.ts';
+import { appendRuleConfirmation, ruleKeyBody, warningBody } from './case-rule-confirmation.ts';
 import { persistTransitionEffects } from './case-transition-write.ts';
 import { LOGIN_DIRECTORY, type LoginDirectory } from './login-directory.ts';
 import { UNIT_OF_WORK, type UnitOfWork } from './unit-of-work.ts';
@@ -56,7 +58,10 @@ const FAIL_REASONS = new Set<string>([
 
 export type CaseStateHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }
-  | { readonly status: 400; readonly body: { readonly result: string; readonly reason: string } }
+  | {
+      readonly status: 400;
+      readonly body: { readonly result: string; readonly reason: string; readonly message?: string; readonly ruleKey?: string };
+    }
   | { readonly status: 403; readonly body: { readonly reason: string } }
   | { readonly status: 404; readonly body: { readonly result: 'not-found' } }
   | {
@@ -93,7 +98,12 @@ export class CaseStateService {
   async transition(
     actor: ActorRef,
     caseId: string,
-    input: { readonly transitionId: string; readonly handlingOrgId: string | null },
+    input: {
+      readonly transitionId: string;
+      readonly handlingOrgId: string | null;
+      readonly confirmedRuleKeys?: readonly string[];
+      readonly confirmReasons?: Readonly<Record<string, string>>;
+    },
   ): Promise<CaseStateHttpOutcome> {
     const loaded = await this.load(caseId);
     if (!loaded) return { status: 404, body: { result: 'not-found' } };
@@ -104,6 +114,8 @@ export class CaseStateService {
     const decision = decideTransition({
       operation: { kind: 'transition', transitionId: input.transitionId },
       subject: { ...loaded.subject, proposedHandlingOrgId: input.handlingOrgId },
+      confirmedRuleKeys: input.confirmedRuleKeys,
+      confirmReasons: input.confirmReasons,
     });
     if (!decision.ok) return this.settle(actor, actorCode, loaded.view.handlingOrgId, caseId, decision);
     if (PROCEDURE_TRANSITIONS.has(input.transitionId)) {
@@ -165,11 +177,21 @@ export class CaseStateService {
           );
         }
       }
+      const parties = this.parties(actor, actorCode, loaded.view.handlingOrgId, caseId, TRANSITION_OPCODE);
       await tx.audit.append({
         action: 'case.transitioned',
-        ...this.parties(actor, actorCode, loaded.view.handlingOrgId, caseId, TRANSITION_OPCODE),
+        ...parties,
         detail: JSON.stringify({ transitionId: input.transitionId, caseId }),
       });
+      if (decision.confirmation) {
+        await appendRuleConfirmation(tx.audit, {
+          parties,
+          confirmation: decision.confirmation,
+          at,
+          step: `transition:${input.transitionId}`,
+          confirmReasons: input.confirmReasons,
+        });
+      }
       const view = await tx.cases.readCaseView(caseId);
       return { status: 200 as const, body: view ? presentCase(view) : { result: 'transitioned', caseId } };
     });
@@ -178,7 +200,11 @@ export class CaseStateService {
   async openApprovalChain(
     actor: ActorRef,
     caseId: string,
-    input: { readonly kind: string },
+    input: {
+      readonly kind: string;
+      readonly confirmedRuleKeys?: readonly string[];
+      readonly confirmReasons?: Readonly<Record<string, string>>;
+    },
   ): Promise<CaseStateHttpOutcome> {
     if (!CHAIN_KIND.test(input.kind)) {
       return { status: 400, body: { result: 'non-compliant', reason: 'invalid-approval-chain-kind' } };
@@ -192,6 +218,8 @@ export class CaseStateService {
     const decision = decideTransition({
       operation: { kind: 'open-approval-chain', chainKind: input.kind },
       subject: loaded.subject,
+      confirmedRuleKeys: input.confirmedRuleKeys,
+      confirmReasons: input.confirmReasons,
     });
     if (!decision.ok) {
       return this.settle(actor, actorCode, loaded.view.handlingOrgId, caseId, decision, CHAIN_OPCODE);
@@ -217,11 +245,21 @@ export class CaseStateService {
           },
         );
       }
+      const parties = this.parties(actor, actorCode, loaded.view.handlingOrgId, caseId, CHAIN_OPCODE);
       await tx.audit.append({
         action: 'case.transitioned',
-        ...this.parties(actor, actorCode, loaded.view.handlingOrgId, caseId, CHAIN_OPCODE),
+        ...parties,
         detail: JSON.stringify({ kind: 'open-approval-chain', chainId, caseId }),
       });
+      if (decision.confirmation) {
+        await appendRuleConfirmation(tx.audit, {
+          parties,
+          confirmation: decision.confirmation,
+          at,
+          step: `open-approval-chain:${input.kind}`,
+          confirmReasons: input.confirmReasons,
+        });
+      }
       const view = await tx.cases.readCaseView(caseId);
       return {
         status: 200 as const,
@@ -297,6 +335,9 @@ export class CaseStateService {
     decision: Exclude<TransitionDecision, { ok: true }>,
     opcode = TRANSITION_OPCODE,
   ): Promise<CaseStateHttpOutcome> {
+    if (decision.httpStatus === 400) {
+      return { status: 400, body: ruleKeyBody(decision) };
+    }
     if (decision.level === 'block') {
       return this.fail(actor, actorCode, orgUnitId, caseId, opcode, {
         reason: decision.reason,
@@ -311,7 +352,8 @@ export class CaseStateService {
       citation: decision.citation,
       outlet: '该提示不改变案件',
       httpStatus: 200,
-      result: 'advisory',
+      result: 'warnings',
+      warnings: decision.warnings,
     });
   }
 
@@ -328,6 +370,7 @@ export class CaseStateService {
       readonly outlet: string;
       readonly httpStatus?: 200 | 409;
       readonly result?: string;
+      readonly warnings?: readonly WarningItem[];
     },
   ): Promise<CaseStateHttpOutcome> {
     const reason = (FAIL_REASONS.has(fail.reason) ? fail.reason : 'advisory') as CaseTransitionedFailedReason;
@@ -336,12 +379,14 @@ export class CaseStateService {
       status === 200
         ? {
             status: 200,
-            body: {
-              result: fail.result ?? 'advisory',
-              reason: fail.reason,
-              message: fail.message,
-              basis: fail.citation,
-            },
+            body: fail.warnings
+              ? warningBody(fail.warnings)
+              : {
+                  result: fail.result ?? 'advisory',
+                  reason: fail.reason,
+                  message: fail.message,
+                  basis: fail.citation,
+                },
           }
         : blockBody(fail.reason, fail.message, fail.citation, fail.outlet);
     return this.uow.run(async () =>

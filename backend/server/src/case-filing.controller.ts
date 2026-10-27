@@ -3,6 +3,7 @@
 import { Body, Controller, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import type { ActorRef } from '@natural-enforcement/identity';
 
+import { readConfirmation } from './case-rule-confirmation.ts';
 import { CaseFilingService } from './case-filing.service.ts';
 import { SameOriginReadGuard } from './same-origin-read.guard.ts';
 import type { AuthenticatedRequest } from './session.guard.ts';
@@ -79,10 +80,17 @@ export class CaseFilingController {
     @Req() req: AuthenticatedRequest,
     @Res() res: HttpReply,
     @Param('id') id: string,
-    @Body() body: { readonly opinion?: unknown },
+    @Body() body: {
+      readonly opinion?: unknown;
+      readonly confirmedRuleKeys?: unknown;
+      readonly confirmReasons?: unknown;
+    },
   ): Promise<void> {
+    const confirmation = readConfirmation(body);
     const outcome = await this.filing.approve(req.actor as ActorRef, id, {
       opinion: typeof body.opinion === 'string' ? body.opinion : null,
+      confirmedRuleKeys: confirmation.confirmedRuleKeys,
+      confirmReasons: confirmation.confirmReasons,
     });
     res.status(outcome.status).json(outcome.body);
   }

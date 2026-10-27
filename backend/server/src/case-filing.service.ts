@@ -43,6 +43,7 @@ import {
   type IdentityStore,
 } from '@natural-enforcement/identity';
 
+import { appendRuleConfirmation, ruleKeyBody, warningBody } from './case-rule-confirmation.ts';
 import { persistTransitionEffects } from './case-transition-write.ts';
 import { CLOCK, type Clock } from './clock.ts';
 import { LOGIN_DIRECTORY, type LoginDirectory } from './login-directory.ts';
@@ -322,7 +323,11 @@ export class CaseFilingService {
   async approve(
     actor: ActorRef,
     approvalId: string,
-    input: { readonly opinion?: string | null },
+    input: {
+      readonly opinion?: string | null;
+      readonly confirmedRuleKeys?: readonly string[];
+      readonly confirmReasons?: Readonly<Record<string, string>>;
+    },
   ): Promise<FilingHttpOutcome> {
     const approval = await this.cases.readFilingApproval(approvalId);
     if (!approval) return { status: 404, body: { result: 'not-found' } };
@@ -393,8 +398,26 @@ export class CaseFilingService {
         otherInFlightChains: 0,
         instances: [],
       },
+      confirmedRuleKeys: input.confirmedRuleKeys,
+      confirmReasons: input.confirmReasons,
     });
     if (!decision.ok) {
+      if (decision.httpStatus === 400) {
+        return { status: 400, body: ruleKeyBody(decision) };
+      }
+      if (decision.httpStatus === 200) {
+        return this.uow.run(async () =>
+          rejected(
+            { status: 200 as const, body: warningBody(decision.warnings) },
+            {
+              action: 'case.transitioned',
+              outcome: 'failed',
+              reason: 'advisory',
+              ...this.parties(actor, actorCode, targetOrgId, approval.clueId, APPROVE_OPCODE),
+            },
+          ),
+        );
+      }
       return this.rejectStep(actor, actorCode, targetOrgId, approval.clueId, 'case.filing-approved', {
         status: 409,
         result: 'invalid-state',
@@ -402,6 +425,7 @@ export class CaseFilingService {
       });
     }
     const effects = decision.effects;
+    const confirmation = decision.confirmation ?? null;
 
     const at = this.clock.now();
     const opinion = typeof input.opinion === 'string' ? input.opinion.trim() || null : null;
@@ -478,11 +502,21 @@ export class CaseFilingService {
             },
           );
         }
+        const noCaseParties = this.parties(actor, actorCode, targetOrgId, approval.clueId, APPROVE_OPCODE);
         await tx.audit.append({
           action: 'case.transitioned',
-          ...this.parties(actor, actorCode, targetOrgId, approval.clueId, APPROVE_OPCODE),
+          ...noCaseParties,
           detail: JSON.stringify({ transitionId: 'T02', clueId: approval.clueId }),
         });
+        if (confirmation) {
+          await appendRuleConfirmation(tx.audit, {
+            parties: noCaseParties,
+            confirmation,
+            at,
+            step: 'filing:T02',
+            confirmReasons: input.confirmReasons,
+          });
+        }
         await tx.audit.append({
           action: 'clue.disposition-recorded',
           ...this.parties(actor, actorCode, targetOrgId, approval.clueId, APPROVE_OPCODE),
@@ -589,11 +623,21 @@ export class CaseFilingService {
           },
         );
       }
+      const openedParties = this.parties(actor, actorCode, targetOrgId, approval.clueId, APPROVE_OPCODE);
       await tx.audit.append({
         action: 'case.transitioned',
-        ...this.parties(actor, actorCode, targetOrgId, approval.clueId, APPROVE_OPCODE),
+        ...openedParties,
         detail: JSON.stringify({ transitionId: 'T01', caseId, clueId: approval.clueId }),
       });
+      if (confirmation) {
+        await appendRuleConfirmation(tx.audit, {
+          parties: openedParties,
+          confirmation,
+          at,
+          step: 'filing:T01',
+          confirmReasons: input.confirmReasons,
+        });
+      }
       await tx.audit.append({
         action: 'case.opened',
         ...this.parties(actor, actorCode, targetOrgId, approval.clueId, APPROVE_OPCODE),
