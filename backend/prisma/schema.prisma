@@ -1035,6 +1035,8 @@ model CaseRecord {
   currentStage String @map("current_stage")
   /// 环节进入次序号（立案后 1）
   stageEntrySeq Int @map("stage_entry_seq")
+  /// E02 上的中止叠加标记（#236）。不是另一主状态。
+  suspended Boolean @default(false)
   /// 当事人名称
   partyNames String[] @map("party_names")
   /// 立案依据的立案呈批主键
@@ -1123,4 +1125,121 @@ model CaseApprovalChain {
 
   @@index([caseId, status])
   @@map("case_approval_chain")
+}
+
+/// 违法记录（#236）。一案多条。作废只改状态，不物理删除。
+model CaseViolationRecord {
+  id String @id
+  caseId String @map("case_id")
+  behaviorDescription String @map("behavior_description")
+  parties String[]
+  startedOn DateTime @db.Date @map("started_on")
+  endedOn DateTime @db.Date @map("ended_on")
+  /// one-off 一次性 | continuous 连续 | continuing 继续
+  recognition String
+  /// active 有效 | voided 作废
+  status String @default("active")
+  voidReason String? @map("void_reason")
+  voidedBy String? @map("voided_by")
+  voidedAt DateTime? @db.Timestamptz(6) @map("voided_at")
+  createdBy String @map("created_by")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_violation_record")
+}
+
+/// 调查取证笔录（#236）。元数据加附件名。只追加，不物理删除。
+model CaseInquiryRecord {
+  id String @id
+  caseId String @map("case_id")
+  occurredAt DateTime @db.Timestamptz(6) @map("occurred_at")
+  place String
+  interviewee String
+  officerIds String[] @map("officer_ids")
+  attachmentName String @map("attachment_name")
+  createdBy String @map("created_by")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_inquiry_record")
+}
+
+/// 调查收尾呈批（#236）：中止、恢复、终止、撤案、结案。一条案件至多一张未批准呈批。
+model CaseProcedureApproval {
+  id String @id
+  caseId String @map("case_id")
+  /// suspend | resume | terminate | withdraw | close
+  kind String
+  drafterId String @map("drafter_id")
+  /// drafting | pending_review | pending_approval | approved
+  status String @default("drafting")
+  adminReview String? @map("admin_review")
+  currentVersionNo Int @default(0) @map("current_version_no")
+  approvalChainId String? @map("approval_chain_id")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt DateTime @default(now()) @db.Timestamptz(6) @map("updated_at")
+
+  @@index([caseId])
+  @@map("case_procedure_approval")
+}
+
+/// 调查收尾呈批正文版本（追加式）。
+model CaseProcedureVersion {
+  id String @id
+  approvalId String @map("approval_id")
+  versionNo Int @map("version_no")
+  contentJson String @map("content_json")
+  createdBy String @map("created_by")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([approvalId, versionNo])
+  @@map("case_procedure_version")
+}
+
+/// 调查收尾呈批步骤（追加式）：submit | review | approve | return。
+model CaseProcedureStep {
+  id String @id
+  approvalId String @map("approval_id")
+  versionNo Int @map("version_no")
+  step String
+  actorId String @map("actor_id")
+  opinion String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([approvalId])
+  @@map("case_procedure_step")
+}
+
+/// 期限停表、续表事件（#236 只发，#29 消费）。依据标签来自参数，只追加。
+model CaseDeadlineEvent {
+  id String @id
+  caseId String @map("case_id")
+  /// stop 停表 | continue 续表
+  eventKind String @map("event_kind")
+  basisLabel String @map("basis_label")
+  basisNote String @map("basis_note")
+  stage String
+  entrySeq Int @map("entry_seq")
+  transitionCode String @map("transition_code")
+  actorId String @map("actor_id")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_deadline_event")
+}
+
+/// 中止、恢复的书面告知记录（#236）。只记事实，不算三个工作日。
+model CasePartyNotice {
+  id String @id
+  caseId String @map("case_id")
+  /// suspend | resume
+  occasion String
+  note String
+  recordedBy String @map("recorded_by")
+  recordedAt DateTime @db.Timestamptz(6) @map("recorded_at")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_party_notice")
 }

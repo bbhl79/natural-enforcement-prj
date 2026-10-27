@@ -11,16 +11,28 @@ import type {
   CaseRow,
   CaseStore,
   CaseView,
+  DeadlineEventRow,
+  DeadlineEventWrite,
   FilingApprovalRow,
   FilingApprovalStepRow,
   FilingApprovalVersionRow,
   FilingDraftWrite,
   FilingStepWrite,
   FilingTodoRow,
+  InquiryRecordRow,
+  InquiryRecordWrite,
+  PartyNoticeRow,
+  PartyNoticeWrite,
+  ProcedureApprovalRow,
+  ProcedureDraftWrite,
+  ProcedureStepWrite,
   StageInstanceRow,
   StageInstanceWrite,
   TransitionHistoryRow,
   TransitionHistoryWrite,
+  ViolationRecordRow,
+  ViolationRecordWrite,
+  ViolationVoidWrite,
 } from './case-store.ts';
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -169,6 +181,7 @@ export class PrismaCaseStore implements CaseStore {
       stageEntrySeq: record.stageEntrySeq,
       partyNames: record.partyNames,
       filingApprovalId: record.filingApprovalId,
+      suspended: record.suspended,
       sourceClueIds: sources.map((row) => row.clueId),
       handlers: handlers.map((row) => ({ personnelId: row.personnelId, role: row.role })),
       openedAt: record.openedAt,
@@ -199,6 +212,7 @@ export class PrismaCaseStore implements CaseStore {
       stageEntrySeq: record.stageEntrySeq,
       partyNames: record.partyNames,
       filingApprovalId: record.filingApprovalId,
+      suspended: record.suspended,
       sourceClueIds: sources.map((row) => row.clueId),
       handlers: handlers.map((row) => ({ personnelId: row.personnelId, role: row.role })),
       openedAt: record.openedAt,
@@ -246,7 +260,12 @@ export class PrismaCaseStore implements CaseStore {
   async advanceCasePointer(write: CasePointerWrite): Promise<boolean> {
     const updated = await this.prisma.caseRecord.updateMany({
       where: { id: write.caseId, currentStage: write.expectedStage, stageEntrySeq: write.expectedSeq },
-      data: { currentStage: write.stage, stageEntrySeq: write.stageEntrySeq, status: write.status },
+      data: {
+        currentStage: write.stage,
+        stageEntrySeq: write.stageEntrySeq,
+        status: write.status,
+        suspended: write.suspended,
+      },
     });
     return updated.count === 1;
   }
@@ -322,6 +341,262 @@ export class PrismaCaseStore implements CaseStore {
       drafterId: row.drafter_id,
       updatedAt: row.updated_at,
     }));
+  }
+
+  async closeApprovalChain(id: string): Promise<boolean> {
+    const updated = await this.prisma.caseApprovalChain.updateMany({
+      where: { id, status: 'in_flight' },
+      data: { status: 'closed' },
+    });
+    return updated.count === 1;
+  }
+
+  async listViolationRecords(caseId: string): Promise<readonly ViolationRecordRow[]> {
+    const rows = await this.prisma.caseViolationRecord.findMany({
+      where: { caseId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      behaviorDescription: row.behaviorDescription,
+      parties: row.parties,
+      startedOn: row.startedOn,
+      endedOn: row.endedOn,
+      recognition: row.recognition,
+      status: row.status,
+      voidReason: row.voidReason,
+      voidedAt: row.voidedAt,
+    }));
+  }
+
+  async insertViolationRecord(write: ViolationRecordWrite): Promise<void> {
+    await this.prisma.caseViolationRecord.create({
+      data: {
+        id: write.id,
+        caseId: write.caseId,
+        behaviorDescription: write.behaviorDescription,
+        parties: [...write.parties],
+        startedOn: write.startedOn,
+        endedOn: write.endedOn,
+        recognition: write.recognition,
+        status: 'active',
+        createdBy: write.createdBy,
+        createdAt: write.createdAt,
+      },
+    });
+  }
+
+  async voidViolationRecord(write: ViolationVoidWrite): Promise<boolean> {
+    const updated = await this.prisma.caseViolationRecord.updateMany({
+      where: { id: write.id, caseId: write.caseId, status: 'active' },
+      data: { status: 'voided', voidReason: write.reason, voidedBy: write.actorId, voidedAt: write.at },
+    });
+    return updated.count === 1;
+  }
+
+  async listInquiryRecords(caseId: string): Promise<readonly InquiryRecordRow[]> {
+    const rows = await this.prisma.caseInquiryRecord.findMany({
+      where: { caseId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      occurredAt: row.occurredAt,
+      place: row.place,
+      interviewee: row.interviewee,
+      officerIds: row.officerIds,
+      attachmentName: row.attachmentName,
+      createdAt: row.createdAt,
+    }));
+  }
+
+  async insertInquiryRecord(write: InquiryRecordWrite): Promise<void> {
+    await this.prisma.caseInquiryRecord.create({
+      data: {
+        id: write.id,
+        caseId: write.caseId,
+        occurredAt: write.occurredAt,
+        place: write.place,
+        interviewee: write.interviewee,
+        officerIds: [...write.officerIds],
+        attachmentName: write.attachmentName,
+        createdBy: write.createdBy,
+        createdAt: write.createdAt,
+      },
+    });
+  }
+
+  async readOpenProcedure(caseId: string): Promise<ProcedureApprovalRow | null> {
+    const row = await this.prisma.caseProcedureApproval.findFirst({
+      where: { caseId, status: { not: 'approved' } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!row) return null;
+    return this.withProcedureContent(row);
+  }
+
+  async readProcedure(approvalId: string): Promise<ProcedureApprovalRow | null> {
+    const row = await this.prisma.caseProcedureApproval.findUnique({ where: { id: approvalId } });
+    if (!row) return null;
+    return this.withProcedureContent(row);
+  }
+
+  async saveProcedureDraft(write: ProcedureDraftWrite): Promise<boolean> {
+    const versionNo = write.isNew ? 1 : write.expectedVersionNo + 1;
+    if (write.isNew) {
+      const inserted = await this.prisma.$queryRaw<Array<{ id: string }>>`
+        INSERT INTO case_procedure_approval (
+          id, case_id, kind, drafter_id, status, current_version_no, created_at, updated_at
+        )
+        VALUES (
+          ${write.approvalId}, ${write.caseId}, ${write.kind}, ${write.drafterId},
+          'drafting', 1, ${write.at}, ${write.at}
+        )
+        ON CONFLICT (case_id) WHERE status <> 'approved' DO NOTHING
+        RETURNING id
+      `;
+      if (inserted.length === 0) return false;
+    } else {
+      const updated = await this.prisma.$queryRaw<Array<{ id: string }>>`
+        UPDATE case_procedure_approval
+        SET kind = ${write.kind},
+            current_version_no = current_version_no + 1,
+            updated_at = ${write.at}
+        WHERE id = ${write.approvalId}
+          AND status = 'drafting'
+          AND current_version_no = ${write.expectedVersionNo}
+        RETURNING id
+      `;
+      if (updated.length === 0) return false;
+    }
+    await this.prisma.caseProcedureVersion.create({
+      data: {
+        id: write.versionId,
+        approvalId: write.approvalId,
+        versionNo,
+        contentJson: write.contentJson,
+        createdBy: write.drafterId,
+        createdAt: write.at,
+      },
+    });
+    return true;
+  }
+
+  async applyProcedureStep(write: ProcedureStepWrite): Promise<boolean> {
+    const data: {
+      status: string;
+      updatedAt: Date;
+      adminReview?: string;
+      approvalChainId?: string | null;
+    } = { status: write.nextStatus, updatedAt: write.at };
+    if (write.adminReview !== undefined) data.adminReview = write.adminReview;
+    if (write.approvalChainId !== undefined) data.approvalChainId = write.approvalChainId;
+    const updated = await this.prisma.caseProcedureApproval.updateMany({
+      where: { id: write.approvalId, status: write.expectedStatus },
+      data,
+    });
+    if (updated.count === 0) return false;
+    await this.prisma.caseProcedureStep.create({
+      data: {
+        id: write.stepId,
+        approvalId: write.approvalId,
+        versionNo: write.versionNo,
+        step: write.step,
+        actorId: write.actorId,
+        opinion: write.opinion,
+        createdAt: write.at,
+      },
+    });
+    return true;
+  }
+
+  async listDeadlineEvents(caseId: string): Promise<readonly DeadlineEventRow[]> {
+    const rows = await this.prisma.caseDeadlineEvent.findMany({
+      where: { caseId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      eventKind: row.eventKind,
+      basisLabel: row.basisLabel,
+      basisNote: row.basisNote,
+      stage: row.stage,
+      entrySeq: row.entrySeq,
+      transitionCode: row.transitionCode,
+      createdAt: row.createdAt,
+    }));
+  }
+
+  async insertDeadlineEvent(write: DeadlineEventWrite): Promise<void> {
+    await this.prisma.caseDeadlineEvent.create({
+      data: {
+        id: write.id,
+        caseId: write.caseId,
+        eventKind: write.eventKind,
+        basisLabel: write.basisLabel,
+        basisNote: write.basisNote,
+        stage: write.stage,
+        entrySeq: write.entrySeq,
+        transitionCode: write.transitionCode,
+        actorId: write.actorId,
+        createdAt: write.createdAt,
+      },
+    });
+  }
+
+  async listPartyNotices(caseId: string): Promise<readonly PartyNoticeRow[]> {
+    const rows = await this.prisma.casePartyNotice.findMany({
+      where: { caseId },
+      orderBy: [{ recordedAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      occasion: row.occasion,
+      note: row.note,
+      recordedAt: row.recordedAt,
+    }));
+  }
+
+  async insertPartyNotice(write: PartyNoticeWrite): Promise<void> {
+    await this.prisma.casePartyNotice.create({
+      data: {
+        id: write.id,
+        caseId: write.caseId,
+        occasion: write.occasion,
+        note: write.note,
+        recordedBy: write.recordedBy,
+        recordedAt: write.recordedAt,
+      },
+    });
+  }
+
+  private async withProcedureContent(row: {
+    id: string;
+    caseId: string;
+    kind: string;
+    status: string;
+    adminReview: string | null;
+    currentVersionNo: number;
+    drafterId: string;
+    approvalChainId: string | null;
+  }): Promise<ProcedureApprovalRow> {
+    const version =
+      row.currentVersionNo > 0
+        ? await this.prisma.caseProcedureVersion.findUnique({
+            where: { approvalId_versionNo: { approvalId: row.id, versionNo: row.currentVersionNo } },
+          })
+        : null;
+    return {
+      id: row.id,
+      caseId: row.caseId,
+      kind: row.kind,
+      status: row.status,
+      adminReview: row.adminReview,
+      currentVersionNo: row.currentVersionNo,
+      drafterId: row.drafterId,
+      approvalChainId: row.approvalChainId,
+      contentJson: version?.contentJson ?? null,
+    };
   }
 }
 
