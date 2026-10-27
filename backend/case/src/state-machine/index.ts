@@ -13,6 +13,7 @@ export {
   X12_WHITELIST,
   block,
   findIllegal,
+  unannotatedMigrationIds,
   findTransition,
   isTerminalCaseStatus,
   isX12Whitelisted,
@@ -40,5 +41,5 @@ export type {
   TransitionOperation,
   TransitionSubject,
 } from './engine.ts';
-export { GUARD_LEVELS } from './guard.ts';
-export type { GuardLevel, GuardResult } from './guard.ts';
+export { GUARD_AUTHORITIES, GUARD_LEVELS } from './guard.ts';
+export type { GuardAuthority, GuardLevel, GuardResult } from './guard.ts';
