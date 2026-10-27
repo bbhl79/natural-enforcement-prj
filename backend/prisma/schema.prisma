@@ -1136,11 +1136,12 @@ model CaseApprovalChain {
 }
 
 /// 改派呈批（#239，T33）。发起后待批准；批准才更新承办人员。一案至多一条待批准。
+/// 不批走 #238 退回置 returned；发起人批准前可撤回置 withdrawn（#279）。
 /// 待批准的部分唯一索引 case_reassignment_pending_uq 在迁移里，Prisma schema 表达不了。
 model CaseReassignment {
   id String @id
   caseId String @map("case_id")
-  /// pending_approval 待批准 | approved 已批准
+  /// pending_approval 待批准 | approved 已批准 | returned 已退回 | withdrawn 已撤回
   status String @default("pending_approval")
   /// transfer 调岗 | leave 离职 | recusal 回避 | other 其他
   reasonCode String @map("reason_code")
