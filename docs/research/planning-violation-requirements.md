@@ -267,7 +267,7 @@
 | type.planning_build_without_permit.subject_kind | 违法主体类别（单位／个人／其他组织） | 违法主体 | 选填 | 核查前补齐 | 提示 | doc_002 3.2.3.4(1)；doc_002 4.2.1 违法责任主体认定 |
 | type.planning_build_without_permit.subject_succession | 责任主体承继情况（是否发生继承、转让、赠与；继承人、受让人、受赠人名称；承租人或者实际使用人名称与配合情况） | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_066 第 27 条第 3 款；doc_002 4.2.1 |
 | type.planning_build_without_permit.responsible_person | 直接负责的主管人员和其他直接责任人员（含是否属于监察对象） | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_066 第 32 条；doc_002 11.2.1(2)(3)、11.2.2；doc_067 第十六条第一至三项 |
-| type.planning_build_without_permit.build_stage | 在建／已建成 | 违法事实 | 必填 | 录入时 | 警告 | doc_066 第 11 条；同；doc_068 第 20 条、第 24 条第 1 款、第 26 条第 2 款、第 27 条第 1 款 |
+| type.planning_build_without_permit.build_stage | 在建／已建成 | 违法事实 | 必填 | 录入时 | 警告 | doc_066 第 11 条；同；doc_068 第 20 条、第 24 条第 1 款、第 26 条、第 27 条第 1 款 |
 | type.planning_build_without_permit.occurrence_time | 违法行为发生时间（开工时间；已建成的另记建成时间） | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 4.4.2.2(4) 国土空间规划违法案件基本要素；doc_002 2.3(5) 追诉时效 |
 | type.planning_build_without_permit.continuing_state | 违法行为是否处于继续状态（违反城乡规划的事实是否持续存在） | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_066 第 3 条第 2 款；doc_069 第十四条；doc_002 2.3(5) |
 | type.planning_build_without_permit.permit_status | 建设工程规划许可证取得情况（未取得／已取得；证号、核发机关、核发日期、许可内容；已取得的是否因一年内未取得施工许可或者未开工且未办延期而自行失效） | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_064 第 40 条第 1 款、第 64 条；doc_070 第 44 条；doc_065 第 40 条、第 80 条第 1 款；doc_070 第 49 条第 2 款 |
@@ -310,7 +310,7 @@
 | type.planning_temporary_build.subject_kind | 违法主体类别（单位／个人／其他组织） | 违法主体 | 选填 | 核查前补齐 | 提示 | doc_002 3.2.3.4(1)；doc_002 4.2.1 |
 | type.planning_temporary_build.subject_succession | 责任主体承继情况（是否发生继承、转让、赠与；继承人、受让人、受赠人名称；承租人或者实际使用人名称与配合情况） | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_066 第 27 条第 3 款；doc_002 4.2.1 |
 | type.planning_temporary_build.responsible_person | 直接负责的主管人员和其他直接责任人员（含是否属于监察对象） | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_066 第 32 条；doc_002 11.2.1(2)(3)、11.2.2；doc_067 第十六条第四项 |
-| type.planning_temporary_build.build_stage | 在建／已建成（临时建筑物、构筑物超过批准期限不拆除的记「已建成」） | 违法事实 | 必填 | 录入时 | 警告 | doc_066 第 11 条；同；doc_068 第 26 条第 2 款 |
+| type.planning_temporary_build.build_stage | 在建／已建成（临时建筑物、构筑物超过批准期限不拆除的记「已建成」） | 违法事实 | 必填 | 录入时 | 警告 | doc_066 第 11 条；同；doc_068 第 26 条 |
 | type.planning_temporary_build.occurrence_time | 违法行为发生时间（临时建设开工时间；超期不拆除的记批准使用期限届满日） | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_002 4.4.2.2(4)；doc_002 2.3(5) |
 | type.planning_temporary_build.continuing_state | 违法行为是否处于继续状态（临时建筑物、构筑物是否仍在原址存续） | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_066 第 3 条第 2 款；doc_002 2.3(5) |
 | type.planning_temporary_build.temp_violation_kind | 临时建设违法情形（未经批准进行临时建设／未按照批准内容进行临时建设／临时建筑物、构筑物超过批准期限不拆除） | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_064 第 66 条第（一）（二）（三）项；doc_066 第 3 条第（三）（四）项 |

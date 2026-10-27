@@ -162,7 +162,7 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.mineral_explore_without_license_or_overstep.explore_situation | 涉嫌情形单选：无证勘查／许可证有效期满未延续／越界勘查 | 违法事实 | 必填 | 录入时 | 阻断 | doc_002 附录 B 一（一）情形列举；doc_079 第 63 条与第 66 条罚则分流 |
+| type.mineral_explore_without_license_or_overstep.explore_situation | 涉嫌情形单选：无证勘查／许可证有效期满未延续／越界勘查 | 违法事实 | 必填 | 录入时 | 阻断 | doc_002 附录 B 一（一）情形列举；doc_079 第 63 条；doc_079 第 66 条；与罚则分流 |
 | type.mineral_explore_without_license_or_overstep.explore_license_no | 勘查许可证号 | 许可资质与审批 | 涉嫌越界勘查或有效期满未延续情形时必填；无证勘查情形不适用 | 核查前补齐 | 警告 | doc_002 3.2.3.2(3)；doc_079 第 63 条第 2 款；doc_002 附录 B 一（一） |
 | type.mineral_explore_without_license_or_overstep.commodity | 勘查目标矿种 | 涉案对象 | 选填 | 只提示 | 提示 | doc_002 3.2.3.2(4) |
 
@@ -177,7 +177,7 @@
 
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
-| type.mineral_mine_without_license.mine_situation | 涉嫌情形单选（附录 B 9 情形，含「其他」） | 违法事实 | 必填 | 录入时 | 阻断 | doc_002 附录 B 二（一）情形列举；doc_079 第 64 条与第 67 条罚则分流 |
+| type.mineral_mine_without_license.mine_situation | 涉嫌情形单选（附录 B 9 情形，含「其他」） | 违法事实 | 必填 | 录入时 | 阻断 | doc_002 附录 B 二（一）情形列举；doc_079 第 64 条；doc_079 第 67 条；与罚则分流 |
 | type.mineral_mine_without_license.commodity | 开采矿种 | 涉案对象 | 选填 | 核查前补齐 | 警告 | doc_002 3.2.3.2(4)；doc_079 第 64 条第 1 款；doc_079 第 8 条第 3 款、第 68 条第 2 款 |
 | type.mineral_mine_without_license.output_clue | 采出矿产品数量与价值线索（估算量、外销情况） | 违法事实 | 选填 | 只提示 | 提示 | doc_002 3.2.3.2(4)、4.2.5；doc_002 附录 B 二（四）价值认定层级 |
 
@@ -214,7 +214,7 @@
 |---|---|---|---|---|---|---|
 | type.mineral_transfer_rights_resale.explore_license_no | 勘查许可证号（涉探矿权时） | 许可资质与审批 | 选填 | 核查前补齐 | 警告 | doc_002 3.2.3.2(3)(7) |
 | type.mineral_transfer_rights_resale.mining_license_no | 采矿许可证号（涉采矿权时） | 许可资质与审批 | 选填 | 核查前补齐 | 警告 | doc_002 3.2.3.2(3)(7) |
-| type.mineral_transfer_rights_resale.transfer_registered | 转让变更登记办理情况（已办／未办／不明） | 许可资质与审批 | 选填 | 核查前补齐 | 警告 | doc_079 第 22 条第 2、3 款 |
+| type.mineral_transfer_rights_resale.transfer_registered | 转让变更登记办理情况（已办／未办／不明） | 许可资质与审批 | 选填 | 核查前补齐 | 警告 | doc_079 第 22 条第 2 款；doc_079 第 22 条第 3 款 |
 | type.mineral_transfer_rights_resale.transfer_control_clue | 受让方实际接收、控制矿山情况线索 | 违法事实 | 选填 | 只提示 | 提示 | doc_002 附录 B 三（五）1 |
 
 **三（三）未经批准，擅自转让探矿权、采矿权**
@@ -223,7 +223,7 @@
 |---|---|---|---|---|---|---|
 | type.mineral_transfer_rights_unapproved.explore_license_no | 勘查许可证号（涉探矿权时） | 许可资质与审批 | 选填 | 核查前补齐 | 警告 | doc_002 3.2.3.2(3)(7) |
 | type.mineral_transfer_rights_unapproved.mining_license_no | 采矿许可证号（涉采矿权时） | 许可资质与审批 | 选填 | 核查前补齐 | 警告 | doc_002 3.2.3.2(3)(7) |
-| type.mineral_transfer_rights_unapproved.transfer_registered | 转让变更登记办理情况（已办／未办／不明） | 许可资质与审批 | 选填 | 核查前补齐 | 警告 | doc_079 第 22 条第 2、3 款；doc_002 附录 B 三（三） |
+| type.mineral_transfer_rights_unapproved.transfer_registered | 转让变更登记办理情况（已办／未办／不明） | 许可资质与审批 | 选填 | 核查前补齐 | 警告 | doc_079 第 22 条第 2 款；doc_079 第 22 条第 3 款；doc_002 附录 B 三（三） |
 | type.mineral_transfer_rights_unapproved.transfer_control_clue | 受让方实际接收、控制矿山情况线索 | 违法事实 | 选填 | 只提示 | 提示 | doc_002 附录 B 三（五）1、5；doc_079 第 63、64 条 |
 
 说明：新矿法下矿业权转让不再经「批准」，改为登记生效（矿法第 22、27 条，实施条例第 19–22 条【法】）。本项行为形态已实质变化（见 §5.2），但附录 B 仍是现行规程清单，要件照项呈现。
@@ -233,7 +233,7 @@
 | 要件键 | 项 | 呈现 | 必填性 | 必填时机 | 缺件后果 | 依据 |
 |---|---|---|---|---|---|---|
 | type.mineral_transfer_mining_by_contract.mining_license_no | 采矿许可证号 | 许可资质与审批 | 选填 | 核查前补齐 | 警告 | doc_002 3.2.3.2(3)(7) |
-| type.mineral_transfer_mining_by_contract.transfer_registered | 变更登记办理情况（已办／未办／不明） | 许可资质与审批 | 选填 | 核查前补齐 | 警告 | doc_079 第 22 条第 2、3 款 |
+| type.mineral_transfer_mining_by_contract.transfer_registered | 变更登记办理情况（已办／未办／不明） | 许可资质与审批 | 选填 | 核查前补齐 | 警告 | doc_079 第 22 条第 2 款；doc_079 第 22 条第 3 款 |
 | type.mineral_transfer_mining_by_contract.transfer_control_clue | 承包方实际接收、控制矿山情况线索（含是否仅承包采掘工程） | 违法事实 | 选填 | 只提示 | 提示 | doc_002 附录 B 三（五）1、三（五）3 |
 
 **四（一）违法审批发放勘查许可证**（与四（二）同形，要件逐类型各设一份）
@@ -242,7 +242,7 @@
 |---|---|---|---|---|---|---|
 | type.mineral_approve_explore_license.approval_doc_no | 涉事审批发证文件文号或许可证号 | 许可资质与审批 | 必填 | 核查前补齐 | 警告 | doc_002 3.2.3.2(3)；doc_002 7.2(2) |
 | type.mineral_approve_explore_license.approval_org | 涉事审批发证机关 | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_002 7.2(2)；doc_002 附录 B 四（一）（二） |
-| type.mineral_approve_explore_license.approval_defect | 违法审批发证情形（超越权限／不符合法定条件／违反程序／其他） | 违法事实 | 选填 | 只提示 | 提示 | doc_002 附录 B 四（三）3；旧；doc_079 第 47 条情形列举；doc_079 第 62 条 |
+| type.mineral_approve_explore_license.approval_defect | 违法审批发证情形（超越权限／不符合法定条件／违反程序／其他） | 违法事实 | 选填 | 只提示 | 提示 | doc_002 附录 B 四（三）3；doc_079 第 62 条；情形列举。第47条已删，该条现为矿区生态修复。第62条匹配中。待法制确认 |
 
 
 **四（二）违法审批发放采矿许可证**
@@ -251,7 +251,7 @@
 |---|---|---|---|---|---|---|
 | type.mineral_approve_mining_license.approval_doc_no | 涉事审批发证文件文号或许可证号 | 许可资质与审批 | 必填 | 核查前补齐 | 警告 | doc_002 3.2.3.2(3)；doc_002 7.2(2) |
 | type.mineral_approve_mining_license.approval_org | 涉事审批发证机关 | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_002 7.2(2)；doc_002 附录 B 四（一）（二） |
-| type.mineral_approve_mining_license.approval_defect | 违法审批发证情形（超越权限／不符合法定条件／违反程序／其他） | 违法事实 | 选填 | 只提示 | 提示 | doc_002 附录 B 四（三）3；旧；doc_079 第 47 条情形列举；doc_079 第 62 条 |
+| type.mineral_approve_mining_license.approval_defect | 违法审批发证情形（超越权限／不符合法定条件／违反程序／其他） | 违法事实 | 选填 | 只提示 | 提示 | doc_002 附录 B 四（三）3；doc_079 第 62 条；情形列举。第47条已删，该条现为矿区生态修复。第62条匹配中。待法制确认 |
 
 - 说明一：本大类的案件出口是行政处理决定（撤销、废止）＋党纪政务责任，不是罚款（规程 7.2(2)、附录 B 四（三）1，底稿 §8）。吊销许可证由颁证机关执行（规程 10.x）。这些影响 #30 校验规则与流程设计，不影响本清单。
 - 说明二：本大类「本机关既是被调查对象又是调查者」的利益冲突承载，另有专票（#35 结论新开票），不在本清单范围。

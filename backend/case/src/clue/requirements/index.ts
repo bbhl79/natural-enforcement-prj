@@ -38,7 +38,7 @@ export type {
  * 声明版本。改动声明（公共层、来源层、类型层任一处）时同时改这里。
  * 响应带它，前端按「组合 + 版本」在会话内缓存（#207 协议 E 节）。
  */
-export const CLUE_REQUIREMENT_DECLARATION_VERSION = 'requirements-2026-10-24-01';
+export const CLUE_REQUIREMENT_DECLARATION_VERSION = 'requirements-2026-10-27-01';
 
 /** 叠加输入。来源大类编码取自线索来源编码表（1／5／22／3／21）。 */
 export interface FormSchemaInput {
