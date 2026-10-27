@@ -34,6 +34,7 @@ import type {
   ClueDesignationRequestRow,
   ClueDesignationRequestWrite,
   ClueDispositionWrite,
+  ClueFiledWrite,
   ClueExternalTransferWrite,
   ClueExternalTransferRow,
   ClueDispatchContext,
@@ -794,6 +795,7 @@ export class PrismaClueStore implements ClueStore {
               assignedByOrgId: assignmentRow.assignedByOrgId,
             },
       handlers: handlerRows.map((row) => ({ personnelId: row.personnelId, role: row.role })),
+      subjectUnknown: clue.subjectUnknown,
       hits: hits.map((hit) => ({
         partId: hit.part_id,
         partIndex: hit.part_index,
@@ -1203,6 +1205,17 @@ export class PrismaClueStore implements ClueStore {
       },
     });
     return true;
+  }
+
+  async markFiled(write: ClueFiledWrite): Promise<boolean> {
+    const rows = await this.prisma.$queryRaw<Array<{ id: string }>>`
+      UPDATE clue SET status = 'filed'
+      WHERE id = ${write.clueId}
+        AND status = ${write.expectedStatus}
+        AND status = 'handler_assigned'
+      RETURNING id
+    `;
+    return rows.length > 0;
   }
 
   async hasOtherDisposition(clueId: string): Promise<boolean> {

@@ -306,6 +306,7 @@ export type {
   ClueDispositionWrite,
   ClueExternalTransferWrite,
   ClueExternalTransferRow,
+  ClueFiledWrite,
   ClueHeldRow,
   ClueReminderResolveWrite,
   ClueWithdrawContext,
