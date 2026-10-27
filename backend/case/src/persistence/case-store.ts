@@ -204,6 +204,67 @@ export interface ApprovalChainWrite {
   readonly openedAt: Date;
 }
 
+/** 人员层利害关系的一行（只追加）。 */
+export interface PersonConflictEventRow {
+  readonly id: string;
+  readonly lineageId: string;
+  readonly caseId: string;
+  readonly personId: string;
+  readonly source: string;
+  readonly reason: string;
+  readonly status: string;
+  readonly seq: number;
+  readonly createdBy: string;
+  readonly createdAt: Date;
+}
+
+export interface PersonConflictEventWrite {
+  readonly id: string;
+  readonly caseId: string;
+  readonly personId: string;
+  readonly lineageId: string;
+  readonly source: string;
+  readonly reason: string;
+  readonly status: string;
+  readonly seq: number;
+  readonly createdBy: string;
+  readonly createdAt: Date;
+}
+
+/** 回避决定的一行（只追加）。 */
+export interface PersonConflictDecisionRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly lineageId: string;
+  readonly deciderId: string;
+  readonly conclusion: string;
+  readonly reason: string;
+  readonly decidedAt: Date;
+  readonly createdAt: Date;
+}
+
+export interface PersonConflictDecisionWrite {
+  readonly id: string;
+  readonly caseId: string;
+  readonly lineageId: string;
+  readonly deciderId: string;
+  readonly conclusion: string;
+  readonly reason: string;
+  readonly decidedAt: Date;
+  /** 决定同时追加的下一条状态事件。 */
+  readonly nextEvent: PersonConflictEventWrite;
+}
+
+/** 调查继续登记的一行（只追加）。 */
+export interface InvestigationEntryWrite {
+  readonly id: string;
+  readonly caseId: string;
+  readonly personnelId: string;
+  readonly kind: string;
+  readonly summary: string;
+  readonly createdAt: Date;
+}
+
 export interface ApprovalOpinionWrite {
   readonly id: string;
   readonly caseId: string;
@@ -305,6 +366,19 @@ export interface CaseStore {
   readStageSignature(signatureId: string): Promise<CaseStageSignatureRow | null>;
   /** 审批人待办：给定状态、线索当前承办机构在范围内的呈批。 */
   listFilingTodos(statuses: readonly string[], orgUnitIds: readonly string[]): Promise<readonly FilingTodoRow[]>;
+  /** 本案人员层利害关系事件（只追加，时间升序）。personId 省略时返回全部。 */
+  listPersonConflictEvents(caseId: string, personId?: string): Promise<readonly PersonConflictEventRow[]>;
+  /** 本案回避决定（只追加，时间升序）。 */
+  listPersonConflictDecisions(caseId: string): Promise<readonly PersonConflictDecisionRow[]>;
+  /** 追加一条利害关系事件。 */
+  appendPersonConflictEvent(write: PersonConflictEventWrite): Promise<void>;
+  /**
+   * 追加回避决定，并追加下一条状态事件。
+   * 该声明链已有决定时返回 false，两行都不留。
+   */
+  appendPersonConflictDecision(write: PersonConflictDecisionWrite): Promise<boolean>;
+  /** 追加一条调查登记（笔录或违法记录）。 */
+  appendInvestigationEntry(write: InvestigationEntryWrite): Promise<void>;
   /** 办结一条进行中的审批链。不是进行中则返回 false。 */
   closeApprovalChain(id: string): Promise<boolean>;
   listViolationRecords(caseId: string): Promise<readonly ViolationRecordRow[]>;

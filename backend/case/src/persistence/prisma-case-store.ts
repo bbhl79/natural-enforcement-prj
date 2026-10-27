@@ -22,6 +22,11 @@ import type {
   FilingDraftWrite,
   FilingStepWrite,
   FilingTodoRow,
+  InvestigationEntryWrite,
+  PersonConflictDecisionRow,
+  PersonConflictDecisionWrite,
+  PersonConflictEventRow,
+  PersonConflictEventWrite,
   InquiryRecordRow,
   InquiryRecordWrite,
   PartyNoticeRow,
@@ -469,6 +474,49 @@ export class PrismaCaseStore implements CaseStore {
       drafterId: row.drafter_id,
       updatedAt: row.updated_at,
     }));
+  }
+
+  async listPersonConflictEvents(caseId: string, personId?: string): Promise<readonly PersonConflictEventRow[]> {
+    return this.prisma.personConflictEvent.findMany({
+      where: personId ? { caseId, personId } : { caseId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async listPersonConflictDecisions(caseId: string): Promise<readonly PersonConflictDecisionRow[]> {
+    return this.prisma.personConflictDecision.findMany({
+      where: { caseId },
+      orderBy: [{ decidedAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async appendPersonConflictEvent(write: PersonConflictEventWrite): Promise<void> {
+    await this.prisma.personConflictEvent.create({ data: { ...write } });
+  }
+
+  async appendPersonConflictDecision(write: PersonConflictDecisionWrite): Promise<boolean> {
+    try {
+      await this.prisma.personConflictDecision.create({
+        data: {
+          id: write.id,
+          caseId: write.caseId,
+          lineageId: write.lineageId,
+          deciderId: write.deciderId,
+          conclusion: write.conclusion,
+          reason: write.reason,
+          decidedAt: write.decidedAt,
+        },
+      });
+      await this.prisma.personConflictEvent.create({ data: { ...write.nextEvent } });
+    } catch (error) {
+      if (isUniqueConflict(error)) return false;
+      throw error;
+    }
+    return true;
+  }
+
+  async appendInvestigationEntry(write: InvestigationEntryWrite): Promise<void> {
+    await this.prisma.caseInvestigationEntry.create({ data: { ...write } });
   }
 
   async closeApprovalChain(id: string): Promise<boolean> {

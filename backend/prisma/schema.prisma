@@ -1133,6 +1133,59 @@ model CaseApprovalChain {
   @@map("case_approval_chain")
 }
 
+/// 人员层利害关系事件（#237，追加式）。状态变化写新行，不改旧行。主体类型固定为人员。
+/// 同一 lineageId 的最新一行是当前状态：declared 声明 | effective 生效 | rejected 驳回。
+model PersonConflictEvent {
+  id         String   @id
+  caseId     String   @map("case_id")
+  personId   String   @map("person_id")
+  /// 声明链。首行等于本行 id，后续状态行指向首行。
+  lineageId  String   @map("lineage_id")
+  /// 链内序号。首行 1，状态变化加 1。时间相同时按它分先后。
+  seq        Int
+  /// self 本人申请 | party 当事人申请 | other 他人勾选
+  source     String
+  /// 声明理由。自由文本留业务行。
+  reason     String
+  status     String
+  createdBy  String   @map("created_by")
+  createdAt  DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([lineageId, seq])
+  @@index([caseId, personId])
+  @@map("person_conflict_event")
+}
+
+/// 回避决定（#237，追加式）。一条声明链至多一条决定。
+/// 结论 recuse 回避 | reject 驳回。决定人、时间、理由必填。
+model PersonConflictDecision {
+  id         String   @id
+  caseId     String   @map("case_id")
+  lineageId  String   @unique @map("lineage_id")
+  deciderId  String   @map("decider_id")
+  conclusion String
+  reason     String
+  decidedAt  DateTime @db.Timestamptz(6) @map("decided_at")
+  createdAt  DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@map("person_conflict_decision")
+}
+
+/// 调查继续登记（#237，追加式）。声明期间承办人员登记笔录或违法记录，不走签出守卫。
+/// kind：transcript 笔录 | violation 违法记录。
+model CaseInvestigationEntry {
+  id          String   @id
+  caseId      String   @map("case_id")
+  personnelId String   @map("personnel_id")
+  kind        String
+  summary     String
+  createdAt   DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_investigation_entry")
+}
+
 /// 审批意见（#238，追加式）。退回原因写在这里。
 model CaseApprovalOpinion {
   id String @id

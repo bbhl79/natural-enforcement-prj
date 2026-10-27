@@ -190,6 +190,7 @@ RULES=(
   spatial-no-orm-mutation
   reference-data-no-mutation
   case-history-append-only
+  person-conflict-append-only
   investigation-record-no-delete
   runtime-manifest
   user-lock-assertions
@@ -710,6 +711,8 @@ check_weak-reference-entry() {
 # #234 追加立案呈批与案件最小模型六张表（#27 T01／T02、#16）：FilingApproval、FilingApprovalVersion、
 # FilingApprovalStep、CaseRecord、CaseSourceClue、CaseHandler。
 # #235 追加环节实例、迁移历史、审批链：CaseStageInstance、CaseTransition、CaseApprovalChain。
+# #237 追加人员层利害关系、回避决定、调查继续登记：PersonConflictEvent、
+# PersonConflictDecision、CaseInvestigationEntry。
 # #238 追加审批意见、退回记录、环节失效、签字、材料：CaseApprovalOpinion、CaseReturn、
 # CaseStageInvalidation、CaseStageSignature、CaseMaterial。
 # #236 追加违法记录、笔录、收尾呈批、期限事件与告知记录：CaseViolationRecord、CaseInquiryRecord、
@@ -768,6 +771,9 @@ G1_MODELS=(
   CaseStageInstance
   CaseTransition
   CaseApprovalChain
+  PersonConflictEvent
+  PersonConflictDecision
+  CaseInvestigationEntry
   CaseApprovalOpinion
   CaseReturn
   CaseStageInvalidation
@@ -969,6 +975,32 @@ check_case-history-append-only() {
   fi
 }
 
+# 规则（#237）：人员层利害关系、回避决定、调查继续登记只追加。
+# delegate 只许 create，不许 update／delete／upsert。库层触发器拒 UPDATE 与 DELETE。
+PERSON_CONFLICT_MODEL='personConflictEvent|personConflictDecision|caseInvestigationEntry'
+PERSON_CONFLICT_ORM_METHOD='upsert|updateMany|update|deleteMany|delete'
+PERSON_CONFLICT_ORM_WRITE="(${PERSON_CONFLICT_MODEL})[[:space:]]*\.[[:space:]]*(${PERSON_CONFLICT_ORM_METHOD})[[:space:]]*\("
+check_person-conflict-append-only() {
+  local hits=0 file lines line
+  while IFS= read -r file; do
+    lines="$(grep -En -e "$PERSON_CONFLICT_ORM_WRITE" "$file" 2>/dev/null)"
+    if [ -n "$lines" ]; then
+      while IFS= read -r line; do
+        note_fail "person-conflict-append-only：人员层利害关系或调查登记 ORM 改写调用 ${file#"$ROOT"/}:${line%%:*}（#237 只追加：状态变化写新行，不许就地改行或删行）"
+        hits=$((hits + 1))
+      done <<< "$lines"
+      continue
+    fi
+    if tr '\n' ' ' < "$file" | grep -qE "$PERSON_CONFLICT_ORM_WRITE"; then
+      note_fail "person-conflict-append-only：${file#"$ROOT"/} 折行后检出人员层利害关系或调查登记 ORM 改写（换行链式形态）"
+      hits=$((hits + 1))
+    fi
+  done < <(find "$BACKEND" "$ROOT/packages" "$ROOT/integration" "$ROOT/e2e" "${SCAN_CODE[@]}")
+  if [ "$hits" -eq 0 ]; then
+    note_ok "person-conflict-append-only：backend + packages + integration + e2e 全源码无人员层利害关系或调查登记 ORM 改写调用（#237 只追加）"
+  fi
+}
+
 # 规则（#236）：违法记录与笔录不物理删除。作废只改状态。ORM delete 与 SQL DELETE FROM 都拒绝。
 INVESTIGATION_RECORD_MODEL='caseViolationRecord|caseInquiryRecord'
 INVESTIGATION_RECORD_ORM_METHOD='deleteMany|delete'
@@ -1002,6 +1034,7 @@ check_investigation-record-no-delete() {
     note_ok "investigation-record-no-delete：backend + packages + integration + e2e 全源码无违法记录或笔录删除（#236 不物理删除）"
   fi
 }
+
 
 # 规则（#120，ADR 0008、#80）：运行参数清单。compose 与 CI 只引用 infra/runtime.env 登记的名字，
 # 不写字面量密钥。清单解析与 dev、tools/ci-inject-env.sh 共用 tools/runtime-env-lib.sh。
