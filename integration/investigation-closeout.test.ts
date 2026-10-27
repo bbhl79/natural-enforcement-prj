@@ -377,7 +377,7 @@ describe('#236 调查收尾', () => {
     ]);
   });
 
-  it('终止原因不在枚举内拒绝；批准后进入待收尾，其他迁移为 X03', async () => {
+  it('终止原因不在枚举内拒绝；批准后进入待收尾，通用迁移降为警告，其他呈批为 X03', async () => {
     const caseId = await fileCase();
     const bad = await postJson(`/api/cases/${caseId}/procedures`, 'P-236-H1', { kind: 'terminate', reason: 'death' });
     expect(bad.status).toBe(400);
@@ -387,8 +387,12 @@ describe('#236 调查收尾', () => {
     const row = await cloned.prisma.caseRecord.findUniqueOrThrow({ where: { id: caseId } });
     expect(row.status).toBe('terminated_pending');
     const moved = await postJson(`/api/cases/${caseId}/transitions`, 'P-APPROVE-HQ', { transitionId: 'T08' });
-    expect(moved.status).toBe(409);
-    expect(moved.body.reason).toBe('X03');
+    expect(moved.status).toBe(200);
+    expect(moved.body.result).toBe('advisory');
+    expect(moved.body.reason).toBe('advisory');
+    expect(moved.body.message).toBe('待收尾状态下只能撤案或结案');
+    const stayed = await cloned.prisma.caseRecord.findUniqueOrThrow({ where: { id: caseId } });
+    expect(stayed.status).toBe('terminated_pending');
     const draft = await postJson(`/api/cases/${caseId}/procedures`, 'P-236-H1', { kind: 'suspend' });
     expect(draft.status).toBe(409);
     expect(draft.body.reason).toBe('X03');

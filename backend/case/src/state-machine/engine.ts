@@ -1,6 +1,8 @@
 // 迁移引擎的纯判定（#235）。不写库。
 // 顺序：监督（X17）、承办机构（X13）、终态（X12）、阅读／导出／回证放行、再开审批链（X18）、
 // 未知编号、未启用、起点不符、另一条审批链（X18）、调用方附加的警告或提示。
+// #255：映射 409 之前看 authority 与 userLock。userLock 非空保持 block。
+// law、regulation、system 为 block。normative、internal 降为 warn，不产生效果。
 // 阻断不写业务行。警告与提示同样不写业务行，只留给调用方落失败留痕。
 
 import {
@@ -139,8 +141,45 @@ function refusal(
   return { ok: false, httpStatus: 409, level: 'block', reason, message, citation, outlet };
 }
 
+function nonEmptyLock(value: string | undefined): boolean {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
+/** userLock 非空（结果上或登记表上）保持阻断。否则只拦 law、regulation、system。 */
+function keepsBlock(item: GuardResult): boolean {
+  const registered = findIllegal(item.code)?.userLock;
+  if (nonEmptyLock(item.userLock) || nonEmptyLock(registered)) return true;
+  return item.authority === 'law' || item.authority === 'regulation' || item.authority === 'system';
+}
+
+function firstHardBlock(results: readonly GuardResult[]): GuardResult | null {
+  return results.find((item) => item.level === 'block' && keepsBlock(item)) ?? null;
+}
+
+/** 尚未构成阻断的警告、提示，以及被层级降下来的阻断。 */
+function softNotes(results: readonly GuardResult[]): GuardResult[] {
+  const notes: GuardResult[] = [];
+  for (const item of results) {
+    if (item.level === 'warn' || item.level === 'hint') {
+      notes.push(item);
+      continue;
+    }
+    if (item.level === 'block' && !keepsBlock(item)) notes.push({ ...item, level: 'warn' });
+  }
+  return notes;
+}
+
 function illegalBlock(id: string, message: string): TransitionDecision {
   const row = findIllegal(id);
+  const hit: GuardResult = {
+    level: 'block',
+    code: id,
+    message,
+    authority: row?.authority ?? 'system',
+    ...(row?.citation ? { citation: row.citation } : {}),
+    ...(row?.userLock ? { userLock: row.userLock } : {}),
+  };
+  if (!keepsBlock(hit)) return advisory([{ ...hit, level: 'warn' }]);
   return refusal(id, message, row?.outlet ?? '该操作不能继续', row?.citation ?? null);
 }
 
@@ -251,10 +290,6 @@ export function buildTransitionEffects(edge: TransitionEdge, subject: Transition
   };
 }
 
-function firstBlock(results: readonly GuardResult[]): GuardResult | null {
-  return results.find((item) => item.level === 'block') ?? null;
-}
-
 function advisoriesOf(results: readonly GuardResult[]): GuardResult[] {
   return results.filter((item) => item.level === 'warn' || item.level === 'hint');
 }
@@ -299,9 +334,12 @@ export function decideTransition(input: {
     if (subject.otherInFlightChains > 0) {
       return illegalBlock('X18', '本案已有进行中的审批链');
     }
-    const hit = firstBlock(extra);
-    if (hit) return illegalBlock(hit.code, hit.message);
-    const notes = advisoriesOf(extra);
+    const hit = firstHardBlock(extra);
+    if (hit) {
+      const row = findIllegal(hit.code);
+      return refusal(hit.code, hit.message, row?.outlet ?? '该操作不能继续', row?.citation ?? null);
+    }
+    const notes = softNotes(extra);
     if (notes.length > 0) return advisory(notes);
     return {
       ok: true,
@@ -337,12 +375,12 @@ export function decideTransition(input: {
   if (subject.otherInFlightChains > 0) {
     return illegalBlock('X18', '本案已有进行中的审批链');
   }
-  const hit = firstBlock(extra);
+  const hit = firstHardBlock(extra);
   if (hit) {
     const row = findIllegal(hit.code);
     return refusal(hit.code, hit.message, row?.outlet ?? '该操作不能继续', hit.citation ?? row?.citation ?? null);
   }
-  const notes = advisoriesOf(extra);
+  const notes = softNotes(extra);
   if (notes.length > 0) return advisory(notes);
   const effects = buildTransitionEffects(edge, subject);
   if (!effects) {
