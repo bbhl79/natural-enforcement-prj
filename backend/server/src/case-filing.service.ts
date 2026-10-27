@@ -11,6 +11,7 @@ import {
   checkFilingContent,
   checkFilingGuards,
   checkFilingParty,
+  decideTransition,
   filingStatusAfter,
   generateClosureReminders,
   isFilingApprovalPending,
@@ -40,6 +41,7 @@ import {
   type IdentityStore,
 } from '@natural-enforcement/identity';
 
+import { persistTransitionEffects } from './case-transition-write.ts';
 import { CLOCK, type Clock } from './clock.ts';
 import { LOGIN_DIRECTORY, type LoginDirectory } from './login-directory.ts';
 import { UNIT_OF_WORK, type UnitOfWork } from './unit-of-work.ts';
@@ -371,6 +373,33 @@ export class CaseFilingService {
       });
     }
 
+    const transitionId = content.conclusion === 'file' ? 'T01' : 'T02';
+    const decision = decideTransition({
+      operation: { kind: 'transition', transitionId },
+      subject: {
+        caseId: null,
+        mainStatus: null,
+        stage: null,
+        stageEntrySeq: null,
+        suspended: false,
+        markers: [],
+        clueStatus: context.status,
+        handlingOrgId: context.assignment?.orgUnitId ?? null,
+        proposedHandlingOrgId: null,
+        actorRoles: [],
+        otherInFlightChains: 0,
+        instances: [],
+      },
+    });
+    if (!decision.ok) {
+      return this.rejectStep(actor, actorCode, targetOrgId, approval.clueId, 'case.filing-approved', {
+        status: 409,
+        result: 'invalid-state',
+        reason: 'invalid-state',
+      });
+    }
+    const effects = decision.effects;
+
     const at = this.clock.now();
     const opinion = typeof input.opinion === 'string' ? input.opinion.trim() || null : null;
     return this.uow.run(async (tx) => {
@@ -425,6 +454,32 @@ export class CaseFilingService {
             },
           );
         }
+        const wrote = await persistTransitionEffects(tx.cases, {
+          effects,
+          caseId: null,
+          clueId: approval.clueId,
+          actorId: actor.personnelId,
+          at,
+          fromJson: JSON.stringify({ clueStatus: context.status }),
+          toJson: JSON.stringify({ clueStatus: 'closed', transitionId: 'T02' }),
+          newId: () => newUlid(),
+        });
+        if (!wrote) {
+          return rejected<FilingHttpOutcome>(
+            { status: 409, body: { result: 'concurrent-change', reason: 'concurrent-change' } },
+            {
+              action: 'case.filing-approved',
+              outcome: 'failed',
+              reason: 'concurrent-change' as CaseFilingApprovedFailedReason,
+              ...this.parties(actor, actorCode, targetOrgId, approval.clueId, APPROVE_OPCODE),
+            },
+          );
+        }
+        await tx.audit.append({
+          action: 'case.transitioned',
+          ...this.parties(actor, actorCode, targetOrgId, approval.clueId, APPROVE_OPCODE),
+          detail: JSON.stringify({ transitionId: 'T02', clueId: approval.clueId }),
+        });
         await tx.audit.append({
           action: 'clue.disposition-recorded',
           ...this.parties(actor, actorCode, targetOrgId, approval.clueId, APPROVE_OPCODE),
@@ -503,6 +558,38 @@ export class CaseFilingService {
         kind: 'case',
         createdAt: at,
         newId: () => newUlid(),
+      });
+      const wrote = await persistTransitionEffects(tx.cases, {
+        effects,
+        caseId,
+        clueId: approval.clueId,
+        actorId: actor.personnelId,
+        at,
+        fromJson: JSON.stringify({ clueStatus: context.status }),
+        toJson: JSON.stringify({
+          caseId,
+          status: 'in_progress',
+          stage: 'E02',
+          stageEntrySeq: 1,
+          transitionId: 'T01',
+        }),
+        newId: () => newUlid(),
+      });
+      if (!wrote) {
+        return rejected<FilingHttpOutcome>(
+          { status: 409, body: { result: 'concurrent-change', reason: 'concurrent-change' } },
+          {
+            action: 'case.filing-approved',
+            outcome: 'failed',
+            reason: 'concurrent-change' as CaseFilingApprovedFailedReason,
+            ...this.parties(actor, actorCode, targetOrgId, approval.clueId, APPROVE_OPCODE),
+          },
+        );
+      }
+      await tx.audit.append({
+        action: 'case.transitioned',
+        ...this.parties(actor, actorCode, targetOrgId, approval.clueId, APPROVE_OPCODE),
+        detail: JSON.stringify({ transitionId: 'T01', caseId, clueId: approval.clueId }),
       });
       await tx.audit.append({
         action: 'case.opened',

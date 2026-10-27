@@ -74,6 +74,8 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'case.filing-returned',
   'case.filing-withdrawn',
   'case.opened',
+  // 案件状态机（#235）：成功推进、只读警告与被拒都记这一动作。
+  'case.transitioned',
 ] as const;
 
 /**
@@ -609,6 +611,20 @@ export type CaseFilingWithdrawnFailedReason = (typeof CASE_FILING_WITHDRAWN_FAIL
 export const CASE_OPENED_FAILED_REASONS = ['invalid-state', 'concurrent-change'] as const;
 export type CaseOpenedFailedReason = (typeof CASE_OPENED_FAILED_REASONS)[number];
 
+/** 案件迁移被拒（#235）。advisory 是警告或提示：不改业务行，只留失败痕。 */
+export const CASE_TRANSITIONED_FAILED_REASONS = [
+  'transition-disabled',
+  'invalid-state',
+  'unknown-transition',
+  'X12',
+  'X13',
+  'X17',
+  'X18',
+  'advisory',
+  'concurrent-change',
+] as const;
+export type CaseTransitionedFailedReason = (typeof CASE_TRANSITIONED_FAILED_REASONS)[number];
+
 export const AUDIT_DETAIL_ACTIONS = [
   'clue.registered',
   'clue.items-supplemented',
@@ -645,5 +661,6 @@ export const AUDIT_DETAIL_ACTIONS = [
   'case.filing-returned',
   'case.filing-withdrawn',
   'case.opened',
+  'case.transitioned',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];

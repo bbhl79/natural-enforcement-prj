@@ -1,25 +1,28 @@
-// 真实 OpenItemsCounter 的小测（#219）：断言 SQL 绑定与口径（cases 恒 0、缺行当 0）。
+// 真实 OpenItemsCounter 的小测（#219，#235）：断言 SQL 绑定与口径（缺行当 0）。
 import { describe, expect, it, vi } from 'vitest';
 
 import { prismaOpenItemsCounter } from './open-items-counter.ts';
 
 describe('prismaOpenItemsCounter', () => {
-  it('按机构 id 查询并把 COUNT 映射为 clues；cases 恒 0', async () => {
+  it('按机构 id 查询，线索与非终态案件分别计数', async () => {
     const queryRaw = vi.fn(
       async (strings: TemplateStringsArray, ...values: unknown[]) => {
-        expect(strings.join(' ')).toContain('clue_assignment');
-        expect(strings.join(' ')).toContain('ended_at IS NULL');
-        expect(strings.join(' ')).toContain('closed');
-        expect(strings.join(' ')).toContain('transferred_out');
-        expect(values[0]).toBe('org-1');
-        return [{ n: 3 }];
+        const sql = strings.join(' ');
+        expect(sql).toContain('clue_assignment');
+        expect(sql).toContain('ended_at IS NULL');
+        expect(sql).toContain('transferred_out');
+        expect(sql).toContain('case_record');
+        expect(sql).toContain('withdrawn');
+        expect(sql).toContain('finalized');
+        expect(values).toEqual(['org-1', 'org-1']);
+        return [{ clues: 3, cases: 2 }];
       },
     );
     const result = await prismaOpenItemsCounter.countOpenItems('org-1', {
       store: {} as never,
       client: { $queryRaw: queryRaw },
     });
-    expect(result).toEqual({ clues: 3, cases: 0 });
+    expect(result).toEqual({ clues: 3, cases: 2 });
     expect(queryRaw).toHaveBeenCalledTimes(1);
   });
 

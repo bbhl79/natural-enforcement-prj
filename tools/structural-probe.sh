@@ -130,6 +130,15 @@ write_probe_reference-data-no-mutation() {
     "}"
 }
 
+write_probe_case-history-append-only() {
+  # #235：环节实例与迁移历史只追加。就地改行即违例。
+  tmp_write "backend/case/src/_structural-probe-history.ts" \
+    "// 探针（临时，勿入库）：环节实例就地改行（#235 只追加）" \
+    "export function probe(prisma: { caseStageInstance: { update(input: unknown): unknown } }) {" \
+    "  return prisma.caseStageInstance.update({ where: { id: 'probe' }, data: { status: 'completed' } });" \
+    "}"
+}
+
 write_probe_queue-in-integration() {
   # C7 扩范围证据：integration 层同样在设施入口规则范围内（装配层不豁免形态类规则）
   tmp_write "integration/_structural-probe.ts" \
@@ -432,6 +441,8 @@ SPECS=(
   "ui-copy-discipline|ui-copy-discipline|界面文案字面量出现「捞回」（#220）"
   # #210 新增规则：参照数据只追加的机器兜底。
   "reference-data-no-mutation|reference-data-no-mutation|参照数据表就地改行（ADR 0016 只追加）"
+  # #235：环节实例与迁移历史只追加。
+  "case-history-append-only|case-history-append-only|环节实例或迁移历史就地改行（#235 只追加）"
   # #211：线索空间三表归 case 模块，空间纪律的模型集扩到线索空间部件与命中集表。
   "clue-spatial-orm-write|spatial-no-orm-mutation|线索空间部件 ORM 写（#211 新空间表禁 ORM 写）"
   # #234：server 层只有立案呈批批准路径能调用不予立案落点服务。

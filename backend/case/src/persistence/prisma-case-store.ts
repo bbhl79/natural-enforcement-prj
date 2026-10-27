@@ -6,14 +6,21 @@ import type { Prisma, PrismaClient } from '../../../prisma/generated/prisma/clie
 
 import type { CaseOpening } from '../filing/rules.ts';
 import type {
+  ApprovalChainWrite,
+  CasePointerWrite,
   CaseRow,
   CaseStore,
+  CaseView,
   FilingApprovalRow,
   FilingApprovalStepRow,
   FilingApprovalVersionRow,
   FilingDraftWrite,
   FilingStepWrite,
   FilingTodoRow,
+  StageInstanceRow,
+  StageInstanceWrite,
+  TransitionHistoryRow,
+  TransitionHistoryWrite,
 } from './case-store.ts';
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -168,6 +175,116 @@ export class PrismaCaseStore implements CaseStore {
     };
   }
 
+  async readCaseView(caseId: string): Promise<CaseView | null> {
+    const record = await this.prisma.caseRecord.findUnique({ where: { id: caseId } });
+    if (!record) return null;
+    const sources = await this.prisma.caseSourceClue.findMany({ where: { caseId } });
+    const handlers = await this.prisma.caseHandler.findMany({
+      where: { caseId, endedAt: null },
+      orderBy: { assignedAt: 'asc' },
+    });
+    const instances = await this.prisma.caseStageInstance.findMany({
+      where: { caseId },
+      orderBy: [{ enteredAt: 'asc' }, { stage: 'asc' }, { entrySeq: 'asc' }],
+    });
+    const history = await this.prisma.caseTransition.findMany({
+      where: { caseId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return {
+      id: record.id,
+      handlingOrgId: record.handlingOrgId,
+      status: record.status,
+      currentStage: record.currentStage,
+      stageEntrySeq: record.stageEntrySeq,
+      partyNames: record.partyNames,
+      filingApprovalId: record.filingApprovalId,
+      sourceClueIds: sources.map((row) => row.clueId),
+      handlers: handlers.map((row) => ({ personnelId: row.personnelId, role: row.role })),
+      openedAt: record.openedAt,
+      instances: instances.map(toInstance),
+      history: history.map(toHistory),
+    };
+  }
+
+  async appendStageInstance(write: StageInstanceWrite): Promise<boolean> {
+    try {
+      await this.prisma.caseStageInstance.create({
+        data: {
+          id: write.id,
+          caseId: write.caseId,
+          stage: write.stage,
+          entrySeq: write.entrySeq,
+          status: write.status,
+          enteredAt: write.enteredAt,
+          enteredBy: write.enteredBy,
+          transitionCode: write.transitionCode,
+        },
+      });
+      return true;
+    } catch (error) {
+      if (isUniqueConflict(error)) return false;
+      throw error;
+    }
+  }
+
+  async appendTransition(write: TransitionHistoryWrite): Promise<void> {
+    await this.prisma.caseTransition.create({
+      data: {
+        id: write.id,
+        caseId: write.caseId,
+        clueId: write.clueId,
+        transitionCode: write.transitionCode,
+        actorId: write.actorId,
+        fromJson: write.fromJson,
+        toJson: write.toJson,
+        createdAt: write.createdAt,
+      },
+    });
+  }
+
+  async advanceCasePointer(write: CasePointerWrite): Promise<boolean> {
+    const updated = await this.prisma.caseRecord.updateMany({
+      where: { id: write.caseId, currentStage: write.expectedStage, stageEntrySeq: write.expectedSeq },
+      data: { currentStage: write.stage, stageEntrySeq: write.stageEntrySeq, status: write.status },
+    });
+    return updated.count === 1;
+  }
+
+  async countInFlightApprovals(caseId: string): Promise<number> {
+    const rows = await this.prisma.$queryRaw<Array<{ n: number }>>`
+      SELECT (
+        (SELECT COUNT(*) FROM case_approval_chain WHERE case_id = ${caseId} AND status = 'in_flight')
+        +
+        (SELECT COUNT(*) FROM filing_approval f
+          JOIN case_source_clue s ON s.clue_id = f.clue_id
+          WHERE s.case_id = ${caseId} AND f.status IN ('pending_review', 'pending_approval'))
+      )::int AS n
+    `;
+    return rows[0]?.n ?? 0;
+  }
+
+  async openApprovalChain(write: ApprovalChainWrite): Promise<boolean> {
+    const existing = await this.countInFlightApprovals(write.caseId);
+    if (existing > 0) return false;
+    try {
+      await this.prisma.caseApprovalChain.create({
+        data: {
+          id: write.id,
+          caseId: write.caseId,
+          kind: write.kind,
+          status: 'in_flight',
+          openedBy: write.openedBy,
+          openedAt: write.openedAt,
+        },
+      });
+      return true;
+    } catch (error) {
+      if (isUniqueConflict(error)) return false;
+      throw error;
+    }
+  }
+
   async listFilingTodos(
     statuses: readonly string[],
     orgUnitIds: readonly string[],
@@ -206,4 +323,46 @@ export class PrismaCaseStore implements CaseStore {
       updatedAt: row.updated_at,
     }));
   }
+}
+
+function toInstance(row: {
+  id: string;
+  stage: string;
+  entrySeq: number;
+  status: string;
+  enteredAt: Date;
+  enteredBy: string;
+  transitionCode: string;
+}): StageInstanceRow {
+  return {
+    id: row.id,
+    stage: row.stage,
+    entrySeq: row.entrySeq,
+    status: row.status,
+    enteredAt: row.enteredAt,
+    enteredBy: row.enteredBy,
+    transitionCode: row.transitionCode,
+  };
+}
+
+function toHistory(row: {
+  id: string;
+  transitionCode: string;
+  actorId: string;
+  fromJson: string;
+  toJson: string;
+  createdAt: Date;
+}): TransitionHistoryRow {
+  return {
+    id: row.id,
+    transitionCode: row.transitionCode,
+    actorId: row.actorId,
+    fromJson: row.fromJson,
+    toJson: row.toJson,
+    createdAt: row.createdAt,
+  };
+}
+
+function isUniqueConflict(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && (error as { code: unknown }).code === 'P2002';
 }
