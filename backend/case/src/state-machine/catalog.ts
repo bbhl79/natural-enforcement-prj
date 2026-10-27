@@ -222,7 +222,13 @@ export const TRANSITIONS: readonly TransitionEdge[] = [
   edge('T23', { kind: 'marker', marker: 'leadership' }, enter('E09', 'completed'), '领导审批通过，决定书生效'),
   edge('T24', stage('E09'), enter('E10', 'completed'), '上传送达回证，送达完成'),
   edge('T25', stage('E10'), enter('E11', 'drafting'), '处罚案件执行记载'),
-  edge('T26', [stage('E10'), stage('E11')], { kind: 'main', status: 'closed' }, '结案呈批批准：已结案'),
+  // 处罚支：E10 经执行记载进入 E11 后结案。不予处罚支：E10 直接结案。边仍关闭。
+  edge(
+    'T26',
+    [stage('E10'), stage('E11')],
+    { kind: 'main', status: 'closed' },
+    '结案呈批批准：处罚支由 E10 经执行记载进入 E11 后结案；不予处罚支由 E10 直接结案。已结案即办结，不等定型',
+  ),
   edge('T27', main('closed', 'withdrawn'), { kind: 'main', status: 'finalized' }, '归档审批通过：已定型'),
   edge('T28', main('finalized'), { kind: 'main', status: 'finalized' }, '受控重开后再定型（主干不启用）'),
   edge('T29', { kind: 'span', start: 'E02', end: 'E11' }, { kind: 'same' }, '涉刑或党纪政务移送：当前环节不变'),
