@@ -93,10 +93,19 @@ export class CaseFilingController {
     @Req() req: AuthenticatedRequest,
     @Res() res: HttpReply,
     @Param('id') id: string,
-    @Body() body: { readonly opinion?: unknown },
+    @Body()
+    body: {
+      readonly reasonCode?: unknown;
+      readonly note?: unknown;
+      readonly receiverId?: unknown;
+      readonly inheritedCode?: unknown;
+    },
   ): Promise<void> {
     const outcome = await this.filing.returnToDraft(req.actor as ActorRef, id, {
-      opinion: text(body.opinion),
+      reasonCode: text(body.reasonCode),
+      note: text(body.note),
+      receiverId: text(body.receiverId),
+      inheritedCode: typeof body.inheritedCode === 'string' && body.inheritedCode.trim() !== '' ? body.inheritedCode : null,
     });
     res.status(outcome.status).json(outcome.body);
   }

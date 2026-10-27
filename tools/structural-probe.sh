@@ -139,6 +139,15 @@ write_probe_person-conflict-append-only() {
     "}"
 }
 
+write_probe_investigation-record-no-delete() {
+  # #236：违法记录与笔录不物理删除。ORM delete 即违例。
+  tmp_write "backend/case/src/_structural-probe-investigation.ts" \
+    "// 探针（临时，勿入库）：违法记录物理删除" \
+    "export function probe(prisma: { caseViolationRecord: { delete(input: unknown): unknown } }) {" \
+    "  return prisma.caseViolationRecord.delete({ where: { id: 'probe' } });" \
+    "}"
+}
+
 write_probe_case-history-append-only() {
   # #235：环节实例与迁移历史只追加。就地改行即违例。
   tmp_write "backend/case/src/_structural-probe-history.ts" \
@@ -454,6 +463,7 @@ SPECS=(
   "case-history-append-only|case-history-append-only|环节实例或迁移历史就地改行（#235 只追加）"
   # #237：人员层利害关系、回避决定、调查继续登记只追加。
   "person-conflict-append-only|person-conflict-append-only|人员层利害关系就地改行（#237 只追加）"
+  "investigation-record-no-delete|investigation-record-no-delete|违法记录或笔录物理删除"
   # #211：线索空间三表归 case 模块，空间纪律的模型集扩到线索空间部件与命中集表。
   "clue-spatial-orm-write|spatial-no-orm-mutation|线索空间部件 ORM 写（#211 新空间表禁 ORM 写）"
   # #234：server 层只有立案呈批批准路径能调用不予立案落点服务。

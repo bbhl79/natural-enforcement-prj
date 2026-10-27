@@ -11,7 +11,10 @@ import type {
   CaseFilingReviewedFailedReason,
   CaseFilingSubmittedFailedReason,
   CaseFilingWithdrawnFailedReason,
+  CaseInvestigationAction,
+  CaseInvestigationFailedReason,
   CaseOpenedFailedReason,
+  CaseReturnedFailedReason,
   CaseTransitionedFailedReason,
   ClueDesignateRejectedFailedReason,
   ClueDesignateRequestedFailedReason,
@@ -292,6 +295,10 @@ export type AuditAppend =
       reason: CaseInvestigationRecordedFailedReason;
     })
   | (AuditParties & { action: 'case.sign-refused'; reason: CaseSignRefusedReason })
+  | (AuditParties & { action: 'case.returned' })
+  | (AuditParties & { action: 'case.returned'; outcome: 'failed'; reason: CaseReturnedFailedReason })
+  | (AuditParties & { action: CaseInvestigationAction })
+  | (AuditParties & { action: CaseInvestigationAction; outcome: 'failed'; reason: CaseInvestigationFailedReason })
 ;
 
 /**

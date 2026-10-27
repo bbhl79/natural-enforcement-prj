@@ -5,6 +5,7 @@ import { useAppDispatch } from '../hooks';
 import {
   approveFilingApproval,
   loadFilingApproval,
+  FILING_RETURN_REASONS,
   returnFilingApproval,
   reviewFilingApproval,
   saveFilingDraft,
@@ -26,6 +27,9 @@ export default function ClueFilingPanel({
   const [partyNames, setPartyNames] = useState('');
   const [noCaseGround, setNoCaseGround] = useState('art16-2-no-violation-fact');
   const [opinion, setOpinion] = useState('');
+  const [reasonCode, setReasonCode] = useState('');
+  const [inheritedCode, setInheritedCode] = useState('');
+  const [receiverId, setReceiverId] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -176,11 +180,63 @@ export default function ClueFilingPanel({
         ) : null}
         {approval && (approval.status === 'pending_review' || approval.status === 'pending_approval') ? (
           <>
+            <div className="form-row">
+              <label htmlFor="filing-return-reason">退回原因</label>
+              <select
+                id="filing-return-reason"
+                value={reasonCode}
+                onChange={(event) => setReasonCode(event.target.value)}
+              >
+                <option value="">选择退回原因</option>
+                {FILING_RETURN_REASONS.map(([code, name]) => (
+                  <option key={code} value={code}>
+                    {code} {name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {reasonCode === 'R10' ? (
+              <div className="form-row">
+                <label htmlFor="filing-return-inherit">R10 退回点</label>
+                <select
+                  id="filing-return-inherit"
+                  value={inheritedCode}
+                  onChange={(event) => setInheritedCode(event.target.value)}
+                >
+                  <option value="">选择退回点</option>
+                  {FILING_RETURN_REASONS.filter(([code]) => code !== 'R10').map(([code, name]) => (
+                    <option key={code} value={code}>
+                      {code} {name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+            <div className="form-row">
+              <label htmlFor="filing-return-receiver">退回接收人</label>
+              <select
+                id="filing-return-receiver"
+                value={receiverId}
+                onChange={(event) => setReceiverId(event.target.value)}
+              >
+                <option value="">选择接收人</option>
+                <option value={approval.drafterId}>拟制人</option>
+              </select>
+            </div>
             <button
               type="button"
               disabled={busy}
               data-role="filing-return"
-              onClick={() => void run('退回', () => returnFilingApproval(dispatch, approval.id, opinion))}
+              onClick={() =>
+                void run('退回', () =>
+                  returnFilingApproval(dispatch, approval.id, {
+                    reasonCode,
+                    note: opinion,
+                    receiverId,
+                    inheritedCode,
+                  }),
+                )
+              }
             >
               退回
             </button>

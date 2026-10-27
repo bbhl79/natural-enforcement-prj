@@ -80,6 +80,18 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'case.conflict-declared',
   'case.conflict-decided',
   'case.investigation-recorded',
+  // 退回（#238）：成功落退回记录；失败不改业务行。
+  'case.returned',
+  // 调查环节与收尾（#236）。呈批、批准、退回与失败都记这些动作。
+  'case.inquiry-recorded',
+  'case.violation-recorded',
+  'case.violation-voided',
+  'case.procedure-drafted',
+  'case.procedure-submitted',
+  'case.procedure-reviewed',
+  'case.procedure-approved',
+  'case.procedure-returned',
+  'case.party-notice-recorded',
 ] as const;
 
 /**
@@ -597,9 +609,15 @@ export const CASE_FILING_APPROVED_FAILED_REASONS = [
 ] as const;
 export type CaseFilingApprovedFailedReason = (typeof CASE_FILING_APPROVED_FAILED_REASONS)[number];
 
-/** 立案呈批退回被拒（#234）。missing-return-reason 退回理由必填。 */
+/** 立案呈批退回被拒（#234，#238 改为 R 代码）。missing-return-reason 退回原因必填。 */
 export const CASE_FILING_RETURNED_FAILED_REASONS = [
   'missing-return-reason',
+  'missing-return-note',
+  'missing-return-target',
+  'missing-receiver',
+  'return-target-not-allowed',
+  'external-return',
+  'receiver-not-allowed',
   'invalid-state',
   'concurrent-change',
 ] as const;
@@ -622,12 +640,15 @@ export const CASE_TRANSITIONED_FAILED_REASONS = [
   'transition-disabled',
   'invalid-state',
   'unknown-transition',
+  'X02',
+  'X03',
   'X12',
   'X13',
   'X17',
   'X18',
   'advisory',
   'concurrent-change',
+  'procedure-required',
 ] as const;
 export type CaseTransitionedFailedReason = (typeof CASE_TRANSITIONED_FAILED_REASONS)[number];
 
@@ -669,6 +690,59 @@ export type CaseInvestigationRecordedFailedReason =
 /** 签出被拒（#237）。conflict-active 该人有声明或生效的人员层利害关系。 */
 export const CASE_SIGN_REFUSED_REASONS = ['conflict-active'] as const;
 export type CaseSignRefusedReason = (typeof CASE_SIGN_REFUSED_REASONS)[number];
+/** 案件退回被拒（#238）。 */
+export const CASE_RETURNED_FAILED_REASONS = [
+  'missing-return-reason',
+  'missing-return-note',
+  'missing-return-target',
+  'missing-receiver',
+  'return-target-not-allowed',
+  'transition-disabled',
+  'external-return',
+  'receiver-not-allowed',
+  'signature-invalidated',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type CaseReturnedFailedReason = (typeof CASE_RETURNED_FAILED_REASONS)[number];
+
+/** 调查环节与收尾被拒（#236）。九个动作共用这一张原因表。 */
+export const CASE_INVESTIGATION_FAILED_REASONS = [
+  'invalid-state',
+  'invalid-kind',
+  'invalid-reason',
+  'invalid-withdraw-reason',
+  'branch-not-open',
+  'missing-return-reason',
+  'missing-void-reason',
+  'not-main-handler',
+  'hearing-started',
+  'post-hearing-limitation',
+  'transition-disabled',
+  'unknown-transition',
+  'X02',
+  'X03',
+  'X12',
+  'X13',
+  'X17',
+  'X18',
+  'X20',
+  'concurrent-change',
+] as const;
+export type CaseInvestigationFailedReason = (typeof CASE_INVESTIGATION_FAILED_REASONS)[number];
+
+export const CASE_INVESTIGATION_ACTIONS = [
+  'case.inquiry-recorded',
+  'case.violation-recorded',
+  'case.violation-voided',
+  'case.procedure-drafted',
+  'case.procedure-submitted',
+  'case.procedure-reviewed',
+  'case.procedure-approved',
+  'case.procedure-returned',
+  'case.party-notice-recorded',
+] as const;
+export type CaseInvestigationAction = (typeof CASE_INVESTIGATION_ACTIONS)[number];
 
 export const AUDIT_DETAIL_ACTIONS = [
   'clue.registered',
@@ -711,5 +785,15 @@ export const AUDIT_DETAIL_ACTIONS = [
   'case.conflict-decided',
   'case.investigation-recorded',
   'case.sign-refused',
+  'case.returned',
+  'case.inquiry-recorded',
+  'case.violation-recorded',
+  'case.violation-voided',
+  'case.procedure-drafted',
+  'case.procedure-submitted',
+  'case.procedure-reviewed',
+  'case.procedure-approved',
+  'case.procedure-returned',
+  'case.party-notice-recorded',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];

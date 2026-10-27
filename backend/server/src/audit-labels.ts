@@ -68,6 +68,16 @@ const OPERATION_OF_ACTION: Readonly<Record<string, string>> = {
   'case.filing-withdrawn': '撤回立案呈批',
   'case.opened': '立案',
   'case.transitioned': '推进案件环节',
+  'case.returned': '退回案件',
+  'case.inquiry-recorded': '登记调查笔录',
+  'case.violation-recorded': '登记违法记录',
+  'case.violation-voided': '作废违法记录',
+  'case.procedure-drafted': '拟制调查收尾呈批',
+  'case.procedure-submitted': '提交调查收尾呈批',
+  'case.procedure-reviewed': '审核调查收尾呈批',
+  'case.procedure-approved': '批准调查收尾呈批',
+  'case.procedure-returned': '退回调查收尾呈批',
+  'case.party-notice-recorded': '登记书面告知',
 };
 
 const OPERATION_OF_OPCODE: Readonly<Record<string, string>> = {

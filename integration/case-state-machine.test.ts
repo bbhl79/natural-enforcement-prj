@@ -337,7 +337,7 @@ describe('#235 案件状态机', () => {
     const { caseId } = await fileCase(['李四']);
     const instances = await countInstances(caseId);
     const history = await countHistory(caseId);
-    const denied = await postJson(`/api/cases/${caseId}/transitions`, 'P-APPROVE-HQ', { transitionId: 'T03' });
+    const denied = await postJson(`/api/cases/${caseId}/transitions`, 'P-APPROVE-HQ', { transitionId: 'T08' });
     expect(denied.status).toBe(409);
     expect(denied.body.reason).toBe('transition-disabled');
     expect(await countInstances(caseId)).toBe(instances);

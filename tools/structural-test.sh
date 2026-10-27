@@ -191,6 +191,7 @@ RULES=(
   reference-data-no-mutation
   case-history-append-only
   person-conflict-append-only
+  investigation-record-no-delete
   runtime-manifest
   user-lock-assertions
   frontend-router-mode
@@ -468,6 +469,8 @@ declare -A ASSEMBLY_EXEMPT=(
   ["integration/clue-closure.test.ts"]="../backend/case/src/ ../backend/identity/src/"
   # #235：再次进入用状态机公共出口的 nextEntrySeq 与 CaseStore.appendStageInstance。
   ["integration/case-state-machine.test.ts"]="../backend/case/src/ ../backend/identity/src/"
+  # #238：退回用例只用身份公共出口 index.ts 的 newUlid。与 #235 同口径。
+  ["integration/case-return.test.ts"]="../backend/identity/src/index.ts"
 )
 
 is_assembly_exempt() { # $1 = 相对 ROOT 路径, $2 = specifier
@@ -710,6 +713,10 @@ check_weak-reference-entry() {
 # #235 追加环节实例、迁移历史、审批链：CaseStageInstance、CaseTransition、CaseApprovalChain。
 # #237 追加人员层利害关系、回避决定、调查继续登记：PersonConflictEvent、
 # PersonConflictDecision、CaseInvestigationEntry。
+# #238 追加审批意见、退回记录、环节失效、签字、材料：CaseApprovalOpinion、CaseReturn、
+# CaseStageInvalidation、CaseStageSignature、CaseMaterial。
+# #236 追加违法记录、笔录、收尾呈批、期限事件与告知记录：CaseViolationRecord、CaseInquiryRecord、
+# CaseProcedureApproval、CaseProcedureVersion、CaseProcedureStep、CaseDeadlineEvent、CasePartyNotice。
 G1_MODELS=(
   MigrationProbe
   OrgUnit
@@ -767,6 +774,18 @@ G1_MODELS=(
   PersonConflictEvent
   PersonConflictDecision
   CaseInvestigationEntry
+  CaseApprovalOpinion
+  CaseReturn
+  CaseStageInvalidation
+  CaseStageSignature
+  CaseMaterial
+  CaseViolationRecord
+  CaseInquiryRecord
+  CaseProcedureApproval
+  CaseProcedureVersion
+  CaseProcedureStep
+  CaseDeadlineEvent
+  CasePartyNotice
 )
 check_g1-model-allowlist() {
   local schema="$BACKEND/prisma/schema.prisma" model in_schema extra missing fails=0
@@ -981,6 +1000,41 @@ check_person-conflict-append-only() {
     note_ok "person-conflict-append-only：backend + packages + integration + e2e 全源码无人员层利害关系或调查登记 ORM 改写调用（#237 只追加）"
   fi
 }
+
+# 规则（#236）：违法记录与笔录不物理删除。作废只改状态。ORM delete 与 SQL DELETE FROM 都拒绝。
+INVESTIGATION_RECORD_MODEL='caseViolationRecord|caseInquiryRecord'
+INVESTIGATION_RECORD_ORM_METHOD='deleteMany|delete'
+INVESTIGATION_RECORD_ORM_WRITE="(${INVESTIGATION_RECORD_MODEL})[[:space:]]*\.[[:space:]]*(${INVESTIGATION_RECORD_ORM_METHOD})[[:space:]]*\("
+INVESTIGATION_RECORD_SQL='DELETE[[:space:]]+FROM[[:space:]]+(case_violation_record|case_inquiry_record)'
+check_investigation-record-no-delete() {
+  local hits=0 file lines line sql
+  while IFS= read -r file; do
+    lines="$(grep -En -e "$INVESTIGATION_RECORD_ORM_WRITE" "$file" 2>/dev/null || true)"
+    sql="$(grep -En -e "$INVESTIGATION_RECORD_SQL" "$file" 2>/dev/null || true)"
+    if [ -n "$lines" ]; then
+      while IFS= read -r line; do
+        note_fail "investigation-record-no-delete：违法记录或笔录被删除 ${file#"$ROOT"/}:${line%%:*}（#236 不物理删除）"
+        hits=$((hits + 1))
+      done <<< "$lines"
+      continue
+    fi
+    if [ -n "$sql" ]; then
+      while IFS= read -r line; do
+        note_fail "investigation-record-no-delete：违法记录或笔录被删除 ${file#"$ROOT"/}:${line%%:*}（#236 不物理删除）"
+        hits=$((hits + 1))
+      done <<< "$sql"
+      continue
+    fi
+    if tr '\n' ' ' < "$file" | grep -qE "$INVESTIGATION_RECORD_ORM_WRITE"; then
+      note_fail "investigation-record-no-delete：${file#"$ROOT"/} 折行后检出违法记录或笔录删除（换行链式形态）"
+      hits=$((hits + 1))
+    fi
+  done < <(find "$BACKEND" "$ROOT/packages" "$ROOT/integration" "$ROOT/e2e" "${SCAN_CODE[@]}")
+  if [ "$hits" -eq 0 ]; then
+    note_ok "investigation-record-no-delete：backend + packages + integration + e2e 全源码无违法记录或笔录删除（#236 不物理删除）"
+  fi
+}
+
 
 # 规则（#120，ADR 0008、#80）：运行参数清单。compose 与 CI 只引用 infra/runtime.env 登记的名字，
 # 不写字面量密钥。清单解析与 dev、tools/ci-inject-env.sh 共用 tools/runtime-env-lib.sh。

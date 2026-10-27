@@ -62,6 +62,10 @@ Agent 间指令传递、工具 / 接口定义、错误提示报文、系统状�
 
 ## Agent skills
 
+### Main flow
+
+需求到实现的门禁顺序见 `docs/agents/main-flow.md`（wayfinder → grilling → to-spec → to-tickets → implement-spec）。
+
 ### Issue tracker
 
 Issues 和 specs 以 GitHub Issues 形式跟踪，使用 gh CLI。见 `docs/agents/issue-tracker.md`。
