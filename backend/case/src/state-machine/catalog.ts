@@ -1,7 +1,7 @@
 // 案件状态机常量（#235）。
 // 法定环节、主状态、环节实例状态：#27/6409848362。
 // 迁移表：基线 #27/6409849007，修订 #27/6410091980，批2 追加 T09a（#27/6431079838）。
-// 非法迁移：X01–X30 同修订；X31 由 #234 实现并在此登记；X32 只登记（#27/6431079838 Q10）。
+// 非法迁移：X01–X30 同修订；X31 由 #234 实现并在此登记；X32 只登记（#27/6431079838 Q10）；X33 回避声明守卫只登记（#27/6443123771）。
 // X 分两类口径（#267，#27/6443175238）。纯系统完整性守卫（authority 为 system，与法律依据无关）一律 409。
 // 带依据层级的 X 按 authority 定。userLock 非空，或 law、regulation，阻断（409）。normative、internal 降为警告（200）。
 // X03、X10、X19、X21、X22、X26 为 normative，结果是警告。待法制确认后再议升级，不在本目录升为阻断。
@@ -330,6 +330,15 @@ export const ILLEGAL_MIGRATIONS: readonly IllegalMigration[] = [
   { id: 'X30', summary: '不予立案理由不合规', citation: '#226/6410041963', outlet: '两类理由择一且选完整', enforcement: 'none', authority: 'regulation' },
   { id: 'X31', summary: '线索上有在途立案呈批时做其他处置', citation: '#27/6431079838 Q9', outlet: '先撤回立案呈批', enforcement: 'filing', authority: 'system' },
   { id: 'X32', summary: '非被指定审理人签出审理意见', citation: '#27/6431079838 Q10', outlet: '须由被指定的审理人签出', enforcement: 'none', authority: 'system' },
+  // X33 只登记，不接到迁移。现有 409 仍由 assertCanSign 拒绝。拦截点：E04 签出（T09–T12）、E07 签出（T10b、T10c、T20、T21）、决定审批链（T18、T23）。
+  {
+    id: 'X33',
+    summary: '回避声明守卫：人员利害关系处于声明或生效状态时签出审理意见、法审意见或决定',
+    citation: '#27/6443123771；#27/6430922951 Q2；#40/6430922449',
+    outlet: '等待回避决定',
+    enforcement: 'none',
+    authority: 'system',
+  },
 ];
 
 const ILLEGAL_BY_ID = new Map(ILLEGAL_MIGRATIONS.map((item) => [item.id, item]));
