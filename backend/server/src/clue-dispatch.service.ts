@@ -640,15 +640,7 @@ export class ClueDispatchService {
       await this.deny(actor, actorCode, actorOrgId, PEOPLE_OPCODE, clueId, assignment.orgUnitId);
       return { status: 403, body: { reason: 'permission-denied' } };
     }
-    const guard = this.stateGuard(context.status, input.expectedStatus, [PEOPLE_ASSIGN_FROM_STATUS]);
-    if (guard) {
-      return this.rejectPeople(actor, actorCode, actorOrgId, clueId, guard);
-    }
-    // 报请期间的指定锁（#215）：承办机构在受理机构子树内时同样拦派主办／协办。
-    const pendingGuard = await this.designationPendingGuard(actorOrgId, clueId);
-    if (pendingGuard) {
-      return this.rejectPeople(actor, actorCode, actorOrgId, clueId, pendingGuard);
-    }
+    // #234 X31：立案呈批在途时，先于状态门槛拦派主办／协办（线索已是 handler_assigned 时状态门槛也会红，须先报呈批原因）。
     if (await this.cases.hasPendingFilingApproval(clueId)) {
       return this.rejectPeople(actor, actorCode, actorOrgId, clueId, {
         status: 409,
@@ -657,6 +649,15 @@ export class ClueDispatchService {
         reason: 'filing-approval-pending',
         outlet: '先撤回立案呈批',
       });
+    }
+    const guard = this.stateGuard(context.status, input.expectedStatus, [PEOPLE_ASSIGN_FROM_STATUS]);
+    if (guard) {
+      return this.rejectPeople(actor, actorCode, actorOrgId, clueId, guard);
+    }
+    // 报请期间的指定锁（#215）：承办机构在受理机构子树内时同样拦派主办／协办。
+    const pendingGuard = await this.designationPendingGuard(actorOrgId, clueId);
+    if (pendingGuard) {
+      return this.rejectPeople(actor, actorCode, actorOrgId, clueId, pendingGuard);
     }
     const mainId = input.mainId.trim();
     if (mainId === '') {
