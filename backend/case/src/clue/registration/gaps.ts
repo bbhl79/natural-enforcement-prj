@@ -103,6 +103,22 @@ export function assessGaps(input: GapAssessmentInput): ClueGapAssessment {
   return { blocking, typeGaps };
 }
 
+/**
+ * 全部未填的必填项，含各时机与各层。
+ * 立案呈批守卫用（#257）：文书段要求核查前补齐项与登记期缺件一并读出，
+ * 不按登记口径只取「录入时」的缺件。
+ */
+export function missingRequiredItems(input: GapAssessmentInput): RequirementItem[] {
+  const missing: RequirementItem[] = [];
+  for (const item of input.items) {
+    if (!item.required) continue;
+    if (!itemApplies(item, input.sourceCode)) continue;
+    if (isFilled(item, input)) continue;
+    missing.push(item);
+  }
+  return missing;
+}
+
 /** 缺件键集合。留痕与响应体用。 */
 export function gapKeys(gaps: readonly ClueGap[]): string[] {
   return gaps.map((gap) => gap.key);

@@ -55,8 +55,13 @@ export class CaseFilingController {
     @Req() req: AuthenticatedRequest,
     @Res() res: HttpReply,
     @Param('id') id: string,
+    @Body() body: {
+      readonly confirmedRuleKeys?: unknown;
+      readonly confirmReasons?: unknown;
+    },
   ): Promise<void> {
-    const outcome = await this.filing.submit(req.actor as ActorRef, id);
+    const confirmation = readConfirmation(body);
+    const outcome = await this.filing.submit(req.actor as ActorRef, id, confirmation);
     res.status(outcome.status).json(outcome.body);
   }
 

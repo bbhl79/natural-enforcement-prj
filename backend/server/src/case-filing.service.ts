@@ -7,21 +7,32 @@ import {
   CASE_STORE,
   CLUE_STORE,
   FILING_DRAFT_TARGET,
+  FILING_GAP_OUTLET,
+  FILING_GAP_REASON,
+  applyWarningGate,
   buildCaseOpening,
+  buildFormSchemaItems,
   canTakeFilingStep,
   checkFilingContent,
   checkFilingGuards,
   checkFilingParty,
+  classifyFilingGaps,
   decideTransition,
+  filingGapWarnings,
   filingStatusAfter,
   generateClosureReminders,
   isFilingApprovalPending,
+  missingRequiredItems,
   planReturn,
   recordNoCaseFromFilingApproval,
   type CaseStore,
+  type ClueDispatchContext,
   type ClueStore,
   type FilingAdminReview,
   type FilingContent,
+  type FilingGapClassification,
+  type RequirementItem,
+  type RuleConfirmation,
 } from '@natural-enforcement/case';
 import {
   rejected,
@@ -33,6 +44,7 @@ import {
   type CaseFilingWithdrawnFailedReason,
   type ClueDispositionRecordedFailedReason,
 } from '@natural-enforcement/audit';
+import { findSourceGroupCode } from '@natural-enforcement/geo-dict';
 import {
   AccessControlService,
   IDENTITY_STORE,
@@ -70,6 +82,7 @@ export type FilingHttpOutcome =
         readonly reason: string;
         readonly basis?: string | null;
         readonly outlet?: string;
+        readonly ruleKeys?: readonly string[];
       };
     }
   | { readonly status: 404; readonly body: { readonly result: 'not-found' } };
@@ -198,8 +211,15 @@ export class CaseFilingService {
     });
   }
 
-  /** 提交：X30；立案结论另拦当事人（R-8 C）。 */
-  async submit(actor: ActorRef, approvalId: string): Promise<FilingHttpOutcome> {
+  /** 提交：X30；立案结论另拦当事人（R-8 C）与线索缺件（#257）。 */
+  async submit(
+    actor: ActorRef,
+    approvalId: string,
+    input: {
+      readonly confirmedRuleKeys?: readonly string[];
+      readonly confirmReasons?: Readonly<Record<string, string>>;
+    } = {},
+  ): Promise<FilingHttpOutcome> {
     const approval = await this.cases.readFilingApproval(approvalId);
     if (!approval) return { status: 404, body: { result: 'not-found' } };
     const context = await this.clues.readDispatchContext(approval.clueId);
@@ -261,6 +281,43 @@ export class CaseFilingService {
         outlet: partyHit.outlet,
       });
     }
+    const gaps = content.conclusion === 'file' ? await this.filingGaps(context) : null;
+    if (gaps && gaps.blocks.length > 0) {
+      return this.rejectFilingGaps(
+        actor,
+        actorCode,
+        targetOrgId,
+        approval.clueId,
+        'case.filing-submitted',
+        gaps.blocks,
+        SUBMIT_OPCODE,
+      );
+    }
+    let gapConfirmation: RuleConfirmation | null = null;
+    if (gaps && gaps.warnings.length > 0) {
+      const gate = applyWarningGate({
+        notes: filingGapWarnings(gaps.warnings),
+        confirmedRuleKeys: input.confirmedRuleKeys,
+        confirmReasons: input.confirmReasons,
+      });
+      if (gate.kind === 'reject') {
+        return { status: 400, body: ruleKeyBody(gate.decision) };
+      }
+      if (gate.kind === 'hold') {
+        return this.uow.run(async () =>
+          rejected<FilingHttpOutcome>(
+            { status: 200 as const, body: warningBody(gate.decision.warnings) },
+            {
+              action: 'case.filing-submitted',
+              outcome: 'failed',
+              reason: 'advisory',
+              ...this.parties(actor, actorCode, targetOrgId, approval.clueId, SUBMIT_OPCODE),
+            },
+          ),
+        );
+      }
+      gapConfirmation = gate.confirmation;
+    }
 
     const nextStatus = filingStatusAfter('submit', this.adminReview);
     const at = this.clock.now();
@@ -288,9 +345,10 @@ export class CaseFilingService {
           },
         );
       }
+      const submittedParties = this.parties(actor, actorCode, targetOrgId, approval.clueId, SUBMIT_OPCODE);
       await tx.audit.append({
         action: 'case.filing-submitted',
-        ...this.parties(actor, actorCode, targetOrgId, approval.clueId, SUBMIT_OPCODE),
+        ...submittedParties,
         detail: JSON.stringify({
           code: context.code,
           approvalId,
@@ -299,6 +357,15 @@ export class CaseFilingService {
           adminReview: this.adminReview,
         }),
       });
+      if (gapConfirmation) {
+        await appendRuleConfirmation(tx.audit, {
+          parties: submittedParties,
+          confirmation: gapConfirmation,
+          at,
+          step: 'filing:submit',
+          confirmReasons: input.confirmReasons,
+        });
+      }
       return {
         status: 200,
         body: {
@@ -380,6 +447,18 @@ export class CaseFilingService {
         outlet: guard.outlet,
       });
     }
+    const gaps = content.conclusion === 'file' ? await this.filingGaps(context) : null;
+    if (gaps && gaps.blocks.length > 0) {
+      return this.rejectFilingGaps(
+        actor,
+        actorCode,
+        targetOrgId,
+        approval.clueId,
+        'case.filing-approved',
+        gaps.blocks,
+        APPROVE_OPCODE,
+      );
+    }
 
     const transitionId = content.conclusion === 'file' ? 'T01' : 'T02';
     const decision = decideTransition({
@@ -398,6 +477,7 @@ export class CaseFilingService {
         otherInFlightChains: 0,
         instances: [],
       },
+      advisories: gaps ? filingGapWarnings(gaps.warnings) : [],
       confirmedRuleKeys: input.confirmedRuleKeys,
       confirmReasons: input.confirmReasons,
     });
@@ -987,6 +1067,59 @@ export class CaseFilingService {
     });
   }
 
+  /**
+   * 线索当前缺件（#257）：按声明重新算全部必填未填项，含「核查前补齐」项。
+   * 公共层由表单顶层字段与几何承担，这里视为已填。
+   */
+  private async filingGaps(context: ClueDispatchContext): Promise<FilingGapClassification> {
+    const sourceGroupCode = findSourceGroupCode(context.sourceCode);
+    if (sourceGroupCode === null) return { blocks: [], warnings: [] };
+    const items = buildFormSchemaItems({ sourceGroupCode, typeCodes: context.typeCodes });
+    const stored = await this.clues.readItemValues(context.clueId);
+    const values: Record<string, string> = {};
+    for (const [key, value] of Object.entries(stored)) {
+      if (value !== null) values[key] = value;
+    }
+    const fileSatisfiedKeys = ['clue.source', 'clue.domain', 'clue.received_at', 'clue.narrative'];
+    if (context.parts.length > 0) fileSatisfiedKeys.push('clue.location');
+    const missing = missingRequiredItems({
+      items,
+      values,
+      sourceCode: context.sourceCode,
+      subjectUnknown: context.subjectUnknown,
+      fileSatisfiedKeys,
+    });
+    return classifyFilingGaps(missing);
+  }
+
+  private rejectFilingGaps(
+    actor: ActorRef,
+    actorCode: string | null,
+    orgUnitId: string,
+    clueId: string,
+    action: 'case.filing-submitted' | 'case.filing-approved',
+    blocks: readonly RequirementItem[],
+    opcode: string,
+  ): Promise<FilingHttpOutcome> {
+    const basis = blocks[0]?.basis[0];
+    return this.rejectStep(
+      actor,
+      actorCode,
+      orgUnitId,
+      clueId,
+      action,
+      {
+        status: 409,
+        result: FILING_GAP_REASON,
+        reason: FILING_GAP_REASON,
+        basis: basis ? `${basis.document} ${basis.article}`.trim() : null,
+        outlet: FILING_GAP_OUTLET,
+        ruleKeys: blocks.map((item) => item.key),
+      },
+      opcode,
+    );
+  }
+
   private async handlerFacts(
     handlers: readonly { readonly personnelId: string; readonly role: string }[],
   ): Promise<Array<{ personnelId: string; role: string; qualified: boolean }>> {
@@ -1120,6 +1253,7 @@ export class CaseFilingService {
       rules?: string[];
       outlet?: string;
       basis?: string | null;
+      ruleKeys?: readonly string[];
     },
     opcode: string = SUBMIT_OPCODE,
     detail?: string,
@@ -1141,6 +1275,7 @@ export class CaseFilingService {
               reason: fail.reason,
               ...(fail.outlet ? { outlet: fail.outlet } : {}),
               ...(fail.basis !== undefined ? { basis: fail.basis } : {}),
+              ...(fail.ruleKeys ? { ruleKeys: fail.ruleKeys } : {}),
             },
           };
     return this.uow.run(async () =>

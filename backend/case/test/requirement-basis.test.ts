@@ -35,8 +35,8 @@ function articles(key: string, document: string): string[] {
 }
 
 describe('要件依据勘误（#261）', () => {
-  it('声明版本升到 requirements-2026-10-27-01', () => {
-    expect(CLUE_REQUIREMENT_DECLARATION_VERSION).toBe('requirements-2026-10-27-01');
+  it('声明版本升到 requirements-2026-10-28-01', () => {
+    expect(CLUE_REQUIREMENT_DECLARATION_VERSION).toBe('requirements-2026-10-28-01');
   });
 
   it('声明不引用已废止文书', () => {

@@ -1,7 +1,9 @@
 // 录入要件声明的类型（ADR 0018）。
 // 录入要件是「一条线索按其线索来源与法域，在录入时应当呈现的那些项」。
 // 它是一份代码里的声明式常量：前端渲染表单与服务端判定缺件读同一份声明。
-// 六个属性：呈现、必填性、必填时机、缺件后果、依据、要件键（#24 决议第二节）。
+// 八个属性：呈现、必填性、必填时机、缺件后果、依据层级、临时标记、依据、要件键。
+
+import type { GuardAuthority } from '../../state-machine/guard.ts';
 
 /** 必填时机三值（#192 决议：统一取「录入时」）。 */
 export const REQUIREMENT_TIMINGS = ['录入时', '核查前补齐', '只提示'] as const;
@@ -10,6 +12,9 @@ export type RequirementTiming = (typeof REQUIREMENT_TIMINGS)[number];
 /** 缺件后果三值（GLOSSARY「缺件后果」）。 */
 export const REQUIREMENT_CONSEQUENCES = ['阻断', '警告', '提示'] as const;
 export type RequirementConsequence = (typeof REQUIREMENT_CONSEQUENCES)[number];
+
+/** 依据层级（#257；取值与 #255 的 GuardAuthority 同一份）。 */
+export type RequirementAuthority = GuardAuthority;
 
 /** 依据引用（ADR 0019）：文件编号 + 条号，指向文件表。 */
 export interface BasisReference {
@@ -33,6 +38,13 @@ export interface RequirementItem {
   readonly timing: RequirementTiming;
   /** 缺件后果。 */
   readonly consequence: RequirementConsequence;
+  /**
+   * 依据层级。law、regulation 在立案守卫阻断；normative、internal 只警告；
+   * system 指系统自设或契约字段（#257 缺口-Q33）。
+   */
+  readonly authority: RequirementAuthority;
+  /** 规程位阶待法制确认时的临时标记（#257 缺口-Q33；仅 4 组 137 键）。 */
+  readonly provisional?: boolean;
   /** 条件说明。条件必填项写明条件（#181 草案的写法）。 */
   readonly condition?: string;
   /** 依据引用。 */
