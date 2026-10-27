@@ -470,6 +470,8 @@ declare -A ASSEMBLY_EXEMPT=(
   ["integration/clue-closure.test.ts"]="../backend/case/src/ ../backend/identity/src/"
   # #235：再次进入用状态机公共出口的 nextEntrySeq 与 CaseStore.appendStageInstance。
   ["integration/case-state-machine.test.ts"]="../backend/case/src/ ../backend/identity/src/"
+  # #246：期限用例用案件公共出口的 CaseStore、nextEntrySeq 与身份公共出口的 newUlid。与 #235 同口径。
+  ["integration/case-deadline.test.ts"]="../backend/case/src/ ../backend/identity/src/"
   # #238：退回用例只用身份公共出口 index.ts 的 newUlid。与 #235 同口径。
   ["integration/case-return.test.ts"]="../backend/identity/src/index.ts"
 )

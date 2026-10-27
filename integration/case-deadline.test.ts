@@ -1,10 +1,10 @@
 // #246 期限：90 日、T34、补登、四维锚点、工作日历、跨年人工确认、换表修订。
 import type { AddressInfo } from 'node:net';
 
-import { CASE_STORE, nextEntrySeq, type CaseStore } from '@natural-enforcement/case';
-import { newUlid } from '@natural-enforcement/identity';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { CASE_STORE, nextEntrySeq, type CaseStore, type StageInstanceRow } from '../backend/case/src/index.ts';
+import { newUlid } from '../backend/identity/src/index.ts';
 import { createApplication } from '../backend/server/src/persistence.module.ts';
 import { openClonedDatabase, type ClonedDatabase } from './cloned-database.ts';
 
@@ -12,7 +12,7 @@ const T0 = Date.parse('2026-03-02T04:00:00.000Z');
 const OPENED = '2026-03-02T04:00:00.000Z';
 const SEED_PASSWORD = 'Seed-pass-52';
 const NEW_PASSWORD = 'Case-due-246!';
-const INITIAL_PASSWORD = 'Due-246!!';
+const INITIAL_PASSWORD = 'Due-246-x!!';
 const SOURCE_URL = 'https://www.gov.cn/zhengce/zhengceku/202511/content_7047091.htm';
 const MANUAL_TRACE = '工作日口径跨入未装入的年份，需人工确认，不按日历日计算。';
 const OVERDUE_PROMPT = '办案期限已届满。只提示，不阻断。';
@@ -310,7 +310,7 @@ describe('#246 期限', () => {
     const view = await store.readCaseView(caseId);
     if (!view) throw new Error('案件不存在');
     const seq = nextEntrySeq(
-      view.instances.map((row) => ({ stage: row.stage, entrySeq: row.entrySeq, status: row.status })),
+      view.instances.map((row: StageInstanceRow) => ({ stage: row.stage, entrySeq: row.entrySeq, status: row.status })),
       'E02',
     );
     expect(seq).toBeGreaterThan(1);
