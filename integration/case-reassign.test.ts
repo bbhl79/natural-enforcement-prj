@@ -774,6 +774,13 @@ describe('#279 X18 出口：不批、撤回与复校文案', () => {
     expect(submitted.status, JSON.stringify(submitted.body)).toBe(200);
     const reassignmentId = String(submitted.body.reassignmentId);
     const chain = await cloned.prisma.caseApprovalChain.findFirstOrThrow({ where: { caseId, status: 'in_flight' } });
+    const e02 = await cloned.prisma.caseStageInstance.findFirstOrThrow({
+      where: { caseId, stage: 'E02', entrySeq: 1 },
+    });
+    const signatureId = newUlid();
+    await cloned.prisma.caseStageSignature.create({
+      data: { id: signatureId, caseId, instanceId: e02.id, actorId: mainId },
+    });
 
     const noNote = await rejectReassign(caseId, reassignmentId, '');
     expect(noNote.status).toBe(409);
@@ -815,6 +822,9 @@ describe('#279 X18 出口：不批、撤回与复校文案', () => {
     expect((await activeHandlers(caseId)).map((row) => row.personnelId).sort()).toEqual([mainId, assistId].sort());
     const trail = await trailOf('case.returned', caseId);
     expect(trail.some((row) => row.outcome === 'succeeded' && String(row.detail).includes(reassignmentId))).toBe(true);
+    const reuse = await postJson(`/api/cases/${caseId}/signatures/${signatureId}/reuse`, 'P-APPROVE-HQ');
+    expect(reuse.status).toBe(409);
+    expect(reuse.body.reason).toBe('signature-invalidated');
 
     const again = await submitReassign(caseId, 'P-239-H1');
     expect(again.status, JSON.stringify(again.body)).toBe(200);
