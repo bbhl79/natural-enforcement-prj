@@ -332,7 +332,7 @@ export const ILLEGAL_MIGRATIONS: readonly IllegalMigration[] = [
   { id: 'X15', summary: '审理开始后走撤案，或调查中走不予处罚（事实不成立）', citation: '#40/6228984565 P2；Q2', outlet: '按当前环节走对应出口', enforcement: 'none', authority: 'system' },
   { id: 'X16', summary: '定案文书引用未入卷证据仍签发（含经回避效力认定为无效的材料）', citation: '#111 L4', outlet: '先把引用的证据入卷', enforcement: 'none', authority: 'system', userLock: '#111 L4' },
   { id: 'X17', summary: '监督角色的写操作推进主状态', citation: '#71/6169639094；GLOSSARY「监督」', outlet: '请由有权办理人操作，监督不能推进主状态', enforcement: 'engine', authority: 'system' },
-  { id: 'X18', summary: '同一案件同时有两条进行中的审批链', citation: '#31/6233001360 Q12', outlet: '先办结或撤回当前审批链', enforcement: 'engine', authority: 'system' },
+  { id: 'X18', summary: '同一案件同时有两条进行中的审批链', citation: '#31/6232829435 Q6', outlet: '先办结或撤回当前审批链', enforcement: 'engine', authority: 'system' },
   { id: 'X19', summary: '未经立案呈批批准就登记或不予立案', citation: '规程 2.4；#31/6233001360 Q4a', outlet: '须经立案呈批批准', enforcement: 'none', authority: 'normative' },
   { id: 'X20', summary: '调查取证笔录在场承办人员少于两人仍保存', citation: '办法第17条第2款＋行政处罚法第42条；笔录记载在场人员属实现口径', outlet: '笔录在场承办人员须不少于两人', enforcement: 'none', authority: 'regulation' },
   { id: 'X21', summary: '带去重标记的线索单独立案（二期）', citation: '#27/6409981777', outlet: '同组附加来源线索，或改判独立', enforcement: 'none', authority: 'normative' },
