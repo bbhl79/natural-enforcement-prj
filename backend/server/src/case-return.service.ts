@@ -24,7 +24,7 @@ import {
 
 import { CLOCK, type Clock } from './clock.ts';
 import { LOGIN_DIRECTORY, type LoginDirectory } from './login-directory.ts';
-import { loadHandlerAvailability, loadReceiverCandidate } from './return-facts.ts';
+import { loadHandlerAvailability, loadReceiverCandidate, returnFailureDetail } from './return-facts.ts';
 import { UNIT_OF_WORK, type UnitOfWork } from './unit-of-work.ts';
 
 const REVIEW_OPCODE = 'doc.admin.review';
@@ -107,12 +107,20 @@ export class CaseReturnService {
       handlers,
     });
     if (!planned.ok) {
-      return this.fail(actor, actorCode, view.handlingOrgId, caseId, opcode, {
-        status: planned.httpStatus,
-        reason: planned.reason,
-        message: planned.message,
-        outlet: planned.outlet,
-      });
+      return this.fail(
+        actor,
+        actorCode,
+        view.handlingOrgId,
+        caseId,
+        opcode,
+        {
+          status: planned.httpStatus,
+          reason: planned.reason,
+          message: planned.message,
+          outlet: planned.outlet,
+        },
+        returnFailureDetail(input.reasonCode, input.targetKey, input.inheritedCode),
+      );
     }
     const plan = planned.plan;
     const at = this.clock.now();
@@ -255,17 +263,20 @@ export class CaseReturnService {
     });
   }
 
-  /** 文书拟制尚未启用。内勤编辑返回 403。 */
+  /** 文书拟制尚未启用。非承办人的内勤先返回 403 clerk-cannot-edit。 */
   async draftDocument(actor: ActorRef, caseId: string): Promise<CaseReturnHttpOutcome> {
     const view = await this.cases.readCaseView(caseId);
     if (!view) return { status: 404, body: { result: 'not-found' } };
-    const denied = await this.authorize(actor, DRAFT_OPCODE, view.handlingOrgId, caseId);
-    if (denied) return { status: 403, body: { reason: denied } };
     const roles = await this.identity.listActiveRoleNames(actor.personnelId);
     const edit = checkDocumentEdit({
       roles,
       isCaseHandler: view.handlers.some((handler) => handler.personnelId === actor.personnelId),
     });
+    if (!edit.ok && edit.reason === 'clerk-cannot-edit') {
+      return { status: 403, body: { reason: 'clerk-cannot-edit' } };
+    }
+    const denied = await this.authorize(actor, DRAFT_OPCODE, view.handlingOrgId, caseId);
+    if (denied) return { status: 403, body: { reason: denied } };
     if (!edit.ok) return { status: 403, body: { reason: edit.reason } };
     return {
       status: 409,
@@ -285,6 +296,7 @@ export class CaseReturnService {
     caseId: string,
     opcode: string,
     fail: { readonly status: 400 | 409; readonly reason: string; readonly message: string; readonly outlet: string },
+    detail?: string,
   ): Promise<CaseReturnHttpOutcome> {
     const reason = (FAIL_REASONS.has(fail.reason) ? fail.reason : 'invalid-state') as CaseReturnedFailedReason;
     const outcome: CaseReturnHttpOutcome =
@@ -297,6 +309,7 @@ export class CaseReturnService {
         outcome: 'failed',
         reason,
         ...this.parties(actor, actorCode, orgUnitId, caseId, opcode),
+        ...(detail ? { detail } : {}),
       }),
     );
   }

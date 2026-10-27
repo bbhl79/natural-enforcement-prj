@@ -578,8 +578,37 @@ describe('#238 立案呈批不批改走 R 编码', () => {
     const approval = await cloned.prisma.filingApproval.findUniqueOrThrow({ where: { id: approvalId } });
     expect(approval.status).toBe('pending_approval');
     const failed = await trailOf('case.filing-returned', clueId);
-    expect(failed.some((row) => row.outcome === 'failed' && row.reason === 'return-target-not-allowed')).toBe(true);
+    expect(
+      failed.some(
+        (row) =>
+          row.outcome === 'failed' &&
+          row.reason === 'return-target-not-allowed' &&
+          String(row.detail).includes('"reasonCode":"R2"'),
+      ),
+    ).toBe(true);
     expect(failed.every((row) => !String(row.detail ?? '').includes('补调查'))).toBe(true);
+  });
+
+  it('R10 继承 R2：呈批拟制中不在允许集合，409 且失败留痕带 R10', async () => {
+    const { clueId, approvalId } = await pendingApproval();
+    const returned = await postJson(`/api/filing-approvals/${approvalId}/return`, 'P-APPROVE-HQ', {
+      reasonCode: 'R10',
+      note: '集合外说明',
+      inheritedCode: 'R2',
+      receiverId: handlerMainId,
+    });
+    expect(returned.status).toBe(409);
+    expect(returned.body.reason).toBe('return-target-not-allowed');
+    const approval = await cloned.prisma.filingApproval.findUniqueOrThrow({ where: { id: approvalId } });
+    expect(approval.status).toBe('pending_approval');
+    const failed = await trailOf('case.filing-returned', clueId);
+    const row = failed.find((item) => item.outcome === 'failed' && item.reason === 'return-target-not-allowed');
+    expect(row).toBeTruthy();
+    const detail = String(row?.detail ?? '');
+    expect(detail).toContain('"reasonCode":"R10"');
+    expect(detail).toContain('其他（须写明）');
+    expect(detail).toContain('"inheritedCode":"R2"');
+    expect(detail).not.toContain('集合外说明');
   });
 
   it('监督退回呈批是 403', async () => {

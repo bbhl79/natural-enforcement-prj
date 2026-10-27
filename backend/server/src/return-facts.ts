@@ -2,6 +2,7 @@
 // 不读机构停用，不放宽机构层「有未办结案件不让停用」。
 
 import {
+  findReturnReason,
   legalReviewAttributionOrgId,
   type HandlerAvailability,
   type LegalReviewOrgFact,
@@ -98,4 +99,25 @@ export async function loadReceiverCandidate(
       attributionId !== null && facts.assignedOrgId === attributionId && !facts.deactivated,
     clerkOfHandlingOrg: roles.includes('内勤') && facts.assignedOrgId === handlingOrgId && !facts.deactivated,
   };
+}
+
+/**
+ * 失败留痕快照。只记 R 编码、目录类别和所选目标。
+ * 说明原文不进快照。原因编码为空时不写快照。
+ */
+export function returnFailureDetail(
+  reasonCode: string,
+  targetKey: string,
+  inheritedCode: string | null,
+): string | undefined {
+  const code = reasonCode.trim();
+  if (code === '') return undefined;
+  const body: Record<string, string> = { reasonCode: code };
+  const spec = findReturnReason(code);
+  if (spec) body.category = spec.name;
+  const target = targetKey.trim();
+  if (target !== '') body.target = target;
+  const inherited = inheritedCode?.trim() ?? '';
+  if (inherited !== '') body.inheritedCode = inherited;
+  return JSON.stringify(body);
 }

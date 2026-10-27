@@ -385,6 +385,58 @@ describe('#238 案件退回验收', () => {
     expect(wrong.body.reason).toBe('return-target-not-allowed');
     const trails = await trailOf('case.returned', caseId);
     expect(trails.some((item) => item.outcome === 'failed' && item.reason === 'return-target-not-allowed')).toBe(true);
+    expect(
+      trails.some(
+        (item) => item.reason === 'return-target-not-allowed' && String(item.detail).includes('"reasonCode":"R2"'),
+      ),
+    ).toBe(true);
+    expect(await cloned.prisma.caseReturn.count({ where: { caseId } })).toBe(0);
+  });
+
+  const outOfSet: ReadonlyArray<{
+    readonly code: string;
+    readonly targetKey: string;
+    readonly category: string;
+    readonly stage?: string;
+    readonly defectiveStage?: string;
+    readonly inheritedCode?: string;
+  }> = [
+    { code: 'R1', targetKey: 'stage:E02', category: '无违法事实（违法事实不成立）' },
+    { code: 'R2', targetKey: 'stage:E04', category: '事实不清、证据不足，需补充调查' },
+    { code: 'R4', targetKey: 'stage:E02', category: '定性或法律适用错误，事实不变' },
+    {
+      code: 'R5',
+      targetKey: 'stage:E02',
+      category: '程序瑕疵（未依法告知、送达瑕疵、人员不足等）',
+      defectiveStage: 'E04',
+    },
+    { code: 'R6', targetKey: 'stage:E02', category: '超出本机关管辖' },
+    { code: 'R8', targetKey: 'stage:E02', category: '裁量不当（罚种、金额、并处事项）', stage: 'E09' },
+    { code: 'R9', targetKey: 'stage:E02', category: '文字、格式、文号' },
+    { code: 'R10', targetKey: 'stage:E02', category: '其他（须写明）', inheritedCode: 'R9' },
+  ];
+
+  it.each(outOfSet)('$code 选集合外目标：409 return-target-not-allowed，失败留痕带该编码与类别', async (row) => {
+    const { caseId } = await stationCase(`${row.code}集合外`);
+    if (row.stage) {
+      await cloned.prisma.caseRecord.update({ where: { id: caseId }, data: { currentStage: row.stage } });
+    }
+    const returned = await returnCase(caseId, {
+      reasonCode: row.code,
+      targetKey: row.targetKey,
+      note: '集合外说明',
+      ...(row.defectiveStage ? { defectiveStage: row.defectiveStage } : {}),
+      ...(row.inheritedCode ? { inheritedCode: row.inheritedCode } : {}),
+    });
+    expect(returned.status).toBe(409);
+    expect(returned.body.reason).toBe('return-target-not-allowed');
+    const trails = await trailOf('case.returned', caseId);
+    const failed = trails.find((item) => item.outcome === 'failed' && item.reason === 'return-target-not-allowed');
+    expect(failed).toBeTruthy();
+    const detail = String(failed?.detail ?? '');
+    expect(detail).toContain(`"reasonCode":"${row.code}"`);
+    expect(detail).toContain(row.category);
+    expect(detail).not.toContain('集合外说明');
     expect(await cloned.prisma.caseReturn.count({ where: { caseId } })).toBe(0);
   });
 
@@ -410,6 +462,17 @@ describe('#238 案件退回验收', () => {
     const noPoint = await returnCase(caseId, { reasonCode: 'R10', note: '其他', inheritedCode: '' });
     expect(noPoint.status).toBe(409);
     expect(noPoint.body.reason).toBe('missing-return-target');
+    const trails = await trailOf('case.returned', caseId);
+    const externalTrail = trails.find((item) => item.outcome === 'failed' && item.reason === 'external-return');
+    expect(String(externalTrail?.detail)).toContain('"reasonCode":"R3"');
+    expect(String(externalTrail?.detail)).toContain('事实清楚但不构成犯罪');
+    const r7Trail = trails.find(
+      (item) =>
+        item.outcome === 'failed' &&
+        item.reason === 'transition-disabled' &&
+        String(item.detail).includes('"reasonCode":"R7"'),
+    );
+    expect(String(r7Trail?.detail)).toContain('法律依据变化（新法施行、补录法条版本）');
   });
 
   it('R1 审理前撤案、审理后不予处罚；R6 只给出移送出口', async () => {
@@ -583,8 +646,13 @@ describe('#238 案件退回验收', () => {
     });
     expect(n5.status).toBe(200);
     expect(n5.body.n5).toBe(true);
+    const stoppedTrail = await trailOf('case.returned', stopped.caseId);
+    expect(
+      stoppedTrail.some((item) => item.outcome === 'succeeded' && String(item.detail).includes('"n5":true')),
+    ).toBe(true);
     const edit = await postJson(`/api/cases/${stopped.caseId}/document-drafts`, 'P-CLERK-FA');
     expect(edit.status).toBe(403);
+    expect(edit.body.reason).toBe('clerk-cannot-edit');
     const handlerDraft = await postJson(`/api/cases/${available.caseId}/document-drafts`, 'P-HANDLER-F1');
     expect(handlerDraft.status).toBe(409);
     expect(handlerDraft.body.reason).toBe('transition-disabled');

@@ -46,7 +46,7 @@ import {
 import { persistTransitionEffects } from './case-transition-write.ts';
 import { CLOCK, type Clock } from './clock.ts';
 import { LOGIN_DIRECTORY, type LoginDirectory } from './login-directory.ts';
-import { loadHandlerAvailability, loadReceiverCandidate } from './return-facts.ts';
+import { loadHandlerAvailability, loadReceiverCandidate, returnFailureDetail } from './return-facts.ts';
 import { UNIT_OF_WORK, type UnitOfWork } from './unit-of-work.ts';
 
 /** 行政审核配置令牌（默认 one-level；IT 可覆写为 skip）。 */
@@ -695,6 +695,7 @@ export class CaseFilingService {
           ...(planned.httpStatus === 400 ? { rules: [planned.reason] } : { outlet: planned.outlet }),
         },
         opcode,
+        returnFailureDetail(input.reasonCode, FILING_DRAFT_TARGET, input.inheritedCode),
       );
     }
     const plan = planned.plan;
@@ -1077,6 +1078,7 @@ export class CaseFilingService {
       basis?: string | null;
     },
     opcode: string = SUBMIT_OPCODE,
+    detail?: string,
   ): Promise<FilingHttpOutcome> {
     const outcome: FilingHttpOutcome =
       fail.status === 400
@@ -1105,6 +1107,7 @@ export class CaseFilingService {
           outcome: 'failed',
           reason: fail.reason as never,
           ...this.parties(actor, actorCode, orgUnitId, clueId, opcode),
+          ...(detail ? { detail } : {}),
         },
       ),
     );
