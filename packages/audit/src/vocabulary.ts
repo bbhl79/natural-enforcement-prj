@@ -95,6 +95,12 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'case.procedure-approved',
   'case.procedure-returned',
   'case.party-notice-recorded',
+  // 期限呈批与锚点（#246）。成功与失败都记这五个动作。
+  'deadline.drafted',
+  'deadline.submitted',
+  'deadline.reviewed',
+  'deadline.approved',
+  'deadline.recorded',
   // 新旧比对判定（#271）：录入成功。拒绝走 case.comparison-refused。
   'case.comparison-recorded',
   // 改派呈批与材料效力认定（#239）。发起、批准、撤回、逐件认定各记一行。
@@ -752,6 +758,40 @@ export const CASE_INVESTIGATION_FAILED_REASONS = [
 ] as const;
 export type CaseInvestigationFailedReason = (typeof CASE_INVESTIGATION_FAILED_REASONS)[number];
 
+/** 期限呈批与锚点被拒（#246）。五个动作共用这一张原因表。 */
+export const CASE_DEADLINE_FAILED_REASONS = [
+  'missing-reason',
+  'missing-basis',
+  'invalid-interval',
+  'over-cap',
+  'anchor-exists',
+  'invalid-state',
+  'invalid-kind',
+  'invalid-days',
+  'invalid-entry',
+  'invalid-start',
+  'invalid-calendar',
+  'unknown-rule',
+  'transition-disabled',
+  'unknown-transition',
+  'concurrent-change',
+  'X02',
+  'X03',
+  'X12',
+  'X17',
+  'X18',
+] as const;
+export type CaseDeadlineFailedReason = (typeof CASE_DEADLINE_FAILED_REASONS)[number];
+
+export const CASE_DEADLINE_ACTIONS = [
+  'deadline.drafted',
+  'deadline.submitted',
+  'deadline.reviewed',
+  'deadline.approved',
+  'deadline.recorded',
+] as const;
+export type CaseDeadlineAction = (typeof CASE_DEADLINE_ACTIONS)[number];
+
 /** 新旧比对判定被拒（#271）。提交缺判定、批准比对过时、材料不合规共用这一张原因表。 */
 export const CASE_COMPARISON_FAILED_REASONS = [
   'missing-judgment',
@@ -902,6 +942,11 @@ export const AUDIT_DETAIL_ACTIONS = [
   'case.procedure-approved',
   'case.procedure-returned',
   'case.party-notice-recorded',
+  'deadline.drafted',
+  'deadline.submitted',
+  'deadline.reviewed',
+  'deadline.approved',
+  'deadline.recorded',
   'case.comparison-recorded',
   'case.comparison-refused',
   // 改派呈批与材料效力认定（#239）：改派原因、原／新承办人员、认定结论与材料。

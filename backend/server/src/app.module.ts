@@ -19,6 +19,7 @@ import { CaseFilingController } from './case-filing.controller.ts';
 import { CaseReassignController } from './case-reassign.controller.ts';
 import { CaseReturnController } from './case-return.controller.ts';
 import { CaseStateController } from './case-state.controller.ts';
+import { DeadlineController } from './deadline.controller.ts';
 import { InvestigationController } from './investigation.controller.ts';
 import { ClueClosureController } from './clue-closure.controller.ts';
 import { ClueCenterController } from './clue-center.controller.ts';
@@ -32,6 +33,7 @@ import { CaseFilingService } from './case-filing.service.ts';
 import { CaseReassignService } from './case-reassign.service.ts';
 import { CaseReturnService } from './case-return.service.ts';
 import { CaseStateService } from './case-state.service.ts';
+import { DeadlineService } from './deadline.service.ts';
 import { InvestigationService } from './investigation.service.ts';
 import { ClueClosureService } from './clue-closure.service.ts';
 import { ClueDispatchService } from './clue-dispatch.service.ts';
@@ -105,6 +107,7 @@ import { WorkbenchService } from './workbench.service.ts';
     CaseConflictController,
     CaseAgencyConflictController,
     InvestigationController,
+    DeadlineController,
     ClueCenterController,
     ClueDispositionController,
     ClueDesignationController,
@@ -135,6 +138,7 @@ import { WorkbenchService } from './workbench.service.ts';
     CaseAgencyConflictService,
     CaseComparisonService,
     InvestigationService,
+    DeadlineService,
     ClueDispositionService,
     ClueDesignationService,
     StorageQuarantineService,

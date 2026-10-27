@@ -12,6 +12,8 @@ import type {
   CaseFilingReviewedFailedReason,
   CaseFilingSubmittedFailedReason,
   CaseFilingWithdrawnFailedReason,
+  CaseDeadlineAction,
+  CaseDeadlineFailedReason,
   CaseInvestigationAction,
   CaseInvestigationFailedReason,
   CaseMaterialEffectivityFailedReason,
@@ -307,6 +309,8 @@ export type AuditAppend =
   | (AuditParties & { action: 'case.returned'; outcome: 'failed'; reason: CaseReturnedFailedReason })
   | (AuditParties & { action: CaseInvestigationAction })
   | (AuditParties & { action: CaseInvestigationAction; outcome: 'failed'; reason: CaseInvestigationFailedReason })
+  | (AuditParties & { action: CaseDeadlineAction })
+  | (AuditParties & { action: CaseDeadlineAction; outcome: 'failed'; reason: CaseDeadlineFailedReason })
   // 改派呈批与材料效力认定（#239）。
   | (AuditParties & { action: 'case.reassignment-submitted' })
   | (AuditParties & {

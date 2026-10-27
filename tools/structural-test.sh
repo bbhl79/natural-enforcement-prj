@@ -470,6 +470,8 @@ declare -A ASSEMBLY_EXEMPT=(
   ["integration/clue-closure.test.ts"]="../backend/case/src/ ../backend/identity/src/"
   # #235：再次进入用状态机公共出口的 nextEntrySeq 与 CaseStore.appendStageInstance。
   ["integration/case-state-machine.test.ts"]="../backend/case/src/ ../backend/identity/src/"
+  # #246：期限用例用案件公共出口的 CaseStore、nextEntrySeq 与身份公共出口的 newUlid。与 #235 同口径。
+  ["integration/case-deadline.test.ts"]="../backend/case/src/ ../backend/identity/src/"
   # #238：退回用例只用身份公共出口 index.ts 的 newUlid。与 #235 同口径。
   ["integration/case-return.test.ts"]="../backend/identity/src/index.ts"
   # #239：改派用例只用身份公共出口 index.ts 的 newUlid。与 #238 同口径。
@@ -721,6 +723,8 @@ check_weak-reference-entry() {
 # CaseStageInvalidation、CaseStageSignature、CaseMaterial。
 # #236 追加违法记录、笔录、收尾呈批、期限事件与告知记录：CaseViolationRecord、CaseInquiryRecord、
 # CaseProcedureApproval、CaseProcedureVersion、CaseProcedureStep、CaseDeadlineEvent、CasePartyNotice。
+# #246 追加期限行、期间事件、期限呈批与后装工作日历：CaseDeadlineRow、CasePeriodEvent、
+# CaseDeadlineApproval、CaseDeadlineApprovalVersion、CaseDeadlineApprovalStep、DeadlineCalendarInstall。
 # #271 追加新旧比对判定：CaseComparisonJudgment。
 # #239 追加改派呈批与材料效力认定：CaseReassignment、CaseMaterialEffectiveness。
 G1_MODELS=(
@@ -793,6 +797,12 @@ G1_MODELS=(
   CaseProcedureStep
   CaseDeadlineEvent
   CasePartyNotice
+  CaseDeadlineRow
+  CasePeriodEvent
+  CaseDeadlineApproval
+  CaseDeadlineApprovalVersion
+  CaseDeadlineApprovalStep
+  DeadlineCalendarInstall
   CaseComparisonJudgment
   CaseReassignment
   CaseMaterialEffectiveness

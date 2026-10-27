@@ -5,7 +5,7 @@ import { Module } from '@nestjs/common';
  * deadline → shield、case（订阅）、approval（订阅）、geo-dict（只读引用程序节点类型，#45 补丁 1）。
  * 往来形态：只读查询 + 事件，默认禁止直写；跨模块互引只许对方公共出口
  *（@natural-enforcement/<module> 根导入），由结构测试 module-public-entry 拦截。
- * 本切片无业务实体（G1），@Module 元数据随真实调用方逐切片填充。
+ * #246 的计算与锚点经本模块公共出口给出。持久化由启动包经案件存储写入。
  */
 @Module({})
 export class DeadlineModule {}

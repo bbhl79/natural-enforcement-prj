@@ -120,7 +120,7 @@ export type ToSpec =
   | { readonly kind: 'branch'; readonly note: string };
 
 /** 已启用边的守卫名。none 表示显式声明本边无额外守卫（通用守卫仍跑）。 */
-export const TRANSITION_GUARDS = ['filing', 'closeout', 'reassign', 'none'] as const;
+export const TRANSITION_GUARDS = ['filing', 'closeout', 'reassign', 'deadline', 'none'] as const;
 export type TransitionGuard = (typeof TRANSITION_GUARDS)[number];
 
 export interface TransitionEdge {
@@ -247,7 +247,10 @@ export const TRANSITIONS: readonly TransitionEdge[] = [
     enabled: true,
     guard: 'reassign',
   }),
-  edge('T34', { kind: 'span', start: 'E01', end: 'E09' }, { kind: 'same' }, '延长办案期限：环节不变'),
+  edge('T34', { kind: 'span', start: 'E01', end: 'E09' }, { kind: 'same' }, '延长办案期限：环节不变', {
+    enabled: true,
+    guard: 'deadline',
+  }),
   edge('T35', { kind: 'after', stage: 'E10' }, { kind: 'same' }, '复议、诉讼记载：主状态不变（主干不启用）'),
 ];
 
