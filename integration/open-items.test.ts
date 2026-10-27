@@ -255,6 +255,27 @@ async function seedClue(input: {
   return id;
 }
 
+/** 插入一张已批准呈批和一条案件。线索已关闭且不分派，不计入线索未办结。 */
+async function seedCase(handlingOrgId: string, status: string): Promise<string> {
+  const clueId = await seedClue({ enteredOrgId: org.deptA, status: 'closed' });
+  const approvalId = newUlid();
+  const caseId = newUlid();
+  await cloned.prisma.$executeRaw`
+    INSERT INTO filing_approval (id, clue_id, drafter_id, status)
+    VALUES (${approvalId}, ${clueId}, ${people.root}, 'approved')
+  `;
+  await cloned.prisma.$executeRaw`
+    INSERT INTO case_record (
+      id, handling_org_id, status, current_stage, stage_entry_seq,
+      party_names, filing_approval_id, opened_by, opened_at
+    ) VALUES (
+      ${caseId}, ${handlingOrgId}, ${status}, 'E02', 1,
+      ${['张三']}::text[], ${approvalId}, ${people.root}, NOW()
+    )
+  `;
+  return caseId;
+}
+
 async function designateClue(clueId: string, toOrgId: string, by: string, byOrg: string): Promise<void> {
   const now = new Date();
   await cloned.prisma.$executeRaw`
@@ -432,6 +453,36 @@ describe('#219 真实 OpenItems 计数（默认装配）', () => {
     expect(await deactivatedAtOf(self)).not.toBeNull();
     expect((await deactivate(PHONES.adminA, peer)).status).toBe(409);
     expect(await deactivatedAtOf(peer)).toBeNull();
+  });
+
+  it('非终态案件阻止停用：办理中与调查已终止·待收尾各计 1，线索为 0', async () => {
+    const progressing = await addUnit('station', org.deptA);
+    const pending = await addUnit('station', org.deptA);
+    await seedCase(progressing, 'in_progress');
+    await seedCase(pending, 'terminated_pending');
+    const progressingResp = await deactivate(PHONES.adminA, progressing);
+    expect(progressingResp.status).toBe(409);
+    expect(await progressingResp.json()).toEqual({
+      result: 'invalid-state',
+      reason: 'org-has-open-items',
+      openItems: { clues: 0, cases: 1 },
+      message: '本机构还有 1 条未办结的线索或案件（线索 0 条、案件 1 条），全部办结后才能停用。',
+    });
+    expect(await deactivatedAtOf(progressing)).toBeNull();
+    const pendingResp = await deactivate(PHONES.adminA, pending);
+    expect(pendingResp.status).toBe(409);
+    expect((await pendingResp.json()).openItems).toEqual({ clues: 0, cases: 1 });
+    expect(await deactivatedAtOf(pending)).toBeNull();
+  });
+
+  it('终态案件不计：已撤案、已结案、已定型同在时可以停用', async () => {
+    const station = await addUnit('station', org.deptA);
+    await seedCase(station, 'withdrawn');
+    await seedCase(station, 'closed');
+    await seedCase(station, 'finalized');
+    const response = await deactivate(PHONES.adminA, station);
+    expect(response.status).toBe(200);
+    expect(await deactivatedAtOf(station)).not.toBeNull();
   });
 
   it('无未办结时可停用（对照）', async () => {
