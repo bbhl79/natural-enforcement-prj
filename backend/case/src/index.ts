@@ -306,6 +306,7 @@ export type {
   ClueDispositionWrite,
   ClueExternalTransferWrite,
   ClueExternalTransferRow,
+  ClueFiledWrite,
   ClueHeldRow,
   ClueReminderResolveWrite,
   ClueWithdrawContext,
@@ -323,3 +324,48 @@ export {
   parseLetterDate,
 } from './clue/disposition/index.ts';
 export type { TransferAssessment } from './clue/disposition/index.ts';
+// #234：立案呈批（结论二选一、理由两类互斥、审批链最小固定形态、X31 在途锁、批准守卫）与案件最小模型。
+export {
+  CASE_FIRST_STAGE,
+  CASE_FIRST_STAGE_ENTRY_SEQ,
+  CASE_STATUS_IN_PROGRESS,
+  FILING_APPROVAL_PENDING_OUTLET,
+  FILING_APPROVAL_PENDING_REASON,
+  FILING_APPROVAL_STATUSES,
+  FILING_CONCLUSIONS,
+  FILING_FROM_CLUE_STATUS,
+  FILING_GUARD_BASIS,
+  FILING_STEPS,
+  FILING_STEP_FROM,
+  buildCaseOpening,
+  canTakeFilingStep,
+  checkFilingContent,
+  checkFilingGuards,
+  checkFilingParty,
+  filingStatusAfter,
+  isFilingApprovalPending,
+} from './filing/index.ts';
+export type {
+  CaseOpening,
+  FilingAdminReview,
+  FilingApprovalStatus,
+  FilingConclusion,
+  FilingContent,
+  FilingContentCheck,
+  FilingGuardHit,
+  FilingGuardInput,
+  FilingHandlerFact,
+  FilingStep,
+} from './filing/index.ts';
+// #234：立案呈批与案件最小模型的持久化端口（Prisma 适配器在模块内，不经公共出口出）。
+export { CASE_STORE } from './persistence/case-store.ts';
+export type {
+  CaseRow,
+  CaseStore,
+  FilingApprovalRow,
+  FilingApprovalStepRow,
+  FilingApprovalVersionRow,
+  FilingDraftWrite,
+  FilingStepWrite,
+  FilingTodoRow,
+} from './persistence/case-store.ts';

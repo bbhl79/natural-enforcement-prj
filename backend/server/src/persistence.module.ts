@@ -25,6 +25,7 @@ import { QUEUE_PORT, createQueuePort, type QueuePort } from '@natural-enforcemen
 import { listActiveJurisdictionRows } from '@natural-enforcement/geo-dict';
 import {
   ALL_LAYERS,
+  CASE_STORE,
   CLUE_STORE,
   CLUE_VERIFICATION_PORT,
   STREET_BOUNDARY_PORT,
@@ -47,10 +48,12 @@ import {
 } from '@natural-enforcement/identity';
 import { prismaOpenItemsCounter } from './open-items-counter.ts';
 import { PrismaClueStore } from '../../case/src/persistence/prisma-clue-store.ts';
+import { PrismaCaseStore } from '../../case/src/persistence/prisma-case-store.ts';
 import { PrismaIdentityStore } from '../../identity/src/persistence/prisma-identity-store.ts';
 import { PrismaClient, type Prisma } from '../../prisma/generated/prisma/client.ts';
 
 import { AppModule } from './app.module.ts';
+import { FILING_ADMIN_REVIEW } from './case-filing.service.ts';
 import { CLOCK, type Clock } from './clock.ts';
 import {
   CLUE_VERIFICATION_QUEUE_NAME,
@@ -430,6 +433,7 @@ class PrismaUnitOfWork implements UnitOfWork {
       audit: this.factory.forClient(client),
       auditReader: new PrismaAuditTrailReader(client as unknown as AuditTrailReadClient),
       clues: new PrismaClueStore(client),
+      cases: new PrismaCaseStore(client),
     };
   }
 }
@@ -454,6 +458,8 @@ export interface ApplicationOverrides {
   jurisdictionLookup?: JurisdictionLookup;
   /** 是否起核查 worker（#213）。默认不起；生产引导时打开。 */
   verificationWorker?: boolean;
+  /** 立案呈批行政审核配置（#234）。默认 one-level；测试可传 skip。 */
+  filingAdminReview?: 'skip' | 'one-level';
 }
 
 /**
@@ -495,6 +501,11 @@ class PersistenceModule {
         { provide: PRISMA, useValue: prisma },
         { provide: IDENTITY_STORE, useValue: new PrismaIdentityStore(prisma) },
         { provide: CLUE_STORE, useValue: new PrismaClueStore(prisma) },
+        { provide: CASE_STORE, useValue: new PrismaCaseStore(prisma) },
+        {
+          provide: FILING_ADMIN_REVIEW,
+          useValue: overrides.filingAdminReview ?? 'one-level',
+        },
         // 存储端口：默认按运行参数建 RustFS 适配；测试可覆写成记录写的假端口。
         { provide: STORAGE_PORT, useValue: overrides.storagePort ?? createDefaultStoragePort() },
         // 队列端口：业务任务队列，连接惰性（不投递就不连 Redis）。
@@ -544,6 +555,8 @@ class PersistenceModule {
       exports: [
         IDENTITY_STORE,
         CLUE_STORE,
+        CASE_STORE,
+        FILING_ADMIN_REVIEW,
         STORAGE_PORT,
         QUEUE_PORT,
         CLUE_VERIFICATION_PORT,

@@ -25,6 +25,7 @@ import {
   type CluePoolReassignedFailedReason,
 } from '@natural-enforcement/audit';
 import {
+  CASE_STORE,
   CLUE_STORE,
   POOL_REASSIGN_FROM_STATUSES,
   TRANSFER_FROM_STATUSES,
@@ -34,6 +35,7 @@ import {
   validateAttachmentSet,
   contentDigest,
   type ClueMaterialRow,
+  type CaseStore,
   type ClueStore,
 } from '@natural-enforcement/case';
 import {
@@ -204,6 +206,7 @@ export class ClueDispositionService {
   constructor(
     @Inject(LOGIN_DIRECTORY) private readonly directory: LoginDirectory,
     @Inject(CLUE_STORE) private readonly clues: ClueStore,
+    @Inject(CASE_STORE) private readonly cases: CaseStore,
     @Inject(IDENTITY_STORE) private readonly identity: IdentityStore,
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     @Inject(STORAGE_PORT) private readonly storage: StoragePort,
@@ -276,6 +279,14 @@ export class ClueDispositionService {
         result: 'invalid-state',
         rules: [],
         reason: 'designation-pending',
+      });
+    }
+    if (await this.cases.hasPendingFilingApproval(clueId)) {
+      return this.rejectTransfer(actor, actorCode, targetOrgId, clueId, {
+        status: 409,
+        result: 'invalid-state',
+        rules: [],
+        reason: 'filing-approval-pending',
       });
     }
     const guard = this.stateGuard(context.status, input.expectedStatus, [...TRANSFER_FROM_STATUSES]);

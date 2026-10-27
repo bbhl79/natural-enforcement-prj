@@ -969,3 +969,107 @@ model ClueDesignationRequest {
   @@index([clueId, status])
   @@map("clue_designation_request")
 }
+
+/// 立案（不予立案）呈批表表头（#234）：状态随审批链推进；正文在版本表（追加式）。
+/// 一条线索同时至多一张未批准的呈批（迁移里的部分唯一索引 filing_approval_open_clue_uq）。
+model FilingApproval {
+  id String @id
+  /// 来源线索（#16 主键引用；本票只支持一条）
+  clueId String @map("clue_id")
+  /// 拟制人（本案线索主办或协办）
+  drafterId String @map("drafter_id")
+  /// 状态：drafting | pending_review | pending_approval | approved
+  status String @default("drafting")
+  /// 提交时取用的行政审核配置：skip | one-level
+  adminReview String? @map("admin_review")
+  /// 当前版本号（0＝尚无正文）
+  currentVersionNo Int @default(0) @map("current_version_no")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt DateTime @default(now()) @db.Timestamptz(6) @map("updated_at")
+
+  @@index([clueId])
+  @@index([status])
+  @@map("filing_approval")
+}
+
+/// 呈批正文版本（#234，追加式：触发器拒 UPDATE/DELETE）
+model FilingApprovalVersion {
+  id String @id
+  approvalId String @map("approval_id")
+  versionNo Int @map("version_no")
+  /// 结论：file（立案）| no-case（不予立案）
+  conclusion String
+  /// 正文快照 JSON（当事人名称，或不予立案理由两类之一）
+  contentJson String @map("content_json")
+  createdBy String @map("created_by")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([approvalId, versionNo])
+  @@map("filing_approval_version")
+}
+
+/// 审批步骤（#234，追加式）：submit | review | approve | return | withdraw；退回、撤回理由必填
+model FilingApprovalStep {
+  id String @id
+  approvalId String @map("approval_id")
+  /// 本步针对的正文版本
+  versionNo Int @map("version_no")
+  step String
+  actorId String @map("actor_id")
+  /// 签署意见，或退回／撤回理由（自由文本留业务行，不进留痕 detail）
+  opinion String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([approvalId])
+  @@map("filing_approval_step")
+}
+
+/// 案件最小模型（#234；#235 接管状态机）。承办机构立案锁定，触发器拒改（X13）。
+model CaseRecord {
+  id String @id
+  /// 承办机构＝立案时线索当前承办机构，此后不可变
+  handlingOrgId String @map("handling_org_id")
+  /// 主状态：in_progress（办理中）
+  status String @default("in_progress")
+  /// 当前法定环节（立案后 E02）
+  currentStage String @map("current_stage")
+  /// 环节进入次序号（立案后 1）
+  stageEntrySeq Int @map("stage_entry_seq")
+  /// 当事人名称
+  partyNames String[] @map("party_names")
+  /// 立案依据的立案呈批主键
+  filingApprovalId String @unique @map("filing_approval_id")
+  openedBy String @map("opened_by")
+  openedAt DateTime @db.Timestamptz(6) @map("opened_at")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([handlingOrgId])
+  @@map("case_record")
+}
+
+/// 案件来源线索（#16：案件 1..N 条来源线索；一条线索只属一个案件）
+model CaseSourceClue {
+  id String @id
+  caseId String @map("case_id")
+  clueId String @unique @map("clue_id")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_source_clue")
+}
+
+/// 案件承办人员（主办、协办随案带入；改派由 #235 之后的票接管）
+model CaseHandler {
+  id String @id
+  caseId String @map("case_id")
+  personnelId String @map("personnel_id")
+  /// 角色：main（主办）| assist（协办）
+  role String
+  assignedAt DateTime @default(now()) @db.Timestamptz(6) @map("assigned_at")
+  endedAt DateTime? @db.Timestamptz(6) @map("ended_at")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([caseId, personnelId, role])
+  @@index([caseId])
+  @@map("case_handler")
+}

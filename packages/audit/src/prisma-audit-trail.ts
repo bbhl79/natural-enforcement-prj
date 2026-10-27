@@ -39,6 +39,13 @@ import {
   STORAGE_SECRECY_REPORT_RECEIPTED_FAILED_REASONS,
   CLUE_REMINDER_RESOLVED_FAILED_REASONS,
   CLUE_WITHDRAWN_FAILED_REASONS,
+  CASE_FILING_APPROVED_FAILED_REASONS,
+  CASE_FILING_DRAFTED_FAILED_REASONS,
+  CASE_FILING_RETURNED_FAILED_REASONS,
+  CASE_FILING_REVIEWED_FAILED_REASONS,
+  CASE_FILING_SUBMITTED_FAILED_REASONS,
+  CASE_FILING_WITHDRAWN_FAILED_REASONS,
+  CASE_OPENED_FAILED_REASONS,
   LOGIN_FAILED_REASONS,
   ORG_UNIT_DEACTIVATE_FAILED_REASONS,
   ORG_UNIT_REGISTER_FAILED_REASONS,
@@ -109,6 +116,13 @@ const FAILED_REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['storage.secrecy-report-created', new Set<string>(STORAGE_SECRECY_REPORT_CREATED_FAILED_REASONS)],
   ['storage.secrecy-report-reported', new Set<string>(STORAGE_SECRECY_REPORT_REPORTED_FAILED_REASONS)],
   ['storage.secrecy-report-receipted', new Set<string>(STORAGE_SECRECY_REPORT_RECEIPTED_FAILED_REASONS)],
+  ['case.filing-drafted', new Set<string>(CASE_FILING_DRAFTED_FAILED_REASONS)],
+  ['case.filing-submitted', new Set<string>(CASE_FILING_SUBMITTED_FAILED_REASONS)],
+  ['case.filing-reviewed', new Set<string>(CASE_FILING_REVIEWED_FAILED_REASONS)],
+  ['case.filing-approved', new Set<string>(CASE_FILING_APPROVED_FAILED_REASONS)],
+  ['case.filing-returned', new Set<string>(CASE_FILING_RETURNED_FAILED_REASONS)],
+  ['case.filing-withdrawn', new Set<string>(CASE_FILING_WITHDRAWN_FAILED_REASONS)],
+  ['case.opened', new Set<string>(CASE_OPENED_FAILED_REASONS)],
 ]);
 
 /** 后值只许出现在带后值的动作上，且这些动作必须带非空后值（#128）。 */

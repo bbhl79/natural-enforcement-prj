@@ -386,6 +386,13 @@ write_probe_ui-copy-discipline() {
     "export const probeLabel = '捞回';"
 }
 
+write_probe_no-case-landing-entry() {
+  # #234：立案呈批批准路径之外的 server 文件调用不予立案落点服务即红。
+  tmp_write "backend/server/src/_structural-probe-no-case.ts" \
+    "// 探针（临时，勿入库）：绕过立案呈批调用不予立案落点服务" \
+    "export const probe = 'recordNoCaseFromFilingApproval';"
+}
+
 SPECS=(
   "frontend-boundary|frontend-boundary|前端直连库（@prisma/client）"
   "spatial-orm-chain|spatial-no-orm-mutation|空间模型 ORM 写（换行链式）"
@@ -427,6 +434,8 @@ SPECS=(
   "reference-data-no-mutation|reference-data-no-mutation|参照数据表就地改行（ADR 0016 只追加）"
   # #211：线索空间三表归 case 模块，空间纪律的模型集扩到线索空间部件与命中集表。
   "clue-spatial-orm-write|spatial-no-orm-mutation|线索空间部件 ORM 写（#211 新空间表禁 ORM 写）"
+  # #234：server 层只有立案呈批批准路径能调用不予立案落点服务。
+  "no-case-landing-entry|no-case-landing-entry|server 层第二个文件调用 recordNoCaseFromFilingApproval"
 )
 
 # ---------- 护栏①（#171）动态层：带违例的整闸全量运行，三族各取一条 ----------

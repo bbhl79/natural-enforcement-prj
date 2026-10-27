@@ -507,6 +507,14 @@ export interface ClueDispatchContext {
   readonly hits: readonly ClueDispatchHit[];
   /** 初步涉嫌违法类型编码列表（#207 P7：用于分派指导判定）。 */
   readonly typeCodes: readonly string[];
+  /** 当事人不明（GLOSSARY；#234 立案守卫「当事人可确定」读它）。 */
+  readonly subjectUnknown: boolean;
+}
+
+/** 立案（T01）写入线索 filed（#234）：从已派承办人条件更新。 */
+export interface ClueFiledWrite {
+  readonly clueId: string;
+  readonly expectedStatus: string;
 }
 
 /** 分派决定的写入。 */
@@ -844,6 +852,11 @@ export interface ClueStore {
    * 返回 false 表示当前状态不符（并发冲突或状态不允许），业务行不变。
    */
   applyDisposition(write: ClueDispositionWrite): Promise<boolean>;
+  /**
+   * 立案（#234 T01）：状态由 handler_assigned 条件更新为 filed。
+   * 返回 false 表示当前状态不符（并发冲突或状态不允许），业务行不变。
+   */
+  markFiled(write: ClueFiledWrite): Promise<boolean>;
   /** 线索是否已有 disposition=other 的处置行（#229 系统外移送前置条件）。 */
   hasOtherDisposition(clueId: string): Promise<boolean>;
   /** 写入系统外移送附加记录与附件（不改线索状态）。 */

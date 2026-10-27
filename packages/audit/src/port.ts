@@ -1,6 +1,13 @@
 import type {
   AccountMaintenanceFailedReason,
   AuditTargetOrgBasis,
+  CaseFilingApprovedFailedReason,
+  CaseFilingDraftedFailedReason,
+  CaseFilingReturnedFailedReason,
+  CaseFilingReviewedFailedReason,
+  CaseFilingSubmittedFailedReason,
+  CaseFilingWithdrawnFailedReason,
+  CaseOpenedFailedReason,
   ClueDesignateRejectedFailedReason,
   ClueDesignateRequestedFailedReason,
   ClueDispatchDecideFailedReason,
@@ -252,7 +259,22 @@ export type AuditAppend =
       action: 'storage.secrecy-report-receipted';
       outcome: 'failed';
       reason: StorageSecrecyReportReceiptedFailedReason;
-    });
+    })
+  | (AuditParties & { action: 'case.filing-drafted' })
+  | (AuditParties & { action: 'case.filing-drafted'; outcome: 'failed'; reason: CaseFilingDraftedFailedReason })
+  | (AuditParties & { action: 'case.filing-submitted' })
+  | (AuditParties & { action: 'case.filing-submitted'; outcome: 'failed'; reason: CaseFilingSubmittedFailedReason })
+  | (AuditParties & { action: 'case.filing-reviewed' })
+  | (AuditParties & { action: 'case.filing-reviewed'; outcome: 'failed'; reason: CaseFilingReviewedFailedReason })
+  | (AuditParties & { action: 'case.filing-approved' })
+  | (AuditParties & { action: 'case.filing-approved'; outcome: 'failed'; reason: CaseFilingApprovedFailedReason })
+  | (AuditParties & { action: 'case.filing-returned' })
+  | (AuditParties & { action: 'case.filing-returned'; outcome: 'failed'; reason: CaseFilingReturnedFailedReason })
+  | (AuditParties & { action: 'case.filing-withdrawn' })
+  | (AuditParties & { action: 'case.filing-withdrawn'; outcome: 'failed'; reason: CaseFilingWithdrawnFailedReason })
+  | (AuditParties & { action: 'case.opened' })
+  | (AuditParties & { action: 'case.opened'; outcome: 'failed'; reason: CaseOpenedFailedReason })
+;
 
 /**
  * 一行授权拒绝。被作用人员、来源地址、前值为空。登录标识和执法证号不进入。

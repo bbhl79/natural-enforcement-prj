@@ -1,7 +1,7 @@
 // 其他（#229）登记、不予立案落点（#226）、结案提醒生成与提醒处理（#217／#226／#229）。
 //
 // #226：HTTP POST disposition=no-case 一律拒绝（filing-approval-required）；不予立案只经
-// recordNoCaseFromFiling（非 HTTP、不授角色）由案件段立案呈批同一事务调用。
+// 不予立案落点只许由立案呈批批准路径调用（#234）；本服务不再包装。
 // other（#229）仍走本服务 HTTP 路径：仅已派承办人；主办／协办本人或承办机构内勤。
 //
 // 结案提醒：提醒挂在「不派」的暂存线索上，对方是被结案的线索。处理人二选一——
@@ -18,6 +18,7 @@ import {
   type ClueReminderResolvedFailedReason,
 } from '@natural-enforcement/audit';
 import {
+  CASE_STORE,
   CLUE_STORE,
   DISPOSITION_RECORD_FROM_STATUS,
   REMINDER_RESOLUTIONS,
@@ -26,7 +27,7 @@ import {
   checkDispositionNote,
   checkReminderResolve,
   generateClosureReminders,
-  recordNoCaseFromFilingApproval,
+  type CaseStore,
   type ClueStore,
 } from '@natural-enforcement/case';
 import {
@@ -107,6 +108,7 @@ export class ClueClosureService {
   constructor(
     @Inject(LOGIN_DIRECTORY) private readonly directory: LoginDirectory,
     @Inject(CLUE_STORE) private readonly clues: ClueStore,
+    @Inject(CASE_STORE) private readonly cases: CaseStore,
     @Inject(IDENTITY_STORE) private readonly identity: IdentityStore,
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     private readonly access: AccessControlService,
@@ -153,6 +155,15 @@ export class ClueClosureService {
         result: 'non-compliant',
         rules: ['filing-approval-required'],
         reason: 'filing-approval-required',
+      });
+    }
+    // #234 X31：立案呈批在途时不能做其他处置。
+    if (await this.cases.hasPendingFilingApproval(clueId)) {
+      return this.rejectDisposition(actor, actorCode, actorOrgId, clueId, {
+        status: 409,
+        result: 'invalid-state',
+        rules: [],
+        reason: 'filing-approval-pending',
       });
     }
 
@@ -240,89 +251,6 @@ export class ClueClosureService {
    * 供案件段立案呈批 doc.approve（结论为不予立案）同一事务调用；IT 直接调本方法验证。
    * 成功写处置＋呈批引用＋理由快照＋closed＋kind=no-case 提醒＋成功留痕；失败写失败留痕、业务行不变。
    */
-  async recordNoCaseFromFiling(
-    input: {
-      readonly clueId: string;
-      readonly expectedStatus: string;
-      readonly filingApprovalRef: string;
-      readonly reason: unknown;
-      readonly recordedBy: string;
-      readonly note?: string | null;
-      readonly actorCode?: string | null;
-      readonly orgUnitId?: string;
-    },
-  ): Promise<DispositionOutcome> {
-    const context = await this.clues.readDispatchContext(input.clueId);
-    if (!context) return { status: 404, body: { result: 'not-found' } };
-    const actorCode = input.actorCode ?? null;
-    const orgUnitId = input.orgUnitId ?? context.assignment?.orgUnitId ?? context.enteredOrgId;
-    const parties = {
-      actorId: input.recordedBy,
-      actorCode,
-      subjectPersonnelId: null,
-      subjectCode: null,
-      orgUnitId,
-      sourceIp: null,
-      opcode: null as string | null,
-      resourceType: 'clue' as const,
-      resourceId: input.clueId,
-    };
-
-    return this.uow.run(async (tx) => {
-      const recordedAt = new Date();
-      const outcome = await recordNoCaseFromFilingApproval(tx.clues, {
-        clueId: input.clueId,
-        expectedStatus: input.expectedStatus,
-        filingApprovalRef: input.filingApprovalRef,
-        reason: input.reason,
-        recordedBy: input.recordedBy,
-        recordedAt,
-        newId: () => newUlid(),
-        note: input.note,
-      });
-      if (!outcome.ok) {
-        const status = outcome.reason === 'invalid-state' || outcome.reason === 'concurrent-change' ? 409 : 400;
-        return rejected<DispositionOutcome>(
-          status === 400
-            ? { status: 400, body: { result: 'non-compliant', rules: outcome.rules } }
-            : {
-                status: 409,
-                body: {
-                  result: outcome.reason as 'invalid-state' | 'concurrent-change',
-                  reason: outcome.reason,
-                },
-              },
-          {
-            action: 'clue.disposition-recorded',
-            outcome: 'failed',
-            reason: outcome.reason as ClueDispositionRecordedFailedReason,
-            ...parties,
-          },
-        );
-      }
-      await tx.audit.append({
-        action: 'clue.disposition-recorded',
-        ...parties,
-        detail: JSON.stringify({
-          code: context.code,
-          disposition: 'no-case',
-          filingApprovalRef: outcome.filingApprovalRef,
-          reason: outcome.reason,
-          reminderCount: outcome.reminderIds.length,
-        }),
-      });
-      return {
-        status: 200,
-        body: {
-          result: 'disposition-recorded' as const,
-          clueId: input.clueId,
-          code: context.code,
-          status: 'closed',
-          reminderCount: outcome.reminderIds.length,
-        },
-      };
-    });
-  }
 
   /** 结案提醒处理：撤回不派再办｜写明原因随旧线索办结。 */
   async resolveReminder(

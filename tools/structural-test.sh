@@ -138,6 +138,7 @@ SERVER_ADAPTER_FILE="backend/server/src/persistence.module.ts"
 SERVER_ADAPTER_SPECS=(
   "../../identity/src/persistence/prisma-identity-store.ts"
   "../../case/src/persistence/prisma-clue-store.ts"
+  "../../case/src/persistence/prisma-case-store.ts"
 )
 
 # 该 specifier 是否在适配器豁免名单内。
@@ -193,6 +194,7 @@ RULES=(
   frontend-router-mode
   screenshot-full-set
   ui-copy-discipline
+  no-case-landing-entry
 )
 # 共用辅助函数（非规则，不进 RULES，#171 显式声明）：check_row 是 6 条 *-deps 规则
 # 共用的矩阵行实现。红探针的接线完整性护栏按「check_ 函数集 == RULES ∪ HELPERS」核对，
@@ -699,6 +701,8 @@ check_weak-reference-entry() {
 # ClueRequirementSnapshot、ClueItemValue、ClueItemGap、ClueInitialType、ClueTagLibrary、
 # ClueTag、ClueMaterial、ClueSpatialHit、ClueVerificationRun、ClueHandler、ClueAssignment、
 # ClueWithdrawal、ClueDisposition、ClueClosureReminder、ClueExternalTransfer（#229）、ClueDesignationRequest、StorageObjectQuarantine（#224）、SecrecyReportTicket（#225）。
+# #234 追加立案呈批与案件最小模型六张表（#27 T01／T02、#16）：FilingApproval、FilingApprovalVersion、
+# FilingApprovalStep、CaseRecord、CaseSourceClue、CaseHandler。
 G1_MODELS=(
   MigrationProbe
   OrgUnit
@@ -744,6 +748,12 @@ G1_MODELS=(
   ClueDesignationRequest
   StorageObjectQuarantine
   SecrecyReportTicket
+  FilingApproval
+  FilingApprovalVersion
+  FilingApprovalStep
+  CaseRecord
+  CaseSourceClue
+  CaseHandler
 )
 check_g1-model-allowlist() {
   local schema="$BACKEND/prisma/schema.prisma" model in_schema extra missing fails=0
@@ -1211,6 +1221,23 @@ check_ui-copy-discipline() {
   done < <(find "$ROOT/frontend/src" -type f \( -name '*.ts' -o -name '*.tsx' -o -name '*.css' \) "${SCAN_CODE[@]}")
   if [ "$fails" -eq 0 ]; then
     note_ok "ui-copy-discipline：frontend/src 生产源码字面量无「捞回」、Issue 号样式、区块 [A-E]"
+  fi
+}
+
+# 规则（#234）：不予立案落点服务 recordNoCaseFromFilingApproval 在 server 层只许由
+# 立案呈批批准路径调用（backend/server/src/case-filing.service.ts）。
+# 其他服务出现即红：防止重新开出绕过立案呈批的不予立案入口（X19）。
+NO_CASE_LANDING_FILE="backend/server/src/case-filing.service.ts"
+check_no-case-landing-entry() {
+  local file rel fails=0
+  while IFS= read -r file; do
+    rel="${file#"$ROOT"/}"
+    [ "$rel" = "$NO_CASE_LANDING_FILE" ] && continue
+    note_fail "no-case-landing-entry：${rel} 引用了 recordNoCaseFromFilingApproval（只许 ${NO_CASE_LANDING_FILE} 的立案呈批批准路径调用，#234 X19）"
+    fails=$((fails + 1))
+  done < <(find "$ROOT/backend/server/src" "${SCAN_CODE[@]}" -exec grep -lE 'recordNoCaseFromFilingApproval' {} + 2>/dev/null || true)
+  if [ "$fails" -eq 0 ]; then
+    note_ok "no-case-landing-entry：server 层只有立案呈批批准路径调用不予立案落点服务"
   fi
 }
 
