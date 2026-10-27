@@ -1,0 +1,33 @@
+// 立案呈批与案件最小模型的领域规则出口（#234）。
+export {
+  CASE_FIRST_STAGE,
+  CASE_FIRST_STAGE_ENTRY_SEQ,
+  CASE_STATUS_IN_PROGRESS,
+  FILING_APPROVAL_PENDING_OUTLET,
+  FILING_APPROVAL_PENDING_REASON,
+  FILING_APPROVAL_STATUSES,
+  FILING_CONCLUSIONS,
+  FILING_FROM_CLUE_STATUS,
+  FILING_GUARD_BASIS,
+  FILING_STEPS,
+  FILING_STEP_FROM,
+  buildCaseOpening,
+  canTakeFilingStep,
+  checkFilingContent,
+  checkFilingGuards,
+  checkFilingParty,
+  filingStatusAfter,
+  isFilingApprovalPending,
+} from './rules.ts';
+export type {
+  CaseOpening,
+  FilingAdminReview,
+  FilingApprovalStatus,
+  FilingConclusion,
+  FilingContent,
+  FilingContentCheck,
+  FilingGuardHit,
+  FilingGuardInput,
+  FilingHandlerFact,
+  FilingStep,
+} from './rules.ts';
