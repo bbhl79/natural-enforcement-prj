@@ -13,9 +13,16 @@ import type {
   CaseRow,
   CaseStageSignatureRow,
   CaseStore,
+  CaseReassignmentApprovalWrite,
+  CaseReassignmentRow,
+  CaseReassignmentWrite,
   CaseView,
   DeadlineEventRow,
   DeadlineEventWrite,
+  HandlerReplacementWrite,
+  HandlerStintRow,
+  MaterialEffectivenessRow,
+  MaterialEffectivenessWrite,
   FilingApprovalRow,
   FilingApprovalStepRow,
   FilingApprovalVersionRow,
@@ -518,6 +525,81 @@ export class PrismaCaseStore implements CaseStore {
 
   async appendInvestigationEntry(write: InvestigationEntryWrite): Promise<void> {
     await this.prisma.caseInvestigationEntry.create({ data: { ...write } });
+  }
+
+  async listReassignments(caseId: string): Promise<readonly CaseReassignmentRow[]> {
+    return this.prisma.caseReassignment.findMany({
+      where: { caseId },
+      orderBy: [{ requestedAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async readReassignment(reassignmentId: string): Promise<CaseReassignmentRow | null> {
+    return this.prisma.caseReassignment.findUnique({ where: { id: reassignmentId } });
+  }
+
+  async insertReassignment(write: CaseReassignmentWrite): Promise<boolean> {
+    try {
+      await this.prisma.caseReassignment.create({ data: { ...write, status: 'pending_approval' } });
+    } catch (error) {
+      if (isUniqueConflict(error)) return false;
+      throw error;
+    }
+    return true;
+  }
+
+  async approveReassignment(write: CaseReassignmentApprovalWrite): Promise<boolean> {
+    const updated = await this.prisma.caseReassignment.updateMany({
+      where: { id: write.id, caseId: write.caseId, status: 'pending_approval' },
+      data: { status: 'approved', approvedBy: write.approvedBy, approvedAt: write.approvedAt },
+    });
+    return updated.count === 1;
+  }
+
+  async listHandlerStints(caseId: string): Promise<readonly HandlerStintRow[]> {
+    return this.prisma.caseHandler.findMany({
+      where: { caseId },
+      orderBy: [{ assignedAt: 'asc' }, { id: 'asc' }],
+      select: { id: true, personnelId: true, role: true, assignedAt: true, endedAt: true },
+    });
+  }
+
+  async replaceHandlers(write: HandlerReplacementWrite): Promise<void> {
+    await this.prisma.caseHandler.updateMany({
+      where: { caseId: write.caseId, endedAt: null },
+      data: { endedAt: write.endedAt },
+    });
+    if (write.next.length === 0) return;
+    await this.prisma.caseHandler.createMany({
+      data: write.next.map((row) => ({
+        id: row.id,
+        caseId: write.caseId,
+        personnelId: row.personnelId,
+        role: row.role,
+        assignedAt: write.endedAt,
+      })),
+    });
+  }
+
+  async listMaterialEffectiveness(caseId: string): Promise<readonly MaterialEffectivenessRow[]> {
+    return this.prisma.caseMaterialEffectiveness.findMany({
+      where: { caseId },
+      orderBy: [{ determinedAt: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        caseId: true,
+        materialId: true,
+        reassignmentId: true,
+        conclusion: true,
+        reason: true,
+        determinedBy: true,
+        determinedAt: true,
+      },
+    });
+  }
+
+  async insertMaterialEffectiveness(write: MaterialEffectivenessWrite): Promise<void> {
+    await this.prisma.caseMaterialEffectiveness.create({ data: { ...write } });
   }
 
   async listAgencyConflictMarks(caseId: string): Promise<readonly AgencyConflictMarkRow[]> {
