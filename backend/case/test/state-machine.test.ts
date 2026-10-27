@@ -16,6 +16,9 @@ import {
   isX12Whitelisted,
   matchesFrom,
   nextEntrySeq,
+  unannotatedMigrationIds,
+  type GuardAuthority,
+  type GuardResult,
   type TransitionSubject,
 } from '../src/state-machine/index.ts';
 
@@ -226,7 +229,7 @@ describe('引擎 409 分支', () => {
     const warned = decideTransition({
       operation: { kind: 'transition', transitionId: 'T01' },
       subject: subject({ clueStatus: 'handler_assigned' }),
-      advisories: [{ level: 'warn', code: 'advisory', message: '同事项已有案件' }],
+      advisories: [{ level: 'warn', code: 'advisory', message: '同事项已有案件', authority: 'normative' }],
     });
     expect(warned.ok).toBe(false);
     if (warned.ok || warned.level === 'block') throw new Error('应为警告');
@@ -242,7 +245,7 @@ describe('引擎 409 分支', () => {
     expect(blocked.ok).toBe(false);
     if (blocked.ok || blocked.level !== 'block') throw new Error('应为阻断');
     expect(blocked.reason).toBe('X02');
-    expect(blocked.citation).toBe('办法第 27 条；#17');
+    expect(blocked.citation).toBe('办法第27条（推定）');
 
     const again = decideTransition({
       operation: { kind: 'transition', transitionId: 'T03' },
@@ -253,21 +256,26 @@ describe('引擎 409 分支', () => {
     expect(again.reason).toBe('invalid-state');
   });
 
-  it('待收尾时除 T06、T07 外返回 X03；T06 进入已撤案并去掉中止标记', () => {
+  it('待收尾时除 T06、T07 外，X03 降为警告；T06 进入已撤案并去掉中止标记', () => {
     const blocked = decideTransition({
       operation: { kind: 'transition', transitionId: 'T08' },
       subject: subject({ ...openCase, mainStatus: 'terminated_pending', suspended: true }),
     });
     expect(blocked.ok).toBe(false);
-    if (blocked.ok || blocked.level !== 'block') throw new Error('应为阻断');
+    if (blocked.ok || blocked.level === 'block') throw new Error('X03 应为警告');
+    expect(blocked.level).toBe('warn');
+    expect(blocked.httpStatus).toBe(200);
     expect(blocked.reason).toBe('X03');
+    expect('effects' in blocked).toBe(false);
 
     const chain = decideTransition({
       operation: { kind: 'open-approval-chain', chainKind: 'suspend' },
       subject: subject({ ...openCase, mainStatus: 'terminated_pending' }),
     });
     expect(chain.ok).toBe(false);
-    if (chain.ok || chain.level !== 'block') throw new Error('应为阻断');
+    if (chain.ok || chain.level === 'block') throw new Error('X03 应为警告');
+    expect(chain.level).toBe('warn');
+    expect(chain.httpStatus).toBe(200);
     expect(chain.reason).toBe('X03');
 
     const withdraw = decideTransition({
@@ -307,5 +315,130 @@ describe('引擎 409 分支', () => {
       subject: subject({ ...openCase, mainStatus: 'finalized' }),
     });
     expect(decision.ok).toBe(true);
+  });
+});
+
+const AUTHORITY_OF: Readonly<Record<GuardAuthority, readonly string[]>> = {
+  system: ['X01', 'X02', 'X04', 'X12', 'X13', 'X15', 'X16', 'X17', 'X18', 'X23', 'X24', 'X25', 'X28', 'X29', 'X31', 'X32'],
+  law: ['X05', 'X07', 'X09', 'X14'],
+  regulation: ['X06', 'X08', 'X11', 'X20', 'X27', 'X30'],
+  normative: ['X03', 'X10', 'X19', 'X21', 'X22', 'X26'],
+  internal: [],
+};
+
+function citationOf(id: string): string | undefined {
+  return ILLEGAL_MIGRATIONS.find((item) => item.id === id)?.citation;
+}
+
+function blockingAdvisory(authority: GuardAuthority, userLock?: string): GuardResult {
+  return {
+    level: 'block',
+    code: 'X-AUTH',
+    message: '同一迁移探针',
+    authority,
+    ...(userLock ? { userLock } : {}),
+  };
+}
+
+describe('依据层级与 USER LOCK（#255）', () => {
+  const ready = subject({ clueStatus: 'handler_assigned' });
+
+  it('同一条迁移：law、regulation、system 为 409；normative、internal 为警告且无效果', () => {
+    for (const authority of ['law', 'regulation', 'system'] as const) {
+      const decision = decideTransition({
+        operation: { kind: 'transition', transitionId: 'T01' },
+        subject: ready,
+        advisories: [blockingAdvisory(authority)],
+      });
+      expect(decision.ok).toBe(false);
+      if (decision.ok || decision.level !== 'block') throw new Error(`${authority} 应为阻断`);
+      expect(decision.httpStatus).toBe(409);
+      expect(decision.reason).toBe('X-AUTH');
+      expect('effects' in decision).toBe(false);
+    }
+    for (const authority of ['normative', 'internal'] as const) {
+      const decision = decideTransition({
+        operation: { kind: 'transition', transitionId: 'T01' },
+        subject: ready,
+        advisories: [blockingAdvisory(authority)],
+      });
+      expect(decision.ok).toBe(false);
+      if (decision.ok || decision.level === 'block') throw new Error(`${authority} 应为警告`);
+      expect(decision.httpStatus).toBe(200);
+      expect(decision.level).toBe('warn');
+      expect(decision.reason).toBe('X-AUTH');
+      expect('effects' in decision).toBe(false);
+      expect(decision.advisories[0]?.level).toBe('warn');
+    }
+  });
+
+  it('登记表按 #255 逐条标注；X08 未拆条，整条为 regulation', () => {
+    for (const [authority, ids] of Object.entries(AUTHORITY_OF)) {
+      expect(ILLEGAL_MIGRATIONS.filter((item) => item.authority === authority).map((item) => item.id)).toEqual(ids);
+    }
+    const x08 = ILLEGAL_MIGRATIONS.find((item) => item.id === 'X08');
+    expect(x08?.authority).toBe('regulation');
+    expect(x08?.summary).toContain('摘要不一致');
+    expect(x08?.citation).toBe('处罚法第58条＋办法第32条第1款＋监督规定第21条第1款');
+    expect(citationOf('X02')).toBe('办法第27条（推定）');
+    expect(citationOf('X04')).toBe('办法第29条＋第30条（推定）');
+    expect(citationOf('X11')).toBe('办法第46条末款');
+    expect(citationOf('X20')).toBe('办法第17条第2款＋行政处罚法第42条；笔录记载在场人员属实现口径');
+    expect(citationOf('X26')).toBe('规程7.1／8.2；设计加严，非规定要求');
+    expect(citationOf('X27')).toBe('粤府令第294号第33条＋处罚法第58条（二）');
+    const x07 = ILLEGAL_MIGRATIONS.find((item) => item.id === 'X07');
+    expect(x07?.authority).toBe('law');
+    expect(x07?.userLock).toBe('#111 L3');
+    expect(x07?.enforcement).toBe('none');
+    expect(x07?.citation).toBe('处罚法第44、62条＋粤府令第294号第17条');
+    const x16 = ILLEGAL_MIGRATIONS.find((item) => item.id === 'X16');
+    expect(x16?.authority).toBe('system');
+    expect(x16?.userLock).toBe('#111 L4');
+    expect(ILLEGAL_MIGRATIONS.filter((item) => item.userLock).map((item) => [item.id, item.userLock])).toEqual([
+      ['X07', '#111 L3'],
+      ['X16', '#111 L4'],
+    ]);
+  });
+
+  it('结构红探针：登记表漏标 authority 判红', () => {
+    expect(unannotatedMigrationIds(ILLEGAL_MIGRATIONS)).toEqual([]);
+    expect(unannotatedMigrationIds([
+      { id: 'X01', authority: 'system' },
+      { id: 'X-MISSING' },
+    ])).toEqual(['X-MISSING']);
+    expect(unannotatedMigrationIds([{ id: 'X-BAD', authority: 'statute' }])).toEqual(['X-BAD']);
+  });
+
+  it('带 userLock 的登记项即使按 normative 送来也仍 block；红探针：normative 加 userLock 仍 block', () => {
+    for (const row of ILLEGAL_MIGRATIONS) {
+      if (!row.userLock) continue;
+      const decision = decideTransition({
+        operation: { kind: 'transition', transitionId: 'T01' },
+        subject: ready,
+        advisories: [{ level: 'block', code: row.id, message: row.summary, authority: 'normative' }],
+      });
+      expect(decision.ok).toBe(false);
+      if (decision.ok || decision.level !== 'block') throw new Error(`${row.id} 带 userLock 不得降为警告`);
+      expect(decision.httpStatus).toBe(409);
+      expect(decision.reason).toBe(row.id);
+    }
+    const locked = decideTransition({
+      operation: { kind: 'transition', transitionId: 'T01' },
+      subject: ready,
+      advisories: [{ level: 'block', code: 'X-LOCK', message: '红探针', authority: 'normative', userLock: '#probe' }],
+    });
+    expect(locked.ok).toBe(false);
+    if (locked.ok || locked.level !== 'block') throw new Error('normative 加 userLock 必须仍阻断');
+    expect(locked.httpStatus).toBe(409);
+    expect(locked.reason).toBe('X-LOCK');
+    const open = decideTransition({
+      operation: { kind: 'transition', transitionId: 'T01' },
+      subject: ready,
+      advisories: [{ level: 'block', code: 'X-LOCK', message: '红探针', authority: 'normative' }],
+    });
+    expect(open.ok).toBe(false);
+    if (open.ok || open.level === 'block') throw new Error('同条无 userLock 应为警告');
+    expect(open.level).toBe('warn');
+    expect(open.httpStatus).toBe(200);
   });
 });

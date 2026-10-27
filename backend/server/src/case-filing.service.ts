@@ -6,6 +6,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import {
   CASE_STORE,
   CLUE_STORE,
+  FILING_DRAFT_TARGET,
   buildCaseOpening,
   canTakeFilingStep,
   checkFilingContent,
@@ -15,6 +16,7 @@ import {
   filingStatusAfter,
   generateClosureReminders,
   isFilingApprovalPending,
+  planReturn,
   recordNoCaseFromFilingApproval,
   type CaseStore,
   type ClueStore,
@@ -44,6 +46,7 @@ import {
 import { persistTransitionEffects } from './case-transition-write.ts';
 import { CLOCK, type Clock } from './clock.ts';
 import { LOGIN_DIRECTORY, type LoginDirectory } from './login-directory.ts';
+import { loadHandlerAvailability, loadReceiverCandidate, returnFailureDetail } from './return-facts.ts';
 import { UNIT_OF_WORK, type UnitOfWork } from './unit-of-work.ts';
 
 /** 行政审核配置令牌（默认 one-level；IT 可覆写为 skip）。 */
@@ -631,7 +634,12 @@ export class CaseFilingService {
   async returnToDraft(
     actor: ActorRef,
     approvalId: string,
-    input: { readonly opinion: string },
+    input: {
+      readonly reasonCode: string;
+      readonly note: string;
+      readonly receiverId: string;
+      readonly inheritedCode: string | null;
+    },
   ): Promise<FilingHttpOutcome> {
     const approval = await this.cases.readFilingApproval(approvalId);
     if (!approval) return { status: 404, body: { result: 'not-found' } };
@@ -644,21 +652,53 @@ export class CaseFilingService {
     const auth = await this.authorize(actor, opcode, targetOrgId, approval.clueId);
     if (auth) return auth;
     if (!canTakeFilingStep('return', approval.status as 'pending_review' | 'pending_approval')) {
-      return this.rejectStep(actor, actorCode, targetOrgId, approval.clueId, 'case.filing-returned', {
-        status: 409,
-        result: 'invalid-state',
-        reason: 'invalid-state',
-      });
+      return this.rejectStep(
+        actor,
+        actorCode,
+        targetOrgId,
+        approval.clueId,
+        'case.filing-returned',
+        { status: 409, result: 'invalid-state', reason: 'invalid-state' },
+        opcode,
+      );
     }
-    const opinion = input.opinion.trim();
-    if (opinion === '') {
-      return this.rejectStep(actor, actorCode, targetOrgId, approval.clueId, 'case.filing-returned', {
-        status: 400,
-        result: 'non-compliant',
-        reason: 'missing-return-reason',
-        rules: ['missing-return-reason'],
-      });
+    const handlers = await loadHandlerAvailability(this.identity, targetOrgId, context.handlers);
+    const receiverId = input.receiverId.trim();
+    const receiver = receiverId
+      ? await loadReceiverCandidate(this.identity, this.access, targetOrgId, receiverId, context.handlers)
+      : null;
+    const planned = planReturn({
+      reasonCode: input.reasonCode,
+      note: input.note,
+      currentStage: 'filing',
+      targetKey: FILING_DRAFT_TARGET,
+      currentEntrySeq: null,
+      inheritedCode: input.inheritedCode,
+      defectiveStage: null,
+      earlierChainLevels: [],
+      instances: [],
+      invalidatedInstanceIds: [],
+      receiver,
+      handlers,
+    });
+    if (!planned.ok) {
+      return this.rejectStep(
+        actor,
+        actorCode,
+        targetOrgId,
+        approval.clueId,
+        'case.filing-returned',
+        {
+          status: planned.httpStatus,
+          result: planned.httpStatus === 400 ? 'non-compliant' : planned.reason,
+          reason: planned.reason,
+          ...(planned.httpStatus === 400 ? { rules: [planned.reason] } : { outlet: planned.outlet }),
+        },
+        opcode,
+        returnFailureDetail(input.reasonCode, FILING_DRAFT_TARGET, input.inheritedCode),
+      );
     }
+    const plan = planned.plan;
     const at = this.clock.now();
     return this.uow.run(async (tx) => {
       const ok = await tx.cases.applyFilingStep({
@@ -669,7 +709,10 @@ export class CaseFilingService {
         step: 'return',
         versionNo: approval.currentVersionNo,
         actorId: actor.personnelId,
-        opinion,
+        opinion: plan.note,
+        reasonCode: plan.reasonCode,
+        returnTarget: plan.target.key,
+        receiverId: plan.receiverId,
         at,
       });
       if (!ok) {
@@ -686,7 +729,15 @@ export class CaseFilingService {
       await tx.audit.append({
         action: 'case.filing-returned',
         ...this.parties(actor, actorCode, targetOrgId, approval.clueId, opcode),
-        detail: JSON.stringify({ code: context.code, approvalId, fromStatus: approval.status }),
+        detail: JSON.stringify({
+          code: context.code,
+          approvalId,
+          fromStatus: approval.status,
+          reasonCode: plan.reasonCode,
+          target: plan.target.key,
+          receiverId: plan.receiverId,
+          n5: plan.n5,
+        }),
       });
       return {
         status: 200,
@@ -696,6 +747,8 @@ export class CaseFilingService {
           clueId: approval.clueId,
           status: 'drafting',
           clueStatus: context.status,
+          reasonCode: plan.reasonCode,
+          target: plan.target.key,
         },
       };
     });
@@ -1024,6 +1077,8 @@ export class CaseFilingService {
       outlet?: string;
       basis?: string | null;
     },
+    opcode: string = SUBMIT_OPCODE,
+    detail?: string,
   ): Promise<FilingHttpOutcome> {
     const outcome: FilingHttpOutcome =
       fail.status === 400
@@ -1051,7 +1106,8 @@ export class CaseFilingService {
           action,
           outcome: 'failed',
           reason: fail.reason as never,
-          ...this.parties(actor, actorCode, orgUnitId, clueId, SUBMIT_OPCODE),
+          ...this.parties(actor, actorCode, orgUnitId, clueId, opcode),
+          ...(detail ? { detail } : {}),
         },
       ),
     );

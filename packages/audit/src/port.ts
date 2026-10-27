@@ -1,8 +1,12 @@
 import type {
   AccountMaintenanceFailedReason,
   AuditTargetOrgBasis,
+  CaseConflictDecidedFailedReason,
+  CaseConflictDeclaredFailedReason,
   CaseFilingApprovedFailedReason,
   CaseFilingDraftedFailedReason,
+  CaseInvestigationRecordedFailedReason,
+  CaseSignRefusedReason,
   CaseFilingReturnedFailedReason,
   CaseFilingReviewedFailedReason,
   CaseFilingSubmittedFailedReason,
@@ -10,6 +14,7 @@ import type {
   CaseInvestigationAction,
   CaseInvestigationFailedReason,
   CaseOpenedFailedReason,
+  CaseReturnedFailedReason,
   CaseTransitionedFailedReason,
   ClueDesignateRejectedFailedReason,
   ClueDesignateRequestedFailedReason,
@@ -279,6 +284,19 @@ export type AuditAppend =
   | (AuditParties & { action: 'case.opened'; outcome: 'failed'; reason: CaseOpenedFailedReason })
   | (AuditParties & { action: 'case.transitioned' })
   | (AuditParties & { action: 'case.transitioned'; outcome: 'failed'; reason: CaseTransitionedFailedReason })
+  | (AuditParties & { action: 'case.conflict-declared' })
+  | (AuditParties & { action: 'case.conflict-declared'; outcome: 'failed'; reason: CaseConflictDeclaredFailedReason })
+  | (AuditParties & { action: 'case.conflict-decided' })
+  | (AuditParties & { action: 'case.conflict-decided'; outcome: 'failed'; reason: CaseConflictDecidedFailedReason })
+  | (AuditParties & { action: 'case.investigation-recorded' })
+  | (AuditParties & {
+      action: 'case.investigation-recorded';
+      outcome: 'failed';
+      reason: CaseInvestigationRecordedFailedReason;
+    })
+  | (AuditParties & { action: 'case.sign-refused'; reason: CaseSignRefusedReason })
+  | (AuditParties & { action: 'case.returned' })
+  | (AuditParties & { action: 'case.returned'; outcome: 'failed'; reason: CaseReturnedFailedReason })
   | (AuditParties & { action: CaseInvestigationAction })
   | (AuditParties & { action: CaseInvestigationAction; outcome: 'failed'; reason: CaseInvestigationFailedReason })
 ;

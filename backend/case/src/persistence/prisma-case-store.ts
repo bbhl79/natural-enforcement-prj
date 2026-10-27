@@ -7,8 +7,11 @@ import type { Prisma, PrismaClient } from '../../../prisma/generated/prisma/clie
 import type { CaseOpening } from '../filing/rules.ts';
 import type {
   ApprovalChainWrite,
+  ApprovalOpinionWrite,
   CasePointerWrite,
+  CaseReturnWrite,
   CaseRow,
+  CaseStageSignatureRow,
   CaseStore,
   CaseView,
   DeadlineEventRow,
@@ -19,6 +22,11 @@ import type {
   FilingDraftWrite,
   FilingStepWrite,
   FilingTodoRow,
+  InvestigationEntryWrite,
+  PersonConflictDecisionRow,
+  PersonConflictDecisionWrite,
+  PersonConflictEventRow,
+  PersonConflictEventWrite,
   InquiryRecordRow,
   InquiryRecordWrite,
   PartyNoticeRow,
@@ -28,6 +36,7 @@ import type {
   ProcedureStepWrite,
   StageInstanceRow,
   StageInstanceWrite,
+  StageInvalidationWrite,
   TransitionHistoryRow,
   TransitionHistoryWrite,
   ViolationRecordRow,
@@ -64,7 +73,17 @@ export class PrismaCaseStore implements CaseStore {
     return this.prisma.filingApprovalStep.findMany({
       where: { approvalId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      select: { id: true, versionNo: true, step: true, actorId: true, opinion: true, createdAt: true },
+      select: {
+        id: true,
+        versionNo: true,
+        step: true,
+        actorId: true,
+        opinion: true,
+        reasonCode: true,
+        returnTarget: true,
+        receiverId: true,
+        createdAt: true,
+      },
     });
   }
 
@@ -129,6 +148,9 @@ export class PrismaCaseStore implements CaseStore {
         step: write.step,
         actorId: write.actorId,
         opinion: write.opinion,
+        reasonCode: write.reasonCode ?? null,
+        returnTarget: write.returnTarget ?? null,
+        receiverId: write.receiverId ?? null,
         createdAt: write.at,
       },
     });
@@ -204,6 +226,19 @@ export class PrismaCaseStore implements CaseStore {
       where: { caseId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
+    const invalidated = new Set(await this.listInvalidatedInstanceIds(caseId));
+    const materials = await this.prisma.caseMaterial.findMany({
+      where: { caseId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    const opinions = await this.prisma.caseApprovalOpinion.findMany({
+      where: { caseId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    const returns = await this.prisma.caseReturn.findMany({
+      where: { caseId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
     return {
       id: record.id,
       handlingOrgId: record.handlingOrgId,
@@ -216,8 +251,37 @@ export class PrismaCaseStore implements CaseStore {
       sourceClueIds: sources.map((row) => row.clueId),
       handlers: handlers.map((row) => ({ personnelId: row.personnelId, role: row.role })),
       openedAt: record.openedAt,
-      instances: instances.map(toInstance),
+      instances: instances.map((row) => toInstance(row, invalidated.has(row.id))),
       history: history.map(toHistory),
+      materials: materials.map((row) => ({
+        id: row.id,
+        kind: row.kind,
+        body: row.body,
+        createdAt: row.createdAt,
+      })),
+      opinions: opinions.map((row) => ({
+        id: row.id,
+        reasonCode: row.reasonCode,
+        note: row.note,
+        targetKey: row.targetKey,
+        actorId: row.actorId,
+        createdAt: row.createdAt,
+      })),
+      returns: returns.map((row) => ({
+        id: row.id,
+        opinionId: row.opinionId,
+        reasonCode: row.reasonCode,
+        inheritedCode: row.inheritedCode,
+        targetKey: row.targetKey,
+        receiverId: row.receiverId,
+        reflow: row.reflow,
+        n5: row.n5,
+        entrySeqBefore: row.entrySeqBefore,
+        entrySeqAfter: row.entrySeqAfter,
+        exitCode: row.exitCode,
+        actorId: row.actorId,
+        createdAt: row.createdAt,
+      })),
     };
   }
 
@@ -304,6 +368,75 @@ export class PrismaCaseStore implements CaseStore {
     }
   }
 
+  async appendApprovalOpinion(write: ApprovalOpinionWrite): Promise<void> {
+    await this.prisma.caseApprovalOpinion.create({
+      data: {
+        id: write.id,
+        caseId: write.caseId,
+        reasonCode: write.reasonCode,
+        note: write.note,
+        targetKey: write.targetKey,
+        actorId: write.actorId,
+        createdAt: write.createdAt,
+      },
+    });
+  }
+
+  async appendCaseReturn(write: CaseReturnWrite): Promise<void> {
+    await this.prisma.caseReturn.create({
+      data: {
+        id: write.id,
+        caseId: write.caseId,
+        opinionId: write.opinionId,
+        reasonCode: write.reasonCode,
+        inheritedCode: write.inheritedCode,
+        targetKey: write.targetKey,
+        receiverId: write.receiverId,
+        reflow: write.reflow,
+        n5: write.n5,
+        entrySeqBefore: write.entrySeqBefore,
+        entrySeqAfter: write.entrySeqAfter,
+        exitCode: write.exitCode,
+        rehearingRequired: write.rehearingRequired,
+        revokeNotice: write.revokeNotice,
+        actorId: write.actorId,
+        createdAt: write.createdAt,
+      },
+    });
+  }
+
+  async appendStageInvalidation(write: StageInvalidationWrite): Promise<boolean> {
+    try {
+      await this.prisma.caseStageInvalidation.create({
+        data: {
+          id: write.id,
+          caseId: write.caseId,
+          instanceId: write.instanceId,
+          returnId: write.returnId,
+          createdAt: write.createdAt,
+        },
+      });
+      return true;
+    } catch (error) {
+      if (isUniqueConflict(error)) return false;
+      throw error;
+    }
+  }
+
+  async listInvalidatedInstanceIds(caseId: string): Promise<readonly string[]> {
+    const rows = await this.prisma.caseStageInvalidation.findMany({
+      where: { caseId },
+      select: { instanceId: true },
+    });
+    return rows.map((row) => row.instanceId);
+  }
+
+  async readStageSignature(signatureId: string): Promise<CaseStageSignatureRow | null> {
+    const row = await this.prisma.caseStageSignature.findUnique({ where: { id: signatureId } });
+    if (!row) return null;
+    return { id: row.id, caseId: row.caseId, instanceId: row.instanceId, actorId: row.actorId };
+  }
+
   async listFilingTodos(
     statuses: readonly string[],
     orgUnitIds: readonly string[],
@@ -341,6 +474,49 @@ export class PrismaCaseStore implements CaseStore {
       drafterId: row.drafter_id,
       updatedAt: row.updated_at,
     }));
+  }
+
+  async listPersonConflictEvents(caseId: string, personId?: string): Promise<readonly PersonConflictEventRow[]> {
+    return this.prisma.personConflictEvent.findMany({
+      where: personId ? { caseId, personId } : { caseId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async listPersonConflictDecisions(caseId: string): Promise<readonly PersonConflictDecisionRow[]> {
+    return this.prisma.personConflictDecision.findMany({
+      where: { caseId },
+      orderBy: [{ decidedAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async appendPersonConflictEvent(write: PersonConflictEventWrite): Promise<void> {
+    await this.prisma.personConflictEvent.create({ data: { ...write } });
+  }
+
+  async appendPersonConflictDecision(write: PersonConflictDecisionWrite): Promise<boolean> {
+    try {
+      await this.prisma.personConflictDecision.create({
+        data: {
+          id: write.id,
+          caseId: write.caseId,
+          lineageId: write.lineageId,
+          deciderId: write.deciderId,
+          conclusion: write.conclusion,
+          reason: write.reason,
+          decidedAt: write.decidedAt,
+        },
+      });
+      await this.prisma.personConflictEvent.create({ data: { ...write.nextEvent } });
+    } catch (error) {
+      if (isUniqueConflict(error)) return false;
+      throw error;
+    }
+    return true;
+  }
+
+  async appendInvestigationEntry(write: InvestigationEntryWrite): Promise<void> {
+    await this.prisma.caseInvestigationEntry.create({ data: { ...write } });
   }
 
   async closeApprovalChain(id: string): Promise<boolean> {
@@ -600,15 +776,18 @@ export class PrismaCaseStore implements CaseStore {
   }
 }
 
-function toInstance(row: {
-  id: string;
-  stage: string;
-  entrySeq: number;
-  status: string;
-  enteredAt: Date;
-  enteredBy: string;
-  transitionCode: string;
-}): StageInstanceRow {
+function toInstance(
+  row: {
+    id: string;
+    stage: string;
+    entrySeq: number;
+    status: string;
+    enteredAt: Date;
+    enteredBy: string;
+    transitionCode: string;
+  },
+  invalidated: boolean,
+): StageInstanceRow {
   return {
     id: row.id,
     stage: row.stage,
@@ -617,6 +796,7 @@ function toInstance(row: {
     enteredAt: row.enteredAt,
     enteredBy: row.enteredBy,
     transitionCode: row.transitionCode,
+    invalidated,
   };
 }
 

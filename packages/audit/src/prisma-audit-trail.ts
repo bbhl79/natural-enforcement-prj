@@ -39,7 +39,11 @@ import {
   STORAGE_SECRECY_REPORT_RECEIPTED_FAILED_REASONS,
   CLUE_REMINDER_RESOLVED_FAILED_REASONS,
   CLUE_WITHDRAWN_FAILED_REASONS,
+  CASE_CONFLICT_DECIDED_FAILED_REASONS,
+  CASE_CONFLICT_DECLARED_FAILED_REASONS,
   CASE_FILING_APPROVED_FAILED_REASONS,
+  CASE_INVESTIGATION_RECORDED_FAILED_REASONS,
+  CASE_SIGN_REFUSED_REASONS,
   CASE_FILING_DRAFTED_FAILED_REASONS,
   CASE_FILING_RETURNED_FAILED_REASONS,
   CASE_FILING_REVIEWED_FAILED_REASONS,
@@ -48,6 +52,7 @@ import {
   CASE_INVESTIGATION_ACTIONS,
   CASE_INVESTIGATION_FAILED_REASONS,
   CASE_OPENED_FAILED_REASONS,
+  CASE_RETURNED_FAILED_REASONS,
   CASE_TRANSITIONED_FAILED_REASONS,
   LOGIN_FAILED_REASONS,
   ORG_UNIT_DEACTIVATE_FAILED_REASONS,
@@ -77,6 +82,7 @@ const DETAIL_ACTIONS = new Set<string>(AUDIT_DETAIL_ACTIONS);
 /** 带原因的动作及其封闭原因表。不在表里的动作不许带原因。 */
 const REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['login.failed', new Set<string>(LOGIN_FAILED_REASONS)],
+  ['case.sign-refused', new Set<string>(CASE_SIGN_REFUSED_REASONS)],
   ['session.ended', new Set<string>(SESSION_END_REASONS)],
   ['account.password-changed', new Set<string>(PASSWORD_CHANGED_REASONS)],
   ['account.password-rejected', new Set<string>(PASSWORD_REJECTED_REASONS)],
@@ -127,6 +133,10 @@ const FAILED_REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['case.filing-withdrawn', new Set<string>(CASE_FILING_WITHDRAWN_FAILED_REASONS)],
   ['case.opened', new Set<string>(CASE_OPENED_FAILED_REASONS)],
   ['case.transitioned', new Set<string>(CASE_TRANSITIONED_FAILED_REASONS)],
+  ['case.conflict-declared', new Set<string>(CASE_CONFLICT_DECLARED_FAILED_REASONS)],
+  ['case.conflict-decided', new Set<string>(CASE_CONFLICT_DECIDED_FAILED_REASONS)],
+  ['case.investigation-recorded', new Set<string>(CASE_INVESTIGATION_RECORDED_FAILED_REASONS)],
+  ['case.returned', new Set<string>(CASE_RETURNED_FAILED_REASONS)],
   ...CASE_INVESTIGATION_ACTIONS.map(
     (action) => [action, new Set<string>(CASE_INVESTIGATION_FAILED_REASONS)] as const,
   ),

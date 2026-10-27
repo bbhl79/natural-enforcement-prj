@@ -40,6 +40,9 @@ export interface FilingApprovalStepRow {
   readonly step: string;
   readonly actorId: string;
   readonly opinion: string | null;
+  readonly reasonCode: string | null;
+  readonly returnTarget: string | null;
+  readonly receiverId: string | null;
   readonly createdAt: Date;
 }
 
@@ -70,6 +73,10 @@ export interface FilingStepWrite {
   readonly versionNo: number;
   readonly actorId: string;
   readonly opinion: string | null;
+  /** 退回步骤写入。其他步骤为空。 */
+  readonly reasonCode?: string | null;
+  readonly returnTarget?: string | null;
+  readonly receiverId?: string | null;
   readonly at: Date;
 }
 
@@ -86,7 +93,7 @@ export interface FilingTodoRow {
   readonly updatedAt: Date;
 }
 
-/** 环节实例一行（只追加）。 */
+/** 环节实例一行（只追加）。invalidated 由失效记录派生，不写在实例行上。 */
 export interface StageInstanceRow {
   readonly id: string;
   readonly stage: string;
@@ -95,6 +102,7 @@ export interface StageInstanceRow {
   readonly enteredAt: Date;
   readonly enteredBy: string;
   readonly transitionCode: string;
+  readonly invalidated: boolean;
 }
 
 /** 迁移历史一行（只追加）。 */
@@ -107,10 +115,52 @@ export interface TransitionHistoryRow {
   readonly createdAt: Date;
 }
 
-/** 案件详情：主状态、当前环节、进入次序号、实例与迁移历史。 */
+/** 案件详情：主状态、当前环节、进入次序号、实例、迁移历史、材料与退回。 */
 export interface CaseView extends CaseRow {
   readonly instances: readonly StageInstanceRow[];
   readonly history: readonly TransitionHistoryRow[];
+  readonly materials: readonly CaseMaterialRow[];
+  readonly opinions: readonly CaseApprovalOpinionRow[];
+  readonly returns: readonly CaseReturnRow[];
+}
+
+export interface CaseMaterialRow {
+  readonly id: string;
+  readonly kind: string;
+  readonly body: string;
+  readonly createdAt: Date;
+}
+
+export interface CaseApprovalOpinionRow {
+  readonly id: string;
+  readonly reasonCode: string;
+  readonly note: string;
+  readonly targetKey: string;
+  readonly actorId: string;
+  readonly createdAt: Date;
+}
+
+export interface CaseReturnRow {
+  readonly id: string;
+  readonly opinionId: string;
+  readonly reasonCode: string;
+  readonly inheritedCode: string | null;
+  readonly targetKey: string;
+  readonly receiverId: string;
+  readonly reflow: boolean;
+  readonly n5: boolean;
+  readonly entrySeqBefore: number | null;
+  readonly entrySeqAfter: number | null;
+  readonly exitCode: string | null;
+  readonly actorId: string;
+  readonly createdAt: Date;
+}
+
+export interface CaseStageSignatureRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly instanceId: string;
+  readonly actorId: string;
 }
 
 export interface StageInstanceWrite {
@@ -152,6 +202,104 @@ export interface ApprovalChainWrite {
   readonly kind: string;
   readonly openedBy: string;
   readonly openedAt: Date;
+}
+
+/** 人员层利害关系的一行（只追加）。 */
+export interface PersonConflictEventRow {
+  readonly id: string;
+  readonly lineageId: string;
+  readonly caseId: string;
+  readonly personId: string;
+  readonly source: string;
+  readonly reason: string;
+  readonly status: string;
+  readonly seq: number;
+  readonly createdBy: string;
+  readonly createdAt: Date;
+}
+
+export interface PersonConflictEventWrite {
+  readonly id: string;
+  readonly caseId: string;
+  readonly personId: string;
+  readonly lineageId: string;
+  readonly source: string;
+  readonly reason: string;
+  readonly status: string;
+  readonly seq: number;
+  readonly createdBy: string;
+  readonly createdAt: Date;
+}
+
+/** 回避决定的一行（只追加）。 */
+export interface PersonConflictDecisionRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly lineageId: string;
+  readonly deciderId: string;
+  readonly conclusion: string;
+  readonly reason: string;
+  readonly decidedAt: Date;
+  readonly createdAt: Date;
+}
+
+export interface PersonConflictDecisionWrite {
+  readonly id: string;
+  readonly caseId: string;
+  readonly lineageId: string;
+  readonly deciderId: string;
+  readonly conclusion: string;
+  readonly reason: string;
+  readonly decidedAt: Date;
+  /** 决定同时追加的下一条状态事件。 */
+  readonly nextEvent: PersonConflictEventWrite;
+}
+
+/** 调查继续登记的一行（只追加）。 */
+export interface InvestigationEntryWrite {
+  readonly id: string;
+  readonly caseId: string;
+  readonly personnelId: string;
+  readonly kind: string;
+  readonly summary: string;
+  readonly createdAt: Date;
+}
+
+export interface ApprovalOpinionWrite {
+  readonly id: string;
+  readonly caseId: string;
+  readonly reasonCode: string;
+  readonly note: string;
+  readonly targetKey: string;
+  readonly actorId: string;
+  readonly createdAt: Date;
+}
+
+export interface CaseReturnWrite {
+  readonly id: string;
+  readonly caseId: string;
+  readonly opinionId: string;
+  readonly reasonCode: string;
+  readonly inheritedCode: string | null;
+  readonly targetKey: string;
+  readonly receiverId: string;
+  readonly reflow: boolean;
+  readonly n5: boolean;
+  readonly entrySeqBefore: number | null;
+  readonly entrySeqAfter: number | null;
+  readonly exitCode: string | null;
+  readonly rehearingRequired: boolean;
+  readonly revokeNotice: boolean;
+  readonly actorId: string;
+  readonly createdAt: Date;
+}
+
+export interface StageInvalidationWrite {
+  readonly id: string;
+  readonly caseId: string;
+  readonly instanceId: string;
+  readonly returnId: string;
+  readonly createdAt: Date;
 }
 
 /** 案件行（最小模型）。 */
@@ -206,8 +354,31 @@ export interface CaseStore {
   countInFlightApprovals(caseId: string): Promise<number>;
   /** 打开一条案件审批链。已有在途链时返回 false，不插入。 */
   openApprovalChain(write: ApprovalChainWrite): Promise<boolean>;
+  /** 追加一条审批意见。 */
+  appendApprovalOpinion(write: ApprovalOpinionWrite): Promise<void>;
+  /** 追加一条退回记录。 */
+  appendCaseReturn(write: CaseReturnWrite): Promise<void>;
+  /** 追加一条环节失效。同一实例已失效时返回 false，不插入第二行。 */
+  appendStageInvalidation(write: StageInvalidationWrite): Promise<boolean>;
+  /** 本案已失效的环节实例主键。 */
+  listInvalidatedInstanceIds(caseId: string): Promise<readonly string[]>;
+  /** 按主键读签字。没有为 null。 */
+  readStageSignature(signatureId: string): Promise<CaseStageSignatureRow | null>;
   /** 审批人待办：给定状态、线索当前承办机构在范围内的呈批。 */
   listFilingTodos(statuses: readonly string[], orgUnitIds: readonly string[]): Promise<readonly FilingTodoRow[]>;
+  /** 本案人员层利害关系事件（只追加，时间升序）。personId 省略时返回全部。 */
+  listPersonConflictEvents(caseId: string, personId?: string): Promise<readonly PersonConflictEventRow[]>;
+  /** 本案回避决定（只追加，时间升序）。 */
+  listPersonConflictDecisions(caseId: string): Promise<readonly PersonConflictDecisionRow[]>;
+  /** 追加一条利害关系事件。 */
+  appendPersonConflictEvent(write: PersonConflictEventWrite): Promise<void>;
+  /**
+   * 追加回避决定，并追加下一条状态事件。
+   * 该声明链已有决定时返回 false，两行都不留。
+   */
+  appendPersonConflictDecision(write: PersonConflictDecisionWrite): Promise<boolean>;
+  /** 追加一条调查登记（笔录或违法记录）。 */
+  appendInvestigationEntry(write: InvestigationEntryWrite): Promise<void>;
   /** 办结一条进行中的审批链。不是进行中则返回 false。 */
   closeApprovalChain(id: string): Promise<boolean>;
   listViolationRecords(caseId: string): Promise<readonly ViolationRecordRow[]>;
