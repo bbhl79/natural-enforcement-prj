@@ -15,6 +15,16 @@ import {
   type ConflictDecisionView,
   type ConflictRecordView,
 } from './conflict';
+import { CaseReassignSection, type CaseReassignSectionProps } from './CaseReassignSection';
+import {
+  approveReassignment,
+  determineMaterial,
+  loadReassignments,
+  submitReassignment,
+  type ReassignListView,
+} from './reassign';
+
+export type CaseDetailTab = 'conflict' | 'personnel';
 
 export function CaseConflictTab({
   records,
@@ -31,6 +41,9 @@ export function CaseConflictTab({
   onDecide,
   onSignCheck,
   onMarkAgency,
+  reassign,
+  activeTab = 'conflict',
+  onTabChange,
 }: {
   readonly records: readonly ConflictRecordView[];
   readonly decisions: readonly ConflictDecisionView[];
@@ -46,6 +59,9 @@ export function CaseConflictTab({
   readonly onDecide: (input: { lineageId: string; conclusion: string; reason: string }) => void;
   readonly onSignCheck: (input: { personId: string; signKind: string }) => void;
   readonly onMarkAgency: () => void;
+  readonly reassign?: CaseReassignSectionProps;
+  readonly activeTab?: CaseDetailTab;
+  readonly onTabChange?: (tab: CaseDetailTab) => void;
 }) {
   const [personId, setPersonId] = useState('');
   const [source, setSource] = useState('self');
@@ -56,13 +72,33 @@ export function CaseConflictTab({
   const [signPersonId, setSignPersonId] = useState('');
   const [signKind, setSignKind] = useState('trial-opinion');
   const [agencyDraft, setAgencyDraft] = useState(false);
+  const showPersonnel = activeTab === 'personnel' && reassign !== undefined;
 
   return (
     <>
       <div className="crumb"><b>案件详情</b></div>
       <div className="checks" role="tablist" aria-label="案件详情页签">
-        <button type="button" className="btn" data-role="conflict-tab" aria-current="page">回避</button>
+        <button
+          type="button"
+          className="btn"
+          data-role="conflict-tab"
+          aria-current={activeTab === 'conflict' ? 'page' : undefined}
+          onClick={() => onTabChange?.('conflict')}
+        >
+          回避
+        </button>
+        <button
+          type="button"
+          className="btn"
+          data-role="personnel-tab"
+          aria-current={activeTab === 'personnel' ? 'page' : undefined}
+          onClick={() => onTabChange?.('personnel')}
+        >
+          人员
+        </button>
       </div>
+      {showPersonnel ? <CaseReassignSection {...reassign} /> : (
+      <>
       <div className="card" data-role="agency-conflict">
         <div className="card-h">机关层利害关系</div>
         {agencyMarked && agencyWarning ? (
@@ -208,6 +244,8 @@ export function CaseConflictTab({
           <button type="submit" className="btn" data-role="decide-submit">作出回避决定</button>
         </form>
       ) : null}
+      </>
+      )}
     </>
   );
 }
@@ -223,15 +261,19 @@ export default function CaseConflictPage() {
   const [agencyOutlet, setAgencyOutlet] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [signResult, setSignResult] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<CaseDetailTab>('conflict');
+  const [reassign, setReassign] = useState<ReassignListView | null>(null);
 
   const reload = useCallback(async () => {
     const view = await loadConflicts(dispatch, caseId);
     const agency = await loadAgencyConflict(dispatch, caseId);
+    const personnel = await loadReassignments(dispatch, caseId);
     setRecords(view.records);
     setDecisions(view.decisions);
     setAgencyMarked(agency.marked);
     setAgencyWarning(agency.warning);
     setAgencyOutlet(agency.outlet);
+    setReassign(personnel);
   }, [caseId, dispatch]);
 
   useEffect(() => {
@@ -291,6 +333,41 @@ export default function CaseConflictPage() {
             setMessage(error instanceof Error ? error.message : '登记失败');
           });
       }}
+      activeTab={activeTab}
+      onTabChange={setActiveTab}
+      reassign={reassign
+        ? {
+            view: reassign,
+            canSubmit: opcodes.includes('case.reassign.submit'),
+            canApprove: opcodes.includes('doc.approve'),
+            canDetermine: opcodes.includes('doc.draft'),
+            message,
+            onSubmit: (input) => {
+              void submitReassignment(dispatch, caseId, input)
+                .then(() => reload())
+                .then(() => setMessage(null))
+                .catch((error: unknown) => {
+                  setMessage(error instanceof Error ? error.message : '发起失败');
+                });
+            },
+            onApprove: (reassignmentId) => {
+              void approveReassignment(dispatch, caseId, reassignmentId)
+                .then(() => reload())
+                .then(() => setMessage(null))
+                .catch((error: unknown) => {
+                  setMessage(error instanceof Error ? error.message : '批准失败');
+                });
+            },
+            onDetermine: (input) => {
+              void determineMaterial(dispatch, caseId, input)
+                .then(() => reload())
+                .then(() => setMessage(null))
+                .catch((error: unknown) => {
+                  setMessage(error instanceof Error ? error.message : '认定失败');
+                });
+            },
+          }
+        : undefined}
     />
   );
 }

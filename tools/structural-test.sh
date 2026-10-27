@@ -472,6 +472,8 @@ declare -A ASSEMBLY_EXEMPT=(
   ["integration/case-state-machine.test.ts"]="../backend/case/src/ ../backend/identity/src/"
   # #238：退回用例只用身份公共出口 index.ts 的 newUlid。与 #235 同口径。
   ["integration/case-return.test.ts"]="../backend/identity/src/index.ts"
+  # #239：改派用例只用身份公共出口 index.ts 的 newUlid。与 #238 同口径。
+  ["integration/case-reassign.test.ts"]="../backend/identity/src/index.ts"
 )
 
 is_assembly_exempt() { # $1 = 相对 ROOT 路径, $2 = specifier
@@ -720,6 +722,7 @@ check_weak-reference-entry() {
 # #236 追加违法记录、笔录、收尾呈批、期限事件与告知记录：CaseViolationRecord、CaseInquiryRecord、
 # CaseProcedureApproval、CaseProcedureVersion、CaseProcedureStep、CaseDeadlineEvent、CasePartyNotice。
 # #271 追加新旧比对判定：CaseComparisonJudgment。
+# #239 追加改派呈批与材料效力认定：CaseReassignment、CaseMaterialEffectiveness。
 G1_MODELS=(
   MigrationProbe
   OrgUnit
@@ -791,6 +794,8 @@ G1_MODELS=(
   CaseDeadlineEvent
   CasePartyNotice
   CaseComparisonJudgment
+  CaseReassignment
+  CaseMaterialEffectiveness
 )
 check_g1-model-allowlist() {
   local schema="$BACKEND/prisma/schema.prisma" model in_schema extra missing fails=0

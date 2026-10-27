@@ -14,6 +14,9 @@ import type {
   CaseFilingWithdrawnFailedReason,
   CaseInvestigationAction,
   CaseInvestigationFailedReason,
+  CaseMaterialEffectivityFailedReason,
+  CaseReassignmentApprovedFailedReason,
+  CaseReassignmentSubmittedFailedReason,
   CaseOpenedFailedReason,
   CaseReturnedFailedReason,
   CaseTransitionedFailedReason,
@@ -303,6 +306,25 @@ export type AuditAppend =
   | (AuditParties & { action: 'case.returned'; outcome: 'failed'; reason: CaseReturnedFailedReason })
   | (AuditParties & { action: CaseInvestigationAction })
   | (AuditParties & { action: CaseInvestigationAction; outcome: 'failed'; reason: CaseInvestigationFailedReason })
+  // 改派呈批与材料效力认定（#239）。
+  | (AuditParties & { action: 'case.reassignment-submitted' })
+  | (AuditParties & {
+    action: 'case.reassignment-submitted';
+    outcome: 'failed';
+    reason: CaseReassignmentSubmittedFailedReason;
+  })
+  | (AuditParties & { action: 'case.reassignment-approved' })
+  | (AuditParties & {
+    action: 'case.reassignment-approved';
+    outcome: 'failed';
+    reason: CaseReassignmentApprovedFailedReason;
+  })
+  | (AuditParties & { action: 'case.material-effectivity-recorded' })
+  | (AuditParties & {
+    action: 'case.material-effectivity-recorded';
+    outcome: 'failed';
+    reason: CaseMaterialEffectivityFailedReason;
+  })
 ;
 
 /**

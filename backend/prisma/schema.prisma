@@ -1066,7 +1066,9 @@ model CaseSourceClue {
   @@map("case_source_clue")
 }
 
-/// 案件承办人员（主办、协办随案带入；改派由 #235 之后的票接管）
+/// 案件承办人员（主办、协办随案带入；#239 改派关闭旧行、追加新行）。
+/// 唯一性是「同一案件、同一人、同一角色至多一条未结束的行」；迁移里的部分唯一索引
+/// case_handler_active_uq 承载它，Prisma schema 表达不了。后续生成迁移时不得删掉或改成全量唯一。
 model CaseHandler {
   id String @id
   caseId String @map("case_id")
@@ -1131,6 +1133,50 @@ model CaseApprovalChain {
 
   @@index([caseId, status])
   @@map("case_approval_chain")
+}
+
+/// 改派呈批（#239，T33）。发起后待批准；批准才更新承办人员。一案至多一条待批准。
+/// 待批准的部分唯一索引 case_reassignment_pending_uq 在迁移里，Prisma schema 表达不了。
+model CaseReassignment {
+  id String @id
+  caseId String @map("case_id")
+  /// pending_approval 待批准 | approved 已批准
+  status String @default("pending_approval")
+  /// transfer 调岗 | leave 离职 | recusal 回避 | other 其他
+  reasonCode String @map("reason_code")
+  /// 原因说明。其他必填。自由文本留业务行。
+  note String
+  /// 回避改派引用的回避决定链。非回避为空。
+  conflictLineageId String? @map("conflict_lineage_id")
+  requestedBy String @map("requested_by")
+  requestedAt DateTime @db.Timestamptz(6) @map("requested_at")
+  approvedBy String? @map("approved_by")
+  approvedAt DateTime? @db.Timestamptz(6) @map("approved_at")
+  approvalChainId String? @map("approval_chain_id")
+  /// 提交时的原承办人员快照与拟任承办人员。
+  proposedJson String @map("proposed_json")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_reassignment")
+}
+
+/// 调查材料效力认定（#239，追加式：触发器拒 UPDATE/DELETE）。回避改派生效后由接手主办逐件认定。
+model CaseMaterialEffectiveness {
+  id String @id
+  caseId String @map("case_id")
+  materialId String @map("material_id")
+  /// 触发本次认定的回避改派。
+  reassignmentId String @map("reassignment_id")
+  /// valid 有效 | invalid 无效 | needs-correction 需补正
+  conclusion String
+  reason String
+  determinedBy String @map("determined_by")
+  determinedAt DateTime @db.Timestamptz(6) @map("determined_at")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId, materialId])
+  @@map("case_material_effectiveness")
 }
 
 /// 人员层利害关系事件（#237，追加式）。状态变化写新行，不改旧行。主体类型固定为人员。

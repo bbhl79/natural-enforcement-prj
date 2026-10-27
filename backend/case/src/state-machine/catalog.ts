@@ -6,7 +6,7 @@
 // 带依据层级的 X 按 authority 定。userLock 非空，或 law、regulation，阻断（409）。normative、internal 降为警告（200）。
 // X03、X10、X19、X21、X22、X26 为 normative，结果是警告。待法制确认后再议升级，不在本目录升为阻断。
 // X12 白名单以 #235 正文及评论 6431387386 为准。
-// #235 启用 T01、T02。#236 启用 T03–T07。其余边仍关闭。
+// #235 启用 T01、T02。#236 启用 T03–T07。#239 启用 T33。其余边仍关闭。
 
 import { GUARD_AUTHORITIES, type GuardAuthority, type GuardResult } from './guard.ts';
 
@@ -120,7 +120,7 @@ export type ToSpec =
   | { readonly kind: 'branch'; readonly note: string };
 
 /** 已启用边的守卫名。none 表示显式声明本边无额外守卫（通用守卫仍跑）。 */
-export const TRANSITION_GUARDS = ['filing', 'closeout', 'none'] as const;
+export const TRANSITION_GUARDS = ['filing', 'closeout', 'reassign', 'none'] as const;
 export type TransitionGuard = (typeof TRANSITION_GUARDS)[number];
 
 export interface TransitionEdge {
@@ -243,7 +243,10 @@ export const TRANSITIONS: readonly TransitionEdge[] = [
   ),
   edge('T31', { kind: 'after', stage: 'E10' }, { kind: 'branch', note: '撤销原决定书，加受控重开；是否回流由主办决定' }, '决定书事实被推翻（主干不启用）'),
   edge('T32', { kind: 'span', start: 'E05', end: 'E09' }, enter('E05', 'drafting', { reenter: true }), '重新比对后撤销原告知，E05 再进入'),
-  edge('T33', { kind: 'any-handled' }, { kind: 'same' }, '改派呈批批准：环节不变'),
+  edge('T33', { kind: 'any-handled' }, { kind: 'same' }, '改派呈批批准：环节不变', {
+    enabled: true,
+    guard: 'reassign',
+  }),
   edge('T34', { kind: 'span', start: 'E01', end: 'E09' }, { kind: 'same' }, '延长办案期限：环节不变'),
   edge('T35', { kind: 'after', stage: 'E10' }, { kind: 'same' }, '复议、诉讼记载：主状态不变（主干不启用）'),
 ];

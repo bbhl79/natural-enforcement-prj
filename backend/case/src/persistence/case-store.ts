@@ -256,6 +256,83 @@ export interface PersonConflictDecisionWrite {
   readonly nextEvent: PersonConflictEventWrite;
 }
 
+/** 改派呈批的一行（#239）。发起即待批准，批准后同行为已批准。 */
+export interface CaseReassignmentRow {
+  readonly id: string;
+  readonly caseId: string;
+  /** pending_approval | approved */
+  readonly status: string;
+  /** transfer | leave | recusal | other */
+  readonly reasonCode: string;
+  readonly note: string;
+  readonly conflictLineageId: string | null;
+  readonly requestedBy: string;
+  readonly requestedAt: Date;
+  readonly approvedBy: string | null;
+  readonly approvedAt: Date | null;
+  readonly approvalChainId: string | null;
+  /** 提交时的原承办人员快照与拟任承办人员。 */
+  readonly proposedJson: string;
+}
+
+export interface CaseReassignmentWrite {
+  readonly id: string;
+  readonly caseId: string;
+  readonly reasonCode: string;
+  readonly note: string;
+  readonly conflictLineageId: string | null;
+  readonly requestedBy: string;
+  readonly requestedAt: Date;
+  readonly approvalChainId: string;
+  readonly proposedJson: string;
+}
+
+export interface CaseReassignmentApprovalWrite {
+  readonly id: string;
+  readonly caseId: string;
+  readonly approvedBy: string;
+  readonly approvedAt: Date;
+}
+
+/** 承办人员的一行。endedAt 非空表示已换下。 */
+export interface HandlerStintRow {
+  readonly id: string;
+  readonly personnelId: string;
+  readonly role: string;
+  readonly assignedAt: Date;
+  readonly endedAt: Date | null;
+}
+
+/** 关闭全部未结束的承办人员行，并追加新名单（同一事务）。 */
+export interface HandlerReplacementWrite {
+  readonly caseId: string;
+  readonly endedAt: Date;
+  readonly next: readonly { readonly id: string; readonly personnelId: string; readonly role: string }[];
+}
+
+/** 材料效力认定的一行（只追加）。 */
+export interface MaterialEffectivenessRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly materialId: string;
+  readonly reassignmentId: string;
+  readonly conclusion: string;
+  readonly reason: string;
+  readonly determinedBy: string;
+  readonly determinedAt: Date;
+}
+
+export interface MaterialEffectivenessWrite {
+  readonly id: string;
+  readonly caseId: string;
+  readonly materialId: string;
+  readonly reassignmentId: string;
+  readonly conclusion: string;
+  readonly reason: string;
+  readonly determinedBy: string;
+  readonly determinedAt: Date;
+}
+
 /** 机关层利害关系勾选的一行（只追加，一案至多一行）。 */
 export interface AgencyConflictMarkRow {
   readonly id: string;
@@ -389,6 +466,22 @@ export interface CaseStore {
   appendPersonConflictDecision(write: PersonConflictDecisionWrite): Promise<boolean>;
   /** 追加一条调查登记（笔录或违法记录）。 */
   appendInvestigationEntry(write: InvestigationEntryWrite): Promise<void>;
+  /** 本案改派呈批（时间升序）。 */
+  listReassignments(caseId: string): Promise<readonly CaseReassignmentRow[]>;
+  /** 按主键读改派呈批；没有为 null。 */
+  readReassignment(reassignmentId: string): Promise<CaseReassignmentRow | null>;
+  /** 追加一条改派呈批。本案已有待批准时返回 false，不插入。 */
+  insertReassignment(write: CaseReassignmentWrite): Promise<boolean>;
+  /** 把待批准改为已批准。不是待批准时返回 false。 */
+  approveReassignment(write: CaseReassignmentApprovalWrite): Promise<boolean>;
+  /** 本案全部承办人员行，含已结束（时间升序）。 */
+  listHandlerStints(caseId: string): Promise<readonly HandlerStintRow[]>;
+  /** 关闭全部未结束的承办人员行，并追加新名单。 */
+  replaceHandlers(write: HandlerReplacementWrite): Promise<void>;
+  /** 本案全部材料效力认定（时间升序）。 */
+  listMaterialEffectiveness(caseId: string): Promise<readonly MaterialEffectivenessRow[]>;
+  /** 追加一条材料效力认定。 */
+  insertMaterialEffectiveness(write: MaterialEffectivenessWrite): Promise<void>;
   /** 本案机关层利害关系勾选。没有勾选时为空。 */
   listAgencyConflictMarks(caseId: string): Promise<readonly AgencyConflictMarkRow[]>;
   /**

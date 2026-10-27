@@ -39,7 +39,8 @@ const TRANSITION_OPCODE = 'doc.approve';
 const CHAIN_OPCODE = 'doc.submit';
 const CHAIN_KIND = /^[a-z0-9-]{1,40}$/;
 
-const PROCEDURE_TRANSITIONS = new Set(['T03', 'T04', 'T05', 'T06', 'T07']);
+// T33 只由改派呈批服务在批准事务里落库，通用迁移入口拒绝直接套用。
+const PROCEDURE_TRANSITIONS = new Set(['T03', 'T04', 'T05', 'T06', 'T07', 'T33']);
 
 const FAIL_REASONS = new Set<string>([
   'transition-disabled',
