@@ -185,6 +185,7 @@ export class CaseReturnService {
             stage: plan.pointer.stage,
             stageEntrySeq: plan.pointer.entrySeq,
             status: current.status,
+            suspended: current.suspended,
           }));
         if (!moved) {
           return rejected<CaseReturnHttpOutcome>(
