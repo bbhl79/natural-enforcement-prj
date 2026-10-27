@@ -26,8 +26,10 @@ describe('回避页签', () => {
         canDeclare
         canDecide
         message={null}
+        signResult="声明期间签出被拒。等待回避决定"
         onDeclare={() => undefined}
         onDecide={() => undefined}
+        onSignCheck={() => undefined}
       />,
     );
     expect(html).toContain('回避');
@@ -39,6 +41,9 @@ describe('回避页签', () => {
     expect(html).toContain('data-role="decide-form"');
     expect(html).toContain('登记声明');
     expect(html).toContain('作出回避决定');
+    expect(html).toContain('data-role="sign-check-form"');
+    expect(html).toContain('data-role="sign-result"');
+    expect(html).toContain('声明期间签出被拒。等待回避决定');
     expect(html).not.toContain('捞回');
     expect(html).not.toMatch(/#[0-9]{2,4}/);
   });
@@ -51,8 +56,10 @@ describe('回避页签', () => {
         canDeclare
         canDecide={false}
         message="等待回避决定"
+        signResult={null}
         onDeclare={() => undefined}
         onDecide={() => undefined}
+        onSignCheck={() => undefined}
       />,
     );
     expect(html).toContain('data-role="declare-form"');

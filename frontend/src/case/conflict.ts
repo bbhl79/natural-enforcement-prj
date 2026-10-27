@@ -43,6 +43,12 @@ export const DECISION_CONCLUSIONS = [
   { value: 'reject', label: '驳回' },
 ] as const;
 
+export const SIGN_KINDS = [
+  { value: 'trial-opinion', label: '审理意见' },
+  { value: 'legal-opinion', label: '法审意见' },
+  { value: 'decision', label: '决定' },
+] as const;
+
 async function readBody(response: Response): Promise<Record<string, unknown>> {
   const body = (await response.json().catch(() => null)) as unknown;
   return body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
@@ -95,4 +101,30 @@ export async function decideConflict(
     throw new Error(typeof body.message === 'string' ? body.message : typeof body.reason === 'string' ? body.reason : '决定失败');
   }
   return body;
+}
+
+/** 检查本人或指定人员能否签出。409 时返回票面文案，不把它当成页面故障。 */
+export async function checkSign(
+  dispatch: ApiDispatch,
+  caseId: string,
+  input: { readonly personId: string; readonly signKind: string },
+): Promise<{ readonly allowed: boolean; readonly text: string }> {
+  const response = await apiFetch(dispatch, `/api/cases/${caseId}/sign-checks`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      personId: input.personId,
+      signKind: input.signKind,
+    }),
+  });
+  const body = await readBody(response);
+  if (response.status === 409) {
+    const message = typeof body.message === 'string' ? body.message : '';
+    const outlet = typeof body.outlet === 'string' ? body.outlet : '';
+    return { allowed: false, text: outlet === '' ? message : `${message}。${outlet}` };
+  }
+  if (!response.ok) {
+    throw new Error(typeof body.reason === 'string' ? body.reason : '检查失败');
+  }
+  return { allowed: true, text: '可以签出' };
 }

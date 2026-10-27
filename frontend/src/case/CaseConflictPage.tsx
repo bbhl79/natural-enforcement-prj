@@ -6,6 +6,8 @@ import { useAppDispatch, useAppSelector } from '../hooks';
 import {
   CONFLICT_SOURCES,
   DECISION_CONCLUSIONS,
+  SIGN_KINDS,
+  checkSign,
   decideConflict,
   declareConflict,
   loadConflicts,
@@ -19,16 +21,20 @@ export function CaseConflictTab({
   canDeclare,
   canDecide,
   message,
+  signResult,
   onDeclare,
   onDecide,
+  onSignCheck,
 }: {
   readonly records: readonly ConflictRecordView[];
   readonly decisions: readonly ConflictDecisionView[];
   readonly canDeclare: boolean;
   readonly canDecide: boolean;
   readonly message: string | null;
+  readonly signResult: string | null;
   readonly onDeclare: (input: { personId: string; source: string; reason: string }) => void;
   readonly onDecide: (input: { lineageId: string; conclusion: string; reason: string }) => void;
+  readonly onSignCheck: (input: { personId: string; signKind: string }) => void;
 }) {
   const [personId, setPersonId] = useState('');
   const [source, setSource] = useState('self');
@@ -36,6 +42,8 @@ export function CaseConflictTab({
   const [lineageId, setLineageId] = useState('');
   const [conclusion, setConclusion] = useState('recuse');
   const [decisionReason, setDecisionReason] = useState('');
+  const [signPersonId, setSignPersonId] = useState('');
+  const [signKind, setSignKind] = useState('trial-opinion');
 
   return (
     <>
@@ -68,6 +76,30 @@ export function CaseConflictTab({
           </ul>
         )}
       </div>
+      <form
+        className="card"
+        data-role="sign-check-form"
+        onSubmit={(event: FormEvent) => {
+          event.preventDefault();
+          onSignCheck({ personId: signPersonId, signKind });
+        }}
+      >
+        <div className="card-h">检查签出</div>
+        <div className="form-row">
+          <label htmlFor="sign-person">人员</label>
+          <input id="sign-person" value={signPersonId} onChange={(event) => setSignPersonId(event.target.value)} />
+        </div>
+        <div className="form-row">
+          <label htmlFor="sign-kind">签出类型</label>
+          <select id="sign-kind" value={signKind} onChange={(event) => setSignKind(event.target.value)}>
+            {SIGN_KINDS.map((item) => (
+              <option key={item.value} value={item.value}>{item.label}</option>
+            ))}
+          </select>
+        </div>
+        <button type="submit" className="btn" data-role="sign-check-submit">检查签出</button>
+        {signResult ? <div className="help" data-role="sign-result">{signResult}</div> : null}
+      </form>
       {canDeclare ? (
         <form
           className="card"
@@ -137,6 +169,7 @@ export default function CaseConflictPage() {
   const [records, setRecords] = useState<readonly ConflictRecordView[]>([]);
   const [decisions, setDecisions] = useState<readonly ConflictDecisionView[]>([]);
   const [message, setMessage] = useState<string | null>(null);
+  const [signResult, setSignResult] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     const view = await loadConflicts(dispatch, caseId);
@@ -158,6 +191,18 @@ export default function CaseConflictPage() {
       canDeclare={opcodes.includes('doc.draft')}
       canDecide={opcodes.includes('doc.approve')}
       message={message}
+      signResult={signResult}
+      onSignCheck={(input) => {
+        void checkSign(dispatch, caseId, input)
+          .then((result) => {
+            setSignResult(result.text);
+            setMessage(null);
+          })
+          .catch((error: unknown) => {
+            setSignResult(null);
+            setMessage(error instanceof Error ? error.message : '检查失败');
+          });
+      }}
       onDeclare={(input) => {
         void declareConflict(dispatch, caseId, input)
           .then(() => reload())
