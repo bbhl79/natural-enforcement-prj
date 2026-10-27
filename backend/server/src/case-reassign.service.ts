@@ -11,6 +11,7 @@ import {
   type CaseMaterialEffectivityFailedReason,
   type CaseReassignmentApprovedFailedReason,
   type CaseReassignmentSubmittedFailedReason,
+  type CaseReassignmentWithdrawnFailedReason,
 } from '@natural-enforcement/audit';
 import {
   CASE_STORE,
@@ -61,6 +62,12 @@ const APPROVE_OPCODE = 'doc.approve';
 /** 效力认定的过渡操作码。正式码随 #230 回写后再议。 */
 const EFFECTIVITY_OPCODE = 'doc.draft';
 const READ_OPCODE = 'case.read';
+
+/** 批准时复校失败的出口（#279）：只能退回或撤回后重新发起。 */
+const APPROVE_RESTART_MESSAGE = '请退回或撤回后重新发起';
+
+/** 回避改派被退回后挂在案件上的提示（#279）。重新发起后消失。 */
+const RECUSAL_REASSIGN_NOTICE = '须重新发起回避改派';
 
 const STRUCTURE_KINDS = new Set(['main', 'assist']);
 
@@ -329,7 +336,9 @@ export class CaseReassignService {
       return this.failApprove(actor, account, view.handlingOrgId, caseId, {
         status: 409,
         reason: conflictIssue,
-        message: this.conflictMessage(conflictIssue),
+        message: conflictIssue === 'conflict-decider-mismatch'
+          ? APPROVE_RESTART_MESSAGE
+          : this.conflictMessage(conflictIssue),
       });
     }
 
@@ -342,7 +351,7 @@ export class CaseReassignService {
       return this.failApprove(actor, account, view.handlingOrgId, caseId, {
         status: 409,
         reason: 'concurrent-change',
-        message: '承办人员已变化，请重新发起改派',
+        message: APPROVE_RESTART_MESSAGE,
       });
     }
 
@@ -381,7 +390,7 @@ export class CaseReassignService {
         .map((item) => ({ personnelId: item.personnelId, role: item.role }));
       if (!sameHandlers(active, proposed.currentHandlers)) {
         return rejected<CaseReassignHttpOutcome>(
-          this.blockBody('concurrent-change', '承办人员已变化，请重新发起改派', '重新读取后再试'),
+          this.blockBody('concurrent-change', APPROVE_RESTART_MESSAGE, APPROVE_RESTART_MESSAGE),
           {
             action: 'case.reassignment-approved',
             outcome: 'failed',
@@ -500,6 +509,80 @@ export class CaseReassignService {
     });
   }
 
+  /**
+   * 发起人批准前撤回（#279）：关闭审批链，改派记录置已撤回。
+   * 批准后不可撤回；只有发起人本人可以撤回。
+   */
+  async withdraw(
+    actor: ActorRef,
+    caseId: string,
+    reassignmentId: string,
+    input: { readonly note: string | null },
+  ): Promise<CaseReassignHttpOutcome> {
+    const view = await this.cases.readCaseView(caseId);
+    if (!view) return { status: 404, body: { result: 'not-found' } };
+    const account = await this.directory.findById(actor.personnelId);
+    const denied = await this.authorize(actor, SUBMIT_OPCODE, view.handlingOrgId, caseId);
+    if (denied) return { status: 403, body: { reason: denied } };
+    const row = await this.cases.readReassignment(reassignmentId);
+    if (!row || row.caseId !== caseId) return { status: 404, body: { result: 'not-found' } };
+    if (row.requestedBy !== actor.personnelId) return { status: 403, body: { reason: 'permission-denied' } };
+    if (row.status !== 'pending_approval') {
+      return this.failWithdraw(actor, account, view.handlingOrgId, caseId, {
+        status: 409,
+        reason: 'invalid-state',
+        message: '改派呈批不在待批准，批准后不可撤回',
+      });
+    }
+    return this.uow.run(async (tx) => {
+      const settled = await tx.cases.settleReassignment({ id: reassignmentId, caseId, toStatus: 'withdrawn' });
+      if (!settled) {
+        return rejected<CaseReassignHttpOutcome>(
+          this.blockBody('concurrent-change', '改派呈批已被他人更新', '请重新读取后再试'),
+          {
+            action: 'case.reassignment-withdrawn',
+            outcome: 'failed',
+            reason: 'concurrent-change' as CaseReassignmentWithdrawnFailedReason,
+            ...this.parties(actor, account, view.handlingOrgId, caseId, SUBMIT_OPCODE),
+          },
+        );
+      }
+      if (row.approvalChainId) {
+        const closed = await tx.cases.closeApprovalChain(row.approvalChainId);
+        if (!closed) {
+          return rejected<CaseReassignHttpOutcome>(
+            this.blockBody('concurrent-change', '审批链已被他人办结', '请重新读取后再试'),
+            {
+              action: 'case.reassignment-withdrawn',
+              outcome: 'failed',
+              reason: 'concurrent-change' as CaseReassignmentWithdrawnFailedReason,
+              ...this.parties(actor, account, view.handlingOrgId, caseId, SUBMIT_OPCODE),
+            },
+          );
+        }
+      }
+      await tx.audit.append({
+        action: 'case.reassignment-withdrawn',
+        ...this.parties(actor, account, view.handlingOrgId, caseId, SUBMIT_OPCODE),
+        detail: JSON.stringify({
+          reassignmentId,
+          reasonCode: row.reasonCode,
+          approvalChainId: row.approvalChainId,
+          note: input.note,
+        }),
+      });
+      return {
+        status: 200 as const,
+        body: {
+          result: 'reassignment-withdrawn',
+          caseId,
+          reassignmentId,
+          status: 'withdrawn',
+        },
+      };
+    });
+  }
+
   /** 人员页签：当前与曾任承办人员、改派呈批、材料效力认定与无效清单。 */
   async list(actor: ActorRef, caseId: string): Promise<CaseReassignHttpOutcome> {
     const view = await this.cases.readCaseView(caseId);
@@ -522,6 +605,8 @@ export class CaseReassignService {
     const latest = latestEffectivenessByMaterial(facts);
     const currentHandlers = stints.filter((row) => row.endedAt === null).map(presentStint);
     const formerHandlers = stints.filter((row) => row.endedAt !== null).map(presentStint);
+    const latestRecusal = [...reassignments].reverse().find((row) => row.reasonCode === 'recusal');
+    const recusalReassignRequired = latestRecusal?.status === 'returned';
     return {
       status: 200,
       body: {
@@ -535,6 +620,9 @@ export class CaseReassignService {
         handlerHistory: stints.map(presentStint),
         everHandlerPersonnelIds: [...new Set(stints.map((row) => row.personnelId))],
         reassignments: reassignments.map(presentReassignment),
+        /** 回避改派被退回后挂到案件上的提示；重新发起回避改派后消失。 */
+        recusalReassignRequired,
+        recusalReassignNotice: recusalReassignRequired ? RECUSAL_REASSIGN_NOTICE : null,
         materials: view.materials.map((material) => {
           const hit = latest.get(material.id);
           return {
@@ -755,7 +843,7 @@ export class CaseReassignService {
     return this.failApprove(actor, account, view.handlingOrgId, caseId, {
       status: issue.httpStatus,
       reason: issue.code,
-      message,
+      message: issue.httpStatus === 409 ? APPROVE_RESTART_MESSAGE : message,
       basis: issue.citation,
     });
   }
@@ -872,6 +960,26 @@ export class CaseReassignService {
       fail,
       fail.reason as CaseMaterialEffectivityFailedReason,
     );
+  }
+
+  private failWithdraw(
+    actor: ActorRef,
+    account: LoginAccount | null,
+    orgUnitId: string,
+    caseId: string,
+    fail: ReassignFailure,
+  ): Promise<CaseReassignHttpOutcome> {
+    const outcome: CaseReassignHttpOutcome =
+      fail.status === 400
+        ? { status: 400, body: { result: 'non-compliant', reason: fail.reason, message: fail.message } }
+        : this.blockBody(fail.reason, fail.message, fail.message);
+    const entry = {
+      action: 'case.reassignment-withdrawn',
+      outcome: 'failed' as const,
+      reason: fail.reason as CaseReassignmentWithdrawnFailedReason,
+      ...this.parties(actor, account, orgUnitId, caseId, SUBMIT_OPCODE),
+    } as unknown as AuditAppend;
+    return this.uow.run(async () => rejected<CaseReassignHttpOutcome>(outcome, entry));
   }
 
   private async reject(
@@ -1006,12 +1114,19 @@ function presentStint(row: { readonly id: string; readonly personnelId: string; 
   };
 }
 
+const REASSIGNMENT_STATUS_NAMES: Readonly<Record<string, string>> = {
+  pending_approval: '待批准',
+  approved: '已批准',
+  returned: '已退回',
+  withdrawn: '已撤回',
+};
+
 function presentReassignment(row: CaseReassignmentRow): Record<string, unknown> {
   const proposed = parseProposed(row.proposedJson);
   return {
     id: row.id,
     status: row.status,
-    statusName: row.status === 'approved' ? '已批准' : '待批准',
+    statusName: REASSIGNMENT_STATUS_NAMES[row.status] ?? row.status,
     reasonCode: row.reasonCode,
     reasonName: isReassignReasonCode(row.reasonCode) ? REASSIGN_REASON_NAMES[row.reasonCode] : row.reasonCode,
     note: row.note,
