@@ -13,6 +13,7 @@ import { AdminService } from './admin.service.ts';
 import { AuditBrowseService } from './audit-browse.service.ts';
 import { AuditController } from './audit.controller.ts';
 import { CaseFilingController } from './case-filing.controller.ts';
+import { CaseReturnController } from './case-return.controller.ts';
 import { CaseStateController } from './case-state.controller.ts';
 import { ClueClosureController } from './clue-closure.controller.ts';
 import { ClueCenterController } from './clue-center.controller.ts';
@@ -21,6 +22,7 @@ import { ClueDesignationController } from './clue-designation.controller.ts';
 import { ClueDesignationService } from './clue-designation.service.ts';
 import { ClueDispatchController } from './clue-dispatch.controller.ts';
 import { CaseFilingService } from './case-filing.service.ts';
+import { CaseReturnService } from './case-return.service.ts';
 import { CaseStateService } from './case-state.service.ts';
 import { ClueClosureService } from './clue-closure.service.ts';
 import { ClueDispatchService } from './clue-dispatch.service.ts';
@@ -88,6 +90,7 @@ import { WorkbenchService } from './workbench.service.ts';
     ClueWithdrawController,
     ClueClosureController,
     CaseFilingController,
+    CaseReturnController,
     CaseStateController,
     ClueCenterController,
     ClueDispositionController,
@@ -112,6 +115,7 @@ import { WorkbenchService } from './workbench.service.ts';
     ClueWithdrawService,
     ClueClosureService,
     CaseFilingService,
+    CaseReturnService,
     CaseStateService,
     ClueDispositionService,
     ClueDesignationService,

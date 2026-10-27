@@ -68,6 +68,7 @@ const OPERATION_OF_ACTION: Readonly<Record<string, string>> = {
   'case.filing-withdrawn': '撤回立案呈批',
   'case.opened': '立案',
   'case.transitioned': '推进案件环节',
+  'case.returned': '退回案件',
 };
 
 const OPERATION_OF_OPCODE: Readonly<Record<string, string>> = {
