@@ -534,13 +534,6 @@ export class PrismaCaseStore implements CaseStore {
     });
   }
 
-  async readOpenReassignment(caseId: string): Promise<CaseReassignmentRow | null> {
-    return this.prisma.caseReassignment.findFirst({
-      where: { caseId, status: 'pending_approval' },
-      orderBy: [{ requestedAt: 'desc' }, { id: 'desc' }],
-    });
-  }
-
   async readReassignment(reassignmentId: string): Promise<CaseReassignmentRow | null> {
     return this.prisma.caseReassignment.findUnique({ where: { id: reassignmentId } });
   }

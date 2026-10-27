@@ -467,8 +467,6 @@ export interface CaseStore {
   appendInvestigationEntry(write: InvestigationEntryWrite): Promise<void>;
   /** 本案改派呈批（时间升序）。 */
   listReassignments(caseId: string): Promise<readonly CaseReassignmentRow[]>;
-  /** 待批准的改派呈批；没有为 null。 */
-  readOpenReassignment(caseId: string): Promise<CaseReassignmentRow | null>;
   /** 按主键读改派呈批；没有为 null。 */
   readReassignment(reassignmentId: string): Promise<CaseReassignmentRow | null>;
   /** 追加一条改派呈批。本案已有待批准时返回 false，不插入。 */
