@@ -1,6 +1,7 @@
 import type {
   AccountMaintenanceFailedReason,
   AuditTargetOrgBasis,
+  CaseComparisonFailedReason,
   CaseConflictDecidedFailedReason,
   CaseConflictDeclaredFailedReason,
   CaseFilingApprovedFailedReason,
@@ -295,6 +296,8 @@ export type AuditAppend =
       outcome: 'failed';
       reason: CaseInvestigationRecordedFailedReason;
     })
+  | (AuditParties & { action: 'case.comparison-recorded' })
+  | (AuditParties & { action: 'case.comparison-refused'; reason: CaseComparisonFailedReason })
   | (AuditParties & { action: 'case.sign-refused'; reason: CaseSignRefusedReason })
   | (AuditParties & { action: 'case.returned' })
   | (AuditParties & { action: 'case.returned'; outcome: 'failed'; reason: CaseReturnedFailedReason })

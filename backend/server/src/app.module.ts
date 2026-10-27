@@ -13,6 +13,7 @@ import { AdminService } from './admin.service.ts';
 import { AuditBrowseService } from './audit-browse.service.ts';
 import { AuditController } from './audit.controller.ts';
 import { CaseAgencyConflictController } from './case-agency-conflict.controller.ts';
+import { CaseComparisonService } from './case-comparison.service.ts';
 import { CaseConflictController } from './case-conflict.controller.ts';
 import { CaseFilingController } from './case-filing.controller.ts';
 import { CaseReturnController } from './case-return.controller.ts';
@@ -128,6 +129,7 @@ import { WorkbenchService } from './workbench.service.ts';
     CaseStateService,
     CaseConflictService,
     CaseAgencyConflictService,
+    CaseComparisonService,
     InvestigationService,
     ClueDispositionService,
     ClueDesignationService,

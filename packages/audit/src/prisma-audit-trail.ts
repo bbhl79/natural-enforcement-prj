@@ -39,6 +39,7 @@ import {
   STORAGE_SECRECY_REPORT_RECEIPTED_FAILED_REASONS,
   CLUE_REMINDER_RESOLVED_FAILED_REASONS,
   CLUE_WITHDRAWN_FAILED_REASONS,
+  CASE_COMPARISON_FAILED_REASONS,
   CASE_CONFLICT_DECIDED_FAILED_REASONS,
   CASE_CONFLICT_DECLARED_FAILED_REASONS,
   CASE_FILING_APPROVED_FAILED_REASONS,
@@ -83,6 +84,7 @@ const DETAIL_ACTIONS = new Set<string>(AUDIT_DETAIL_ACTIONS);
 const REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['login.failed', new Set<string>(LOGIN_FAILED_REASONS)],
   ['case.sign-refused', new Set<string>(CASE_SIGN_REFUSED_REASONS)],
+  ['case.comparison-refused', new Set<string>(CASE_COMPARISON_FAILED_REASONS)],
   ['session.ended', new Set<string>(SESSION_END_REASONS)],
   ['account.password-changed', new Set<string>(PASSWORD_CHANGED_REASONS)],
   ['account.password-rejected', new Set<string>(PASSWORD_REJECTED_REASONS)],

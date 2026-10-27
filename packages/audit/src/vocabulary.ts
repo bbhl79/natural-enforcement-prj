@@ -95,6 +95,8 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'case.procedure-approved',
   'case.procedure-returned',
   'case.party-notice-recorded',
+  // 新旧比对判定（#271）：录入成功。拒绝走 case.comparison-refused。
+  'case.comparison-recorded',
 ] as const;
 
 /**
@@ -106,6 +108,8 @@ export type PasswordRejectedReason = (typeof PASSWORD_REJECTED_REASONS)[number];
 
 export const AUDIT_ACTIONS = [
   ...AUDIT_SUCCEEDED_ACTIONS,
+  // 新旧比对判定被拒（#271）：只记失败。比对过时、缺判定、材料不合规。
+  'case.comparison-refused',
   // 人员层签出被拒（#237）：只记失败。
   'case.sign-refused',
   // 口令被拒（ADR 0015，#132）：只记失败。
@@ -739,6 +743,14 @@ export const CASE_INVESTIGATION_FAILED_REASONS = [
 ] as const;
 export type CaseInvestigationFailedReason = (typeof CASE_INVESTIGATION_FAILED_REASONS)[number];
 
+/** 新旧比对判定被拒（#271）。提交缺判定、批准比对过时、材料不合规共用这一张原因表。 */
+export const CASE_COMPARISON_FAILED_REASONS = [
+  'missing-judgment',
+  'comparison-stale',
+  'invalid-input',
+] as const;
+export type CaseComparisonFailedReason = (typeof CASE_COMPARISON_FAILED_REASONS)[number];
+
 export const CASE_INVESTIGATION_ACTIONS = [
   'case.inquiry-recorded',
   'case.violation-recorded',
@@ -804,5 +816,7 @@ export const AUDIT_DETAIL_ACTIONS = [
   'case.procedure-approved',
   'case.procedure-returned',
   'case.party-notice-recorded',
+  'case.comparison-recorded',
+  'case.comparison-refused',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];
