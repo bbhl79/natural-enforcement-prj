@@ -436,10 +436,16 @@ describe('#218 线索中心列表', () => {
     const byTag = await listClues({ q: '六维标签独有名' });
     expect(byTag.body.rows.map((row) => row.id)).toEqual([landId]);
 
-    // 登记日窗口：钉死时钟当日有，次日窗口空。
-    const onDay = await listClues({ q: '六维筛选专用叙述甲', from: '2026-10-26', to: '2026-10-26' });
+    // 登记日窗口：registered_at 取库 now()，不走注入时钟；列表按库会话时区切日界。
+    // 登记日由该行 registered_at 在同一会话时区下取，跨零点运行也不抖。
+    const [day] = await cloned.prisma.$queryRaw<{ on_day: string; off_day: string }[]>`
+      SELECT to_char(registered_at::date, 'YYYY-MM-DD') AS on_day,
+             to_char(registered_at::date + 1, 'YYYY-MM-DD') AS off_day
+      FROM clue WHERE id = ${landId}`;
+    if (!day) throw new Error('缺少登记行');
+    const onDay = await listClues({ q: '六维筛选专用叙述甲', from: day.on_day, to: day.on_day });
     expect(onDay.body.rows.some((row) => row.id === landId)).toBe(true);
-    const offDay = await listClues({ q: '六维筛选专用叙述甲', from: '2026-10-27', to: '2026-10-27' });
+    const offDay = await listClues({ q: '六维筛选专用叙述甲', from: day.off_day, to: day.off_day });
     expect(offDay.body.rows).toHaveLength(0);
   });
 
