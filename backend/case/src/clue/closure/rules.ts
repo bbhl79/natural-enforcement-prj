@@ -83,11 +83,13 @@ export function checkDispositionNote(note: string): DispositionNoteCheckOutcome 
 /**
  * 处罚办法第十六条（一）–（五）固定编码（#226）：勾选表示该项立案条件未满足。
  * 标签逐字取第十六条（一）–（五）原文（立案条件本身），不改写为否定句。
- * 不自由文本替代条款本身；标签仅供展示与快照。
+ * 不自由文本替代条款本身；标签仅供展示；快照只存编码。
  */
 export const NON_FILING_GROUND_CODES = [
   'art16-1-no-clear-actor',
   'art16-2-no-violation-fact',
+  // 对应第十六条（三）「依照自然资源管理法律法规应当追究法律责任」：键名字面是「没有法律责任」，
+  // 语义即（三）不成立；键名已作为编码落库，不改名。
   'art16-3-no-legal-liability',
   'art16-4-not-our-jurisdiction',
   'art16-5-beyond-limitation',
