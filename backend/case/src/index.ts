@@ -373,6 +373,7 @@ export type {
   FilingTodoRow,
   StageInstanceRow,
   StageInstanceWrite,
+  StageInvalidationWrite,
   TransitionHistoryRow,
   TransitionHistoryWrite,
 } from './persistence/case-store.ts';

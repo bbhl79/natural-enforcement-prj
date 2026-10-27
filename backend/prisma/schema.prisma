@@ -1016,8 +1016,14 @@ model FilingApprovalStep {
   versionNo Int @map("version_no")
   step String
   actorId String @map("actor_id")
-  /// 签署意见，或退回／撤回理由（自由文本留业务行，不进留痕 detail）
+  /// 签署意见，或退回说明（自由文本留业务行，不进留痕 detail）
   opinion String?
+  /// 退回原因 R1–R10。非退回步骤为空。
+  reasonCode String? @map("reason_code")
+  /// 退回点键。非退回步骤为空。
+  returnTarget String? @map("return_target")
+  /// 退回接收人。非退回步骤为空。
+  receiverId String? @map("receiver_id")
   createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
 
   @@index([approvalId])
@@ -1123,4 +1129,83 @@ model CaseApprovalChain {
 
   @@index([caseId, status])
   @@map("case_approval_chain")
+}
+
+/// 审批意见（#238，追加式）。退回原因写在这里。
+model CaseApprovalOpinion {
+  id String @id
+  caseId String @map("case_id")
+  /// R1–R10
+  reasonCode String @map("reason_code")
+  /// 说明。自由文本留本行，不进留痕 detail。
+  note String
+  /// 退回点键
+  targetKey String @map("target_key")
+  actorId String @map("actor_id")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_approval_opinion")
+}
+
+/// 退回记录（#238，追加式）。与审批意见同事务写入。
+model CaseReturn {
+  id String @id
+  caseId String @map("case_id")
+  opinionId String @map("opinion_id")
+  reasonCode String @map("reason_code")
+  inheritedCode String? @map("inherited_code")
+  targetKey String @map("target_key")
+  receiverId String @map("receiver_id")
+  reflow Boolean
+  n5 Boolean
+  entrySeqBefore Int? @map("entry_seq_before")
+  entrySeqAfter Int? @map("entry_seq_after")
+  exitCode String? @map("exit_code")
+  rehearingRequired Boolean @map("rehearing_required")
+  revokeNotice Boolean @map("revoke_notice")
+  actorId String @map("actor_id")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_return")
+}
+
+/// 环节实例失效（#238，追加式）。不改 case_stage_instance。
+model CaseStageInvalidation {
+  id String @id
+  caseId String @map("case_id")
+  instanceId String @map("instance_id")
+  returnId String @map("return_id")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([instanceId])
+  @@index([caseId])
+  @@map("case_stage_invalidation")
+}
+
+/// 审核、审批签字（#238，追加式）。失效实例上的签字不能用于新一轮。
+model CaseStageSignature {
+  id String @id
+  caseId String @map("case_id")
+  instanceId String @map("instance_id")
+  actorId String @map("actor_id")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@index([instanceId])
+  @@map("case_stage_signature")
+}
+
+/// 案件材料（#238，追加式）。退回不改已有行。
+model CaseMaterial {
+  id String @id
+  caseId String @map("case_id")
+  /// investigation-record 调查记录 | notice 告知书
+  kind String
+  body String
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_material")
 }
