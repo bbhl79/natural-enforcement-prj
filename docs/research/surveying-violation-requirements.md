@@ -333,7 +333,7 @@ L2 原文逐字照录：
 | type.survey_datum_coord_system_unapproved.approval_document | 建立相对独立的平面坐标系统的批准文件名称、文号、批准机关与日期 | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_022 第 11 条第 1 款；doc_002 3.2.3.3(3) |
 | type.survey_datum_coord_system_unapproved.statutory_approval_level | 该事项的法定批准层级（国务院测绘地理信息主管部门／省级测绘地理信息主管部门） | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_022 第 11 条第 1 款；doc_023 第 7 条第 1 款 |
 | type.survey_datum_coord_system_unapproved.national_system_linkage | 是否与国家坐标系统相联系以及联系方式 | 违法事实 | 必填 | 核查前补齐 | 警告 | doc_022 第 11 条第 2 款；doc_023 第 7 条第 2 款、第 8 条 |
-| type.survey_datum_coord_system_unapproved.criminal_referral_check | 是否达到《刑法》第 282 条、第 398 条追诉标准 | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_006 第 282 条、第 398 条；doc_002 7.1(8)、11.1；doc_002；doc_002 附录 C 一（五） |
+| type.survey_datum_coord_system_unapproved.criminal_referral_check | 是否达到《刑法》第 282 条、第 398 条追诉标准 | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_006 第 282 条、第 398 条；doc_002 7.1(8)、11.1；doc_002 附录 C 一（五） |
 
 说明：
 
@@ -364,7 +364,7 @@ L2 原文逐字照录：
 | type.survey_gnss_station_no_filing.construction_start_date | 基准站开工建设时间 | 违法事实 | 必填 | 核查前补齐 | 警告 | doc_024 第 9 条；doc_026 第 7 条 |
 | type.survey_gnss_station_no_filing.rectification_notice_service | 责令限期改正通知书的发出日期、送达日期与改正期限届满日期 | 程序环节 | 必填 | 核查前补齐 | 阻断 | doc_022 第 53 条；doc_002 15.5 |
 | type.survey_gnss_station_no_filing.overdue_non_correction | 期限届满后仍未改正的事实 | 程序环节 | 必填 | 核查前补齐 | 阻断 | doc_022 第 53 条 |
-| type.survey_gnss_station_no_filing.criminal_referral_check | 是否达到《刑法》第 282 条、第 398 条追诉标准 | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_006 第 282 条、第 398 条；doc_002 7.1(8)、11.1；doc_002；doc_002 附录 C 一（五） |
+| type.survey_gnss_station_no_filing.criminal_referral_check | 是否达到《刑法》第 282 条、第 398 条追诉标准 | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_006 第 282 条、第 398 条；doc_002 7.1(8)、11.1；doc_002 附录 C 一（五） |
 
 说明：
 
@@ -422,7 +422,7 @@ L2 原文逐字照录：
 | type.survey_basic_project_nonstandard_datum.datum_system_used | 实际使用的基准与系统（大地基准、高程基准、深度基准、重力基准；大地坐标系统、平面坐标系统、高程系统、地心坐标系统、重力测量系统） | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_027 第 17 条第 1 款；doc_022 第 5 条、第 9 条、第 10 条 |
 | type.survey_basic_project_nonstandard_datum.applicable_technical_standards | 应当执行的国家规定的测绘技术规范和标准清单（标准号与版本） | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_027 第 17 条第 1 款；doc_022 第 5 条 |
 | type.survey_basic_project_nonstandard_datum.independent_coord_system_linkage | 确需建立相对独立的平面坐标系统时是否与国家坐标系统相联系 | 违法事实 | 选填 | 核查前补齐 | 提示 | doc_027 第 17 条第 2 款 |
-| type.survey_basic_project_nonstandard_datum.criminal_referral_check | 是否达到《刑法》第 282 条、第 398 条追诉标准 | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_006 第 282 条、第 398 条；doc_002 7.1(8)、11.1；doc_002；doc_002 附录 C 一（五） |
+| type.survey_basic_project_nonstandard_datum.criminal_referral_check | 是否达到《刑法》第 282 条、第 398 条追诉标准 | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_006 第 282 条、第 398 条；doc_002 7.1(8)、11.1；doc_002 附录 C 一（五） |
 
 说明：
 
@@ -891,7 +891,7 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 |---|---|---|---|---|---|---|
 | type.survey_quality_unqualified.unit_name | 测绘单位名称 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_022 第 39 条第 1 款、第 63 条；doc_002 2.3(1) |
 | type.survey_quality_unqualified.unit_identity | 测绘单位身份证明材料（统一社会信用代码证书、营业执照） | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.3(1)；doc_002 2.3(1) |
-| type.survey_quality_unqualified.qualification_cert_no | 测绘资质证书号、资质等级与专业类别 | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.3(3)；doc_002 8.4.1(5)⑥；doc_002 4.4.2.2(3)；doc_028 第一、二条 |
+| type.survey_quality_unqualified.qualification_cert_no | 测绘资质证书号、资质等级与专业类别 | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.3(3)；doc_002 8.4.2(5)⑥；doc_002 4.4.2.2(3)；doc_028 第一、二条 |
 | type.survey_quality_unqualified.issuing_authority | 颁发该测绘资质证书的部门 | 许可资质与审批 | 必填 | 核查前补齐 | 警告 | doc_022 第 66 条第 1 款；doc_027 第 34 条；doc_002 10.6(7) |
 | type.survey_quality_unqualified.responsible_person | 直接负责的主管人员和其他直接责任人员 | 违法主体 | 选填 | 核查前补齐 | 提示 | doc_002 4.2.1 违法责任主体认定；无直接法条依据 |
 | type.survey_quality_unqualified.project_name | 涉案测绘项目名称与项目内容 | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.3(5)；doc_002 4.4.2.2(3) |
@@ -1062,21 +1062,21 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 | type.survey_result_not_submitted.obligor_kind | 汇交义务人类别（测绘项目出资人／承担国家投资的测绘项目的单位） | 违法主体 | 必填 | 录入时 | 阻断 | doc_022 第 60 条；doc_025 附件 3 序号 12 |
 | type.survey_result_not_submitted.obligor_identity | 汇交义务人身份证明材料 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.3(1)；doc_002 2.3(1) |
 | type.survey_result_not_submitted.responsible_person | 直接负责的主管人员和其他直接责任人员 | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_022 第 60 条末句 |
-| type.survey_result_not_submitted.qualification_cert_no | 承担国家投资的测绘项目的单位的测绘资质证书号与等级（义务人类别为出资人且出资人无资质证书的填「不适用」） | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_022 第 60 条；doc_002 3.2.3.3(3)；doc_002 8.4.1(5)⑥ |
+| type.survey_result_not_submitted.qualification_cert_no | 承担国家投资的测绘项目的单位的测绘资质证书号与等级（义务人类别为出资人且出资人无资质证书的填「不适用」） | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_022 第 60 条；doc_002 3.2.3.3(3)；doc_002 8.4.2(5)⑥ |
 | type.survey_result_not_submitted.issuing_authority | 颁发该测绘资质证书的部门 | 许可资质与审批 | 选填 | 核查前补齐 | 提示 | doc_022 第 66 条第 1 款；doc_002 10.6(7) |
 | type.survey_result_not_submitted.submission_receipt | 测绘成果汇交凭证（已取得的填凭证编号与出具机关，未取得的填「未取得」） | 许可资质与审批 | 必填 | 核查前补齐 | 阻断 | doc_022 第 33 条第 2 款；doc_039 第 10 条 |
 | type.survey_result_not_submitted.project_name | 涉案测绘项目名称 | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.3(5)；doc_002 4.4.2.2(3) |
 | type.survey_result_not_submitted.is_state_invested | 是否属于国家投资的测绘项目 | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_022 第 33 条第 2 款、第 60 条 |
-| type.survey_result_not_submitted.is_basic_survey | 是否属于基础测绘项目（决定汇交副本还是汇交目录） | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_022 第 33 条第 2 款；doc_039 第 9 条；doc_040 第 5 条、第 6 条 |
-| type.survey_result_not_submitted.submission_content | 应汇交的内容（测绘成果副本／测绘成果目录） | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_022 第 33 条第 2 款；doc_040 第 5 条；doc_033 第 21 条 |
+| type.survey_result_not_submitted.is_basic_survey | 是否属于基础测绘项目（决定汇交副本还是汇交目录） | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_022 第 33 条第 2 款；doc_039 第 9 条；doc_040 第 5 条、第 6 条；2027-01-01起施行，尚未施行。施行日前以本键已列现行依据为准，到期再切 |
+| type.survey_result_not_submitted.submission_content | 应汇交的内容（测绘成果副本／测绘成果目录） | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_022 第 33 条第 2 款；doc_040 第 5 条；doc_033 第 21 条；2027-01-01起施行，尚未施行。施行日前以本键已列现行依据为准，到期再切 |
 | type.survey_result_not_submitted.result_materials | 涉案测绘成果资料 | 涉案对象 | 必填 | 核查前补齐 | 警告 | doc_002 3.2.3.3(7) |
 | type.survey_result_not_submitted.project_contract | 测绘项目合同或者协议性文件 | 涉案对象 | 选填 | 核查前补齐 | 提示 | doc_002 3.2.3.3(5) |
-| type.survey_result_not_submitted.acceptance_date | 测绘项目验收完成之日（汇交期限的起算点） | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_039 第 9 条；doc_040 第 4 条 |
-| type.survey_result_not_submitted.deadline_expiry | 三个月汇交期限的届满日 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_039 第 9 条；doc_040 第 4 条 |
+| type.survey_result_not_submitted.acceptance_date | 测绘项目验收完成之日（汇交期限的起算点） | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_039 第 9 条；doc_040 第 4 条；2027-01-01起施行，尚未施行。施行日前以本键已列现行依据为准，到期再切 |
+| type.survey_result_not_submitted.deadline_expiry | 三个月汇交期限的届满日 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_039 第 9 条；doc_040 第 4 条；2027-01-01起施行，尚未施行。施行日前以本键已列现行依据为准，到期再切 |
 | type.survey_result_not_submitted.overdue_fact | 逾期不汇交的事实 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_022 第 60 条 |
 | type.survey_result_not_submitted.overdue_duration | 责令汇交期限届满后的实际汇交时间，或者拒不汇交的状态 | 违法事实 | 必填 | 核查前补齐 | 警告 | doc_025 附件 3 序号 12 |
 | type.survey_result_not_submitted.order_submit | 责令限期汇交的通知书、送达回证与限期届满日 | 程序环节 | 必填 | 核查前补齐 | 阻断 | doc_022 第 60 条；doc_002 15.5；doc_002 附录 E 第 26 项 |
-| type.survey_result_not_submitted.suspension_six_months | 自暂扣测绘资质证书之日起六个月内仍不汇交的事实与期间计算 | 程序环节 | 选填 | 核查前补齐 | 提示 | doc_022 第 60 条；doc_002 8.4.1(5)⑥ |
+| type.survey_result_not_submitted.suspension_six_months | 自暂扣测绘资质证书之日起六个月内仍不汇交的事实与期间计算 | 程序环节 | 选填 | 核查前补齐 | 提示 | doc_022 第 60 条；doc_002 8.4.2(5)⑥ |
 | type.survey_result_not_submitted.hearing_flag | 是否拟作出暂扣或者吊销测绘资质证书的处罚 | 程序环节 | 选填 | 核查前补齐 | 提示 | doc_002 8.3(5)；doc_002 附录 E 第 23 项 |
 
 说明：
@@ -1128,14 +1128,14 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 | type.survey_secret_geo_info_no_register.unit_role | 单位在地理信息链条中的角色（生产／保管／利用） | 违法主体 | 必填 | 录入时 | 阻断 | doc_022 第 47 条第 1 款 |
 | type.survey_secret_geo_info_no_register.unit_identity | 单位身份证明材料 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.3(1) |
 | type.survey_secret_geo_info_no_register.responsible_person | 直接负责的主管人员和其他直接责任人员 | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_043 第 57 条第 1 款、第 58 条 |
-| type.survey_secret_geo_info_no_register.qualification_cert_no | 测绘资质证书号与等级（拟责令停业整顿并处降低测绘资质等级或者吊销测绘资质证书时填写） | 许可资质与审批 | 选填 | 核查前补齐 | 提示 | doc_022 第 65 条第 1 款；doc_002 3.2.3.3(3)；doc_002 8.4.1(5)⑥ |
+| type.survey_secret_geo_info_no_register.qualification_cert_no | 测绘资质证书号与等级（拟责令停业整顿并处降低测绘资质等级或者吊销测绘资质证书时填写） | 许可资质与审批 | 选填 | 核查前补齐 | 提示 | doc_022 第 65 条第 1 款；doc_002 3.2.3.3(3)；doc_002 8.4.2(5)⑥ |
 | type.survey_secret_geo_info_no_register.issuing_authority | 颁发该测绘资质证书的部门 | 许可资质与审批 | 选填 | 核查前补齐 | 提示 | doc_022 第 66 条第 1 款；doc_002 10.6(7) |
-| type.survey_secret_geo_info_no_register.license_record | 涉密基础测绘成果的使用许可或者审批材料、《涉密基础测绘成果使用安全保密责任书》 | 许可资质与审批 | 必填 | 核查前补齐 | 警告 | doc_044 第（三）项、第（六）项；doc_045 |
+| type.survey_secret_geo_info_no_register.license_record | 涉密基础测绘成果的使用许可或者审批材料、《涉密基础测绘成果使用安全保密责任书》 | 许可资质与审批 | 必填 | 核查前补齐 | 警告 | doc_044 第七点（三）；doc_044 第十点；待法制确认。doc_045有效期届满未查到延期公告，改引自然资规〔2023〕3号，不升阻断 |
 | type.survey_secret_geo_info_no_register.secret_data_object | 涉案的属于国家秘密的地理信息（名称、种类、数量、载体形式） | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_022 第 47 条第 1 款；doc_002 3.2.3.3(7) |
 | type.survey_secret_geo_info_no_register.secret_level | 涉案地理信息的密级（绝密／机密／秘密） | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_043 第 14 条；doc_046 第 2 条 |
 | type.survey_secret_geo_info_no_register.register_ledger | 获取、持有、提供、利用情况的登记台账与长期保存记录 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_022 第 47 条第 1 款；doc_002 3.2.3.3(6)；doc_044 第（六）项 |
 | type.survey_secret_geo_info_no_register.traceable_management | 可追溯管理的落实情况（保管、使用、复制、销毁的登记记录） | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_022 第 47 条第 1 款；doc_044 第（六）项 |
-| type.survey_secret_geo_info_no_register.management_system | 本单位的涉密地理信息管理制度与保密措施 | 违法事实 | 必填 | 核查前补齐 | 警告 | doc_043 第 57 条第 1 款；doc_047 |
+| type.survey_secret_geo_info_no_register.management_system | 本单位的涉密地理信息管理制度与保密措施 | 违法事实 | 必填 | 核查前补齐 | 警告 | doc_043 第 57 条第 1 款；doc_043 第 8 条；待法制确认。doc_047文号未核，原引「二、」，不升阻断 |
 | type.survey_secret_geo_info_no_register.leak_fact | 是否发生国家秘密泄露，以及泄露的事实材料 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_022 第 65 条第 1 款；doc_025 附件 3 序号 20 |
 | type.survey_secret_geo_info_no_register.leak_level | 泄露的国家秘密密级与项（件）数 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_025 附件 3 序号 20；doc_048 （三）（四） |
 | type.survey_secret_geo_info_no_register.leak_channel | 泄露的渠道与方式 | 违法事实 | 必填 | 核查前补齐 | 警告 | doc_043 第 57 条第 1 款第 (三) 项至第 (十) 项 |
@@ -1193,7 +1193,7 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 | type.survey_custodian_damage_loss.custodian_name | 测绘成果保管单位名称 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_039 第 12 条、第 28 条第 1 项；doc_002 2.3(1) |
 | type.survey_custodian_damage_loss.custodian_identity | 保管单位身份证明材料 | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.3(1) |
 | type.survey_custodian_damage_loss.responsible_person | 直接负责的主管人员和其他直接责任人员 | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_039 第 28 条 |
-| type.survey_custodian_damage_loss.custodian_designation | 保管单位的指定或者授权文件，以及接收移交的记录 | 许可资质与审批 | 必填 | 核查前补齐 | 警告 | doc_039 第 10 条；doc_052 第 4 条；doc_033 第 23 条 |
+| type.survey_custodian_damage_loss.custodian_designation | 保管单位的指定或者授权文件，以及接收移交的记录 | 许可资质与审批 | 必填 | 核查前补齐 | 警告 | doc_039 第 10 条；doc_033 第 23 条；待法制确认。穗府办规〔2018〕12号已失效。广州令第190号无授权或指定保管单位的对应条，第23条匹配低，不升阻断 |
 | type.survey_custodian_damage_loss.result_object | 涉案测绘成果资料（名称、种类、数量、载体形式） | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.3(7)；doc_039 第 12 条 |
 | type.survey_custodian_damage_loss.secret_involved | 涉案成果资料是否属于国家秘密 | 涉案对象 | 必填 | 核查前补齐 | 警告 | doc_039 第 4 条；doc_046 第 2 条 |
 | type.survey_custodian_damage_loss.custody_system | 该单位应当执行的测绘成果资料保管制度（含设施配备要求与基础测绘成果资料异地备份存放制度） | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_039 第 11 条、第 12 条；doc_022 第 34 条第 2 款 |
@@ -1253,9 +1253,9 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 | type.survey_custodian_refuse_provide.user_identity | 使用人身份证明材料 | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_002 3.2.3.3(1) |
 | type.survey_custodian_refuse_provide.user_kind | 使用人类别（国家机关／各级人民政府及有关部门／军队／社会公益性事业主体／其他） | 违法主体 | 必填 | 核查前补齐 | 阻断 | doc_022 第 36 条；doc_039 第 19 条 |
 | type.survey_custodian_refuse_provide.responsible_person | 直接负责的主管人员和其他直接责任人员 | 违法主体 | 必填 | 核查前补齐 | 警告 | doc_039 第 28 条 |
-| type.survey_custodian_refuse_provide.custodian_designation | 保管单位的指定或者授权文件 | 许可资质与审批 | 选填 | 核查前补齐 | 提示 | doc_039 第 10 条；doc_052 第 4 条 |
+| type.survey_custodian_refuse_provide.custodian_designation | 保管单位的指定或者授权文件 | 许可资质与审批 | 选填 | 核查前补齐 | 提示 | doc_039 第 10 条；doc_033 第 4 条第 1 款；待法制确认。穗府办规〔2018〕12号已失效。广州令第190号第4条第1款匹配低，不升阻断 |
 | type.survey_custodian_refuse_provide.written_agreement | 有偿使用时使用人与测绘项目出资人签订的书面协议 | 许可资质与审批 | 选填 | 核查前补齐 | 提示 | doc_039 第 19 条第 3 款；doc_002 3.2.3.3(5) |
-| type.survey_custodian_refuse_provide.secret_approval | 属于国家秘密的成果的使用审批材料（涉密基础测绘成果使用许可） | 许可资质与审批 | 选填 | 核查前补齐 | 提示 | doc_044；doc_045；doc_039 第 4 条 |
+| type.survey_custodian_refuse_provide.secret_approval | 属于国家秘密的成果的使用审批材料（涉密基础测绘成果使用许可） | 许可资质与审批 | 选填 | 核查前补齐 | 提示 | doc_044 第三点；doc_044 第九点；doc_044 第十点；doc_039 第 4 条；doc_033 第 25 条第 2 款；待法制确认。doc_045改引自然资规〔2023〕3号，不升阻断 |
 | type.survey_custodian_refuse_provide.result_object | 被申请提供的测绘成果资料（名称、种类、范围） | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_002 3.2.3.3(7) |
 | type.survey_custodian_refuse_provide.result_nature | 该成果属于基础测绘成果还是财政投资完成的其他测绘成果 | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_022 第 36 条第 1 款；doc_039 第 19 条第 1 款 |
 | type.survey_custodian_refuse_provide.use_purpose | 使用人申请的使用目的与范围（政府决策／国防建设／公共服务／防灾减灾／应对突发事件／维护国家安全／社会公益性事业／其他） | 涉案对象 | 必填 | 核查前补齐 | 阻断 | doc_022 第 36 条；doc_039 第 19 条 |
@@ -1736,7 +1736,7 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 | type.survey_internet_map_service_unapproved.service_period | 违法行为的起止时间与持续时间 | 违法事实 | 必填 | 核查前补齐 | 警告 | doc_030 第 54 条；doc_002 4.4.2.2 |
 | type.survey_internet_map_service_unapproved.order_correction | 责令改正的下达时间与履行情况 | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_030 第 54 条；doc_002 8.4 |
 | type.survey_internet_map_service_unapproved.refuse_correction | 经责令改正而拒不改正的情况 | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_006 第 286 之一条第 1 款；doc_056 第 2 条；doc_002 8.4 |
-| type.survey_internet_map_service_unapproved.cross_dept_report | 向出版行政主管部门、网络安全和信息化主管部门报告或者抄告的情况 | 程序环节 | 选填 | 核查前补齐 | 提示 | doc_030 第 26 条、第 36 条第 2 款、第 43 条；doc_022 第 38 条第 3 款；doc_002 2.2.2.2 |
+| type.survey_internet_map_service_unapproved.cross_dept_report | 向出版行政主管部门、网络安全和信息化主管部门报告或者抄告的情况 | 程序环节 | 选填 | 核查前补齐 | 提示 | doc_030 第 26 条、第 36 条、第 43 条；doc_022 第 38 条第 3 款；doc_002 2.2.2.2 |
 | type.survey_internet_map_service_unapproved.qualification_penalty_transfer | 提请颁发资质证书的部门决定降低资质等级或者吊销测绘资质证书的情况（情节严重时填写） | 程序环节 | 选填 | 核查前补齐 | 提示 | doc_030 第 54 条、第 56 条；doc_022 第 66 条第 1 款 |
 | type.survey_internet_map_service_unapproved.criminal_referral_check | 是否达到刑法第 286 之一条第 1 款四项的追诉标准 | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_006 第 286 之一条；doc_056 第 1 条至第 6 条；doc_030 第 54 条末句；doc_002 7.1(8)、11 |
 
@@ -1766,10 +1766,10 @@ USER LOCK L2 原文：「只针对土地类、矿产类线索。测绘地理信�
 | type.survey_internet_map_upload_prohibited.prohibited_detail | 含有按照国家有关规定在地图上不得表示的内容的具体情形 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_030 第 8 条第 2 款五类、第 37 条；doc_055 第二十项、第二十一项、第二十二项 |
 | type.survey_internet_map_upload_prohibited.prohibited_basis | 所违反的具体国家规定条款 | 违法事实 | 必填 | 核查前补齐 | 阻断 | doc_030 第 37 条；doc_055 |
 | type.survey_internet_map_upload_prohibited.upload_time | 上传标注的时间与持续时间 | 违法事实 | 必填 | 核查前补齐 | 警告 | doc_030 第 55 条；doc_002 4.4.2.2 |
-| type.survey_internet_map_upload_prohibited.platform_duty | 互联网地图服务单位是否履行立即停止传输、保存有关记录、向有关部门报告的义务 | 程序环节 | 选填 | 核查前补齐 | 提示 | doc_030 第 36 条第 2 款；doc_057 第 16 条 |
+| type.survey_internet_map_upload_prohibited.platform_duty | 互联网地图服务单位是否履行立即停止传输、保存有关记录、向有关部门报告的义务 | 程序环节 | 选填 | 核查前补齐 | 提示 | doc_030 第 36 条；doc_057 第 16 条 |
 | type.survey_internet_map_upload_prohibited.order_correction | 责令改正的下达时间与履行情况 | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_030 第 55 条；doc_002 8.4 |
 | type.survey_internet_map_upload_prohibited.refuse_correction | 经责令改正而拒不改正的情况 | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_006 第 286 之一条第 1 款；doc_056 第 2 条 |
-| type.survey_internet_map_upload_prohibited.cross_dept_report | 向出版行政主管部门、网络安全和信息化主管部门、公安机关报告或者抄告的情况 | 程序环节 | 选填 | 核查前补齐 | 提示 | doc_030 第 36 条第 2 款、第 43 条；doc_022 第 38 条第 3 款；doc_057 第 18 条、第 20 条；doc_002 2.2.2.2 |
+| type.survey_internet_map_upload_prohibited.cross_dept_report | 向出版行政主管部门、网络安全和信息化主管部门、公安机关报告或者抄告的情况 | 程序环节 | 选填 | 核查前补齐 | 提示 | doc_030 第 36 条、第 43 条；doc_022 第 38 条第 3 款；doc_057 第 18 条、第 20 条；doc_002 2.2.2.2 |
 | type.survey_internet_map_upload_prohibited.criminal_referral_check | 是否达到刑事追诉标准 | 程序环节 | 必填 | 核查前补齐 | 警告 | doc_006 第 111、282、285、286 之一、398 条；doc_056 第 3 条至第 6 条；doc_030 第 55 条末句；doc_002 7.1(8)、11 |
 
 说明：
