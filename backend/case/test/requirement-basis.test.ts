@@ -40,7 +40,7 @@ describe('要件依据勘误（#261）', () => {
   });
 
   it('声明不引用已废止文书', () => {
-    const repealed = new Set(
+    const repealed = new Set<string>(
       DOCUMENTS.filter((document) => document.validityStatus === '已废止').map((document) => document.code),
     );
     expect(repealed.has('doc_052')).toBe(true);
