@@ -2,7 +2,8 @@
 // 法定环节、主状态、环节实例状态：#27/6409848362。
 // 迁移表：基线 #27/6409849007，修订 #27/6410091980，批2 追加 T09a（#27/6431079838）。
 // 非法迁移：X01–X30 同修订；X31 由 #234 实现并在此登记；X32 只登记（#27/6431079838 Q10）。
-// X12 白名单以 #235 正文及评论 6431387386 为准。本票只启用 T01、T02。
+// X12 白名单以 #235 正文及评论 6431387386 为准。
+// #235 启用 T01、T02。#236 启用 T03–T07。其余边仍关闭。
 
 import type { GuardResult } from './guard.ts';
 
@@ -116,7 +117,7 @@ export type ToSpec =
   | { readonly kind: 'branch'; readonly note: string };
 
 /** 已启用边的守卫名。none 表示显式声明本边无额外守卫（通用守卫仍跑）。 */
-export const TRANSITION_GUARDS = ['filing', 'none'] as const;
+export const TRANSITION_GUARDS = ['filing', 'closeout', 'none'] as const;
 export type TransitionGuard = (typeof TRANSITION_GUARDS)[number];
 
 export interface TransitionEdge {
@@ -168,13 +169,27 @@ export const TRANSITIONS: readonly TransitionEdge[] = [
     enabled: true,
     guard: 'filing',
   }),
-  edge('T03', stage('E02'), { kind: 'overlay', suspended: true }, '中止呈批批准：E02 加中止标记'),
+  edge('T03', stage('E02'), { kind: 'overlay', suspended: true }, '中止呈批批准：E02 加中止标记', {
+    enabled: true,
+    guard: 'closeout',
+  }),
   edge('T04', stage('E02'), { kind: 'overlay', suspended: false }, '恢复呈批批准：去掉中止标记', {
+    enabled: true,
+    guard: 'closeout',
     requiresSuspended: true,
   }),
-  edge('T05', stage('E02'), { kind: 'main', status: 'terminated_pending' }, '终止调查呈批批准：调查已终止·待收尾'),
-  edge('T06', main('terminated_pending'), { kind: 'main', status: 'withdrawn' }, '撤销立案呈批批准：已撤案'),
-  edge('T07', main('terminated_pending'), { kind: 'main', status: 'closed' }, '待收尾结案呈批批准：已结案'),
+  edge('T05', stage('E02'), { kind: 'main', status: 'terminated_pending' }, '终止调查呈批批准：调查已终止·待收尾', {
+    enabled: true,
+    guard: 'closeout',
+  }),
+  edge('T06', main('terminated_pending'), { kind: 'main', status: 'withdrawn' }, '撤销立案呈批批准：已撤案', {
+    enabled: true,
+    guard: 'closeout',
+  }),
+  edge('T07', main('terminated_pending'), { kind: 'main', status: 'closed' }, '待收尾结案呈批批准：已结案', {
+    enabled: true,
+    guard: 'closeout',
+  }),
   edge('T08', stage('E02'), enter('E04', 'drafting', { completeStage: 'E03' }), '调查报告呈批批准：E03 完成，进入 E04'),
   edge('T09', stage('E04'), enter('E02', 'drafting', { reenter: true }), '审理意见补充调查：E02 再次进入'),
   edge('T09a', stage('E04'), { kind: 'branch', note: '负责人支持审理意见则走 T09；支持承办人员则按决定进入 T10、T11 或 T12' }, '审理异议呈批'),
@@ -261,8 +276,8 @@ export interface IllegalMigration {
 
 export const ILLEGAL_MIGRATIONS: readonly IllegalMigration[] = [
   { id: 'X01', summary: '没有关联线索就立案', citation: '#16', outlet: '先关联来源线索', enforcement: 'none' },
-  { id: 'X02', summary: '中止期间推进到调查终结及以后', citation: '办法第 27 条；#17', outlet: '先恢复调查', enforcement: 'none' },
-  { id: 'X03', summary: '待收尾状态下，除撤案、结案呈批外的任何迁移', citation: '规程 4.3.3(4)', outlet: '只可走撤案呈批或结案呈批', enforcement: 'none' },
+  { id: 'X02', summary: '中止期间推进到调查终结及以后', citation: '办法第 27 条；#17', outlet: '先恢复调查', enforcement: 'engine' },
+  { id: 'X03', summary: '待收尾状态下，除撤案、结案呈批外的任何迁移', citation: '规程 4.3.3(4)', outlet: '只可走撤案呈批或结案呈批', enforcement: 'engine' },
   { id: 'X04', summary: '调查未终结就进入审理', citation: '办法第 29 条', outlet: '先完成调查终结', enforcement: 'none' },
   { id: 'X05', summary: '拟处罚，但告知书未送达就作出处罚决定', citation: '行政处罚法第 44 条', outlet: '先送达告知书', enforcement: 'none' },
   { id: 'X06', summary: '告知期限未满就作出处罚决定', citation: '#111 L1', outlet: '待告知期限届满', enforcement: 'none' },
