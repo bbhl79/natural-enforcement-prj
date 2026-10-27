@@ -1,7 +1,9 @@
 // #238 案件退回：R1–R10、接收人（含 N5 与法制审核归属）、追加式。
+// #279 链外退回：同事务关链、回写呈批记录、作废已签各级；链内退回 R8／R9 不关链。
 import type { AddressInfo } from 'node:net';
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { prismaAuditTrailFactory, type AuditTrailFactory } from '@natural-enforcement/audit';
 
 import { newUlid } from '../backend/identity/src/index.ts';
 import { createApplication } from '../backend/server/src/persistence.module.ts';
@@ -46,6 +48,20 @@ class RecordingQueue {
   async close(): Promise<void> {}
 }
 
+/** #279 接缝：留痕先照常写入，再抛错，验证关链与回写整体回滚。 */
+const seam = { armed: false };
+const failingFactory: AuditTrailFactory = {
+  forClient(client) {
+    const real = prismaAuditTrailFactory.forClient(client);
+    return {
+      async append(entry) {
+        await real.append(entry);
+        if (seam.armed) throw new Error('接缝：退回写完留痕后抛错');
+      },
+    };
+  },
+};
+
 let cloned: ClonedDatabase;
 let baseUrl = '';
 let closeApp: () => Promise<void> = async () => {};
@@ -70,6 +86,10 @@ let n5MainId = '';
 let n5AssistId = '';
 let n5MoveMainId = '';
 let n5MoveAssistId = '';
+let chainMainId = '';
+let chainAssistId = '';
+let rollbackMainId = '';
+let rollbackAssistId = '';
 let offset = 0;
 
 function sessionCookie(response: Response): string {
@@ -264,6 +284,7 @@ beforeAll(async () => {
       storagePort: new RecordingStorage() as never,
       queuePort: new RecordingQueue() as never,
       filingAdminReview: 'skip',
+      auditTrailFactory: failingFactory,
     },
   );
   await app.listen(0, '127.0.0.1');
@@ -294,16 +315,22 @@ beforeAll(async () => {
   n5AssistId = await seedPerson('P-N5-A1', '停用协办', stationAId, ['经办'], '13900006208');
   n5MoveMainId = await seedPerson('P-N5-M2', '调离主办', stationAId, ['经办'], '13900006209');
   n5MoveAssistId = await seedPerson('P-N5-A2', '调离协办', stationAId, ['经办'], '13900006210');
+  chainMainId = await seedPerson('P-CHAIN-M1', '在途主办', stationAId, ['经办'], '13900006216');
+  chainAssistId = await seedPerson('P-CHAIN-A1', '在途协办', stationAId, ['经办'], '13900006217');
+  rollbackMainId = await seedPerson('P-RB-M1', '回滚主办', stationAId, ['经办'], '13900006218');
+  rollbackAssistId = await seedPerson('P-RB-A1', '回滚协办', stationAId, ['经办'], '13900006219');
   legalStationId = (await cloned.prisma.personnel.findFirstOrThrow({ where: { code: 'P-LEGAL-ST' } })).id;
   reviewAId = (await cloned.prisma.personnel.findFirstOrThrow({ where: { code: 'P-REVIEW-A' } })).id;
 }, 120_000);
 
 afterAll(async () => {
+  seam.armed = false;
   await closeApp();
   await cloned.close();
 });
 
 beforeEach(() => {
+  seam.armed = false;
   cookies.clear();
 });
 
@@ -719,5 +746,153 @@ describe('#238 案件退回验收', () => {
     await expect(cloned.prisma.$executeRaw`DELETE FROM case_return WHERE id = ${row.id}`).rejects.toThrow();
     expect(await cloned.prisma.caseApprovalOpinion.count({ where: { caseId } })).toBe(1);
     expect(await cloned.prisma.caseReturn.count({ where: { caseId } })).toBe(1);
+  });
+});
+
+describe('#279 链外退回关链', () => {
+  async function openChain(caseId: string, code: string): Promise<string> {
+    const chain = await postJson(`/api/cases/${caseId}/approval-chains`, code, { kind: 'decision-review' });
+    expect(chain.status, JSON.stringify(chain.body)).toBe(200);
+    return String(chain.body.chainId);
+  }
+
+  async function n5Case(
+    party: string,
+    main: string,
+    assist: string,
+    drafter: string,
+  ): Promise<string> {
+    const opened = await openCase({
+      orgUnitId: stationAId,
+      poolCode: 'P-INTAKE-A',
+      intakeCode: 'P-INTAKE-ST',
+      mainId: main,
+      assistId: assist,
+      drafter,
+      party,
+    });
+    return opened.caseId;
+  }
+
+  async function deactivate(...personnelIds: readonly string[]): Promise<void> {
+    for (const personnelId of personnelIds) {
+      const response = await postJson(`/api/admin/personnel/${personnelId}/deactivate`, 'P-ADMIN-HQ');
+      expect(response.status, JSON.stringify(response.body)).toBe(200);
+    }
+  }
+
+  it('带真实在途链的 N5：退回内勤同事务关链、回写呈批、作废已签；内勤改派不再 X18；期限不暂停', async () => {
+    const caseId = await n5Case('在途链甲', chainMainId, chainAssistId, 'P-CHAIN-M1');
+    const drafted = await postJson(`/api/cases/${caseId}/procedures`, 'P-CHAIN-M1', { kind: 'suspend' });
+    expect(drafted.status, JSON.stringify(drafted.body)).toBe(200);
+    const approvalId = String(drafted.body.approvalId);
+    const submitted = await postJson(`/api/procedures/${approvalId}/submit`, 'P-CHAIN-M1');
+    expect(submitted.status, JSON.stringify(submitted.body)).toBe(200);
+    const chain = await cloned.prisma.caseApprovalChain.findFirstOrThrow({ where: { caseId, status: 'in_flight' } });
+    const e02 = await cloned.prisma.caseStageInstance.findFirstOrThrow({
+      where: { caseId, stage: 'E02', entrySeq: 1 },
+    });
+    const signatureId = newUlid();
+    await cloned.prisma.caseStageSignature.create({
+      data: { id: signatureId, caseId, instanceId: e02.id, actorId: chainMainId },
+    });
+    const opened = await cloned.prisma.caseRecord.findUniqueOrThrow({ where: { id: caseId } });
+    await deactivate(chainMainId, chainAssistId);
+
+    const returned = await returnCase(caseId, {
+      reasonCode: 'R2',
+      targetKey: 'stage:E02',
+      receiverId: clerkId,
+      note: '两人都停用，退回内勤',
+    });
+    expect(returned.status, JSON.stringify(returned.body)).toBe(200);
+    expect(returned.body.n5).toBe(true);
+
+    expect((await cloned.prisma.caseApprovalChain.findUniqueOrThrow({ where: { id: chain.id } })).status).toBe('closed');
+    const approval = await cloned.prisma.caseProcedureApproval.findUniqueOrThrow({ where: { id: approvalId } });
+    expect(approval.status).toBe('drafting');
+    expect(approval.approvalChainId).toBeNull();
+    expect(await cloned.prisma.caseProcedureStep.count({ where: { approvalId, step: 'return' } })).toBe(1);
+
+    const reuse = await postJson(`/api/cases/${caseId}/signatures/${signatureId}/reuse`, 'P-APPROVE-HQ');
+    expect(reuse.status).toBe(409);
+    expect(reuse.body.reason).toBe('signature-invalidated');
+
+    const recorded = await cloned.prisma.caseReturn.findFirstOrThrow({ where: { caseId } });
+    expect(recorded.targetKey).toBe('stage:E02');
+    expect(recorded.receiverId).toBe(clerkId);
+    expect(recorded.reflow).toBe(true);
+
+    expect(await cloned.prisma.caseDeadlineEvent.count({ where: { caseId } })).toBe(0);
+    const after = await cloned.prisma.caseRecord.findUniqueOrThrow({ where: { id: caseId } });
+    expect(after.openedAt).toEqual(opened.openedAt);
+
+    const again = await postJson(`/api/cases/${caseId}/reassignments`, 'P-INTAKE-ST', {
+      mainId: handlerMainId,
+      assistIds: [handlerAssistId],
+      reasonCode: 'transfer',
+      note: '',
+    });
+    expect(again.status, JSON.stringify(again.body)).toBe(200);
+  });
+
+  it('链内退回 R8／R9 回较早一级：不关链、不失效、不新增实例', async () => {
+    const { caseId } = await stationCase('链内甲');
+    const chainId = await openChain(caseId, 'P-HANDLER-F1');
+    await cloned.prisma.caseRecord.update({ where: { id: caseId }, data: { currentStage: 'E09' } });
+    const before = await cloned.prisma.caseStageInstance.count({ where: { caseId } });
+    const r8 = await returnCase(caseId, { reasonCode: 'R8', targetKey: 'drafting:E09', note: '金额' });
+    expect(r8.status, JSON.stringify(r8.body)).toBe(200);
+    const r9 = await returnCase(caseId, {
+      reasonCode: 'R9',
+      targetKey: 'chain:level-1',
+      earlierChainLevel: 'level-1',
+      note: '文号',
+    });
+    expect(r9.status, JSON.stringify(r9.body)).toBe(200);
+    expect((await cloned.prisma.caseApprovalChain.findUniqueOrThrow({ where: { id: chainId } })).status).toBe('in_flight');
+    expect(await cloned.prisma.caseStageInvalidation.count({ where: { caseId } })).toBe(0);
+    expect(await cloned.prisma.caseStageInstance.count({ where: { caseId } })).toBe(before);
+  });
+
+  it('关链与回写同一事务：留痕写失败整体回滚，之后重试成功', async () => {
+    const caseId = await n5Case('回滚链甲', rollbackMainId, rollbackAssistId, 'P-RB-M1');
+    const chainId = await openChain(caseId, 'P-RB-M1');
+    const e02 = await cloned.prisma.caseStageInstance.findFirstOrThrow({
+      where: { caseId, stage: 'E02', entrySeq: 1 },
+    });
+    await cloned.prisma.caseStageSignature.create({
+      data: { id: newUlid(), caseId, instanceId: e02.id, actorId: rollbackMainId },
+    });
+    await deactivate(rollbackMainId, rollbackAssistId);
+    seam.armed = true;
+    try {
+      const failed = await returnCase(caseId, {
+        reasonCode: 'R2',
+        targetKey: 'stage:E02',
+        receiverId: clerkId,
+        note: '事务回滚',
+      });
+      expect(failed.status).toBe(500);
+    } finally {
+      seam.armed = false;
+    }
+    expect((await cloned.prisma.caseApprovalChain.findUniqueOrThrow({ where: { id: chainId } })).status).toBe(
+      'in_flight',
+    );
+    expect(await cloned.prisma.caseReturn.count({ where: { caseId } })).toBe(0);
+    expect(await cloned.prisma.caseStageInvalidation.count({ where: { caseId } })).toBe(0);
+    const record = await cloned.prisma.caseRecord.findUniqueOrThrow({ where: { id: caseId } });
+    expect(record.currentStage).toBe('E02');
+    expect(record.stageEntrySeq).toBe(1);
+
+    const retried = await returnCase(caseId, {
+      reasonCode: 'R2',
+      targetKey: 'stage:E02',
+      receiverId: clerkId,
+      note: '重试',
+    });
+    expect(retried.status, JSON.stringify(retried.body)).toBe(200);
+    expect((await cloned.prisma.caseApprovalChain.findUniqueOrThrow({ where: { id: chainId } })).status).toBe('closed');
   });
 });

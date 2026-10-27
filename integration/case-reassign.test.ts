@@ -1,7 +1,9 @@
 // #239 改派呈批（T33）与回避后材料效力认定：全部验收框。
+// #279 X18 出口：不批（走 #238 退回）、撤回、批准复校文案、回避改派退回提示。
 import type { AddressInfo } from 'node:net';
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { prismaAuditTrailFactory, type AuditTrailFactory } from '@natural-enforcement/audit';
 
 import { newUlid } from '../backend/identity/src/index.ts';
 import { createApplication } from '../backend/server/src/persistence.module.ts';
@@ -46,6 +48,20 @@ class RecordingQueue {
   async close(): Promise<void> {}
 }
 
+/** #279 接缝：留痕先照常写入，再抛错，验证关链与改派记录回写整体回滚。 */
+const seam = { armed: false };
+const failingFactory: AuditTrailFactory = {
+  forClient(client) {
+    const real = prismaAuditTrailFactory.forClient(client);
+    return {
+      async append(entry) {
+        await real.append(entry);
+        if (seam.armed) throw new Error('接缝：改派退回写完留痕后抛错');
+      },
+    };
+  },
+};
+
 let cloned: ClonedDatabase;
 let baseUrl = '';
 let closeApp: () => Promise<void> = async () => {};
@@ -67,6 +83,8 @@ let clerkAssistId = '';
 let flowMainId = '';
 let flowAssistId = '';
 let revalidateAssistId = '';
+let rosterExtraId = '';
+let revalidate2AssistId = '';
 let offset = 0;
 
 function sessionCookie(response: Response): string {
@@ -290,6 +308,23 @@ async function approveReassign(
   return postJson(`/api/cases/${caseId}/reassignments/${reassignmentId}/approve`, code, { opinion: '同意' });
 }
 
+async function rejectReassign(
+  caseId: string,
+  reassignmentId: string,
+  opinion: string,
+  code = 'P-239-HEAD',
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  return postJson(`/api/cases/${caseId}/reassignments/${reassignmentId}/reject`, code, { opinion });
+}
+
+async function withdrawReassign(
+  caseId: string,
+  reassignmentId: string,
+  code = 'P-239-H1',
+): Promise<{ status: number; body: Record<string, unknown> }> {
+  return postJson(`/api/cases/${caseId}/reassignments/${reassignmentId}/withdraw`, code, { note: '撤回' });
+}
+
 async function declareAndRecuse(caseId: string, personId: string, code = 'P-239-H1'): Promise<string> {
   const declared = await postJson(`/api/cases/${caseId}/conflicts`, code, {
     personId,
@@ -322,6 +357,7 @@ beforeAll(async () => {
       storagePort: new RecordingStorage() as never,
       queuePort: new RecordingQueue() as never,
       filingAdminReview: 'skip',
+      auditTrailFactory: failingFactory,
     },
   );
   await app.listen(0, '127.0.0.1');
@@ -354,15 +390,19 @@ beforeAll(async () => {
   flowMainId = await seedPerson('P-239-F1', 'N5案主办', stationAId, ['经办'], '13900023912');
   flowAssistId = await seedPerson('P-239-F2', 'N5案协办', stationAId, ['经办'], '13900023913');
   revalidateAssistId = await seedPerson('P-239-R1', '批准复验协办', stationAId, ['经办'], '13900023914');
+  rosterExtraId = await seedPerson('P-239-R2', '名单变化协办', stationAId, ['经办'], '13900023915');
+  revalidate2AssistId = await seedPerson('P-239-R3', '复校缺证协办', stationAId, ['经办'], '13900023916');
 }, 120_000);
 
 afterAll(async () => {
+  seam.armed = false;
   await closeApp();
   await cloned.close();
 });
 
 beforeEach(() => {
   now = T0;
+  seam.armed = false;
   cookies.clear();
 });
 
@@ -724,5 +764,192 @@ describe('#239 回避后材料效力认定', () => {
     });
     const after = await getJson(`/api/cases/${caseId}/reassignments`, 'P-239-H3');
     expect(after.body.invalidMaterialIds).toEqual([]);
+  });
+});
+
+describe('#279 X18 出口：不批、撤回与复校文案', () => {
+  it('不批：R10 须写明；同事务关链、改派置已退回、原名单不变；可重新发起；留痕失败整体回滚', async () => {
+    const caseId = await stationCase('不批甲');
+    const submitted = await submitReassign(caseId, 'P-239-H1');
+    expect(submitted.status, JSON.stringify(submitted.body)).toBe(200);
+    const reassignmentId = String(submitted.body.reassignmentId);
+    const chain = await cloned.prisma.caseApprovalChain.findFirstOrThrow({ where: { caseId, status: 'in_flight' } });
+
+    const noNote = await rejectReassign(caseId, reassignmentId, '');
+    expect(noNote.status).toBe(409);
+    expect(noNote.body.reason).toBe('missing-return-note');
+
+    seam.armed = true;
+    try {
+      const failed = await rejectReassign(caseId, reassignmentId, '回滚验证');
+      expect(failed.status).toBe(500);
+    } finally {
+      seam.armed = false;
+    }
+    expect((await cloned.prisma.caseApprovalChain.findUniqueOrThrow({ where: { id: chain.id } })).status).toBe(
+      'in_flight',
+    );
+    expect((await cloned.prisma.caseReassignment.findUniqueOrThrow({ where: { id: reassignmentId } })).status).toBe(
+      'pending_approval',
+    );
+    expect(await cloned.prisma.caseReturn.count({ where: { caseId } })).toBe(0);
+
+    const rejected = await rejectReassign(caseId, reassignmentId, '不同意该名单');
+    expect(rejected.status, JSON.stringify(rejected.body)).toBe(200);
+    expect(rejected.body).toMatchObject({
+      result: 'reassignment-returned',
+      status: 'returned',
+      reasonCode: 'R10',
+      receiverId: mainId,
+    });
+    expect((await cloned.prisma.caseApprovalChain.findUniqueOrThrow({ where: { id: chain.id } })).status).toBe('closed');
+    expect((await cloned.prisma.caseReassignment.findUniqueOrThrow({ where: { id: reassignmentId } })).status).toBe(
+      'returned',
+    );
+    const returned = await cloned.prisma.caseReturn.findFirstOrThrow({ where: { caseId } });
+    expect(returned.reasonCode).toBe('R10');
+    expect(returned.inheritedCode).toBe('R9');
+    expect(returned.targetKey).toBe('drafting:E02');
+    expect(returned.receiverId).toBe(mainId);
+    expect(returned.reflow).toBe(false);
+    expect((await activeHandlers(caseId)).map((row) => row.personnelId).sort()).toEqual([mainId, assistId].sort());
+    const trail = await trailOf('case.returned', caseId);
+    expect(trail.some((row) => row.outcome === 'succeeded' && String(row.detail).includes(reassignmentId))).toBe(true);
+
+    const again = await submitReassign(caseId, 'P-239-H1');
+    expect(again.status, JSON.stringify(again.body)).toBe(200);
+    const stale = await rejectReassign(caseId, reassignmentId, '重复不批');
+    expect(stale.status).toBe(409);
+    expect(stale.body.reason).toBe('invalid-state');
+  });
+
+  it('撤回：只有发起人本人可撤；撤回关链置已撤回；批准后不可撤回;不暂停期限', async () => {
+    const caseId = await stationCase('撤回甲');
+    const opened = await cloned.prisma.caseRecord.findUniqueOrThrow({ where: { id: caseId } });
+    const submitted = await submitReassign(caseId, 'P-239-H1');
+    expect(submitted.status, JSON.stringify(submitted.body)).toBe(200);
+    const reassignmentId = String(submitted.body.reassignmentId);
+    const chain = await cloned.prisma.caseApprovalChain.findFirstOrThrow({ where: { caseId, status: 'in_flight' } });
+
+    const byOther = await withdrawReassign(caseId, reassignmentId, 'P-239-H2');
+    expect(byOther.status).toBe(403);
+
+    const withdrawn = await withdrawReassign(caseId, reassignmentId);
+    expect(withdrawn.status, JSON.stringify(withdrawn.body)).toBe(200);
+    expect(withdrawn.body).toMatchObject({ result: 'reassignment-withdrawn', status: 'withdrawn' });
+    expect((await cloned.prisma.caseApprovalChain.findUniqueOrThrow({ where: { id: chain.id } })).status).toBe('closed');
+    expect((await cloned.prisma.caseReassignment.findUniqueOrThrow({ where: { id: reassignmentId } })).status).toBe(
+      'withdrawn',
+    );
+    const listed = await getJson(`/api/cases/${caseId}/reassignments`, 'P-239-H1');
+    const first = (listed.body.reassignments as Array<Record<string, unknown>>)[0];
+    expect(first).toMatchObject({ id: reassignmentId, status: 'withdrawn', statusName: '已撤回' });
+
+    expect(await cloned.prisma.caseDeadlineEvent.count({ where: { caseId } })).toBe(0);
+    expect((await cloned.prisma.caseRecord.findUniqueOrThrow({ where: { id: caseId } })).openedAt).toEqual(
+      opened.openedAt,
+    );
+    expect((await activeHandlers(caseId)).map((row) => row.personnelId).sort()).toEqual([mainId, assistId].sort());
+
+    const again = await submitReassign(caseId, 'P-239-H1');
+    expect(again.status, JSON.stringify(again.body)).toBe(200);
+    const approveStale = await approveReassign(caseId, reassignmentId);
+    expect(approveStale.status).toBe(409);
+    expect(approveStale.body.reason).toBe('invalid-state');
+
+    const approved = await approveReassign(caseId, String(again.body.reassignmentId));
+    expect(approved.status, JSON.stringify(approved.body)).toBe(200);
+    const afterApprove = await withdrawReassign(caseId, String(again.body.reassignmentId), 'P-239-H1');
+    expect(afterApprove.status).toBe(409);
+    expect(afterApprove.body.reason).toBe('invalid-state');
+  });
+
+  it('批准复校失败统一文案：X14、名单变化、回避决定人不一致；退回或撤回后可重新发起', async () => {
+    const x14Case = await stationCase('复校甲');
+    const x14Submitted = await submitReassign(x14Case, 'P-239-H1', { assistIds: [revalidate2AssistId] });
+    expect(x14Submitted.status, JSON.stringify(x14Submitted.body)).toBe(200);
+    await cloned.prisma.personnel.update({ where: { id: revalidate2AssistId }, data: { enforcementCertNo: null } });
+    const x14 = await approveReassign(x14Case, String(x14Submitted.body.reassignmentId));
+    expect(x14.status).toBe(409);
+    expect(x14.body.reason).toBe('X14');
+    expect(x14.body.message).toBe('请退回或撤回后重新发起');
+    const x14Back = await rejectReassign(x14Case, String(x14Submitted.body.reassignmentId), '名单失效');
+    expect(x14Back.status, JSON.stringify(x14Back.body)).toBe(200);
+    await cloned.prisma.personnel.update({
+      where: { id: revalidate2AssistId },
+      data: { enforcementCertNo: `ENF-P-239-R3` },
+    });
+    const x14Again = await submitReassign(x14Case, 'P-239-H1', { assistIds: [revalidate2AssistId] });
+    expect(x14Again.status, JSON.stringify(x14Again.body)).toBe(200);
+
+    const rosterCase = await stationCase('复校乙');
+    const rosterSubmitted = await submitReassign(rosterCase, 'P-239-H1');
+    expect(rosterSubmitted.status, JSON.stringify(rosterSubmitted.body)).toBe(200);
+    await cloned.prisma.caseHandler.create({
+      data: {
+        id: newUlid(),
+        caseId: rosterCase,
+        personnelId: rosterExtraId,
+        role: 'assist',
+        assignedAt: new Date(T0),
+      },
+    });
+    const roster = await approveReassign(rosterCase, String(rosterSubmitted.body.reassignmentId));
+    expect(roster.status).toBe(409);
+    expect(roster.body.message).toBe('请退回或撤回后重新发起');
+    const rosterWithdrawn = await withdrawReassign(rosterCase, String(rosterSubmitted.body.reassignmentId));
+    expect(rosterWithdrawn.status, JSON.stringify(rosterWithdrawn.body)).toBe(200);
+
+    const recusalCase = await stationCase('复校丙');
+    const lineageId = await declareAndRecuse(recusalCase, mainId);
+    const recusalSubmitted = await submitReassign(recusalCase, 'P-239-H1', {
+      reasonCode: 'recusal',
+      conflictLineageId: lineageId,
+    });
+    expect(recusalSubmitted.status, JSON.stringify(recusalSubmitted.body)).toBe(200);
+    const mismatch = await approveReassign(recusalCase, String(recusalSubmitted.body.reassignmentId), 'P-APPROVE-HQ');
+    expect(mismatch.status).toBe(409);
+    expect(mismatch.body.reason).toBe('conflict-decider-mismatch');
+    expect(mismatch.body.message).toBe('请退回或撤回后重新发起');
+    const recusalWithdrawn = await withdrawReassign(recusalCase, String(recusalSubmitted.body.reassignmentId));
+    expect(recusalWithdrawn.status, JSON.stringify(recusalWithdrawn.body)).toBe(200);
+    const recusalAgain = await submitReassign(recusalCase, 'P-239-H1', {
+      reasonCode: 'recusal',
+      conflictLineageId: lineageId,
+    });
+    expect(recusalAgain.status, JSON.stringify(recusalAgain.body)).toBe(200);
+  });
+
+  it('回避改派被退回后：保留须重新发起提示；重新发起后消失；不阻断其他操作', async () => {
+    const caseId = await stationCase('回避退回甲');
+    const lineageId = await declareAndRecuse(caseId, mainId);
+    const submitted = await submitReassign(caseId, 'P-239-H1', {
+      reasonCode: 'recusal',
+      conflictLineageId: lineageId,
+    });
+    expect(submitted.status, JSON.stringify(submitted.body)).toBe(200);
+    const rejected = await rejectReassign(caseId, String(submitted.body.reassignmentId), '回避暂不成立');
+    expect(rejected.status, JSON.stringify(rejected.body)).toBe(200);
+    expect((await activeHandlers(caseId)).map((row) => row.personnelId).sort()).toEqual([mainId, assistId].sort());
+
+    const listed = await getJson(`/api/cases/${caseId}/reassignments`, 'P-239-H1');
+    expect(listed.body.recusalReassignRequired).toBe(true);
+    expect(listed.body.recusalReassignNotice).toBe('须重新发起回避改派');
+
+    const other = await submitReassign(caseId, 'P-239-H1', { reasonCode: 'transfer' });
+    expect(other.status, JSON.stringify(other.body)).toBe(200);
+    const withdrawn = await withdrawReassign(caseId, String(other.body.reassignmentId));
+    expect(withdrawn.status).toBe(200);
+    const mid = await getJson(`/api/cases/${caseId}/reassignments`, 'P-239-H1');
+    expect(mid.body.recusalReassignRequired).toBe(true);
+
+    const again = await submitReassign(caseId, 'P-239-H1', {
+      reasonCode: 'recusal',
+      conflictLineageId: lineageId,
+    });
+    expect(again.status, JSON.stringify(again.body)).toBe(200);
+    const after = await getJson(`/api/cases/${caseId}/reassignments`, 'P-239-H1');
+    expect(after.body.recusalReassignRequired).toBe(false);
+    expect(after.body.recusalReassignNotice).toBeNull();
   });
 });
