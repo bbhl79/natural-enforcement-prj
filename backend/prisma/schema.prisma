@@ -1029,7 +1029,7 @@ model CaseRecord {
   id String @id
   /// 承办机构＝立案时线索当前承办机构，此后不可变
   handlingOrgId String @map("handling_org_id")
-  /// 主状态：in_progress（办理中）
+  /// 主状态：in_progress 办理中 | terminated_pending 调查已终止·待收尾 | withdrawn 已撤案 | closed 已结案 | finalized 已定型
   status String @default("in_progress")
   /// 当前法定环节（立案后 E02）
   currentStage String @map("current_stage")
@@ -1072,4 +1072,55 @@ model CaseHandler {
   @@unique([caseId, personnelId, role])
   @@index([caseId])
   @@map("case_handler")
+}
+
+/// 环节实例（#235，追加式：触发器拒 UPDATE/DELETE）。再次进入时新行次序号加 1，旧行只读。
+model CaseStageInstance {
+  id String @id
+  caseId String @map("case_id")
+  /// E01–E13
+  stage String
+  entrySeq Int @map("entry_seq")
+  /// drafting 拟制中 | pending_approval 待审批 | waiting_prerequisite 待前置环节 | completed 已完成
+  status String
+  enteredAt DateTime @db.Timestamptz(6) @map("entered_at")
+  enteredBy String @map("entered_by")
+  /// 写入该实例的迁移编号
+  transitionCode String @map("transition_code")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([caseId, stage, entrySeq])
+  @@index([caseId])
+  @@map("case_stage_instance")
+}
+
+/// 迁移历史（#235，追加式：触发器拒 UPDATE/DELETE）。T02 可以只有线索、没有案件。
+model CaseTransition {
+  id String @id
+  caseId String? @map("case_id")
+  clueId String? @map("clue_id")
+  transitionCode String @map("transition_code")
+  actorId String @map("actor_id")
+  fromJson String @map("from_json")
+  toJson String @map("to_json")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@index([clueId])
+  @@map("case_transition")
+}
+
+/// 案件上的进行中审批链（#235 X18）。立案呈批的在途状态另记在 filing_approval。
+model CaseApprovalChain {
+  id String @id
+  caseId String @map("case_id")
+  kind String
+  /// in_flight | closed
+  status String @default("in_flight")
+  openedBy String @map("opened_by")
+  openedAt DateTime @db.Timestamptz(6) @map("opened_at")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId, status])
+  @@map("case_approval_chain")
 }

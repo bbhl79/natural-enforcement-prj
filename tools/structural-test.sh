@@ -189,6 +189,7 @@ RULES=(
   audit-facility-entry
   spatial-no-orm-mutation
   reference-data-no-mutation
+  case-history-append-only
   runtime-manifest
   user-lock-assertions
   frontend-router-mode
@@ -464,6 +465,8 @@ declare -A ASSEMBLY_EXEMPT=(
   ["integration/clue-form-schema.test.ts"]="../backend/case/src/ ../backend/geo-dict/src/ ../backend/identity/src/"
   # #217：立案（filed）路径直调案件段的提醒生成内部服务，同样直接装配 case 与 identity 的源码。
   ["integration/clue-closure.test.ts"]="../backend/case/src/ ../backend/identity/src/"
+  # #235：再次进入用状态机公共出口的 nextEntrySeq 与 CaseStore.appendStageInstance。
+  ["integration/case-state-machine.test.ts"]="../backend/case/src/ ../backend/identity/src/"
 )
 
 is_assembly_exempt() { # $1 = 相对 ROOT 路径, $2 = specifier
@@ -703,6 +706,7 @@ check_weak-reference-entry() {
 # ClueWithdrawal、ClueDisposition、ClueClosureReminder、ClueExternalTransfer（#229）、ClueDesignationRequest、StorageObjectQuarantine（#224）、SecrecyReportTicket（#225）。
 # #234 追加立案呈批与案件最小模型六张表（#27 T01／T02、#16）：FilingApproval、FilingApprovalVersion、
 # FilingApprovalStep、CaseRecord、CaseSourceClue、CaseHandler。
+# #235 追加环节实例、迁移历史、审批链：CaseStageInstance、CaseTransition、CaseApprovalChain。
 G1_MODELS=(
   MigrationProbe
   OrgUnit
@@ -754,6 +758,9 @@ G1_MODELS=(
   CaseRecord
   CaseSourceClue
   CaseHandler
+  CaseStageInstance
+  CaseTransition
+  CaseApprovalChain
 )
 check_g1-model-allowlist() {
   local schema="$BACKEND/prisma/schema.prisma" model in_schema extra missing fails=0
@@ -913,6 +920,33 @@ check_reference-data-no-mutation() {
   done < <(find "$BACKEND" "$ROOT/packages" "$ROOT/integration" "$ROOT/e2e" "${SCAN_CODE[@]}")
   if [ "$hits" -eq 0 ]; then
     note_ok "reference-data-no-mutation：backend + packages + integration + e2e 全源码无参照数据表 ORM 改写调用（ADR 0016 只追加）"
+  fi
+}
+
+# 规则（#235）：环节实例与迁移历史只追加。delegate 只许 create，不许 update／delete／upsert。
+# 库层触发器 reject_row_mutation 拒 UPDATE 与 DELETE。本规则补应用层那一道。
+# 审批链不在此列：进行中与办结允许以后改状态。
+CASE_HISTORY_MODEL='caseStageInstance|caseTransition'
+CASE_HISTORY_ORM_METHOD='upsert|updateMany|update|deleteMany|delete'
+CASE_HISTORY_ORM_WRITE="(${CASE_HISTORY_MODEL})[[:space:]]*\.[[:space:]]*(${CASE_HISTORY_ORM_METHOD})[[:space:]]*\("
+check_case-history-append-only() {
+  local hits=0 file lines line
+  while IFS= read -r file; do
+    lines="$(grep -En -e "$CASE_HISTORY_ORM_WRITE" "$file" 2>/dev/null)"
+    if [ -n "$lines" ]; then
+      while IFS= read -r line; do
+        note_fail "case-history-append-only：环节实例或迁移历史 ORM 改写调用 ${file#"$ROOT"/}:${line%%:*}（#235 只追加：再次进入写新行，不许就地改行或删行）"
+        hits=$((hits + 1))
+      done <<< "$lines"
+      continue
+    fi
+    if tr '\n' ' ' < "$file" | grep -qE "$CASE_HISTORY_ORM_WRITE"; then
+      note_fail "case-history-append-only：${file#"$ROOT"/} 折行后检出环节实例或迁移历史 ORM 改写（换行链式形态）"
+      hits=$((hits + 1))
+    fi
+  done < <(find "$BACKEND" "$ROOT/packages" "$ROOT/integration" "$ROOT/e2e" "${SCAN_CODE[@]}")
+  if [ "$hits" -eq 0 ]; then
+    note_ok "case-history-append-only：backend + packages + integration + e2e 全源码无环节实例或迁移历史 ORM 改写调用（#235 只追加）"
   fi
 }
 
