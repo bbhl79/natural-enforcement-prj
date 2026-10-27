@@ -205,6 +205,29 @@ export interface ApprovalChainWrite {
   readonly openedAt: Date;
 }
 
+/** 案件审批链的一行（#235 X18）。 */
+export interface ApprovalChainRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly kind: string;
+}
+
+/** 改派呈批结案（#279）：待批准 → 已退回或已撤回。 */
+export interface ReassignmentSettlementWrite {
+  readonly id: string;
+  readonly caseId: string;
+  readonly toStatus: 'returned' | 'withdrawn';
+}
+
+/** 链外退回把该链上的呈批打回拟制中（#279）：状态回 drafting、清空链，并追加 return 步骤。 */
+export interface ProcedureChainReturnWrite {
+  readonly chainId: string;
+  readonly actorId: string;
+  readonly opinion: string | null;
+  readonly at: Date;
+  readonly newId: () => string;
+}
+
 /** 人员层利害关系的一行（只追加）。 */
 export interface PersonConflictEventRow {
   readonly id: string;
@@ -490,6 +513,15 @@ export interface CaseStore {
   appendAgencyConflictMark(write: AgencyConflictMarkRow): Promise<boolean>;
   /** 办结一条进行中的审批链。不是进行中则返回 false。 */
   closeApprovalChain(id: string): Promise<boolean>;
+  /** 本案进行中的审批链（按打开时间升序）。 */
+  listInFlightApprovalChains(caseId: string): Promise<readonly ApprovalChainRow[]>;
+  /** 把待批准改派改为已退回或已撤回。不是待批准时返回 false。 */
+  settleReassignment(write: ReassignmentSettlementWrite): Promise<boolean>;
+  /**
+   * 链外退回（#279）：该链上待审核／待审批的呈批打回拟制中，追加 return 步骤。
+   * 任一条状态不符返回 false；本方法不自开事务。
+   */
+  returnProcedureApprovalsByChain(write: ProcedureChainReturnWrite): Promise<boolean>;
   listViolationRecords(caseId: string): Promise<readonly ViolationRecordRow[]>;
   insertViolationRecord(write: ViolationRecordWrite): Promise<void>;
   /** 只把有效记录标成作废。不是有效或不属于本案时返回 false。 */

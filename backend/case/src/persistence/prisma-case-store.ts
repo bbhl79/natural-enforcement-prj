@@ -7,6 +7,7 @@ import type { Prisma, PrismaClient } from '../../../prisma/generated/prisma/clie
 import type { ComparisonBasis, ComparisonBenchmark } from '../comparison/rules.ts';
 import type { CaseOpening } from '../filing/rules.ts';
 import type {
+  ApprovalChainRow,
   ApprovalChainWrite,
   ApprovalOpinionWrite,
   CasePointerWrite,
@@ -52,8 +53,10 @@ import type {
   PartyNoticeRow,
   PartyNoticeWrite,
   ProcedureApprovalRow,
+  ProcedureChainReturnWrite,
   ProcedureDraftWrite,
   ProcedureStepWrite,
+  ReassignmentSettlementWrite,
   StageInstanceRow,
   StageInstanceWrite,
   StageInvalidationWrite,
@@ -637,6 +640,45 @@ export class PrismaCaseStore implements CaseStore {
       data: { status: 'closed' },
     });
     return updated.count === 1;
+  }
+
+  async listInFlightApprovalChains(caseId: string): Promise<readonly ApprovalChainRow[]> {
+    return this.prisma.caseApprovalChain.findMany({
+      where: { caseId, status: 'in_flight' },
+      orderBy: [{ openedAt: 'asc' }, { id: 'asc' }],
+      select: { id: true, caseId: true, kind: true },
+    });
+  }
+
+  async settleReassignment(write: ReassignmentSettlementWrite): Promise<boolean> {
+    const updated = await this.prisma.caseReassignment.updateMany({
+      where: { id: write.id, caseId: write.caseId, status: 'pending_approval' },
+      data: { status: write.toStatus },
+    });
+    return updated.count === 1;
+  }
+
+  async returnProcedureApprovalsByChain(write: ProcedureChainReturnWrite): Promise<boolean> {
+    const rows = await this.prisma.caseProcedureApproval.findMany({
+      where: { approvalChainId: write.chainId, status: { in: ['pending_review', 'pending_approval'] } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    for (const row of rows) {
+      const stepped = await this.applyProcedureStep({
+        approvalId: row.id,
+        expectedStatus: row.status,
+        nextStatus: 'drafting',
+        approvalChainId: null,
+        stepId: write.newId(),
+        step: 'return',
+        versionNo: row.currentVersionNo,
+        actorId: write.actorId,
+        opinion: write.opinion,
+        at: write.at,
+      });
+      if (!stepped) return false;
+    }
+    return true;
   }
 
   async listViolationRecords(caseId: string): Promise<readonly ViolationRecordRow[]> {

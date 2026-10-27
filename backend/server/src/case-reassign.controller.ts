@@ -4,6 +4,7 @@ import { Body, Controller, Get, Param, Post, Req, Res, UseGuards } from '@nestjs
 import type { ActorRef } from '@natural-enforcement/identity';
 
 import { CaseReassignService } from './case-reassign.service.ts';
+import { CaseReturnService } from './case-return.service.ts';
 import { SameOriginReadGuard } from './same-origin-read.guard.ts';
 import type { AuthenticatedRequest } from './session.guard.ts';
 
@@ -20,7 +21,10 @@ const stringList = (value: unknown): string[] =>
 
 @Controller()
 export class CaseReassignController {
-  constructor(private readonly reassignments: CaseReassignService) {}
+  constructor(
+    private readonly reassignments: CaseReassignService,
+    private readonly returns: CaseReturnService,
+  ) {}
 
   @Get('api/cases/:id/reassignments')
   @UseGuards(SameOriginReadGuard)
@@ -64,6 +68,38 @@ export class CaseReassignController {
   ): Promise<void> {
     const outcome = await this.reassignments.approve(req.actor as ActorRef, id, reassignmentId, {
       opinion: optional(body.opinion),
+    });
+    res.status(outcome.status).json(outcome.body);
+  }
+
+  /** 不批（#279）：走 #238 退回，R10 须写明意见。 */
+  @Post('api/cases/:id/reassignments/:reassignmentId/reject')
+  @UseGuards(SameOriginReadGuard)
+  async reject(
+    @Req() req: AuthenticatedRequest,
+    @Res() res: HttpReply,
+    @Param('id') id: string,
+    @Param('reassignmentId') reassignmentId: string,
+    @Body() body: { readonly opinion?: unknown },
+  ): Promise<void> {
+    const outcome = await this.returns.rejectReassignment(req.actor as ActorRef, id, reassignmentId, {
+      opinion: text(body.opinion),
+    });
+    res.status(outcome.status).json(outcome.body);
+  }
+
+  /** 发起人批准前撤回（#279）。 */
+  @Post('api/cases/:id/reassignments/:reassignmentId/withdraw')
+  @UseGuards(SameOriginReadGuard)
+  async withdraw(
+    @Req() req: AuthenticatedRequest,
+    @Res() res: HttpReply,
+    @Param('id') id: string,
+    @Param('reassignmentId') reassignmentId: string,
+    @Body() body: { readonly note?: unknown },
+  ): Promise<void> {
+    const outcome = await this.reassignments.withdraw(req.actor as ActorRef, id, reassignmentId, {
+      note: optional(body.note),
     });
     res.status(outcome.status).json(outcome.body);
   }

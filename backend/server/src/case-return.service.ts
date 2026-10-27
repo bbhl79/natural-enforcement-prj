@@ -12,6 +12,7 @@ import {
   signatureReusable,
   type CaseStageCode,
   type CaseStore,
+  type CaseView,
 } from '@natural-enforcement/case';
 import {
   AccessControlService,
@@ -25,11 +26,15 @@ import {
 import { CLOCK, type Clock } from './clock.ts';
 import { LOGIN_DIRECTORY, type LoginDirectory } from './login-directory.ts';
 import { loadHandlerAvailability, loadReceiverCandidate, returnFailureDetail } from './return-facts.ts';
-import { UNIT_OF_WORK, type UnitOfWork } from './unit-of-work.ts';
+import { UNIT_OF_WORK, type TxScope, type UnitOfWork } from './unit-of-work.ts';
 
 const REVIEW_OPCODE = 'doc.admin.review';
 const APPROVE_OPCODE = 'doc.approve';
 const DRAFT_OPCODE = 'doc.draft';
+
+/** 改派不批（#279）：走 #238 退回，R10 继承 R9 取得「退回拟制中」这一点。 */
+const REASSIGN_REJECT_REASON = 'R10';
+const REASSIGN_REJECT_INHERITED = 'R9';
 
 const FAIL_REASONS = new Set<string>([
   'missing-return-reason',
@@ -208,6 +213,35 @@ export class CaseReturnService {
           createdAt: at,
         });
       }
+      if (plan.target.kind === 'stage') {
+        const signed = currentInstanceInvalidationIds(current, plan.invalidateInstanceIds);
+        for (const instanceId of signed) {
+          await tx.cases.appendStageInvalidation({
+            id: newUlid(),
+            caseId,
+            instanceId,
+            returnId,
+            createdAt: at,
+          });
+        }
+        const settled = await this.closeExternalChains(tx, {
+          caseId,
+          actorId: actor.personnelId,
+          note: plan.note,
+          at,
+        });
+        if (!settled) {
+          return rejected<CaseReturnHttpOutcome>(
+            { status: 409, body: { result: 'concurrent-change', reason: 'concurrent-change' } },
+            {
+              action: 'case.returned',
+              outcome: 'failed',
+              reason: 'concurrent-change',
+              ...this.parties(actor, actorCode, view.handlingOrgId, caseId, opcode),
+            },
+          );
+        }
+      }
       await tx.audit.append({
         action: 'case.returned',
         ...this.parties(actor, actorCode, view.handlingOrgId, caseId, opcode),
@@ -236,6 +270,244 @@ export class CaseReturnService {
         },
       };
     });
+  }
+
+  /**
+   * 改派不批（#279）：走 #238 退回，接收人＝发起人，原因 R10 须写明，退回点＝拟制中。
+   * 同一事务内关闭审批链、回写改派记录（置已退回）、写退回记录并作废当前环节已签。
+   */
+  async rejectReassignment(
+    actor: ActorRef,
+    caseId: string,
+    reassignmentId: string,
+    input: { readonly opinion: string },
+  ): Promise<CaseReturnHttpOutcome> {
+    const view = await this.cases.readCaseView(caseId);
+    if (!view) return { status: 404, body: { result: 'not-found' } };
+    const account = await this.directory.findById(actor.personnelId);
+    const actorCode = account?.code ?? null;
+    const roles = await this.identity.listActiveRoleNames(actor.personnelId);
+    if (roles.length > 0 && roles.every((role) => role === CASE_SUPERVISION_ROLE)) {
+      return { status: 403, body: { reason: 'permission-denied' } };
+    }
+    const opcode = roles.includes('行政审批') ? APPROVE_OPCODE : REVIEW_OPCODE;
+    const denied = await this.authorize(actor, opcode, view.handlingOrgId, caseId);
+    if (denied) return { status: 403, body: { reason: denied } };
+
+    const row = await this.cases.readReassignment(reassignmentId);
+    if (!row || row.caseId !== caseId) return { status: 404, body: { result: 'not-found' } };
+    if (row.status !== 'pending_approval') {
+      return this.fail(actor, actorCode, view.handlingOrgId, caseId, opcode, {
+        status: 409,
+        reason: 'invalid-state',
+        message: '改派呈批不在待批准',
+        outlet: '已办结的改派呈批不能退回',
+      });
+    }
+
+    const stage = asStage(view.currentStage);
+    const handlers = await loadHandlerAvailability(this.identity, view.handlingOrgId, view.handlers);
+    const receiver = await loadReceiverCandidate(
+      this.identity,
+      this.access,
+      view.handlingOrgId,
+      row.requestedBy,
+      view.handlers,
+    );
+    const planned = planReturn({
+      reasonCode: REASSIGN_REJECT_REASON,
+      note: input.opinion,
+      currentStage: stage,
+      targetKey: stage ? `drafting:${stage}` : '',
+      currentEntrySeq: view.stageEntrySeq,
+      inheritedCode: REASSIGN_REJECT_INHERITED,
+      defectiveStage: null,
+      earlierChainLevels: [],
+      instances: view.instances.map((item) => ({ id: item.id, stage: item.stage, entrySeq: item.entrySeq })),
+      invalidatedInstanceIds: view.instances.filter((item) => item.invalidated).map((item) => item.id),
+      receiver,
+      handlers,
+    });
+    if (!planned.ok) {
+      return this.fail(
+        actor,
+        actorCode,
+        view.handlingOrgId,
+        caseId,
+        opcode,
+        {
+          status: planned.httpStatus,
+          reason: planned.reason,
+          message: planned.message,
+          outlet: planned.outlet,
+        },
+        returnFailureDetail(REASSIGN_REJECT_REASON, stage ? `drafting:${stage}` : '', REASSIGN_REJECT_INHERITED),
+      );
+    }
+    const plan = planned.plan;
+    const at = this.clock.now();
+    return this.uow.run(async (tx) => {
+      const current = await tx.cases.readCaseView(caseId);
+      if (!current || current.currentStage !== view.currentStage || current.stageEntrySeq !== view.stageEntrySeq) {
+        return rejected<CaseReturnHttpOutcome>(
+          { status: 409, body: { result: 'concurrent-change', reason: 'concurrent-change' } },
+          {
+            action: 'case.returned',
+            outcome: 'failed',
+            reason: 'concurrent-change',
+            ...this.parties(actor, actorCode, view.handlingOrgId, caseId, opcode),
+          },
+        );
+      }
+      const opinionId = newUlid();
+      const returnId = newUlid();
+      await tx.cases.appendApprovalOpinion({
+        id: opinionId,
+        caseId,
+        reasonCode: plan.reasonCode,
+        note: plan.note,
+        targetKey: plan.target.key,
+        actorId: actor.personnelId,
+        createdAt: at,
+      });
+      await tx.cases.appendCaseReturn({
+        id: returnId,
+        caseId,
+        opinionId,
+        reasonCode: plan.reasonCode,
+        inheritedCode: plan.inheritedCode,
+        targetKey: plan.target.key,
+        receiverId: plan.receiverId,
+        reflow: false,
+        n5: plan.n5,
+        entrySeqBefore: current.stageEntrySeq,
+        entrySeqAfter: null,
+        exitCode: null,
+        rehearingRequired: false,
+        revokeNotice: false,
+        actorId: actor.personnelId,
+        createdAt: at,
+      });
+      for (const instanceId of currentInstanceInvalidationIds(current, [])) {
+        await tx.cases.appendStageInvalidation({
+          id: newUlid(),
+          caseId,
+          instanceId,
+          returnId,
+          createdAt: at,
+        });
+      }
+      const settled = await this.settleReassignChain(tx, {
+        caseId,
+        reassignmentId,
+        chainId: row.approvalChainId,
+        actorId: actor.personnelId,
+        note: plan.note,
+        at,
+      });
+      if (!settled) {
+        return rejected<CaseReturnHttpOutcome>(
+          { status: 409, body: { result: 'concurrent-change', reason: 'concurrent-change' } },
+          {
+            action: 'case.returned',
+            outcome: 'failed',
+            reason: 'concurrent-change',
+            ...this.parties(actor, actorCode, view.handlingOrgId, caseId, opcode),
+          },
+        );
+      }
+      await tx.audit.append({
+        action: 'case.returned',
+        ...this.parties(actor, actorCode, view.handlingOrgId, caseId, opcode),
+        detail: JSON.stringify({
+          reassignmentId,
+          reasonCode: plan.reasonCode,
+          target: plan.target.key,
+          receiverId: plan.receiverId,
+          n5: plan.n5,
+        }),
+      });
+      return {
+        status: 200,
+        body: {
+          result: 'reassignment-returned',
+          caseId,
+          reassignmentId,
+          status: 'returned',
+          reasonCode: plan.reasonCode,
+          target: plan.target.key,
+          receiverId: plan.receiverId,
+          n5: plan.n5,
+        },
+      };
+    });
+  }
+
+  /** 链外退回（#279）：关闭全部在途链，回写呈批记录。任一条件不成立返回 false，由调用方回滚。 */
+  private async closeExternalChains(
+    tx: TxScope,
+    input: { readonly caseId: string; readonly actorId: string; readonly note: string; readonly at: Date },
+  ): Promise<boolean> {
+    const chains = await tx.cases.listInFlightApprovalChains(input.caseId);
+    if (chains.length === 0) return true;
+    const reassignments = await tx.cases.listReassignments(input.caseId);
+    for (const chain of chains) {
+      const reset = await tx.cases.returnProcedureApprovalsByChain({
+        chainId: chain.id,
+        actorId: input.actorId,
+        opinion: input.note,
+        at: input.at,
+        newId: () => newUlid(),
+      });
+      if (!reset) return false;
+      for (const row of reassignments) {
+        if (row.status !== 'pending_approval' || row.approvalChainId !== chain.id) continue;
+        const settled = await tx.cases.settleReassignment({
+          id: row.id,
+          caseId: input.caseId,
+          toStatus: 'returned',
+        });
+        if (!settled) return false;
+      }
+      const closed = await tx.cases.closeApprovalChain(chain.id);
+      if (!closed) return false;
+    }
+    return true;
+  }
+
+  /** 改派不批的收尾（#279）：回写呈批记录并关闭该条链。 */
+  private async settleReassignChain(
+    tx: TxScope,
+    input: {
+      readonly caseId: string;
+      readonly reassignmentId: string;
+      readonly chainId: string | null;
+      readonly actorId: string;
+      readonly note: string;
+      readonly at: Date;
+    },
+  ): Promise<boolean> {
+    if (input.chainId) {
+      const reset = await tx.cases.returnProcedureApprovalsByChain({
+        chainId: input.chainId,
+        actorId: input.actorId,
+        opinion: input.note,
+        at: input.at,
+        newId: () => newUlid(),
+      });
+      if (!reset) return false;
+    }
+    const settled = await tx.cases.settleReassignment({
+      id: input.reassignmentId,
+      caseId: input.caseId,
+      toStatus: 'returned',
+    });
+    if (!settled) return false;
+    if (input.chainId) {
+      const closed = await tx.cases.closeApprovalChain(input.chainId);
+      if (!closed) return false;
+    }
+    return true;
   }
 
   async reuseSignature(actor: ActorRef, caseId: string, signatureId: string): Promise<CaseReturnHttpOutcome> {
@@ -343,4 +615,14 @@ export class CaseReturnService {
 function asStage(value: string | null): CaseStageCode | null {
   if (!value) return null;
   return (CASE_STAGE_CODES as readonly string[]).includes(value) ? (value as CaseStageCode) : null;
+}
+
+/**
+ * 链外退回作废当前环节已签（#279）。返回需要额外失效的实例：当前环节实例，
+ * 已失效或已在本计划内的不重复列入。
+ */
+function currentInstanceInvalidationIds(view: CaseView, planned: readonly string[]): readonly string[] {
+  const row = view.instances.find((item) => item.stage === view.currentStage && item.entrySeq === view.stageEntrySeq);
+  if (!row || row.invalidated || planned.includes(row.id)) return [];
+  return [row.id];
 }

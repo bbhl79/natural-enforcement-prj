@@ -19,6 +19,7 @@ import type {
   CaseMaterialEffectivityFailedReason,
   CaseReassignmentApprovedFailedReason,
   CaseReassignmentSubmittedFailedReason,
+  CaseReassignmentWithdrawnFailedReason,
   CaseOpenedFailedReason,
   CaseReturnedFailedReason,
   CaseTransitionedFailedReason,
@@ -322,6 +323,13 @@ export type AuditAppend =
     action: 'case.reassignment-approved';
     outcome: 'failed';
     reason: CaseReassignmentApprovedFailedReason;
+  })
+  // 改派呈批撤回（#279）：发起人批准前撤回，关链并置已撤回。
+  | (AuditParties & { action: 'case.reassignment-withdrawn' })
+  | (AuditParties & {
+    action: 'case.reassignment-withdrawn';
+    outcome: 'failed';
+    reason: CaseReassignmentWithdrawnFailedReason;
   })
   | (AuditParties & { action: 'case.material-effectivity-recorded' })
   | (AuditParties & {
