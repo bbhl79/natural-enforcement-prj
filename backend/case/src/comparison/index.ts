@@ -1,0 +1,28 @@
+export {
+  COMPARISON_MISSING_MESSAGE,
+  COMPARISON_MISSING_OUTLET,
+  COMPARISON_STALE_MESSAGE,
+  COMPARISON_STALE_OUTLET,
+  EFFECTIVE_DAY_ATTRIBUTION_V1,
+  Q31_OUTLET,
+  Q32_PROMPT,
+  Q32_RULE_KEY,
+  q32Hints,
+  assessComparisonFreshness,
+  assessDecisionSubmission,
+  latestJudgments,
+  readComparisonJudgment,
+} from './rules.ts';
+export type {
+  ComparisonBasis,
+  ComparisonBenchmark,
+  ComparisonFreshness,
+  ComparisonFreshnessInput,
+  ComparisonJudgment,
+  ComparisonJudgmentEntry,
+  ComparisonJudgmentRead,
+  ComparisonJudgmentRef,
+  EffectiveDayAttribution,
+  RawComparisonJudgment,
+  SubmissionAssessment,
+} from './rules.ts';

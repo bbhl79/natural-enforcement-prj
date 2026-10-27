@@ -4,6 +4,7 @@
 // Prisma 适配器在 prisma-case-store.ts（被根 tsconfig 排除在 unit 层之外，由 integration 层承载编译）。
 // 事务纪律：调用方在交互式事务里调本端口，业务行与留痕同成同败（#119）。
 
+import type { ComparisonBasis, ComparisonBenchmark } from '../comparison/rules.ts';
 import type { CaseOpening } from '../filing/rules.ts';
 
 /** 注入令牌。 */
@@ -400,6 +401,10 @@ export interface CaseStore {
   insertViolationRecord(write: ViolationRecordWrite): Promise<void>;
   /** 只把有效记录标成作废。不是有效或不属于本案时返回 false。 */
   voidViolationRecord(write: ViolationVoidWrite): Promise<boolean>;
+  /** 本案新旧比对判定（只追加，时间升序）。 */
+  listComparisonJudgments(caseId: string): Promise<readonly ComparisonJudgmentRow[]>;
+  /** 追加一条新旧比对判定。只追加，不改旧行。 */
+  insertComparisonJudgment(write: ComparisonJudgmentWrite): Promise<void>;
   listInquiryRecords(caseId: string): Promise<readonly InquiryRecordRow[]>;
   insertInquiryRecord(write: InquiryRecordWrite): Promise<void>;
   readOpenProcedure(caseId: string): Promise<ProcedureApprovalRow | null>;
@@ -444,6 +449,25 @@ export interface ViolationVoidWrite {
   readonly actorId: string;
   readonly at: Date;
 }
+
+/** 新旧比对判定（#271）。只追加。 */
+export interface ComparisonJudgmentRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly violationRecordId: string;
+  readonly behaviorBases: readonly ComparisonBasis[];
+  readonly decisionBases: readonly ComparisonBasis[];
+  readonly behaviorBenchmarks: readonly ComparisonBenchmark[];
+  readonly decisionBenchmarks: readonly ComparisonBenchmark[];
+  readonly adoptedVersion: string;
+  readonly reason: string;
+  readonly noticeRef: string;
+  readonly zeroDifference: boolean;
+  readonly createdBy: string;
+  readonly createdAt: Date;
+}
+
+export type ComparisonJudgmentWrite = ComparisonJudgmentRow;
 
 /** 调查取证笔录。只追加。 */
 export interface InquiryRecordRow {

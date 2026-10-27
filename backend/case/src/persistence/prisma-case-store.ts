@@ -4,6 +4,7 @@
 
 import type { Prisma, PrismaClient } from '../../../prisma/generated/prisma/client.ts';
 
+import type { ComparisonBasis, ComparisonBenchmark } from '../comparison/rules.ts';
 import type { CaseOpening } from '../filing/rules.ts';
 import type {
   ApprovalChainWrite,
@@ -14,6 +15,8 @@ import type {
   CaseStageSignatureRow,
   CaseStore,
   CaseView,
+  ComparisonJudgmentRow,
+  ComparisonJudgmentWrite,
   DeadlineEventRow,
   DeadlineEventWrite,
   FilingApprovalRow,
@@ -588,6 +591,48 @@ export class PrismaCaseStore implements CaseStore {
     return updated.count === 1;
   }
 
+  async listComparisonJudgments(caseId: string): Promise<readonly ComparisonJudgmentRow[]> {
+    const rows = await this.prisma.caseComparisonJudgment.findMany({
+      where: { caseId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      caseId: row.caseId,
+      violationRecordId: row.violationRecordId,
+      behaviorBases: parseComparisonBases(row.behaviorBasesJson),
+      decisionBases: parseComparisonBases(row.decisionBasesJson),
+      behaviorBenchmarks: parseComparisonBenchmarks(row.behaviorBenchmarksJson),
+      decisionBenchmarks: parseComparisonBenchmarks(row.decisionBenchmarksJson),
+      adoptedVersion: row.adoptedVersion,
+      reason: row.reason,
+      noticeRef: row.noticeRef,
+      zeroDifference: row.zeroDifference,
+      createdBy: row.createdBy,
+      createdAt: row.createdAt,
+    }));
+  }
+
+  async insertComparisonJudgment(write: ComparisonJudgmentWrite): Promise<void> {
+    await this.prisma.caseComparisonJudgment.create({
+      data: {
+        id: write.id,
+        caseId: write.caseId,
+        violationRecordId: write.violationRecordId,
+        behaviorBasesJson: JSON.stringify(write.behaviorBases),
+        decisionBasesJson: JSON.stringify(write.decisionBases),
+        behaviorBenchmarksJson: JSON.stringify(write.behaviorBenchmarks),
+        decisionBenchmarksJson: JSON.stringify(write.decisionBenchmarks),
+        adoptedVersion: write.adoptedVersion,
+        reason: write.reason,
+        noticeRef: write.noticeRef,
+        zeroDifference: write.zeroDifference,
+        createdBy: write.createdBy,
+        createdAt: write.createdAt,
+      },
+    });
+  }
+
   async listInquiryRecords(caseId: string): Promise<readonly InquiryRecordRow[]> {
     const rows = await this.prisma.caseInquiryRecord.findMany({
       where: { caseId },
@@ -834,6 +879,14 @@ function toHistory(row: {
     toJson: row.toJson,
     createdAt: row.createdAt,
   };
+}
+
+function parseComparisonBases(value: string): ComparisonBasis[] {
+  return JSON.parse(value) as ComparisonBasis[];
+}
+
+function parseComparisonBenchmarks(value: string): ComparisonBenchmark[] {
+  return JSON.parse(value) as ComparisonBenchmark[];
 }
 
 function isUniqueConflict(error: unknown): boolean {

@@ -1299,6 +1299,28 @@ model CaseViolationRecord {
   @@map("case_violation_record")
 }
 
+/// 新旧比对判定（#271）。只追加，不物理删除。每条违法记录取最新一行。
+/// 没有「已知版本集摘要」字段；版本集自动解析属二期。
+model CaseComparisonJudgment {
+  id                     String   @id
+  caseId                 String   @map("case_id")
+  violationRecordId      String   @map("violation_record_id")
+  behaviorBasesJson      String   @map("behavior_bases_json")
+  decisionBasesJson      String   @map("decision_bases_json")
+  behaviorBenchmarksJson String   @map("behavior_benchmarks_json")
+  decisionBenchmarksJson String   @map("decision_benchmarks_json")
+  adoptedVersion         String   @map("adopted_version")
+  reason                 String
+  noticeRef              String   @map("notice_ref")
+  zeroDifference         Boolean  @map("zero_difference")
+  createdBy              String   @map("created_by")
+  createdAt              DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@index([violationRecordId])
+  @@map("case_comparison_judgment")
+}
+
 /// 调查取证笔录（#236）。元数据加附件名。只追加，不物理删除。
 model CaseInquiryRecord {
   id String @id
