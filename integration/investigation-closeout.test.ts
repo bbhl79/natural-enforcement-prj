@@ -231,6 +231,15 @@ async function trails(action: string, resourceId: string): Promise<Array<{ outco
   `;
 }
 
+async function confirmationRows(resourceId: string): Promise<Array<{ outcome: string; detail: string | null }>> {
+  return cloned.prisma.$queryRaw<Array<{ outcome: string; detail: string | null }>>`
+    SELECT outcome, detail
+    FROM audit_trail
+    WHERE action = 'case.rule-confirmed' AND resource_id = ${resourceId}
+    ORDER BY created_at ASC, id ASC
+  `;
+}
+
 beforeAll(async () => {
   cloned = await openClonedDatabase();
   const app = await createApplication(cloned.connectionString, { now: () => new Date(T0) }, undefined, {
@@ -388,14 +397,71 @@ describe('#236 调查收尾', () => {
     expect(row.status).toBe('terminated_pending');
     const moved = await postJson(`/api/cases/${caseId}/transitions`, 'P-APPROVE-HQ', { transitionId: 'T08' });
     expect(moved.status).toBe(200);
-    expect(moved.body.result).toBe('advisory');
-    expect(moved.body.reason).toBe('advisory');
-    expect(moved.body.message).toBe('待收尾状态下只能撤案或结案');
+    expect(moved.body.result).toBe('warnings');
+    const movedWarnings = moved.body.warnings as Array<{ code: string; ruleKey: string; message: string; level: string }>;
+    expect(movedWarnings[0]).toMatchObject({
+      level: 'warn',
+      code: 'X03',
+      ruleKey: 'X03',
+      message: '待收尾状态下只能撤案或结案',
+    });
     const stayed = await cloned.prisma.caseRecord.findUniqueOrThrow({ where: { id: caseId } });
     expect(stayed.status).toBe('terminated_pending');
     const draft = await postJson(`/api/cases/${caseId}/procedures`, 'P-236-H1', { kind: 'suspend' });
-    expect(draft.status).toBe(409);
-    expect(draft.body.reason).toBe('X03');
+    expect(draft.status).toBe(200);
+    expect(draft.body.result).toBe('warnings');
+    expect((draft.body.warnings as Array<{ ruleKey: string }>)[0]?.ruleKey).toBe('X03');
+    expect(await cloned.prisma.caseProcedureApproval.count({ where: { caseId, kind: 'suspend' } })).toBe(0);
+  });
+
+  it('确认 X03 后重提才落呈批和开链，并追加确认留痕；未知规则键 400 且不落库', async () => {
+    const caseId = await fileCase();
+    await runProcedure(caseId, { kind: 'terminate', reason: 'other' });
+    const unknown = await postJson(`/api/cases/${caseId}/procedures`, 'P-236-H1', {
+      kind: 'suspend',
+      confirmedRuleKeys: ['NO-SUCH'],
+    });
+    expect(unknown.status).toBe(400);
+    expect(unknown.body.reason).toBe('unknown-rule-key');
+    expect(await cloned.prisma.caseProcedureApproval.count({ where: { caseId, kind: 'suspend' } })).toBe(0);
+
+    const drafted = await postJson(`/api/cases/${caseId}/procedures`, 'P-236-H1', {
+      kind: 'suspend',
+      confirmedRuleKeys: ['X03'],
+    });
+    expect(drafted.status).toBe(200);
+    expect(drafted.body.result).toBe('procedure-drafted');
+    const draftTrail = await confirmationRows(caseId);
+    expect(draftTrail).toHaveLength(1);
+    expect(draftTrail[0]?.outcome).toBe('succeeded');
+    const draftDetail = JSON.parse(draftTrail[0]?.detail ?? '{}') as {
+      confirmerId: string;
+      step: string;
+      ruleKeys: Array<{ ruleKey: string; version: string }>;
+      warnings: Array<{ ruleKey: string; code: string }>;
+    };
+    expect(draftDetail.step).toBe('procedure-draft:suspend');
+    expect(draftDetail.confirmerId).toBe(handlerMainId);
+    expect(draftDetail.ruleKeys).toEqual([{ ruleKey: 'X03', version: '1' }]);
+    expect(draftDetail.warnings[0]?.ruleKey).toBe('X03');
+
+    const chainHeld = await postJson(`/api/cases/${caseId}/approval-chains`, 'P-236-H1', { kind: 'suspend' });
+    expect(chainHeld.status).toBe(200);
+    expect(chainHeld.body.result).toBe('warnings');
+    expect(await cloned.prisma.caseApprovalChain.count({ where: { caseId, kind: 'suspend' } })).toBe(0);
+    const chain = await postJson(`/api/cases/${caseId}/approval-chains`, 'P-236-H1', {
+      kind: 'suspend',
+      confirmedRuleKeys: ['X03'],
+    });
+    expect(chain.status).toBe(200);
+    expect(chain.body.result).toBe('approval-chain-opened');
+    expect(await cloned.prisma.caseApprovalChain.count({ where: { caseId, status: 'in_flight' } })).toBe(1);
+    const chainTrail = await confirmationRows(caseId);
+    expect(chainTrail).toHaveLength(2);
+    const chainDetail = JSON.parse(chainTrail[1]?.detail ?? '{}') as { step: string };
+    expect(chainDetail.step).toBe('open-approval-chain:suspend');
+    const row = await cloned.prisma.caseRecord.findUniqueOrThrow({ where: { id: caseId } });
+    expect(row.status).toBe('terminated_pending');
   });
 
   it('撤案原因不对拒绝；撤案后终态，再写为 X12', async () => {

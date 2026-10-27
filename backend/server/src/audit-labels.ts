@@ -68,6 +68,7 @@ const OPERATION_OF_ACTION: Readonly<Record<string, string>> = {
   'case.filing-withdrawn': '撤回立案呈批',
   'case.opened': '立案',
   'case.transitioned': '推进案件环节',
+  'case.rule-confirmed': '确认警告规则',
   'case.returned': '退回案件',
   'case.inquiry-recorded': '登记调查笔录',
   'case.violation-recorded': '登记违法记录',
