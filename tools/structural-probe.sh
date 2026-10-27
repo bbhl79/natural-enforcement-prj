@@ -139,6 +139,15 @@ write_probe_person-conflict-append-only() {
     "}"
 }
 
+write_probe_agency-conflict-append-only() {
+  # #263：机关层利害关系只追加。就地改行即违例。
+  tmp_write "backend/case/src/_structural-probe-agency-conflict.ts" \
+    "// 探针（临时，勿入库）：机关层利害关系就地改行（#263 只追加）" \
+    "export function probe(prisma: { caseAgencyConflict: { update(input: unknown): unknown } }) {" \
+    "  return prisma.caseAgencyConflict.update({ where: { id: 'probe' }, data: { markedBy: 'probe' } });" \
+    "}"
+}
+
 write_probe_investigation-record-no-delete() {
   # #236：违法记录与笔录不物理删除。ORM delete 即违例。
   tmp_write "backend/case/src/_structural-probe-investigation.ts" \
@@ -463,6 +472,8 @@ SPECS=(
   "case-history-append-only|case-history-append-only|环节实例或迁移历史就地改行（#235 只追加）"
   # #237：人员层利害关系、回避决定、调查继续登记只追加。
   "person-conflict-append-only|person-conflict-append-only|人员层利害关系就地改行（#237 只追加）"
+  # #263：机关层利害关系勾选只追加。
+  "agency-conflict-append-only|agency-conflict-append-only|机关层利害关系就地改行（#263 只追加）"
   "investigation-record-no-delete|investigation-record-no-delete|违法记录或笔录物理删除"
   # #211：线索空间三表归 case 模块，空间纪律的模型集扩到线索空间部件与命中集表。
   "clue-spatial-orm-write|spatial-no-orm-mutation|线索空间部件 ORM 写（#211 新空间表禁 ORM 写）"

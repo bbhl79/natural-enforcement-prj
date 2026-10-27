@@ -77,6 +77,7 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   // 案件状态机（#235）：成功推进、只读警告与被拒都记这一动作。
   'case.transitioned',
   // 人员层利害关系（#237）。登记声明、回避决定、调查继续登记。签出被拒只记失败。
+  // 机关层勾选（#263）复用 case.conflict-declared，不另增留痕动作。
   'case.conflict-declared',
   'case.conflict-decided',
   'case.investigation-recorded',
@@ -653,10 +654,12 @@ export const CASE_TRANSITIONED_FAILED_REASONS = [
 export type CaseTransitionedFailedReason = (typeof CASE_TRANSITIONED_FAILED_REASONS)[number];
 
 /**
- * 登记人员层利害关系被拒（#237）。
+ * 登记利害关系被拒（#237 人员层，#263 机关层共用 case.conflict-declared）。
  * missing-reason 理由为空；invalid-source 来源不在封闭集；
  * self-mismatch 本人申请的对象不是操作者；unknown-person 对象人员不存在；
  * conflict-pending 该人已有声明或生效记录。
+ * invalid-checked 机关层勾选值不是布尔；already-marked 本案机关层已勾选；
+ * uncheck-forbidden 取消机关层勾选在主干被拒绝。
  */
 export const CASE_CONFLICT_DECLARED_FAILED_REASONS = [
   'missing-reason',
@@ -664,6 +667,9 @@ export const CASE_CONFLICT_DECLARED_FAILED_REASONS = [
   'self-mismatch',
   'unknown-person',
   'conflict-pending',
+  'invalid-checked',
+  'already-marked',
+  'uncheck-forbidden',
 ] as const;
 export type CaseConflictDeclaredFailedReason = (typeof CASE_CONFLICT_DECLARED_FAILED_REASONS)[number];
 

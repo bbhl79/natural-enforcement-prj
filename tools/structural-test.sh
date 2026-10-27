@@ -191,6 +191,7 @@ RULES=(
   reference-data-no-mutation
   case-history-append-only
   person-conflict-append-only
+  agency-conflict-append-only
   investigation-record-no-delete
   runtime-manifest
   user-lock-assertions
@@ -713,6 +714,7 @@ check_weak-reference-entry() {
 # #235 追加环节实例、迁移历史、审批链：CaseStageInstance、CaseTransition、CaseApprovalChain。
 # #237 追加人员层利害关系、回避决定、调查继续登记：PersonConflictEvent、
 # PersonConflictDecision、CaseInvestigationEntry。
+# #263 追加机关层利害关系勾选：CaseAgencyConflict。
 # #238 追加审批意见、退回记录、环节失效、签字、材料：CaseApprovalOpinion、CaseReturn、
 # CaseStageInvalidation、CaseStageSignature、CaseMaterial。
 # #236 追加违法记录、笔录、收尾呈批、期限事件与告知记录：CaseViolationRecord、CaseInquiryRecord、
@@ -774,6 +776,7 @@ G1_MODELS=(
   PersonConflictEvent
   PersonConflictDecision
   CaseInvestigationEntry
+  CaseAgencyConflict
   CaseApprovalOpinion
   CaseReturn
   CaseStageInvalidation
@@ -998,6 +1001,32 @@ check_person-conflict-append-only() {
   done < <(find "$BACKEND" "$ROOT/packages" "$ROOT/integration" "$ROOT/e2e" "${SCAN_CODE[@]}")
   if [ "$hits" -eq 0 ]; then
     note_ok "person-conflict-append-only：backend + packages + integration + e2e 全源码无人员层利害关系或调查登记 ORM 改写调用（#237 只追加）"
+  fi
+}
+
+# 规则（#263）：机关层利害关系勾选只追加。delegate 只许 create，不许 update／delete／upsert。
+# 库层触发器拒 UPDATE 与 DELETE。取消勾选不改行。
+AGENCY_CONFLICT_MODEL='caseAgencyConflict'
+AGENCY_CONFLICT_ORM_METHOD='upsert|updateMany|update|deleteMany|delete'
+AGENCY_CONFLICT_ORM_WRITE="(${AGENCY_CONFLICT_MODEL})[[:space:]]*\.[[:space:]]*(${AGENCY_CONFLICT_ORM_METHOD})[[:space:]]*\("
+check_agency-conflict-append-only() {
+  local hits=0 file lines line
+  while IFS= read -r file; do
+    lines="$(grep -En -e "$AGENCY_CONFLICT_ORM_WRITE" "$file" 2>/dev/null)"
+    if [ -n "$lines" ]; then
+      while IFS= read -r line; do
+        note_fail "agency-conflict-append-only：机关层利害关系 ORM 改写调用 ${file#"$ROOT"/}:${line%%:*}（#263 只追加：不许就地改行或删行）"
+        hits=$((hits + 1))
+      done <<< "$lines"
+      continue
+    fi
+    if tr '\n' ' ' < "$file" | grep -qE "$AGENCY_CONFLICT_ORM_WRITE"; then
+      note_fail "agency-conflict-append-only：${file#"$ROOT"/} 折行后检出机关层利害关系 ORM 改写（换行链式形态）"
+      hits=$((hits + 1))
+    fi
+  done < <(find "$BACKEND" "$ROOT/packages" "$ROOT/integration" "$ROOT/e2e" "${SCAN_CODE[@]}")
+  if [ "$hits" -eq 0 ]; then
+    note_ok "agency-conflict-append-only：backend + packages + integration + e2e 全源码无机关层利害关系 ORM 改写调用（#263 只追加）"
   fi
 }
 

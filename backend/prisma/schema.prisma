@@ -1186,6 +1186,18 @@ model CaseInvestigationEntry {
   @@map("case_investigation_entry")
 }
 
+/// 机关层利害关系勾选（#263，追加式）。一案一行。取消勾选不写新行。
+/// 只提示，不参与签出、呈批、迁移。主体是承办机构。
+model CaseAgencyConflict {
+  id        String   @id
+  caseId    String   @unique @map("case_id")
+  orgUnitId String   @map("org_unit_id")
+  markedBy  String   @map("marked_by")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@map("case_agency_conflict")
+}
+
 /// 审批意见（#238，追加式）。退回原因写在这里。
 model CaseApprovalOpinion {
   id String @id

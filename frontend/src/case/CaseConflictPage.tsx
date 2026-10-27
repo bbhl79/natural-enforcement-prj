@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router';
 
 import { useAppDispatch, useAppSelector } from '../hooks';
+import { loadAgencyConflict, markAgencyConflict } from './agency-conflict';
 import {
   CONFLICT_SOURCES,
   DECISION_CONCLUSIONS,
@@ -20,21 +21,31 @@ export function CaseConflictTab({
   decisions,
   canDeclare,
   canDecide,
+  agencyMarked,
+  agencyWarning,
+  agencyOutlet,
+  canMarkAgency,
   message,
   signResult,
   onDeclare,
   onDecide,
   onSignCheck,
+  onMarkAgency,
 }: {
   readonly records: readonly ConflictRecordView[];
   readonly decisions: readonly ConflictDecisionView[];
   readonly canDeclare: boolean;
   readonly canDecide: boolean;
+  readonly agencyMarked: boolean;
+  readonly agencyWarning: string | null;
+  readonly agencyOutlet: string | null;
+  readonly canMarkAgency: boolean;
   readonly message: string | null;
   readonly signResult: string | null;
   readonly onDeclare: (input: { personId: string; source: string; reason: string }) => void;
   readonly onDecide: (input: { lineageId: string; conclusion: string; reason: string }) => void;
   readonly onSignCheck: (input: { personId: string; signKind: string }) => void;
+  readonly onMarkAgency: () => void;
 }) {
   const [personId, setPersonId] = useState('');
   const [source, setSource] = useState('self');
@@ -44,12 +55,51 @@ export function CaseConflictTab({
   const [decisionReason, setDecisionReason] = useState('');
   const [signPersonId, setSignPersonId] = useState('');
   const [signKind, setSignKind] = useState('trial-opinion');
+  const [agencyDraft, setAgencyDraft] = useState(false);
 
   return (
     <>
       <div className="crumb"><b>案件详情</b></div>
       <div className="checks" role="tablist" aria-label="案件详情页签">
         <button type="button" className="btn" data-role="conflict-tab" aria-current="page">回避</button>
+      </div>
+      <div className="card" data-role="agency-conflict">
+        <div className="card-h">机关层利害关系</div>
+        {agencyMarked && agencyWarning ? (
+          <div className="help" role="status" data-role="agency-conflict-warning">
+            {agencyWarning}。{agencyOutlet}
+          </div>
+        ) : (
+          <div className="help">尚未登记</div>
+        )}
+        {agencyMarked ? (
+          <label>
+            <input type="checkbox" checked disabled data-role="agency-conflict-checkbox" readOnly />
+            本机关与本案当事人存在利害关系
+          </label>
+        ) : canMarkAgency ? (
+          <form
+            data-role="agency-conflict-form"
+            onSubmit={(event: FormEvent) => {
+              event.preventDefault();
+              if (!agencyDraft) return;
+              onMarkAgency();
+            }}
+          >
+            <label>
+              <input
+                type="checkbox"
+                checked={agencyDraft}
+                data-role="agency-conflict-checkbox"
+                onChange={(event) => setAgencyDraft(event.target.checked)}
+              />
+              本机关与本案当事人存在利害关系
+            </label>
+            <button type="submit" className="btn" data-role="agency-conflict-submit" disabled={!agencyDraft}>
+              登记机关层利害关系
+            </button>
+          </form>
+        ) : null}
       </div>
       {message ? <div className="help" data-role="failure">{message}</div> : null}
       <div className="card">
@@ -168,13 +218,20 @@ export default function CaseConflictPage() {
   const opcodes = useAppSelector((root) => root.login.operator?.opcodes ?? []);
   const [records, setRecords] = useState<readonly ConflictRecordView[]>([]);
   const [decisions, setDecisions] = useState<readonly ConflictDecisionView[]>([]);
+  const [agencyMarked, setAgencyMarked] = useState(false);
+  const [agencyWarning, setAgencyWarning] = useState<string | null>(null);
+  const [agencyOutlet, setAgencyOutlet] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [signResult, setSignResult] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     const view = await loadConflicts(dispatch, caseId);
+    const agency = await loadAgencyConflict(dispatch, caseId);
     setRecords(view.records);
     setDecisions(view.decisions);
+    setAgencyMarked(agency.marked);
+    setAgencyWarning(agency.warning);
+    setAgencyOutlet(agency.outlet);
   }, [caseId, dispatch]);
 
   useEffect(() => {
@@ -190,6 +247,10 @@ export default function CaseConflictPage() {
       decisions={decisions}
       canDeclare={opcodes.includes('doc.draft')}
       canDecide={opcodes.includes('doc.approve')}
+      agencyMarked={agencyMarked}
+      agencyWarning={agencyWarning}
+      agencyOutlet={agencyOutlet}
+      canMarkAgency={opcodes.includes('doc.draft')}
       message={message}
       signResult={signResult}
       onSignCheck={(input) => {
@@ -220,6 +281,14 @@ export default function CaseConflictPage() {
           .then(() => setMessage(null))
           .catch((error: unknown) => {
             setMessage(error instanceof Error ? error.message : '决定失败');
+          });
+      }}
+      onMarkAgency={() => {
+        void markAgencyConflict(dispatch, caseId)
+          .then(() => reload())
+          .then(() => setMessage(null))
+          .catch((error: unknown) => {
+            setMessage(error instanceof Error ? error.message : '登记失败');
           });
       }}
     />
