@@ -18,7 +18,7 @@ export const CLUE_CLOSURE_RULE_CODES = [
   'unsupported-disposition',
   /** HTTP 直接登记不予立案被拒：须经立案呈批批准（#226）。 */
   'filing-approval-required',
-  /** 不予立案理由皆空、混选、条款非法或三要素不全（#226）。 */
+  /** 不予立案理由皆空、混选、条款非法或第十六条末款三项未全确认（#226）。 */
   'invalid-no-case-reason',
   /** 落点服务缺呈批引用主键（#226）。 */
   'missing-filing-approval-ref',
@@ -103,7 +103,7 @@ export const NON_FILING_GROUND_LABELS: Readonly<Record<NonFilingGroundCode, stri
   'art16-5-beyond-limitation': '违法行为没有超过追诉时效',
 };
 
-/** 轻微＋及时纠正＋无危害后果三要素字段名。 */
+/** 第十六条末款三项（违法行为轻微／及时纠正／没有造成危害后果）字段名。 */
 export const MINOR_ELEMENT_KEYS = ['minor', 'timelyCorrection', 'noHarm'] as const;
 export type MinorElementKey = (typeof MINOR_ELEMENT_KEYS)[number];
 
@@ -113,7 +113,7 @@ export const MINOR_ELEMENT_LABELS: Readonly<Record<MinorElementKey, string>> = {
   noHarm: '没有造成危害后果',
 };
 
-/** 三要素中一项：须确认且附说明。 */
+/** 末款三项中一项：须确认且附说明。 */
 export interface MinorElementConfirmation {
   readonly confirmed: true;
   readonly note: string;
@@ -121,8 +121,8 @@ export interface MinorElementConfirmation {
 
 /**
  * 不予立案理由快照（#226 评论 6410041963）：两类互斥必选其一。
- * (a) non-filing-grounds＝不符合立案条件（第 16 条（一）–（五）至少一项）；
- * (b) minor-corrected-no-harm＝轻微＋及时纠正＋无危害后果（三项全确认且每项有说明）。
+ * (a) non-filing-grounds＝不符合立案条件，勾选第十六条（一）–（五）中未满足的项（至少一项）；
+ * (b) minor-corrected-no-harm＝第十六条末款「违法行为轻微并及时纠正，没有造成危害后果」（三项全确认且每项有说明）。
  */
 export type NoCaseReason =
   | {
@@ -151,7 +151,7 @@ function isGroundCode(value: unknown): value is NonFilingGroundCode {
 }
 
 /**
- * 校验不予立案理由（#226）：两类互斥；皆空或混选拒绝；仅勾部分三要素拒绝。
+ * 校验不予立案理由（#226）：两类互斥；皆空或混选拒绝；末款三项仅确认部分拒绝。
  * 接受未知结构的入参，解析为规范快照或拒绝。
  */
 export function checkNoCaseReason(input: unknown): NoCaseReasonCheckOutcome {
