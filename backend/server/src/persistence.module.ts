@@ -27,6 +27,9 @@ import {
   ALL_LAYERS,
   CASE_STORE,
   CLUE_STORE,
+  LIMITATION_DISCOVERY_EXIT_V1,
+  SUSPENSION_CLOCK_PARAMETER,
+  type LimitationDiscoveryExit,
   CLUE_VERIFICATION_PORT,
   STREET_BOUNDARY_PORT,
   createLayerServiceVerificationPort,
@@ -54,6 +57,7 @@ import { PrismaClient, type Prisma } from '../../prisma/generated/prisma/client.
 
 import { AppModule } from './app.module.ts';
 import { FILING_ADMIN_REVIEW } from './case-filing.service.ts';
+import { LIMITATION_DISCOVERY_EXIT, SUSPENSION_CLOCK } from './investigation.service.ts';
 import { CLOCK, type Clock } from './clock.ts';
 import {
   CLUE_VERIFICATION_QUEUE_NAME,
@@ -460,6 +464,8 @@ export interface ApplicationOverrides {
   verificationWorker?: boolean;
   /** 立案呈批行政审核配置（#234）。默认 one-level；测试可传 skip。 */
   filingAdminReview?: 'skip' | 'one-level';
+  /** 追诉时效发现时点到出口的映射（#236）。默认用带版本号的常量。 */
+  limitationDiscoveryExit?: LimitationDiscoveryExit;
 }
 
 /**
@@ -505,6 +511,11 @@ class PersistenceModule {
         {
           provide: FILING_ADMIN_REVIEW,
           useValue: overrides.filingAdminReview ?? 'one-level',
+        },
+        { provide: SUSPENSION_CLOCK, useValue: SUSPENSION_CLOCK_PARAMETER },
+        {
+          provide: LIMITATION_DISCOVERY_EXIT,
+          useValue: overrides.limitationDiscoveryExit ?? LIMITATION_DISCOVERY_EXIT_V1,
         },
         // 存储端口：默认按运行参数建 RustFS 适配；测试可覆写成记录写的假端口。
         { provide: STORAGE_PORT, useValue: overrides.storagePort ?? createDefaultStoragePort() },
@@ -557,6 +568,8 @@ class PersistenceModule {
         CLUE_STORE,
         CASE_STORE,
         FILING_ADMIN_REVIEW,
+        SUSPENSION_CLOCK,
+        LIMITATION_DISCOVERY_EXIT,
         STORAGE_PORT,
         QUEUE_PORT,
         CLUE_VERIFICATION_PORT,

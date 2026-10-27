@@ -58,9 +58,9 @@ describe('迁移表常量', () => {
     }
   });
 
-  it('只启用 T01 与 T02，且已启用的边声明了守卫', () => {
+  it('启用 T01、T02 与调查收尾 T03 至 T07，且已启用的边声明了守卫', () => {
     const enabled = TRANSITIONS.filter((item) => item.enabled).map((item) => item.id);
-    expect(enabled).toEqual(['T01', 'T02']);
+    expect(enabled).toEqual(['T01', 'T02', 'T03', 'T04', 'T05', 'T06', 'T07']);
     for (const item of TRANSITIONS) {
       if (!item.enabled) continue;
       expect(item.guard).not.toBe('none');
@@ -89,6 +89,8 @@ describe('迁移表常量', () => {
     expect(ILLEGAL_MIGRATIONS.map((item) => item.id)).toEqual(
       Array.from({ length: 32 }, (_, index) => `X${String(index + 1).padStart(2, '0')}`),
     );
+    expect(ILLEGAL_MIGRATIONS.find((item) => item.id === 'X02')?.enforcement).toBe('engine');
+    expect(ILLEGAL_MIGRATIONS.find((item) => item.id === 'X03')?.enforcement).toBe('engine');
     expect(ILLEGAL_MIGRATIONS.find((item) => item.id === 'X32')?.enforcement).toBe('none');
     expect(ILLEGAL_MIGRATIONS.find((item) => item.id === 'X31')?.enforcement).toBe('filing');
     expect(X12_WHITELIST.map((item) => item.id)).toEqual(['read', 'export', 'T27', 'post-close-receipt']);
@@ -150,7 +152,7 @@ describe('引擎 409 分支', () => {
   });
 
   it('未启用的边返回 transition-disabled，不产生效果', () => {
-    const decision = decideTransition({ operation: { kind: 'transition', transitionId: 'T03' }, subject: openCase });
+    const decision = decideTransition({ operation: { kind: 'transition', transitionId: 'T08' }, subject: openCase });
     expect(decision.ok).toBe(false);
     if (decision.ok || decision.level !== 'block') throw new Error('应为阻断');
     expect(decision.reason).toBe('transition-disabled');
@@ -233,6 +235,78 @@ describe('引擎 409 分支', () => {
     if (warned.ok || warned.level === 'block') throw new Error('应为警告');
     expect(warned.level).toBe('warn');
     expect(warned.httpStatus).toBe(200);
+  });
+
+  it('中止期间 T08 返回 X02，即使该边未启用；已中止再办 T03 是起点不符', () => {
+    const blocked = decideTransition({
+      operation: { kind: 'transition', transitionId: 'T08' },
+      subject: subject({ ...openCase, suspended: true }),
+    });
+    expect(blocked.ok).toBe(false);
+    if (blocked.ok || blocked.level !== 'block') throw new Error('应为阻断');
+    expect(blocked.reason).toBe('X02');
+    expect(blocked.citation).toBe('办法第27条（推定）');
+
+    const again = decideTransition({
+      operation: { kind: 'transition', transitionId: 'T03' },
+      subject: subject({ ...openCase, suspended: true }),
+    });
+    expect(again.ok).toBe(false);
+    if (again.ok || again.level !== 'block') throw new Error('应为阻断');
+    expect(again.reason).toBe('invalid-state');
+  });
+
+  it('待收尾时除 T06、T07 外，X03 降为警告；T06 进入已撤案并去掉中止标记', () => {
+    const blocked = decideTransition({
+      operation: { kind: 'transition', transitionId: 'T08' },
+      subject: subject({ ...openCase, mainStatus: 'terminated_pending', suspended: true }),
+    });
+    expect(blocked.ok).toBe(false);
+    if (blocked.ok || blocked.level === 'block') throw new Error('X03 应为警告');
+    expect(blocked.level).toBe('warn');
+    expect(blocked.httpStatus).toBe(200);
+    expect(blocked.reason).toBe('X03');
+    expect('effects' in blocked).toBe(false);
+
+    const chain = decideTransition({
+      operation: { kind: 'open-approval-chain', chainKind: 'suspend' },
+      subject: subject({ ...openCase, mainStatus: 'terminated_pending' }),
+    });
+    expect(chain.ok).toBe(false);
+    if (chain.ok || chain.level === 'block') throw new Error('X03 应为警告');
+    expect(chain.level).toBe('warn');
+    expect(chain.httpStatus).toBe(200);
+    expect(chain.reason).toBe('X03');
+
+    const withdraw = decideTransition({
+      operation: { kind: 'transition', transitionId: 'T06' },
+      subject: subject({ ...openCase, mainStatus: 'terminated_pending', suspended: true }),
+    });
+    expect(withdraw.ok).toBe(true);
+    if (!withdraw.ok) throw new Error('应成功');
+    expect(withdraw.effects.mainStatus).toBe('withdrawn');
+    expect(withdraw.effects.suspended).toBe(false);
+  });
+
+  it('T03 加上中止标记，T04 去掉标记，主状态仍是办理中', () => {
+    const suspended = decideTransition({
+      operation: { kind: 'transition', transitionId: 'T03' },
+      subject: openCase,
+    });
+    expect(suspended.ok).toBe(true);
+    if (!suspended.ok) throw new Error('应成功');
+    expect(suspended.effects.suspended).toBe(true);
+    expect(suspended.effects.mainStatus).toBe('in_progress');
+    expect(suspended.effects.currentStage).toBe('E02');
+
+    const resumed = decideTransition({
+      operation: { kind: 'transition', transitionId: 'T04' },
+      subject: subject({ ...openCase, suspended: true }),
+    });
+    expect(resumed.ok).toBe(true);
+    if (!resumed.ok) throw new Error('应成功');
+    expect(resumed.effects.suspended).toBe(false);
+    expect(resumed.effects.mainStatus).toBe('in_progress');
   });
 
   it('阅读终态案件不被 X12 挡住', () => {
