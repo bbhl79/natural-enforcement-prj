@@ -8,6 +8,7 @@ import {
   requiredDeciderSeat,
   signingPaused,
   statusAfterDecision,
+  transitionalDeciderSeats,
   type ConflictEventFact,
 } from '../src/conflict/index.ts';
 
@@ -119,5 +120,49 @@ describe('决定人两级', () => {
     })).toBe(false);
     expect(statusAfterDecision('recuse')).toBe('effective');
     expect(statusAfterDecision('reject')).toBe('rejected');
+  });
+});
+
+describe('决定人身份过渡映射', () => {
+  const handling = 'station';
+  const path = ['hq', 'dept', handling];
+
+  it('任职等于承办机构的行政审批是承办机构负责人', () => {
+    expect(transitionalDeciderSeats({
+      roles: ['行政审批'],
+      orgUnitId: handling,
+      handlingOrgId: handling,
+      orgPathToRoot: path,
+    })).toEqual({ isHandlingOrgHead: true, isCompetentAuthorityHead: false });
+  });
+
+  it('上级路径上的行政审批是自然资源主管部门负责人', () => {
+    expect(transitionalDeciderSeats({
+      roles: ['行政审批'],
+      orgUnitId: 'hq',
+      handlingOrgId: handling,
+      orgPathToRoot: path,
+    })).toEqual({ isHandlingOrgHead: false, isCompetentAuthorityHead: true });
+  });
+
+  it('没有行政审批，或任职不在路径上，两级都不是', () => {
+    expect(transitionalDeciderSeats({
+      roles: ['经办'],
+      orgUnitId: handling,
+      handlingOrgId: handling,
+      orgPathToRoot: path,
+    })).toEqual({ isHandlingOrgHead: false, isCompetentAuthorityHead: false });
+    expect(transitionalDeciderSeats({
+      roles: ['行政审批'],
+      orgUnitId: 'other',
+      handlingOrgId: handling,
+      orgPathToRoot: path,
+    })).toEqual({ isHandlingOrgHead: false, isCompetentAuthorityHead: false });
+    expect(transitionalDeciderSeats({
+      roles: ['行政审批'],
+      orgUnitId: null,
+      handlingOrgId: handling,
+      orgPathToRoot: path,
+    })).toEqual({ isHandlingOrgHead: false, isCompetentAuthorityHead: false });
   });
 });

@@ -1,13 +1,8 @@
 // 人员层利害关系与回避（#237）。
 // 过渡：登记声明、调查继续登记复用 doc.draft；回避决定复用 doc.approve。不新增操作码。
 // 正式码（草案 case.conflict.mark）待 #230／#71 回写后迁入。
-//
-// 决定人两级的身份是过渡映射，不是新岗位：
-// #105 岗位只有法制审核两项，不能表示规程 2.7 的两级负责人。
-// doc.approve 只授给行政审批。本票不新增岗位、不改允许行。
-// 持有行政审批且当前任职机构等于承办机构的人，当作承办机构负责人。
-// 持有行政审批且当前任职机构在承办机构的上级路径上的人，当作自然资源主管部门负责人。
-// 这一映射与规程用语可能不一致，PR 列为风险。
+// 决定人两级：过渡映射，待岗位模型能区分两级负责人后替换。
+// 替换点只有 transitionalDeciderSeats。本文件只取人员事实。
 
 import { Inject, Injectable } from '@nestjs/common';
 import {
@@ -33,6 +28,7 @@ import {
   isSignKind,
   latestConflictEvents,
   statusAfterDecision,
+  transitionalDeciderSeats,
   type CaseStore,
   type ConflictEventFact,
   type ConflictSource,
@@ -56,11 +52,6 @@ const DECLARE_OPCODE = 'doc.draft';
 /** 过渡操作码。回避决定。 */
 const DECIDE_OPCODE = 'doc.approve';
 const READ_OPCODE = 'case.read';
-
-/**
- * 过渡席位所用角色。只用来识别两级决定人，不表示规程已经把「负责人」定成这个角色名。
- */
-const DECIDE_ROLE = '行政审批';
 
 const HANDLER_ROLES = new Set(['main', 'assist']);
 
@@ -421,26 +412,20 @@ export class CaseConflictService {
     };
   }
 
-  /**
-   * 过渡席位。行政审批且任职等于承办机构＝承办机构负责人。
-   * 行政审批且任职在上级路径上＝自然资源主管部门负责人。
-   */
+  /** 只取人员事实。过渡映射，待岗位模型能区分两级负责人后替换。替换点只有 transitionalDeciderSeats。 */
   private async seatsOf(personId: string, handlingOrgId: string): Promise<{
     readonly isHandlingOrgHead: boolean;
     readonly isCompetentAuthorityHead: boolean;
   }> {
     const account = await this.directory.findById(personId);
-    if (!account?.orgUnitId || !account.roles.includes(DECIDE_ROLE)) {
-      return { isHandlingOrgHead: false, isCompetentAuthorityHead: false };
-    }
-    if (account.orgUnitId === handlingOrgId) {
-      return { isHandlingOrgHead: true, isCompetentAuthorityHead: false };
-    }
-    const path = await this.identity.findOrgUnitPathToRoot(handlingOrgId);
-    return {
-      isHandlingOrgHead: false,
-      isCompetentAuthorityHead: path.includes(account.orgUnitId),
-    };
+    const orgUnitId = account?.orgUnitId ?? null;
+    const orgPathToRoot = orgUnitId == null ? [] : await this.identity.findOrgUnitPathToRoot(handlingOrgId);
+    return transitionalDeciderSeats({
+      roles: account?.roles ?? [],
+      orgUnitId,
+      handlingOrgId,
+      orgPathToRoot,
+    });
   }
 
   private isHandler(

@@ -450,8 +450,12 @@ export {
   requiredDeciderSeat,
   signingPaused,
   statusAfterDecision,
+  TRANSITIONAL_DECIDER_ROLE,
+  transitionalDeciderSeats,
 } from './conflict/index.ts';
 export type {
+  TransitionalDeciderFacts,
+  TransitionalDeciderSeats,
   ActiveConflictStatus,
   ConflictEventFact,
   ConflictSource,

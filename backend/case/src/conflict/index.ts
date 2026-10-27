@@ -27,6 +27,8 @@ export {
   signingPaused,
   statusAfterDecision,
 } from './rules.ts';
+export { TRANSITIONAL_DECIDER_ROLE, transitionalDeciderSeats } from './transitional-decider-seat.ts';
+export type { TransitionalDeciderFacts, TransitionalDeciderSeats } from './transitional-decider-seat.ts';
 export type {
   ActiveConflictStatus,
   ConflictEventFact,
