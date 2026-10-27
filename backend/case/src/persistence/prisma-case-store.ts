@@ -4,6 +4,7 @@
 
 import type { Prisma, PrismaClient } from '../../../prisma/generated/prisma/client.ts';
 
+import type { ComparisonBasis, ComparisonBenchmark } from '../comparison/rules.ts';
 import type { CaseOpening } from '../filing/rules.ts';
 import type {
   ApprovalChainWrite,
@@ -13,6 +14,9 @@ import type {
   CaseRow,
   CaseStageSignatureRow,
   CaseStore,
+  CaseReassignmentApprovalWrite,
+  CaseReassignmentRow,
+  CaseReassignmentWrite,
   CaseView,
   CalendarInstallRow,
   CalendarInstallWrite,
@@ -25,6 +29,12 @@ import type {
   DeadlineStepWrite,
   PeriodEventRow,
   PeriodEventWrite,
+  ComparisonJudgmentRow,
+  ComparisonJudgmentWrite,
+  HandlerReplacementWrite,
+  HandlerStintRow,
+  MaterialEffectivenessRow,
+  MaterialEffectivenessWrite,
   FilingApprovalRow,
   FilingApprovalStepRow,
   FilingApprovalVersionRow,
@@ -529,6 +539,81 @@ export class PrismaCaseStore implements CaseStore {
     await this.prisma.caseInvestigationEntry.create({ data: { ...write } });
   }
 
+  async listReassignments(caseId: string): Promise<readonly CaseReassignmentRow[]> {
+    return this.prisma.caseReassignment.findMany({
+      where: { caseId },
+      orderBy: [{ requestedAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async readReassignment(reassignmentId: string): Promise<CaseReassignmentRow | null> {
+    return this.prisma.caseReassignment.findUnique({ where: { id: reassignmentId } });
+  }
+
+  async insertReassignment(write: CaseReassignmentWrite): Promise<boolean> {
+    try {
+      await this.prisma.caseReassignment.create({ data: { ...write, status: 'pending_approval' } });
+    } catch (error) {
+      if (isUniqueConflict(error)) return false;
+      throw error;
+    }
+    return true;
+  }
+
+  async approveReassignment(write: CaseReassignmentApprovalWrite): Promise<boolean> {
+    const updated = await this.prisma.caseReassignment.updateMany({
+      where: { id: write.id, caseId: write.caseId, status: 'pending_approval' },
+      data: { status: 'approved', approvedBy: write.approvedBy, approvedAt: write.approvedAt },
+    });
+    return updated.count === 1;
+  }
+
+  async listHandlerStints(caseId: string): Promise<readonly HandlerStintRow[]> {
+    return this.prisma.caseHandler.findMany({
+      where: { caseId },
+      orderBy: [{ assignedAt: 'asc' }, { id: 'asc' }],
+      select: { id: true, personnelId: true, role: true, assignedAt: true, endedAt: true },
+    });
+  }
+
+  async replaceHandlers(write: HandlerReplacementWrite): Promise<void> {
+    await this.prisma.caseHandler.updateMany({
+      where: { caseId: write.caseId, endedAt: null },
+      data: { endedAt: write.endedAt },
+    });
+    if (write.next.length === 0) return;
+    await this.prisma.caseHandler.createMany({
+      data: write.next.map((row) => ({
+        id: row.id,
+        caseId: write.caseId,
+        personnelId: row.personnelId,
+        role: row.role,
+        assignedAt: write.endedAt,
+      })),
+    });
+  }
+
+  async listMaterialEffectiveness(caseId: string): Promise<readonly MaterialEffectivenessRow[]> {
+    return this.prisma.caseMaterialEffectiveness.findMany({
+      where: { caseId },
+      orderBy: [{ determinedAt: 'asc' }, { id: 'asc' }],
+      select: {
+        id: true,
+        caseId: true,
+        materialId: true,
+        reassignmentId: true,
+        conclusion: true,
+        reason: true,
+        determinedBy: true,
+        determinedAt: true,
+      },
+    });
+  }
+
+  async insertMaterialEffectiveness(write: MaterialEffectivenessWrite): Promise<void> {
+    await this.prisma.caseMaterialEffectiveness.create({ data: { ...write } });
+  }
+
   async listAgencyConflictMarks(caseId: string): Promise<readonly AgencyConflictMarkRow[]> {
     return this.prisma.caseAgencyConflict.findMany({
       where: { caseId },
@@ -595,6 +680,48 @@ export class PrismaCaseStore implements CaseStore {
       data: { status: 'voided', voidReason: write.reason, voidedBy: write.actorId, voidedAt: write.at },
     });
     return updated.count === 1;
+  }
+
+  async listComparisonJudgments(caseId: string): Promise<readonly ComparisonJudgmentRow[]> {
+    const rows = await this.prisma.caseComparisonJudgment.findMany({
+      where: { caseId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      caseId: row.caseId,
+      violationRecordId: row.violationRecordId,
+      behaviorBases: parseComparisonBases(row.behaviorBasesJson),
+      decisionBases: parseComparisonBases(row.decisionBasesJson),
+      behaviorBenchmarks: parseComparisonBenchmarks(row.behaviorBenchmarksJson),
+      decisionBenchmarks: parseComparisonBenchmarks(row.decisionBenchmarksJson),
+      adoptedVersion: row.adoptedVersion,
+      reason: row.reason,
+      noticeRef: row.noticeRef,
+      zeroDifference: row.zeroDifference,
+      createdBy: row.createdBy,
+      createdAt: row.createdAt,
+    }));
+  }
+
+  async insertComparisonJudgment(write: ComparisonJudgmentWrite): Promise<void> {
+    await this.prisma.caseComparisonJudgment.create({
+      data: {
+        id: write.id,
+        caseId: write.caseId,
+        violationRecordId: write.violationRecordId,
+        behaviorBasesJson: JSON.stringify(write.behaviorBases),
+        decisionBasesJson: JSON.stringify(write.decisionBases),
+        behaviorBenchmarksJson: JSON.stringify(write.behaviorBenchmarks),
+        decisionBenchmarksJson: JSON.stringify(write.decisionBenchmarks),
+        adoptedVersion: write.adoptedVersion,
+        reason: write.reason,
+        noticeRef: write.noticeRef,
+        zeroDifference: write.zeroDifference,
+        createdBy: write.createdBy,
+        createdAt: write.createdAt,
+      },
+    });
   }
 
   async listInquiryRecords(caseId: string): Promise<readonly InquiryRecordRow[]> {
@@ -1129,6 +1256,14 @@ function toDeadlineRow(row: {
     calendarVersion: row.calendarVersion,
     clamped: row.clamped,
   };
+}
+
+function parseComparisonBases(value: string): ComparisonBasis[] {
+  return JSON.parse(value) as ComparisonBasis[];
+}
+
+function parseComparisonBenchmarks(value: string): ComparisonBenchmark[] {
+  return JSON.parse(value) as ComparisonBenchmark[];
 }
 
 function isUniqueConflict(error: unknown): boolean {

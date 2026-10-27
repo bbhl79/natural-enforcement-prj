@@ -253,11 +253,12 @@ describe('#211 线索登记', () => {
   it('公共层或来源层阻断项缺失：400 + 失败留痕，业务行不变，存储零写入', async () => {
     const before = await cloned.prisma.clue.count();
     const values = { ...BASE_VALUES };
-    delete (values as Record<string, string>)['clue.finder'];
+    // #257：clue.finder 等来源层键降为警告，改用仍为阻断的公共层键。
+    delete (values as Record<string, string>)['clue.narrative'];
     const result = await register({ values });
     expect(result.status).toBe(400);
     expect(result.body.result).toBe('non-compliant');
-    expect(result.body.rules ?? []).toContain('clue.finder');
+    expect(result.body.rules ?? []).toContain('clue.narrative');
     expect(await cloned.prisma.clue.count()).toBe(before);
     expect(storage.writes).toHaveLength(0);
     const failed = (await trailOf('clue.registered')).filter((row) => row.outcome === 'failed');

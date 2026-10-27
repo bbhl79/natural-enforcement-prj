@@ -18,6 +18,7 @@ export {
   gapKeys,
   itemApplies,
   layerOf,
+  missingRequiredItems,
 } from './gaps.ts';
 export type { GapAssessmentInput } from './gaps.ts';
 export { ALLOWED_INPUT_SRID, parseSpatialSource } from './geometry.ts';

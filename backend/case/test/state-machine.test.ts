@@ -10,8 +10,11 @@ import {
   TRANSITIONS,
   TRANSITION_GUARDS,
   X12_WHITELIST,
+  X03_WARN_MESSAGE,
   buildTransitionEffects,
+  confirmationGap,
   decideTransition,
+  findRuleParameter,
   findTransition,
   isX12Whitelisted,
   matchesFrom,
@@ -58,9 +61,9 @@ describe('迁移表常量', () => {
     }
   });
 
-  it('启用 T01、T02、调查收尾 T03 至 T07 与 T34，且已启用的边声明了守卫', () => {
+  it('启用 T01、T02、调查收尾 T03 至 T07、改派 T33 与 T34，且已启用的边声明了守卫', () => {
     const enabled = TRANSITIONS.filter((item) => item.enabled).map((item) => item.id);
-    expect(enabled).toEqual(['T01', 'T02', 'T03', 'T04', 'T05', 'T06', 'T07', 'T34']);
+    expect(enabled).toEqual(['T01', 'T02', 'T03', 'T04', 'T05', 'T06', 'T07', 'T33', 'T34']);
     for (const item of TRANSITIONS) {
       if (!item.enabled) continue;
       expect(item.guard).not.toBe('none');
@@ -441,5 +444,180 @@ describe('依据层级与 USER LOCK（#255）', () => {
     if (open.ok || open.level === 'block') throw new Error('同条无 userLock 应为警告');
     expect(open.level).toBe('warn');
     expect(open.httpStatus).toBe(200);
+  });
+});
+
+describe('两段式确认与规则键（#258）', () => {
+  const ready = subject({ clueStatus: 'handler_assigned' });
+  const pending = subject({
+    caseId: 'case-1',
+    mainStatus: 'terminated_pending',
+    stage: 'E02',
+    stageEntrySeq: 1,
+    suspended: false,
+    handlingOrgId: 'org-1',
+  });
+  const x03 = {
+    level: 'warn' as const,
+    code: 'X03',
+    message: X03_WARN_MESSAGE,
+    authority: 'normative' as const,
+    citation: '规程 4.3.3(4)',
+  };
+
+  it('注册表只登记 X03 与 CMP-01 的参数，不登记其他业务票的警告规则', () => {
+    expect(findRuleParameter('X03')).toMatchObject({
+      ruleKey: 'X03',
+      version: '1',
+      level: 'warn',
+      reasonRequired: false,
+    });
+    expect(findRuleParameter('X10')).toBeNull();
+    expect(findRuleParameter('X22')).toBeNull();
+    expect(findRuleParameter('X26')).toBeNull();
+    expect(findRuleParameter('X07')).toBeNull();
+    expect(findRuleParameter('X16')).toBeNull();
+  });
+
+  it('理由必填按规则标注；未登记的确认键先被拒绝', () => {
+    const registry = [
+      { ruleKey: 'R-NEED', version: '1', level: 'warn' as const, message: '要理由', citation: null, reasonRequired: true },
+      { ruleKey: 'R-FREE', version: '1', level: 'warn' as const, message: '免理由', citation: null, reasonRequired: false },
+    ];
+    expect(confirmationGap({
+      warnRuleKeys: ['R-NEED'],
+      confirmedRuleKeys: ['R-NEED'],
+      confirmReasons: {},
+      registry,
+    })).toEqual({ kind: 'reason', ruleKey: 'R-NEED' });
+    expect(confirmationGap({
+      warnRuleKeys: ['R-FREE'],
+      confirmedRuleKeys: ['R-FREE'],
+      confirmReasons: {},
+      registry,
+    })).toEqual({ kind: 'ready' });
+    expect(confirmationGap({
+      warnRuleKeys: ['X03'],
+      confirmedRuleKeys: ['NO-SUCH'],
+      confirmReasons: {},
+    })).toEqual({ kind: 'unknown', ruleKey: 'NO-SUCH' });
+    expect(confirmationGap({
+      warnRuleKeys: ['X03', 'X10'],
+      confirmedRuleKeys: ['X03'],
+      confirmReasons: {},
+    })).toEqual({ kind: 'hold' });
+  });
+
+  it('首次命中 warn 返回 warnings 且无效果；确认已登记键后才执行', () => {
+    const first = decideTransition({
+      operation: { kind: 'transition', transitionId: 'T01' },
+      subject: ready,
+      advisories: [x03],
+    });
+    expect(first.ok).toBe(false);
+    if (first.ok || first.httpStatus !== 200) throw new Error('首次应为警告');
+    expect(first.warnings).toEqual([
+      { level: 'warn', code: 'X03', message: X03_WARN_MESSAGE, citation: '规程 4.3.3(4)', ruleKey: 'X03' },
+    ]);
+    expect('effects' in first).toBe(false);
+
+    const again = decideTransition({
+      operation: { kind: 'transition', transitionId: 'T01' },
+      subject: ready,
+      advisories: [x03],
+      confirmedRuleKeys: ['X03'],
+    });
+    expect(again.ok).toBe(true);
+    if (!again.ok) throw new Error('确认后应执行');
+    expect(again.effects.kind).toBe('open-case');
+    expect(again.confirmation?.ruleKeys).toEqual([{ ruleKey: 'X03', version: '1' }]);
+    expect(again.confirmation?.warnings).toEqual(first.warnings);
+  });
+
+  it('只确认其中一部分 warn 时仍不执行；未知确认键返回 400', () => {
+    const partial = decideTransition({
+      operation: { kind: 'transition', transitionId: 'T01' },
+      subject: ready,
+      advisories: [x03, { level: 'warn', code: 'X10', message: '另一条', authority: 'normative' }],
+      confirmedRuleKeys: ['X03'],
+    });
+    expect(partial.ok).toBe(false);
+    if (partial.ok || partial.httpStatus !== 200) throw new Error('未齐应为警告');
+    expect(partial.warnings.map((item) => item.ruleKey)).toEqual(['X03', 'X10']);
+
+    const unknown = decideTransition({
+      operation: { kind: 'transition', transitionId: 'T01' },
+      subject: ready,
+      confirmedRuleKeys: ['NO-SUCH'],
+    });
+    expect(unknown.ok).toBe(false);
+    if (unknown.ok || unknown.httpStatus !== 400) throw new Error('未知键应为 400');
+    expect(unknown.reason).toBe('unknown-rule-key');
+    expect(unknown.ruleKey).toBe('NO-SUCH');
+  });
+
+  it('hint 不要求确认，也不放行执行', () => {
+    const hinted = decideTransition({
+      operation: { kind: 'transition', transitionId: 'T01' },
+      subject: ready,
+      advisories: [{ level: 'hint', code: 'HINT-1', message: '只记命中', authority: 'internal' }],
+      confirmedRuleKeys: ['X03'],
+    });
+    expect(hinted.ok).toBe(false);
+    if (hinted.ok || hinted.httpStatus !== 200) throw new Error('hint 应保持 200');
+    expect(hinted.level).toBe('hint');
+    expect('effects' in hinted).toBe(false);
+  });
+
+  it('待收尾的 X03 确认后才放行已启用的开链；未启用边确认后仍是 transition-disabled', () => {
+    const held = decideTransition({
+      operation: { kind: 'open-approval-chain', chainKind: 'suspend' },
+      subject: pending,
+    });
+    expect(held.ok).toBe(false);
+    if (held.ok || held.level === 'block') throw new Error('X03 应为警告');
+    expect(held.httpStatus).toBe(200);
+    expect(held.reason).toBe('X03');
+
+    const opened = decideTransition({
+      operation: { kind: 'open-approval-chain', chainKind: 'suspend' },
+      subject: pending,
+      confirmedRuleKeys: ['X03'],
+    });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) throw new Error('确认后应可开链');
+    expect(opened.effects.kind).toBe('open-chain');
+    expect(opened.confirmation?.ruleKeys).toEqual([{ ruleKey: 'X03', version: '1' }]);
+
+    const disabled = decideTransition({
+      operation: { kind: 'transition', transitionId: 'T08' },
+      subject: pending,
+      confirmedRuleKeys: ['X03'],
+    });
+    expect(disabled.ok).toBe(false);
+    if (disabled.ok || disabled.level !== 'block') throw new Error('未启用边仍应阻断');
+    expect(disabled.reason).toBe('transition-disabled');
+  });
+
+  it('USER LOCK 的 X07、X16 带确认键重提仍是 409', () => {
+    for (const code of ['X07', 'X16'] as const) {
+      const row = ILLEGAL_MIGRATIONS.find((item) => item.id === code);
+      const decision = decideTransition({
+        operation: { kind: 'transition', transitionId: 'T01' },
+        subject: ready,
+        advisories: [{
+          level: 'block',
+          code,
+          message: row?.summary ?? code,
+          authority: 'normative',
+          userLock: row?.userLock,
+        }],
+        confirmedRuleKeys: [code, 'NO-SUCH'],
+      });
+      expect(decision.ok).toBe(false);
+      if (decision.ok || decision.level !== 'block') throw new Error(`${code} 不得被确认绕过`);
+      expect(decision.httpStatus).toBe(409);
+      expect(decision.reason).toBe(code);
+    }
   });
 });

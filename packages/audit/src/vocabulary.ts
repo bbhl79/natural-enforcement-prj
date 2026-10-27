@@ -76,6 +76,8 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'case.opened',
   // 案件状态机（#235）：成功推进、只读警告与被拒都记这一动作。
   'case.transitioned',
+  // 两段式确认（#258）：确认成功后只追加。不改业务行的首次警告仍走原动作的失败留痕。
+  'case.rule-confirmed',
   // 人员层利害关系（#237）。登记声明、回避决定、调查继续登记。签出被拒只记失败。
   // 机关层勾选（#263）复用 case.conflict-declared，不另增留痕动作。
   'case.conflict-declared',
@@ -99,6 +101,12 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'deadline.reviewed',
   'deadline.approved',
   'deadline.recorded',
+  // 新旧比对判定（#271）：录入成功。拒绝走 case.comparison-refused。
+  'case.comparison-recorded',
+  // 改派呈批与材料效力认定（#239）。发起、批准、逐件认定各记一行。
+  'case.reassignment-submitted',
+  'case.reassignment-approved',
+  'case.material-effectivity-recorded',
 ] as const;
 
 /**
@@ -110,6 +118,8 @@ export type PasswordRejectedReason = (typeof PASSWORD_REJECTED_REASONS)[number];
 
 export const AUDIT_ACTIONS = [
   ...AUDIT_SUCCEEDED_ACTIONS,
+  // 新旧比对判定被拒（#271）：只记失败。比对过时、缺判定、材料不合规。
+  'case.comparison-refused',
   // 人员层签出被拒（#237）：只记失败。
   'case.sign-refused',
   // 口令被拒（ADR 0015，#132）：只记失败。
@@ -590,10 +600,12 @@ export type CaseFilingDraftedFailedReason = (typeof CASE_FILING_DRAFTED_FAILED_R
  */
 export const CASE_FILING_SUBMITTED_FAILED_REASONS = [
   'party-unknown',
+  'missing-required-items',
   'invalid-conclusion',
   'invalid-no-case-reason',
   'invalid-state',
   'concurrent-change',
+  'advisory',
 ] as const;
 export type CaseFilingSubmittedFailedReason = (typeof CASE_FILING_SUBMITTED_FAILED_REASONS)[number];
 
@@ -609,6 +621,7 @@ export type CaseFilingReviewedFailedReason = (typeof CASE_FILING_REVIEWED_FAILED
 export const CASE_FILING_APPROVED_FAILED_REASONS = [
   'handlers-not-qualified',
   'party-unknown',
+  'missing-required-items',
   'invalid-conclusion',
   'invalid-no-case-reason',
   'invalid-state',
@@ -777,6 +790,80 @@ export const CASE_DEADLINE_ACTIONS = [
 ] as const;
 export type CaseDeadlineAction = (typeof CASE_DEADLINE_ACTIONS)[number];
 
+/** 新旧比对判定被拒（#271）。提交缺判定、批准比对过时、材料不合规共用这一张原因表。 */
+export const CASE_COMPARISON_FAILED_REASONS = [
+  'missing-judgment',
+  'comparison-stale',
+  'invalid-input',
+] as const;
+export type CaseComparisonFailedReason = (typeof CASE_COMPARISON_FAILED_REASONS)[number];
+/**
+ * 改派呈批发起被拒（#239）。missing-reason 原因空或不在封闭集；missing-reason-note 其他原因缺说明；
+ * invalid-proposal 名单形态不合规；not-handler-or-clerk 发起人既非承办人又非 N5 内勤；
+ * conflict-decision-required 回避原因未引用回避决定；conflict-decision-not-effective 引用的决定不是生效回避；
+ * handler-not-eligible 拟任人员已停用或不持经办；handler-out-of-scope 拟任人员不在承办机构子树；
+ * X14 人数不足或缺执法资格。其余为引擎守卫与并发。
+ */
+export const CASE_REASSIGNMENT_SUBMITTED_FAILED_REASONS = [
+  'missing-reason',
+  'missing-reason-note',
+  'invalid-proposal',
+  'not-handler-or-clerk',
+  'conflict-decision-required',
+  'conflict-decision-not-effective',
+  'handler-not-eligible',
+  'handler-out-of-scope',
+  'X14',
+  'X03',
+  'X12',
+  'X13',
+  'X17',
+  'X18',
+  'transition-disabled',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type CaseReassignmentSubmittedFailedReason =
+  (typeof CASE_REASSIGNMENT_SUBMITTED_FAILED_REASONS)[number];
+
+/**
+ * 改派呈批批准被拒（#239）。invalid-state 不在待批准；conflict-decider-mismatch 批准人与回避决定人不一致；
+ * 其余同发起侧的名单、决定与引擎守卫。
+ */
+export const CASE_REASSIGNMENT_APPROVED_FAILED_REASONS = [
+  'invalid-state',
+  'conflict-decision-required',
+  'conflict-decision-not-effective',
+  'conflict-decider-mismatch',
+  'handler-not-eligible',
+  'handler-out-of-scope',
+  'X14',
+  'X03',
+  'X12',
+  'X13',
+  'X17',
+  'X18',
+  'transition-disabled',
+  'concurrent-change',
+] as const;
+export type CaseReassignmentApprovedFailedReason =
+  (typeof CASE_REASSIGNMENT_APPROVED_FAILED_REASONS)[number];
+
+/**
+ * 材料效力认定被拒（#239）。missing-reason 理由为空；invalid-conclusion 结论不在三值；
+ * unknown-material 材料不属本案；not-main-handler 不是当前主办；invalid-state 没有生效的回避改派。
+ */
+export const CASE_MATERIAL_EFFECTIVITY_FAILED_REASONS = [
+  'missing-reason',
+  'invalid-conclusion',
+  'unknown-material',
+  'not-main-handler',
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type CaseMaterialEffectivityFailedReason =
+  (typeof CASE_MATERIAL_EFFECTIVITY_FAILED_REASONS)[number];
+
 export const CASE_INVESTIGATION_ACTIONS = [
   'case.inquiry-recorded',
   'case.violation-recorded',
@@ -827,6 +914,7 @@ export const AUDIT_DETAIL_ACTIONS = [
   'case.filing-withdrawn',
   'case.opened',
   'case.transitioned',
+  'case.rule-confirmed',
   'case.conflict-declared',
   'case.conflict-decided',
   'case.investigation-recorded',
@@ -846,5 +934,11 @@ export const AUDIT_DETAIL_ACTIONS = [
   'deadline.reviewed',
   'deadline.approved',
   'deadline.recorded',
+  'case.comparison-recorded',
+  'case.comparison-refused',
+  // 改派呈批与材料效力认定（#239）：改派原因、原／新承办人员、认定结论与材料。
+  'case.reassignment-submitted',
+  'case.reassignment-approved',
+  'case.material-effectivity-recorded',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];

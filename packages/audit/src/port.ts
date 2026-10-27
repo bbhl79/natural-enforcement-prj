@@ -1,6 +1,7 @@
 import type {
   AccountMaintenanceFailedReason,
   AuditTargetOrgBasis,
+  CaseComparisonFailedReason,
   CaseConflictDecidedFailedReason,
   CaseConflictDeclaredFailedReason,
   CaseFilingApprovedFailedReason,
@@ -15,6 +16,9 @@ import type {
   CaseDeadlineFailedReason,
   CaseInvestigationAction,
   CaseInvestigationFailedReason,
+  CaseMaterialEffectivityFailedReason,
+  CaseReassignmentApprovedFailedReason,
+  CaseReassignmentSubmittedFailedReason,
   CaseOpenedFailedReason,
   CaseReturnedFailedReason,
   CaseTransitionedFailedReason,
@@ -286,6 +290,7 @@ export type AuditAppend =
   | (AuditParties & { action: 'case.opened'; outcome: 'failed'; reason: CaseOpenedFailedReason })
   | (AuditParties & { action: 'case.transitioned' })
   | (AuditParties & { action: 'case.transitioned'; outcome: 'failed'; reason: CaseTransitionedFailedReason })
+  | (AuditParties & { action: 'case.rule-confirmed' })
   | (AuditParties & { action: 'case.conflict-declared' })
   | (AuditParties & { action: 'case.conflict-declared'; outcome: 'failed'; reason: CaseConflictDeclaredFailedReason })
   | (AuditParties & { action: 'case.conflict-decided' })
@@ -296,6 +301,8 @@ export type AuditAppend =
       outcome: 'failed';
       reason: CaseInvestigationRecordedFailedReason;
     })
+  | (AuditParties & { action: 'case.comparison-recorded' })
+  | (AuditParties & { action: 'case.comparison-refused'; reason: CaseComparisonFailedReason })
   | (AuditParties & { action: 'case.sign-refused'; reason: CaseSignRefusedReason })
   | (AuditParties & { action: 'case.returned' })
   | (AuditParties & { action: 'case.returned'; outcome: 'failed'; reason: CaseReturnedFailedReason })
@@ -303,6 +310,25 @@ export type AuditAppend =
   | (AuditParties & { action: CaseInvestigationAction; outcome: 'failed'; reason: CaseInvestigationFailedReason })
   | (AuditParties & { action: CaseDeadlineAction })
   | (AuditParties & { action: CaseDeadlineAction; outcome: 'failed'; reason: CaseDeadlineFailedReason })
+  // 改派呈批与材料效力认定（#239）。
+  | (AuditParties & { action: 'case.reassignment-submitted' })
+  | (AuditParties & {
+    action: 'case.reassignment-submitted';
+    outcome: 'failed';
+    reason: CaseReassignmentSubmittedFailedReason;
+  })
+  | (AuditParties & { action: 'case.reassignment-approved' })
+  | (AuditParties & {
+    action: 'case.reassignment-approved';
+    outcome: 'failed';
+    reason: CaseReassignmentApprovedFailedReason;
+  })
+  | (AuditParties & { action: 'case.material-effectivity-recorded' })
+  | (AuditParties & {
+    action: 'case.material-effectivity-recorded';
+    outcome: 'failed';
+    reason: CaseMaterialEffectivityFailedReason;
+  })
 ;
 
 /**

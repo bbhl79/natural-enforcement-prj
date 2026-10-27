@@ -4,6 +4,8 @@
 // #255：映射 409 之前看 authority 与 userLock。userLock 非空保持 block。
 // law、regulation、system 为 block。normative、internal 降为 warn，不产生效果。
 // 阻断不写业务行。警告与提示同样不写业务行，只留给调用方落失败留痕。
+// #258：warn 走两段式。确认键盖住全部 warn 后才继续后面的判定。
+// block 与 userLock 不因确认键放行。keepsBlock 与 authority 映射不在本段改动。
 
 import {
   CASE_SUPERVISION_ROLE,
@@ -20,6 +22,16 @@ import {
   type TransitionEdge,
 } from './catalog.ts';
 import type { GuardResult } from './guard.ts';
+import {
+  confirmationGap,
+  ruleRefsFor,
+  toWarning,
+  type RuleConfirmation,
+  type WarningItem,
+} from './rule-registry.ts';
+
+/** 引擎自己写出的 X03 文案。调用方预览同一条时用这一句，避免另写一份。 */
+export const X03_WARN_MESSAGE = '待收尾状态下只能撤案或结案';
 
 export interface StageInstanceFact {
   readonly stage: string;
@@ -85,12 +97,31 @@ export type TransitionDecision =
       readonly message: string;
       readonly citation: string | null;
       readonly advisories: readonly GuardResult[];
+      readonly warnings: readonly WarningItem[];
+    }
+  | {
+      readonly ok: false;
+      readonly httpStatus: 400;
+      readonly level: 'reject';
+      readonly reason: 'unknown-rule-key' | 'missing-confirm-reason';
+      readonly message: string;
+      readonly ruleKey: string;
+      readonly citation: null;
+      readonly outlet: string;
+      /** 与 200 警告并列，便于既有「非阻断则读 advisories」的收窄。400 本身没有命中项。 */
+      readonly advisories: readonly GuardResult[];
     }
   | {
       readonly ok: true;
       readonly effects: TransitionEffects;
       readonly advisories: readonly GuardResult[];
+      readonly confirmation?: RuleConfirmation;
     };
+
+export type WarningGate =
+  | { readonly kind: 'hold'; readonly decision: Extract<TransitionDecision, { httpStatus: 200 }> }
+  | { readonly kind: 'reject'; readonly decision: Extract<TransitionDecision, { httpStatus: 400 }> }
+  | { readonly kind: 'clear'; readonly confirmation: RuleConfirmation | null };
 
 export function nextEntrySeq(instances: readonly StageInstanceFact[], stage: string): number {
   const seqs = instances.filter((row) => row.stage === stage).map((row) => row.entrySeq);
@@ -298,9 +329,34 @@ export function decideTransition(input: {
   readonly operation: TransitionOperation;
   readonly subject: TransitionSubject;
   readonly advisories?: readonly GuardResult[];
+  readonly confirmedRuleKeys?: readonly string[];
+  readonly confirmReasons?: Readonly<Record<string, string>>;
 }): TransitionDecision {
   const subject = input.subject;
   const extra = input.advisories ?? [];
+  let confirmation: RuleConfirmation | null = null;
+
+  const release = (notes: readonly GuardResult[]): TransitionDecision | null => {
+    const gate = applyWarningGate({
+      notes,
+      confirmedRuleKeys: input.confirmedRuleKeys,
+      confirmReasons: input.confirmReasons,
+    });
+    if (gate.kind === 'clear') {
+      confirmation = mergeConfirmation(confirmation, gate.confirmation);
+      return null;
+    }
+    return gate.decision;
+  };
+
+  const acknowledgeX03 = (): TransitionDecision | null => {
+    const blocked = illegalBlock('X03', X03_WARN_MESSAGE);
+    if (blocked.ok || blocked.httpStatus !== 200) return blocked;
+    return release(blocked.advisories);
+  };
+
+  const succeed = (effects: TransitionEffects, advisories: readonly GuardResult[] = []): TransitionDecision =>
+    confirmation ? { ok: true, effects, advisories, confirmation } : { ok: true, effects, advisories };
 
   if (onlySupervision(subject.actorRoles) && input.operation.kind !== 'read' && input.operation.kind !== 'export') {
     return illegalBlock('X17', '监督角色不能推进案件');
@@ -323,13 +379,15 @@ export function decideTransition(input: {
 
   if (input.operation.kind === 'transition' && subject.mainStatus === 'terminated_pending') {
     if (input.operation.transitionId !== 'T06' && input.operation.transitionId !== 'T07') {
-      return illegalBlock('X03', '待收尾状态下只能撤案或结案');
+      const held = acknowledgeX03();
+      if (held) return held;
     }
   }
 
   if (input.operation.kind === 'open-approval-chain') {
     if (subject.mainStatus === 'terminated_pending' && input.operation.chainKind !== 'withdraw' && input.operation.chainKind !== 'close') {
-      return illegalBlock('X03', '待收尾状态下只能撤案或结案');
+      const held = acknowledgeX03();
+      if (held) return held;
     }
     if (subject.otherInFlightChains > 0) {
       return illegalBlock('X18', '本案已有进行中的审批链');
@@ -340,20 +398,17 @@ export function decideTransition(input: {
       return refusal(hit.code, hit.message, row?.outlet ?? '该操作不能继续', row?.citation ?? null);
     }
     const notes = softNotes(extra);
-    if (notes.length > 0) return advisory(notes);
-    return {
-      ok: true,
-      advisories: [],
-      effects: {
-        kind: 'open-chain',
-        transitionCode: null,
-        mainStatus: (subject.mainStatus as CaseMainStatus | null) ?? null,
-        currentStage: (subject.stage as CaseStageCode | null) ?? null,
-        stageEntrySeq: subject.stageEntrySeq,
-        suspended: subject.suspended,
-        instances: [],
-      },
-    };
+    const held = release(notes);
+    if (held) return held;
+    return succeed({
+      kind: 'open-chain',
+      transitionCode: null,
+      mainStatus: (subject.mainStatus as CaseMainStatus | null) ?? null,
+      currentStage: (subject.stage as CaseStageCode | null) ?? null,
+      stageEntrySeq: subject.stageEntrySeq,
+      suspended: subject.suspended,
+      instances: [],
+    });
   }
 
   const edge = findTransition(input.operation.transitionId);
@@ -381,12 +436,13 @@ export function decideTransition(input: {
     return refusal(hit.code, hit.message, row?.outlet ?? '该操作不能继续', hit.citation ?? row?.citation ?? null);
   }
   const notes = softNotes(extra);
-  if (notes.length > 0) return advisory(notes);
+  const held = release(notes);
+  if (held) return held;
   const effects = buildTransitionEffects(edge, subject);
   if (!effects) {
     return refusal('invalid-state', '该迁移的去向还不是单一落点', '该迁移尚未拆成可执行的单一去向');
   }
-  return { ok: true, effects, advisories: [] };
+  return succeed(effects);
 }
 
 /** 去向进入调查终结（E03）或更后的环节。中止期间这类迁移是 X02，不论该边是否已启用。 */
@@ -409,7 +465,7 @@ function emptyEffects(): TransitionEffects {
   };
 }
 
-function advisory(notes: readonly GuardResult[]): TransitionDecision {
+function advisory(notes: readonly GuardResult[]): Extract<TransitionDecision, { httpStatus: 200 }> {
   const first = notes[0] as GuardResult;
   return {
     ok: false,
@@ -419,5 +475,66 @@ function advisory(notes: readonly GuardResult[]): TransitionDecision {
     message: first.message,
     citation: first.citation ?? null,
     advisories: notes,
+    warnings: notes.map(toWarning),
   };
+}
+
+function ruleRejection(
+  reason: 'unknown-rule-key' | 'missing-confirm-reason',
+  ruleKey: string,
+  message: string,
+  outlet: string,
+): Extract<TransitionDecision, { httpStatus: 400 }> {
+  return { ok: false, httpStatus: 400, level: 'reject', reason, message, ruleKey, citation: null, outlet, advisories: [] };
+}
+
+/** 警告门。hint 只占住返回，不要求确认，也不放行。空命中只检查确认键是否已登记。 */
+export function applyWarningGate(input: {
+  readonly notes: readonly GuardResult[];
+  readonly confirmedRuleKeys?: readonly string[];
+  readonly confirmReasons?: Readonly<Record<string, string>>;
+}): WarningGate {
+  const warnings = input.notes.map(toWarning);
+  const warnKeys = warnings.filter((item) => item.level === 'warn').map((item) => item.ruleKey);
+  const gap = confirmationGap({
+    warnRuleKeys: warnKeys,
+    confirmedRuleKeys: input.confirmedRuleKeys ?? [],
+    confirmReasons: input.confirmReasons ?? {},
+  });
+  if (gap.kind === 'unknown') {
+    return {
+      kind: 'reject',
+      decision: ruleRejection('unknown-rule-key', gap.ruleKey, '确认键未在规则注册表登记', '请改用已登记的规则键'),
+    };
+  }
+  if (gap.kind === 'reason') {
+    return {
+      kind: 'reject',
+      decision: ruleRejection('missing-confirm-reason', gap.ruleKey, '该规则要求填写确认理由', '请填写该规则的确认理由'),
+    };
+  }
+  if (warnKeys.length === 0) {
+    if (input.notes.length > 0) return { kind: 'hold', decision: advisory(input.notes) };
+    return { kind: 'clear', confirmation: null };
+  }
+  if (gap.kind === 'hold') return { kind: 'hold', decision: advisory(input.notes) };
+  return { kind: 'clear', confirmation: { ruleKeys: ruleRefsFor(warnKeys), warnings } };
+}
+
+function mergeConfirmation(current: RuleConfirmation | null, next: RuleConfirmation | null): RuleConfirmation | null {
+  if (!next) return current;
+  if (!current) return next;
+  const seen = new Set<string>();
+  const ruleKeys = [];
+  for (const ref of [...current.ruleKeys, ...next.ruleKeys]) {
+    if (seen.has(ref.ruleKey)) continue;
+    seen.add(ref.ruleKey);
+    ruleKeys.push(ref);
+  }
+  return { ruleKeys, warnings: [...current.warnings, ...next.warnings] };
+}
+
+/** 与 illegalBlock 同一出口。服务层预览 X03 时走这里，不另写降级。 */
+export function classifyIllegal(id: string, message: string): TransitionDecision {
+  return illegalBlock(id, message);
 }

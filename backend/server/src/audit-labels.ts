@@ -68,6 +68,7 @@ const OPERATION_OF_ACTION: Readonly<Record<string, string>> = {
   'case.filing-withdrawn': '撤回立案呈批',
   'case.opened': '立案',
   'case.transitioned': '推进案件环节',
+  'case.rule-confirmed': '确认警告规则',
   'case.returned': '退回案件',
   'case.inquiry-recorded': '登记调查笔录',
   'case.violation-recorded': '登记违法记录',
@@ -83,6 +84,8 @@ const OPERATION_OF_ACTION: Readonly<Record<string, string>> = {
   'deadline.reviewed': '审核期限呈批',
   'deadline.approved': '批准期限呈批',
   'deadline.recorded': '登记期限',
+  'case.comparison-recorded': '登记新旧比对判定',
+  'case.comparison-refused': '登记新旧比对判定',
 };
 
 const OPERATION_OF_OPCODE: Readonly<Record<string, string>> = {
