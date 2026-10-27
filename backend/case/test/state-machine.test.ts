@@ -465,7 +465,7 @@ describe('两段式确认与规则键（#258）', () => {
     citation: '规程 4.3.3(4)',
   };
 
-  it('注册表只登记 X03 的参数，不登记业务票的警告规则', () => {
+  it('注册表只登记 X03 与 CMP-01 的参数，不登记其他业务票的警告规则', () => {
     expect(findRuleParameter('X03')).toMatchObject({
       ruleKey: 'X03',
       version: '1',

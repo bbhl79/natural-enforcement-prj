@@ -95,6 +95,8 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'case.procedure-approved',
   'case.procedure-returned',
   'case.party-notice-recorded',
+  // 新旧比对判定（#271）：录入成功。拒绝走 case.comparison-refused。
+  'case.comparison-recorded',
   // 改派呈批与材料效力认定（#239）。发起、批准、逐件认定各记一行。
   'case.reassignment-submitted',
   'case.reassignment-approved',
@@ -110,6 +112,8 @@ export type PasswordRejectedReason = (typeof PASSWORD_REJECTED_REASONS)[number];
 
 export const AUDIT_ACTIONS = [
   ...AUDIT_SUCCEEDED_ACTIONS,
+  // 新旧比对判定被拒（#271）：只记失败。比对过时、缺判定、材料不合规。
+  'case.comparison-refused',
   // 人员层签出被拒（#237）：只记失败。
   'case.sign-refused',
   // 口令被拒（ADR 0015，#132）：只记失败。
@@ -743,6 +747,13 @@ export const CASE_INVESTIGATION_FAILED_REASONS = [
 ] as const;
 export type CaseInvestigationFailedReason = (typeof CASE_INVESTIGATION_FAILED_REASONS)[number];
 
+/** 新旧比对判定被拒（#271）。提交缺判定、批准比对过时、材料不合规共用这一张原因表。 */
+export const CASE_COMPARISON_FAILED_REASONS = [
+  'missing-judgment',
+  'comparison-stale',
+  'invalid-input',
+] as const;
+export type CaseComparisonFailedReason = (typeof CASE_COMPARISON_FAILED_REASONS)[number];
 /**
  * 改派呈批发起被拒（#239）。missing-reason 原因空或不在封闭集；missing-reason-note 其他原因缺说明；
  * invalid-proposal 名单形态不合规；not-handler-or-clerk 发起人既非承办人又非 N5 内勤；
@@ -875,6 +886,8 @@ export const AUDIT_DETAIL_ACTIONS = [
   'case.procedure-approved',
   'case.procedure-returned',
   'case.party-notice-recorded',
+  'case.comparison-recorded',
+  'case.comparison-refused',
   // 改派呈批与材料效力认定（#239）：改派原因、原／新承办人员、认定结论与材料。
   'case.reassignment-submitted',
   'case.reassignment-approved',

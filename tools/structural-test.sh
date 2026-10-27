@@ -721,6 +721,7 @@ check_weak-reference-entry() {
 # CaseStageInvalidation、CaseStageSignature、CaseMaterial。
 # #236 追加违法记录、笔录、收尾呈批、期限事件与告知记录：CaseViolationRecord、CaseInquiryRecord、
 # CaseProcedureApproval、CaseProcedureVersion、CaseProcedureStep、CaseDeadlineEvent、CasePartyNotice。
+# #271 追加新旧比对判定：CaseComparisonJudgment。
 # #239 追加改派呈批与材料效力认定：CaseReassignment、CaseMaterialEffectiveness。
 G1_MODELS=(
   MigrationProbe
@@ -792,6 +793,7 @@ G1_MODELS=(
   CaseProcedureStep
   CaseDeadlineEvent
   CasePartyNotice
+  CaseComparisonJudgment
   CaseReassignment
   CaseMaterialEffectiveness
 )
