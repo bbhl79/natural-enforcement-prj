@@ -97,9 +97,11 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'case.party-notice-recorded',
   // 新旧比对判定（#271）：录入成功。拒绝走 case.comparison-refused。
   'case.comparison-recorded',
-  // 改派呈批与材料效力认定（#239）。发起、批准、逐件认定各记一行。
+  // 改派呈批与材料效力认定（#239）。发起、批准、撤回、逐件认定各记一行。
   'case.reassignment-submitted',
   'case.reassignment-approved',
+  // 改派呈批撤回（#279）：发起人批准前撤回。不批走 #238 的 case.returned。
+  'case.reassignment-withdrawn',
   'case.material-effectivity-recorded',
 ] as const;
 
@@ -810,6 +812,17 @@ export type CaseReassignmentApprovedFailedReason =
   (typeof CASE_REASSIGNMENT_APPROVED_FAILED_REASONS)[number];
 
 /**
+ * 改派呈批撤回被拒（#279）。invalid-state 不在待批准（批准后不可撤回）；
+ * concurrent-change 链或改派记录已被他人更新。
+ */
+export const CASE_REASSIGNMENT_WITHDRAWN_FAILED_REASONS = [
+  'invalid-state',
+  'concurrent-change',
+] as const;
+export type CaseReassignmentWithdrawnFailedReason =
+  (typeof CASE_REASSIGNMENT_WITHDRAWN_FAILED_REASONS)[number];
+
+/**
  * 材料效力认定被拒（#239）。missing-reason 理由为空；invalid-conclusion 结论不在三值；
  * unknown-material 材料不属本案；not-main-handler 不是当前主办；invalid-state 没有生效的回避改派。
  */
@@ -894,6 +907,8 @@ export const AUDIT_DETAIL_ACTIONS = [
   // 改派呈批与材料效力认定（#239）：改派原因、原／新承办人员、认定结论与材料。
   'case.reassignment-submitted',
   'case.reassignment-approved',
+  // 改派呈批撤回（#279）：改派标识、原因与审批链。
+  'case.reassignment-withdrawn',
   'case.material-effectivity-recorded',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];

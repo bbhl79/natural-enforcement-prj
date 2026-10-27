@@ -55,6 +55,7 @@ import {
   CASE_MATERIAL_EFFECTIVITY_FAILED_REASONS,
   CASE_REASSIGNMENT_APPROVED_FAILED_REASONS,
   CASE_REASSIGNMENT_SUBMITTED_FAILED_REASONS,
+  CASE_REASSIGNMENT_WITHDRAWN_FAILED_REASONS,
   CASE_OPENED_FAILED_REASONS,
   CASE_RETURNED_FAILED_REASONS,
   CASE_TRANSITIONED_FAILED_REASONS,
@@ -144,6 +145,7 @@ const FAILED_REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['case.returned', new Set<string>(CASE_RETURNED_FAILED_REASONS)],
   ['case.reassignment-submitted', new Set<string>(CASE_REASSIGNMENT_SUBMITTED_FAILED_REASONS)],
   ['case.reassignment-approved', new Set<string>(CASE_REASSIGNMENT_APPROVED_FAILED_REASONS)],
+  ['case.reassignment-withdrawn', new Set<string>(CASE_REASSIGNMENT_WITHDRAWN_FAILED_REASONS)],
   ['case.material-effectivity-recorded', new Set<string>(CASE_MATERIAL_EFFECTIVITY_FAILED_REASONS)],
   ...CASE_INVESTIGATION_ACTIONS.map(
     (action) => [action, new Set<string>(CASE_INVESTIGATION_FAILED_REASONS)] as const,

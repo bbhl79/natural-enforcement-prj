@@ -112,6 +112,7 @@ export type {
   CaseMaterialEffectivityFailedReason,
   CaseReassignmentApprovedFailedReason,
   CaseReassignmentSubmittedFailedReason,
+  CaseReassignmentWithdrawnFailedReason,
   CaseOpenedFailedReason,
   CaseReturnedFailedReason,
   CaseTransitionedFailedReason,

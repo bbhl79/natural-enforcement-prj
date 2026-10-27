@@ -368,6 +368,7 @@ export type {
 // #234：立案呈批与案件最小模型的持久化端口（Prisma 适配器在模块内，不经公共出口出）。
 export { CASE_STORE } from './persistence/case-store.ts';
 export type {
+  ApprovalChainRow,
   ApprovalChainWrite,
   CasePointerWrite,
   CaseRow,
@@ -399,8 +400,10 @@ export type {
   PartyNoticeRow,
   PartyNoticeWrite,
   ProcedureApprovalRow,
+  ProcedureChainReturnWrite,
   ProcedureDraftWrite,
   ProcedureStepWrite,
+  ReassignmentSettlementWrite,
   StageInstanceRow,
   StageInstanceWrite,
   StageInvalidationWrite,
