@@ -570,7 +570,7 @@ export interface DeadlineRow {
   readonly clamped: boolean;
 }
 
-export interface DeadlineRowWrite extends DeadlineRow {}
+export type DeadlineRowWrite = DeadlineRow;
 
 export interface PeriodEventRow {
   readonly id: string;

@@ -209,7 +209,6 @@ export class DeadlineService {
         outlet: '按已登记的规则键和起算日重填',
       });
     }
-    const at = this.clock.now();
     const id = newUlid();
     return this.uow.run(async (tx) => {
       const inserted = await tx.cases.insertDeadlineRow(rowFromPlan(id, caseId, planned.plan, 0, 'open', false));
