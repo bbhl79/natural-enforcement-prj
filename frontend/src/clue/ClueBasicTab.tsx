@@ -10,6 +10,7 @@ import { useState } from 'react';
 import type { ReporterReadResult } from './duplicate';
 import { maskContact, maskName, type ClueDetail, type ClueGap, type GapFillResult } from './detail';
 import { ClueExternalTransferSection } from './ClueExternalTransferSection';
+import ClueFilingPanel from './ClueFilingPanel';
 
 /** 将 gaps 值映射到 requirements 上的一条展示行。 */
 interface RequirementRow {
@@ -457,6 +458,9 @@ export function ClueBasicTab({
       <GapsSection gaps={view.gaps} unfilledCount={unfilledGaps.length} />
 
       {/* 系统外移送附加记录（#229）：仅处置为 other 时展示 */}
+      {view.status === 'handler_assigned' || view.status === 'filed' || view.status === 'closed' ? (
+        <ClueFilingPanel clueId={view.id} clueStatus={view.status} />
+      ) : null}
       {view.latestDisposition === 'other' ? (
         <ClueExternalTransferSection
           clueId={view.id}
