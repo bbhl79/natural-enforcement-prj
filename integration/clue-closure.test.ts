@@ -10,10 +10,10 @@ import {
   generateClosureReminders,
   recordNoCaseFromFilingApproval,
 } from '../backend/case/src/index.ts';
+import { rejected } from '../packages/audit/src/index.ts';
 import { newUlid } from '../backend/identity/src/index.ts';
 
 import { createApplication } from '../backend/server/src/persistence.module.ts';
-import { ClueClosureService } from '../backend/server/src/clue-closure.service.ts';
 import { UNIT_OF_WORK, type UnitOfWork } from '../backend/server/src/unit-of-work.ts';
 import { openClonedDatabase, type ClonedDatabase } from './cloned-database.ts';
 
@@ -73,7 +73,6 @@ let storage = new RecordingStorage();
 let baseUrl = '';
 let closeApp: () => Promise<void> = async () => {};
 let uow: UnitOfWork;
-let closureService: ClueClosureService;
 const cookies = new Map<string, string>();
 const passwords = new Map<string, string>();
 
@@ -263,6 +262,7 @@ function minorReason() {
 }
 
 /** 直调落点服务（同事务写处置＋提醒＋留痕由 Nest 包装）。 */
+/** #234：IT 直调域落点（server 层只许立案呈批批准路径调用；本辅助不经 ClueClosureService）。 */
 async function recordNoCaseFromFiling(
   clueId: string,
   input: {
@@ -273,16 +273,71 @@ async function recordNoCaseFromFiling(
     recordedBy?: string;
   } = {},
 ): Promise<{ status: number; body: Record<string, unknown> }> {
-  const outcome = await closureService.recordNoCaseFromFiling({
-    clueId,
-    expectedStatus: input.expectedStatus ?? 'handler_assigned',
-    filingApprovalRef: input.filingApprovalRef ?? newUlid(),
-    reason: input.reason ?? groundsReason(),
-    recordedBy: input.recordedBy ?? handlerSt1Id,
-    note: input.note ?? '呈批批准不予立案',
-    actorCode: 'P-HANDLER-ST1',
+  const filingApprovalRef = input.filingApprovalRef ?? newUlid();
+  const recordedBy = input.recordedBy ?? handlerSt1Id;
+  const reason = input.reason ?? groundsReason();
+  const expectedStatus = input.expectedStatus ?? 'handler_assigned';
+  return uow.run(async (tx) => {
+    const recordedAt = new Date();
+    const outcome = await recordNoCaseFromFilingApproval(tx.clues, {
+      clueId,
+      expectedStatus,
+      filingApprovalRef,
+      reason,
+      recordedBy,
+      recordedAt,
+      newId: () => newUlid(),
+      note: input.note ?? '呈批批准不予立案',
+    });
+    if (!outcome.ok) {
+      const status = outcome.reason === 'invalid-state' || outcome.reason === 'concurrent-change' ? 409 : 400;
+      return rejected<{ status: number; body: Record<string, unknown> }>(
+        status === 400
+          ? { status: 400, body: { result: 'non-compliant', rules: outcome.rules } }
+          : { status: 409, body: { result: outcome.reason, reason: outcome.reason } },
+        {
+          action: 'clue.disposition-recorded',
+          outcome: 'failed',
+          reason: outcome.reason as never,
+          actorId: recordedBy,
+          actorCode: 'P-HANDLER-ST1',
+          subjectPersonnelId: null,
+          subjectCode: null,
+          orgUnitId: stationAId,
+          sourceIp: null,
+          resourceType: 'clue',
+          resourceId: clueId,
+        },
+      );
+    }
+    await tx.audit.append({
+      action: 'clue.disposition-recorded',
+      actorId: recordedBy,
+      actorCode: 'P-HANDLER-ST1',
+      subjectPersonnelId: null,
+      subjectCode: null,
+      orgUnitId: stationAId,
+      sourceIp: null,
+      resourceType: 'clue',
+      resourceId: clueId,
+      detail: JSON.stringify({
+        disposition: 'no-case',
+        filingApprovalRef,
+        reason: outcome.reason,
+        reminderCount: outcome.reminderIds.length,
+      }),
+    });
+    return {
+      status: 200,
+      body: {
+        result: 'disposition-recorded',
+        clueId,
+        status: 'closed',
+        filingApprovalRef,
+        reminderCount: outcome.reminderIds.length,
+      },
+    };
   });
-  return { status: outcome.status, body: outcome.body as Record<string, unknown> };
 }
 
 /** 结案提醒列表。 */
@@ -391,7 +446,6 @@ beforeAll(async () => {
   baseUrl = `http://127.0.0.1:${address.port}`;
   closeApp = () => app.close();
   uow = app.get<UnitOfWork>(UNIT_OF_WORK);
-  closureService = app.get(ClueClosureService);
 
   const orgOf = async (code: string) => {
     const org = await cloned.prisma.orgUnit.findUnique({ where: { code } });
