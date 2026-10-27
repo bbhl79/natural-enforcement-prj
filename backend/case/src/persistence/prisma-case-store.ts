@@ -22,6 +22,7 @@ import type {
   FilingDraftWrite,
   FilingStepWrite,
   FilingTodoRow,
+  AgencyConflictMarkRow,
   InvestigationEntryWrite,
   PersonConflictDecisionRow,
   PersonConflictDecisionWrite,
@@ -517,6 +518,23 @@ export class PrismaCaseStore implements CaseStore {
 
   async appendInvestigationEntry(write: InvestigationEntryWrite): Promise<void> {
     await this.prisma.caseInvestigationEntry.create({ data: { ...write } });
+  }
+
+  async listAgencyConflictMarks(caseId: string): Promise<readonly AgencyConflictMarkRow[]> {
+    return this.prisma.caseAgencyConflict.findMany({
+      where: { caseId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async appendAgencyConflictMark(write: AgencyConflictMarkRow): Promise<boolean> {
+    try {
+      await this.prisma.caseAgencyConflict.create({ data: { ...write } });
+    } catch (error) {
+      if (isUniqueConflict(error)) return false;
+      throw error;
+    }
+    return true;
   }
 
   async closeApprovalChain(id: string): Promise<boolean> {

@@ -371,6 +371,7 @@ export type {
   FilingDraftWrite,
   FilingStepWrite,
   FilingTodoRow,
+  AgencyConflictMarkRow,
   InvestigationEntryWrite,
   PersonConflictDecisionRow,
   PersonConflictDecisionWrite,
@@ -535,6 +536,18 @@ export type {
   InvestigationKind,
   SignKind,
 } from './conflict/index.ts';
+// #263：机关层利害关系。只提示，不阻断签出、呈批、迁移。
+export {
+  AGENCY_CONFLICT_ALREADY_MARKED_MESSAGE,
+  AGENCY_CONFLICT_GATES,
+  AGENCY_CONFLICT_OUTLET,
+  AGENCY_CONFLICT_UNCHECK_MESSAGE,
+  AGENCY_CONFLICT_WARNING,
+  agencyConflictBlocks,
+  agencyConflictMarked,
+  agencyConflictNotice,
+} from './agency-conflict/index.ts';
+export type { AgencyConflictGate, AgencyConflictMark } from './agency-conflict/index.ts';
 // #236：调查环节与收尾。停表类别与追诉时效出口映射都由参数给出。
 export {
   CLOSE_BRANCH_NOT_OPEN_MESSAGE,

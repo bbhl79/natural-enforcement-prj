@@ -255,6 +255,15 @@ export interface PersonConflictDecisionWrite {
   readonly nextEvent: PersonConflictEventWrite;
 }
 
+/** 机关层利害关系勾选的一行（只追加，一案至多一行）。 */
+export interface AgencyConflictMarkRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly orgUnitId: string;
+  readonly markedBy: string;
+  readonly createdAt: Date;
+}
+
 /** 调查继续登记的一行（只追加）。 */
 export interface InvestigationEntryWrite {
   readonly id: string;
@@ -379,6 +388,12 @@ export interface CaseStore {
   appendPersonConflictDecision(write: PersonConflictDecisionWrite): Promise<boolean>;
   /** 追加一条调查登记（笔录或违法记录）。 */
   appendInvestigationEntry(write: InvestigationEntryWrite): Promise<void>;
+  /** 本案机关层利害关系勾选。没有勾选时为空。 */
+  listAgencyConflictMarks(caseId: string): Promise<readonly AgencyConflictMarkRow[]>;
+  /**
+   * 追加机关层勾选。本案已有一行时返回 false，不插入第二行。
+   */
+  appendAgencyConflictMark(write: AgencyConflictMarkRow): Promise<boolean>;
   /** 办结一条进行中的审批链。不是进行中则返回 false。 */
   closeApprovalChain(id: string): Promise<boolean>;
   listViolationRecords(caseId: string): Promise<readonly ViolationRecordRow[]>;

@@ -17,6 +17,14 @@ const record = {
   createdAt: '2026-10-27T00:00:00.000Z',
 };
 
+const agencyQuiet = {
+  agencyMarked: false,
+  agencyWarning: null,
+  agencyOutlet: null,
+  canMarkAgency: true,
+  onMarkAgency: () => undefined,
+};
+
 describe('回避页签', () => {
   it('显示回避页签、记录，以及登记与决定入口', () => {
     const html = renderToStaticMarkup(
@@ -30,6 +38,7 @@ describe('回避页签', () => {
         onDeclare={() => undefined}
         onDecide={() => undefined}
         onSignCheck={() => undefined}
+        {...agencyQuiet}
       />,
     );
     expect(html).toContain('回避');
@@ -55,6 +64,7 @@ describe('回避页签', () => {
         decisions={[]}
         canDeclare
         canDecide={false}
+        {...agencyQuiet}
         message="等待回避决定"
         signResult={null}
         onDeclare={() => undefined}
@@ -66,5 +76,55 @@ describe('回避页签', () => {
     expect(html).not.toContain('data-role="decide-form"');
     expect(html).toContain('等待回避决定');
     expect(html).toContain('尚无记录');
+  });
+
+  it('勾选机关层利害关系后显示提示，勾选框不能取消，签出检查仍在', () => {
+    const html = renderToStaticMarkup(
+      <CaseConflictTab
+        records={[]}
+        decisions={[]}
+        canDeclare
+        canDecide={false}
+        agencyMarked
+        agencyWarning="本机关与本案当事人存在利害关系"
+        agencyOutlet="线下报请上级处理"
+        canMarkAgency
+        message={null}
+        signResult={null}
+        onDeclare={() => undefined}
+        onDecide={() => undefined}
+        onSignCheck={() => undefined}
+        onMarkAgency={() => undefined}
+      />,
+    );
+    expect(html).toContain('data-role="agency-conflict-warning"');
+    expect(html).toContain('本机关与本案当事人存在利害关系');
+    expect(html).toContain('线下报请上级处理');
+    expect(html).toContain('data-role="agency-conflict-checkbox"');
+    expect(html).toContain('disabled');
+    expect(html).not.toContain('data-role="agency-conflict-form"');
+    expect(html).toContain('data-role="sign-check-form"');
+    expect(html).not.toMatch(/#[0-9]{2,4}/);
+  });
+
+  it('未勾选时经办可以登记，页面不显示机关层提示', () => {
+    const html = renderToStaticMarkup(
+      <CaseConflictTab
+        records={[]}
+        decisions={[]}
+        canDeclare={false}
+        canDecide={false}
+        {...agencyQuiet}
+        message={null}
+        signResult={null}
+        onDeclare={() => undefined}
+        onDecide={() => undefined}
+        onSignCheck={() => undefined}
+      />,
+    );
+    expect(html).toContain('尚未登记');
+    expect(html).toContain('data-role="agency-conflict-form"');
+    expect(html).toContain('登记机关层利害关系');
+    expect(html).not.toContain('data-role="agency-conflict-warning"');
   });
 });

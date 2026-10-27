@@ -12,6 +12,7 @@ import { AdminController } from './admin.controller.ts';
 import { AdminService } from './admin.service.ts';
 import { AuditBrowseService } from './audit-browse.service.ts';
 import { AuditController } from './audit.controller.ts';
+import { CaseAgencyConflictController } from './case-agency-conflict.controller.ts';
 import { CaseConflictController } from './case-conflict.controller.ts';
 import { CaseFilingController } from './case-filing.controller.ts';
 import { CaseReturnController } from './case-return.controller.ts';
@@ -23,6 +24,7 @@ import { ClueCenterService } from './clue-center.service.ts';
 import { ClueDesignationController } from './clue-designation.controller.ts';
 import { ClueDesignationService } from './clue-designation.service.ts';
 import { ClueDispatchController } from './clue-dispatch.controller.ts';
+import { CaseAgencyConflictService } from './case-agency-conflict.service.ts';
 import { CaseConflictService } from './case-conflict.service.ts';
 import { CaseFilingService } from './case-filing.service.ts';
 import { CaseReturnService } from './case-return.service.ts';
@@ -97,6 +99,7 @@ import { WorkbenchService } from './workbench.service.ts';
     CaseReturnController,
     CaseStateController,
     CaseConflictController,
+    CaseAgencyConflictController,
     InvestigationController,
     ClueCenterController,
     ClueDispositionController,
@@ -124,6 +127,7 @@ import { WorkbenchService } from './workbench.service.ts';
     CaseReturnService,
     CaseStateService,
     CaseConflictService,
+    CaseAgencyConflictService,
     InvestigationService,
     ClueDispositionService,
     ClueDesignationService,
