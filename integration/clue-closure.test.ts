@@ -247,12 +247,12 @@ async function recordNoCase(
 }
 
 
-/** #226 落点：不符合立案条件（第 16 条至少一项）。 */
+/** #226 落点：不符合立案条件，勾选第十六条（一）–（五）中未满足的项（至少一项）。 */
 function groundsReason(codes: readonly string[] = ['art16-2-no-violation-fact']) {
   return { kind: 'non-filing-grounds' as const, grounds: [...codes], note: '核查后不符合立案条件' };
 }
 
-/** #226 落点：轻微三要素。 */
+/** #226 落点：第十六条末款三项。 */
 function minorReason() {
   return {
     kind: 'minor-corrected-no-harm' as const,
@@ -501,7 +501,7 @@ describe('#226 落点服务 recordNoCaseFromFiling', () => {
     expect(reminders[0]?.otherClueId).toBe(pair.oldClueId);
   });
 
-  it('(b) 三要素齐全成功', async () => {
+  it('(b) 末款三项全确认成功', async () => {
     const pair = await heldPair(84);
     const outcome = await recordNoCaseFromFiling(pair.oldClueId, { reason: minorReason() });
     expect(outcome.status).toBe(200);
@@ -566,7 +566,7 @@ describe('#226 落点服务 recordNoCaseFromFiling', () => {
     expect(outcome.body.rules).toEqual(['invalid-no-case-reason']);
   });
 
-  it('仅部分三要素拒绝', async () => {
+  it('末款三项仅确认部分拒绝', async () => {
     const old = await register({ polygon: geojsonPolygon(square(89)) });
     await assignOrg(old.body.id ?? '', { orgUnitId: stationAId });
     await assignPeople(old.body.id ?? '', { mainId: handlerSt1Id });
@@ -574,7 +574,7 @@ describe('#226 落点服务 recordNoCaseFromFiling', () => {
       reason: {
         kind: 'minor-corrected-no-harm',
         minor: { confirmed: true, note: '轻微' },
-        timelyCorrection: { confirmed: true, note: '已改正' },
+        timelyCorrection: { confirmed: true, note: '已及时纠正' },
       },
     });
     expect(outcome.status).toBe(400);

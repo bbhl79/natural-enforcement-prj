@@ -16,12 +16,12 @@ describe('checkNoCaseReason（#226）', () => {
     }
   });
 
-  it('(b) 三要素齐全成功', () => {
+  it('(b) 末款三项全确认成功', () => {
     const out = checkNoCaseReason({
       kind: 'minor-corrected-no-harm',
       minor: { confirmed: true, note: '轻微' },
-      timelyCorrection: { confirmed: true, note: '已改正' },
-      noHarm: { confirmed: true, note: '无危害' },
+      timelyCorrection: { confirmed: true, note: '已及时纠正' },
+      noHarm: { confirmed: true, note: '没有造成危害后果' },
     });
     expect(out.ok).toBe(true);
   });
@@ -40,11 +40,11 @@ describe('checkNoCaseReason（#226）', () => {
     expect(out.ok).toBe(false);
   });
 
-  it('仅部分三要素拒绝', () => {
+  it('末款三项仅确认部分拒绝', () => {
     const out = checkNoCaseReason({
       kind: 'minor-corrected-no-harm',
       minor: { confirmed: true, note: '轻微' },
-      timelyCorrection: { confirmed: true, note: '已改正' },
+      timelyCorrection: { confirmed: true, note: '已及时纠正' },
       // noHarm 缺
     });
     expect(out.ok).toBe(false);
