@@ -836,6 +836,39 @@ describe('#279 链外退回关链', () => {
     expect(again.status, JSON.stringify(again.body)).toBe(200);
   });
 
+  it('回流（R2 回调查，接收人非内勤）：在途链同事务关闭、呈批回写、当前环节已签作废；不是 N5', async () => {
+    const { caseId } = await stationCase('回流乙');
+    const drafted = await postJson(`/api/cases/${caseId}/procedures`, 'P-HANDLER-F1', { kind: 'suspend' });
+    expect(drafted.status, JSON.stringify(drafted.body)).toBe(200);
+    const approvalId = String(drafted.body.approvalId);
+    const submitted = await postJson(`/api/procedures/${approvalId}/submit`, 'P-HANDLER-F1');
+    expect(submitted.status, JSON.stringify(submitted.body)).toBe(200);
+    const chain = await cloned.prisma.caseApprovalChain.findFirstOrThrow({ where: { caseId, status: 'in_flight' } });
+    const e02 = await cloned.prisma.caseStageInstance.findFirstOrThrow({
+      where: { caseId, stage: 'E02', entrySeq: 1 },
+    });
+    const signatureId = newUlid();
+    await cloned.prisma.caseStageSignature.create({
+      data: { id: signatureId, caseId, instanceId: e02.id, actorId: handlerMainId },
+    });
+
+    const returned = await returnCase(caseId, { reasonCode: 'R2', targetKey: 'stage:E02', note: '补调查' });
+    expect(returned.status, JSON.stringify(returned.body)).toBe(200);
+    expect(returned.body.entrySeq).toBe(2);
+    expect(returned.body.n5).toBe(false);
+
+    expect((await cloned.prisma.caseApprovalChain.findUniqueOrThrow({ where: { id: chain.id } })).status).toBe('closed');
+    expect(await cloned.prisma.caseApprovalChain.count({ where: { caseId, status: 'in_flight' } })).toBe(0);
+    const approval = await cloned.prisma.caseProcedureApproval.findUniqueOrThrow({ where: { id: approvalId } });
+    expect(approval.status).toBe('drafting');
+    expect(approval.approvalChainId).toBeNull();
+    expect(await cloned.prisma.caseProcedureStep.count({ where: { approvalId, step: 'return' } })).toBe(1);
+    const reuse = await postJson(`/api/cases/${caseId}/signatures/${signatureId}/reuse`, 'P-APPROVE-HQ');
+    expect(reuse.status).toBe(409);
+    expect(reuse.body.reason).toBe('signature-invalidated');
+    expect(await cloned.prisma.caseDeadlineEvent.count({ where: { caseId } })).toBe(0);
+  });
+
   it('链内退回 R8／R9 回较早一级：不关链、不失效、不新增实例', async () => {
     const { caseId } = await stationCase('链内甲');
     const chainId = await openChain(caseId, 'P-HANDLER-F1');
