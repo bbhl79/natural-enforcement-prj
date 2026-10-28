@@ -1578,3 +1578,121 @@ model DeadlineCalendarInstall {
 
   @@map("deadline_calendar_install")
 }
+
+/// 调查报告呈批（T08，#240）。一条案件至多一张未批准呈批。
+model CaseReviewReport {
+  id String @id
+  caseId String @map("case_id")
+  drafterId String @map("drafter_id")
+  /// drafting | pending_review | pending_approval | approved
+  status String @default("drafting")
+  adminReview String? @map("admin_review")
+  currentVersionNo Int @default(0) @map("current_version_no")
+  approvalChainId String? @map("approval_chain_id")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt DateTime @default(now()) @db.Timestamptz(6) @map("updated_at")
+
+  @@index([caseId])
+  @@map("case_review_report")
+}
+
+/// 调查报告呈批正文版本（追加式）。
+model CaseReviewReportVersion {
+  id String @id
+  reportId String @map("report_id")
+  versionNo Int @map("version_no")
+  contentJson String @map("content_json")
+  createdBy String @map("created_by")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([reportId, versionNo])
+  @@map("case_review_report_version")
+}
+
+/// 调查报告呈批步骤（追加式）：submit | review | approve | return。
+model CaseReviewReportStep {
+  id String @id
+  reportId String @map("report_id")
+  versionNo Int @map("version_no")
+  step String
+  actorId String @map("actor_id")
+  opinion String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([reportId])
+  @@map("case_review_report_step")
+}
+
+/// 审理人指定（#240）。只追加新行；旧指定置 supersededAt 后保留。
+model CaseReviewerDesignation {
+  id String @id
+  caseId String @map("case_id")
+  /// 指定的 E04 进入次序号。
+  entrySeq Int @map("entry_seq")
+  personnelId String @map("personnel_id")
+  designatedBy String @map("designated_by")
+  reason String?
+  replacesId String? @map("replaces_id")
+  designatedAt DateTime @map("designated_at")
+  supersededAt DateTime? @map("superseded_at")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_reviewer_designation")
+}
+
+/// 审理意见（#240）。只追加，不改写。
+model CaseReviewOpinion {
+  id String @id
+  caseId String @map("case_id")
+  entrySeq Int @map("entry_seq")
+  opinionKind String @map("opinion_kind")
+  content String
+  signedBy String @map("signed_by")
+  designationId String @map("designation_id")
+  /// 迁移编号。已过追诉时效的出口取 cfg.rule 映射，不写死 T12。
+  destinationCode String @map("destination_code")
+  outcomeCode String? @map("outcome_code")
+  outcomeLabel String? @map("outcome_label")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_review_opinion")
+}
+
+/// 拟决定摘要冻结（#240）。一条审理意见至多一行。
+model CaseFrozenDecision {
+  id String @id
+  caseId String @map("case_id")
+  opinionId String @map("opinion_id")
+  summaryJson String @map("summary_json")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([opinionId])
+  @@index([caseId])
+  @@map("case_frozen_decision")
+}
+
+/// 审理异议呈批（T09a，#240）。一案同一 E04 次序号至多一张未决定呈批。
+model CaseReviewObjection {
+  id String @id
+  caseId String @map("case_id")
+  entrySeq Int @map("entry_seq")
+  opinionId String @map("opinion_id")
+  drafterId String @map("drafter_id")
+  /// drafting | pending_approval | decided
+  status String @default("drafting")
+  contentJson String @map("content_json")
+  /// support-review | support-handler
+  decision String?
+  /// 支持审理意见记 T09；支持承办人员落到 T10、T11 或 T12。
+  decisionTransition String? @map("decision_transition")
+  decidedBy String? @map("decided_by")
+  decidedAt DateTime? @map("decided_at")
+  approvalChainId String? @map("approval_chain_id")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt DateTime @default(now()) @db.Timestamptz(6) @map("updated_at")
+
+  @@index([caseId])
+  @@map("case_review_objection")
+}

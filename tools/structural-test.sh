@@ -806,6 +806,13 @@ G1_MODELS=(
   CaseComparisonJudgment
   CaseReassignment
   CaseMaterialEffectiveness
+  CaseReviewReport
+  CaseReviewReportVersion
+  CaseReviewReportStep
+  CaseReviewerDesignation
+  CaseReviewOpinion
+  CaseFrozenDecision
+  CaseReviewObjection
 )
 check_g1-model-allowlist() {
   local schema="$BACKEND/prisma/schema.prisma" model in_schema extra missing fails=0
