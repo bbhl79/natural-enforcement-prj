@@ -9,6 +9,17 @@ export const Q31_RULE_KEY = 'CMP-01';
 /** Q31 警告原文（#42 关票第二节、#256 §6 第 4 条）。 */
 export const Q31_WARNING_MESSAGE = '施行日当天批准，适用哪一版请法制部门确认';
 
+/** X22 签出警告的规则键与原文（#240；normative，警告不阻断）。 */
+export const X22_RULE_KEY = 'X22';
+export const X22_MESSAGE = '本案承办人员签出审理意见';
+
+/**
+ * 调查审理职能分离（#240 R-03）。独立规则，不占 X 号。
+ * 被指定人为本案主办或协办（含已换下的）时警告，理由必填，确认入审计。
+ */
+export const REVIEW_SEPARATION_RULE_KEY = 'REVIEW-SEPARATION';
+export const REVIEW_SEPARATION_MESSAGE = '被指定人为本案主办或协办';
+
 /** 一期参数。级别、依据、文案、是否必填理由。阈值留空表示这条没有阈值。 */
 export interface RuleParameter {
   readonly ruleKey: string;
@@ -48,6 +59,24 @@ export const RULE_PARAMETERS: readonly RuleParameter[] = [
     message: Q31_WARNING_MESSAGE,
     citation: null,
     reasonRequired: false,
+  },
+  // #240：X22 签出警告。normative→警告，不升阻断（#240/6443344977）。
+  {
+    ruleKey: X22_RULE_KEY,
+    version: '1',
+    level: 'warn',
+    message: X22_MESSAGE,
+    citation: '规程 5.1',
+    reasonRequired: false,
+  },
+  // #240：调查审理职能分离。独立规则，不占 X 号；理由必填。
+  {
+    ruleKey: REVIEW_SEPARATION_RULE_KEY,
+    version: '1',
+    level: 'warn',
+    message: REVIEW_SEPARATION_MESSAGE,
+    citation: null,
+    reasonRequired: true,
   },
 ];
 
