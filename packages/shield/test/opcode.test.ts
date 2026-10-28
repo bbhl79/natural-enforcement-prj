@@ -32,6 +32,8 @@ const CASE_OPCODES = [
   'legal.opinion.submit',
   'doc.admin.review',
   'doc.approve',
+  // #240：审理意见签出。
+  'case.review.record',
   'clue.read',
   'case.read',
   'doc.read',
@@ -186,6 +188,14 @@ describe('操作码名册', () => {
     expect(opcodeRequirements('case.open')?.changesPrimaryState).toBe(true);
     expect(opcodeRequirements('doc.draft')?.changesPrimaryState).toBe(false);
     expect(opcodeRequirements('doc.approve')?.changesPrimaryState).toBe(true);
+  });
+
+  it('审理意见签出不要求执法资格、不必是主办人、不改变主状态（#240）', () => {
+    expect(opcodeRequirements('case.review.record')).toEqual({
+      qualification: 'none',
+      mustBeCaseHandler: false,
+      changesPrimaryState: false,
+    });
   });
 
   it('case.reassign.submit：经办必须是主办人或协办人，内勤不必是', () => {
