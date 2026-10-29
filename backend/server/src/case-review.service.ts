@@ -1,8 +1,9 @@
 // 调查终结与审理（#240）：T08 报告呈批、审理人指定与更换、case.review.record、T09 回流、T09a 异议呈批。
 // 呈批沿用 doc.draft / doc.submit / doc.admin.review / doc.approve；审理意见用新增码 case.review.record。
+// #282 裁 B：补充调查／修改纠正签出只落意见并开异议窗口，不立即执行 T09。
+// 窗口结束（到期、明示放弃、异议支持审理意见）才在同一事务执行 T09：回 E02、R2 退回、#246 期限锚点，90 日不变。
 // T08 与 T09 的迁移判定在引擎；T09a、T10、T11、T12 是 branch 边，由本服务解析后落到单一边。
 // 「调查审理职能分离」与 X22 走 #258 两段式确认；X23、X32、X33 直接 409。
-// T09 同一事务内写 R2 退回记录与 #246 期限锚点（以新进入次序号），90 日到期日不变。
 // 失败与警告不改业务行，只写留痕。
 
 import { Inject, Injectable } from '@nestjs/common';
@@ -27,6 +28,7 @@ import {
   filingStatusAfter,
   findIllegal,
   isTerminalCaseStatus,
+  objectionWindowDueAt,
   opinionDestination,
   readDesignationReason,
   readReviewObjectionContent,
@@ -45,6 +47,8 @@ import {
   type LimitationDiscoveryExit,
   type OpinionDestination,
   type ReviewCandidateFacts,
+  type ReviewObjectionWindowRule,
+  type ReviewObjectionWindowRow,
   type ReviewOpinionKind,
   type ReviewReportContent,
   type ReviewReportRow,
@@ -80,12 +84,16 @@ import { CaseConflictService } from './case-conflict.service.ts';
 import { LOGIN_DIRECTORY, type LoginAccount, type LoginDirectory } from './login-directory.ts';
 import { UNIT_OF_WORK, type TxScope, type UnitOfWork } from './unit-of-work.ts';
 
+export const REVIEW_OBJECTION_WINDOW = Symbol('REVIEW_OBJECTION_WINDOW');
+
 const READ_OPCODE = 'case.read';
 const DRAFT_OPCODE = 'doc.draft';
 const SUBMIT_OPCODE = 'doc.submit';
 const REVIEW_OPCODE = 'doc.admin.review';
 const APPROVE_OPCODE = 'doc.approve';
 const RECORD_OPCODE = 'case.review.record';
+// 过渡：明示放弃异议复用主办／协办可见的提交码，待 #230 回写 #71 时再定专用码。
+const WAIVE_OPCODE = 'doc.submit';
 const HANDLER_ROLES = new Set(['main', 'assist']);
 const FAIL_REASONS = new Set<string>(CASE_REVIEW_FAILED_REASONS);
 
@@ -120,32 +128,38 @@ export class CaseReviewService {
     @Inject(CLOCK) private readonly clock: Clock,
     @Inject(FILING_ADMIN_REVIEW) private readonly adminReview: FilingAdminReview,
     @Inject(LIMITATION_DISCOVERY_EXIT) private readonly limitationExit: LimitationDiscoveryExit,
+    @Inject(REVIEW_OBJECTION_WINDOW) private readonly objectionWindow: ReviewObjectionWindowRule,
     private readonly access: AccessControlService,
     private readonly conflicts: CaseConflictService,
   ) {}
 
   async read(actor: ActorRef, caseId: string): Promise<CaseReviewHttpOutcome> {
-    const view = await this.cases.readCaseView(caseId);
-    if (!view) return { status: 404, body: { result: 'not-found' } };
-    const denied = await this.authorize(actor, READ_OPCODE, view.handlingOrgId, caseId);
+    const initialView = await this.cases.readCaseView(caseId);
+    if (!initialView) return { status: 404, body: { result: 'not-found' } };
+    const denied = await this.authorize(actor, READ_OPCODE, initialView.handlingOrgId, caseId);
     if (denied) return { status: 403, body: { reason: denied } };
+    await this.settleObjectionWindows(caseId);
+    const view = (await this.cases.readCaseView(caseId)) ?? initialView;
     const roles = await this.identity.listActiveRoleNames(actor.personnelId);
-    const [report, designations, opinions, frozen, objections] = await Promise.all([
+    const [report, designations, opinions, frozen, objections, windows] = await Promise.all([
       this.cases.readOpenReviewReport(caseId),
       this.cases.listReviewerDesignations(caseId),
       this.cases.listReviewOpinions(caseId),
       this.cases.listFrozenDecisions(caseId),
       this.cases.listReviewObjections(caseId),
+      this.cases.listReviewObjectionWindows(caseId),
     ]);
+    const windowsByOpinion = new Map(windows.map((row) => [row.opinionId, row]));
     const currentEntry = view.currentStage === 'E04' ? view.stageEntrySeq : latestHearingEntry(view);
     const active = currentEntry === null ? null : activeDesignation(designations, currentEntry);
     const latest = currentEntry === null ? null : latestOpinionOf(opinions, currentEntry);
-    const concluded = currentEntry !== null && opinions.some(
-      (row) => row.entrySeq === currentEntry && row.destinationCode !== 'T09',
-    );
+    const entryOpinions = currentEntry === null ? [] : opinions.filter((row) => row.entrySeq === currentEntry);
+    const concluded = entryOpinions.some((row) => row.destinationCode !== 'T09');
     const leaderDecided = objections.some(
       (row) => row.status === 'decided' && row.decision === 'support-handler' && row.entrySeq === currentEntry,
     );
+    const latestWindow = latest === null ? null : windowsByOpinion.get(latest.id) ?? null;
+    const windowOpen = latestWindow?.status === 'open';
     const isHandler = view.handlers.some((row) => row.personnelId === actor.personnelId && HANDLER_ROLES.has(row.role));
     const isHead = await this.isHandlingOrgHead(actor.personnelId, view.handlingOrgId);
     const inReview = view.status === 'in_progress' && view.currentStage === 'E04';
@@ -160,9 +174,10 @@ export class CaseReviewService {
         suspended: view.suspended,
         entries: {
           report: view.status === 'in_progress' && view.currentStage === 'E02' && !view.suspended && isHandler,
-          designate: inReview && isHead && !concluded && !leaderDecided,
-          sign: inReview && roles.includes('行政审核') && !concluded && !leaderDecided,
-          objection: isHandler && latest !== null && allowsObjection(latest.opinionKind),
+          designate: inReview && isHead && !concluded && !leaderDecided && entryOpinions.length === 0,
+          sign: inReview && roles.includes('行政审核') && !concluded && !leaderDecided && entryOpinions.length === 0,
+          objection: isHandler && latest !== null && allowsObjection(latest.opinionKind) && windowOpen && !leaderDecided,
+          waive: isHandler && windowOpen && !leaderDecided,
         },
         report: report
           ? {
@@ -203,7 +218,9 @@ export class CaseReviewService {
           outcomeCode: row.outcomeCode,
           outcomeLabel: row.outcomeLabel,
           createdAt: row.createdAt.toISOString(),
+          objectionWindow: objectionWindowView(windowsByOpinion.get(row.id)),
         })),
+        objectionWindow: objectionWindowView(latestWindow),
         frozenDecision: frozenRow
           ? { opinionId: frozenRow.opinionId, summary: parseJson(frozenRow.summaryJson), createdAt: frozenRow.createdAt.toISOString() }
           : null,
@@ -798,21 +815,24 @@ export class CaseReviewService {
     caseId: string,
     input: ConfirmationInput & { readonly kind?: unknown; readonly content?: unknown },
   ): Promise<CaseReviewHttpOutcome> {
-    const view = await this.cases.readCaseView(caseId);
-    if (!view) return { status: 404, body: { result: 'not-found' } };
+    const initialView = await this.cases.readCaseView(caseId);
+    if (!initialView) return { status: 404, body: { result: 'not-found' } };
     const account = await this.directory.findById(actor.personnelId);
     const roles = await this.identity.listActiveRoleNames(actor.personnelId);
-    const prepared: Prepared = { actorId: actor.personnelId, actorCode: account?.code ?? null, account, roles, view };
+    const initial: Prepared = { actorId: actor.personnelId, actorCode: account?.code ?? null, account, roles, view: initialView };
     if (!roles.includes('行政审核')) {
-      return this.fail(prepared, 'case.review-recorded', RECORD_OPCODE, {
+      return this.fail(initial, 'case.review-recorded', RECORD_OPCODE, {
         httpStatus: 409,
         reason: 'X23',
         message: '未持行政审核角色的人不能签出审理意见',
         outlet: findIllegal('X23')?.outlet ?? '由持行政审核角色的人签出',
       });
     }
-    const denied = await this.authorize(actor, RECORD_OPCODE, view.handlingOrgId, caseId);
-    if (denied) return this.denied(prepared, 'case.review-recorded', RECORD_OPCODE, denied);
+    const denied = await this.authorize(actor, RECORD_OPCODE, initialView.handlingOrgId, caseId);
+    if (denied) return this.denied(initial, 'case.review-recorded', RECORD_OPCODE, denied);
+    await this.settleObjectionWindows(caseId);
+    const view = (await this.cases.readCaseView(caseId)) ?? initialView;
+    const prepared: Prepared = { ...initial, view };
     const terminal = await this.terminalHit(prepared, 'case.review-recorded', RECORD_OPCODE);
     if (terminal) return terminal;
     if (view.status !== 'in_progress' || view.currentStage !== 'E04') {
@@ -834,6 +854,14 @@ export class CaseReviewService {
         reason: 'invalid-state',
         message: '审理已通过，修改须回流',
         outlet: '经补充调查或修改纠正回流后再审理',
+      });
+    }
+    if (sameEntry.length > 0) {
+      return this.fail(prepared, 'case.review-recorded', RECORD_OPCODE, {
+        httpStatus: 409,
+        reason: 'invalid-state',
+        message: '本次审理已签出审理意见',
+        outlet: '等待异议窗口结束或负责人决定后再处理',
       });
     }
     const parsed = readReviewOpinionContent({ kind: input.kind, content: input.content });
@@ -876,48 +904,33 @@ export class CaseReviewService {
     const at = this.clock.now();
     const opinionId = newUlid();
     if (destination.transitionId === 'T09') {
-      const other = await this.cases.countInFlightApprovals(caseId);
-      const decision = decideTransition({
-        operation: { kind: 'transition', transitionId: 'T09' },
-        subject: await this.subjectOf(view, roles, other),
-      });
-      if (!decision.ok) {
-        if (decision.httpStatus === 400) return { status: 400, body: ruleKeyBody(decision) };
-        if (decision.httpStatus === 200) {
-          return this.holdWarning(prepared, 'case.review-recorded', RECORD_OPCODE, decision);
-        }
-        return this.fail(prepared, 'case.review-recorded', RECORD_OPCODE, {
-          httpStatus: 409,
-          reason: decision.reason,
-          message: decision.message,
-          outlet: decision.outlet,
-          basis: decision.citation,
-        });
-      }
-      const effects = decision.effects;
-      if (effects.kind !== 'advance' || !effects.currentStage || effects.stageEntrySeq === null || !effects.transitionCode) {
-        return this.fail(prepared, 'case.review-recorded', RECORD_OPCODE, {
-          httpStatus: 409,
-          reason: 'invalid-state',
-          message: '该意见没有可执行的去向',
-          outlet: '按意见类型重选',
-        });
-      }
+      const windowDueAt = objectionWindowDueAt(at, this.objectionWindow);
       return this.uow.run(async (tx) => {
-        const moved = await this.commitT09(tx, {
-          prepared,
-          effects,
-          actorId: actor.personnelId,
-          at,
-          opinionId,
-          opinion: parsed.content,
-          destination,
+        await tx.cases.insertReviewOpinion({
+          id: opinionId,
+          caseId,
+          entrySeq: view.stageEntrySeq,
+          opinionKind: parsed.content.kind,
+          content: parsed.content.content,
+          signedBy: actor.personnelId,
           designationId: active.id,
-          note: parsed.content.content,
+          destinationCode: destination.transitionId,
+          outcomeCode: destination.outcomeCode,
+          outcomeLabel: destination.outcomeLabel,
+          createdAt: at,
         });
-        if (!moved.ok) {
+        const opened = await tx.cases.insertReviewObjectionWindow({
+          id: newUlid(),
+          caseId,
+          entrySeq: view.stageEntrySeq,
+          opinionId,
+          dueAt: windowDueAt,
+          openedAt: at,
+          at,
+        });
+        if (!opened) {
           return rejected<CaseReviewHttpOutcome>(
-            blockBody('concurrent-change', '案件已被他人更新', null, '请重新读取后再试'),
+            blockBody('concurrent-change', '审理意见已被他人签出', null, '请重新读取后再试'),
             {
               action: 'case.review-recorded',
               outcome: 'failed',
@@ -935,7 +948,9 @@ export class CaseReviewService {
             opinionId,
             kind: parsed.content.kind,
             destinationCode: destination.transitionId,
-            entrySeq: effects.stageEntrySeq,
+            entrySeq: view.stageEntrySeq,
+            appliedInThisTicket: false,
+            objectionWindowDueAt: windowDueAt.toISOString(),
             confirmationRuleKeys: gate.confirmation?.ruleKeys ?? [],
           }),
         });
@@ -944,7 +959,7 @@ export class CaseReviewService {
             parties,
             confirmation: gate.confirmation,
             at,
-            step: 'review-record:T09',
+            step: 'review-record:T09-window',
             confirmReasons: input.confirmReasons,
           });
         }
@@ -956,11 +971,12 @@ export class CaseReviewService {
             opinionId,
             kind: parsed.content.kind,
             destinationCode: destination.transitionId,
-            currentStage: effects.currentStage,
-            stageEntrySeq: effects.stageEntrySeq,
+            currentStage: view.currentStage,
+            stageEntrySeq: view.stageEntrySeq,
             outcomeCode: destination.outcomeCode,
             outcomeLabel: destination.outcomeLabel,
             frozen: false,
+            objectionWindow: { status: 'open', dueAt: windowDueAt.toISOString() },
           },
         };
       });
@@ -1224,6 +1240,15 @@ export class CaseReviewService {
         outlet: '填写决定理由',
       });
     }
+    const window = await this.cases.readOpenReviewObjectionWindow(loaded.opinionId);
+    if (!window) {
+      return this.fail(prepared, 'case.review-objection-decided', APPROVE_OPCODE, {
+        httpStatus: 409,
+        reason: 'invalid-state',
+        message: '异议窗口已结束',
+        outlet: '按已生效的审理意见继续办理',
+      });
+    }
     if (decision === 'support-handler') {
       const target = text(input.decisionTransition);
       if (target !== 'T10' && target !== 'T11' && target !== 'T12') {
@@ -1283,12 +1308,31 @@ export class CaseReviewService {
             },
           );
         }
+        const windowClosed = await tx.cases.closeReviewObjectionWindow({
+          id: window.id,
+          caseId: loaded.caseId,
+          closeKind: 'support-handler',
+          closedBy: actor.personnelId,
+          at,
+        });
+        if (!windowClosed) {
+          return rejected<CaseReviewHttpOutcome>(
+            blockBody('concurrent-change', '异议窗口已被他人结束', null, '请重新读取后再试'),
+            {
+              action: 'case.review-objection-decided',
+              outcome: 'failed',
+              reason: 'concurrent-change',
+              ...this.parties(prepared, loaded.caseId, APPROVE_OPCODE),
+            },
+          );
+        }
         await tx.audit.append({
           action: 'case.review-objection-decided',
           ...this.parties(prepared, loaded.caseId, APPROVE_OPCODE),
           detail: JSON.stringify({
             caseId: loaded.caseId,
             objectionId,
+            windowId: window.id,
             decision: 'support-handler',
             decisionTransition: target,
           }),
@@ -1310,59 +1354,7 @@ export class CaseReviewService {
     }
     const eligible = await this.objectionEligibility(prepared, 'case.review-objection-decided', APPROVE_OPCODE, objectionId);
     if ('status' in eligible) return eligible;
-    if (prepared.view.currentStage !== 'E04') {
-      const appliedAt = this.clock.now();
-      return this.uow.run(async (tx) => {
-        const stepped = await tx.cases.applyReviewObjectionStep({
-          objectionId,
-          expectedStatus: 'pending_approval',
-          nextStatus: 'decided',
-          decision: 'support-review',
-          decisionTransition: 'T09',
-          decidedBy: actor.personnelId,
-          decidedAt: appliedAt,
-          at: appliedAt,
-        });
-        const closed = stepped && loaded.approvalChainId
-          ? await tx.cases.closeApprovalChain(loaded.approvalChainId)
-          : stepped;
-        if (!closed) {
-          return rejected<CaseReviewHttpOutcome>(
-            blockBody('concurrent-change', '异议呈批已被他人更新', null, '请重新读取后再试'),
-            {
-              action: 'case.review-objection-decided',
-              outcome: 'failed',
-              reason: 'concurrent-change',
-              ...this.parties(prepared, loaded.caseId, APPROVE_OPCODE),
-            },
-          );
-        }
-        await tx.audit.append({
-          action: 'case.review-objection-decided',
-          ...this.parties(prepared, loaded.caseId, APPROVE_OPCODE),
-          detail: JSON.stringify({
-            caseId: loaded.caseId,
-            objectionId,
-            decision: 'support-review',
-            decisionTransition: 'T09',
-            t09AlreadyApplied: true,
-          }),
-        });
-        return {
-          status: 200 as const,
-          body: {
-            result: 'review-objection-decided',
-            objectionId,
-            caseId: loaded.caseId,
-            decision: 'support-review',
-            decisionTransition: 'T09',
-            currentStage: prepared.view.currentStage,
-            stageEntrySeq: prepared.view.stageEntrySeq,
-            t09AlreadyApplied: true,
-          },
-        };
-      });
-    }
+    const returnNote = note === '' ? '负责人支持审理意见，审理意见生效' : note;
     const other = await this.cases.countInFlightApprovals(loaded.caseId);
     const move = decideTransition({
       operation: { kind: 'transition', transitionId: 'T09' },
@@ -1425,6 +1417,24 @@ export class CaseReviewService {
           );
         }
       }
+      const windowClosed = await tx.cases.closeReviewObjectionWindow({
+        id: window.id,
+        caseId: loaded.caseId,
+        closeKind: 'support-review',
+        closedBy: actor.personnelId,
+        at,
+      });
+      if (!windowClosed) {
+        return rejected<CaseReviewHttpOutcome>(
+          blockBody('concurrent-change', '异议窗口已被他人结束', null, '请重新读取后再试'),
+          {
+            action: 'case.review-objection-decided',
+            outcome: 'failed',
+            reason: 'concurrent-change',
+            ...this.parties(prepared, loaded.caseId, APPROVE_OPCODE),
+          },
+        );
+      }
       const opinion = (await tx.cases.listReviewOpinions(loaded.caseId)).find((row) => row.id === loaded.opinionId);
       const moved = await this.commitT09(tx, {
         prepared,
@@ -1436,7 +1446,7 @@ export class CaseReviewService {
         existingOpinion: true,
         destination: opinionDestination((opinion?.opinionKind ?? 'supplementary-investigation') as ReviewOpinionKind, this.limitationExit),
         designationId: opinion?.designationId ?? '',
-        note,
+        note: returnNote,
       });
       if (!moved.ok) {
         return rejected<CaseReviewHttpOutcome>(
@@ -1452,7 +1462,13 @@ export class CaseReviewService {
       await tx.audit.append({
         action: 'case.review-objection-decided',
         ...this.parties(prepared, loaded.caseId, APPROVE_OPCODE),
-        detail: JSON.stringify({ caseId: loaded.caseId, objectionId, decision: 'support-review', decisionTransition: 'T09' }),
+        detail: JSON.stringify({
+          caseId: loaded.caseId,
+          objectionId,
+          windowId: window.id,
+          decision: 'support-review',
+          decisionTransition: 'T09',
+        }),
       });
       return {
         status: 200 as const,
@@ -1467,6 +1483,230 @@ export class CaseReviewService {
         },
       };
     });
+  }
+
+  /** 明示放弃异议（#282 裁 B）：主办／协办在窗口内放弃，同一事务关闭窗口并执行 T09。 */
+  async waiveObjection(
+    actor: ActorRef,
+    caseId: string,
+    input: { readonly note?: unknown },
+  ): Promise<CaseReviewHttpOutcome> {
+    const prepared = await this.prepare(actor, caseId, WAIVE_OPCODE, 'case.review-objection-waived', true);
+    if ('status' in prepared) return prepared;
+    const terminal = await this.terminalHit(prepared, 'case.review-objection-waived', WAIVE_OPCODE);
+    if (terminal) return terminal;
+    if (prepared.view.status !== 'in_progress' || prepared.view.currentStage !== 'E04') {
+      return this.fail(prepared, 'case.review-objection-waived', WAIVE_OPCODE, {
+        httpStatus: 409,
+        reason: 'invalid-state',
+        message: '当前不在审理环节',
+        outlet: '异议窗口开放期间才能放弃异议',
+      });
+    }
+    const latest = (await this.cases.listReviewOpinions(caseId))
+      .filter((row) => row.entrySeq === prepared.view.stageEntrySeq)
+      .at(-1) ?? null;
+    if (!latest || !allowsObjection(latest.opinionKind)) {
+      return this.fail(prepared, 'case.review-objection-waived', WAIVE_OPCODE, {
+        httpStatus: 409,
+        reason: 'objection-not-allowed',
+        message: '只有补充调查或修改纠正可以放弃异议',
+        outlet: '审理意见为补充调查或修改纠正时再放弃',
+      });
+    }
+    const window = await this.cases.readOpenReviewObjectionWindow(latest.id);
+    if (!window) {
+      return this.fail(prepared, 'case.review-objection-waived', WAIVE_OPCODE, {
+        httpStatus: 409,
+        reason: 'invalid-state',
+        message: '没有进行中的异议窗口',
+        outlet: '按审理意见的去向继续办理',
+      });
+    }
+    const objections = await this.cases.listReviewObjections(caseId);
+    if (objections.some((row) => row.opinionId === latest.id && row.status === 'pending_approval')) {
+      return this.fail(prepared, 'case.review-objection-waived', WAIVE_OPCODE, {
+        httpStatus: 409,
+        reason: 'invalid-state',
+        message: '异议呈批待负责人决定',
+        outlet: '先由负责人决定异议呈批',
+      });
+    }
+    const move = decideTransition({
+      operation: { kind: 'transition', transitionId: 'T09' },
+      subject: await this.subjectOf(prepared.view, prepared.roles, await this.cases.countInFlightApprovals(caseId)),
+    });
+    if (!move.ok) {
+      if (move.httpStatus === 400) return { status: 400, body: ruleKeyBody(move) };
+      if (move.httpStatus === 200) {
+        return this.holdWarning(prepared, 'case.review-objection-waived', WAIVE_OPCODE, move);
+      }
+      return this.fail(prepared, 'case.review-objection-waived', WAIVE_OPCODE, {
+        httpStatus: 409,
+        reason: move.reason,
+        message: move.message,
+        outlet: move.outlet,
+        basis: move.citation,
+      });
+    }
+    const effects = move.effects;
+    if (effects.kind !== 'advance' || !effects.currentStage || effects.stageEntrySeq === null || !effects.transitionCode) {
+      return this.fail(prepared, 'case.review-objection-waived', WAIVE_OPCODE, {
+        httpStatus: 409,
+        reason: 'invalid-state',
+        message: '该意见没有可执行的去向',
+        outlet: '按意见类型重选',
+      });
+    }
+    const at = this.clock.now();
+    const note = text(input.note) || '主办／协办明示放弃异议，审理意见生效';
+    const kind = latest.opinionKind as ReviewOpinionKind;
+    return this.uow.run(async (tx) => {
+      const windowClosed = await tx.cases.closeReviewObjectionWindow({
+        id: window.id,
+        caseId,
+        closeKind: 'waived',
+        closedBy: actor.personnelId,
+        at,
+      });
+      if (!windowClosed) {
+        return rejected<CaseReviewHttpOutcome>(
+          blockBody('concurrent-change', '异议窗口已被他人结束', null, '请重新读取后再试'),
+          {
+            action: 'case.review-objection-waived',
+            outcome: 'failed',
+            reason: 'concurrent-change',
+            ...this.parties(prepared, caseId, WAIVE_OPCODE),
+          },
+        );
+      }
+      const moved = await this.commitT09(tx, {
+        prepared,
+        effects,
+        actorId: actor.personnelId,
+        at,
+        opinionId: latest.id,
+        opinion: { kind, content: latest.content },
+        existingOpinion: true,
+        destination: opinionDestination(kind, this.limitationExit),
+        designationId: latest.designationId,
+        note,
+      });
+      if (!moved.ok) {
+        return rejected<CaseReviewHttpOutcome>(
+          blockBody('concurrent-change', '案件已被他人更新', null, '请重新读取后再试'),
+          {
+            action: 'case.review-objection-waived',
+            outcome: 'failed',
+            reason: 'concurrent-change',
+            ...this.parties(prepared, caseId, WAIVE_OPCODE),
+          },
+        );
+      }
+      await tx.audit.append({
+        action: 'case.review-objection-waived',
+        ...this.parties(prepared, caseId, WAIVE_OPCODE),
+        detail: JSON.stringify({
+          caseId,
+          opinionId: latest.id,
+          windowId: window.id,
+          dueAt: window.dueAt.toISOString(),
+          note,
+        }),
+      });
+      return {
+        status: 200 as const,
+        body: {
+          result: 'review-objection-waived',
+          caseId,
+          opinionId: latest.id,
+          destinationCode: 'T09',
+          currentStage: effects.currentStage,
+          stageEntrySeq: effects.stageEntrySeq,
+        },
+      };
+    });
+  }
+
+  /**
+   * 惰性结算到期窗口（#282 裁 B）。相关读写前调用。
+   * 已提交待决定的异议不结算；中止或在途审批链导致 T09 不可执行时留窗，待下次。
+   */
+  private async settleObjectionWindows(caseId: string): Promise<void> {
+    const windows = await this.cases.listReviewObjectionWindows(caseId);
+    const at = this.clock.now();
+    const due = windows.filter((row) => row.status === 'open' && row.dueAt.getTime() <= at.getTime());
+    if (due.length === 0) return;
+    const objections = await this.cases.listReviewObjections(caseId);
+    for (const window of due) {
+      const submitted = objections.some(
+        (row) => row.opinionId === window.opinionId && row.status === 'pending_approval',
+      );
+      if (submitted) continue;
+      await this.settleObjectionWindow(caseId, window, at);
+    }
+  }
+
+  private async settleObjectionWindow(
+    caseId: string,
+    window: ReviewObjectionWindowRow,
+    at: Date,
+  ): Promise<void> {
+    const view = await this.cases.readCaseView(caseId);
+    if (!view || view.status !== 'in_progress' || view.currentStage !== 'E04' || view.stageEntrySeq !== window.entrySeq) {
+      return;
+    }
+    const opinion = (await this.cases.listReviewOpinions(caseId)).find((row) => row.id === window.opinionId);
+    if (!opinion) return;
+    const decision = decideTransition({
+      operation: { kind: 'transition', transitionId: 'T09' },
+      subject: await this.subjectOf(view, [], await this.cases.countInFlightApprovals(caseId)),
+    });
+    if (!decision.ok) return;
+    const effects = decision.effects;
+    if (effects.kind !== 'advance' || !effects.currentStage || effects.stageEntrySeq === null || !effects.transitionCode) {
+      return;
+    }
+    const kind = opinion.opinionKind as ReviewOpinionKind;
+    const prepared: Prepared = { actorId: opinion.signedBy, actorCode: null, account: null, roles: [], view };
+    try {
+      await this.uow.run(async (tx) => {
+        const windowClosed = await tx.cases.closeReviewObjectionWindow({
+          id: window.id,
+          caseId,
+          closeKind: 'expired',
+          closedBy: null,
+          at,
+        });
+        if (!windowClosed) return;
+        const moved = await this.commitT09(tx, {
+          prepared,
+          effects,
+          actorId: opinion.signedBy,
+          at,
+          opinionId: opinion.id,
+          opinion: { kind, content: opinion.content },
+          existingOpinion: true,
+          destination: opinionDestination(kind, this.limitationExit),
+          designationId: opinion.designationId,
+          note: '异议窗口到期，审理意见生效',
+        });
+        if (!moved.ok) throw new ObjectionWindowSettleAbort();
+        await tx.audit.append({
+          action: 'case.review-objection-expired',
+          ...this.partiesFor(opinion.signedBy, null, view.handlingOrgId, caseId, RECORD_OPCODE),
+          detail: JSON.stringify({
+            caseId,
+            opinionId: opinion.id,
+            windowId: window.id,
+            dueAt: window.dueAt.toISOString(),
+            settledAt: at.toISOString(),
+          }),
+        });
+      });
+    } catch (error) {
+      if (!(error instanceof ObjectionWindowSettleAbort)) throw error;
+    }
   }
 
   /** T09 同一事务：意见（首次签出时）、环节实例、迁移历史、R2 退回记录、期限锚点、旧实例失效。 */
@@ -1639,8 +1879,8 @@ export class CaseReviewService {
   }
 
   /**
-   * 异议对象：本案最近一条审理意见。补充调查或修改纠正签出后已经走 T09 时，
-   * 该意见仍可被异议（票面「可提 T09a」与「签出→T09」并存时的落点，见 PR 待澄清）。
+   * 异议对象：本案最近一条审理意见，且该意见的异议窗口仍在开放。
+   * 窗口已结束（到期、放弃或负责人决定）时不能再提 T09a。
    */
   private async objectionEligibility(
     prepared: Prepared,
@@ -1655,6 +1895,27 @@ export class CaseReviewService {
         reason: 'objection-not-allowed',
         message: '只有补充调查或修改纠正可以提审理异议',
         outlet: '审理意见为补充调查或修改纠正时再提',
+      });
+    }
+    if (
+      prepared.view.status !== 'in_progress' ||
+      prepared.view.currentStage !== 'E04' ||
+      prepared.view.stageEntrySeq !== latest.entrySeq
+    ) {
+      return this.fail(prepared, action, opcode, {
+        httpStatus: 409,
+        reason: 'invalid-state',
+        message: '当前不在该审理意见所在环节',
+        outlet: '等待补充调查或修改纠正回流后再审理',
+      });
+    }
+    const window = await this.cases.readOpenReviewObjectionWindow(latest.id);
+    if (!window) {
+      return this.fail(prepared, action, opcode, {
+        httpStatus: 409,
+        reason: 'invalid-state',
+        message: '异议窗口已结束',
+        outlet: '按审理意见的去向继续办理',
       });
     }
     const objections = await this.cases.listReviewObjections(prepared.view.id);
@@ -1780,13 +2041,16 @@ export class CaseReviewService {
     action: CaseReviewAction,
     mustBeHandler: boolean,
   ): Promise<Prepared | CaseReviewHttpOutcome> {
-    const view = await this.cases.readCaseView(caseId);
-    if (!view) return { status: 404, body: { result: 'not-found' } };
+    const initialView = await this.cases.readCaseView(caseId);
+    if (!initialView) return { status: 404, body: { result: 'not-found' } };
     const account = await this.directory.findById(actor.personnelId);
     const roles = await this.identity.listActiveRoleNames(actor.personnelId);
-    const prepared: Prepared = { actorId: actor.personnelId, actorCode: account?.code ?? null, account, roles, view };
-    const denied = await this.authorize(actor, opcode, view.handlingOrgId, caseId);
-    if (denied) return this.denied(prepared, action, opcode, denied);
+    const initial: Prepared = { actorId: actor.personnelId, actorCode: account?.code ?? null, account, roles, view: initialView };
+    const denied = await this.authorize(actor, opcode, initialView.handlingOrgId, caseId);
+    if (denied) return this.denied(initial, action, opcode, denied);
+    await this.settleObjectionWindows(caseId);
+    const view = (await this.cases.readCaseView(caseId)) ?? initialView;
+    const prepared: Prepared = { ...initial, view };
     if (mustBeHandler && !view.handlers.some((row) => row.personnelId === actor.personnelId && HANDLER_ROLES.has(row.role))) {
       return { status: 403, body: { reason: 'permission-denied' } };
     }
@@ -1994,6 +2258,22 @@ function activeDesignation(
 function latestOpinionOf(rows: readonly ReviewOpinionRow[], entrySeq: number): ReviewOpinionRow | null {
   return rows.filter((row) => row.entrySeq === entrySeq).at(-1) ?? null;
 }
+
+function objectionWindowView(row: ReviewObjectionWindowRow | null | undefined) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    opinionId: row.opinionId,
+    status: row.status,
+    dueAt: row.dueAt.toISOString(),
+    openedAt: row.openedAt.toISOString(),
+    closedAt: row.closedAt ? row.closedAt.toISOString() : null,
+    closeKind: row.closeKind,
+    closedBy: row.closedBy,
+  };
+}
+
+class ObjectionWindowSettleAbort extends Error {}
 
 function latestHearingEntry(view: CaseView): number | null {
   const rows = view.instances.filter((row) => row.stage === 'E04');

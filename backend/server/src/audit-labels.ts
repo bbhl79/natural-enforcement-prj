@@ -88,6 +88,8 @@ const OPERATION_OF_ACTION: Readonly<Record<string, string>> = {
   'case.review-objection-drafted': '拟制审理异议呈批',
   'case.review-objection-submitted': '提交审理异议呈批',
   'case.review-objection-decided': '决定审理异议',
+  'case.review-objection-waived': '放弃审理异议',
+  'case.review-objection-expired': '异议窗口到期',
   'deadline.drafted': '拟制期限呈批',
   'deadline.submitted': '提交期限呈批',
   'deadline.reviewed': '审核期限呈批',

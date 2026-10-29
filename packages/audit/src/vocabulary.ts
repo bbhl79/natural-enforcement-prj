@@ -105,6 +105,9 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'case.review-objection-drafted',
   'case.review-objection-submitted',
   'case.review-objection-decided',
+  // 异议窗口（#282 裁 B）：明示放弃与到期结算。
+  'case.review-objection-waived',
+  'case.review-objection-expired',
   // 期限呈批与锚点（#246）。成功与失败都记这五个动作。
   'deadline.drafted',
   'deadline.submitted',
@@ -743,7 +746,7 @@ export const CASE_RETURNED_FAILED_REASONS = [
 ] as const;
 export type CaseReturnedFailedReason = (typeof CASE_RETURNED_FAILED_REASONS)[number];
 
-/** 审理与异议呈批被拒（#240）。九个动作共用这一张原因表。 */
+/** 审理与异议呈批被拒（#240）。审理动作共用这一张原因表。 */
 export const CASE_REVIEW_FAILED_REASONS = [
   'invalid-state',
   'invalid-kind',
@@ -794,6 +797,8 @@ export const CASE_REVIEW_ACTIONS = [
   'case.review-objection-drafted',
   'case.review-objection-submitted',
   'case.review-objection-decided',
+  'case.review-objection-waived',
+  'case.review-objection-expired',
 ] as const;
 export type CaseReviewAction = (typeof CASE_REVIEW_ACTIONS)[number];
 
@@ -1016,6 +1021,9 @@ export const AUDIT_DETAIL_ACTIONS = [
   'case.review-objection-drafted',
   'case.review-objection-submitted',
   'case.review-objection-decided',
+  // 异议窗口（#282 裁 B）：结束方式与到期时刻。
+  'case.review-objection-waived',
+  'case.review-objection-expired',
   'deadline.drafted',
   'deadline.submitted',
   'deadline.reviewed',

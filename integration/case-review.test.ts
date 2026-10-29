@@ -1,4 +1,5 @@
 // #240 调查终结与审理：T08 报告呈批、审理人指定与更换、case.review.record、T09 回流、T09a 异议呈批。
+// #282 裁 B：补充调查／修改纠正签出只开异议窗口；窗口到期、明示放弃或支持审理意见才执行 T09。
 import type { AddressInfo } from 'node:net';
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -7,6 +8,9 @@ import { createApplication } from '../backend/server/src/persistence.module.ts';
 import { openClonedDatabase, type ClonedDatabase } from './cloned-database.ts';
 
 const T0 = Date.parse('2026-10-27T06:00:00.000Z');
+const DAY = 24 * 60 * 60 * 1000;
+/** 可变时钟：窗口到期用例把时钟拨到到期之后，用例结束恢复。 */
+let nowMs = T0;
 const SEED_PASSWORD = 'Seed-pass-52';
 const NEW_PASSWORD = 'Case-review-240!';
 const INITIAL_PASSWORD = 'Review-240!!';
@@ -72,6 +76,7 @@ let reviewerId = '';
 let reviewer2Id = '';
 let conflictedId = '';
 let outOfScopeId = '';
+let approverId = '';
 let offset = 0;
 
 function sessionCookie(response: Response): string {
@@ -307,6 +312,30 @@ async function caseState(caseId: string): Promise<Record<string, unknown>> {
   return (await getJson(`/api/cases/${caseId}`, 'P-240-RV')).body;
 }
 
+async function waive(caseId: string, code: string, extra: Record<string, unknown> = {}): Promise<{ status: number; body: Record<string, unknown> }> {
+  return postJson(`/api/cases/${caseId}/review-objection-waivers`, code, extra);
+}
+
+async function openWindow(caseId: string) {
+  return cloned.prisma.caseReviewObjectionWindow.findFirst({ where: { caseId, status: 'open' } });
+}
+
+/** 到 E04 并签出补充调查或修改纠正，返回案件与窗口。 */
+async function signIntoWindow(kind: 'supplementary-investigation' | 'correction'): Promise<{
+  caseId: string;
+  dueAt: Date;
+}> {
+  const { caseId } = await toE04();
+  expect((await designate(caseId, 'P-240-HEAD', reviewerId)).status).toBe(200);
+  // 立案期限锚点在首次读期限时惰性写入。
+  expect((await getJson(`/api/cases/${caseId}/deadlines`, 'P-240-HEAD')).status).toBe(200);
+  const signed = await sign(caseId, 'P-240-RV', kind);
+  expect(signed.status, JSON.stringify(signed.body)).toBe(200);
+  const window = await openWindow(caseId);
+  if (!window) throw new Error('签出后没有异议窗口');
+  return { caseId, dueAt: window.dueAt };
+}
+
 async function trails(action: string, resourceId: string): Promise<Array<{ outcome: string; reason: string | null; detail: string | null }>> {
   return cloned.prisma.$queryRaw<Array<{ outcome: string; reason: string | null; detail: string | null }>>`
     SELECT outcome, reason, detail
@@ -327,7 +356,7 @@ async function confirmationRows(resourceId: string): Promise<Array<{ detail: str
 
 beforeAll(async () => {
   cloned = await openClonedDatabase();
-  const app = await createApplication(cloned.connectionString, { now: () => new Date(T0) }, undefined, {
+  const app = await createApplication(cloned.connectionString, { now: () => new Date(nowMs) }, undefined, {
     storagePort: new RecordingStorage() as never,
     queuePort: new RecordingQueue() as never,
     filingAdminReview: 'one-level',
@@ -354,6 +383,7 @@ beforeAll(async () => {
   conflictedId = await seedPerson('P-240-IMP', '回避审核', stationAId, ['行政审核'], '13900024007', false);
   outOfScopeId = await seedPerson('P-240-OUT', '乙区审核', deptBId, ['行政审核'], '13900024008', false);
   await seedPerson('P-240-HEAD', '甲所负责人', stationAId, ['行政审批', '行政审核'], '13900024009', false);
+  approverId = (await cloned.prisma.personnel.findFirstOrThrow({ where: { code: 'P-APPROVE-HQ' } })).id;
 }, 180_000);
 
 afterAll(async () => {
@@ -578,20 +608,63 @@ describe('#240 审理意见签出守卫', () => {
   });
 });
 
-describe('#240 T09 回流与锚点', () => {
-  it('补充调查：回 E02、次序号加 1、退回 R2、旧实例失效、新锚点且 90 日到期日不变', async () => {
-    const { caseId, reportId } = await toE04();
-    expect((await designate(caseId, 'P-240-HEAD', reviewerId)).status).toBe(200);
-    const before = await getJson(`/api/cases/${caseId}/deadlines`, 'P-240-HEAD');
-    const beforeRows = (before.body.rows as Array<Record<string, unknown>>).filter((row) => row.ruleKey === 'case.handle');
-    expect(beforeRows).toHaveLength(1);
-    const dueOn = beforeRows[0]?.dueOn;
+describe('#282 T09 时序：签出开窗，窗口结束才回流', () => {
+  it('签出补充调查／修改纠正：意见生效并开窗，仍在 E04，不立刻回 E02，无新锚点', async () => {
+    for (const kind of ['supplementary-investigation', 'correction'] as const) {
+      const { caseId } = await signIntoWindow(kind);
+      const signedView = await getJson(`/api/cases/${caseId}/review`, 'P-240-RV');
+      expect(signedView.body.opinions).toEqual([
+        expect.objectContaining({ kind, destinationCode: 'T09', objectionWindow: expect.objectContaining({ status: 'open' }) }),
+      ]);
 
-    const signed = await sign(caseId, 'P-240-RV', 'supplementary-investigation');
-    expect(signed.status, JSON.stringify(signed.body)).toBe(200);
-    expect(signed.body).toMatchObject({ destinationCode: 'T09', currentStage: 'E02', stageEntrySeq: 2 });
-    expect(signed.body.opinionId).toBeTruthy();
-    expect(await cloned.prisma.caseReviewOpinion.count({ where: { caseId, opinionKind: 'supplementary-investigation' } })).toBe(1);
+      const state = await caseState(caseId);
+      expect(state.currentStage).toBe('E04');
+      expect(state.status).toBe('in_progress');
+      expect(state.stageEntrySeq).toBe(1);
+      expect(state.returns).toEqual([]);
+      expect(await cloned.prisma.caseDeadlineRow.count({ where: { caseId, ruleKey: 'case.handle' } })).toBe(1);
+      const window = await openWindow(caseId);
+      expect(window?.dueAt.getTime()).toBe(T0 + 3 * DAY);
+
+      const again = await sign(caseId, 'P-240-RV', 'penalty');
+      expect(again.status).toBe(409);
+      expect(again.body.message).toBe('本次审理已签出审理意见');
+    }
+  });
+
+  it('窗口内主办／协办可提 T09a 异议呈批', async () => {
+    const byMain = await signIntoWindow('supplementary-investigation');
+    const drafted = await postJson(`/api/cases/${byMain.caseId}/review-objections`, 'P-240-H1', {
+      note: '已补充证据，不同意补充调查',
+      evidenceRefs: ['ev-1'],
+    });
+    expect(drafted.status, JSON.stringify(drafted.body)).toBe(200);
+    expect((await postJson(`/api/review-objections/${String(drafted.body.objectionId)}/submit`, 'P-240-H1')).status).toBe(200);
+
+    const byAssist = await signIntoWindow('correction');
+    const assistDraft = await postJson(`/api/cases/${byAssist.caseId}/review-objections`, 'P-240-DUAL', {
+      note: '协办提出异议',
+    });
+    expect(assistDraft.status, JSON.stringify(assistDraft.body)).toBe(200);
+    expect((await postJson(`/api/review-objections/${String(assistDraft.body.objectionId)}/submit`, 'P-240-DUAL')).status).toBe(200);
+  });
+
+  it('窗口到期后惰性结算：回 E02、次序号加 1、退回 R2、旧实例失效、新锚点且 90 日到期日不变', async () => {
+    const { caseId, dueAt } = await signIntoWindow('supplementary-investigation');
+    const before = await cloned.prisma.caseDeadlineRow.findMany({ where: { caseId, ruleKey: 'case.handle' } });
+    expect(before).toHaveLength(1);
+    const dueOn = before[0]?.dueOn?.toISOString();
+
+    const restore = nowMs;
+    nowMs = dueAt.getTime() + 1_000;
+    try {
+      // 会话按 T0 建立，拨钟后过期；重新登录再触发惰性结算。
+      cookies.clear();
+      const view = await getJson(`/api/cases/${caseId}/review`, 'P-240-RV');
+      expect(view.status, JSON.stringify(view.body)).toBe(200);
+    } finally {
+      nowMs = restore;
+    }
 
     const state = await caseState(caseId);
     expect(state.currentStage).toBe('E02');
@@ -601,26 +674,32 @@ describe('#240 T09 回流与锚点', () => {
       expect.objectContaining({ reasonCode: 'R2', reflow: true, entrySeqBefore: 1, entrySeqAfter: 2, receiverId: handlerMainId }),
     ]);
     const instances = state.instances as Array<Record<string, unknown>>;
-    const oldE04 = instances.find((row) => row.stage === 'E04' && row.entrySeq === 1);
-    expect(oldE04?.invalidated).toBe(true);
-    const newE02 = instances.find((row) => row.stage === 'E02' && row.entrySeq === 2);
-    expect(newE02).toMatchObject({ status: 'drafting', transitionCode: 'T09', invalidated: false });
+    expect(instances.find((row) => row.stage === 'E04' && row.entrySeq === 1)?.invalidated).toBe(true);
+    expect(instances.find((row) => row.stage === 'E02' && row.entrySeq === 2)).toMatchObject({
+      status: 'drafting',
+      transitionCode: 'T09',
+      invalidated: false,
+    });
 
     const rows = await cloned.prisma.caseDeadlineRow.findMany({ where: { caseId, ruleKey: 'case.handle' }, orderBy: { entrySeq: 'asc' } });
     expect(rows).toHaveLength(2);
-    expect(rows.map((row) => [row.entrySeq, row.procedureNode, row.startedOn.toISOString().slice(0, 10), row.dueOn?.toISOString().slice(0, 10)])).toEqual([
+    expect(rows.map((row) => [row.entrySeq, row.procedureNode, row.startedOn.toISOString().slice(0, 10), row.dueOn?.toISOString()])).toEqual([
       [1, 'E02', '2026-10-27', dueOn],
       [2, 'E02', '2026-10-27', dueOn],
     ]);
+    const window = await cloned.prisma.caseReviewObjectionWindow.findFirstOrThrow({ where: { caseId } });
+    expect(window).toMatchObject({ status: 'closed', closeKind: 'expired', closedBy: null });
+    expect(await trails('case.review-objection-expired', caseId)).toEqual([
+      expect.objectContaining({ outcome: 'succeeded' }),
+    ]);
 
-    // 回来后再提报告须重新审理：新 E04 没有在任指定，签出 409。
+    // 回流后再提报告：新 E04 没有在任指定，签出 409。
     const second = await saveReport(caseId, [penaltySuggestion((await cloned.prisma.caseViolationRecord.findFirstOrThrow({ where: { caseId } })).id)]);
     expect(second.status, JSON.stringify(second.body)).toBe(200);
     const secondId = String(second.body.approvalId);
     expect((await submitReport(secondId)).status).toBe(200);
     expect((await reviewReport(secondId)).status).toBe(200);
-    const approved = await approveReport(secondId, 'P-APPROVE-HQ');
-    expect(approved.status, JSON.stringify(approved.body)).toBe(200);
+    expect((await approveReport(secondId, 'P-APPROVE-HQ')).status).toBe(200);
     const again = await caseState(caseId);
     expect(again.currentStage).toBe('E04');
     expect(again.stageEntrySeq).toBe(2);
@@ -630,28 +709,37 @@ describe('#240 T09 回流与锚点', () => {
 
     const opinions = (await getJson(`/api/cases/${caseId}/review`, 'P-240-RV')).body.opinions as Array<Record<string, unknown>>;
     expect(opinions).toEqual([expect.objectContaining({ kind: 'supplementary-investigation', destinationCode: 'T09' })]);
-    expect(reportId).toBeTruthy();
   });
 
-  it('修改纠正：同样回 E02、次序号加 1，留痕意见类型单独记载', async () => {
-    const { caseId } = await toE04();
-    expect((await designate(caseId, 'P-240-HEAD', reviewerId)).status).toBe(200);
-    expect((await getJson(`/api/cases/${caseId}/deadlines`, 'P-240-HEAD')).status).toBe(200);
-    const signed = await sign(caseId, 'P-240-RV', 'correction');
-    expect(signed.status, JSON.stringify(signed.body)).toBe(200);
-    expect(signed.body.destinationCode).toBe('T09');
-    const opinion = await cloned.prisma.caseReviewOpinion.findFirstOrThrow({ where: { caseId } });
-    expect(opinion.opinionKind).toBe('correction');
-    expect(opinion.destinationCode).toBe('T09');
+  it('明示放弃异议：主办或协办可放弃，同一事务回 E02；非承办人 403', async () => {
+    const { caseId } = await signIntoWindow('correction');
+    expect((await waive(caseId, 'P-240-RV')).status).toBe(403);
+    const waived = await waive(caseId, 'P-240-H1', { note: '放弃异议，按意见回流' });
+    expect(waived.status, JSON.stringify(waived.body)).toBe(200);
+    expect(waived.body).toMatchObject({
+      result: 'review-objection-waived',
+      destinationCode: 'T09',
+      currentStage: 'E02',
+      stageEntrySeq: 2,
+    });
+
     const state = await caseState(caseId);
-    expect(state.currentStage).toBe('E02');
-    expect(state.stageEntrySeq).toBe(2);
     expect((state.returns as Array<Record<string, unknown>>)[0]).toMatchObject({ reasonCode: 'R2', entrySeqAfter: 2 });
     const rows = await cloned.prisma.caseDeadlineRow.findMany({ where: { caseId, ruleKey: 'case.handle' } });
-    expect(rows.map((row) => row.dueOn?.toISOString().slice(0, 10))).toEqual([
-      rows[0]?.dueOn?.toISOString().slice(0, 10),
-      rows[0]?.dueOn?.toISOString().slice(0, 10),
+    expect(rows).toHaveLength(2);
+    expect(rows[1]?.dueOn?.toISOString()).toBe(rows[0]?.dueOn?.toISOString());
+    const window = await cloned.prisma.caseReviewObjectionWindow.findFirstOrThrow({ where: { caseId } });
+    expect(window).toMatchObject({ status: 'closed', closeKind: 'waived', closedBy: handlerMainId });
+    expect(await trails('case.review-objection-waived', caseId)).toEqual([
+      expect.objectContaining({ outcome: 'succeeded' }),
     ]);
+
+    expect((await waive(caseId, 'P-240-H1')).status).toBe(409);
+
+    const assistCase = await signIntoWindow('supplementary-investigation');
+    const assistWaived = await waive(assistCase.caseId, 'P-240-DUAL');
+    expect(assistWaived.status, JSON.stringify(assistWaived.body)).toBe(200);
+    expect((await caseState(assistCase.caseId)).currentStage).toBe('E02');
   });
 
   it('不存在 E04→E03 迁移：E04 尝试 T08 返回 409', async () => {
@@ -713,13 +801,12 @@ describe('#240 审理通过、冻结与时效出口', () => {
   });
 });
 
-describe('#240 T09a 审理异议呈批', () => {
-  it('补充调查与修改纠正同一套参数：可拟制、提交并由负责人决定；异议不在退回列表', async () => {
+describe('#282 T09a 审理异议呈批', () => {
+  it('支持承办人员：不走 T09，E04 以负责人决定结束，原意见可查，不进退回列表', async () => {
     for (const kind of ['supplementary-investigation', 'correction'] as const) {
-      const { caseId } = await toE04();
-      expect((await designate(caseId, 'P-240-HEAD', reviewerId)).status).toBe(200);
-      expect((await sign(caseId, 'P-240-RV', kind)).status).toBe(200);
+      const { caseId } = await signIntoWindow(kind);
       const beforeReturns = (await caseState(caseId)).returns as Array<Record<string, unknown>>;
+      expect(beforeReturns).toEqual([]);
 
       const drafted = await postJson(`/api/cases/${caseId}/review-objections`, 'P-240-H1', {
         note: '已补充证据，不同意补充调查',
@@ -734,7 +821,13 @@ describe('#240 T09a 审理异议呈批', () => {
         decisionTransition: 'T11',
       });
       expect(decided.status, JSON.stringify(decided.body)).toBe(200);
-      expect(decided.body).toMatchObject({ decision: 'support-handler', decisionTransition: 'T11' });
+      expect(decided.body).toMatchObject({
+        decision: 'support-handler',
+        decisionTransition: 'T11',
+        currentStage: 'E04',
+        stageEntrySeq: 1,
+        concludedBy: 'leader-decision',
+      });
 
       const view = await getJson(`/api/cases/${caseId}/review`, 'P-240-RV');
       expect((view.body.opinions as Array<Record<string, unknown>>)[0]).toMatchObject({ kind, destinationCode: 'T09' });
@@ -743,18 +836,25 @@ describe('#240 T09a 审理异议呈批', () => {
         decision: 'support-handler',
         decisionTransition: 'T11',
       });
+      expect(view.body.entries).toMatchObject({ sign: false, designate: false, objection: false, waive: false });
       const after = await caseState(caseId);
+      expect(after.currentStage).toBe('E04');
+      expect(after.status).toBe('in_progress');
       expect(after.returns).toEqual(beforeReturns);
+      expect(await cloned.prisma.caseDeadlineRow.count({ where: { caseId, ruleKey: 'case.handle' } })).toBe(1);
       const frozen = await cloned.prisma.caseFrozenDecision.findFirst({ where: { caseId } });
       expect(frozen?.summaryJson).toContain('leader-decision');
+      const window = await cloned.prisma.caseReviewObjectionWindow.findFirstOrThrow({ where: { caseId } });
+      expect(window).toMatchObject({ status: 'closed', closeKind: 'support-handler', closedBy: approverId });
     }
   });
 
-  it('负责人支持审理意见：T09 已生效，不再追加退回记录', async () => {
-    const { caseId } = await toE04();
-    expect((await designate(caseId, 'P-240-HEAD', reviewerId)).status).toBe(200);
-    expect((await sign(caseId, 'P-240-RV', 'correction')).status).toBe(200);
-    const before = (await caseState(caseId)).returns as Array<Record<string, unknown>>;
+  it('支持审理意见：同一事务执行 T09，回 E02、次序号加 1、退回 R2、新锚点且 90 日不变', async () => {
+    const { caseId } = await signIntoWindow('correction');
+    const beforeRows = await cloned.prisma.caseDeadlineRow.findMany({ where: { caseId, ruleKey: 'case.handle' } });
+    expect(beforeRows).toHaveLength(1);
+    const dueOn = beforeRows[0]?.dueOn?.toISOString();
+
     const drafted = await postJson(`/api/cases/${caseId}/review-objections`, 'P-240-H1', { note: '有异议' });
     const objectionId = String(drafted.body.objectionId);
     expect((await postJson(`/api/review-objections/${objectionId}/submit`, 'P-240-H1')).status).toBe(200);
@@ -762,10 +862,25 @@ describe('#240 T09a 审理异议呈批', () => {
       decision: 'support-review',
     });
     expect(decided.status, JSON.stringify(decided.body)).toBe(200);
-    expect(decided.body).toMatchObject({ decision: 'support-review', t09AlreadyApplied: true });
+    expect(decided.body).toMatchObject({ decision: 'support-review', decisionTransition: 'T09', currentStage: 'E02', stageEntrySeq: 2 });
+    expect(decided.body.t09AlreadyApplied).toBeUndefined();
+
     const after = await caseState(caseId);
     expect(after.currentStage).toBe('E02');
-    expect(after.returns).toEqual(before);
+    expect(after.stageEntrySeq).toBe(2);
+    expect(after.returns).toEqual([
+      expect.objectContaining({ reasonCode: 'R2', reflow: true, entrySeqBefore: 1, entrySeqAfter: 2 }),
+    ]);
+    const rows = await cloned.prisma.caseDeadlineRow.findMany({ where: { caseId, ruleKey: 'case.handle' }, orderBy: { entrySeq: 'asc' } });
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => [row.entrySeq, row.dueOn?.toISOString()])).toEqual([
+      [1, dueOn],
+      [2, dueOn],
+    ]);
+    const window = await cloned.prisma.caseReviewObjectionWindow.findFirstOrThrow({ where: { caseId } });
+    expect(window).toMatchObject({ status: 'closed', closeKind: 'support-review', closedBy: approverId });
+    const opinions = (await getJson(`/api/cases/${caseId}/review`, 'P-240-RV')).body.opinions as Array<Record<string, unknown>>;
+    expect(opinions).toEqual([expect.objectContaining({ kind: 'correction', destinationCode: 'T09' })]);
   });
 
   it('非补充调查或修改纠正的意见不能提异议 409', async () => {

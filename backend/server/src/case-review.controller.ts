@@ -1,5 +1,6 @@
 // 调查终结与审理的 HTTP 入口（#240）。
 // 呈批走 doc.*；审理意见用 case.review.record；审理人指定复用行政审核一级的码（过渡，待 #230 回写 #71）。
+// 明示放弃异议复用 doc.submit（过渡，待 #230 回写 #71）。
 
 import { Body, Controller, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import type { ActorRef } from '@natural-enforcement/identity';
@@ -147,6 +148,18 @@ export class CaseReviewController {
     @Param('objectionId') objectionId: string,
   ): Promise<void> {
     const outcome = await this.review.submitObjection(req.actor as ActorRef, objectionId);
+    res.status(outcome.status).json(outcome.body);
+  }
+
+  @Post('api/cases/:id/review-objection-waivers')
+  @UseGuards(SameOriginReadGuard)
+  async waiveObjection(
+    @Req() req: AuthenticatedRequest,
+    @Res() res: HttpReply,
+    @Param('id') id: string,
+    @Body() body: { readonly note?: unknown },
+  ): Promise<void> {
+    const outcome = await this.review.waiveObjection(req.actor as ActorRef, id, { note: body.note });
     res.status(outcome.status).json(outcome.body);
   }
 
