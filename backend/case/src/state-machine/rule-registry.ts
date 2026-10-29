@@ -20,6 +20,13 @@ export const X26_MESSAGE = '命中必审但未经告知前法审就批准告知�
 /** 较大数额提示的规则键（#272；hint，不阻断、不要求确认）。 */
 export const HEARING_AMOUNT_RULE_KEY = 'NOTICE-LARGE-AMOUNT';
 
+/** 审理人与法审人为同一人的警告（#269；normative，不阻断，Q23 下理由选填）。 */
+export const LEGAL_SAME_PERSON_RULE_KEY = 'LEGAL-SAME-PERSON';
+export const LEGAL_SAME_PERSON_MESSAGE = '审理人与法审人为同一人';
+
+/** 法审人员法律职业资格未登记的提示（#269；hint，不阻断、不要求确认）。 */
+export const LEGAL_QUALIFICATION_RULE_KEY = 'LEGAL-QUALIFICATION';
+
 /**
  * 调查审理职能分离（#240 R-03）。独立规则，不占 X 号。
  * 被指定人为本案主办或协办（含已换下的）时警告，理由必填，确认入审计。
@@ -101,6 +108,24 @@ export const RULE_PARAMETERS: readonly RuleParameter[] = [
     level: 'hint',
     message: '罚款额、没收等价值或二者相加达较大数额标准，提示按应听证情形处理',
     citation: '粤府令第294号第7条',
+    reasonRequired: false,
+  },
+  // #269：审理人与法审人为同一人。警告不阻断，确认后留痕；理由选填。
+  {
+    ruleKey: LEGAL_SAME_PERSON_RULE_KEY,
+    version: '1',
+    level: 'warn',
+    message: LEGAL_SAME_PERSON_MESSAGE,
+    citation: '省办法第6条第2款',
+    reasonRequired: false,
+  },
+  // #269：法律职业资格未登记。hint 不要求确认、不阻断。
+  {
+    ruleKey: LEGAL_QUALIFICATION_RULE_KEY,
+    version: '1',
+    level: 'hint',
+    message: '法审人员法律职业资格未登记',
+    citation: '行政处罚法第58条第2款',
     reasonRequired: false,
   },
 ];
