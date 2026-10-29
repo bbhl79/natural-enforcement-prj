@@ -518,7 +518,7 @@ describe('#269 自动必审与告知前法审', () => {
     expect((await caseView(caseId)).currentStage).toBe('E05');
   }, 60_000);
 
-  it('不必审情形：罚款 5000 元无听证，告知照常；决定闸口放行', async () => {
+  it('不必审情形：罚款 5000 元无听证，告知照常；决定闸口放行；主动送审受理', async () => {
     const caseId = await toE04();
     const view = await getJson(`/api/cases/${caseId}/legal-review`, 'P-269-H1');
     expect(view.body.mandatoryReview).toMatchObject({ required: false, excluded: false });
@@ -528,6 +528,11 @@ describe('#269 自动必审与告知前法审', () => {
     const gate = await decisionGate(caseId);
     expect(gate.status, JSON.stringify(gate.body)).toBe(200);
     expect(gate.body).toMatchObject({ result: 'decision-gate-passed', mandatoryReview: false });
+
+    const voluntaryCase = await toE04();
+    const voluntary = await startReview(voluntaryCase, legalOneId);
+    expect(voluntary.status, JSON.stringify(voluntary.body)).toBe(200);
+    expect(voluntary.body.determination).toMatchObject({ required: false, autoReasons: [], manualItems: [] });
   }, 60_000);
 });
 

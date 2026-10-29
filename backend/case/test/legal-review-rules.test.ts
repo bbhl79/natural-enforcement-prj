@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   COLLECTIVE_DISCUSSION_CRITERIA,
+  GUANGZHOU_PROCEDURE_REFERENCE_LIST_V1,
   LEGAL_REVIEW_LIST_ID,
   LEGAL_REVIEW_LIST_VERSION,
   MANDATORY_REVIEW_PENALTY_CODES,
@@ -333,6 +334,16 @@ describe('#269 集体讨论与提示', () => {
       ok: false,
       hit: { reason: 'missing-note' },
     });
+  });
+
+  it('广州市局程序条参照适用清单可配置；冲突时以本地／已锁为准', () => {
+    expect(GUANGZHOU_PROCEDURE_REFERENCE_LIST_V1.ruleId).toBe('cfg.rule.guangzhou-procedure-reference.v1');
+    expect(GUANGZHOU_PROCEDURE_REFERENCE_LIST_V1.precedence).toBe('local-or-locked');
+    expect(GUANGZHOU_PROCEDURE_REFERENCE_LIST_V1.items.map((row) => row.code)).toEqual([
+      'hearing-re-review',
+      'two-handlers',
+      'legal-review-deadline',
+    ]);
   });
 
   it('审理人＝法审人：警告不阻断；资格未登记：提示不阻断', () => {
