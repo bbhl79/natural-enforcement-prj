@@ -476,6 +476,8 @@ declare -A ASSEMBLY_EXEMPT=(
   ["integration/case-return.test.ts"]="../backend/identity/src/index.ts"
   # #239：改派用例只用身份公共出口 index.ts 的 newUlid。与 #238 同口径。
   ["integration/case-reassign.test.ts"]="../backend/identity/src/index.ts"
+  # #272：告知／听证用例用期限公共出口的 DEADLINE_RULE_VERSION 断言期限规则版本。
+  ["integration/notice-hearing.test.ts"]="../backend/deadline/src/index.ts"
 )
 
 is_assembly_exempt() { # $1 = 相对 ROOT 路径, $2 = specifier
