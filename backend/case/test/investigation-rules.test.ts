@@ -85,17 +85,15 @@ describe('呈批原因', () => {
     expect(checkProcedureContent({ kind: 'withdraw', reason: 'limitation-expired' }).ok).toBe(true);
   });
 
-  it('结案选不可抗力通过；选不属本部门管辖为 409 且提示未开放', () => {
+  it('结案选不可抗力、不属本部门管辖均通过内容校验（#242 开放管辖支）', () => {
     expect(checkProcedureContent({ kind: 'close', reason: 'force-majeure' })).toEqual({
       ok: true,
       content: { kind: 'close', reason: 'force-majeure' },
     });
-    const blocked = checkProcedureContent({ kind: 'close', reason: 'outside-jurisdiction' });
-    expect(blocked.ok).toBe(false);
-    if (blocked.ok) throw new Error('应拒绝');
-    expect(blocked.hit.httpStatus).toBe(409);
-    expect(blocked.hit.reason).toBe('branch-not-open');
-    expect(blocked.hit.message).toBe('该分支未开放');
+    expect(checkProcedureContent({ kind: 'close', reason: 'outside-jurisdiction' })).toEqual({
+      ok: true,
+      content: { kind: 'close', reason: 'outside-jurisdiction' },
+    });
   });
 
   it('待收尾只允许撤案和结案；办理中不能直接撤案', () => {

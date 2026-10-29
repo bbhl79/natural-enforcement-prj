@@ -486,7 +486,7 @@ describe('#236 调查收尾', () => {
     expect(transition.body.reason).toBe('X12');
   });
 
-  it('结案选不属本部门管辖拒绝；不可抗力结案成功', async () => {
+  it('结案选不属本部门管辖：无管辖移送记载拒绝；不可抗力结案成功', async () => {
     const caseId = await fileCase();
     await runProcedure(caseId, { kind: 'terminate', reason: 'force-majeure' });
     const blocked = await postJson(`/api/cases/${caseId}/procedures`, 'P-236-H1', {
@@ -494,8 +494,8 @@ describe('#236 调查收尾', () => {
       reason: 'outside-jurisdiction',
     });
     expect(blocked.status).toBe(409);
-    expect(blocked.body.reason).toBe('branch-not-open');
-    expect(blocked.body.message).toBe('该分支未开放');
+    expect(blocked.body.reason).toBe('invalid-state');
+    expect(blocked.body.message).toBe('结案原因为不属本部门管辖时，须已有管辖移送记载');
     const still = await cloned.prisma.caseRecord.findUniqueOrThrow({ where: { id: caseId } });
     expect(still.status).toBe('terminated_pending');
     const approved = await runProcedure(caseId, { kind: 'close', reason: 'force-majeure' });
