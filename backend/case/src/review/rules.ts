@@ -1,5 +1,6 @@
 // 审理（E04）纯规则（#240）。不依赖 Nest 与存储。
 // T08、T09 的迁移判定在引擎；本文件管报告处理建议、审理人候选与签出守卫、意见类型到去向的映射。
+// #282 裁 B：补充调查／修改纠正签出只开异议窗口，窗口结束才执行 T09；窗口天数读 cfg.rule.review-objection-window.v1。
 // 「调查审理职能分离」是独立规则，不占 X 号（不改 X01–X33、不动 catalog 的 T／X 计数）。
 // 时效届满的发现时点 → 出口一律读 cfg.rule.limitation-discovery-exit.v1，不硬编码。
 
@@ -110,6 +111,42 @@ export function isHandlingSuggestionKind(value: string): value is HandlingSugges
 export function allowsObjection(kind: string): boolean {
   return kind === 'supplementary-investigation' || kind === 'correction';
 }
+
+/**
+ * 异议窗口（#282 裁 B）：签出补充调查或修改纠正后，不立即执行 T09，先开窗等待异议。
+ * 窗口按自然日计算，自签出时刻起算。
+ */
+export interface ReviewObjectionWindowRule {
+  readonly ruleId: string;
+  readonly dayCount: number;
+  readonly dayBasis: 'natural';
+}
+
+/** cfg.rule.review-objection-window.v1。默认 3 个自然日。 */
+export const REVIEW_OBJECTION_WINDOW_V1: ReviewObjectionWindowRule = {
+  ruleId: 'cfg.rule.review-objection-window.v1',
+  dayCount: 3,
+  dayBasis: 'natural',
+};
+
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+/** 窗口到期时刻＝签出时刻＋窗口天数。 */
+export function objectionWindowDueAt(
+  signedAt: Date,
+  rule: ReviewObjectionWindowRule = REVIEW_OBJECTION_WINDOW_V1,
+): Date {
+  return new Date(signedAt.getTime() + rule.dayCount * MS_PER_DAY);
+}
+
+/** 窗口结束方式：到期、明示放弃、异议支持审理意见、异议支持承办人员。 */
+export const OBJECTION_WINDOW_CLOSE_KINDS = [
+  'expired',
+  'waived',
+  'support-review',
+  'support-handler',
+] as const;
+export type ObjectionWindowCloseKind = (typeof OBJECTION_WINDOW_CLOSE_KINDS)[number];
 
 /** 一条处理建议。罚种代码集合、罚款金额、裁量理由按 #240 范围第 1 条。 */
 export interface HandlingSuggestion {

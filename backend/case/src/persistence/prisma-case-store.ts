@@ -61,6 +61,9 @@ import type {
   ReviewObjectionDraftWrite,
   ReviewObjectionRow,
   ReviewObjectionStepWrite,
+  ReviewObjectionWindowCloseWrite,
+  ReviewObjectionWindowRow,
+  ReviewObjectionWindowWrite,
   ReviewOpinionRow,
   ReviewOpinionWrite,
   ReviewReportDraftWrite,
@@ -1359,6 +1362,54 @@ export class PrismaCaseStore implements CaseStore {
       where: { caseId },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
+  }
+
+  async insertReviewObjectionWindow(write: ReviewObjectionWindowWrite): Promise<boolean> {
+    try {
+      await this.prisma.caseReviewObjectionWindow.create({
+        data: {
+          id: write.id,
+          caseId: write.caseId,
+          entrySeq: write.entrySeq,
+          opinionId: write.opinionId,
+          status: 'open',
+          dueAt: write.dueAt,
+          openedAt: write.openedAt,
+          createdAt: write.at,
+          updatedAt: write.at,
+        },
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async listReviewObjectionWindows(caseId: string): Promise<readonly ReviewObjectionWindowRow[]> {
+    return this.prisma.caseReviewObjectionWindow.findMany({
+      where: { caseId },
+      orderBy: [{ openedAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async readOpenReviewObjectionWindow(opinionId: string): Promise<ReviewObjectionWindowRow | null> {
+    return this.prisma.caseReviewObjectionWindow.findFirst({
+      where: { opinionId, status: 'open' },
+    });
+  }
+
+  async closeReviewObjectionWindow(write: ReviewObjectionWindowCloseWrite): Promise<boolean> {
+    const updated = await this.prisma.caseReviewObjectionWindow.updateMany({
+      where: { id: write.id, caseId: write.caseId, status: 'open' },
+      data: {
+        status: 'closed',
+        closeKind: write.closeKind,
+        closedBy: write.closedBy,
+        closedAt: write.at,
+        updatedAt: write.at,
+      },
+    });
+    return updated.count > 0;
   }
 
   async listCalendarInstalls(): Promise<readonly CalendarInstallRow[]> {

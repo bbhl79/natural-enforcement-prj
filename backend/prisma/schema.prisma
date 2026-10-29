@@ -1673,6 +1673,28 @@ model CaseFrozenDecision {
   @@map("case_frozen_decision")
 }
 
+/// 审理异议窗口（#282 裁 B）。签出补充调查或修改纠正后开窗，窗口结束后执行 T09 或按负责人决定结束。
+model CaseReviewObjectionWindow {
+  id String @id
+  caseId String @map("case_id")
+  entrySeq Int @map("entry_seq")
+  opinionId String @map("opinion_id")
+  /// open | closed
+  status String @default("open")
+  dueAt DateTime @map("due_at") @db.Timestamptz(6)
+  openedAt DateTime @map("opened_at") @db.Timestamptz(6)
+  closedAt DateTime? @map("closed_at") @db.Timestamptz(6)
+  /// expired | waived | support-review | support-handler
+  closeKind String? @map("close_kind")
+  closedBy String? @map("closed_by")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt DateTime @default(now()) @db.Timestamptz(6) @map("updated_at")
+
+  @@unique([opinionId])
+  @@index([caseId])
+  @@map("case_review_objection_window")
+}
+
 /// 审理异议呈批（T09a，#240）。一案同一 E04 次序号至多一张未决定呈批。
 model CaseReviewObjection {
   id String @id

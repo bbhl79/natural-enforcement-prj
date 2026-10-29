@@ -537,6 +537,42 @@ export interface ReviewObjectionStepWrite {
   readonly at: Date;
 }
 
+/** 审理异议窗口的一行（#282 裁 B）。一条审理意见至多一窗。 */
+export interface ReviewObjectionWindowRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly entrySeq: number;
+  readonly opinionId: string;
+  /** open | closed */
+  readonly status: string;
+  readonly dueAt: Date;
+  readonly openedAt: Date;
+  readonly closedAt: Date | null;
+  /** expired | waived | support-review | support-handler */
+  readonly closeKind: string | null;
+  readonly closedBy: string | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+export interface ReviewObjectionWindowWrite {
+  readonly id: string;
+  readonly caseId: string;
+  readonly entrySeq: number;
+  readonly opinionId: string;
+  readonly dueAt: Date;
+  readonly openedAt: Date;
+  readonly at: Date;
+}
+
+export interface ReviewObjectionWindowCloseWrite {
+  readonly id: string;
+  readonly caseId: string;
+  readonly closeKind: string;
+  readonly closedBy: string | null;
+  readonly at: Date;
+}
+
 /** 案件行（最小模型）。 */
 export interface CaseRow {
   readonly id: string;
@@ -711,6 +747,14 @@ export interface CaseStore {
   applyReviewObjectionStep(write: ReviewObjectionStepWrite): Promise<boolean>;
   /** 本案全部异议呈批（时间升序）。 */
   listReviewObjections(caseId: string): Promise<readonly ReviewObjectionRow[]>;
+  /** 追加一条异议窗口。本案同一进入次序号已有未关闭窗口时返回 false。 */
+  insertReviewObjectionWindow(write: ReviewObjectionWindowWrite): Promise<boolean>;
+  /** 本案全部异议窗口（时间升序）。 */
+  listReviewObjectionWindows(caseId: string): Promise<readonly ReviewObjectionWindowRow[]>;
+  /** 某条审理意见未关闭的异议窗口；没有为 null。 */
+  readOpenReviewObjectionWindow(opinionId: string): Promise<ReviewObjectionWindowRow | null>;
+  /** 关闭异议窗口。窗口已关闭时返回 false。 */
+  closeReviewObjectionWindow(write: ReviewObjectionWindowCloseWrite): Promise<boolean>;
   listCalendarInstalls(): Promise<readonly CalendarInstallRow[]>;
   insertCalendarInstall(write: CalendarInstallWrite): Promise<void>;
 }

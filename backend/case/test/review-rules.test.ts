@@ -4,8 +4,11 @@ import { describe, expect, it } from 'vitest';
 import {
   FINE_COMPETITION_MESSAGE,
   MISSING_HANDLING_SUGGESTION_MESSAGE,
+  OBJECTION_WINDOW_CLOSE_KINDS,
+  REVIEW_OBJECTION_WINDOW_V1,
   REVIEW_OPINION_KINDS,
   allowsObjection,
+  objectionWindowDueAt,
   checkReviewSign,
   checkReviewerCandidate,
   isReviewOpinionKind,
@@ -91,6 +94,24 @@ describe('#240 意见类型与去向', () => {
     expect(allowsObjection('correction')).toBe(true);
     expect(allowsObjection('penalty')).toBe(false);
     expect(allowsObjection('limitation-expired')).toBe(false);
+  });
+});
+
+describe('#282 异议窗口', () => {
+  it('配置键 cfg.rule.review-objection-window.v1，默认 3 个自然日', () => {
+    expect(REVIEW_OBJECTION_WINDOW_V1).toEqual({
+      ruleId: 'cfg.rule.review-objection-window.v1',
+      dayCount: 3,
+      dayBasis: 'natural',
+    });
+    expect(OBJECTION_WINDOW_CLOSE_KINDS).toEqual(['expired', 'waived', 'support-review', 'support-handler']);
+  });
+
+  it('到期时刻＝签出时刻＋窗口天数，不按工作日顺延', () => {
+    const signedAt = new Date('2026-10-30T18:00:00.000Z');
+    expect(objectionWindowDueAt(signedAt).toISOString()).toBe('2026-11-02T18:00:00.000Z');
+    const fiveDays = { ...REVIEW_OBJECTION_WINDOW_V1, dayCount: 5 };
+    expect(objectionWindowDueAt(signedAt, fiveDays).toISOString()).toBe('2026-11-04T18:00:00.000Z');
   });
 });
 
