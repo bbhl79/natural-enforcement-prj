@@ -337,7 +337,7 @@ describe('#235 案件状态机', () => {
     const { caseId } = await fileCase(['李四']);
     const instances = await countInstances(caseId);
     const history = await countHistory(caseId);
-    const denied = await postJson(`/api/cases/${caseId}/transitions`, 'P-APPROVE-HQ', { transitionId: 'T10' });
+    const denied = await postJson(`/api/cases/${caseId}/transitions`, 'P-APPROVE-HQ', { transitionId: 'T18' });
     expect(denied.status).toBe(409);
     expect(denied.body.reason).toBe('transition-disabled');
     expect(await countInstances(caseId)).toBe(instances);
@@ -448,7 +448,7 @@ describe('#235 案件状态机', () => {
   it('再次进入写新次序号，旧实例仍可查；HTTP 未启用边不写；触发器拒绝改删', async () => {
     const { caseId } = await fileCase(['吴十']);
     const before = await countInstances(caseId);
-    const t10 = await postJson(`/api/cases/${caseId}/transitions`, 'P-APPROVE-HQ', { transitionId: 'T10' });
+    const t10 = await postJson(`/api/cases/${caseId}/transitions`, 'P-APPROVE-HQ', { transitionId: 'T18' });
     expect(t10.status).toBe(409);
     expect(t10.body.reason).toBe('transition-disabled');
     expect(await countInstances(caseId)).toBe(before);

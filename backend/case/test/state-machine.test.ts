@@ -61,9 +61,12 @@ describe('迁移表常量', () => {
     }
   });
 
-  it('启用 T01、T02、调查收尾 T03 至 T07、审理 T08／T09、改派 T33 与 T34，且已启用的边声明了守卫', () => {
+  it('启用 T01、T02、调查收尾 T03 至 T07、审理 T08／T09、告知与听证 T10／T11／T13 至 T17、改派 T33 与 T34，且已启用的边声明了守卫', () => {
     const enabled = TRANSITIONS.filter((item) => item.enabled).map((item) => item.id);
-    expect(enabled).toEqual(['T01', 'T02', 'T03', 'T04', 'T05', 'T06', 'T07', 'T08', 'T09', 'T33', 'T34']);
+    expect(enabled).toEqual([
+      'T01', 'T02', 'T03', 'T04', 'T05', 'T06', 'T07', 'T08', 'T09',
+      'T10', 'T11', 'T13', 'T14', 'T15', 'T16', 'T17', 'T33', 'T34',
+    ]);
     for (const item of TRANSITIONS) {
       if (!item.enabled) continue;
       expect(item.guard).not.toBe('none');
@@ -171,7 +174,7 @@ describe('引擎 409 分支', () => {
   });
 
   it('未启用的边返回 transition-disabled，不产生效果', () => {
-    const decision = decideTransition({ operation: { kind: 'transition', transitionId: 'T10' }, subject: openCase });
+    const decision = decideTransition({ operation: { kind: 'transition', transitionId: 'T18' }, subject: openCase });
     expect(decision.ok).toBe(false);
     if (decision.ok || decision.level !== 'block') throw new Error('应为阻断');
     expect(decision.reason).toBe('transition-disabled');
@@ -622,7 +625,7 @@ describe('两段式确认与规则键（#258）', () => {
     expect(opened.confirmation?.ruleKeys).toEqual([{ ruleKey: 'X03', version: '1' }]);
 
     const disabled = decideTransition({
-      operation: { kind: 'transition', transitionId: 'T10' },
+      operation: { kind: 'transition', transitionId: 'T18' },
       subject: pending,
       confirmedRuleKeys: ['X03'],
     });
