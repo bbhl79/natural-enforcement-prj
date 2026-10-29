@@ -365,11 +365,15 @@ describe('#272 X07：自动命中 ∪ 人工勾选', () => {
     expect(refused.status).toBe(409);
     expect(refused.body.reason).toBe('X07');
     expect(refused.body.message).toBe('应听证情形未发听证告知');
+    // USER LOCK：X07 不接受确认键绕过。
+    const confirmed = await approveNotice(drafted.noticeId, { confirmedRuleKeys: ['X07'] });
+    expect(confirmed.status).toBe(409);
+    expect(confirmed.body.reason).toBe('X07');
     const row = await cloned.prisma.caseNotice.findFirstOrThrow({ where: { caseId } });
     expect(row.status).toBe('pending_approval');
-    expect(await trails('case.notice-approved', caseId)).toEqual([
-      expect.objectContaining({ outcome: 'failed', reason: 'X07' }),
-    ]);
+    const failedTrails = await trails('case.notice-approved', caseId);
+    expect(failedTrails).toHaveLength(2);
+    expect(failedTrails.every((row) => row.outcome === 'failed' && row.reason === 'X07')).toBe(true);
   });
 
   it('人工勾选应听证：系统未达阈值也能命中；未带听证告知 409', async () => {
