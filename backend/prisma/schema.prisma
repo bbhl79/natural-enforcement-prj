@@ -1480,8 +1480,8 @@ model CaseMarker {
   @@map("case_marker")
 }
 
-/// 告知书（T10／T11 进入 E05，#272）。一条案件同一 E05 进入次序号至多一张。
-/// 呈批状态：drafting | pending_review | pending_approval | approved | served。
+/// 告知书（T10／T11 进入 E05，#272；#248 增加 revoked）。
+/// 呈批状态：drafting | pending_review | pending_approval | approved | served | revoked。
 model CaseNotice {
   id String @id
   caseId String @map("case_id")
@@ -1533,6 +1533,69 @@ model CaseNoticeStep {
 
   @@index([noticeId])
   @@map("case_notice_step")
+}
+
+/// 告知有效性基线（#248）。告知送达时冻结原告知的拟决定摘要；一条告知至多一行。
+/// 重新告知产生新基线，旧基线只读保留。
+model CaseNoticeValidityBaseline {
+  id String @id
+  caseId String @map("case_id")
+  noticeId String @map("notice_id")
+  /// E05 进入次序号
+  entrySeq Int @map("entry_seq")
+  kind String
+  partyType String @map("party_type")
+  hearingNoticeAttached Boolean @map("hearing_notice_attached")
+  confiscationValue Float? @map("confiscation_value")
+  summaryJson String @map("summary_json")
+  summaryDigest String @map("summary_digest")
+  capturedBy String @map("captured_by")
+  capturedAt DateTime @db.Timestamptz(6) @map("captured_at")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([noticeId])
+  @@index([caseId])
+  @@map("case_notice_validity_baseline")
+}
+
+/// 有效性确认（#248）。只追加；差异清单按违法记录分组存快照。
+model CaseValidityConfirmation {
+  id String @id
+  caseId String @map("case_id")
+  noticeId String @map("notice_id")
+  decisionDigest String @map("decision_digest")
+  systemHitsJson String @map("system_hits_json")
+  differencesJson String @map("differences_json")
+  /// valid 有效 | invalid 失效
+  conclusion String
+  reason String
+  reasonChanged Boolean @default(false) @map("reason_changed")
+  /// reflow-new-evidence | r4-qualification-correction
+  aggravationSource String? @map("aggravation_source")
+  aggravationReference String? @map("aggravation_reference")
+  aggravationReason String? @map("aggravation_reason")
+  confirmedBy String @map("confirmed_by")
+  confirmedAt DateTime @db.Timestamptz(6) @map("confirmed_at")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId, noticeId])
+  @@map("case_validity_confirmation")
+}
+
+/// 有效性确认复核（#248）。只追加；审理或法审复核，复核人不得是确认人。
+model CaseValidityReview {
+  id String @id
+  caseId String @map("case_id")
+  confirmationId String @map("confirmation_id")
+  /// pass | fail
+  conclusion String
+  opinion String?
+  reviewedBy String @map("reviewed_by")
+  reviewedAt DateTime @db.Timestamptz(6) @map("reviewed_at")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId, confirmationId])
+  @@map("case_validity_review")
 }
 
 /// 当事人陈述申辩与书面放弃记录（#272，追加式）。
