@@ -55,6 +55,8 @@ import {
   CASE_DEADLINE_FAILED_REASONS,
   CASE_REVIEW_ACTIONS,
   CASE_REVIEW_FAILED_REASONS,
+  CASE_NOTICE_ACTIONS,
+  CASE_NOTICE_FAILED_REASONS,
   CASE_INVESTIGATION_FAILED_REASONS,
   CASE_MATERIAL_EFFECTIVITY_FAILED_REASONS,
   CASE_REASSIGNMENT_APPROVED_FAILED_REASONS,
@@ -92,6 +94,7 @@ const DETAIL_ACTIONS = new Set<string>(AUDIT_DETAIL_ACTIONS);
 const REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['login.failed', new Set<string>(LOGIN_FAILED_REASONS)],
   ['case.sign-refused', new Set<string>(CASE_SIGN_REFUSED_REASONS)],
+  ['case.hearing-reopen-refused', new Set<string>(['X28', 'invalid-state'])],
   ['case.comparison-refused', new Set<string>(CASE_COMPARISON_FAILED_REASONS)],
   ['session.ended', new Set<string>(SESSION_END_REASONS)],
   ['account.password-changed', new Set<string>(PASSWORD_CHANGED_REASONS)],
@@ -159,6 +162,9 @@ const FAILED_REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ),
   ...CASE_REVIEW_ACTIONS.map(
     (action) => [action, new Set<string>(CASE_REVIEW_FAILED_REASONS)] as const,
+  ),
+  ...CASE_NOTICE_ACTIONS.map(
+    (action) => [action, new Set<string>(CASE_NOTICE_FAILED_REASONS)] as const,
   ),
 ]);
 

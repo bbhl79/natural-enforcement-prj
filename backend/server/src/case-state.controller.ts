@@ -24,6 +24,13 @@ export class CaseStateController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  @Get('api/cases/:id/markers')
+  @UseGuards(SameOriginReadGuard)
+  async markers(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {
+    const outcome = await this.states.readMarkers(req.actor as ActorRef, id);
+    res.status(outcome.status).json(outcome.body);
+  }
+
   @Post('api/cases/:id/transitions')
   @UseGuards(SameOriginReadGuard)
   async transition(

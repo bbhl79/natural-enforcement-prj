@@ -6,8 +6,9 @@
 // 带依据层级的 X 按 authority 定。userLock 非空，或 law、regulation，阻断（409）。normative、internal 降为警告（200）。
 // X03、X10、X19、X21、X22、X26 为 normative，结果是警告。待法制确认后再议升级，不在本目录升为阻断。
 // X12 白名单以 #235 正文及评论 6431387386 为准。
-// #235 启用 T01、T02。#236 启用 T03–T07。#239 启用 T33。#240 启用 T08、T09。其余边仍关闭。
-// T09a、T10、T11、T12 是 branch 边，由 #240 服务层解析后落到单一边，不在本表启用。
+// #235 启用 T01、T02。#236 启用 T03–T07。#239 启用 T33。#240 启用 T08、T09。
+// #272 启用 T10、T11（进入 E05）与 T13–T17（告知、陈述申辩、听证）。
+// T09a、T10a、T10b、T10c、T12、T14a、T16a 仍是 branch 或未启用边，由服务层解析或由后续票接入。
 
 import { GUARD_AUTHORITIES, type GuardAuthority, type GuardResult } from './guard.ts';
 
@@ -121,7 +122,7 @@ export type ToSpec =
   | { readonly kind: 'branch'; readonly note: string };
 
 /** 已启用边的守卫名。none 表示显式声明本边无额外守卫（通用守卫仍跑）。 */
-export const TRANSITION_GUARDS = ['filing', 'closeout', 'reassign', 'deadline', 'review', 'none'] as const;
+export const TRANSITION_GUARDS = ['filing', 'closeout', 'reassign', 'deadline', 'review', 'notice', 'none'] as const;
 export type TransitionGuard = (typeof TRANSITION_GUARDS)[number];
 
 export interface TransitionEdge {
@@ -203,23 +204,32 @@ export const TRANSITIONS: readonly TransitionEdge[] = [
     guard: 'review',
   }),
   edge('T09a', stage('E04'), { kind: 'branch', note: '负责人支持审理意见则走 T09；支持承办人员则按决定进入 T10、T11 或 T12' }, '审理异议呈批（审理意见为补充调查或修改纠正）'),
-  edge('T10', stage('E04'), { kind: 'branch', note: '未命中必审进入 E05 拟制中；命中必审转 T10a' }, '审理通过，拟处罚'),
+  // #272：未命中必审进入 E05。命中必审的 T10a 分流由法审票接入；本票的告知批准路径对 X26 只警告。
+  edge('T10', stage('E04'), enter('E05', 'drafting'), '审理通过，拟处罚：进入告知拟制', {
+    enabled: true,
+    guard: 'notice',
+  }),
   edge('T10a', stage('E04'), enter('E07', 'drafting'), '告知前法制审核'),
   edge('T10b', stage('E07'), enter('E05', 'drafting'), '告知前法制审核通过，进入 E05'),
   edge('T10c', stage('E07'), { kind: 'branch', note: '法审不通过：改后重送，视情况回 E04，或提请 E08 后回 E07' }, '告知前法制审核不通过'),
-  edge('T11', stage('E04'), { kind: 'branch', note: '未命中必审时进入 E05 或直接 E09；命中必审转 T10a' }, '审理通过，拟不予处罚'),
+  // #272：由主办选择发告知，进入 E05；不发告知直接 E09 由决定票处理。
+  edge('T11', stage('E04'), enter('E05', 'drafting'), '审理通过，拟不予处罚：可选择发告知，进入告知拟制', {
+    enabled: true,
+    guard: 'notice',
+  }),
   edge('T12', stage('E04'), enter('E09', 'drafting'), '审理认定违法事实不成立或已过追诉时效，进入不予处罚决定'),
-  edge('T13', stage('E05'), { kind: 'same' }, '告知书送达，进入告知等待'),
-  edge('T14', { kind: 'marker', marker: 'notice-waiting' }, enter('E09', 'drafting'), '告知等待结束，进入决定拟制'),
+  edge('T13', stage('E05'), { kind: 'same' }, '告知书送达，进入告知等待', { enabled: true, guard: 'notice' }),
+  edge('T14', { kind: 'marker', marker: 'notice-waiting' }, enter('E09', 'drafting'), '告知等待结束，进入决定拟制', { enabled: true, guard: 'notice' }),
   edge('T14a', { kind: 'marker', marker: 'notice-waiting' }, { kind: 'branch', note: '清除视为放弃，转 T15' }, '视为放弃后在决定前要求听证'),
-  edge('T15', { kind: 'marker', marker: 'notice-waiting' }, enter('E06', 'drafting'), '当事人申请听证'),
-  edge('T16', stage('E06'), enter('E09', 'drafting'), '听证终结或放弃，进入决定拟制'),
+  edge('T15', { kind: 'marker', marker: 'notice-waiting' }, enter('E06', 'drafting'), '当事人申请听证', { enabled: true, guard: 'notice' }),
+  edge('T16', stage('E06'), enter('E09', 'drafting'), '听证终结或放弃，进入决定拟制', { enabled: true, guard: 'notice' }),
   edge('T16a', { kind: 'marker', marker: 'hearing-terminated' }, { kind: 'branch', note: '不自动复开；重新申请按 T15' }, '已终止的听证'),
   edge(
     'T17',
     [{ kind: 'marker', marker: 'notice-waiting' }, stage('E06')],
     enter('E02', 'drafting', { reenter: true }),
     '陈述申辩或听证中须核实的新事实，回到调查',
+    { enabled: true, guard: 'notice' },
   ),
   edge('T18', stage('E09'), { kind: 'same' }, '科长审核通过，进入闸口判定'),
   edge('T19', { kind: 'marker', marker: 'decision-gate' }, enter('E07', 'drafting'), '命中必审或进入听证程序，决定审批链挂起'),

@@ -469,6 +469,7 @@ export class CaseFilingService {
         stage: null,
         stageEntrySeq: null,
         suspended: false,
+        // 线索尚未建案，#272 R-02 的案件标记在此不适用。
         markers: [],
         clueStatus: context.status,
         handlingOrgId: context.assignment?.orgUnitId ?? null,

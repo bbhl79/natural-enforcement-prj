@@ -21,6 +21,7 @@ import {
   checkRecusalReference,
   checkReassignProposal,
   decideTransition,
+  readActiveCaseMarkers,
   isMaterialEffectivenessConclusion,
   isReassignReasonCode,
   invalidMaterialIds,
@@ -192,7 +193,7 @@ export class CaseReassignService {
     const other = await this.cases.countInFlightApprovals(caseId);
     const decision = decideTransition({
       operation: { kind: 'open-approval-chain', chainKind: 'reassign' },
-      subject: this.subjectOf(view, roles, other),
+      subject: await this.subjectOf(view, roles, other),
     });
     if (!decision.ok) return this.settleSubmit(actor, account, view, decision);
 
@@ -361,7 +362,7 @@ export class CaseReassignService {
     );
     const decision = decideTransition({
       operation: { kind: 'transition', transitionId: 'T33' },
-      subject: this.subjectOf(view, roles, other),
+      subject: await this.subjectOf(view, roles, other),
     });
     if (!decision.ok) return this.settleApprove(actor, account, view, decision);
 
@@ -793,14 +794,14 @@ export class CaseReassignService {
     return rows;
   }
 
-  private subjectOf(view: CaseView, roles: readonly string[], otherInFlightChains: number): TransitionSubject {
+  private async subjectOf(view: CaseView, roles: readonly string[], otherInFlightChains: number): Promise<TransitionSubject> {
     return {
       caseId: view.id,
       mainStatus: view.status,
       stage: view.currentStage,
       stageEntrySeq: view.stageEntrySeq,
       suspended: view.suspended,
-      markers: [],
+      markers: await readActiveCaseMarkers(this.cases, view.id),
       clueStatus: null,
       handlingOrgId: view.handlingOrgId,
       proposedHandlingOrgId: null,

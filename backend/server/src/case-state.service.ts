@@ -10,7 +10,9 @@ import {
   CASE_STORE,
   CASE_SUPERVISION_ROLE,
   CLUE_STORE,
+  activeMarkerKeys,
   decideTransition,
+  readActiveCaseMarkers,
   type CaseMainStatus,
   type CaseStore,
   type CaseView,
@@ -40,7 +42,11 @@ const CHAIN_OPCODE = 'doc.submit';
 const CHAIN_KIND = /^[a-z0-9-]{1,40}$/;
 
 // T33 只由改派呈批服务在批准事务里落库，通用迁移入口拒绝直接套用。
-const PROCEDURE_TRANSITIONS = new Set(['T03', 'T04', 'T05', 'T06', 'T07', 'T33']);
+// #272：T10／T11 与 T13–T17 须经告知服务，通用入口直接调用会漏写标记、期限与留痕。
+const PROCEDURE_TRANSITIONS = new Set([
+  'T03', 'T04', 'T05', 'T06', 'T07', 'T33',
+  'T10', 'T11', 'T13', 'T14', 'T15', 'T16', 'T17',
+]);
 
 const FAIL_REASONS = new Set<string>([
   'transition-disabled',
@@ -94,6 +100,30 @@ export class CaseStateService {
     const denied = await this.authorize(actor, READ_OPCODE, view.handlingOrgId, caseId);
     if (denied) return { status: 403, body: { reason: denied } };
     return { status: 200, body: presentCase(view) };
+  }
+
+  /** 案件标记只读入口（#272 R-02）。供 #269／#242／#270 与前端读同一份事实。 */
+  async readMarkers(actor: ActorRef, caseId: string): Promise<CaseStateHttpOutcome> {
+    const view = await this.cases.readCaseView(caseId);
+    if (!view) return { status: 404, body: { result: 'not-found' } };
+    const denied = await this.authorize(actor, READ_OPCODE, view.handlingOrgId, caseId);
+    if (denied) return { status: 403, body: { reason: denied } };
+    const rows = await this.cases.listCaseMarkers(caseId);
+    return {
+      status: 200,
+      body: {
+        caseId,
+        active: activeMarkerKeys(rows),
+        markers: rows.map((row) => ({
+          id: row.id,
+          marker: row.marker,
+          state: row.state,
+          note: row.note,
+          actorId: row.actorId,
+          changedAt: row.changedAt.toISOString(),
+        })),
+      },
+    };
   }
 
   async transition(
@@ -289,7 +319,7 @@ export class CaseStateService {
         stage: view.currentStage,
         stageEntrySeq: view.stageEntrySeq,
         suspended: view.suspended,
-        markers: [],
+        markers: await readActiveCaseMarkers(this.cases, view.id),
         clueStatus: clue?.status ?? null,
         handlingOrgId: view.handlingOrgId,
         proposedHandlingOrgId: null,

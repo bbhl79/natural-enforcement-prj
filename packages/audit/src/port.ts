@@ -16,6 +16,8 @@ import type {
   CaseDeadlineFailedReason,
   CaseReviewAction,
   CaseReviewFailedReason,
+  CaseNoticeAction,
+  CaseNoticeFailedReason,
   CaseInvestigationAction,
   CaseInvestigationFailedReason,
   CaseMaterialEffectivityFailedReason,
@@ -342,6 +344,9 @@ export type AuditAppend =
     outcome: 'failed';
     reason: CaseMaterialEffectivityFailedReason;
   })
+  // 告知／陈述申辩／听证（#272）。成功与失败都记同一动作。
+  | (AuditParties & { action: CaseNoticeAction })
+  | (AuditParties & { action: CaseNoticeAction; outcome: 'failed'; reason: CaseNoticeFailedReason })
 ;
 
 /**

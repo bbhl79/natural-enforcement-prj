@@ -122,6 +122,21 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   // 改派呈批撤回（#279）：发起人批准前撤回。不批走 #238 的 case.returned。
   'case.reassignment-withdrawn',
   'case.material-effectivity-recorded',
+  // 告知／陈述申辩／听证（#272）。成功与失败都记这些动作。
+  'case.notice-drafted',
+  'case.notice-submitted',
+  'case.notice-reviewed',
+  'case.notice-approved',
+  'case.notice-served',
+  'case.notice-completed',
+  'case.statement-recorded',
+  'case.hearing-applied',
+  'case.hearing-accepted',
+  'case.hearing-scheduled',
+  'case.hearing-host-designated',
+  'case.hearing-ended',
+  'case.new-fact-returned',
+  'case.marker-changed',
 ] as const;
 
 /**
@@ -135,6 +150,8 @@ export const AUDIT_ACTIONS = [
   ...AUDIT_SUCCEEDED_ACTIONS,
   // 新旧比对判定被拒（#271）：只记失败。比对过时、缺判定、材料不合规。
   'case.comparison-refused',
+  // 听证自动复开被拒（#272 X28）：只记失败。
+  'case.hearing-reopen-refused',
   // 人员层签出被拒（#237）：只记失败。
   'case.sign-refused',
   // 口令被拒（ADR 0015，#132）：只记失败。
@@ -861,6 +878,61 @@ export const CASE_DEADLINE_ACTIONS = [
 ] as const;
 export type CaseDeadlineAction = (typeof CASE_DEADLINE_ACTIONS)[number];
 
+/** 告知／陈述申辩／听证被拒（#272）。十四个动作共用这一张原因表。 */
+export const CASE_NOTICE_FAILED_REASONS = [
+  'invalid-state',
+  'invalid-kind',
+  'invalid-party-type',
+  'invalid-hearing-attachment',
+  'invalid-hearing-selection',
+  'invalid-mandatory-review',
+  'invalid-confiscation-value',
+  'invalid-content',
+  'missing-note',
+  'missing-reason',
+  'no-frozen-decision',
+  'notice-kind-mismatch',
+  'hearing-window-closed',
+  'deadline-manual-confirmation-required',
+  'hearing-already-requested',
+  'hearing-not-open',
+  'hearing-host-is-handler',
+  'hearing-end-kind-invalid',
+  'hearing-request-before-notice',
+  'not-handler',
+  'concurrent-change',
+  'transition-disabled',
+  'unknown-transition',
+  'X02',
+  'X03',
+  'X07',
+  'X12',
+  'X17',
+  'X18',
+  'X26',
+  'X28',
+] as const;
+export type CaseNoticeFailedReason = (typeof CASE_NOTICE_FAILED_REASONS)[number];
+
+export const CASE_NOTICE_ACTIONS = [
+  'case.notice-drafted',
+  'case.notice-submitted',
+  'case.notice-reviewed',
+  'case.notice-approved',
+  'case.notice-served',
+  'case.notice-completed',
+  'case.statement-recorded',
+  'case.hearing-applied',
+  'case.hearing-accepted',
+  'case.hearing-scheduled',
+  'case.hearing-host-designated',
+  'case.hearing-ended',
+  'case.hearing-reopen-refused',
+  'case.new-fact-returned',
+  'case.marker-changed',
+] as const;
+export type CaseNoticeAction = (typeof CASE_NOTICE_ACTIONS)[number];
+
 /** 新旧比对判定被拒（#271）。提交缺判定、批准比对过时、材料不合规共用这一张原因表。 */
 export const CASE_COMPARISON_FAILED_REASONS = [
   'missing-judgment',
@@ -1037,5 +1109,21 @@ export const AUDIT_DETAIL_ACTIONS = [
   // 改派呈批撤回（#279）：改派标识、原因与审批链。
   'case.reassignment-withdrawn',
   'case.material-effectivity-recorded',
+  // 告知／陈述申辩／听证（#272）：告知正文、期限、标记与听证状态。
+  'case.notice-drafted',
+  'case.notice-submitted',
+  'case.notice-reviewed',
+  'case.notice-approved',
+  'case.notice-served',
+  'case.notice-completed',
+  'case.statement-recorded',
+  'case.hearing-applied',
+  'case.hearing-accepted',
+  'case.hearing-scheduled',
+  'case.hearing-host-designated',
+  'case.hearing-ended',
+  'case.hearing-reopen-refused',
+  'case.new-fact-returned',
+  'case.marker-changed',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];

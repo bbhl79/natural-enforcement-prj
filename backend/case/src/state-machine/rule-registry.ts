@@ -13,6 +13,13 @@ export const Q31_WARNING_MESSAGE = '施行日当天批准，适用哪一版请�
 export const X22_RULE_KEY = 'X22';
 export const X22_MESSAGE = '本案承办人员签出审理意见';
 
+/** X26 告知批准路径的规则键与原文（#272；normative，警告不阻断）。 */
+export const X26_RULE_KEY = 'X26';
+export const X26_MESSAGE = '命中必审但未经告知前法审就批准告知书';
+
+/** 较大数额提示的规则键（#272；hint，不阻断、不要求确认）。 */
+export const HEARING_AMOUNT_RULE_KEY = 'NOTICE-LARGE-AMOUNT';
+
 /**
  * 调查审理职能分离（#240 R-03）。独立规则，不占 X 号。
  * 被指定人为本案主办或协办（含已换下的）时警告，理由必填，确认入审计。
@@ -77,6 +84,24 @@ export const RULE_PARAMETERS: readonly RuleParameter[] = [
     message: REVIEW_SEPARATION_MESSAGE,
     citation: null,
     reasonRequired: true,
+  },
+  // #272：X26 告知批准路径。normative→警告，不升阻断（#256 跨环节 A 第 4 条）。
+  {
+    ruleKey: X26_RULE_KEY,
+    version: '1',
+    level: 'warn',
+    message: X26_MESSAGE,
+    citation: '规程7.1／8.2；设计加严，非规定要求',
+    reasonRequired: false,
+  },
+  // #272：较大数额提示。hint 不要求确认、不阻断。
+  {
+    ruleKey: HEARING_AMOUNT_RULE_KEY,
+    version: '1',
+    level: 'hint',
+    message: '罚款额、没收等价值或二者相加达较大数额标准，提示按应听证情形处理',
+    citation: '粤府令第294号第7条',
+    reasonRequired: false,
   },
 ];
 
