@@ -43,8 +43,19 @@ import type {
   PeriodEventWrite,
   ComparisonJudgmentRow,
   ComparisonJudgmentWrite,
+  DiscussionMarkRow,
+  DiscussionMarkWrite,
+  DiscussionRecordRow,
+  DiscussionRecordWrite,
   HandlerReplacementWrite,
   HandlerStintRow,
+  LegalReviewHeaderWrite,
+  LegalReviewOpinionRow,
+  LegalReviewOpinionSignWrite,
+  LegalReviewOpinionWrite,
+  LegalReviewReceiverWrite,
+  LegalReviewRow,
+  LegalReviewWrite,
   MaterialEffectivenessRow,
   MaterialEffectivenessWrite,
   FilingApprovalRow,
@@ -1016,6 +1027,99 @@ export class PrismaCaseStore implements CaseStore {
 
   async appendCaseMarker(write: CaseMarkerWrite): Promise<void> {
     await this.prisma.caseMarker.create({ data: { ...write } });
+  }
+
+  async listLegalReviews(caseId: string): Promise<readonly LegalReviewRow[]> {
+    return this.prisma.caseLegalReview.findMany({
+      where: { caseId },
+      orderBy: [{ roundNo: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async readLegalReview(legalReviewId: string): Promise<LegalReviewRow | null> {
+    return this.prisma.caseLegalReview.findUnique({ where: { id: legalReviewId } });
+  }
+
+  async insertLegalReview(write: LegalReviewWrite): Promise<boolean> {
+    try {
+      await this.prisma.caseLegalReview.create({ data: { ...write } });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async applyLegalReviewHeader(write: LegalReviewHeaderWrite): Promise<boolean> {
+    const updated = await this.prisma.caseLegalReview.updateMany({
+      where: { id: write.legalReviewId, status: { in: [...write.expectedStatuses] } },
+      data: {
+        status: write.status,
+        ...(write.latestOpinionId !== undefined ? { latestOpinionId: write.latestOpinionId } : {}),
+        ...(write.conclusion !== undefined ? { conclusion: write.conclusion } : {}),
+        ...(write.headId !== undefined ? { headId: write.headId } : {}),
+        ...(write.headSignedAt !== undefined ? { headSignedAt: write.headSignedAt } : {}),
+        ...(write.concludedAt !== undefined ? { concludedAt: write.concludedAt } : {}),
+        updatedAt: write.at,
+      },
+    });
+    return updated.count > 0;
+  }
+
+  async replaceLegalReviewReceiver(write: LegalReviewReceiverWrite): Promise<boolean> {
+    const updated = await this.prisma.caseLegalReview.updateMany({
+      where: { id: write.legalReviewId, status: { not: 'concluded' } },
+      data: { receiverId: write.receiverId, updatedAt: write.at },
+    });
+    return updated.count > 0;
+  }
+
+  async insertLegalReviewOpinion(write: LegalReviewOpinionWrite): Promise<void> {
+    await this.prisma.caseLegalReviewOpinion.create({ data: { ...write } });
+  }
+
+  async listLegalReviewOpinions(caseId: string): Promise<readonly LegalReviewOpinionRow[]> {
+    return this.prisma.caseLegalReviewOpinion.findMany({
+      where: { caseId },
+      orderBy: [{ signedAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async readLegalReviewOpinion(opinionId: string): Promise<LegalReviewOpinionRow | null> {
+    return this.prisma.caseLegalReviewOpinion.findUnique({ where: { id: opinionId } });
+  }
+
+  async signLegalReviewOpinion(write: LegalReviewOpinionSignWrite): Promise<boolean> {
+    const updated = await this.prisma.caseLegalReviewOpinion.updateMany({
+      where: { id: write.opinionId, headSignedAt: null },
+      data: {
+        headId: write.headId,
+        headSignedAt: write.headSignedAt,
+        headOpinion: write.headOpinion,
+      },
+    });
+    return updated.count > 0;
+  }
+
+  async listDiscussionMarks(caseId: string): Promise<readonly DiscussionMarkRow[]> {
+    return this.prisma.caseDiscussionMark.findMany({
+      where: { caseId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async insertDiscussionMark(write: DiscussionMarkWrite): Promise<void> {
+    await this.prisma.caseDiscussionMark.create({ data: { ...write } });
+  }
+
+  async listDiscussionRecords(caseId: string): Promise<readonly DiscussionRecordRow[]> {
+    return this.prisma.caseDiscussionRecord.findMany({
+      where: { caseId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async insertDiscussionRecord(write: DiscussionRecordWrite): Promise<void> {
+    await this.prisma.caseDiscussionRecord.create({ data: { ...write } });
   }
 
   async readNotice(caseId: string, entrySeq: number): Promise<NoticeRow | null> {

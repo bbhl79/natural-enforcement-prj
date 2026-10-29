@@ -573,6 +573,107 @@ export interface ReviewObjectionWindowCloseWrite {
   readonly at: Date;
 }
 
+/** 法审轮次（#269）。一案同一轮次号至多一行。 */
+export interface LegalReviewRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly roundNo: number;
+  /** pre-notice 告知前 | pre-decision 决定前 */
+  readonly phase: string;
+  /** drafting | pending_head | concluded */
+  readonly status: string;
+  readonly receiverId: string;
+  readonly designatedBy: string;
+  readonly determinationJson: string;
+  readonly latestOpinionId: string | null;
+  /** pass | fail；未定稿为 null */
+  readonly conclusion: string | null;
+  readonly headId: string | null;
+  readonly headSignedAt: Date | null;
+  readonly concludedAt: Date | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+export type LegalReviewWrite = LegalReviewRow;
+
+/** 法审轮次表头的条件推进（#269）。 */
+export interface LegalReviewHeaderWrite {
+  readonly legalReviewId: string;
+  readonly expectedStatuses: readonly string[];
+  readonly status: string;
+  readonly latestOpinionId?: string | null;
+  readonly conclusion?: string | null;
+  readonly headId?: string | null;
+  readonly headSignedAt?: Date | null;
+  readonly concludedAt?: Date | null;
+  readonly at: Date;
+}
+
+/** 法审接收人改派（#269 G5）。不是已定稿时生效。 */
+export interface LegalReviewReceiverWrite {
+  readonly legalReviewId: string;
+  readonly receiverId: string;
+  readonly at: Date;
+}
+
+/** 法审意见（#269）。只追加；负责人签出只更新 head 字段。 */
+export interface LegalReviewOpinionRow {
+  readonly id: string;
+  readonly legalReviewId: string;
+  readonly caseId: string;
+  readonly roundNo: number;
+  /** pass | fail */
+  readonly conclusion: string;
+  /** accept-revise | collective-discussion；通过为 null */
+  readonly failRoute: string | null;
+  readonly content: string;
+  readonly signedBy: string;
+  readonly signedAt: Date;
+  readonly frozenDecisionId: string | null;
+  readonly discussionRecordId: string | null;
+  readonly headId: string | null;
+  readonly headSignedAt: Date | null;
+  readonly headOpinion: string | null;
+  readonly createdAt: Date;
+}
+
+export type LegalReviewOpinionWrite = Omit<LegalReviewOpinionRow, 'headId' | 'headSignedAt' | 'headOpinion' | 'createdAt'>;
+
+/** 负责人签出（#269）。未签出时生效。 */
+export interface LegalReviewOpinionSignWrite {
+  readonly opinionId: string;
+  readonly headId: string;
+  readonly headSignedAt: Date;
+  readonly headOpinion: string | null;
+}
+
+/** 集体讨论触发勾选（#269）。只追加。 */
+export interface DiscussionMarkRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly criteriaJson: string;
+  readonly reason: string;
+  readonly markedBy: string;
+  readonly createdAt: Date;
+}
+
+export type DiscussionMarkWrite = DiscussionMarkRow;
+
+/** 集体讨论记录（#269）。只追加。 */
+export interface DiscussionRecordRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly purposesJson: string;
+  readonly criteriaJson: string;
+  readonly note: string;
+  readonly recordedBy: string;
+  readonly recordedAt: Date;
+  readonly createdAt: Date;
+}
+
+export type DiscussionRecordWrite = DiscussionRecordRow;
+
 /** 案件行（最小模型）。 */
 export interface CaseRow {
   readonly id: string;
@@ -761,6 +862,32 @@ export interface CaseStore {
   listCaseMarkers(caseId: string): Promise<readonly CaseMarkerRow[]>;
   /** 追加一条标记置位或清除。不清除旧行。 */
   appendCaseMarker(write: CaseMarkerWrite): Promise<void>;
+  /** 本案全部法审轮次（轮次号升序）。 */
+  listLegalReviews(caseId: string): Promise<readonly LegalReviewRow[]>;
+  /** 按主键读法审轮次。 */
+  readLegalReview(legalReviewId: string): Promise<LegalReviewRow | null>;
+  /** 追加一轮法审。同案同轮次号已存在时返回 false。 */
+  insertLegalReview(write: LegalReviewWrite): Promise<boolean>;
+  /** 推进法审表头。状态不符返回 false。 */
+  applyLegalReviewHeader(write: LegalReviewHeaderWrite): Promise<boolean>;
+  /** 改派法审接收人。已定稿时返回 false。 */
+  replaceLegalReviewReceiver(write: LegalReviewReceiverWrite): Promise<boolean>;
+  /** 追加一条法审意见。 */
+  insertLegalReviewOpinion(write: LegalReviewOpinionWrite): Promise<void>;
+  /** 本案全部法审意见（签出时间升序）。 */
+  listLegalReviewOpinions(caseId: string): Promise<readonly LegalReviewOpinionRow[]>;
+  /** 按主键读法审意见。 */
+  readLegalReviewOpinion(opinionId: string): Promise<LegalReviewOpinionRow | null>;
+  /** 负责人签出。该意见已签出时返回 false。 */
+  signLegalReviewOpinion(write: LegalReviewOpinionSignWrite): Promise<boolean>;
+  /** 本案集体讨论触发勾选（时间升序）。 */
+  listDiscussionMarks(caseId: string): Promise<readonly DiscussionMarkRow[]>;
+  /** 追加一条集体讨论触发勾选。 */
+  insertDiscussionMark(write: DiscussionMarkWrite): Promise<void>;
+  /** 本案集体讨论记录（时间升序）。 */
+  listDiscussionRecords(caseId: string): Promise<readonly DiscussionRecordRow[]>;
+  /** 追加一条集体讨论记录。 */
+  insertDiscussionRecord(write: DiscussionRecordWrite): Promise<void>;
   /** 按 E05 进入次序号读告知。没有为 null。 */
   readNotice(caseId: string, entrySeq: number): Promise<NoticeRow | null>;
   /** 按主键读告知。 */

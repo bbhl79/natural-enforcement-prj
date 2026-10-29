@@ -45,7 +45,7 @@ const CHAIN_KIND = /^[a-z0-9-]{1,40}$/;
 // #272：T10／T11 与 T13–T17 须经告知服务，通用入口直接调用会漏写标记、期限与留痕。
 const PROCEDURE_TRANSITIONS = new Set([
   'T03', 'T04', 'T05', 'T06', 'T07', 'T33',
-  'T10', 'T11', 'T13', 'T14', 'T15', 'T16', 'T17',
+  'T10', 'T10a', 'T10b', 'T11', 'T13', 'T14', 'T15', 'T16', 'T17',
 ]);
 
 const FAIL_REASONS = new Set<string>([

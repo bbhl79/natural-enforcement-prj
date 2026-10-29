@@ -91,6 +91,8 @@ const ROLE_ALLOWANCES = {
     "doc.submit",
     "case.reassign.submit",
     "legal.review.request",
+    // #269：集体讨论记录录入（对象级须本案主办或协办）。
+    "case.discussion.record",
     "clue.read",
     "case.read",
     "doc.read",
@@ -122,6 +124,8 @@ const ROLE_ALLOWANCES = {
     "doc.admin.review",
     // #240：审理意见签出。
     "case.review.record",
+    // #269 G5：法审接收人改派复用改派码，授权给法制审核负责人（持行政审核、带岗位标记）。
+    "case.reassign.submit",
     "clue.read",
     "case.read",
     "doc.read",

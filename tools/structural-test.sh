@@ -729,6 +729,8 @@ check_weak-reference-entry() {
 # CaseDeadlineApproval、CaseDeadlineApprovalVersion、CaseDeadlineApprovalStep、DeadlineCalendarInstall。
 # #271 追加新旧比对判定：CaseComparisonJudgment。
 # #239 追加改派呈批与材料效力认定：CaseReassignment、CaseMaterialEffectiveness。
+# #269 追加法审轮次、法审意见、集体讨论勾选与记录（#256 §5 E07／E08）：CaseLegalReview、
+# CaseLegalReviewOpinion、CaseDiscussionMark、CaseDiscussionRecord。
 G1_MODELS=(
   MigrationProbe
   OrgUnit
@@ -822,6 +824,10 @@ G1_MODELS=(
   CaseNoticeStep
   CasePartySubmission
   CaseHearing
+  CaseLegalReview
+  CaseLegalReviewOpinion
+  CaseDiscussionMark
+  CaseDiscussionRecord
 )
 check_g1-model-allowlist() {
   local schema="$BACKEND/prisma/schema.prisma" model in_schema extra missing fails=0

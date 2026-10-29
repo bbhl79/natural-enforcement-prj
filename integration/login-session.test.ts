@@ -205,7 +205,8 @@ describe('POST /api/auth/login', () => {
         'clue.reminder.resolve', 'clue.item.supplement', 'clue.verify.retry', 'clue.reference.read',
         'clue.geometry.update',
         'case.open', 'doc.draft', 'doc.submit', 'case.reassign.submit',
-        'legal.review.request', 'clue.read', 'case.read', 'doc.read', 'clue.export', 'case.export',
+        'legal.review.request', 'case.discussion.record',
+        'clue.read', 'case.read', 'doc.read', 'clue.export', 'case.export',
         'doc.export', 'audit.admin.read', 'audit.admin.export',
       ],
     });
