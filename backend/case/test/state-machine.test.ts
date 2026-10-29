@@ -61,13 +61,28 @@ describe('迁移表常量', () => {
     }
   });
 
-  it('启用 T01、T02、调查收尾 T03 至 T07、改派 T33 与 T34，且已启用的边声明了守卫', () => {
+  it('启用 T01、T02、调查收尾 T03 至 T07、审理 T08／T09、改派 T33 与 T34，且已启用的边声明了守卫', () => {
     const enabled = TRANSITIONS.filter((item) => item.enabled).map((item) => item.id);
-    expect(enabled).toEqual(['T01', 'T02', 'T03', 'T04', 'T05', 'T06', 'T07', 'T33', 'T34']);
+    expect(enabled).toEqual(['T01', 'T02', 'T03', 'T04', 'T05', 'T06', 'T07', 'T08', 'T09', 'T33', 'T34']);
     for (const item of TRANSITIONS) {
       if (!item.enabled) continue;
       expect(item.guard).not.toBe('none');
     }
+  });
+
+  it('T08、T09 启用且声明 review 守卫；不存在 E04→E03 迁移（Q31）', () => {
+    expect(findTransition('T08')?.enabled).toBe(true);
+    expect(findTransition('T08')?.guard).toBe('review');
+    expect(findTransition('T09')?.enabled).toBe(true);
+    expect(findTransition('T09')?.guard).toBe('review');
+    const fromE04 = TRANSITIONS.filter((item) => {
+      const specs = Array.isArray(item.from) ? item.from : [item.from];
+      return specs.some((spec) => spec.kind === 'stage' && spec.stage === 'E04');
+    });
+    expect(fromE04.map((item) => item.id)).toEqual(['T09', 'T09a', 'T10', 'T10a', 'T11', 'T12']);
+    expect(
+      fromE04.some((item) => item.to.kind === 'enter' && item.to.stage === 'E03'),
+    ).toBe(false);
   });
 
   it('环节、主状态、实例状态与终态清单完整', () => {
@@ -156,7 +171,7 @@ describe('引擎 409 分支', () => {
   });
 
   it('未启用的边返回 transition-disabled，不产生效果', () => {
-    const decision = decideTransition({ operation: { kind: 'transition', transitionId: 'T08' }, subject: openCase });
+    const decision = decideTransition({ operation: { kind: 'transition', transitionId: 'T10' }, subject: openCase });
     expect(decision.ok).toBe(false);
     if (decision.ok || decision.level !== 'block') throw new Error('应为阻断');
     expect(decision.reason).toBe('transition-disabled');
@@ -241,7 +256,7 @@ describe('引擎 409 分支', () => {
     expect(warned.httpStatus).toBe(200);
   });
 
-  it('中止期间 T08 返回 X02，即使该边未启用；已中止再办 T03 是起点不符', () => {
+  it('中止期间 T08 返回 X02；已中止再办 T03 是起点不符', () => {
     const blocked = decideTransition({
       operation: { kind: 'transition', transitionId: 'T08' },
       subject: subject({ ...openCase, suspended: true }),
@@ -465,15 +480,26 @@ describe('两段式确认与规则键（#258）', () => {
     citation: '规程 4.3.3(4)',
   };
 
-  it('注册表只登记 X03 与 CMP-01 的参数，不登记其他业务票的警告规则', () => {
+  it('注册表登记 X03、CMP-01、X22 与调查审理职能分离，不登记其他业务票的警告规则', () => {
     expect(findRuleParameter('X03')).toMatchObject({
       ruleKey: 'X03',
       version: '1',
       level: 'warn',
       reasonRequired: false,
     });
+    expect(findRuleParameter('X22')).toMatchObject({
+      ruleKey: 'X22',
+      version: '1',
+      level: 'warn',
+      reasonRequired: false,
+    });
+    expect(findRuleParameter('REVIEW-SEPARATION')).toMatchObject({
+      ruleKey: 'REVIEW-SEPARATION',
+      version: '1',
+      level: 'warn',
+      reasonRequired: true,
+    });
     expect(findRuleParameter('X10')).toBeNull();
-    expect(findRuleParameter('X22')).toBeNull();
     expect(findRuleParameter('X26')).toBeNull();
     expect(findRuleParameter('X07')).toBeNull();
     expect(findRuleParameter('X16')).toBeNull();
@@ -590,7 +616,7 @@ describe('两段式确认与规则键（#258）', () => {
     expect(opened.confirmation?.ruleKeys).toEqual([{ ruleKey: 'X03', version: '1' }]);
 
     const disabled = decideTransition({
-      operation: { kind: 'transition', transitionId: 'T08' },
+      operation: { kind: 'transition', transitionId: 'T10' },
       subject: pending,
       confirmedRuleKeys: ['X03'],
     });

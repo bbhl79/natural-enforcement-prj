@@ -84,6 +84,8 @@ const EXPECTED_ALLOWANCES: Record<string, readonly string[]> = {
   行政审核: [
     'legal.review.request',
     'doc.admin.review',
+    // #240：审理意见签出。
+    'case.review.record',
     'clue.read',
     'case.read',
     'doc.read',

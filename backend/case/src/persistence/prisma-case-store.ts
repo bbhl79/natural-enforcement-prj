@@ -56,6 +56,21 @@ import type {
   ProcedureChainReturnWrite,
   ProcedureDraftWrite,
   ProcedureStepWrite,
+  FrozenDecisionRow,
+  FrozenDecisionWrite,
+  ReviewObjectionDraftWrite,
+  ReviewObjectionRow,
+  ReviewObjectionStepWrite,
+  ReviewObjectionWindowCloseWrite,
+  ReviewObjectionWindowRow,
+  ReviewObjectionWindowWrite,
+  ReviewOpinionRow,
+  ReviewOpinionWrite,
+  ReviewReportDraftWrite,
+  ReviewReportRow,
+  ReviewReportStepWrite,
+  ReviewerDesignationRow,
+  ReviewerDesignationWrite,
   ReassignmentSettlementWrite,
   StageInstanceRow,
   StageInstanceWrite,
@@ -678,6 +693,25 @@ export class PrismaCaseStore implements CaseStore {
       });
       if (!stepped) return false;
     }
+    const reports = await this.prisma.caseReviewReport.findMany({
+      where: { approvalChainId: write.chainId, status: { in: ['pending_review', 'pending_approval'] } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    for (const row of reports) {
+      const stepped = await this.applyReviewReportStep({
+        reportId: row.id,
+        expectedStatus: row.status,
+        nextStatus: 'drafting',
+        approvalChainId: null,
+        stepId: write.newId(),
+        step: 'return',
+        versionNo: row.currentVersionNo,
+        actorId: write.actorId,
+        opinion: write.opinion,
+        at: write.at,
+      });
+      if (!stepped) return false;
+    }
     return true;
   }
 
@@ -1117,6 +1151,267 @@ export class PrismaCaseStore implements CaseStore {
     return true;
   }
 
+  async readOpenReviewReport(caseId: string): Promise<ReviewReportRow | null> {
+    const row = await this.prisma.caseReviewReport.findFirst({
+      where: { caseId, status: { not: 'approved' } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!row) return null;
+    return this.withReviewReportContent(row);
+  }
+
+  async readApprovedReviewReport(caseId: string): Promise<ReviewReportRow | null> {
+    const row = await this.prisma.caseReviewReport.findFirst({
+      where: { caseId, status: 'approved' },
+      orderBy: { updatedAt: 'desc' },
+    });
+    if (!row) return null;
+    return this.withReviewReportContent(row);
+  }
+
+  async readReviewReport(reportId: string): Promise<ReviewReportRow | null> {
+    const row = await this.prisma.caseReviewReport.findUnique({ where: { id: reportId } });
+    if (!row) return null;
+    return this.withReviewReportContent(row);
+  }
+
+  async saveReviewReportDraft(write: ReviewReportDraftWrite): Promise<boolean> {
+    const versionNo = write.isNew ? 1 : write.expectedVersionNo + 1;
+    if (write.isNew) {
+      const inserted = await this.prisma.$queryRaw<Array<{ id: string }>>`
+        INSERT INTO case_review_report (
+          id, case_id, drafter_id, status, current_version_no, created_at, updated_at
+        )
+        VALUES (
+          ${write.approvalId}, ${write.caseId}, ${write.drafterId},
+          'drafting', 1, ${write.at}, ${write.at}
+        )
+        ON CONFLICT (case_id) WHERE status <> 'approved' DO NOTHING
+        RETURNING id
+      `;
+      if (inserted.length === 0) return false;
+    } else {
+      const updated = await this.prisma.$queryRaw<Array<{ id: string }>>`
+        UPDATE case_review_report
+        SET current_version_no = current_version_no + 1,
+            updated_at = ${write.at}
+        WHERE id = ${write.approvalId}
+          AND status = 'drafting'
+          AND current_version_no = ${write.expectedVersionNo}
+        RETURNING id
+      `;
+      if (updated.length === 0) return false;
+    }
+    await this.prisma.caseReviewReportVersion.create({
+      data: {
+        id: write.versionId,
+        reportId: write.approvalId,
+        versionNo,
+        contentJson: write.contentJson,
+        createdBy: write.drafterId,
+        createdAt: write.at,
+      },
+    });
+    return true;
+  }
+
+  async applyReviewReportStep(write: ReviewReportStepWrite): Promise<boolean> {
+    const data: {
+      status: string;
+      updatedAt: Date;
+      adminReview?: string;
+      approvalChainId?: string | null;
+    } = { status: write.nextStatus, updatedAt: write.at };
+    if (write.adminReview !== undefined) data.adminReview = write.adminReview;
+    if (write.approvalChainId !== undefined) data.approvalChainId = write.approvalChainId;
+    const updated = await this.prisma.caseReviewReport.updateMany({
+      where: { id: write.reportId, status: write.expectedStatus },
+      data,
+    });
+    if (updated.count === 0) return false;
+    await this.prisma.caseReviewReportStep.create({
+      data: {
+        id: write.stepId,
+        reportId: write.reportId,
+        versionNo: write.versionNo,
+        step: write.step,
+        actorId: write.actorId,
+        opinion: write.opinion,
+        createdAt: write.at,
+      },
+    });
+    return true;
+  }
+
+  async listReviewerDesignations(caseId: string): Promise<readonly ReviewerDesignationRow[]> {
+    return this.prisma.caseReviewerDesignation.findMany({
+      where: { caseId },
+      orderBy: [{ designatedAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async insertReviewerDesignation(write: ReviewerDesignationWrite): Promise<boolean> {
+    try {
+      await this.prisma.caseReviewerDesignation.create({ data: { ...write } });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async supersedeReviewerDesignation(write: { readonly id: string; readonly caseId: string; readonly at: Date }): Promise<boolean> {
+    const updated = await this.prisma.caseReviewerDesignation.updateMany({
+      where: { id: write.id, caseId: write.caseId, supersededAt: null },
+      data: { supersededAt: write.at },
+    });
+    return updated.count > 0;
+  }
+
+  async insertReviewOpinion(write: ReviewOpinionWrite): Promise<void> {
+    await this.prisma.caseReviewOpinion.create({ data: { ...write } });
+  }
+
+  async listReviewOpinions(caseId: string): Promise<readonly ReviewOpinionRow[]> {
+    return this.prisma.caseReviewOpinion.findMany({
+      where: { caseId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async insertFrozenDecision(write: FrozenDecisionWrite): Promise<boolean> {
+    try {
+      await this.prisma.caseFrozenDecision.create({ data: { ...write } });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async listFrozenDecisions(caseId: string): Promise<readonly FrozenDecisionRow[]> {
+    return this.prisma.caseFrozenDecision.findMany({
+      where: { caseId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async readOpenReviewObjection(caseId: string): Promise<ReviewObjectionRow | null> {
+    return this.prisma.caseReviewObjection.findFirst({
+      where: { caseId, status: { not: 'decided' } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async readReviewObjection(objectionId: string): Promise<ReviewObjectionRow | null> {
+    return this.prisma.caseReviewObjection.findUnique({ where: { id: objectionId } });
+  }
+
+  async saveReviewObjectionDraft(write: ReviewObjectionDraftWrite): Promise<boolean> {
+    if (write.isNew) {
+      try {
+        await this.prisma.caseReviewObjection.create({
+          data: {
+            id: write.objectionId,
+            caseId: write.caseId,
+            entrySeq: write.entrySeq,
+            opinionId: write.opinionId,
+            drafterId: write.drafterId,
+            status: 'drafting',
+            contentJson: write.contentJson,
+            createdAt: write.at,
+            updatedAt: write.at,
+          },
+        });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    const updated = await this.prisma.caseReviewObjection.updateMany({
+      where: { id: write.objectionId, caseId: write.caseId, drafterId: write.drafterId, status: 'drafting' },
+      data: { contentJson: write.contentJson, updatedAt: write.at },
+    });
+    return updated.count > 0;
+  }
+
+  async applyReviewObjectionStep(write: ReviewObjectionStepWrite): Promise<boolean> {
+    const data: {
+      status: string;
+      updatedAt: Date;
+      decision?: string | null;
+      decisionTransition?: string | null;
+      decidedBy?: string | null;
+      decidedAt?: Date | null;
+      approvalChainId?: string | null;
+      contentJson?: string;
+    } = { status: write.nextStatus, updatedAt: write.at };
+    if (write.decision !== undefined) data.decision = write.decision;
+    if (write.decisionTransition !== undefined) data.decisionTransition = write.decisionTransition;
+    if (write.decidedBy !== undefined) data.decidedBy = write.decidedBy;
+    if (write.decidedAt !== undefined) data.decidedAt = write.decidedAt;
+    if (write.approvalChainId !== undefined) data.approvalChainId = write.approvalChainId;
+    if (write.contentJson !== undefined) data.contentJson = write.contentJson;
+    const updated = await this.prisma.caseReviewObjection.updateMany({
+      where: { id: write.objectionId, status: write.expectedStatus },
+      data,
+    });
+    return updated.count > 0;
+  }
+
+  async listReviewObjections(caseId: string): Promise<readonly ReviewObjectionRow[]> {
+    return this.prisma.caseReviewObjection.findMany({
+      where: { caseId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async insertReviewObjectionWindow(write: ReviewObjectionWindowWrite): Promise<boolean> {
+    try {
+      await this.prisma.caseReviewObjectionWindow.create({
+        data: {
+          id: write.id,
+          caseId: write.caseId,
+          entrySeq: write.entrySeq,
+          opinionId: write.opinionId,
+          status: 'open',
+          dueAt: write.dueAt,
+          openedAt: write.openedAt,
+          createdAt: write.at,
+          updatedAt: write.at,
+        },
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async listReviewObjectionWindows(caseId: string): Promise<readonly ReviewObjectionWindowRow[]> {
+    return this.prisma.caseReviewObjectionWindow.findMany({
+      where: { caseId },
+      orderBy: [{ openedAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async readOpenReviewObjectionWindow(opinionId: string): Promise<ReviewObjectionWindowRow | null> {
+    return this.prisma.caseReviewObjectionWindow.findFirst({
+      where: { opinionId, status: 'open' },
+    });
+  }
+
+  async closeReviewObjectionWindow(write: ReviewObjectionWindowCloseWrite): Promise<boolean> {
+    const updated = await this.prisma.caseReviewObjectionWindow.updateMany({
+      where: { id: write.id, caseId: write.caseId, status: 'open' },
+      data: {
+        status: 'closed',
+        closeKind: write.closeKind,
+        closedBy: write.closedBy,
+        closedAt: write.at,
+        updatedAt: write.at,
+      },
+    });
+    return updated.count > 0;
+  }
+
   async listCalendarInstalls(): Promise<readonly CalendarInstallRow[]> {
     const rows = await this.prisma.deadlineCalendarInstall.findMany({
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
@@ -1194,6 +1489,33 @@ export class PrismaCaseStore implements CaseStore {
       id: row.id,
       caseId: row.caseId,
       kind: row.kind,
+      status: row.status,
+      adminReview: row.adminReview,
+      currentVersionNo: row.currentVersionNo,
+      drafterId: row.drafterId,
+      approvalChainId: row.approvalChainId,
+      contentJson: version?.contentJson ?? null,
+    };
+  }
+
+  private async withReviewReportContent(row: {
+    id: string;
+    caseId: string;
+    status: string;
+    adminReview: string | null;
+    currentVersionNo: number;
+    drafterId: string;
+    approvalChainId: string | null;
+  }): Promise<ReviewReportRow> {
+    const version =
+      row.currentVersionNo > 0
+        ? await this.prisma.caseReviewReportVersion.findUnique({
+            where: { reportId_versionNo: { reportId: row.id, versionNo: row.currentVersionNo } },
+          })
+        : null;
+    return {
+      id: row.id,
+      caseId: row.caseId,
       status: row.status,
       adminReview: row.adminReview,
       currentVersionNo: row.currentVersionNo,

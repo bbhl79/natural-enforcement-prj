@@ -71,6 +71,8 @@ const CASE_OPCODES = {
   'legal.opinion.submit': entry('none', false, false),
   'doc.admin.review': entry('none', false, false),
   'doc.approve': entry('none', false, true),
+  // #240：审理意见签出。只增码、不增角色；允许行只授行政审核（#71 回写见 #230）。
+  'case.review.record': entry('none', false, false),
   'clue.read': entry('none', false, false),
   'case.read': entry('none', false, false),
   'doc.read': entry('none', false, false),

@@ -52,7 +52,7 @@ const ALLOWED: Record<string, readonly string[]> = {
     'clue.export', 'case.export', 'doc.export',
   ],
   行政审核: [
-    'legal.review.request', 'doc.admin.review', 'clue.read', 'case.read', 'doc.read',
+    'legal.review.request', 'doc.admin.review', 'case.review.record', 'clue.read', 'case.read', 'doc.read',
     'clue.export', 'case.export', 'doc.export',
   ],
   行政审批: [

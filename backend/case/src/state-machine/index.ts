@@ -53,7 +53,11 @@ export type {
 export {
   Q31_RULE_KEY,
   Q31_WARNING_MESSAGE,
+  REVIEW_SEPARATION_MESSAGE,
+  REVIEW_SEPARATION_RULE_KEY,
   RULE_PARAMETERS,
+  X22_MESSAGE,
+  X22_RULE_KEY,
   confirmationGap,
   findRuleParameter,
   ruleRefsFor,

@@ -95,6 +95,19 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'case.procedure-approved',
   'case.procedure-returned',
   'case.party-notice-recorded',
+  // 审理（#240）：报告呈批、指定审理人、意见签出、异议呈批。警告与失败记同一动作的 failed 行。
+  'case.review-report-drafted',
+  'case.review-report-submitted',
+  'case.review-report-reviewed',
+  'case.review-report-approved',
+  'case.reviewer-designated',
+  'case.review-recorded',
+  'case.review-objection-drafted',
+  'case.review-objection-submitted',
+  'case.review-objection-decided',
+  // 异议窗口（#282 裁 B）：明示放弃与到期结算。
+  'case.review-objection-waived',
+  'case.review-objection-expired',
   // 期限呈批与锚点（#246）。成功与失败都记这五个动作。
   'deadline.drafted',
   'deadline.submitted',
@@ -733,6 +746,62 @@ export const CASE_RETURNED_FAILED_REASONS = [
 ] as const;
 export type CaseReturnedFailedReason = (typeof CASE_RETURNED_FAILED_REASONS)[number];
 
+/** 审理与异议呈批被拒（#240）。审理动作共用这一张原因表。 */
+export const CASE_REVIEW_FAILED_REASONS = [
+  'invalid-state',
+  'invalid-kind',
+  'invalid-reason',
+  'invalid-report',
+  'invalid-suggestion',
+  'invalid-violation-record',
+  'duplicate-suggestion',
+  'missing-handling-suggestion',
+  'fine-competition-reason-missing',
+  'missing-content',
+  'missing-note',
+  'invalid-evidence-refs',
+  'missing-reason',
+  'missing-reviewer',
+  'not-org-head',
+  'reviewer-not-admin-reviewer',
+  'reviewer-org-not-covered',
+  'reviewer-conflict-active',
+  'reviewer-not-designated',
+  'objection-not-allowed',
+  'invalid-decision',
+  'invalid-decision-transition',
+  'post-hearing-limitation',
+  'transition-disabled',
+  'unknown-transition',
+  'X02',
+  'X03',
+  'X12',
+  'X17',
+  'X18',
+  'X22',
+  'X23',
+  'X32',
+  'X33',
+  'REVIEW-SEPARATION',
+  'concurrent-change',
+] as const;
+export type CaseReviewFailedReason = (typeof CASE_REVIEW_FAILED_REASONS)[number];
+
+export const CASE_REVIEW_ACTIONS = [
+  'case.review-report-drafted',
+  'case.review-report-submitted',
+  'case.review-report-reviewed',
+  'case.review-report-approved',
+  'case.reviewer-designated',
+  'case.review-recorded',
+  'case.review-objection-drafted',
+  'case.review-objection-submitted',
+  'case.review-objection-decided',
+  'case.review-objection-waived',
+  'case.review-objection-expired',
+] as const;
+export type CaseReviewAction = (typeof CASE_REVIEW_ACTIONS)[number];
+
 /** 调查环节与收尾被拒（#236）。九个动作共用这一张原因表。 */
 export const CASE_INVESTIGATION_FAILED_REASONS = [
   'invalid-state',
@@ -942,6 +1011,19 @@ export const AUDIT_DETAIL_ACTIONS = [
   'case.procedure-approved',
   'case.procedure-returned',
   'case.party-notice-recorded',
+  // 审理（#240）：报告呈批、审理人指定、意见签出、异议呈批的前后值与确认键。
+  'case.review-report-drafted',
+  'case.review-report-submitted',
+  'case.review-report-reviewed',
+  'case.review-report-approved',
+  'case.reviewer-designated',
+  'case.review-recorded',
+  'case.review-objection-drafted',
+  'case.review-objection-submitted',
+  'case.review-objection-decided',
+  // 异议窗口（#282 裁 B）：结束方式与到期时刻。
+  'case.review-objection-waived',
+  'case.review-objection-expired',
   'deadline.drafted',
   'deadline.submitted',
   'deadline.reviewed',

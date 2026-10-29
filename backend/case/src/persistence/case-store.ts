@@ -412,6 +412,167 @@ export interface StageInvalidationWrite {
   readonly createdAt: Date;
 }
 
+/** 调查报告呈批表头，带当前版本正文（#240）。 */
+export interface ReviewReportRow {
+  readonly id: string;
+  readonly caseId: string;
+  /** drafting | pending_review | pending_approval | approved */
+  readonly status: string;
+  readonly adminReview: string | null;
+  readonly currentVersionNo: number;
+  readonly drafterId: string;
+  readonly approvalChainId: string | null;
+  readonly contentJson: string | null;
+}
+
+export interface ReviewReportDraftWrite {
+  readonly approvalId: string;
+  readonly caseId: string;
+  readonly drafterId: string;
+  readonly isNew: boolean;
+  readonly expectedVersionNo: number;
+  readonly versionId: string;
+  readonly contentJson: string;
+  readonly at: Date;
+}
+
+export interface ReviewReportStepWrite {
+  readonly reportId: string;
+  readonly expectedStatus: string;
+  readonly nextStatus: string;
+  readonly adminReview?: string;
+  /** undefined 不改；null 清空；字符串写入。 */
+  readonly approvalChainId?: string | null;
+  readonly stepId: string;
+  readonly step: string;
+  readonly versionNo: number;
+  readonly actorId: string;
+  readonly opinion: string | null;
+  readonly at: Date;
+}
+
+/** 审理人指定的一行（#240）。supersededAt 非空表示已被更换。 */
+export interface ReviewerDesignationRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly entrySeq: number;
+  readonly personnelId: string;
+  readonly designatedBy: string;
+  readonly reason: string | null;
+  readonly replacesId: string | null;
+  readonly designatedAt: Date;
+  readonly supersededAt: Date | null;
+}
+
+export type ReviewerDesignationWrite = ReviewerDesignationRow;
+
+/** 审理意见的一行（#240）。只追加。 */
+export interface ReviewOpinionRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly entrySeq: number;
+  readonly opinionKind: string;
+  readonly content: string;
+  readonly signedBy: string;
+  readonly designationId: string;
+  readonly destinationCode: string;
+  readonly outcomeCode: string | null;
+  readonly outcomeLabel: string | null;
+  readonly createdAt: Date;
+}
+
+export type ReviewOpinionWrite = ReviewOpinionRow;
+
+/** 拟决定摘要冻结的一行（#240）。一条意见至多一行。 */
+export interface FrozenDecisionRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly opinionId: string;
+  readonly summaryJson: string;
+  readonly createdAt: Date;
+}
+
+export type FrozenDecisionWrite = FrozenDecisionRow;
+
+/** 审理异议呈批的一行（T09a，#240）。 */
+export interface ReviewObjectionRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly entrySeq: number;
+  readonly opinionId: string;
+  readonly drafterId: string;
+  /** drafting | pending_approval | decided */
+  readonly status: string;
+  readonly contentJson: string;
+  readonly decision: string | null;
+  readonly decisionTransition: string | null;
+  readonly decidedBy: string | null;
+  readonly decidedAt: Date | null;
+  readonly approvalChainId: string | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+export interface ReviewObjectionDraftWrite {
+  readonly objectionId: string;
+  readonly caseId: string;
+  readonly entrySeq: number;
+  readonly opinionId: string;
+  readonly drafterId: string;
+  readonly isNew: boolean;
+  readonly contentJson: string;
+  readonly at: Date;
+}
+
+export interface ReviewObjectionStepWrite {
+  readonly objectionId: string;
+  readonly expectedStatus: string;
+  readonly nextStatus: string;
+  readonly decision?: string | null;
+  readonly decisionTransition?: string | null;
+  readonly decidedBy?: string | null;
+  readonly decidedAt?: Date | null;
+  readonly approvalChainId?: string | null;
+  readonly contentJson?: string;
+  readonly at: Date;
+}
+
+/** 审理异议窗口的一行（#282 裁 B）。一条审理意见至多一窗。 */
+export interface ReviewObjectionWindowRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly entrySeq: number;
+  readonly opinionId: string;
+  /** open | closed */
+  readonly status: string;
+  readonly dueAt: Date;
+  readonly openedAt: Date;
+  readonly closedAt: Date | null;
+  /** expired | waived | support-review | support-handler */
+  readonly closeKind: string | null;
+  readonly closedBy: string | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+export interface ReviewObjectionWindowWrite {
+  readonly id: string;
+  readonly caseId: string;
+  readonly entrySeq: number;
+  readonly opinionId: string;
+  readonly dueAt: Date;
+  readonly openedAt: Date;
+  readonly at: Date;
+}
+
+export interface ReviewObjectionWindowCloseWrite {
+  readonly id: string;
+  readonly caseId: string;
+  readonly closeKind: string;
+  readonly closedBy: string | null;
+  readonly at: Date;
+}
+
 /** 案件行（最小模型）。 */
 export interface CaseRow {
   readonly id: string;
@@ -519,7 +680,7 @@ export interface CaseStore {
   settleReassignment(write: ReassignmentSettlementWrite): Promise<boolean>;
   /**
    * 链外退回（#279）：该链上待审核／待审批的呈批打回拟制中，追加 return 步骤。
-   * 任一条状态不符返回 false；本方法不自开事务。
+   * 覆盖调查收尾呈批与调查报告呈批（#240）。任一条状态不符返回 false；本方法不自开事务。
    */
   returnProcedureApprovalsByChain(write: ProcedureChainReturnWrite): Promise<boolean>;
   listViolationRecords(caseId: string): Promise<readonly ViolationRecordRow[]>;
@@ -552,6 +713,48 @@ export interface CaseStore {
   readDeadlineApproval(approvalId: string): Promise<DeadlineApprovalRow | null>;
   saveDeadlineDraft(write: DeadlineDraftWrite): Promise<boolean>;
   applyDeadlineStep(write: DeadlineStepWrite): Promise<boolean>;
+  /** 本案未批准的调查报告呈批（#240）；没有为 null。 */
+  readOpenReviewReport(caseId: string): Promise<ReviewReportRow | null>;
+  /** 本案最近一张已批准的调查报告呈批（#240）；没有为 null。 */
+  readApprovedReviewReport(caseId: string): Promise<ReviewReportRow | null>;
+  /** 按主键读调查报告呈批。 */
+  readReviewReport(reportId: string): Promise<ReviewReportRow | null>;
+  /** 保存报告拟制稿。同一条案件至多一张未批准呈批；版本号不符返回 false。 */
+  saveReviewReportDraft(write: ReviewReportDraftWrite): Promise<boolean>;
+  /** 推进报告呈批一步。状态不符返回 false。 */
+  applyReviewReportStep(write: ReviewReportStepWrite): Promise<boolean>;
+  /** 本案全部审理人指定（含已更换，时间升序）。 */
+  listReviewerDesignations(caseId: string): Promise<readonly ReviewerDesignationRow[]>;
+  /** 追加一条审理人指定。本案已有在任指定时返回 false。 */
+  insertReviewerDesignation(write: ReviewerDesignationWrite): Promise<boolean>;
+  /** 把在任指定置为已更换。不是在任指定时返回 false。 */
+  supersedeReviewerDesignation(write: { readonly id: string; readonly caseId: string; readonly at: Date }): Promise<boolean>;
+  /** 追加一条审理意见。 */
+  insertReviewOpinion(write: ReviewOpinionWrite): Promise<void>;
+  /** 本案全部审理意见（时间升序）。 */
+  listReviewOpinions(caseId: string): Promise<readonly ReviewOpinionRow[]>;
+  /** 冻结一条意见的拟决定摘要。该意见已冻结时返回 false。 */
+  insertFrozenDecision(write: FrozenDecisionWrite): Promise<boolean>;
+  /** 本案全部冻结摘要（时间升序）。 */
+  listFrozenDecisions(caseId: string): Promise<readonly FrozenDecisionRow[]>;
+  /** 本案未决定的审理异议呈批；没有为 null。 */
+  readOpenReviewObjection(caseId: string): Promise<ReviewObjectionRow | null>;
+  /** 按主键读审理异议呈批。 */
+  readReviewObjection(objectionId: string): Promise<ReviewObjectionRow | null>;
+  /** 保存异议呈批拟制稿。已提交或已决定时返回 false。 */
+  saveReviewObjectionDraft(write: ReviewObjectionDraftWrite): Promise<boolean>;
+  /** 推进异议呈批一步。状态不符返回 false。 */
+  applyReviewObjectionStep(write: ReviewObjectionStepWrite): Promise<boolean>;
+  /** 本案全部异议呈批（时间升序）。 */
+  listReviewObjections(caseId: string): Promise<readonly ReviewObjectionRow[]>;
+  /** 追加一条异议窗口。本案同一进入次序号已有未关闭窗口时返回 false。 */
+  insertReviewObjectionWindow(write: ReviewObjectionWindowWrite): Promise<boolean>;
+  /** 本案全部异议窗口（时间升序）。 */
+  listReviewObjectionWindows(caseId: string): Promise<readonly ReviewObjectionWindowRow[]>;
+  /** 某条审理意见未关闭的异议窗口；没有为 null。 */
+  readOpenReviewObjectionWindow(opinionId: string): Promise<ReviewObjectionWindowRow | null>;
+  /** 关闭异议窗口。窗口已关闭时返回 false。 */
+  closeReviewObjectionWindow(write: ReviewObjectionWindowCloseWrite): Promise<boolean>;
   listCalendarInstalls(): Promise<readonly CalendarInstallRow[]>;
   insertCalendarInstall(write: CalendarInstallWrite): Promise<void>;
 }

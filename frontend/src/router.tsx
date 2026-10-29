@@ -32,6 +32,8 @@ import CaseDeadlinePage from './case/CaseDeadlinePage';
 import { deadlineLoader } from './case/deadline';
 import CaseInvestigationPage from './case/CaseInvestigationPage';
 import { investigationLoader } from './case/investigation';
+import CaseReviewPage from './case/CaseReviewPage';
+import { reviewLoader } from './case/review';
 import PlannedCenterPage from './pages/PlannedCenterPage';
 import WorkbenchPage from './pages/WorkbenchPage';
 import { authRedirect } from './routing';
@@ -101,6 +103,12 @@ export function appRoutes(store: RouterStore): RouteObject[] {
                   path: 'case/:caseId/investigation',
                   loader: investigationLoader(store),
                   element: <CaseInvestigationPage />,
+                },
+                {
+                  id: 'case-review',
+                  path: 'case/:caseId/review',
+                  loader: reviewLoader(store),
+                  element: <CaseReviewPage />,
                 },
                 {
                   id: 'case-deadline',
