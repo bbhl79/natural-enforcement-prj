@@ -1463,6 +1463,23 @@ model CasePartyNotice {
   @@map("case_party_notice")
 }
 
+/// 案件标记（#272 R-02）。只追加；当前状态取每键最后一行。
+/// 标记值：notice-served、notice-waiting、deemed-waived、hearing-entered、hearing-terminated。
+model CaseMarker {
+  id String @id
+  caseId String @map("case_id")
+  marker String
+  /// set 置位 | cleared 清除
+  state String
+  note String?
+  actorId String @map("actor_id")
+  changedAt DateTime @db.Timestamptz(6) @map("changed_at")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId, marker, changedAt])
+  @@map("case_marker")
+}
+
 /// 期限行（#246）。四维锚点加修订号唯一。只追加，不覆盖旧行。
 model CaseDeadlineRow {
   id String @id

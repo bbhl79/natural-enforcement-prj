@@ -757,6 +757,10 @@ export interface CaseStore {
   closeReviewObjectionWindow(write: ReviewObjectionWindowCloseWrite): Promise<boolean>;
   listCalendarInstalls(): Promise<readonly CalendarInstallRow[]>;
   insertCalendarInstall(write: CalendarInstallWrite): Promise<void>;
+  /** 本案全部案件标记行（只追加，时间升序）。 */
+  listCaseMarkers(caseId: string): Promise<readonly CaseMarkerRow[]>;
+  /** 追加一条标记置位或清除。不清除旧行。 */
+  appendCaseMarker(write: CaseMarkerWrite): Promise<void>;
 }
 
 /** 违法记录。作废只改状态和作废字段，不删行。 */
@@ -1024,3 +1028,26 @@ export interface PartyNoticeWrite {
   readonly recordedBy: string;
   readonly recordedAt: Date;
 }
+
+/** 案件标记的一行（#272 R-02）。只追加；当前状态取每键最后一行。 */
+export interface CaseMarkerRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly marker: string;
+  /** set 置位 | cleared 清除 */
+  readonly state: 'set' | 'cleared';
+  readonly note: string | null;
+  readonly actorId: string;
+  readonly changedAt: Date;
+  readonly createdAt: Date;
+}
+
+export type CaseMarkerWrite = {
+  readonly id: string;
+  readonly caseId: string;
+  readonly marker: string;
+  readonly state: 'set' | 'cleared';
+  readonly note: string | null;
+  readonly actorId: string;
+  readonly changedAt: Date;
+};

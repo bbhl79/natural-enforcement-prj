@@ -814,6 +814,7 @@ G1_MODELS=(
   CaseFrozenDecision
   CaseReviewObjection
   CaseReviewObjectionWindow
+  CaseMarker
 )
 check_g1-model-allowlist() {
   local schema="$BACKEND/prisma/schema.prisma" model in_schema extra missing fails=0

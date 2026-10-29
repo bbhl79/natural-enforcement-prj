@@ -11,6 +11,8 @@ import type {
   ApprovalChainWrite,
   ApprovalOpinionWrite,
   CasePointerWrite,
+  CaseMarkerRow,
+  CaseMarkerWrite,
   CaseReturnWrite,
   CaseRow,
   CaseStageSignatureRow,
@@ -974,6 +976,17 @@ export class PrismaCaseStore implements CaseStore {
         recordedAt: write.recordedAt,
       },
     });
+  }
+
+  async listCaseMarkers(caseId: string): Promise<readonly CaseMarkerRow[]> {
+    return this.prisma.caseMarker.findMany({
+      where: { caseId },
+      orderBy: [{ changedAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async appendCaseMarker(write: CaseMarkerWrite): Promise<void> {
+    await this.prisma.caseMarker.create({ data: { ...write } });
   }
 
   async listDeadlineRows(caseId: string): Promise<readonly DeadlineRow[]> {

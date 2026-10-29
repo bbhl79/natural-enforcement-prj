@@ -10,7 +10,9 @@ import {
   CASE_STORE,
   CASE_SUPERVISION_ROLE,
   CLUE_STORE,
+  activeMarkerKeys,
   decideTransition,
+  readActiveCaseMarkers,
   type CaseMainStatus,
   type CaseStore,
   type CaseView,
@@ -94,6 +96,30 @@ export class CaseStateService {
     const denied = await this.authorize(actor, READ_OPCODE, view.handlingOrgId, caseId);
     if (denied) return { status: 403, body: { reason: denied } };
     return { status: 200, body: presentCase(view) };
+  }
+
+  /** 案件标记只读入口（#272 R-02）。供 #269／#242／#270 与前端读同一份事实。 */
+  async readMarkers(actor: ActorRef, caseId: string): Promise<CaseStateHttpOutcome> {
+    const view = await this.cases.readCaseView(caseId);
+    if (!view) return { status: 404, body: { result: 'not-found' } };
+    const denied = await this.authorize(actor, READ_OPCODE, view.handlingOrgId, caseId);
+    if (denied) return { status: 403, body: { reason: denied } };
+    const rows = await this.cases.listCaseMarkers(caseId);
+    return {
+      status: 200,
+      body: {
+        caseId,
+        active: activeMarkerKeys(rows),
+        markers: rows.map((row) => ({
+          id: row.id,
+          marker: row.marker,
+          state: row.state,
+          note: row.note,
+          actorId: row.actorId,
+          changedAt: row.changedAt.toISOString(),
+        })),
+      },
+    };
   }
 
   async transition(
@@ -289,7 +315,7 @@ export class CaseStateService {
         stage: view.currentStage,
         stageEntrySeq: view.stageEntrySeq,
         suspended: view.suspended,
-        markers: [],
+        markers: await readActiveCaseMarkers(this.cases, view.id),
         clueStatus: clue?.status ?? null,
         handlingOrgId: view.handlingOrgId,
         proposedHandlingOrgId: null,

@@ -374,6 +374,8 @@ export type {
   CaseRow,
   CaseStore,
   CaseView,
+  CaseMarkerRow,
+  CaseMarkerWrite,
   ComparisonJudgmentRow,
   ComparisonJudgmentWrite,
   FilingApprovalRow,
@@ -768,3 +770,13 @@ export type {
   ReviewSignCheck,
   ReviewSignFacts,
 } from './review/index.ts';
+// #272 R-02：案件标记的统一读写出口（供 #269／#242／#270 复用）。
+export {
+  CASE_MARKER_KEYS,
+  STICKY_CASE_MARKERS,
+  activeMarkerKeys,
+  isCaseMarkerKey,
+  isStickyCaseMarker,
+  readActiveCaseMarkers,
+} from './marker/index.ts';
+export type { CaseMarkerFact, CaseMarkerKey } from './marker/index.ts';
