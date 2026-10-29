@@ -20,6 +20,8 @@ import type {
   CaseLegalReviewFailedReason,
   CaseValidityAction,
   CaseValidityFailedReason,
+  CaseTransferAction,
+  CaseTransferFailedReason,
   CaseNoticeAction,
   CaseNoticeFailedReason,
   CaseInvestigationAction,
@@ -357,6 +359,9 @@ export type AuditAppend =
   // 有效性确认与重新告知（#248）。成功与失败都记同一动作。
   | (AuditParties & { action: CaseValidityAction })
   | (AuditParties & { action: CaseValidityAction; outcome: 'failed'; reason: CaseValidityFailedReason })
+  // 案件阶段三类移送（#242）。成功与失败都记同一动作。
+  | (AuditParties & { action: CaseTransferAction })
+  | (AuditParties & { action: CaseTransferAction; outcome: 'failed'; reason: CaseTransferFailedReason })
 ;
 
 /**

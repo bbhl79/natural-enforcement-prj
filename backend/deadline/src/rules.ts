@@ -68,6 +68,26 @@ export const DEADLINE_RULES: readonly DeadlineRule[] = [
     extensionAllowance: null,
     basis: '移送告知 3 个工作日',
   },
+  {
+    key: 'criminal-transfer.decision',
+    version: DEADLINE_RULE_VERSION,
+    dayCount: 3,
+    dayBasis: 'working',
+    consumption: 'restart',
+    partyFacing: false,
+    extensionAllowance: null,
+    basis: '涉刑移送审批三个工作日（规程11.1.2(2)）',
+  },
+  {
+    key: 'criminal-decision.review',
+    version: DEADLINE_RULE_VERSION,
+    dayCount: 3,
+    dayBasis: 'calendar',
+    consumption: 'restart',
+    partyFacing: false,
+    extensionAllowance: null,
+    basis: '接到不予立案通知之日起三日只警告（国务院令第310号第9条）',
+  },
 ];
 
 const BY_KEY = new Map(DEADLINE_RULES.map((rule) => [rule.key, rule]));
