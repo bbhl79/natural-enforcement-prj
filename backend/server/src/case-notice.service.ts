@@ -17,6 +17,8 @@ import {
   activeMarkerKeys,
   applyWarningGate,
   assessHearing,
+  assessMandatoryReview,
+  assertNoticeGate,
   canTakeFilingStep,
   checkHearingHost,
   checkHearingReopen,
@@ -27,8 +29,6 @@ import {
   hearingWindowState,
   isHearingEndKind,
   isStickyCaseMarker,
-  mandatoryReviewHit,
-  preReviewWarning,
   readNoticeContent,
   readActiveCaseMarkers,
   stageIndex,
@@ -97,6 +97,7 @@ interface ConfirmationInput {
 }
 
 interface FrozenSummary {
+  readonly id: string;
   readonly opinionId: string;
   readonly kind: string;
   readonly destinationCode: string;
@@ -226,6 +227,26 @@ export class CaseNoticeService {
     const assessment = this.assessOfContent(parsed.content, frozen);
     const at = this.clock.now();
     if (prepared.view.currentStage === 'E04') {
+      const markers = await readActiveCaseMarkers(this.cases, caseId);
+      const hearings = await this.cases.listHearings(caseId);
+      const mandatory = assessMandatoryReview({
+        decisionKind: parsed.content.kind,
+        hearingHeld: hearings.some((row) => row.endKind === 'concluded'),
+        hearingEntered:
+          markers.includes('hearing-entered')
+          || hearings.some((row) => row.acceptedAt !== null || row.scheduledAt !== null),
+        penaltyCodes: frozen.violations.flatMap((row) => row.penaltyCodes),
+        criminalTransfer: false,
+        manualItems: [],
+      });
+      if (mandatory.required) {
+        return this.fail(prepared, 'case.notice-drafted', DRAFT_OPCODE, {
+          httpStatus: 409,
+          reason: 'legal-review-required',
+          message: '命中自动必审，须先完成告知前法制审核',
+          outlet: '发起法制审核，通过后回到告知',
+        });
+      }
       const transitionId = parsed.content.kind === 'penalty' ? 'T10' : 'T11';
       const other = await this.cases.countInFlightApprovals(caseId);
       const subject = await this.subjectOf(prepared.view, prepared.roles, other);
@@ -341,11 +362,62 @@ export class CaseNoticeService {
     }
     const existing = await this.cases.readOpenNotice(caseId);
     if (!existing) {
-      return this.fail(prepared, 'case.notice-drafted', DRAFT_OPCODE, {
-        httpStatus: 409,
-        reason: 'invalid-state',
-        message: '当前没有可保存的告知草稿',
-        outlet: '先由审理意见进入告知',
+      if (prepared.view.currentStage !== 'E05') {
+        return this.fail(prepared, 'case.notice-drafted', DRAFT_OPCODE, {
+          httpStatus: 409,
+          reason: 'invalid-state',
+          message: '当前没有可保存的告知草稿',
+          outlet: '先由审理意见进入告知',
+        });
+      }
+      const noticeId = newUlid();
+      return this.uow.run(async (tx) => {
+        const saved = await tx.cases.saveNoticeDraft({
+          noticeId,
+          caseId,
+          entrySeq: prepared.view.stageEntrySeq,
+          kind: parsed.content.kind,
+          drafterId: actor.personnelId,
+          isNew: true,
+          expectedVersionNo: 0,
+          versionId: newUlid(),
+          contentJson: JSON.stringify(parsed.content),
+          at,
+        });
+        if (!saved) {
+          return rejected<CaseNoticeHttpOutcome>(
+            blockBody('concurrent-change', '告知已被他人更新', null, '请重新读取后再试'),
+            {
+              action: 'case.notice-drafted',
+              outcome: 'failed',
+              reason: 'concurrent-change',
+              ...this.parties(prepared, caseId, DRAFT_OPCODE),
+            },
+          );
+        }
+        await tx.audit.append({
+          action: 'case.notice-drafted',
+          ...this.parties(prepared, caseId, DRAFT_OPCODE),
+          detail: JSON.stringify({
+            caseId,
+            noticeId,
+            kind: parsed.content.kind,
+            entrySeq: prepared.view.stageEntrySeq,
+            afterLegalReview: true,
+            hearingRequired: assessment.required,
+          }),
+        });
+        return {
+          status: 200 as const,
+          body: {
+            result: 'notice-drafted',
+            noticeId,
+            caseId,
+            currentStage: prepared.view.currentStage,
+            stageEntrySeq: prepared.view.stageEntrySeq,
+            hints: assessment.hints,
+          },
+        };
       });
     }
     if (existing.status !== 'drafting') {
@@ -558,11 +630,24 @@ export class CaseNoticeService {
     const blocked = this.x07Outcome(prepared, 'case.notice-approved', APPROVE_OPCODE, assessment);
     if (blocked) return blocked;
     const markers = await readActiveCaseMarkers(this.cases, loaded.caseId);
-    const mandatory = mandatoryReviewHit({
-      manual: content.content.mandatoryReview,
-      hearingEntered: markers.includes('hearing-entered'),
+    const hearings = await this.cases.listHearings(loaded.caseId);
+    const mandatoryAssessment = assessMandatoryReview({
+      decisionKind: content.content.kind,
+      hearingHeld: hearings.some((row) => row.endKind === 'concluded'),
+      hearingEntered:
+        markers.includes('hearing-entered')
+        || hearings.some((row) => row.acceptedAt !== null || row.scheduledAt !== null),
+      penaltyCodes: frozen.violations.flatMap((row) => row.penaltyCodes),
+      criminalTransfer: false,
+      manualItems: [],
     });
-    const warning = preReviewWarning({ mandatoryReview: mandatory, preReviewApproval: content.content.preReviewApproval });
+    const mandatory = mandatoryAssessment.required || content.content.mandatoryReview;
+    const coverage = await this.noticeCoverage(content.content.preReviewApproval, loaded.caseId, frozen);
+    const warning = assertNoticeGate({
+      mandatory,
+      preReviewApproval: content.content.preReviewApproval,
+      coverage,
+    });
     const gate = applyWarningGate({
       notes: warning ? [warning] : [],
       confirmedRuleKeys: input.confirmedRuleKeys,
@@ -1706,6 +1791,19 @@ export class CaseNoticeService {
     });
   }
 
+  /** 系统内法审引用的摘要覆盖：引用解析不出时按外部引用处理（#272 旧口径）。 */
+  private async noticeCoverage(
+    reference: string | null,
+    caseId: string,
+    frozen: FrozenSummary,
+  ): Promise<'covered' | 'not-covered' | 'unknown'> {
+    if (reference === null || reference.trim() === '') return 'unknown';
+    const opinion = await this.cases.readLegalReviewOpinion(reference.trim());
+    if (!opinion || opinion.caseId !== caseId) return 'unknown';
+    const passed = opinion.conclusion === 'pass' && opinion.headSignedAt !== null;
+    return passed && opinion.frozenDecisionId === frozen.id ? 'covered' : 'not-covered';
+  }
+
   private async prepare(
     actor: ActorRef,
     caseId: string,
@@ -1769,6 +1867,7 @@ export class CaseNoticeService {
       const parsed = JSON.parse(latest.summaryJson) as Record<string, unknown>;
       const violations = Array.isArray(parsed.violations) ? parsed.violations : [];
       return {
+        id: latest.id,
         opinionId: typeof parsed.opinionId === 'string' ? parsed.opinionId : latest.opinionId,
         kind: typeof parsed.kind === 'string' ? parsed.kind : '',
         destinationCode: typeof parsed.destinationCode === 'string' ? parsed.destinationCode : '',

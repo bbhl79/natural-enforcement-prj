@@ -8,7 +8,8 @@
 // X12 白名单以 #235 正文及评论 6431387386 为准。
 // #235 启用 T01、T02。#236 启用 T03–T07。#239 启用 T33。#240 启用 T08、T09。
 // #272 启用 T10、T11（进入 E05）与 T13–T17（告知、陈述申辩、听证）。
-// T09a、T10a、T10b、T10c、T12、T14a、T16a 仍是 branch 或未启用边，由服务层解析或由后续票接入。
+// #269 启用 T10a、T10b（告知前法制审核进出 E07）。
+// T09a、T10c、T12、T14a、T16a 仍是 branch 或未启用边，由服务层解析或由后续票接入。
 
 import { GUARD_AUTHORITIES, type GuardAuthority, type GuardResult } from './guard.ts';
 
@@ -122,7 +123,7 @@ export type ToSpec =
   | { readonly kind: 'branch'; readonly note: string };
 
 /** 已启用边的守卫名。none 表示显式声明本边无额外守卫（通用守卫仍跑）。 */
-export const TRANSITION_GUARDS = ['filing', 'closeout', 'reassign', 'deadline', 'review', 'notice', 'none'] as const;
+export const TRANSITION_GUARDS = ['filing', 'closeout', 'reassign', 'deadline', 'review', 'notice', 'legal-review', 'none'] as const;
 export type TransitionGuard = (typeof TRANSITION_GUARDS)[number];
 
 export interface TransitionEdge {
@@ -209,8 +210,14 @@ export const TRANSITIONS: readonly TransitionEdge[] = [
     enabled: true,
     guard: 'notice',
   }),
-  edge('T10a', stage('E04'), enter('E07', 'drafting'), '告知前法制审核'),
-  edge('T10b', stage('E07'), enter('E05', 'drafting'), '告知前法制审核通过，进入 E05'),
+  edge('T10a', stage('E04'), enter('E07', 'drafting'), '告知前法制审核', {
+    enabled: true,
+    guard: 'legal-review',
+  }),
+  edge('T10b', stage('E07'), enter('E05', 'drafting', { completeStage: 'E07' }), '告知前法制审核通过，进入 E05', {
+    enabled: true,
+    guard: 'legal-review',
+  }),
   edge('T10c', stage('E07'), { kind: 'branch', note: '法审不通过：改后重送，视情况回 E04，或提请 E08 后回 E07' }, '告知前法制审核不通过'),
   // #272：由主办选择发告知，进入 E05；不发告知直接 E09 由决定票处理。
   edge('T11', stage('E04'), enter('E05', 'drafting'), '审理通过，拟不予处罚：可选择发告知，进入告知拟制', {
