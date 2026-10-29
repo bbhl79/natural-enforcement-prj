@@ -85,7 +85,7 @@ CREATE TABLE case_notice_step (
   opinion     TEXT,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT case_notice_step_id_ulid CHECK (id ~ '^[0-7][0-9A-HJKMNP-TV-Z]{25}$'),
-  CONSTRAINT case_notice_step_ck CHECK (step IN ('submit', 'review', 'approve', 'serve', 'complete')),
+  CONSTRAINT case_notice_step_ck CHECK (step IN ('submit', 'review', 'approve', 'serve', 'complete', 'return')),
   CONSTRAINT case_notice_step_notice_fkey FOREIGN KEY (notice_id) REFERENCES case_notice (id),
   CONSTRAINT case_notice_step_actor_fkey FOREIGN KEY (actor_id) REFERENCES personnel (id)
 );

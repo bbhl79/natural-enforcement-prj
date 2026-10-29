@@ -1525,7 +1525,7 @@ model CaseNoticeStep {
   id String @id
   noticeId String @map("notice_id")
   versionNo Int @map("version_no")
-  /// submit | review | approve | serve | complete
+  /// submit | review | approve | serve | complete | return
   step String
   actorId String @map("actor_id")
   opinion String?

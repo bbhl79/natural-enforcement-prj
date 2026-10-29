@@ -723,6 +723,25 @@ export class PrismaCaseStore implements CaseStore {
       });
       if (!stepped) return false;
     }
+    const notices = await this.prisma.caseNotice.findMany({
+      where: { approvalChainId: write.chainId, status: { in: ['pending_review', 'pending_approval'] } },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    for (const row of notices) {
+      const stepped = await this.applyNoticeStep({
+        noticeId: row.id,
+        expectedStatus: row.status,
+        nextStatus: 'drafting',
+        approvalChainId: null,
+        stepId: write.newId(),
+        step: 'return',
+        versionNo: row.currentVersionNo,
+        actorId: write.actorId,
+        opinion: write.opinion,
+        at: write.at,
+      });
+      if (!stepped) return false;
+    }
     return true;
   }
 
