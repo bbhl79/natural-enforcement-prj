@@ -476,6 +476,22 @@ describe('#272 T14／T14a', () => {
     expect(await markersOf(caseId)).not.toContain('notice-waiting');
   });
 
+  it('登记陈述申辩后可按陈述申辩完毕进入决定拟制', async () => {
+    const { caseId, noticeId } = await approvedNotice('penalty', 5000, { hearingNoticeAttached: true });
+    expect((await serveNotice(caseId, noticeId)).status).toBe(200);
+    const statement = await postJson(`/api/cases/${caseId}/statements`, 'P-272-H1', {
+      note: '当事人提交书面陈述申辩',
+    });
+    expect(statement.status, JSON.stringify(statement.body)).toBe(200);
+    expect(await cloned.prisma.casePartySubmission.count({ where: { caseId, kind: 'statement' } })).toBe(1);
+
+    const completed = await postJson(`/api/cases/${caseId}/notice-completions`, 'P-272-H1', {
+      basis: 'statement-complete',
+    });
+    expect(completed.status, JSON.stringify(completed.body)).toBe(200);
+    expect(completed.body.currentStage).toBe('E09');
+  });
+
   it('期满未申请视为放弃：届满前不能结算，届满后可登记', async () => {
     const { caseId, noticeId } = await approvedNotice('penalty', 5000, { hearingNoticeAttached: true });
     expect((await serveNotice(caseId, noticeId)).status).toBe(200);
@@ -493,6 +509,7 @@ describe('#272 T14／T14a', () => {
       });
       expect(late.status, JSON.stringify(late.body)).toBe(200);
       expect(await markersOf(caseId)).toEqual(expect.arrayContaining(['deemed-waived']));
+      expect(await markersOf(caseId)).not.toContain('hearing-entered');
     } finally {
       nowMs = restore;
     }
@@ -513,6 +530,20 @@ describe('#272 进入听证程序标记与 X28', () => {
     expect(ended.status, JSON.stringify(ended.body)).toBe(200);
     expect(ended.body).toMatchObject({ countsAsHeld: false, currentStage: 'E09' });
     expect(await markersOf(caseId)).not.toContain('hearing-entered');
+  });
+
+  it('受理后撤回、放弃、终止都算经过听证：标记＝是，不清除', async () => {
+    for (const endKind of ['withdrawn', 'waived', 'terminated'] as const) {
+      const { caseId, noticeId } = await approvedNotice('penalty', 5000, { hearingNoticeAttached: true });
+      expect((await serveNotice(caseId, noticeId)).status).toBe(200);
+      const requested = await postJson(`/api/cases/${caseId}/hearing-requests`, 'P-272-H1');
+      const hearingId = String(requested.body.hearingId);
+      expect((await postJson(`/api/hearings/${hearingId}/accept`, 'P-272-RV')).status).toBe(200);
+      const ended = await postJson(`/api/hearings/${hearingId}/end`, 'P-272-RV', { endKind });
+      expect(ended.status, JSON.stringify(ended.body)).toBe(200);
+      expect(ended.body).toMatchObject({ countsAsHeld: true, hearingEntered: true });
+      expect(await markersOf(caseId), endKind).toEqual(expect.arrayContaining(['hearing-entered']));
+    }
   });
 
   it('受理后撤回算经过听证：标记＝是，不清除；自动复开 409 X28', async () => {
