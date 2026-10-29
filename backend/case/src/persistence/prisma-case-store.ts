@@ -988,10 +988,11 @@ export class PrismaCaseStore implements CaseStore {
   }
 
   async listCaseMarkers(caseId: string): Promise<readonly CaseMarkerRow[]> {
-    return this.prisma.caseMarker.findMany({
+    const rows = await this.prisma.caseMarker.findMany({
       where: { caseId },
       orderBy: [{ changedAt: 'asc' }, { id: 'asc' }],
     });
+    return rows.map((row) => ({ ...row, state: row.state as 'set' | 'cleared' }));
   }
 
   async appendCaseMarker(write: CaseMarkerWrite): Promise<void> {
