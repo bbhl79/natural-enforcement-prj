@@ -1834,3 +1834,88 @@ model CaseReviewObjection {
   @@index([caseId])
   @@map("case_review_objection")
 }
+
+/// 法制审核轮次（#269，T10a／T10b）。一案同一轮次号至多一行。
+/// 必审清单判定快照存 determinationJson；负责人签出后 conclusion 定稿。
+/// phase：pre-notice 告知前 | pre-decision 决定前。
+/// status：drafting 拟制中 | pending_head 待负责人签 | concluded 已定稿。
+model CaseLegalReview {
+  id                String    @id
+  caseId            String    @map("case_id")
+  /// 案件内轮次号，自 1 起递增；期限锚点（legal-review.round）用该号
+  roundNo           Int       @map("round_no")
+  phase             String
+  status            String    @default("drafting")
+  receiverId        String    @map("receiver_id")
+  designatedBy      String    @map("designated_by")
+  /// 必审判定快照：自动原因、人工项、清单 id 与版本
+  determinationJson String    @map("determination_json")
+  /// 最近一次审核人签出的意见；未签为空
+  latestOpinionId   String?   @map("latest_opinion_id")
+  /// 定稿结论：pass | fail；未定稿为空
+  conclusion        String?
+  headId            String?   @map("head_id")
+  headSignedAt      DateTime? @db.Timestamptz(6) @map("head_signed_at")
+  concludedAt       DateTime? @db.Timestamptz(6) @map("concluded_at")
+  createdAt         DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt         DateTime  @default(now()) @db.Timestamptz(6) @map("updated_at")
+
+  @@unique([caseId, roundNo])
+  @@index([caseId])
+  @@map("case_legal_review")
+}
+
+/// 法审意见（#269）。只追加；负责人签出只更新本行的 head 字段。
+model CaseLegalReviewOpinion {
+  id                 String    @id
+  legalReviewId      String    @map("legal_review_id")
+  caseId             String    @map("case_id")
+  roundNo            Int       @map("round_no")
+  /// pass | fail
+  conclusion         String
+  /// accept-revise | collective-discussion；通过为空
+  failRoute          String?   @map("fail_route")
+  content            String
+  signedBy           String    @map("signed_by")
+  signedAt           DateTime  @db.Timestamptz(6) @map("signed_at")
+  /// 签出时冻结的拟决定摘要行；摘要覆盖判定用
+  frozenDecisionId   String?   @map("frozen_decision_id")
+  /// 通过时引用的集体讨论记录
+  discussionRecordId String?   @map("discussion_record_id")
+  headId             String?   @map("head_id")
+  headSignedAt       DateTime? @db.Timestamptz(6) @map("head_signed_at")
+  headOpinion        String?   @map("head_opinion")
+  createdAt          DateTime  @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([legalReviewId])
+  @@index([caseId])
+  @@map("case_legal_review_opinion")
+}
+
+/// 集体讨论触发勾选（#269）。只追加。
+model CaseDiscussionMark {
+  id           String   @id
+  caseId       String   @map("case_id")
+  criteriaJson String   @map("criteria_json")
+  reason       String
+  markedBy     String   @map("marked_by")
+  createdAt    DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_discussion_mark")
+}
+
+/// 集体讨论记录（#269）。只追加，入卷。
+model CaseDiscussionRecord {
+  id           String   @id
+  caseId       String   @map("case_id")
+  purposesJson String   @map("purposes_json")
+  criteriaJson String   @map("criteria_json")
+  note         String
+  recordedBy   String   @map("recorded_by")
+  recordedAt   DateTime @db.Timestamptz(6) @map("recorded_at")
+  createdAt    DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_discussion_record")
+}
