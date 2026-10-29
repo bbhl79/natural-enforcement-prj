@@ -14,6 +14,15 @@ import type {
   CaseMarkerRow,
   CaseMarkerWrite,
   CaseReturnWrite,
+  HearingRow,
+  HearingStepWrite,
+  HearingWrite,
+  NoticeDraftWrite,
+  NoticeRow,
+  NoticeServedWrite,
+  NoticeStepWrite,
+  PartySubmissionRow,
+  PartySubmissionWrite,
   CaseRow,
   CaseStageSignatureRow,
   CaseStore,
@@ -989,6 +998,180 @@ export class PrismaCaseStore implements CaseStore {
     await this.prisma.caseMarker.create({ data: { ...write } });
   }
 
+  async readNotice(caseId: string, entrySeq: number): Promise<NoticeRow | null> {
+    const row = await this.prisma.caseNotice.findUnique({ where: { caseId_entrySeq: { caseId, entrySeq } } });
+    return row ? toNoticeRow(row) : null;
+  }
+
+  async readNoticeById(noticeId: string): Promise<NoticeRow | null> {
+    const row = await this.prisma.caseNotice.findUnique({ where: { id: noticeId } });
+    return row ? toNoticeRow(row) : null;
+  }
+
+  async readOpenNotice(caseId: string): Promise<NoticeRow | null> {
+    const row = await this.prisma.caseNotice.findFirst({
+      where: { caseId, status: { not: 'served' } },
+      orderBy: { entrySeq: 'desc' },
+    });
+    return row ? toNoticeRow(row) : null;
+  }
+
+  async listNotices(caseId: string): Promise<readonly NoticeRow[]> {
+    const rows = await this.prisma.caseNotice.findMany({ where: { caseId }, orderBy: { entrySeq: 'asc' } });
+    return rows.map(toNoticeRow);
+  }
+
+  async saveNoticeDraft(write: NoticeDraftWrite): Promise<boolean> {
+    if (write.isNew) {
+      try {
+        await this.prisma.caseNotice.create({
+          data: {
+            id: write.noticeId,
+            caseId: write.caseId,
+            entrySeq: write.entrySeq,
+            kind: write.kind,
+            status: 'drafting',
+            currentVersionNo: 1,
+            drafterId: write.drafterId,
+            contentJson: write.contentJson,
+            createdAt: write.at,
+            updatedAt: write.at,
+          },
+        });
+      } catch {
+        return false;
+      }
+      await this.prisma.caseNoticeVersion.create({
+        data: {
+          id: write.versionId,
+          noticeId: write.noticeId,
+          versionNo: 1,
+          contentJson: write.contentJson,
+          createdBy: write.drafterId,
+          createdAt: write.at,
+        },
+      });
+      return true;
+    }
+    const updated = await this.prisma.caseNotice.updateMany({
+      where: { id: write.noticeId, status: 'drafting', currentVersionNo: write.expectedVersionNo },
+      data: {
+        contentJson: write.contentJson,
+        currentVersionNo: write.expectedVersionNo + 1,
+        updatedAt: write.at,
+      },
+    });
+    if (updated.count === 0) return false;
+    await this.prisma.caseNoticeVersion.create({
+      data: {
+        id: write.versionId,
+        noticeId: write.noticeId,
+        versionNo: write.expectedVersionNo + 1,
+        contentJson: write.contentJson,
+        createdBy: write.drafterId,
+        createdAt: write.at,
+      },
+    });
+    return true;
+  }
+
+  async applyNoticeStep(write: NoticeStepWrite): Promise<boolean> {
+    const updated = await this.prisma.caseNotice.updateMany({
+      where: { id: write.noticeId, status: write.expectedStatus },
+      data: {
+        status: write.nextStatus,
+        ...(write.adminReview !== undefined ? { adminReview: write.adminReview } : {}),
+        ...(write.approvalChainId !== undefined ? { approvalChainId: write.approvalChainId } : {}),
+        updatedAt: write.at,
+      },
+    });
+    if (updated.count === 0) return false;
+    await this.prisma.caseNoticeStep.create({
+      data: {
+        id: write.stepId,
+        noticeId: write.noticeId,
+        versionNo: write.versionNo,
+        step: write.step,
+        actorId: write.actorId,
+        opinion: write.opinion,
+        createdAt: write.at,
+      },
+    });
+    return true;
+  }
+
+  async markNoticeServed(write: NoticeServedWrite): Promise<boolean> {
+    const updated = await this.prisma.caseNotice.updateMany({
+      where: { id: write.noticeId, status: 'approved' },
+      data: {
+        status: 'served',
+        servedBy: write.servedBy,
+        servedAt: write.servedAt,
+        servedOn: civilToDate(write.servedOn),
+        updatedAt: write.servedAt,
+      },
+    });
+    return updated.count > 0;
+  }
+
+  async listPartySubmissions(caseId: string): Promise<readonly PartySubmissionRow[]> {
+    return this.prisma.casePartySubmission.findMany({
+      where: { caseId },
+      orderBy: [{ recordedAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async insertPartySubmission(write: PartySubmissionWrite): Promise<void> {
+    await this.prisma.casePartySubmission.create({ data: { ...write } });
+  }
+
+  async listHearings(caseId: string): Promise<readonly HearingRow[]> {
+    return this.prisma.caseHearing.findMany({
+      where: { caseId },
+      orderBy: [{ entrySeq: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async readHearing(hearingId: string): Promise<HearingRow | null> {
+    return this.prisma.caseHearing.findUnique({ where: { id: hearingId } });
+  }
+
+  async readOpenHearing(caseId: string): Promise<HearingRow | null> {
+    return this.prisma.caseHearing.findFirst({
+      where: { caseId, status: { not: 'ended' } },
+      orderBy: { entrySeq: 'desc' },
+    });
+  }
+
+  async insertHearing(write: HearingWrite): Promise<boolean> {
+    try {
+      await this.prisma.caseHearing.create({
+        data: { ...write, createdAt: write.appliedAt, updatedAt: write.appliedAt },
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async applyHearingStep(write: HearingStepWrite): Promise<boolean> {
+    const updated = await this.prisma.caseHearing.updateMany({
+      where: { id: write.hearingId, status: { in: [...write.expectedStatuses] } },
+      data: {
+        status: write.nextStatus,
+        ...(write.hostPersonnelId !== undefined ? { hostPersonnelId: write.hostPersonnelId } : {}),
+        ...(write.acceptedAt !== undefined ? { acceptedAt: write.acceptedAt } : {}),
+        ...(write.scheduledAt !== undefined ? { scheduledAt: write.scheduledAt } : {}),
+        ...(write.scheduledFor !== undefined ? { scheduledFor: write.scheduledFor } : {}),
+        ...(write.endedAt !== undefined ? { endedAt: write.endedAt } : {}),
+        ...(write.endKind !== undefined ? { endKind: write.endKind } : {}),
+        ...(write.note !== undefined ? { note: write.note } : {}),
+        updatedAt: write.at,
+      },
+    });
+    return updated.count > 0;
+  }
+
   async listDeadlineRows(caseId: string): Promise<readonly DeadlineRow[]> {
     const rows = await this.prisma.caseDeadlineRow.findMany({
       where: { caseId },
@@ -1587,6 +1770,29 @@ function civilToDate(iso: string): Date {
 
 function dateToCivil(value: Date): string {
   return value.toISOString().slice(0, 10);
+}
+
+function toNoticeRow(row: {
+  id: string;
+  caseId: string;
+  entrySeq: number;
+  kind: string;
+  status: string;
+  adminReview: string | null;
+  currentVersionNo: number;
+  drafterId: string;
+  approvalChainId: string | null;
+  contentJson: string;
+  servedBy: string | null;
+  servedAt: Date | null;
+  servedOn: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): NoticeRow {
+  return {
+    ...row,
+    servedOn: row.servedOn === null ? null : dateToCivil(row.servedOn),
+  };
 }
 
 function toDeadlineRow(row: {

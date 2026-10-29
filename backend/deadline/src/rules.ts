@@ -49,6 +49,16 @@ export const DEADLINE_RULES: readonly DeadlineRule[] = [
     basis: '听证申请期默认五个工作日',
   },
   {
+    key: 'notice.statement',
+    version: DEADLINE_RULE_VERSION,
+    dayCount: 5,
+    dayBasis: 'working',
+    consumption: 'restart',
+    partyFacing: true,
+    extensionAllowance: null,
+    basis: '陈述申辩期默认五个工作日（#272）',
+  },
+  {
     key: 'transfer.notice',
     version: DEADLINE_RULE_VERSION,
     dayCount: 3,

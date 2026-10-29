@@ -1480,6 +1480,105 @@ model CaseMarker {
   @@map("case_marker")
 }
 
+/// 告知书（T10／T11 进入 E05，#272）。一条案件同一 E05 进入次序号至多一张。
+/// 呈批状态：drafting | pending_review | pending_approval | approved | served。
+model CaseNotice {
+  id String @id
+  caseId String @map("case_id")
+  /// E05 进入次序号
+  entrySeq Int @map("entry_seq")
+  /// penalty 拟处罚 | no-penalty 拟不予处罚
+  kind String
+  status String @default("drafting")
+  adminReview String? @map("admin_review")
+  currentVersionNo Int @default(0) @map("current_version_no")
+  drafterId String @map("drafter_id")
+  approvalChainId String? @map("approval_chain_id")
+  /// 当前正文快照（版本表留历史）
+  contentJson String @map("content_json")
+  servedBy String? @map("served_by")
+  servedAt DateTime? @db.Timestamptz(6) @map("served_at")
+  servedOn DateTime? @db.Date @map("served_on")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt DateTime @default(now()) @db.Timestamptz(6) @map("updated_at")
+
+  @@unique([caseId, entrySeq])
+  @@index([caseId])
+  @@map("case_notice")
+}
+
+/// 告知正文版本（#272，追加式）。
+model CaseNoticeVersion {
+  id String @id
+  noticeId String @map("notice_id")
+  versionNo Int @map("version_no")
+  contentJson String @map("content_json")
+  createdBy String @map("created_by")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([noticeId, versionNo])
+  @@map("case_notice_version")
+}
+
+/// 告知呈批步骤（#272，追加式）。
+model CaseNoticeStep {
+  id String @id
+  noticeId String @map("notice_id")
+  versionNo Int @map("version_no")
+  /// submit | review | approve | serve | complete
+  step String
+  actorId String @map("actor_id")
+  opinion String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([noticeId])
+  @@map("case_notice_step")
+}
+
+/// 当事人陈述申辩与书面放弃记录（#272，追加式）。
+model CasePartySubmission {
+  id String @id
+  caseId String @map("case_id")
+  noticeId String @map("notice_id")
+  /// statement 陈述申辩 | notice-waiver 书面明确放弃
+  kind String
+  note String
+  recordedBy String @map("recorded_by")
+  recordedAt DateTime @db.Timestamptz(6) @map("recorded_at")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_party_submission")
+}
+
+/// 听证（T15／T16／T16a，#272）。一条案件同一 E06 进入次序号至多一次。
+model CaseHearing {
+  id String @id
+  caseId String @map("case_id")
+  noticeId String @map("notice_id")
+  /// E06 进入次序号
+  entrySeq Int @map("entry_seq")
+  /// applied | accepted | scheduled | ended
+  status String
+  /// 主持人。曾任本案主办、协办（含已换下的）不得指定。
+  hostPersonnelId String? @map("host_personnel_id")
+  appliedAt DateTime @db.Timestamptz(6) @map("applied_at")
+  acceptedAt DateTime? @db.Timestamptz(6) @map("accepted_at")
+  scheduledAt DateTime? @db.Timestamptz(6) @map("scheduled_at")
+  scheduledFor DateTime? @db.Timestamptz(6) @map("scheduled_for")
+  endedAt DateTime? @db.Timestamptz(6) @map("ended_at")
+  /// concluded | withdrawn | waived | no-show | terminated | withdrawn-before-acceptance
+  endKind String? @map("end_kind")
+  note String?
+  recordedBy String @map("recorded_by")
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt DateTime @default(now()) @db.Timestamptz(6) @map("updated_at")
+
+  @@unique([caseId, entrySeq])
+  @@index([caseId])
+  @@map("case_hearing")
+}
+
 /// 期限行（#246）。四维锚点加修订号唯一。只追加，不覆盖旧行。
 model CaseDeadlineRow {
   id String @id

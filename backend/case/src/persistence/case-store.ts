@@ -761,6 +761,34 @@ export interface CaseStore {
   listCaseMarkers(caseId: string): Promise<readonly CaseMarkerRow[]>;
   /** 追加一条标记置位或清除。不清除旧行。 */
   appendCaseMarker(write: CaseMarkerWrite): Promise<void>;
+  /** 按 E05 进入次序号读告知。没有为 null。 */
+  readNotice(caseId: string, entrySeq: number): Promise<NoticeRow | null>;
+  /** 按主键读告知。 */
+  readNoticeById(noticeId: string): Promise<NoticeRow | null>;
+  /** 本案未送达的告知（status <> served，按进入次序号降序）。没有为 null。 */
+  readOpenNotice(caseId: string): Promise<NoticeRow | null>;
+  /** 本案全部告知（进入次序号升序）。 */
+  listNotices(caseId: string): Promise<readonly NoticeRow[]>;
+  /** 保存告知拟制稿。同案同次序号已有告知或版本号不符返回 false。 */
+  saveNoticeDraft(write: NoticeDraftWrite): Promise<boolean>;
+  /** 推进告知呈批一步。状态不符返回 false。 */
+  applyNoticeStep(write: NoticeStepWrite): Promise<boolean>;
+  /** 已批准的告知置为已送达。不是已批准时返回 false。 */
+  markNoticeServed(write: NoticeServedWrite): Promise<boolean>;
+  /** 本案当事人提交（只追加，时间升序）。 */
+  listPartySubmissions(caseId: string): Promise<readonly PartySubmissionRow[]>;
+  /** 追加一条当事人提交。 */
+  insertPartySubmission(write: PartySubmissionWrite): Promise<void>;
+  /** 本案全部听证（进入次序号升序）。 */
+  listHearings(caseId: string): Promise<readonly HearingRow[]>;
+  /** 按主键读听证。没有为 null。 */
+  readHearing(hearingId: string): Promise<HearingRow | null>;
+  /** 本案未结束的听证。没有为 null。 */
+  readOpenHearing(caseId: string): Promise<HearingRow | null>;
+  /** 追加一条听证。同案同次序号已有听证或已有未结束听证时返回 false。 */
+  insertHearing(write: HearingWrite): Promise<boolean>;
+  /** 推进听证状态。状态不符返回 false。 */
+  applyHearingStep(write: HearingStepWrite): Promise<boolean>;
 }
 
 /** 违法记录。作废只改状态和作废字段，不删行。 */
@@ -1051,3 +1079,122 @@ export type CaseMarkerWrite = {
   readonly actorId: string;
   readonly changedAt: Date;
 };
+
+/** 告知书表头（#272）。servedOn 是北京日期的公历日文本。 */
+export interface NoticeRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly entrySeq: number;
+  readonly kind: string;
+  readonly status: string;
+  readonly adminReview: string | null;
+  readonly currentVersionNo: number;
+  readonly drafterId: string;
+  readonly approvalChainId: string | null;
+  readonly contentJson: string;
+  readonly servedBy: string | null;
+  readonly servedAt: Date | null;
+  readonly servedOn: string | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+export interface NoticeDraftWrite {
+  readonly noticeId: string;
+  readonly caseId: string;
+  readonly entrySeq: number;
+  readonly kind: string;
+  readonly drafterId: string;
+  readonly isNew: boolean;
+  readonly expectedVersionNo: number;
+  readonly versionId: string;
+  readonly contentJson: string;
+  readonly at: Date;
+}
+
+export interface NoticeStepWrite {
+  readonly noticeId: string;
+  readonly expectedStatus: string;
+  readonly nextStatus: string;
+  readonly adminReview?: string;
+  readonly approvalChainId?: string | null;
+  readonly stepId: string;
+  readonly step: string;
+  readonly versionNo: number;
+  readonly actorId: string;
+  readonly opinion: string | null;
+  readonly at: Date;
+}
+
+export interface NoticeServedWrite {
+  readonly noticeId: string;
+  readonly servedBy: string;
+  readonly servedAt: Date;
+  readonly servedOn: string;
+}
+
+/** 当事人陈述申辩或书面放弃（#272，只追加）。 */
+export interface PartySubmissionRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly noticeId: string;
+  readonly kind: string;
+  readonly note: string;
+  readonly recordedBy: string;
+  readonly recordedAt: Date;
+}
+
+export type PartySubmissionWrite = PartySubmissionRow;
+
+/** 听证（#272）。 */
+export interface HearingRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly noticeId: string;
+  readonly entrySeq: number;
+  readonly status: string;
+  readonly hostPersonnelId: string | null;
+  readonly appliedAt: Date;
+  readonly acceptedAt: Date | null;
+  readonly scheduledAt: Date | null;
+  readonly scheduledFor: Date | null;
+  readonly endedAt: Date | null;
+  readonly endKind: string | null;
+  readonly note: string | null;
+  readonly recordedBy: string;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+export interface HearingWrite {
+  readonly id: string;
+  readonly caseId: string;
+  readonly noticeId: string;
+  readonly entrySeq: number;
+  /** applied | accepted | scheduled | ended */
+  readonly status: string;
+  readonly hostPersonnelId: string | null;
+  readonly appliedAt: Date;
+  readonly acceptedAt: Date | null;
+  readonly scheduledAt: Date | null;
+  readonly scheduledFor: Date | null;
+  readonly endedAt: Date | null;
+  readonly endKind: string | null;
+  readonly note: string | null;
+  readonly recordedBy: string;
+}
+
+export interface HearingStepWrite {
+  readonly hearingId: string;
+  readonly expectedStatuses: readonly string[];
+  /** accepted | scheduled | ended */
+  readonly nextStatus: string;
+  readonly hostPersonnelId?: string | null;
+  readonly acceptedAt?: Date | null;
+  readonly scheduledAt?: Date | null;
+  readonly scheduledFor?: Date | null;
+  readonly endedAt?: Date | null;
+  readonly endKind?: string | null;
+  readonly note?: string | null;
+  readonly at: Date;
+}
