@@ -480,7 +480,7 @@ describe('两段式确认与规则键（#258）', () => {
     citation: '规程 4.3.3(4)',
   };
 
-  it('注册表登记 X03、CMP-01、X22 与调查审理职能分离，不登记其他业务票的警告规则', () => {
+  it('注册表登记 X03、CMP-01、X22、X26 与调查审理职能分离，不登记其他业务票的警告规则', () => {
     expect(findRuleParameter('X03')).toMatchObject({
       ruleKey: 'X03',
       version: '1',
@@ -499,8 +499,14 @@ describe('两段式确认与规则键（#258）', () => {
       level: 'warn',
       reasonRequired: true,
     });
+    // #272：告知批准路径的 X26 登记为警告键，走 #258 两段式。
+    expect(findRuleParameter('X26')).toMatchObject({
+      ruleKey: 'X26',
+      version: '1',
+      level: 'warn',
+      reasonRequired: false,
+    });
     expect(findRuleParameter('X10')).toBeNull();
-    expect(findRuleParameter('X26')).toBeNull();
     expect(findRuleParameter('X07')).toBeNull();
     expect(findRuleParameter('X16')).toBeNull();
   });
