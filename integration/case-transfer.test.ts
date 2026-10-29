@@ -559,7 +559,7 @@ it('党纪政务移送：不要求法审，批准即记载、侧链不改环节'
 });
 
 describe('#242 涉刑移送与 X11', () => {
-  it('未法审通过批准 409；法审通过后批准；三个工作日提示；停表事件', async () => {
+  it('未法审通过不得批准（提交 409）；法审通过后批准；三个工作日提示；停表事件', async () => {
     const caseId = await toE04();
     const drafted = await draftTransfer(caseId, 'P-242-H1', {
       kind: 'criminal',
