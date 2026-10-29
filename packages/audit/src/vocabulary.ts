@@ -145,6 +145,11 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'case.discussion-marked',
   'case.discussion-recorded',
   'case.decision-gate-checked',
+  // 有效性确认与重新告知（#248）。成功与失败都记这四个动作。
+  'case.validity-confirmed',
+  'case.validity-reviewed',
+  'case.validity-gate-checked',
+  'case.notice-reissued',
 ] as const;
 
 /**
@@ -1007,6 +1012,50 @@ export const CASE_LEGAL_REVIEW_ACTIONS = [
 ] as const;
 export type CaseLegalReviewAction = (typeof CASE_LEGAL_REVIEW_ACTIONS)[number];
 
+/** 有效性确认、复核、重新告知与决定闸口被拒（#248）。四个动作共用这一张原因表。 */
+export const CASE_VALIDITY_FAILED_REASONS = [
+  'invalid-state',
+  'invalid-conclusion',
+  'invalid-summary',
+  'missing-reason',
+  'missing-note',
+  'missing-aggravation',
+  'invalid-aggravation',
+  'aggravation-reference-invalid',
+  'validity-system-invalid',
+  'validity-reason-mismatch',
+  'no-baseline',
+  'no-frozen-decision',
+  'not-handler',
+  'not-reviewer',
+  'same-reviewer',
+  'concurrent-change',
+  'transition-disabled',
+  'unknown-transition',
+  'X02',
+  'X03',
+  'X12',
+  'X17',
+  'X18',
+  'validity-invalid',
+  'validity-invalid-confirmed',
+  'validity-b-confirmation-required',
+  'validity-b-confirmation-stale',
+  'validity-review-required',
+  'validity-baseline-missing',
+  'validity-summary-missing',
+  'Q14',
+] as const;
+export type CaseValidityFailedReason = (typeof CASE_VALIDITY_FAILED_REASONS)[number];
+
+export const CASE_VALIDITY_ACTIONS = [
+  'case.validity-confirmed',
+  'case.validity-reviewed',
+  'case.validity-gate-checked',
+  'case.notice-reissued',
+] as const;
+export type CaseValidityAction = (typeof CASE_VALIDITY_ACTIONS)[number];
+
 /** 新旧比对判定被拒（#271）。提交缺判定、批准比对过时、材料不合规共用这一张原因表。 */
 export const CASE_COMPARISON_FAILED_REASONS = [
   'missing-judgment',
@@ -1207,5 +1256,10 @@ export const AUDIT_DETAIL_ACTIONS = [
   'case.discussion-marked',
   'case.discussion-recorded',
   'case.decision-gate-checked',
+  // 有效性确认与重新告知（#248）：差异快照、确认结论、复核与重新告知前后值。
+  'case.validity-confirmed',
+  'case.validity-reviewed',
+  'case.validity-gate-checked',
+  'case.notice-reissued',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];

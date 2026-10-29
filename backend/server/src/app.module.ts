@@ -20,6 +20,7 @@ import { CaseReassignController } from './case-reassign.controller.ts';
 import { CaseReturnController } from './case-return.controller.ts';
 import { CaseLegalReviewController } from './case-legal-review.controller.ts';
 import { CaseNoticeController } from './case-notice.controller.ts';
+import { CaseValidityController } from './case-validity.controller.ts';
 import { CaseReviewController } from './case-review.controller.ts';
 import { CaseStateController } from './case-state.controller.ts';
 import { DeadlineController } from './deadline.controller.ts';
@@ -37,6 +38,7 @@ import { CaseReassignService } from './case-reassign.service.ts';
 import { CaseReturnService } from './case-return.service.ts';
 import { CaseLegalReviewService } from './case-legal-review.service.ts';
 import { CaseNoticeService } from './case-notice.service.ts';
+import { CaseValidityService } from './case-validity.service.ts';
 import { CaseReviewService } from './case-review.service.ts';
 import { CaseStateService } from './case-state.service.ts';
 import { DeadlineService } from './deadline.service.ts';
@@ -112,6 +114,7 @@ import { WorkbenchService } from './workbench.service.ts';
     CaseReviewController,
     CaseLegalReviewController,
     CaseNoticeController,
+    CaseValidityController,
     CaseStateController,
     CaseConflictController,
     CaseAgencyConflictController,
@@ -145,6 +148,7 @@ import { WorkbenchService } from './workbench.service.ts';
     CaseReviewService,
     CaseLegalReviewService,
     CaseNoticeService,
+    CaseValidityService,
     CaseStateService,
     CaseConflictService,
     CaseAgencyConflictService,

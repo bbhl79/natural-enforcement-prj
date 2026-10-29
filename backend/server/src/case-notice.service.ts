@@ -23,6 +23,7 @@ import {
   checkHearingHost,
   checkHearingReopen,
   decideTransition,
+  decisionDigest,
   filingStatusAfter,
   findIllegal,
   hearingCountsAsHeld,
@@ -34,6 +35,7 @@ import {
   stageIndex,
   type CaseStore,
   type CaseView,
+  type DecisionSummary,
   type HearingAssessment,
   type HearingRow,
   type NoticeContent,
@@ -102,8 +104,12 @@ interface FrozenSummary {
   readonly kind: string;
   readonly destinationCode: string;
   readonly violations: readonly {
+    readonly violationRecordId: string;
+    readonly kind: string;
     readonly penaltyCodes: readonly string[];
     readonly fineAmount: number | null;
+    readonly fineBases: readonly string[];
+    readonly basisText: string;
   }[];
 }
 
@@ -756,6 +762,9 @@ export class CaseNoticeService {
     const assessment = this.assessOfContent(content.content, frozen);
     const blocked = this.x07Outcome(prepared, 'case.notice-served', SUBMIT_OPCODE, assessment);
     if (blocked) return blocked;
+    const summary = this.decisionSummaryOf(frozen, prepared.view, content.content);
+    const summaryJson = JSON.stringify(summary);
+    const summaryDigest = decisionDigest(summary);
     const other = await this.cases.countInFlightApprovals(loaded.caseId);
     const subject = await this.subjectOf(prepared.view, prepared.roles, other);
     const decision = decideTransition({ operation: { kind: 'transition', transitionId: 'T13' }, subject });
@@ -803,6 +812,32 @@ export class CaseNoticeService {
       if (!served) {
         return rejected<CaseNoticeHttpOutcome>(
           blockBody('concurrent-change', '告知已被他人送达', null, '请重新读取后再试'),
+          {
+            action: 'case.notice-served',
+            outcome: 'failed',
+            reason: 'concurrent-change',
+            ...this.parties(prepared, loaded.caseId, SUBMIT_OPCODE),
+          },
+        );
+      }
+      const baselineId = newUlid();
+      const baselineInserted = await tx.cases.insertNoticeValidityBaseline({
+        id: baselineId,
+        caseId: loaded.caseId,
+        noticeId,
+        entrySeq: loaded.entrySeq,
+        kind: content.content.kind,
+        partyType: content.content.partyType,
+        hearingNoticeAttached: content.content.hearingNoticeAttached,
+        confiscationValue: content.content.confiscationValue,
+        summaryJson,
+        summaryDigest,
+        capturedBy: actor.personnelId,
+        capturedAt: at,
+      });
+      if (!baselineInserted) {
+        return rejected<CaseNoticeHttpOutcome>(
+          blockBody('concurrent-change', '告知有效性基线已存在', null, '请重新读取后再试'),
           {
             action: 'case.notice-served',
             outcome: 'failed',
@@ -866,7 +901,7 @@ export class CaseNoticeService {
       await tx.audit.append({
         action: 'case.notice-served',
         ...parties,
-        detail: JSON.stringify({ caseId: loaded.caseId, noticeId, servedOn, transitionId: 'T13' }),
+        detail: JSON.stringify({ caseId: loaded.caseId, noticeId, servedOn, transitionId: 'T13', baselineId, summaryDigest }),
       });
       await tx.audit.append({
         action: 'case.transitioned',
@@ -880,6 +915,8 @@ export class CaseNoticeService {
           noticeId,
           caseId: loaded.caseId,
           servedOn,
+          validityBaselineId: baselineId,
+          validityDigest: summaryDigest,
           deadlines: deadlines.rows.map((row) => ({
             ruleKey: row.rule.key,
             startedOn: row.startedOn,
@@ -1874,8 +1911,12 @@ export class CaseNoticeService {
         violations: violations.map((item) => {
           const row = (typeof item === 'object' && item !== null ? item : {}) as Record<string, unknown>;
           return {
+            violationRecordId: typeof row.violationRecordId === 'string' ? row.violationRecordId : '',
+            kind: typeof row.kind === 'string' ? row.kind : '',
             penaltyCodes: Array.isArray(row.penaltyCodes) ? (row.penaltyCodes as string[]) : [],
             fineAmount: typeof row.fineAmount === 'number' ? row.fineAmount : null,
+            fineBases: Array.isArray(row.fineBases) ? (row.fineBases as string[]) : [],
+            basisText: typeof row.basisText === 'string' ? row.basisText : '',
           };
         }),
       };
@@ -1898,6 +1939,24 @@ export class CaseNoticeService {
       };
     }
     return this.assessOfContent(parsed.content, frozen);
+  }
+
+  /** 送达基线的拟决定摘要。当事人取案件当事人；没收等价值取告知正文。 */
+  private decisionSummaryOf(frozen: FrozenSummary, view: CaseView, content: NoticeContent): DecisionSummary {
+    return {
+      parties: [...view.partyNames],
+      kind: frozen.kind,
+      confiscationValue: content.confiscationValue,
+      violations: frozen.violations.map((row) => ({
+        violationRecordId: row.violationRecordId,
+        kind: row.kind,
+        penaltyCodes: [...row.penaltyCodes],
+        fineAmount: row.fineAmount,
+        fineBases: [...row.fineBases],
+        basisText: row.basisText,
+        factChange: null,
+      })),
+    };
   }
 
   private assessOfContent(content: NoticeContent, frozen: FrozenSummary): HearingAssessment {

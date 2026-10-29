@@ -9,6 +9,7 @@
 // #235 启用 T01、T02。#236 启用 T03–T07。#239 启用 T33。#240 启用 T08、T09。
 // #272 启用 T10、T11（进入 E05）与 T13–T17（告知、陈述申辩、听证）。
 // #269 启用 T10a、T10b（告知前法制审核进出 E07）。
+// #248 启用 T32（重新告知：撤销原告知，E05 再进入一次）。
 // T09a、T10c、T12、T14a、T16a 仍是 branch 或未启用边，由服务层解析或由后续票接入。
 
 import { GUARD_AUTHORITIES, type GuardAuthority, type GuardResult } from './guard.ts';
@@ -266,7 +267,10 @@ export const TRANSITIONS: readonly TransitionEdge[] = [
     '记载公安、检察的决定。A 须写明违法状态是否仍未消除及处罚依据。B 须写理由。',
   ),
   edge('T31', { kind: 'after', stage: 'E10' }, { kind: 'branch', note: '撤销原决定书，加受控重开；是否回流由主办决定' }, '决定书事实被推翻（主干不启用）'),
-  edge('T32', { kind: 'span', start: 'E05', end: 'E09' }, enter('E05', 'drafting', { reenter: true }), '重新比对后撤销原告知，E05 再进入'),
+  edge('T32', { kind: 'span', start: 'E05', end: 'E09' }, enter('E05', 'drafting', { reenter: true }), '重新比对后撤销原告知，E05 再进入', {
+    enabled: true,
+    guard: 'notice',
+  }),
   edge('T33', { kind: 'any-handled' }, { kind: 'same' }, '改派呈批批准：环节不变', {
     enabled: true,
     guard: 'reassign',
