@@ -137,6 +137,14 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'case.hearing-ended',
   'case.new-fact-returned',
   'case.marker-changed',
+  // 法制审核与集体讨论（#269）。成功与失败都记这些动作。
+  'case.legal-review-started',
+  'case.legal-review-opinion-signed',
+  'case.legal-review-concluded',
+  'case.legal-review-receiver-changed',
+  'case.discussion-marked',
+  'case.discussion-recorded',
+  'case.decision-gate-checked',
 ] as const;
 
 /**
@@ -892,6 +900,7 @@ export const CASE_NOTICE_FAILED_REASONS = [
   'missing-reason',
   'no-frozen-decision',
   'notice-kind-mismatch',
+  'legal-review-required',
   'hearing-window-closed',
   'deadline-manual-confirmation-required',
   'hearing-already-requested',
@@ -932,6 +941,71 @@ export const CASE_NOTICE_ACTIONS = [
   'case.marker-changed',
 ] as const;
 export type CaseNoticeAction = (typeof CASE_NOTICE_ACTIONS)[number];
+
+/** 法制审核与集体讨论被拒（#269）。七个动作共用这一张原因表。 */
+export const CASE_LEGAL_REVIEW_FAILED_REASONS = [
+  'invalid-state',
+  'invalid-content',
+  'invalid-conclusion',
+  'invalid-fail-route',
+  'missing-content',
+  'missing-fail-route',
+  'missing-reason',
+  'missing-criteria',
+  'missing-purpose',
+  'missing-note',
+  'missing-receiver',
+  'invalid-purpose',
+  'invalid-criteria',
+  'invalid-list-level',
+  'no-frozen-decision',
+  'no-legal-review',
+  'no-legal-review-org',
+  'legal-review-not-found',
+  'receiver-not-legal-reviewer',
+  'receiver-deactivated',
+  'receiver-org-not-attributed',
+  'receiver-is-handler',
+  'receiver-conflict-active',
+  'head-deactivated',
+  'head-not-admin-reviewer',
+  'head-post-marker-missing',
+  'head-org-not-attributed',
+  'reviewer-not-receiver',
+  'reviewer-not-legal-reviewer',
+  'opinion-not-pending',
+  'no-pending-opinion',
+  'discussion-record-not-found',
+  'discussion-record-not-in-case',
+  'discussion-purpose-mismatch',
+  'discussion-record-too-early',
+  'discussion-reference-required',
+  'LEGAL-SAME-PERSON',
+  'X02',
+  'X03',
+  'X08',
+  'X09',
+  'X12',
+  'X17',
+  'X18',
+  'X27',
+  'X33',
+  'concurrent-change',
+  'transition-disabled',
+  'unknown-transition',
+] as const;
+export type CaseLegalReviewFailedReason = (typeof CASE_LEGAL_REVIEW_FAILED_REASONS)[number];
+
+export const CASE_LEGAL_REVIEW_ACTIONS = [
+  'case.legal-review-started',
+  'case.legal-review-opinion-signed',
+  'case.legal-review-concluded',
+  'case.legal-review-receiver-changed',
+  'case.discussion-marked',
+  'case.discussion-recorded',
+  'case.decision-gate-checked',
+] as const;
+export type CaseLegalReviewAction = (typeof CASE_LEGAL_REVIEW_ACTIONS)[number];
 
 /** 新旧比对判定被拒（#271）。提交缺判定、批准比对过时、材料不合规共用这一张原因表。 */
 export const CASE_COMPARISON_FAILED_REASONS = [
@@ -1125,5 +1199,13 @@ export const AUDIT_DETAIL_ACTIONS = [
   'case.hearing-reopen-refused',
   'case.new-fact-returned',
   'case.marker-changed',
+  // 法制审核与集体讨论（#269）：轮次、两级签出、改派、勾选、记录与决定闸口。
+  'case.legal-review-started',
+  'case.legal-review-opinion-signed',
+  'case.legal-review-concluded',
+  'case.legal-review-receiver-changed',
+  'case.discussion-marked',
+  'case.discussion-recorded',
+  'case.decision-gate-checked',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];

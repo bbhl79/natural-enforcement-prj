@@ -63,6 +63,8 @@ const CASE_OPCODES = {
   'doc.submit': entry('operator', true, false),
   'case.reassign.submit': entry('operator', true, false, {
     内勤: { mustBeCaseHandler: false },
+    // #269 G5：法制审核接收人改派由归属那一级的法制审核负责人执行。
+    行政审核: { qualification: 'none', mustBeCaseHandler: false },
   }),
   'legal.review.request': entry('none', false, false, {
     经办: { qualification: 'operator', mustBeCaseHandler: true },
@@ -73,6 +75,8 @@ const CASE_OPCODES = {
   'doc.approve': entry('none', false, true),
   // #240：审理意见签出。只增码、不增角色；允许行只授行政审核（#71 回写见 #230）。
   'case.review.record': entry('none', false, false),
+  // #269：集体讨论记录录入。授经办；对象级须本案主办或协办。
+  'case.discussion.record': entry('operator', true, false),
   'clue.read': entry('none', false, false),
   'case.read': entry('none', false, false),
   'doc.read': entry('none', false, false),

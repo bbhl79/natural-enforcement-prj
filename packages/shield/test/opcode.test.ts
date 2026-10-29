@@ -34,6 +34,8 @@ const CASE_OPCODES = [
   'doc.approve',
   // #240：审理意见签出。
   'case.review.record',
+  // #269：集体讨论记录录入。
+  'case.discussion.record',
   'clue.read',
   'case.read',
   'doc.read',
@@ -214,6 +216,14 @@ describe('操作码名册', () => {
   it('case.reassign.submit：经办与内勤同时能放行时，取不必是主办人', () => {
     expect(effectiveOpcodeRequirements('case.reassign.submit', ['经办', '内勤'])).toEqual({
       qualification: 'operator',
+      mustBeCaseHandler: false,
+      changesPrimaryState: false,
+    });
+  });
+
+  it('case.reassign.submit：法制审核负责人持行政审核，不要求执法资格、不必是主办人（#269 G5）', () => {
+    expect(effectiveOpcodeRequirements('case.reassign.submit', ['行政审核'])).toEqual({
+      qualification: 'none',
       mustBeCaseHandler: false,
       changesPrimaryState: false,
     });
