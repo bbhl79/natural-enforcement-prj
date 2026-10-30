@@ -61,11 +61,12 @@ describe('迁移表常量', () => {
     }
   });
 
-  it('启用 T01、T02、调查收尾 T03 至 T07、审理 T08／T09、告知与听证 T10／T11／T13 至 T17、告知前法审 T10a／T10b、定型 T27、移送 T29、重新告知 T32、改派 T33 与 T34，且已启用的边声明了守卫', () => {
+  it('启用 T01、T02、调查收尾 T03 至 T07、审理 T08／T09、告知与听证 T10／T11／T13 至 T17、告知前法审 T10a／T10b、决定至结案 T23 至 T26、定型 T27、移送 T29、重新告知 T32、改派 T33 与 T34，且已启用的边声明了守卫', () => {
     const enabled = TRANSITIONS.filter((item) => item.enabled).map((item) => item.id);
     expect(enabled).toEqual([
       'T01', 'T02', 'T03', 'T04', 'T05', 'T06', 'T07', 'T08', 'T09',
-      'T10', 'T10a', 'T10b', 'T11', 'T13', 'T14', 'T15', 'T16', 'T17', 'T27', 'T29', 'T32', 'T33', 'T34',
+      'T10', 'T10a', 'T10b', 'T11', 'T13', 'T14', 'T15', 'T16', 'T17',
+      'T23', 'T24', 'T25', 'T26', 'T27', 'T29', 'T32', 'T33', 'T34',
     ]);
     for (const item of TRANSITIONS) {
       if (!item.enabled) continue;
@@ -502,7 +503,7 @@ describe('两段式确认与规则键（#258）', () => {
     citation: '规程 4.3.3(4)',
   };
 
-  it('注册表登记 X03、CMP-01、X22、X26 与调查审理职能分离，不登记其他业务票的警告规则', () => {
+  it('注册表登记 X03、X10、CMP-01、X22、X26 与调查审理职能分离，不登记其他业务票的警告规则', () => {
     expect(findRuleParameter('X03')).toMatchObject({
       ruleKey: 'X03',
       version: '1',
@@ -528,7 +529,13 @@ describe('两段式确认与规则键（#258）', () => {
       level: 'warn',
       reasonRequired: false,
     });
-    expect(findRuleParameter('X10')).toBeNull();
+    // #270：X10 在 T25／T26 走 #258 两段式确认。
+    expect(findRuleParameter('X10')).toMatchObject({
+      ruleKey: 'X10',
+      version: '1',
+      level: 'warn',
+      reasonRequired: false,
+    });
     expect(findRuleParameter('X07')).toBeNull();
     expect(findRuleParameter('X16')).toBeNull();
   });

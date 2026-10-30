@@ -57,6 +57,8 @@ const EXPECTED_ALLOWANCES: Record<string, readonly string[]> = {
     'legal.review.request',
     // #269：集体讨论记录录入。
     'case.discussion.record',
+    // #270：执行记载录入。
+    'case.execution.record',
     'clue.read',
     'case.read',
     'doc.read',

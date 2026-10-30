@@ -167,6 +167,17 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'case.finalize-submitted',
   'case.finalize-reviewed',
   'case.finalize-approved',
+  // 决定、送达、执行记载与结案（#270）。成功与失败都记同一动作。
+  'case.decision-drafted',
+  'case.decision-submitted',
+  'case.decision-reviewed',
+  'case.decision-approved',
+  'case.delivery-recorded',
+  'case.execution-recorded',
+  'case.closure-drafted',
+  'case.closure-submitted',
+  'case.closure-reviewed',
+  'case.closure-approved',
 ] as const;
 
 /**
@@ -1157,6 +1168,85 @@ export const CASE_FINALIZE_ACTIONS = [
 ] as const;
 export type CaseFinalizeAction = (typeof CASE_FINALIZE_ACTIONS)[number];
 
+/** 决定（E09／T23）被拒（#270）。拟制、提交、审核与批准共用这一张原因表。 */
+export const CASE_DECISION_FAILED_REASONS = [
+  'invalid-state',
+  'invalid-content',
+  'invalid-evidence',
+  'not-handler',
+  'not-drafter',
+  'no-frozen-decision',
+  'missing-judgment',
+  'comparison-stale',
+  'X05',
+  'X06',
+  'X08',
+  'X09',
+  'X12',
+  'X16',
+  'X17',
+  'X18',
+  'X27',
+  'validity-invalid',
+  'validity-invalid-confirmed',
+  'validity-baseline-missing',
+  'validity-summary-missing',
+  'validity-b-confirmation-required',
+  'validity-b-confirmation-stale',
+  'validity-review-required',
+  'Q14',
+  'advisory',
+  'concurrent-change',
+  'transition-disabled',
+  'unknown-transition',
+] as const;
+export type CaseDecisionFailedReason = (typeof CASE_DECISION_FAILED_REASONS)[number];
+
+export const CASE_DECISION_ACTIONS = [
+  'case.decision-drafted',
+  'case.decision-submitted',
+  'case.decision-reviewed',
+  'case.decision-approved',
+] as const;
+export type CaseDecisionAction = (typeof CASE_DECISION_ACTIONS)[number];
+
+/** 送达、执行记载与结案被拒（#270）。三者共用这一张原因表。 */
+export const CASE_CLOSEOUT_FAILED_REASONS = [
+  'invalid-state',
+  'invalid-content',
+  'invalid-kind',
+  'invalid-delivered-on',
+  'invalid-deliverers',
+  'insufficient-deliverers',
+  'missing-reason-record',
+  'missing-announcement-materials',
+  'invalid-attachment',
+  'missing-attachment',
+  'missing-note',
+  'not-handler',
+  'not-drafter',
+  'X10',
+  'X11',
+  'X12',
+  'X17',
+  'X18',
+  'advisory',
+  'concurrent-change',
+  'transition-disabled',
+  'unknown-transition',
+] as const;
+export type CaseCloseoutFailedReason = (typeof CASE_CLOSEOUT_FAILED_REASONS)[number];
+
+export const CASE_CLOSEOUT_ACTIONS = [
+  'case.delivery-recorded',
+  'case.execution-recorded',
+  'case.closure-drafted',
+  'case.closure-submitted',
+  'case.closure-reviewed',
+  'case.closure-approved',
+] as const;
+export type CaseCloseoutAction = (typeof CASE_CLOSEOUT_ACTIONS)[number];
+
 /** 新旧比对判定被拒（#271）。提交缺判定、批准比对过时、材料不合规共用这一张原因表。 */
 export const CASE_COMPARISON_FAILED_REASONS = [
   'missing-judgment',
@@ -1379,5 +1469,16 @@ export const AUDIT_DETAIL_ACTIONS = [
   'case.finalize-submitted',
   'case.finalize-reviewed',
   'case.finalize-approved',
+  // 决定、送达、执行记载与结案（#270）：决定正文、闸口、送达证据与结案清单快照。
+  'case.decision-drafted',
+  'case.decision-submitted',
+  'case.decision-reviewed',
+  'case.decision-approved',
+  'case.delivery-recorded',
+  'case.execution-recorded',
+  'case.closure-drafted',
+  'case.closure-submitted',
+  'case.closure-reviewed',
+  'case.closure-approved',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];

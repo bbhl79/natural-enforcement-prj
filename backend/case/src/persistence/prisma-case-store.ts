@@ -128,6 +128,18 @@ import type {
   FinalizeApprovalStepWrite,
   FinalizeRecordRow,
   FinalizeRecordWrite,
+  DecisionApprovalDraftWrite,
+  DecisionApprovalRow,
+  DecisionApprovalStepWrite,
+  DeliveryRow,
+  DeliveryWrite,
+  ExecutionRecordRow,
+  ExecutionRecordWrite,
+  ClosureApprovalDraftWrite,
+  ClosureApprovalRow,
+  ClosureApprovalStepWrite,
+  ClosureRecordRow,
+  ClosureRecordWrite,
 } from './case-store.ts';
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -2438,6 +2450,326 @@ export class PrismaCaseStore implements CaseStore {
       caseId: row.caseId,
       status: row.status,
       adminReview: row.adminReview,
+      currentVersionNo: row.currentVersionNo,
+      drafterId: row.drafterId,
+      approvalChainId: row.approvalChainId,
+      contentJson: version?.contentJson ?? null,
+    };
+  }
+
+  async readOpenDecisionApproval(caseId: string): Promise<DecisionApprovalRow | null> {
+    const row = await this.prisma.caseDecisionApproval.findFirst({
+      where: { caseId, status: { not: 'approved' } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+    return row ? this.withDecisionContent(row) : null;
+  }
+
+  async readDecisionApproval(approvalId: string): Promise<DecisionApprovalRow | null> {
+    const row = await this.prisma.caseDecisionApproval.findUnique({ where: { id: approvalId } });
+    return row ? this.withDecisionContent(row) : null;
+  }
+
+  async readApprovedDecisionApproval(caseId: string): Promise<DecisionApprovalRow | null> {
+    const row = await this.prisma.caseDecisionApproval.findFirst({
+      where: { caseId, status: 'approved' },
+      orderBy: [{ updatedAt: 'desc' }, { id: 'desc' }],
+    });
+    return row ? this.withDecisionContent(row) : null;
+  }
+
+  async saveDecisionDraft(write: DecisionApprovalDraftWrite): Promise<boolean> {
+    const versionNo = write.isNew ? 1 : write.expectedVersionNo + 1;
+    if (write.isNew) {
+      if (write.expectedVersionNo !== 0) return false;
+      try {
+        await this.prisma.caseDecisionApproval.create({
+          data: {
+            id: write.approvalId,
+            caseId: write.caseId,
+            status: 'drafting',
+            currentVersionNo: 1,
+            drafterId: write.drafterId,
+            createdAt: write.at,
+            updatedAt: write.at,
+          },
+        });
+      } catch (error) {
+        if (isUniqueConflict(error)) return false;
+        throw error;
+      }
+    } else {
+      const updated = await this.prisma.caseDecisionApproval.updateMany({
+        where: { id: write.approvalId, status: 'drafting', currentVersionNo: write.expectedVersionNo },
+        data: { currentVersionNo: versionNo, updatedAt: write.at },
+      });
+      if (updated.count === 0) return false;
+    }
+    await this.prisma.caseDecisionApprovalVersion.create({
+      data: {
+        id: write.versionId,
+        approvalId: write.approvalId,
+        versionNo,
+        contentJson: write.contentJson,
+        createdBy: write.drafterId,
+        createdAt: write.at,
+      },
+    });
+    return true;
+  }
+
+  async applyDecisionStep(write: DecisionApprovalStepWrite): Promise<boolean> {
+    const data: { status: string; updatedAt: Date; approvalChainId?: string | null } = {
+      status: write.nextStatus,
+      updatedAt: write.at,
+    };
+    if (write.approvalChainId !== undefined) data.approvalChainId = write.approvalChainId;
+    const updated = await this.prisma.caseDecisionApproval.updateMany({
+      where: { id: write.approvalId, status: write.expectedStatus },
+      data,
+    });
+    if (updated.count === 0) return false;
+    await this.prisma.caseDecisionApprovalStep.create({
+      data: {
+        id: write.stepId,
+        approvalId: write.approvalId,
+        versionNo: write.versionNo,
+        step: write.step,
+        actorId: write.actorId,
+        opinion: write.opinion,
+        createdAt: write.at,
+      },
+    });
+    return true;
+  }
+
+  async listDeliveries(caseId: string): Promise<readonly DeliveryRow[]> {
+    const rows = await this.prisma.caseDelivery.findMany({
+      where: { caseId },
+      orderBy: [{ recordedAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      caseId: row.caseId,
+      kind: row.kind,
+      documentKind: row.documentKind,
+      deliveredOn: row.deliveredOn,
+      deliverers: JSON.parse(row.deliverersJson) as string[],
+      reasonRecord: row.reasonRecord,
+      announcementMaterials: JSON.parse(row.announcementMaterialsJson) as string[],
+      note: row.note,
+      decisionApprovalId: row.decisionApprovalId,
+      recordedBy: row.recordedBy,
+      recordedAt: row.recordedAt,
+    }));
+  }
+
+  async insertDelivery(write: DeliveryWrite): Promise<void> {
+    await this.prisma.caseDelivery.create({
+      data: {
+        id: write.id,
+        caseId: write.caseId,
+        kind: write.kind,
+        documentKind: write.documentKind,
+        deliveredOn: write.deliveredOn,
+        deliverersJson: JSON.stringify(write.deliverers),
+        reasonRecord: write.reasonRecord,
+        announcementMaterialsJson: JSON.stringify(write.announcementMaterials),
+        note: write.note,
+        decisionApprovalId: write.decisionApprovalId,
+        recordedBy: write.recordedBy,
+        recordedAt: write.recordedAt,
+      },
+    });
+  }
+
+  async listExecutionRecords(caseId: string): Promise<readonly ExecutionRecordRow[]> {
+    const rows = await this.prisma.caseExecutionRecord.findMany({
+      where: { caseId },
+      orderBy: [{ recordedAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      caseId: row.caseId,
+      kind: row.kind,
+      note: row.note,
+      attachments: JSON.parse(row.attachmentsJson) as string[],
+      recordedBy: row.recordedBy,
+      recordedAt: row.recordedAt,
+    }));
+  }
+
+  async insertExecutionRecord(write: ExecutionRecordWrite): Promise<void> {
+    await this.prisma.caseExecutionRecord.create({
+      data: {
+        id: write.id,
+        caseId: write.caseId,
+        kind: write.kind,
+        note: write.note,
+        attachmentsJson: JSON.stringify(write.attachments),
+        recordedBy: write.recordedBy,
+        recordedAt: write.recordedAt,
+      },
+    });
+  }
+
+  async readOpenClosureApproval(caseId: string): Promise<ClosureApprovalRow | null> {
+    const row = await this.prisma.caseClosureApproval.findFirst({
+      where: { caseId, status: { not: 'approved' } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+    return row ? this.withClosureContent(row) : null;
+  }
+
+  async readClosureApproval(approvalId: string): Promise<ClosureApprovalRow | null> {
+    const row = await this.prisma.caseClosureApproval.findUnique({ where: { id: approvalId } });
+    return row ? this.withClosureContent(row) : null;
+  }
+
+  async saveClosureDraft(write: ClosureApprovalDraftWrite): Promise<boolean> {
+    const versionNo = write.isNew ? 1 : write.expectedVersionNo + 1;
+    if (write.isNew) {
+      if (write.expectedVersionNo !== 0) return false;
+      try {
+        await this.prisma.caseClosureApproval.create({
+          data: {
+            id: write.approvalId,
+            caseId: write.caseId,
+            status: 'drafting',
+            currentVersionNo: 1,
+            drafterId: write.drafterId,
+            createdAt: write.at,
+            updatedAt: write.at,
+          },
+        });
+      } catch (error) {
+        if (isUniqueConflict(error)) return false;
+        throw error;
+      }
+    } else {
+      const updated = await this.prisma.caseClosureApproval.updateMany({
+        where: { id: write.approvalId, status: 'drafting', currentVersionNo: write.expectedVersionNo },
+        data: { currentVersionNo: versionNo, updatedAt: write.at },
+      });
+      if (updated.count === 0) return false;
+    }
+    await this.prisma.caseClosureApprovalVersion.create({
+      data: {
+        id: write.versionId,
+        approvalId: write.approvalId,
+        versionNo,
+        contentJson: write.contentJson,
+        createdBy: write.drafterId,
+        createdAt: write.at,
+      },
+    });
+    return true;
+  }
+
+  async applyClosureStep(write: ClosureApprovalStepWrite): Promise<boolean> {
+    const data: { status: string; updatedAt: Date; approvalChainId?: string | null } = {
+      status: write.nextStatus,
+      updatedAt: write.at,
+    };
+    if (write.approvalChainId !== undefined) data.approvalChainId = write.approvalChainId;
+    const updated = await this.prisma.caseClosureApproval.updateMany({
+      where: { id: write.approvalId, status: write.expectedStatus },
+      data,
+    });
+    if (updated.count === 0) return false;
+    await this.prisma.caseClosureApprovalStep.create({
+      data: {
+        id: write.stepId,
+        approvalId: write.approvalId,
+        versionNo: write.versionNo,
+        step: write.step,
+        actorId: write.actorId,
+        opinion: write.opinion,
+        createdAt: write.at,
+      },
+    });
+    return true;
+  }
+
+  async readClosure(caseId: string): Promise<ClosureRecordRow | null> {
+    const row = await this.prisma.caseClosure.findUnique({ where: { caseId } });
+    if (!row) return null;
+    return {
+      id: row.id,
+      caseId: row.caseId,
+      approvalId: row.approvalId,
+      branch: row.branch,
+      checklistJson: row.checklistJson,
+      materialsRuleId: row.materialsRuleId,
+      materialsRuleVersion: row.materialsRuleVersion,
+      closedBy: row.closedBy,
+      closedAt: row.closedAt,
+    };
+  }
+
+  async insertClosure(write: ClosureRecordWrite): Promise<boolean> {
+    try {
+      await this.prisma.caseClosure.create({
+        data: {
+          id: write.id,
+          caseId: write.caseId,
+          approvalId: write.approvalId,
+          branch: write.branch,
+          checklistJson: write.checklistJson,
+          materialsRuleId: write.materialsRuleId,
+          materialsRuleVersion: write.materialsRuleVersion,
+          closedBy: write.closedBy,
+          closedAt: write.closedAt,
+        },
+      });
+      return true;
+    } catch (error) {
+      if (isUniqueConflict(error)) return false;
+      throw error;
+    }
+  }
+
+  private async withDecisionContent(row: {
+    id: string;
+    caseId: string;
+    status: string;
+    currentVersionNo: number;
+    drafterId: string;
+    approvalChainId: string | null;
+  }): Promise<DecisionApprovalRow> {
+    const version = row.currentVersionNo > 0
+      ? await this.prisma.caseDecisionApprovalVersion.findUnique({
+          where: { approvalId_versionNo: { approvalId: row.id, versionNo: row.currentVersionNo } },
+        })
+      : null;
+    return {
+      id: row.id,
+      caseId: row.caseId,
+      status: row.status,
+      currentVersionNo: row.currentVersionNo,
+      drafterId: row.drafterId,
+      approvalChainId: row.approvalChainId,
+      contentJson: version?.contentJson ?? null,
+    };
+  }
+
+  private async withClosureContent(row: {
+    id: string;
+    caseId: string;
+    status: string;
+    currentVersionNo: number;
+    drafterId: string;
+    approvalChainId: string | null;
+  }): Promise<ClosureApprovalRow> {
+    const version = row.currentVersionNo > 0
+      ? await this.prisma.caseClosureApprovalVersion.findUnique({
+          where: { approvalId_versionNo: { approvalId: row.id, versionNo: row.currentVersionNo } },
+        })
+      : null;
+    return {
+      id: row.id,
+      caseId: row.caseId,
+      status: row.status,
       currentVersionNo: row.currentVersionNo,
       drafterId: row.drafterId,
       approvalChainId: row.approvalChainId,

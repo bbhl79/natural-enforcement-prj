@@ -133,6 +133,16 @@ const OPERATION_OF_ACTION: Readonly<Record<string, string>> = {
   'deadline.recorded': '登记期限',
   'case.comparison-recorded': '登记新旧比对判定',
   'case.comparison-refused': '登记新旧比对判定',
+  'case.decision-drafted': '拟制决定呈批',
+  'case.decision-submitted': '提交决定呈批',
+  'case.decision-reviewed': '审核决定呈批',
+  'case.decision-approved': '批准决定',
+  'case.delivery-recorded': '登记送达',
+  'case.execution-recorded': '登记执行记载',
+  'case.closure-drafted': '拟制结案呈批',
+  'case.closure-submitted': '提交结案呈批',
+  'case.closure-reviewed': '审核结案呈批',
+  'case.closure-approved': '批准结案',
 };
 
 const OPERATION_OF_OPCODE: Readonly<Record<string, string>> = {

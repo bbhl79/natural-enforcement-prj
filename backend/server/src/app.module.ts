@@ -14,6 +14,10 @@ import { AuditBrowseService } from './audit-browse.service.ts';
 import { AuditController } from './audit.controller.ts';
 import { CaseAgencyConflictController } from './case-agency-conflict.controller.ts';
 import { CaseComparisonService } from './case-comparison.service.ts';
+import { CaseCloseoutController } from './case-closeout.controller.ts';
+import { CaseCloseoutService } from './case-closeout.service.ts';
+import { CaseDecisionController } from './case-decision.controller.ts';
+import { CaseDecisionService } from './case-decision.service.ts';
 import { CaseConflictController } from './case-conflict.controller.ts';
 import { CaseFilingController } from './case-filing.controller.ts';
 import { CaseFinalizeController } from './case-finalize.controller.ts';
@@ -118,6 +122,8 @@ import { WorkbenchService } from './workbench.service.ts';
     CaseReturnController,
     CaseReviewController,
     CaseLegalReviewController,
+    CaseDecisionController,
+    CaseCloseoutController,
     CaseNoticeController,
     CaseValidityController,
     CaseStateController,
@@ -154,6 +160,8 @@ import { WorkbenchService } from './workbench.service.ts';
     CaseReturnService,
     CaseReviewService,
     CaseLegalReviewService,
+    CaseDecisionService,
+    CaseCloseoutService,
     CaseNoticeService,
     CaseValidityService,
     CaseStateService,

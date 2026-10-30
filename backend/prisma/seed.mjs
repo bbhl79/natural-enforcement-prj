@@ -93,6 +93,8 @@ const ROLE_ALLOWANCES = {
     "legal.review.request",
     // #269：集体讨论记录录入（对象级须本案主办或协办）。
     "case.discussion.record",
+    // #270：执行记载录入（T25，对象级须本案主办或协办）。
+    "case.execution.record",
     "clue.read",
     "case.read",
     "doc.read",

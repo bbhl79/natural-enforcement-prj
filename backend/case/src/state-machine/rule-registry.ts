@@ -57,6 +57,15 @@ export const RULE_PARAMETERS: readonly RuleParameter[] = [
     citation: '规程 4.3.3(4)',
     reasonRequired: false,
   },
+  // #270：X10 处罚决定未送达就执行记载或结案。normative→警告，两段式确认后继续。
+  {
+    ruleKey: 'X10',
+    version: '1',
+    level: 'warn',
+    message: '处罚决定未送达就执行记载或结案',
+    citation: '规程第 9 章',
+    reasonRequired: false,
+  },
   // #257：立案呈批缺件的警告项。逐项缺件写进 warnings 的 message，确认键共用一个。
   {
     ruleKey: 'FILING-GAP',
