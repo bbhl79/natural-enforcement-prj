@@ -77,6 +77,8 @@ const CASE_OPCODES = {
   'case.review.record': entry('none', false, false),
   // #269：集体讨论记录录入。授经办；对象级须本案主办或协办。
   'case.discussion.record': entry('operator', true, false),
+  // #270：执行记载录入（T25）。授经办；对象级须本案主办或协办；推进主状态。
+  'case.execution.record': entry('operator', true, true),
   'clue.read': entry('none', false, false),
   'case.read': entry('none', false, false),
   'doc.read': entry('none', false, false),
