@@ -23,6 +23,7 @@ import { CaseNoticeController } from './case-notice.controller.ts';
 import { CaseValidityController } from './case-validity.controller.ts';
 import { CaseReviewController } from './case-review.controller.ts';
 import { CaseStateController } from './case-state.controller.ts';
+import { CaseTransferController } from './case-transfer.controller.ts';
 import { DeadlineController } from './deadline.controller.ts';
 import { InvestigationController } from './investigation.controller.ts';
 import { ClueClosureController } from './clue-closure.controller.ts';
@@ -41,6 +42,7 @@ import { CaseNoticeService } from './case-notice.service.ts';
 import { CaseValidityService } from './case-validity.service.ts';
 import { CaseReviewService } from './case-review.service.ts';
 import { CaseStateService } from './case-state.service.ts';
+import { CaseTransferService } from './case-transfer.service.ts';
 import { DeadlineService } from './deadline.service.ts';
 import { InvestigationService } from './investigation.service.ts';
 import { ClueClosureService } from './clue-closure.service.ts';
@@ -116,6 +118,7 @@ import { WorkbenchService } from './workbench.service.ts';
     CaseNoticeController,
     CaseValidityController,
     CaseStateController,
+    CaseTransferController,
     CaseConflictController,
     CaseAgencyConflictController,
     InvestigationController,
@@ -150,6 +153,7 @@ import { WorkbenchService } from './workbench.service.ts';
     CaseNoticeService,
     CaseValidityService,
     CaseStateService,
+    CaseTransferService,
     CaseConflictService,
     CaseAgencyConflictService,
     CaseComparisonService,

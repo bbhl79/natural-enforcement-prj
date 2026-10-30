@@ -1982,3 +1982,148 @@ model CaseDiscussionRecord {
   @@index([caseId])
   @@map("case_discussion_record")
 }
+
+/// 移送呈批表头（#242）。三类移送各自单独呈批；状态随审核、批准推进。
+model CaseTransferApproval {
+  id               String   @id
+  caseId           String   @map("case_id")
+  /// jurisdiction 管辖 | criminal 涉刑 | party-discipline 党纪政务
+  kind             String
+  /// drafting | pending_review | pending_approval | approved | withdrawn
+  status           String   @default("drafting")
+  currentVersionNo Int      @default(0) @map("current_version_no")
+  drafterId        String   @map("drafter_id")
+  approvalChainId  String?  @map("approval_chain_id")
+  createdAt        DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt        DateTime @default(now()) @db.Timestamptz(6) @map("updated_at")
+
+  @@index([caseId])
+  @@map("case_transfer_approval")
+}
+
+/// 移送呈批正文版本（#242）。只追加。
+model CaseTransferApprovalVersion {
+  id         String   @id
+  approvalId String   @map("approval_id")
+  versionNo  Int      @map("version_no")
+  contentJson String  @map("content_json")
+  createdBy  String   @map("created_by")
+  createdAt  DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([approvalId, versionNo])
+  @@index([approvalId])
+  @@map("case_transfer_approval_version")
+}
+
+/// 移送呈批步骤（#242）。只追加。
+model CaseTransferApprovalStep {
+  id         String   @id
+  approvalId String   @map("approval_id")
+  versionNo  Int      @map("version_no")
+  /// submit | review | approve | withdraw
+  step       String
+  actorId    String   @map("actor_id")
+  opinion    String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([approvalId])
+  @@map("case_transfer_approval_step")
+}
+
+/// 移送记载（#242）。批准后追加一行，只追加，不物理删除。
+model CaseTransfer {
+  id           String   @id
+  caseId       String   @map("case_id")
+  /// jurisdiction | criminal | party-discipline
+  kind         String
+  receivingOrg String   @map("receiving_org")
+  documentNo   String   @map("document_no")
+  letterDate   String   @map("letter_date")
+  reason       String
+  approvalId   String   @map("approval_id")
+  recordedBy   String   @map("recorded_by")
+  recordedAt   DateTime @db.Timestamptz(6) @map("recorded_at")
+  createdAt    DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([approvalId])
+  @@index([caseId])
+  @@map("case_transfer")
+}
+
+/// 移送附件与回证（#242）。附件随呈批上传；回证可后补。只追加。
+model CaseTransferFile {
+  id          String   @id
+  caseId      String   @map("case_id")
+  approvalId  String?  @map("approval_id")
+  transferId  String?  @map("transfer_id")
+  /// attachment 附件 | receipt 回证
+  kind        String
+  fileKey     String   @map("file_key")
+  versionId   String   @map("version_id")
+  fileName    String   @map("file_name")
+  contentType String   @map("content_type")
+  byteSize    Int      @map("byte_size")
+  digest      String
+  uploadedBy  String   @map("uploaded_by")
+  uploadedAt  DateTime @db.Timestamptz(6) @map("uploaded_at")
+  createdAt   DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([approvalId])
+  @@index([transferId])
+  @@index([caseId])
+  @@map("case_transfer_file")
+}
+
+/// 公安、检察决定记载（#242 T30）。只追加。
+model CaseCriminalDecision {
+  id               String   @id
+  caseId           String   @map("case_id")
+  /// police 公安 | procuratorate 检察
+  source           String
+  notifiedOn       String   @map("notified_on")
+  reason           String
+  caseReturned     Boolean  @map("case_returned")
+  returnedListJson String   @default("[]") @map("returned_list_json")
+  reviewJson       String   @default("{}") @map("review_json")
+  partyNoticeJson  String   @default("{}") @map("party_notice_json")
+  recordedBy       String   @map("recorded_by")
+  recordedAt       DateTime @db.Timestamptz(6) @map("recorded_at")
+  createdAt        DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_criminal_decision")
+}
+
+/// 外部决定后的人工出口（#242 T30）。A、B 互斥；同一决定至多批准一个。
+model CaseCriminalOutlet {
+  id              String   @id
+  caseId          String   @map("case_id")
+  decisionId      String   @map("decision_id")
+  /// investigate-again 回调查 | close-or-other 结案或其他处理
+  outlet          String
+  /// drafting | pending_approval | approved | withdrawn
+  status          String   @default("drafting")
+  contentJson     String   @map("content_json")
+  drafterId       String   @map("drafter_id")
+  approvalChainId String?  @map("approval_chain_id")
+  createdAt       DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt       DateTime @default(now()) @db.Timestamptz(6) @map("updated_at")
+
+  @@index([caseId])
+  @@index([decisionId])
+  @@map("case_criminal_outlet")
+}
+
+/// 人工出口步骤（#242）。只追加。
+model CaseCriminalOutletStep {
+  id        String   @id
+  outletId  String   @map("outlet_id")
+  /// submit | approve | withdraw
+  step      String
+  actorId   String   @map("actor_id")
+  opinion   String?
+  createdAt DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([outletId])
+  @@map("case_criminal_outlet_step")
+}

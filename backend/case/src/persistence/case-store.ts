@@ -674,6 +674,138 @@ export interface DiscussionRecordRow {
 
 export type DiscussionRecordWrite = DiscussionRecordRow;
 
+/** 移送呈批表头，带当前版本正文（#242）。 */
+export interface TransferApprovalRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly kind: string;
+  readonly status: string;
+  readonly currentVersionNo: number;
+  readonly drafterId: string;
+  readonly approvalChainId: string | null;
+  readonly contentJson: string | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+/** 保存移送呈批拟制稿（#242）。 */
+export interface TransferApprovalDraftWrite {
+  readonly approvalId: string;
+  readonly caseId: string;
+  readonly kind: string;
+  readonly drafterId: string;
+  /** true＝新建表头；false＝在既有拟制中的表头上追加版本。 */
+  readonly isNew: boolean;
+  readonly expectedVersionNo: number;
+  readonly versionId: string;
+  readonly contentJson: string;
+  readonly at: Date;
+}
+
+/** 推进移送呈批一步（#242）。状态不符返回 false。 */
+export interface TransferApprovalStepWrite {
+  readonly approvalId: string;
+  readonly expectedStatus: string;
+  readonly nextStatus: string;
+  /** undefined 不改；null 清空；字符串写入。 */
+  readonly approvalChainId?: string | null;
+  readonly stepId: string;
+  readonly step: string;
+  readonly versionNo: number;
+  readonly actorId: string;
+  readonly opinion: string | null;
+  readonly at: Date;
+}
+
+/** 移送记载（#242）。只追加。 */
+export interface TransferRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly kind: string;
+  readonly receivingOrg: string;
+  readonly documentNo: string;
+  readonly letterDate: string;
+  readonly reason: string;
+  readonly approvalId: string;
+  readonly recordedBy: string;
+  readonly recordedAt: Date;
+}
+
+export type TransferWrite = TransferRow;
+
+/** 移送附件与回证（#242）。只追加。 */
+export interface TransferFileRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly approvalId: string | null;
+  readonly transferId: string | null;
+  readonly kind: string;
+  readonly fileName: string;
+  readonly contentType: string;
+  readonly byteSize: number;
+  readonly uploadedBy: string;
+  readonly uploadedAt: Date;
+}
+
+export interface TransferFileWrite extends TransferFileRow {
+  readonly fileKey: string;
+  readonly versionId: string;
+  readonly digest: string;
+}
+
+/** 公安、检察决定记载（#242 T30）。只追加。 */
+export interface CriminalDecisionRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly source: string;
+  readonly notifiedOn: string;
+  readonly reason: string;
+  readonly caseReturned: boolean;
+  readonly returnedListJson: string;
+  readonly reviewJson: string;
+  readonly partyNoticeJson: string;
+  readonly recordedBy: string;
+  readonly recordedAt: Date;
+}
+
+export type CriminalDecisionWrite = CriminalDecisionRow;
+
+/** 人工出口（#242 T30）。表头随提交、批准推进。 */
+export interface CriminalOutletRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly decisionId: string;
+  readonly outlet: string;
+  readonly status: string;
+  readonly contentJson: string;
+  readonly drafterId: string;
+  readonly approvalChainId: string | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+export interface CriminalOutletWrite {
+  readonly id: string;
+  readonly caseId: string;
+  readonly decisionId: string;
+  readonly outlet: string;
+  readonly contentJson: string;
+  readonly drafterId: string;
+  readonly at: Date;
+}
+
+export interface CriminalOutletStepWrite {
+  readonly outletId: string;
+  readonly expectedStatus: string;
+  readonly nextStatus: string;
+  readonly approvalChainId?: string | null;
+  readonly stepId: string;
+  readonly step: string;
+  readonly actorId: string;
+  readonly opinion: string | null;
+  readonly at: Date;
+}
+
 /** 案件行（最小模型）。 */
 export interface CaseRow {
   readonly id: string;
@@ -934,6 +1066,34 @@ export interface CaseStore {
   insertValidityReview(write: ValidityReviewWrite): Promise<void>;
   /** 本案全部有效性复核（按复核时间升序）。 */
   listValidityReviews(caseId: string): Promise<readonly ValidityReviewRow[]>;
+  /** 本案全部移送呈批，带当前版本正文（时间升序）。 */
+  listTransferApprovals(caseId: string): Promise<readonly TransferApprovalRow[]>;
+  /** 按主键读移送呈批。没有为 null。 */
+  readTransferApproval(approvalId: string): Promise<TransferApprovalRow | null>;
+  /** 保存移送呈批拟制稿。表头不在拟制中或版本号不符返回 false。 */
+  saveTransferDraft(write: TransferApprovalDraftWrite): Promise<boolean>;
+  /** 推进移送呈批一步。状态不符返回 false。 */
+  applyTransferStep(write: TransferApprovalStepWrite): Promise<boolean>;
+  /** 本案全部移送记载（时间升序）。 */
+  listTransfers(caseId: string): Promise<readonly TransferRow[]>;
+  /** 追加一条移送记载。同一呈批已有记载时返回 false。 */
+  insertTransfer(write: TransferWrite): Promise<boolean>;
+  /** 本案全部移送附件与回证（时间升序）。 */
+  listTransferFiles(caseId: string): Promise<readonly TransferFileRow[]>;
+  /** 追加一条移送附件或回证。 */
+  insertTransferFile(write: TransferFileWrite): Promise<void>;
+  /** 本案全部外部决定记载（时间升序）。 */
+  listCriminalDecisions(caseId: string): Promise<readonly CriminalDecisionRow[]>;
+  /** 追加一条外部决定记载。只追加。 */
+  insertCriminalDecision(write: CriminalDecisionWrite): Promise<void>;
+  /** 本案全部人工出口（时间升序）。 */
+  listCriminalOutlets(caseId: string): Promise<readonly CriminalOutletRow[]>;
+  /** 按主键读人工出口。没有为 null。 */
+  readCriminalOutlet(outletId: string): Promise<CriminalOutletRow | null>;
+  /** 追加一条人工出口拟制稿。 */
+  insertCriminalOutlet(write: CriminalOutletWrite): Promise<void>;
+  /** 推进人工出口一步。状态不符返回 false。 */
+  applyCriminalOutletStep(write: CriminalOutletStepWrite): Promise<boolean>;
 }
 
 /** 违法记录。作废只改状态和作废字段，不删行。 */

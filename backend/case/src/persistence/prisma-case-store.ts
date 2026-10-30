@@ -109,6 +109,18 @@ import type {
   ValidityConfirmationWrite,
   ValidityReviewRow,
   ValidityReviewWrite,
+  TransferApprovalDraftWrite,
+  TransferApprovalRow,
+  TransferApprovalStepWrite,
+  TransferFileRow,
+  TransferFileWrite,
+  TransferRow,
+  TransferWrite,
+  CriminalDecisionRow,
+  CriminalDecisionWrite,
+  CriminalOutletRow,
+  CriminalOutletStepWrite,
+  CriminalOutletWrite,
 } from './case-store.ts';
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -1384,6 +1396,280 @@ export class PrismaCaseStore implements CaseStore {
     });
   }
 
+  async listTransferApprovals(caseId: string): Promise<readonly TransferApprovalRow[]> {
+    const rows = await this.prisma.caseTransferApproval.findMany({
+      where: { caseId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return Promise.all(rows.map((row) => this.withTransferContent(row)));
+  }
+
+  async readTransferApproval(approvalId: string): Promise<TransferApprovalRow | null> {
+    const row = await this.prisma.caseTransferApproval.findUnique({ where: { id: approvalId } });
+    return row ? this.withTransferContent(row) : null;
+  }
+
+  async saveTransferDraft(write: TransferApprovalDraftWrite): Promise<boolean> {
+    const versionNo = write.isNew ? 1 : write.expectedVersionNo + 1;
+    if (write.isNew) {
+      if (write.expectedVersionNo !== 0) return false;
+      try {
+        await this.prisma.caseTransferApproval.create({
+          data: {
+            id: write.approvalId,
+            caseId: write.caseId,
+            kind: write.kind,
+            status: 'drafting',
+            currentVersionNo: 1,
+            drafterId: write.drafterId,
+            createdAt: write.at,
+            updatedAt: write.at,
+          },
+        });
+      } catch (error) {
+        if (isUniqueConflict(error)) return false;
+        throw error;
+      }
+    } else {
+      const updated = await this.prisma.caseTransferApproval.updateMany({
+        where: { id: write.approvalId, status: 'drafting', currentVersionNo: write.expectedVersionNo },
+        data: { currentVersionNo: versionNo, updatedAt: write.at },
+      });
+      if (updated.count === 0) return false;
+    }
+    await this.prisma.caseTransferApprovalVersion.create({
+      data: {
+        id: write.versionId,
+        approvalId: write.approvalId,
+        versionNo,
+        contentJson: write.contentJson,
+        createdBy: write.drafterId,
+        createdAt: write.at,
+      },
+    });
+    return true;
+  }
+
+  async applyTransferStep(write: TransferApprovalStepWrite): Promise<boolean> {
+    const data: { status: string; updatedAt: Date; approvalChainId?: string | null } = {
+      status: write.nextStatus,
+      updatedAt: write.at,
+    };
+    if (write.approvalChainId !== undefined) data.approvalChainId = write.approvalChainId;
+    const updated = await this.prisma.caseTransferApproval.updateMany({
+      where: { id: write.approvalId, status: write.expectedStatus },
+      data,
+    });
+    if (updated.count === 0) return false;
+    await this.prisma.caseTransferApprovalStep.create({
+      data: {
+        id: write.stepId,
+        approvalId: write.approvalId,
+        versionNo: write.versionNo,
+        step: write.step,
+        actorId: write.actorId,
+        opinion: write.opinion,
+        createdAt: write.at,
+      },
+    });
+    return true;
+  }
+
+  async listTransfers(caseId: string): Promise<readonly TransferRow[]> {
+    const rows = await this.prisma.caseTransfer.findMany({
+      where: { caseId },
+      orderBy: [{ recordedAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      caseId: row.caseId,
+      kind: row.kind,
+      receivingOrg: row.receivingOrg,
+      documentNo: row.documentNo,
+      letterDate: row.letterDate,
+      reason: row.reason,
+      approvalId: row.approvalId,
+      recordedBy: row.recordedBy,
+      recordedAt: row.recordedAt,
+    }));
+  }
+
+  async insertTransfer(write: TransferWrite): Promise<boolean> {
+    try {
+      await this.prisma.caseTransfer.create({
+        data: {
+          id: write.id,
+          caseId: write.caseId,
+          kind: write.kind,
+          receivingOrg: write.receivingOrg,
+          documentNo: write.documentNo,
+          letterDate: write.letterDate,
+          reason: write.reason,
+          approvalId: write.approvalId,
+          recordedBy: write.recordedBy,
+          recordedAt: write.recordedAt,
+        },
+      });
+      return true;
+    } catch (error) {
+      if (isUniqueConflict(error)) return false;
+      throw error;
+    }
+  }
+
+  async listTransferFiles(caseId: string): Promise<readonly TransferFileRow[]> {
+    const rows = await this.prisma.caseTransferFile.findMany({
+      where: { caseId },
+      orderBy: [{ uploadedAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      caseId: row.caseId,
+      approvalId: row.approvalId,
+      transferId: row.transferId,
+      kind: row.kind,
+      fileName: row.fileName,
+      contentType: row.contentType,
+      byteSize: row.byteSize,
+      uploadedBy: row.uploadedBy,
+      uploadedAt: row.uploadedAt,
+    }));
+  }
+
+  async insertTransferFile(write: TransferFileWrite): Promise<void> {
+    await this.prisma.caseTransferFile.create({
+      data: {
+        id: write.id,
+        caseId: write.caseId,
+        approvalId: write.approvalId,
+        transferId: write.transferId,
+        kind: write.kind,
+        fileKey: write.fileKey,
+        versionId: write.versionId,
+        fileName: write.fileName,
+        contentType: write.contentType,
+        byteSize: write.byteSize,
+        digest: write.digest,
+        uploadedBy: write.uploadedBy,
+        uploadedAt: write.uploadedAt,
+      },
+    });
+  }
+
+  async listCriminalDecisions(caseId: string): Promise<readonly CriminalDecisionRow[]> {
+    const rows = await this.prisma.caseCriminalDecision.findMany({
+      where: { caseId },
+      orderBy: [{ recordedAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      caseId: row.caseId,
+      source: row.source,
+      notifiedOn: row.notifiedOn,
+      reason: row.reason,
+      caseReturned: row.caseReturned,
+      returnedListJson: row.returnedListJson,
+      reviewJson: row.reviewJson,
+      partyNoticeJson: row.partyNoticeJson,
+      recordedBy: row.recordedBy,
+      recordedAt: row.recordedAt,
+    }));
+  }
+
+  async insertCriminalDecision(write: CriminalDecisionWrite): Promise<void> {
+    await this.prisma.caseCriminalDecision.create({
+      data: {
+        id: write.id,
+        caseId: write.caseId,
+        source: write.source,
+        notifiedOn: write.notifiedOn,
+        reason: write.reason,
+        caseReturned: write.caseReturned,
+        returnedListJson: write.returnedListJson,
+        reviewJson: write.reviewJson,
+        partyNoticeJson: write.partyNoticeJson,
+        recordedBy: write.recordedBy,
+        recordedAt: write.recordedAt,
+      },
+    });
+  }
+
+  async listCriminalOutlets(caseId: string): Promise<readonly CriminalOutletRow[]> {
+    const rows = await this.prisma.caseCriminalOutlet.findMany({
+      where: { caseId },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      caseId: row.caseId,
+      decisionId: row.decisionId,
+      outlet: row.outlet,
+      status: row.status,
+      contentJson: row.contentJson,
+      drafterId: row.drafterId,
+      approvalChainId: row.approvalChainId,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    }));
+  }
+
+  async readCriminalOutlet(outletId: string): Promise<CriminalOutletRow | null> {
+    const row = await this.prisma.caseCriminalOutlet.findUnique({ where: { id: outletId } });
+    if (!row) return null;
+    return {
+      id: row.id,
+      caseId: row.caseId,
+      decisionId: row.decisionId,
+      outlet: row.outlet,
+      status: row.status,
+      contentJson: row.contentJson,
+      drafterId: row.drafterId,
+      approvalChainId: row.approvalChainId,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    };
+  }
+
+  async insertCriminalOutlet(write: CriminalOutletWrite): Promise<void> {
+    await this.prisma.caseCriminalOutlet.create({
+      data: {
+        id: write.id,
+        caseId: write.caseId,
+        decisionId: write.decisionId,
+        outlet: write.outlet,
+        status: 'drafting',
+        contentJson: write.contentJson,
+        drafterId: write.drafterId,
+        createdAt: write.at,
+        updatedAt: write.at,
+      },
+    });
+  }
+
+  async applyCriminalOutletStep(write: CriminalOutletStepWrite): Promise<boolean> {
+    const data: { status: string; updatedAt: Date; approvalChainId?: string | null } = {
+      status: write.nextStatus,
+      updatedAt: write.at,
+    };
+    if (write.approvalChainId !== undefined) data.approvalChainId = write.approvalChainId;
+    const updated = await this.prisma.caseCriminalOutlet.updateMany({
+      where: { id: write.outletId, status: write.expectedStatus },
+      data,
+    });
+    if (updated.count === 0) return false;
+    await this.prisma.caseCriminalOutletStep.create({
+      data: {
+        id: write.stepId,
+        outletId: write.outletId,
+        step: write.step,
+        actorId: write.actorId,
+        opinion: write.opinion,
+        createdAt: write.at,
+      },
+    });
+    return true;
+  }
+
   async listDeadlineRows(caseId: string): Promise<readonly DeadlineRow[]> {
     const rows = await this.prisma.caseDeadlineRow.findMany({
       where: { caseId },
@@ -1903,6 +2189,37 @@ export class PrismaCaseStore implements CaseStore {
       drafterId: row.drafterId,
       approvalChainId: row.approvalChainId,
       contentJson: version?.contentJson ?? null,
+    };
+  }
+
+  private async withTransferContent(row: {
+    id: string;
+    caseId: string;
+    kind: string;
+    status: string;
+    currentVersionNo: number;
+    drafterId: string;
+    approvalChainId: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }): Promise<TransferApprovalRow> {
+    const version =
+      row.currentVersionNo > 0
+        ? await this.prisma.caseTransferApprovalVersion.findUnique({
+            where: { approvalId_versionNo: { approvalId: row.id, versionNo: row.currentVersionNo } },
+          })
+        : null;
+    return {
+      id: row.id,
+      caseId: row.caseId,
+      kind: row.kind,
+      status: row.status,
+      currentVersionNo: row.currentVersionNo,
+      drafterId: row.drafterId,
+      approvalChainId: row.approvalChainId,
+      contentJson: version?.contentJson ?? null,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
     };
   }
 

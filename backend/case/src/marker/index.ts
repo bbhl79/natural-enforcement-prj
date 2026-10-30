@@ -17,6 +17,8 @@ export const CASE_MARKER_KEYS = [
   'hearing-entered',
   /** 听证已终止，等待当事人重新申请（X28）。 */
   'hearing-terminated',
+  /** 已形成涉刑移送记载（T30 侧链起点）。本键只由移送票置位，不清除。 */
+  'criminal-transfer',
 ] as const;
 
 export type CaseMarkerKey = (typeof CASE_MARKER_KEYS)[number];

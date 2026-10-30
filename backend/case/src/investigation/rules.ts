@@ -51,14 +51,17 @@ export const WITHDRAW_REASONS = [
 export type WithdrawReason = (typeof WITHDRAW_REASONS)[number]['code'];
 
 /**
- * 待收尾结案原因。不可抗力开放（规程 7.1(5)）。
- * 不属本部门管辖须已有管辖移送记录，本票不开放。
+ * 待收尾结案原因。不可抗力与不属本部门管辖均开放（#242 开放管辖移送支）。
+ * 不属本部门管辖须已有管辖移送记载，由服务层在制、提交、批准三处校验。
  */
 export const CLOSE_REASONS = [
   { code: 'force-majeure', label: '不可抗力', open: true },
-  { code: 'outside-jurisdiction', label: '不属本部门管辖', open: false },
+  { code: 'outside-jurisdiction', label: '不属本部门管辖', open: true },
 ] as const;
 export type CloseReason = (typeof CLOSE_REASONS)[number]['code'];
+
+/** 结案原因为不属本部门管辖时的提示。 */
+export const MISSING_JURISDICTION_TRANSFER_MESSAGE = '结案原因为不属本部门管辖时，须已有管辖移送记载';
 
 export const PROCEDURE_KINDS = ['suspend', 'resume', 'terminate', 'withdraw', 'close'] as const;
 export type ProcedureKind = (typeof PROCEDURE_KINDS)[number];
@@ -79,7 +82,7 @@ export type ProcedureContent =
   | { readonly kind: 'resume' }
   | { readonly kind: 'terminate'; readonly reason: TerminationReason }
   | { readonly kind: 'withdraw'; readonly reason: WithdrawReason }
-  | { readonly kind: 'close'; readonly reason: 'force-majeure' };
+  | { readonly kind: 'close'; readonly reason: CloseReason };
 
 export type ProcedureContentHit =
   | { readonly httpStatus: 400; readonly reason: 'invalid-kind' | 'invalid-reason'; readonly message: string }
@@ -219,7 +222,7 @@ export function checkProcedureContent(input: {
       },
     };
   }
-  return { ok: true, content: { kind: 'close', reason: 'force-majeure' } };
+  return { ok: true, content: { kind: 'close', reason: close.code } };
 }
 
 export type ProcedureStateHit =

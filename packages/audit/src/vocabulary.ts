@@ -150,6 +150,17 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'case.validity-reviewed',
   'case.validity-gate-checked',
   'case.notice-reissued',
+  // 案件阶段三类移送（#242）。呈批、记载、回证、外部决定与人工出口都记这些动作。
+  'case.transfer-drafted',
+  'case.transfer-submitted',
+  'case.transfer-reviewed',
+  'case.transfer-approved',
+  'case.transfer-receipt-uploaded',
+  'case.criminal-decision-recorded',
+  'case.criminal-outlet-drafted',
+  'case.criminal-outlet-submitted',
+  'case.criminal-outlet-approved',
+  'case.closeout-gate-checked',
 ] as const;
 
 /**
@@ -1055,6 +1066,60 @@ export const CASE_VALIDITY_ACTIONS = [
   'case.notice-reissued',
 ] as const;
 export type CaseValidityAction = (typeof CASE_VALIDITY_ACTIONS)[number];
+/** 案件阶段三类移送被拒（#242）。呈批、记载、回证、外部决定、人工出口与结案闸口共用这一张原因表。 */
+export const CASE_TRANSFER_FAILED_REASONS = [
+  'invalid-state',
+  'invalid-content',
+  'invalid-kind',
+  'invalid-source',
+  'invalid-outlet',
+  'invalid-letter-date',
+  'invalid-notified-on',
+  'invalid-returned-list',
+  'invalid-review-on',
+  'invalid-party-notified-on',
+  'invalid-optional',
+  'invalid-attachment',
+  'missing-fields',
+  'missing-reason',
+  'missing-case-returned',
+  'missing-returned-list',
+  'missing-illegal-state',
+  'missing-illegal-state-note',
+  'missing-penalty-basis',
+  'not-transfer-drafter',
+  'not-outlet-drafter',
+  'legal-review-required',
+  'no-criminal-decision',
+  'outlet-conflict',
+  'outlet-not-criminal-transfer',
+  'transfer-not-found',
+  'decision-not-found',
+  'outlet-not-found',
+  'unknown-transition',
+  'transition-disabled',
+  'X03',
+  'X11',
+  'X12',
+  'X17',
+  'X18',
+  'concurrent-change',
+] as const;
+export type CaseTransferFailedReason = (typeof CASE_TRANSFER_FAILED_REASONS)[number];
+
+export const CASE_TRANSFER_ACTIONS = [
+  'case.transfer-drafted',
+  'case.transfer-submitted',
+  'case.transfer-reviewed',
+  'case.transfer-approved',
+  'case.transfer-receipt-uploaded',
+  'case.criminal-decision-recorded',
+  'case.criminal-outlet-drafted',
+  'case.criminal-outlet-submitted',
+  'case.criminal-outlet-approved',
+  'case.closeout-gate-checked',
+] as const;
+export type CaseTransferAction = (typeof CASE_TRANSFER_ACTIONS)[number];
 
 /** 新旧比对判定被拒（#271）。提交缺判定、批准比对过时、材料不合规共用这一张原因表。 */
 export const CASE_COMPARISON_FAILED_REASONS = [
@@ -1261,5 +1326,16 @@ export const AUDIT_DETAIL_ACTIONS = [
   'case.validity-reviewed',
   'case.validity-gate-checked',
   'case.notice-reissued',
+  // 案件阶段三类移送（#242）：呈批、记载、回证、外部决定与人工出口的前后值。
+  'case.transfer-drafted',
+  'case.transfer-submitted',
+  'case.transfer-reviewed',
+  'case.transfer-approved',
+  'case.transfer-receipt-uploaded',
+  'case.criminal-decision-recorded',
+  'case.criminal-outlet-drafted',
+  'case.criminal-outlet-submitted',
+  'case.criminal-outlet-approved',
+  'case.closeout-gate-checked',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];

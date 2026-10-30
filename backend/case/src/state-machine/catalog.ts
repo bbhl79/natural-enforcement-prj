@@ -10,7 +10,8 @@
 // #272 启用 T10、T11（进入 E05）与 T13–T17（告知、陈述申辩、听证）。
 // #269 启用 T10a、T10b（告知前法制审核进出 E07）。
 // #248 启用 T32（重新告知：撤销原告知，E05 再进入一次）。
-// T09a、T10c、T12、T14a、T16a 仍是 branch 或未启用边，由服务层解析或由后续票接入。
+// #242 启用 T29（涉刑、党纪政务移送批准：当前环节不变，记侧链）。
+// T09a、T10c、T12、T14a、T16a、T30 仍是 branch 或未启用边，由服务层解析或由后续票接入。
 
 import { GUARD_AUTHORITIES, type GuardAuthority, type GuardResult } from './guard.ts';
 
@@ -124,7 +125,17 @@ export type ToSpec =
   | { readonly kind: 'branch'; readonly note: string };
 
 /** 已启用边的守卫名。none 表示显式声明本边无额外守卫（通用守卫仍跑）。 */
-export const TRANSITION_GUARDS = ['filing', 'closeout', 'reassign', 'deadline', 'review', 'notice', 'legal-review', 'none'] as const;
+export const TRANSITION_GUARDS = [
+  'filing',
+  'closeout',
+  'reassign',
+  'deadline',
+  'review',
+  'notice',
+  'legal-review',
+  'transfer',
+  'none',
+] as const;
 export type TransitionGuard = (typeof TRANSITION_GUARDS)[number];
 
 export interface TransitionEdge {
@@ -256,7 +267,10 @@ export const TRANSITIONS: readonly TransitionEdge[] = [
   ),
   edge('T27', main('closed', 'withdrawn'), { kind: 'main', status: 'finalized' }, '归档审批通过：已定型'),
   edge('T28', main('finalized'), { kind: 'main', status: 'finalized' }, '受控重开后再定型（主干不启用）'),
-  edge('T29', { kind: 'span', start: 'E02', end: 'E11' }, { kind: 'same' }, '涉刑或党纪政务移送：当前环节不变'),
+  edge('T29', { kind: 'span', start: 'E02', end: 'E11' }, { kind: 'same' }, '涉刑或党纪政务移送：当前环节不变', {
+    enabled: true,
+    guard: 'transfer',
+  }),
   edge(
     'T30',
     { kind: 'side', name: 'criminal-transfer' },

@@ -16,6 +16,7 @@ import {
   CLUE_STORE,
   EXTEND_DEADLINE_PROMPT,
   INQUIRY_OFFICER_CITATION,
+  MISSING_JURISDICTION_TRANSFER_MESSAGE,
   PARTY_NOTICE_PROMPT,
   PROCEDURE_TRANSITION,
   X03_WARN_MESSAGE,
@@ -1035,6 +1036,17 @@ export class InvestigationService {
         outlet: state.hit.outlet,
         basis: 'citation' in state.hit ? state.hit.citation : null,
       });
+    }
+    if (content.kind === 'close' && content.reason === 'outside-jurisdiction') {
+      const transfers = await this.cases.listTransfers(prepared.view.id);
+      if (!transfers.some((row) => row.kind === 'jurisdiction')) {
+        return this.fail(prepared, action, opcode, {
+          httpStatus: 409,
+          reason: 'invalid-state',
+          message: MISSING_JURISDICTION_TRANSFER_MESSAGE,
+          outlet: '先完成管辖移送呈批并取得记载',
+        });
+      }
     }
     const idle = applyWarningGate({
       notes: [],
