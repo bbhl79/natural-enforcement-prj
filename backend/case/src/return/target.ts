@@ -117,7 +117,8 @@ function chainTarget(level: string): ReturnTarget {
 
 /**
  * R4、R8 的告知有效性按 #28 第四节判。
- * 本票不判 A／B／C，只把调用点留在退回点结果上。
+ * 退回点只保留调用点；#248 在决定呈批闸口 assertValidityGate 统一判 A／B／C，
+ * 因此返回值仍是 deferred，本函数不重复判。
  */
 export function noticeValidityCallSite(code: 'R4' | 'R8'): 'deferred' {
   switch (code) {

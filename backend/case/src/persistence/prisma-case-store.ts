@@ -19,8 +19,11 @@ import type {
   HearingWrite,
   NoticeDraftWrite,
   NoticeRow,
+  NoticeRevokeWrite,
   NoticeServedWrite,
   NoticeStepWrite,
+  NoticeValidityBaselineRow,
+  NoticeValidityBaselineWrite,
   PartySubmissionRow,
   PartySubmissionWrite,
   CaseRow,
@@ -102,6 +105,10 @@ import type {
   ViolationRecordRow,
   ViolationRecordWrite,
   ViolationVoidWrite,
+  ValidityConfirmationRow,
+  ValidityConfirmationWrite,
+  ValidityReviewRow,
+  ValidityReviewWrite,
 } from './case-store.ts';
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -1134,7 +1141,7 @@ export class PrismaCaseStore implements CaseStore {
 
   async readOpenNotice(caseId: string): Promise<NoticeRow | null> {
     const row = await this.prisma.caseNotice.findFirst({
-      where: { caseId, status: { not: 'served' } },
+      where: { caseId, status: { notIn: ['served', 'revoked'] } },
       orderBy: { entrySeq: 'desc' },
     });
     return row ? toNoticeRow(row) : null;
@@ -1294,6 +1301,87 @@ export class PrismaCaseStore implements CaseStore {
       },
     });
     return updated.count > 0;
+  }
+
+  async revokeNotice(write: NoticeRevokeWrite): Promise<boolean> {
+    const updated = await this.prisma.caseNotice.updateMany({
+      where: { id: write.noticeId, status: 'served' },
+      data: { status: 'revoked', updatedAt: write.at },
+    });
+    if (updated.count === 0) return false;
+    await this.prisma.caseNoticeStep.create({
+      data: {
+        id: write.stepId,
+        noticeId: write.noticeId,
+        versionNo: write.versionNo,
+        step: 'revoke',
+        actorId: write.actorId,
+        opinion: write.opinion,
+        createdAt: write.at,
+      },
+    });
+    return true;
+  }
+
+  async insertNoticeValidityBaseline(write: NoticeValidityBaselineWrite): Promise<boolean> {
+    try {
+      await this.prisma.caseNoticeValidityBaseline.create({
+        data: {
+          id: write.id,
+          caseId: write.caseId,
+          noticeId: write.noticeId,
+          entrySeq: write.entrySeq,
+          kind: write.kind,
+          partyType: write.partyType,
+          hearingNoticeAttached: write.hearingNoticeAttached,
+          confiscationValue: write.confiscationValue,
+          summaryJson: write.summaryJson,
+          summaryDigest: write.summaryDigest,
+          capturedBy: write.capturedBy,
+          capturedAt: write.capturedAt,
+        },
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async readNoticeValidityBaseline(noticeId: string): Promise<NoticeValidityBaselineRow | null> {
+    return this.prisma.caseNoticeValidityBaseline.findUnique({ where: { noticeId } });
+  }
+
+  async listNoticeValidityBaselines(caseId: string): Promise<readonly NoticeValidityBaselineRow[]> {
+    return this.prisma.caseNoticeValidityBaseline.findMany({
+      where: { caseId },
+      orderBy: [{ capturedAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async insertValidityConfirmation(write: ValidityConfirmationWrite): Promise<void> {
+    await this.prisma.caseValidityConfirmation.create({ data: { ...write } });
+  }
+
+  async listValidityConfirmations(caseId: string): Promise<readonly ValidityConfirmationRow[]> {
+    return this.prisma.caseValidityConfirmation.findMany({
+      where: { caseId },
+      orderBy: [{ confirmedAt: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  async readValidityConfirmation(confirmationId: string): Promise<ValidityConfirmationRow | null> {
+    return this.prisma.caseValidityConfirmation.findUnique({ where: { id: confirmationId } });
+  }
+
+  async insertValidityReview(write: ValidityReviewWrite): Promise<void> {
+    await this.prisma.caseValidityReview.create({ data: { ...write } });
+  }
+
+  async listValidityReviews(caseId: string): Promise<readonly ValidityReviewRow[]> {
+    return this.prisma.caseValidityReview.findMany({
+      where: { caseId },
+      orderBy: [{ reviewedAt: 'asc' }, { id: 'asc' }],
+    });
   }
 
   async listDeadlineRows(caseId: string): Promise<readonly DeadlineRow[]> {

@@ -18,6 +18,8 @@ import type {
   CaseReviewFailedReason,
   CaseLegalReviewAction,
   CaseLegalReviewFailedReason,
+  CaseValidityAction,
+  CaseValidityFailedReason,
   CaseNoticeAction,
   CaseNoticeFailedReason,
   CaseInvestigationAction,
@@ -352,6 +354,9 @@ export type AuditAppend =
   // 法制审核与集体讨论（#269）。成功与失败都记同一动作。
   | (AuditParties & { action: CaseLegalReviewAction })
   | (AuditParties & { action: CaseLegalReviewAction; outcome: 'failed'; reason: CaseLegalReviewFailedReason })
+  // 有效性确认与重新告知（#248）。成功与失败都记同一动作。
+  | (AuditParties & { action: CaseValidityAction })
+  | (AuditParties & { action: CaseValidityAction; outcome: 'failed'; reason: CaseValidityFailedReason })
 ;
 
 /**

@@ -61,16 +61,27 @@ describe('迁移表常量', () => {
     }
   });
 
-  it('启用 T01、T02、调查收尾 T03 至 T07、审理 T08／T09、告知与听证 T10／T11／T13 至 T17、告知前法审 T10a／T10b、改派 T33 与 T34，且已启用的边声明了守卫', () => {
+  it('启用 T01、T02、调查收尾 T03 至 T07、审理 T08／T09、告知与听证 T10／T11／T13 至 T17、告知前法审 T10a／T10b、重新告知 T32、改派 T33 与 T34，且已启用的边声明了守卫', () => {
     const enabled = TRANSITIONS.filter((item) => item.enabled).map((item) => item.id);
     expect(enabled).toEqual([
       'T01', 'T02', 'T03', 'T04', 'T05', 'T06', 'T07', 'T08', 'T09',
-      'T10', 'T10a', 'T10b', 'T11', 'T13', 'T14', 'T15', 'T16', 'T17', 'T33', 'T34',
+      'T10', 'T10a', 'T10b', 'T11', 'T13', 'T14', 'T15', 'T16', 'T17', 'T32', 'T33', 'T34',
     ]);
     for (const item of TRANSITIONS) {
       if (!item.enabled) continue;
       expect(item.guard).not.toBe('none');
     }
+  });
+
+  it('#248 T32 重新告知：E05 至 E09 的告知失效后撤销原告知并再进入 E05', () => {
+    const edge = findTransition('T32');
+    expect(edge).toMatchObject({
+      enabled: true,
+      guard: 'notice',
+      to: { kind: 'enter', stage: 'E05', instanceStatus: 'drafting', reenter: true },
+    });
+    const specs = Array.isArray(edge?.from) ? edge?.from : [edge?.from];
+    expect(specs).toEqual([{ kind: 'span', start: 'E05', end: 'E09' }]);
   });
 
   it('T08、T09 启用且声明 review 守卫；不存在 E04→E03 迁移（Q31）', () => {

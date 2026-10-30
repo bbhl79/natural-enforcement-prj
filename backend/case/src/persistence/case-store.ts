@@ -892,7 +892,7 @@ export interface CaseStore {
   readNotice(caseId: string, entrySeq: number): Promise<NoticeRow | null>;
   /** 按主键读告知。 */
   readNoticeById(noticeId: string): Promise<NoticeRow | null>;
-  /** 本案未送达的告知（status <> served，按进入次序号降序）。没有为 null。 */
+  /** 本案未送达的告知（status 不是 served 或 revoked，按进入次序号降序）。没有为 null。 */
   readOpenNotice(caseId: string): Promise<NoticeRow | null>;
   /** 本案全部告知（进入次序号升序）。 */
   listNotices(caseId: string): Promise<readonly NoticeRow[]>;
@@ -916,6 +916,24 @@ export interface CaseStore {
   insertHearing(write: HearingWrite): Promise<boolean>;
   /** 推进听证状态。状态不符返回 false。 */
   applyHearingStep(write: HearingStepWrite): Promise<boolean>;
+  /** 撤销已送达的告知（#248）：served → revoked，并追加 revoke 步骤。其他状态返回 false。 */
+  revokeNotice(write: NoticeRevokeWrite): Promise<boolean>;
+  /** 写入告知有效性基线（#248）。该告知已有基线时返回 false。 */
+  insertNoticeValidityBaseline(write: NoticeValidityBaselineWrite): Promise<boolean>;
+  /** 按告知读有效性基线。没有为 null。 */
+  readNoticeValidityBaseline(noticeId: string): Promise<NoticeValidityBaselineRow | null>;
+  /** 本案全部有效性基线（按送达先后升序）。 */
+  listNoticeValidityBaselines(caseId: string): Promise<readonly NoticeValidityBaselineRow[]>;
+  /** 追加一条有效性确认。只追加。 */
+  insertValidityConfirmation(write: ValidityConfirmationWrite): Promise<void>;
+  /** 本案全部有效性确认（按确认时间升序）。 */
+  listValidityConfirmations(caseId: string): Promise<readonly ValidityConfirmationRow[]>;
+  /** 按主键读有效性确认。没有为 null。 */
+  readValidityConfirmation(confirmationId: string): Promise<ValidityConfirmationRow | null>;
+  /** 追加一条有效性复核。只追加。 */
+  insertValidityReview(write: ValidityReviewWrite): Promise<void>;
+  /** 本案全部有效性复核（按复核时间升序）。 */
+  listValidityReviews(caseId: string): Promise<readonly ValidityReviewRow[]>;
 }
 
 /** 违法记录。作废只改状态和作废字段，不删行。 */
@@ -1325,3 +1343,70 @@ export interface HearingStepWrite {
   readonly note?: string | null;
   readonly at: Date;
 }
+
+/** 撤销告知（#248）。只允许 served → revoked。 */
+export interface NoticeRevokeWrite {
+  readonly noticeId: string;
+  readonly stepId: string;
+  readonly versionNo: number;
+  readonly actorId: string;
+  readonly opinion: string | null;
+  readonly at: Date;
+}
+
+/** 告知有效性基线（#248）。summaryJson 是送达时冻结的拟决定摘要。 */
+export interface NoticeValidityBaselineRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly noticeId: string;
+  readonly entrySeq: number;
+  readonly kind: string;
+  readonly partyType: string;
+  readonly hearingNoticeAttached: boolean;
+  readonly confiscationValue: number | null;
+  readonly summaryJson: string;
+  readonly summaryDigest: string;
+  readonly capturedBy: string;
+  readonly capturedAt: Date;
+  readonly createdAt: Date;
+}
+
+export type NoticeValidityBaselineWrite = Omit<NoticeValidityBaselineRow, 'createdAt'>;
+
+/** 有效性确认（#248）。只追加。 */
+export interface ValidityConfirmationRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly noticeId: string;
+  readonly decisionDigest: string;
+  readonly systemHitsJson: string;
+  readonly differencesJson: string;
+  /** valid | invalid */
+  readonly conclusion: string;
+  readonly reason: string;
+  readonly reasonChanged: boolean;
+  /** reflow-new-evidence | r4-qualification-correction */
+  readonly aggravationSource: string | null;
+  readonly aggravationReference: string | null;
+  readonly aggravationReason: string | null;
+  readonly confirmedBy: string;
+  readonly confirmedAt: Date;
+  readonly createdAt: Date;
+}
+
+export type ValidityConfirmationWrite = Omit<ValidityConfirmationRow, 'createdAt'>;
+
+/** 有效性确认复核（#248）。只追加。 */
+export interface ValidityReviewRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly confirmationId: string;
+  /** pass | fail */
+  readonly conclusion: string;
+  readonly opinion: string | null;
+  readonly reviewedBy: string;
+  readonly reviewedAt: Date;
+  readonly createdAt: Date;
+}
+
+export type ValidityReviewWrite = Omit<ValidityReviewRow, 'createdAt'>;
