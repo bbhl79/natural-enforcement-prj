@@ -16,6 +16,7 @@ import { CaseAgencyConflictController } from './case-agency-conflict.controller.
 import { CaseComparisonService } from './case-comparison.service.ts';
 import { CaseConflictController } from './case-conflict.controller.ts';
 import { CaseFilingController } from './case-filing.controller.ts';
+import { CaseFinalizeController } from './case-finalize.controller.ts';
 import { CaseReassignController } from './case-reassign.controller.ts';
 import { CaseReturnController } from './case-return.controller.ts';
 import { CaseLegalReviewController } from './case-legal-review.controller.ts';
@@ -35,6 +36,7 @@ import { ClueDispatchController } from './clue-dispatch.controller.ts';
 import { CaseAgencyConflictService } from './case-agency-conflict.service.ts';
 import { CaseConflictService } from './case-conflict.service.ts';
 import { CaseFilingService } from './case-filing.service.ts';
+import { CaseFinalizeService } from './case-finalize.service.ts';
 import { CaseReassignService } from './case-reassign.service.ts';
 import { CaseReturnService } from './case-return.service.ts';
 import { CaseLegalReviewService } from './case-legal-review.service.ts';
@@ -111,6 +113,7 @@ import { WorkbenchService } from './workbench.service.ts';
     ClueWithdrawController,
     ClueClosureController,
     CaseFilingController,
+    CaseFinalizeController,
     CaseReassignController,
     CaseReturnController,
     CaseReviewController,
@@ -146,6 +149,7 @@ import { WorkbenchService } from './workbench.service.ts';
     ClueWithdrawService,
     ClueClosureService,
     CaseFilingService,
+    CaseFinalizeService,
     CaseReassignService,
     CaseReturnService,
     CaseReviewService,

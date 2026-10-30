@@ -121,6 +121,13 @@ import type {
   CriminalOutletRow,
   CriminalOutletStepWrite,
   CriminalOutletWrite,
+  DossierMaterialRow,
+  DossierMaterialWrite,
+  FinalizeApprovalDraftWrite,
+  FinalizeApprovalRow,
+  FinalizeApprovalStepWrite,
+  FinalizeRecordRow,
+  FinalizeRecordWrite,
 } from './case-store.ts';
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -1668,6 +1675,194 @@ export class PrismaCaseStore implements CaseStore {
       },
     });
     return true;
+  }
+
+  async listDossierMaterials(caseId: string): Promise<readonly DossierMaterialRow[]> {
+    const rows = await this.prisma.caseDossierMaterial.findMany({
+      where: { caseId },
+      orderBy: [{ recordedAt: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      caseId: row.caseId,
+      itemCode: row.itemCode,
+      title: row.title,
+      note: row.note,
+      stage: row.stage,
+      entrySeq: row.entrySeq,
+      evidenceJson: row.evidenceJson,
+      recordedBy: row.recordedBy,
+      recordedAt: row.recordedAt,
+    }));
+  }
+
+  async insertDossierMaterial(write: DossierMaterialWrite): Promise<void> {
+    await this.prisma.caseDossierMaterial.create({
+      data: {
+        id: write.id,
+        caseId: write.caseId,
+        itemCode: write.itemCode,
+        title: write.title,
+        note: write.note,
+        stage: write.stage,
+        entrySeq: write.entrySeq,
+        evidenceJson: write.evidenceJson,
+        recordedBy: write.recordedBy,
+        recordedAt: write.recordedAt,
+      },
+    });
+  }
+
+  async readOpenFinalizeApproval(caseId: string): Promise<FinalizeApprovalRow | null> {
+    const row = await this.prisma.caseFinalizeApproval.findFirst({
+      where: { caseId, status: { not: 'approved' } },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    });
+    return row ? this.withFinalizeContent(row) : null;
+  }
+
+  async readFinalizeApproval(approvalId: string): Promise<FinalizeApprovalRow | null> {
+    const row = await this.prisma.caseFinalizeApproval.findUnique({ where: { id: approvalId } });
+    return row ? this.withFinalizeContent(row) : null;
+  }
+
+  async saveFinalizeDraft(write: FinalizeApprovalDraftWrite): Promise<boolean> {
+    const versionNo = write.isNew ? 1 : write.expectedVersionNo + 1;
+    if (write.isNew) {
+      if (write.expectedVersionNo !== 0) return false;
+      try {
+        await this.prisma.caseFinalizeApproval.create({
+          data: {
+            id: write.approvalId,
+            caseId: write.caseId,
+            status: 'drafting',
+            currentVersionNo: 1,
+            drafterId: write.drafterId,
+            createdAt: write.at,
+            updatedAt: write.at,
+          },
+        });
+      } catch (error) {
+        if (isUniqueConflict(error)) return false;
+        throw error;
+      }
+    } else {
+      const updated = await this.prisma.caseFinalizeApproval.updateMany({
+        where: { id: write.approvalId, status: 'drafting', currentVersionNo: write.expectedVersionNo },
+        data: { currentVersionNo: versionNo, updatedAt: write.at },
+      });
+      if (updated.count === 0) return false;
+    }
+    await this.prisma.caseFinalizeApprovalVersion.create({
+      data: {
+        id: write.versionId,
+        approvalId: write.approvalId,
+        versionNo,
+        contentJson: write.contentJson,
+        createdBy: write.drafterId,
+        createdAt: write.at,
+      },
+    });
+    return true;
+  }
+
+  async applyFinalizeStep(write: FinalizeApprovalStepWrite): Promise<boolean> {
+    const data: { status: string; updatedAt: Date; approvalChainId?: string | null } = {
+      status: write.nextStatus,
+      updatedAt: write.at,
+    };
+    if (write.approvalChainId !== undefined) data.approvalChainId = write.approvalChainId;
+    const updated = await this.prisma.caseFinalizeApproval.updateMany({
+      where: { id: write.approvalId, status: write.expectedStatus },
+      data,
+    });
+    if (updated.count === 0) return false;
+    await this.prisma.caseFinalizeApprovalStep.create({
+      data: {
+        id: write.stepId,
+        approvalId: write.approvalId,
+        versionNo: write.versionNo,
+        step: write.step,
+        actorId: write.actorId,
+        opinion: write.opinion,
+        createdAt: write.at,
+      },
+    });
+    return true;
+  }
+
+  async listFinalizes(caseId: string): Promise<readonly FinalizeRecordRow[]> {
+    const rows = await this.prisma.caseFinalize.findMany({
+      where: { caseId },
+      orderBy: [{ generationNo: 'asc' }, { id: 'asc' }],
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      caseId: row.caseId,
+      approvalId: row.approvalId,
+      generationNo: row.generationNo,
+      conclusion: row.conclusion,
+      checklistJson: row.checklistJson,
+      missingReason: row.missingReason,
+      receiptDeficient: row.receiptDeficient,
+      materialsRuleId: row.materialsRuleId,
+      materialsRuleVersion: row.materialsRuleVersion,
+      exemptionsRuleId: row.exemptionsRuleId,
+      exemptionsRuleVersion: row.exemptionsRuleVersion,
+      finalizedBy: row.finalizedBy,
+      finalizedAt: row.finalizedAt,
+    }));
+  }
+
+  async insertFinalize(write: FinalizeRecordWrite): Promise<boolean> {
+    try {
+      await this.prisma.caseFinalize.create({
+        data: {
+          id: write.id,
+          caseId: write.caseId,
+          approvalId: write.approvalId,
+          generationNo: write.generationNo,
+          conclusion: write.conclusion,
+          checklistJson: write.checklistJson,
+          missingReason: write.missingReason,
+          receiptDeficient: write.receiptDeficient,
+          materialsRuleId: write.materialsRuleId,
+          materialsRuleVersion: write.materialsRuleVersion,
+          exemptionsRuleId: write.exemptionsRuleId,
+          exemptionsRuleVersion: write.exemptionsRuleVersion,
+          finalizedBy: write.finalizedBy,
+          finalizedAt: write.finalizedAt,
+        },
+      });
+      return true;
+    } catch (error) {
+      if (isUniqueConflict(error)) return false;
+      throw error;
+    }
+  }
+
+  private async withFinalizeContent(row: {
+    id: string;
+    caseId: string;
+    status: string;
+    currentVersionNo: number;
+    drafterId: string;
+    approvalChainId: string | null;
+  }): Promise<FinalizeApprovalRow> {
+    const version = row.currentVersionNo > 0
+      ? await this.prisma.caseFinalizeApprovalVersion.findUnique({
+          where: { approvalId_versionNo: { approvalId: row.id, versionNo: row.currentVersionNo } },
+        })
+      : null;
+    return {
+      id: row.id,
+      caseId: row.caseId,
+      status: row.status,
+      currentVersionNo: row.currentVersionNo,
+      drafterId: row.drafterId,
+      approvalChainId: row.approvalChainId,
+      contentJson: version?.contentJson ?? null,
+    };
   }
 
   async listDeadlineRows(caseId: string): Promise<readonly DeadlineRow[]> {

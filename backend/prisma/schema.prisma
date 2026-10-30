@@ -2127,3 +2127,97 @@ model CaseCriminalOutletStep {
   @@index([outletId])
   @@map("case_criminal_outlet_step")
 }
+
+/// 卷宗材料入卷登记（#243）。只追加；每行是一次入卷。
+/// 必需项由 dossier 规则按事件推导，不由人勾选；本表记录卷宗里实际有哪些材料。
+model CaseDossierMaterial {
+  id           String   @id
+  caseId       String   @map("case_id")
+  /// 规程 13.1 的项号 1–21
+  itemCode     Int      @map("item_code")
+  title        String
+  note         String?
+  /// 入卷时案件所在环节与进入次序号；该实例失效后材料标「非当前」。
+  stage        String?
+  entrySeq     Int?     @map("entry_seq")
+  /// 仅送达项（20）使用：Q27 的 A／B 证据。
+  evidenceJson String?  @map("evidence_json")
+  recordedBy   String   @map("recorded_by")
+  recordedAt   DateTime @db.Timestamptz(6) @map("recorded_at")
+  createdAt    DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId, itemCode])
+  @@map("case_dossier_material")
+}
+
+/// 归档（定型）呈批（#243）。拟制、提交、审核、批准走既有 doc.* 操作码。
+/// 一案同时至多一张未批准呈批；批准后落 T27 与定型记录。
+model CaseFinalizeApproval {
+  id               String   @id
+  caseId           String   @map("case_id")
+  /// drafting | pending_review | pending_approval | approved
+  status           String   @default("drafting")
+  currentVersionNo Int      @default(0) @map("current_version_no")
+  drafterId        String   @map("drafter_id")
+  approvalChainId  String?  @map("approval_chain_id")
+  createdAt        DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt        DateTime @default(now()) @db.Timestamptz(6) @map("updated_at")
+
+  @@index([caseId])
+  @@map("case_finalize_approval")
+}
+
+/// 归档呈批正文版本（#243）。只追加。
+model CaseFinalizeApprovalVersion {
+  id          String   @id
+  approvalId  String   @map("approval_id")
+  versionNo   Int      @map("version_no")
+  contentJson String   @map("content_json")
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @db.Timestamptz(6) @map("created_at")
+
+  @@unique([approvalId, versionNo])
+  @@index([approvalId])
+  @@map("case_finalize_approval_version")
+}
+
+/// 归档呈批步骤（#243）。只追加。
+model CaseFinalizeApprovalStep {
+  id         String   @id
+  approvalId String   @map("approval_id")
+  versionNo  Int      @map("version_no")
+  /// submit | review | approve
+  step       String
+  actorId    String   @map("actor_id")
+  opinion    String?
+  createdAt  DateTime @db.Timestamptz(6) @map("created_at")
+
+  @@index([approvalId])
+  @@map("case_finalize_approval_step")
+}
+
+/// 定型记录（#243）。每次定型一个归档代次，只追加。清单与规则版本随代次冻结。
+model CaseFinalize {
+  id                  String   @id
+  caseId              String   @map("case_id")
+  approvalId          String   @unique @map("approval_id")
+  generationNo        Int      @map("generation_no")
+  /// complete 完整 | approved-missing 经批准缺项
+  conclusion          String
+  /// 冻结的完整性清单（每项一行）。
+  checklistJson       String   @map("checklist_json")
+  /// 缺件或回证缺失时主办写明的理由；随卷保存。
+  missingReason       String?  @map("missing_reason")
+  receiptDeficient    Boolean  @default(false) @map("receipt_deficient")
+  materialsRuleId     String   @map("materials_rule_id")
+  materialsRuleVersion String  @map("materials_rule_version")
+  exemptionsRuleId    String   @map("exemptions_rule_id")
+  exemptionsRuleVersion String @map("exemptions_rule_version")
+  finalizedBy         String   @map("finalized_by")
+  finalizedAt         DateTime @db.Timestamptz(6) @map("finalized_at")
+  createdAt           DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([caseId, generationNo])
+  @@index([caseId])
+  @@map("case_finalize")
+}

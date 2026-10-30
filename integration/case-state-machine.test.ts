@@ -362,12 +362,12 @@ describe('#235 案件状态机', () => {
     expect(trail).toEqual([expect.objectContaining({ outcome: 'failed', reason: 'invalid-state' })]);
   });
 
-  it('终态业务写 409 X12；白名单上的 T27 仍是未启用；阅读放行', async () => {
+  it('终态业务写 409 X12；白名单上的 T27 须经定型服务；阅读放行', async () => {
     const { caseId } = await fileCase(['赵六']);
     await cloned.prisma.caseRecord.update({ where: { id: caseId }, data: { status: 'closed' } });
     const t27 = await postJson(`/api/cases/${caseId}/transitions`, 'P-APPROVE-HQ', { transitionId: 'T27' });
     expect(t27.status).toBe(409);
-    expect(t27.body.reason).toBe('transition-disabled');
+    expect(t27.body.reason).toBe('procedure-required');
     const rowAfterT27 = await cloned.prisma.caseRecord.findUniqueOrThrow({ where: { id: caseId } });
     expect(rowAfterT27.status).toBe('closed');
 

@@ -11,6 +11,7 @@
 // #269 启用 T10a、T10b（告知前法制审核进出 E07）。
 // #248 启用 T32（重新告知：撤销原告知，E05 再进入一次）。
 // #242 启用 T29（涉刑、党纪政务移送批准：当前环节不变，记侧链）。
+// #243 启用 T27（归档审批通过：已结案或已撤案 → 已定型）。T27 由定型服务在批准事务里落库。
 // T09a、T10c、T12、T14a、T16a、T30 仍是 branch 或未启用边，由服务层解析或由后续票接入。
 
 import { GUARD_AUTHORITIES, type GuardAuthority, type GuardResult } from './guard.ts';
@@ -134,6 +135,7 @@ export const TRANSITION_GUARDS = [
   'notice',
   'legal-review',
   'transfer',
+  'dossier',
   'none',
 ] as const;
 export type TransitionGuard = (typeof TRANSITION_GUARDS)[number];
@@ -265,7 +267,10 @@ export const TRANSITIONS: readonly TransitionEdge[] = [
     { kind: 'main', status: 'closed' },
     '结案呈批批准：处罚支由 E10 经执行记载进入 E11 后结案；不予处罚支由 E10 直接结案。已结案即办结，不等定型',
   ),
-  edge('T27', main('closed', 'withdrawn'), { kind: 'main', status: 'finalized' }, '归档审批通过：已定型'),
+  edge('T27', main('closed', 'withdrawn'), { kind: 'main', status: 'finalized' }, '归档审批通过：已定型', {
+    enabled: true,
+    guard: 'dossier',
+  }),
   edge('T28', main('finalized'), { kind: 'main', status: 'finalized' }, '受控重开后再定型（主干不启用）'),
   edge('T29', { kind: 'span', start: 'E02', end: 'E11' }, { kind: 'same' }, '涉刑或党纪政务移送：当前环节不变', {
     enabled: true,
@@ -306,7 +311,7 @@ export function stageIndex(code: string): number {
   return (CASE_STAGE_CODES as readonly string[]).indexOf(code);
 }
 
-/** X12 可登记白名单。阅读、导出本票放行；T27 与结案后回证只登记，由 #243、#242 启用。 */
+/** X12 可登记白名单。阅读、导出本票放行；T27 由 #243 启用，结案后回证由 #242 启用。 */
 export const X12_WHITELIST = [
   { id: 'read', kind: 'read', basis: '终态后仍可阅读（#235）' },
   { id: 'export', kind: 'read', basis: '终态后仍可导出（#235）' },

@@ -29,8 +29,10 @@ import { clueCenterLoader } from './clue/center';
 import { clueRegisterLoader } from './clue/registration';
 import ClueCenterPage from './pages/ClueCenterPage';
 import CaseDeadlinePage from './case/CaseDeadlinePage';
+import CaseFinalizePage from './case/CaseFinalizePage';
 import CaseTransferPage from './case/CaseTransferPage';
 import { deadlineLoader } from './case/deadline';
+import { finalizeLoader } from './case/finalize';
 import { transferLoader } from './case/transfer';
 import CaseInvestigationPage from './case/CaseInvestigationPage';
 import { investigationLoader } from './case/investigation';
@@ -131,6 +133,12 @@ export function appRoutes(store: RouterStore): RouteObject[] {
                   path: 'case/:caseId/transfer',
                   loader: transferLoader(store),
                   element: <CaseTransferPage />,
+                },
+                {
+                  id: 'case-finalize',
+                  path: 'case/:caseId/finalize',
+                  loader: finalizeLoader(store),
+                  element: <CaseFinalizePage />,
                 },
                 { id: 'case-onsite', path: 'case/onsite-check', element: <PlannedCenterPage primary="case" /> },
                 { id: 'case-trial', path: 'case/trial', element: <PlannedCenterPage primary="case" /> },
