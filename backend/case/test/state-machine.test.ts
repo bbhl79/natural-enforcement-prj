@@ -61,11 +61,11 @@ describe('迁移表常量', () => {
     }
   });
 
-  it('启用 T01、T02、调查收尾 T03 至 T07、审理 T08／T09、告知与听证 T10／T11／T13 至 T17、告知前法审 T10a／T10b、移送 T29、重新告知 T32、改派 T33 与 T34，且已启用的边声明了守卫', () => {
+  it('启用 T01、T02、调查收尾 T03 至 T07、审理 T08／T09、告知与听证 T10／T11／T13 至 T17、告知前法审 T10a／T10b、定型 T27、移送 T29、重新告知 T32、改派 T33 与 T34，且已启用的边声明了守卫', () => {
     const enabled = TRANSITIONS.filter((item) => item.enabled).map((item) => item.id);
     expect(enabled).toEqual([
       'T01', 'T02', 'T03', 'T04', 'T05', 'T06', 'T07', 'T08', 'T09',
-      'T10', 'T10a', 'T10b', 'T11', 'T13', 'T14', 'T15', 'T16', 'T17', 'T29', 'T32', 'T33', 'T34',
+      'T10', 'T10a', 'T10b', 'T11', 'T13', 'T14', 'T15', 'T16', 'T17', 'T27', 'T29', 'T32', 'T33', 'T34',
     ]);
     for (const item of TRANSITIONS) {
       if (!item.enabled) continue;
@@ -218,8 +218,16 @@ describe('引擎 409 分支', () => {
       operation: { kind: 'transition', transitionId: 'T27' },
       subject: subject({ ...openCase, mainStatus: 'closed' }),
     });
-    expect(archive.ok).toBe(false);
-    if (!archive.ok && archive.level === 'block') expect(archive.reason).toBe('transition-disabled');
+    expect(archive.ok).toBe(true);
+    if (!archive.ok) throw new Error('已结案的归档审批应放行');
+    expect(archive.effects.mainStatus).toBe('finalized');
+
+    const archiveTwice = decideTransition({
+      operation: { kind: 'transition', transitionId: 'T27' },
+      subject: subject({ ...openCase, mainStatus: 'finalized' }),
+    });
+    expect(archiveTwice.ok).toBe(false);
+    if (!archiveTwice.ok && archiveTwice.level === 'block') expect(archiveTwice.reason).toBe('invalid-state');
 
     const supervisor = decideTransition({
       operation: { kind: 'transition', transitionId: 'T01' },
