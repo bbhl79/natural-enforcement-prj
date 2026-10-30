@@ -22,6 +22,8 @@ import type {
   CaseValidityFailedReason,
   CaseTransferAction,
   CaseTransferFailedReason,
+  CaseFinalizeAction,
+  CaseFinalizeFailedReason,
   CaseNoticeAction,
   CaseNoticeFailedReason,
   CaseInvestigationAction,
@@ -362,6 +364,9 @@ export type AuditAppend =
   // 案件阶段三类移送（#242）。成功与失败都记同一动作。
   | (AuditParties & { action: CaseTransferAction })
   | (AuditParties & { action: CaseTransferAction; outcome: 'failed'; reason: CaseTransferFailedReason })
+  // 定型（#243）：材料入卷与归档审批。成功与失败都记同一动作。
+  | (AuditParties & { action: CaseFinalizeAction })
+  | (AuditParties & { action: CaseFinalizeAction; outcome: 'failed'; reason: CaseFinalizeFailedReason })
 ;
 
 /**

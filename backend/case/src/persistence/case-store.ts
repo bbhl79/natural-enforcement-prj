@@ -1094,6 +1094,22 @@ export interface CaseStore {
   insertCriminalOutlet(write: CriminalOutletWrite): Promise<void>;
   /** 推进人工出口一步。状态不符返回 false。 */
   applyCriminalOutletStep(write: CriminalOutletStepWrite): Promise<boolean>;
+  /** 本案全部卷宗材料入卷登记（时间升序，只追加）。 */
+  listDossierMaterials(caseId: string): Promise<readonly DossierMaterialRow[]>;
+  /** 追加一条卷宗材料入卷登记。 */
+  insertDossierMaterial(write: DossierMaterialWrite): Promise<void>;
+  /** 本案未批准的归档呈批；没有为 null。 */
+  readOpenFinalizeApproval(caseId: string): Promise<FinalizeApprovalRow | null>;
+  /** 按主键读归档呈批。 */
+  readFinalizeApproval(approvalId: string): Promise<FinalizeApprovalRow | null>;
+  /** 保存归档呈批拟制稿。状态或版本号不符返回 false。 */
+  saveFinalizeDraft(write: FinalizeApprovalDraftWrite): Promise<boolean>;
+  /** 推进归档呈批一步。状态不符返回 false。 */
+  applyFinalizeStep(write: FinalizeApprovalStepWrite): Promise<boolean>;
+  /** 本案全部定型记录（代次升序）。 */
+  listFinalizes(caseId: string): Promise<readonly FinalizeRecordRow[]>;
+  /** 追加一条定型记录。同一呈批或同一代次已存在时返回 false。 */
+  insertFinalize(write: FinalizeRecordWrite): Promise<boolean>;
 }
 
 /** 违法记录。作废只改状态和作废字段，不删行。 */
@@ -1570,3 +1586,78 @@ export interface ValidityReviewRow {
 }
 
 export type ValidityReviewWrite = Omit<ValidityReviewRow, 'createdAt'>;
+
+/** 卷宗材料入卷登记的一行（#243）。只追加。 */
+export interface DossierMaterialRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly itemCode: number;
+  readonly title: string;
+  readonly note: string | null;
+  readonly stage: string | null;
+  readonly entrySeq: number | null;
+  readonly evidenceJson: string | null;
+  readonly recordedBy: string;
+  readonly recordedAt: Date;
+}
+
+export type DossierMaterialWrite = DossierMaterialRow;
+
+/** 归档呈批表头，带当前版本正文（#243）。 */
+export interface FinalizeApprovalRow {
+  readonly id: string;
+  readonly caseId: string;
+  /** drafting | pending_review | pending_approval | approved */
+  readonly status: string;
+  readonly currentVersionNo: number;
+  readonly drafterId: string;
+  readonly approvalChainId: string | null;
+  readonly contentJson: string | null;
+}
+
+export interface FinalizeApprovalDraftWrite {
+  readonly approvalId: string;
+  readonly caseId: string;
+  readonly drafterId: string;
+  /** true＝新建表头；false＝在既有拟制中的表头上追加版本。 */
+  readonly isNew: boolean;
+  readonly expectedVersionNo: number;
+  readonly versionId: string;
+  readonly contentJson: string;
+  readonly at: Date;
+}
+
+export interface FinalizeApprovalStepWrite {
+  readonly approvalId: string;
+  readonly expectedStatus: string;
+  readonly nextStatus: string;
+  /** undefined 不改；null 清空；字符串写入。 */
+  readonly approvalChainId?: string | null;
+  readonly stepId: string;
+  readonly step: string;
+  readonly versionNo: number;
+  readonly actorId: string;
+  readonly opinion: string | null;
+  readonly at: Date;
+}
+
+/** 定型记录的一行（#243）。每个归档代次一行，只追加。 */
+export interface FinalizeRecordRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly approvalId: string;
+  readonly generationNo: number;
+  /** complete | approved-missing */
+  readonly conclusion: string;
+  readonly checklistJson: string;
+  readonly missingReason: string | null;
+  readonly receiptDeficient: boolean;
+  readonly materialsRuleId: string;
+  readonly materialsRuleVersion: string;
+  readonly exemptionsRuleId: string;
+  readonly exemptionsRuleVersion: string;
+  readonly finalizedBy: string;
+  readonly finalizedAt: Date;
+}
+
+export type FinalizeRecordWrite = FinalizeRecordRow;

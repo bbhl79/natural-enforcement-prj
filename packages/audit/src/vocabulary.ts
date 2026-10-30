@@ -161,6 +161,12 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'case.criminal-outlet-submitted',
   'case.criminal-outlet-approved',
   'case.closeout-gate-checked',
+  // 定型（#243）。材料入卷与归档审批都记这些动作。
+  'case.dossier-material-recorded',
+  'case.finalize-drafted',
+  'case.finalize-submitted',
+  'case.finalize-reviewed',
+  'case.finalize-approved',
 ] as const;
 
 /**
@@ -1121,6 +1127,36 @@ export const CASE_TRANSFER_ACTIONS = [
 ] as const;
 export type CaseTransferAction = (typeof CASE_TRANSFER_ACTIONS)[number];
 
+/** 定型（E13／T27）被拒（#243）：材料入卷、归档审批与批准共用这一张原因表。 */
+export const CASE_FINALIZE_FAILED_REASONS = [
+  'invalid-state',
+  'invalid-content',
+  'invalid-item',
+  'invalid-delivery-evidence',
+  'materials-incomplete',
+  'receipt-missing',
+  'not-handler',
+  'not-drafter',
+  'X03',
+  'X12',
+  'X17',
+  'X18',
+  'transition-disabled',
+  'unknown-transition',
+  'advisory',
+  'concurrent-change',
+] as const;
+export type CaseFinalizeFailedReason = (typeof CASE_FINALIZE_FAILED_REASONS)[number];
+
+export const CASE_FINALIZE_ACTIONS = [
+  'case.dossier-material-recorded',
+  'case.finalize-drafted',
+  'case.finalize-submitted',
+  'case.finalize-reviewed',
+  'case.finalize-approved',
+] as const;
+export type CaseFinalizeAction = (typeof CASE_FINALIZE_ACTIONS)[number];
+
 /** 新旧比对判定被拒（#271）。提交缺判定、批准比对过时、材料不合规共用这一张原因表。 */
 export const CASE_COMPARISON_FAILED_REASONS = [
   'missing-judgment',
@@ -1337,5 +1373,11 @@ export const AUDIT_DETAIL_ACTIONS = [
   'case.criminal-outlet-submitted',
   'case.criminal-outlet-approved',
   'case.closeout-gate-checked',
+  // 定型（#243）：材料项号、审批步骤与归档代次的快照。
+  'case.dossier-material-recorded',
+  'case.finalize-drafted',
+  'case.finalize-submitted',
+  'case.finalize-reviewed',
+  'case.finalize-approved',
 ] as const;
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];
