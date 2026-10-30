@@ -2221,3 +2221,150 @@ model CaseFinalize {
   @@index([caseId])
   @@map("case_finalize")
 }
+
+/// 决定呈批（E09／T23，#270）。拟制、提交、审核、批准走既有 doc.* 操作码。
+/// 一案同时至多一张未批准的决定呈批；批准后落 T23 与决定书记载。
+model CaseDecisionApproval {
+  id               String   @id
+  caseId           String   @map("case_id")
+  /// drafting | pending_review | pending_approval | approved
+  status           String   @default("drafting")
+  currentVersionNo Int      @default(0) @map("current_version_no")
+  drafterId        String   @map("drafter_id")
+  approvalChainId  String?  @map("approval_chain_id")
+  createdAt        DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt        DateTime @default(now()) @db.Timestamptz(6) @map("updated_at")
+
+  @@index([caseId])
+  @@map("case_decision_approval")
+}
+
+/// 决定呈批正文版本（#270）。只追加。
+model CaseDecisionApprovalVersion {
+  id          String   @id
+  approvalId  String   @map("approval_id")
+  versionNo   Int      @map("version_no")
+  contentJson String   @map("content_json")
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([approvalId, versionNo])
+  @@index([approvalId])
+  @@map("case_decision_approval_version")
+}
+
+/// 决定呈批步骤（#270）。只追加。
+model CaseDecisionApprovalStep {
+  id         String   @id
+  approvalId String   @map("approval_id")
+  versionNo  Int      @map("version_no")
+  /// submit | review | approve
+  step       String
+  actorId    String   @map("actor_id")
+  opinion    String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([approvalId])
+  @@map("case_decision_approval_step")
+}
+
+/// 送达记载（T24，#270）。只追加。Q27：回证，或公告原因经过加公告材料。
+model CaseDelivery {
+  id                        String   @id
+  caseId                    String   @map("case_id")
+  /// receipt | announcement
+  kind                      String
+  /// penalty-decision | no-penalty-decision | order-correction-notice
+  documentKind              String?  @map("document_kind")
+  deliveredOn               String   @map("delivered_on")
+  deliverersJson            String   @default("[]") @map("deliverers_json")
+  reasonRecord              String?  @map("reason_record")
+  announcementMaterialsJson String   @default("[]") @map("announcement_materials_json")
+  note                      String?
+  decisionApprovalId        String?  @map("decision_approval_id")
+  recordedBy                String   @map("recorded_by")
+  recordedAt                DateTime @db.Timestamptz(6) @map("recorded_at")
+  createdAt                 DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_delivery")
+}
+
+/// 执行记载（T25，#270）。只追加。「已申请法院强制执行」附申请书；「履行完毕」附缴款凭证等。
+model CaseExecutionRecord {
+  id              String   @id
+  caseId          String   @map("case_id")
+  /// court-enforcement | fulfilled | other
+  kind            String
+  note            String?
+  attachmentsJson String   @default("[]") @map("attachments_json")
+  recordedBy      String   @map("recorded_by")
+  recordedAt      DateTime @db.Timestamptz(6) @map("recorded_at")
+  createdAt       DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_execution_record")
+}
+
+/// 结案呈批（T26，#270）。批准即办结，不等定型。
+model CaseClosureApproval {
+  id               String   @id
+  caseId           String   @map("case_id")
+  /// drafting | pending_review | pending_approval | approved
+  status           String   @default("drafting")
+  currentVersionNo Int      @default(0) @map("current_version_no")
+  drafterId        String   @map("drafter_id")
+  approvalChainId  String?  @map("approval_chain_id")
+  createdAt        DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+  updatedAt        DateTime @default(now()) @db.Timestamptz(6) @map("updated_at")
+
+  @@index([caseId])
+  @@map("case_closure_approval")
+}
+
+/// 结案呈批正文版本（#270）。只追加。
+model CaseClosureApprovalVersion {
+  id          String   @id
+  approvalId  String   @map("approval_id")
+  versionNo   Int      @map("version_no")
+  contentJson String   @map("content_json")
+  createdBy   String   @map("created_by")
+  createdAt   DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@unique([approvalId, versionNo])
+  @@index([approvalId])
+  @@map("case_closure_approval_version")
+}
+
+/// 结案呈批步骤（#270）。只追加。
+model CaseClosureApprovalStep {
+  id         String   @id
+  approvalId String   @map("approval_id")
+  versionNo  Int      @map("version_no")
+  /// submit | review | approve
+  step       String
+  actorId    String   @map("actor_id")
+  opinion    String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([approvalId])
+  @@map("case_closure_approval_step")
+}
+
+/// 结案记录（T26，#270）。一案一行，只追加。清单与规则版本随结案冻结。
+model CaseClosure {
+  id                   String   @id
+  caseId               String   @unique @map("case_id")
+  approvalId           String   @unique @map("approval_id")
+  /// penalty 处罚支 | no-penalty 不予处罚支
+  branch               String
+  checklistJson        String   @map("checklist_json")
+  materialsRuleId      String   @map("materials_rule_id")
+  materialsRuleVersion String   @map("materials_rule_version")
+  closedBy             String   @map("closed_by")
+  closedAt             DateTime @db.Timestamptz(6) @map("closed_at")
+  createdAt            DateTime @default(now()) @db.Timestamptz(6) @map("created_at")
+
+  @@index([caseId])
+  @@map("case_closure")
+}

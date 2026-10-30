@@ -1110,6 +1110,36 @@ export interface CaseStore {
   listFinalizes(caseId: string): Promise<readonly FinalizeRecordRow[]>;
   /** 追加一条定型记录。同一呈批或同一代次已存在时返回 false。 */
   insertFinalize(write: FinalizeRecordWrite): Promise<boolean>;
+  /** 本案未批准的决定呈批；没有为 null。 */
+  readOpenDecisionApproval(caseId: string): Promise<DecisionApprovalRow | null>;
+  /** 按主键读决定呈批。 */
+  readDecisionApproval(approvalId: string): Promise<DecisionApprovalRow | null>;
+  /** 本案最近一张已批准的决定呈批；没有为 null。 */
+  readApprovedDecisionApproval(caseId: string): Promise<DecisionApprovalRow | null>;
+  /** 保存决定呈批拟制稿。状态或版本号不符返回 false。 */
+  saveDecisionDraft(write: DecisionApprovalDraftWrite): Promise<boolean>;
+  /** 推进决定呈批一步。状态不符返回 false。 */
+  applyDecisionStep(write: DecisionApprovalStepWrite): Promise<boolean>;
+  /** 本案全部送达记载（时间升序）。 */
+  listDeliveries(caseId: string): Promise<readonly DeliveryRow[]>;
+  /** 追加一条送达记载。 */
+  insertDelivery(write: DeliveryWrite): Promise<void>;
+  /** 本案全部执行记载（时间升序）。 */
+  listExecutionRecords(caseId: string): Promise<readonly ExecutionRecordRow[]>;
+  /** 追加一条执行记载。 */
+  insertExecutionRecord(write: ExecutionRecordWrite): Promise<void>;
+  /** 本案未批准的结案呈批；没有为 null。 */
+  readOpenClosureApproval(caseId: string): Promise<ClosureApprovalRow | null>;
+  /** 按主键读结案呈批。 */
+  readClosureApproval(approvalId: string): Promise<ClosureApprovalRow | null>;
+  /** 保存结案呈批拟制稿。状态或版本号不符返回 false。 */
+  saveClosureDraft(write: ClosureApprovalDraftWrite): Promise<boolean>;
+  /** 推进结案呈批一步。状态不符返回 false。 */
+  applyClosureStep(write: ClosureApprovalStepWrite): Promise<boolean>;
+  /** 本案结案记录；没有为 null。 */
+  readClosure(caseId: string): Promise<ClosureRecordRow | null>;
+  /** 追加一条结案记录。同一呈批已存在时返回 false。 */
+  insertClosure(write: ClosureRecordWrite): Promise<boolean>;
 }
 
 /** 违法记录。作废只改状态和作废字段，不删行。 */
@@ -1661,3 +1691,127 @@ export interface FinalizeRecordRow {
 }
 
 export type FinalizeRecordWrite = FinalizeRecordRow;
+
+/** 决定呈批表头，带当前版本正文（#270）。 */
+export interface DecisionApprovalRow {
+  readonly id: string;
+  readonly caseId: string;
+  /** drafting | pending_review | pending_approval | approved */
+  readonly status: string;
+  readonly currentVersionNo: number;
+  readonly drafterId: string;
+  readonly approvalChainId: string | null;
+  readonly contentJson: string | null;
+}
+
+export interface DecisionApprovalDraftWrite {
+  readonly approvalId: string;
+  readonly caseId: string;
+  readonly drafterId: string;
+  readonly isNew: boolean;
+  readonly expectedVersionNo: number;
+  readonly versionId: string;
+  readonly contentJson: string;
+  readonly at: Date;
+}
+
+export interface DecisionApprovalStepWrite {
+  readonly approvalId: string;
+  readonly expectedStatus: string;
+  readonly nextStatus: string;
+  readonly approvalChainId?: string | null;
+  readonly stepId: string;
+  /** submit | review | approve */
+  readonly step: string;
+  readonly versionNo: number;
+  readonly actorId: string;
+  readonly opinion: string | null;
+  readonly at: Date;
+}
+
+/** 送达记载（T24， #270）。只追加。 */
+export interface DeliveryRow {
+  readonly id: string;
+  readonly caseId: string;
+  /** receipt | announcement */
+  readonly kind: string;
+  /** penalty-decision | no-penalty-decision | order-correction-notice */
+  readonly documentKind: string | null;
+  readonly deliveredOn: string;
+  readonly deliverers: readonly string[];
+  readonly reasonRecord: string | null;
+  readonly announcementMaterials: readonly string[];
+  readonly note: string | null;
+  readonly decisionApprovalId: string | null;
+  readonly recordedBy: string;
+  readonly recordedAt: Date;
+}
+
+export type DeliveryWrite = DeliveryRow;
+
+/** 执行记载（T25， #270）。只追加。 */
+export interface ExecutionRecordRow {
+  readonly id: string;
+  readonly caseId: string;
+  /** court-enforcement | fulfilled | other */
+  readonly kind: string;
+  readonly note: string | null;
+  readonly attachments: readonly string[];
+  readonly recordedBy: string;
+  readonly recordedAt: Date;
+}
+
+export type ExecutionRecordWrite = ExecutionRecordRow;
+
+/** 结案呈批表头，带当前版本正文（#270）。 */
+export interface ClosureApprovalRow {
+  readonly id: string;
+  readonly caseId: string;
+  /** drafting | pending_review | pending_approval | approved */
+  readonly status: string;
+  readonly currentVersionNo: number;
+  readonly drafterId: string;
+  readonly approvalChainId: string | null;
+  readonly contentJson: string | null;
+}
+
+export interface ClosureApprovalDraftWrite {
+  readonly approvalId: string;
+  readonly caseId: string;
+  readonly drafterId: string;
+  readonly isNew: boolean;
+  readonly expectedVersionNo: number;
+  readonly versionId: string;
+  readonly contentJson: string;
+  readonly at: Date;
+}
+
+export interface ClosureApprovalStepWrite {
+  readonly approvalId: string;
+  readonly expectedStatus: string;
+  readonly nextStatus: string;
+  readonly approvalChainId?: string | null;
+  readonly stepId: string;
+  /** submit | review | approve */
+  readonly step: string;
+  readonly versionNo: number;
+  readonly actorId: string;
+  readonly opinion: string | null;
+  readonly at: Date;
+}
+
+/** 结案记录（T26， #270）。一案一行，只追加。 */
+export interface ClosureRecordRow {
+  readonly id: string;
+  readonly caseId: string;
+  readonly approvalId: string;
+  /** penalty | no-penalty */
+  readonly branch: string;
+  readonly checklistJson: string;
+  readonly materialsRuleId: string;
+  readonly materialsRuleVersion: string;
+  readonly closedBy: string;
+  readonly closedAt: Date;
+}
+
+export type ClosureRecordWrite = ClosureRecordRow;
