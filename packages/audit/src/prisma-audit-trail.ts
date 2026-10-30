@@ -177,6 +177,7 @@ const FAILED_REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ),
   ...CASE_VALIDITY_ACTIONS.map(
     (action) => [action, new Set<string>(CASE_VALIDITY_FAILED_REASONS)] as const,
+  ),
   ...CASE_TRANSFER_ACTIONS.map(
     (action) => [action, new Set<string>(CASE_TRANSFER_FAILED_REASONS)] as const,
   ),
