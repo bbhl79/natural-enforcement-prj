@@ -12,6 +12,8 @@
 // #248 启用 T32（重新告知：撤销原告知，E05 再进入一次）。
 // #242 启用 T29（涉刑、党纪政务移送批准：当前环节不变，记侧链）。
 // #243 启用 T27（归档审批通过：已结案或已撤案 → 已定型）。T27 由定型服务在批准事务里落库。
+// #270 启用 T23（领导审批通过）、T24（送达完成）、T25（执行记载）、T26（结案）。
+// 四条边只由决定／结案服务在各自事务里落库；通用迁移入口拒绝直接套用。
 // T09a、T10c、T12、T14a、T16a、T30 仍是 branch 或未启用边，由服务层解析或由后续票接入。
 
 import { GUARD_AUTHORITIES, type GuardAuthority, type GuardResult } from './guard.ts';
@@ -136,6 +138,10 @@ export const TRANSITION_GUARDS = [
   'legal-review',
   'transfer',
   'dossier',
+  'decision',
+  'delivery',
+  'execution',
+  'closure',
   'none',
 ] as const;
 export type TransitionGuard = (typeof TRANSITION_GUARDS)[number];
@@ -257,15 +263,28 @@ export const TRANSITIONS: readonly TransitionEdge[] = [
   edge('T20', stage('E07'), { kind: 'branch', note: '须集体讨论的进入 E08，否则进入领导审批' }, '法制审核通过'),
   edge('T21', stage('E07'), { kind: 'branch', note: '决定审批链作废，E09 回到拟制中；视情况回 E04 或提请 E08' }, '法制审核不通过'),
   edge('T22', stage('E08'), { kind: 'branch', note: '回 E07 再进入一次，或进入领导审批' }, '集体讨论记录入卷'),
-  edge('T23', { kind: 'marker', marker: 'leadership' }, enter('E09', 'completed'), '领导审批通过，决定书生效'),
-  edge('T24', stage('E09'), enter('E10', 'completed'), '上传送达回证，或记录公告送达的原因和经过并附公告材料，送达完成'),
-  edge('T25', stage('E10'), enter('E11', 'drafting'), '处罚案件执行记载'),
-  // 处罚支：E10 经执行记载进入 E11 后结案。不予处罚支：E10 直接结案。边仍关闭。
+  edge('T23', { kind: 'marker', marker: 'leadership' }, enter('E09', 'completed'), '领导审批通过，决定书生效', {
+    enabled: true,
+    guard: 'decision',
+  }),
+  edge('T24', stage('E09'), enter('E10', 'completed'), '上传送达回证，或记录公告送达的原因和经过并附公告材料，送达完成', {
+    enabled: true,
+    guard: 'delivery',
+  }),
+  edge('T25', stage('E10'), enter('E11', 'drafting'), '处罚案件执行记载', {
+    enabled: true,
+    guard: 'execution',
+  }),
+  // 处罚支：E10 经执行记载进入 E11 后结案。不予处罚支：E10 直接结案。
   edge(
     'T26',
     [stage('E10'), stage('E11')],
     { kind: 'main', status: 'closed' },
     '结案呈批批准：处罚支由 E10 经执行记载进入 E11 后结案；不予处罚支由 E10 直接结案。已结案即办结，不等定型',
+    {
+      enabled: true,
+      guard: 'closure',
+    },
   ),
   edge('T27', main('closed', 'withdrawn'), { kind: 'main', status: 'finalized' }, '归档审批通过：已定型', {
     enabled: true,
