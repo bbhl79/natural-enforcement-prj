@@ -198,14 +198,16 @@ export class InvestigationService {
       readonly startedOn?: unknown;
       readonly endedOn?: unknown;
       readonly recognition?: unknown;
+      readonly confirmedRuleKeys?: readonly string[];
+      readonly confirmReasons?: Readonly<Record<string, string>>;
     },
   ): Promise<InvestigationHttpOutcome> {
     const prepared = await this.prepare(actor, caseId, DRAFT_OPCODE, 'case.violation-recorded', true);
     if ('status' in prepared) return prepared;
     const terminal = await this.terminalHit(prepared, 'case.violation-recorded', DRAFT_OPCODE);
     if (terminal) return terminal;
-    const stageHit = await this.requireInvestigation(prepared, 'case.violation-recorded', DRAFT_OPCODE);
-    if (stageHit) return stageHit;
+    const stage = await this.requireInvestigation(prepared, 'case.violation-recorded', DRAFT_OPCODE, input);
+    if ('status' in stage) return stage;
     const description = text(input.behaviorDescription);
     const parties = stringList(input.parties);
     const startedOn = parseCalendarDay(input.startedOn);
@@ -233,11 +235,21 @@ export class InvestigationService {
         createdBy: actor.personnelId,
         createdAt: at,
       });
+      const trailParties = this.parties(prepared, caseId, DRAFT_OPCODE);
       await tx.audit.append({
         action: 'case.violation-recorded',
-        ...this.parties(prepared, caseId, DRAFT_OPCODE),
+        ...trailParties,
         detail: JSON.stringify({ caseId, recordId: id, recognition }),
       });
+      if (stage.confirmation) {
+        await appendRuleConfirmation(tx.audit, {
+          parties: trailParties,
+          confirmation: stage.confirmation,
+          at,
+          step: 'case.violation-recorded',
+          confirmReasons: input.confirmReasons,
+        });
+      }
       return { status: 200 as const, body: { result: 'violation-recorded', id, caseId, status: 'active' } };
     });
   }
@@ -303,14 +315,16 @@ export class InvestigationService {
       readonly interviewee?: unknown;
       readonly officerIds?: unknown;
       readonly attachmentName?: unknown;
+      readonly confirmedRuleKeys?: readonly string[];
+      readonly confirmReasons?: Readonly<Record<string, string>>;
     },
   ): Promise<InvestigationHttpOutcome> {
     const prepared = await this.prepare(actor, caseId, DRAFT_OPCODE, 'case.inquiry-recorded', true);
     if ('status' in prepared) return prepared;
     const terminal = await this.terminalHit(prepared, 'case.inquiry-recorded', DRAFT_OPCODE);
     if (terminal) return terminal;
-    const stageHit = await this.requireInvestigation(prepared, 'case.inquiry-recorded', DRAFT_OPCODE);
-    if (stageHit) return stageHit;
+    const stage = await this.requireInvestigation(prepared, 'case.inquiry-recorded', DRAFT_OPCODE, input);
+    if ('status' in stage) return stage;
     const place = text(input.place);
     const interviewee = text(input.interviewee);
     const attachmentName = text(input.attachmentName);
@@ -349,11 +363,21 @@ export class InvestigationService {
         createdBy: actor.personnelId,
         createdAt: at,
       });
+      const trailParties = this.parties(prepared, caseId, DRAFT_OPCODE);
       await tx.audit.append({
         action: 'case.inquiry-recorded',
-        ...this.parties(prepared, caseId, DRAFT_OPCODE),
+        ...trailParties,
         detail: JSON.stringify({ caseId, recordId: id, officerCount: officers.officerIds.length }),
       });
+      if (stage.confirmation) {
+        await appendRuleConfirmation(tx.audit, {
+          parties: trailParties,
+          confirmation: stage.confirmation,
+          at,
+          step: 'case.inquiry-recorded',
+          confirmReasons: input.confirmReasons,
+        });
+      }
       return { status: 200 as const, body: { result: 'inquiry-recorded', id, caseId } };
     });
   }
@@ -361,14 +385,19 @@ export class InvestigationService {
   async saveNotice(
     actor: ActorRef,
     caseId: string,
-    input: { readonly occasion?: unknown; readonly note?: unknown },
+    input: {
+      readonly occasion?: unknown;
+      readonly note?: unknown;
+      readonly confirmedRuleKeys?: readonly string[];
+      readonly confirmReasons?: Readonly<Record<string, string>>;
+    },
   ): Promise<InvestigationHttpOutcome> {
     const prepared = await this.prepare(actor, caseId, DRAFT_OPCODE, 'case.party-notice-recorded', true);
     if ('status' in prepared) return prepared;
     const terminal = await this.terminalHit(prepared, 'case.party-notice-recorded', DRAFT_OPCODE);
     if (terminal) return terminal;
-    const stageHit = await this.requireInvestigation(prepared, 'case.party-notice-recorded', DRAFT_OPCODE);
-    if (stageHit) return stageHit;
+    const stage = await this.requireInvestigation(prepared, 'case.party-notice-recorded', DRAFT_OPCODE, input);
+    if ('status' in stage) return stage;
     const occasion = input.occasion === 'suspend' || input.occasion === 'resume' ? input.occasion : '';
     const note = text(input.note);
     if (occasion === '' || note === '') {
@@ -390,11 +419,21 @@ export class InvestigationService {
         recordedBy: actor.personnelId,
         recordedAt: at,
       });
+      const trailParties = this.parties(prepared, caseId, DRAFT_OPCODE);
       await tx.audit.append({
         action: 'case.party-notice-recorded',
-        ...this.parties(prepared, caseId, DRAFT_OPCODE),
+        ...trailParties,
         detail: JSON.stringify({ caseId, noticeId: id, occasion }),
       });
+      if (stage.confirmation) {
+        await appendRuleConfirmation(tx.audit, {
+          parties: trailParties,
+          confirmation: stage.confirmation,
+          at,
+          step: 'case.party-notice-recorded',
+          confirmReasons: input.confirmReasons,
+        });
+      }
       return { status: 200 as const, body: { result: 'party-notice-recorded', id, caseId, occasion } };
     });
   }
@@ -1081,9 +1120,26 @@ export class InvestigationService {
     prepared: Prepared,
     action: CaseInvestigationAction,
     opcode: string,
-  ): Promise<InvestigationHttpOutcome | null> {
-    if (prepared.view.status === 'in_progress' && prepared.view.currentStage === 'E02') return null;
+    input: {
+      readonly confirmedRuleKeys?: readonly string[];
+      readonly confirmReasons?: Readonly<Record<string, string>>;
+    } = {},
+  ): Promise<InvestigationHttpOutcome | { readonly confirmation: RuleConfirmation | null }> {
+    if (prepared.view.status === 'in_progress' && prepared.view.currentStage === 'E02') {
+      return { confirmation: null };
+    }
     if (prepared.view.status === 'terminated_pending') {
+      const classified = classifyIllegal('X03', X03_WARN_MESSAGE);
+      if (!classified.ok && classified.httpStatus === 200) {
+        const gate = applyWarningGate({
+          notes: classified.advisories,
+          confirmedRuleKeys: input.confirmedRuleKeys,
+          confirmReasons: input.confirmReasons,
+        });
+        if (gate.kind === 'reject') return { status: 400, body: ruleKeyBody(gate.decision) };
+        if (gate.kind === 'hold') return this.holdWarning(prepared, action, opcode, gate.decision);
+        return { confirmation: gate.confirmation };
+      }
       const row = findIllegal('X03');
       return this.fail(prepared, action, opcode, {
         httpStatus: 409,

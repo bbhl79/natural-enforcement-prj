@@ -464,6 +464,134 @@ describe('#236 调查收尾', () => {
     expect(row.status).toBe('terminated_pending');
   });
 
+  it('待收尾登记笔录、书面告知、违法记录：首次命中 X03 只警告不落库，确认后落库并追加确认留痕', async () => {
+    const caseId = await fileCase();
+    await runProcedure(caseId, { kind: 'terminate', reason: 'other' });
+
+    const inquiryInput = {
+      occurredAt: '2026-10-27T01:00:00.000Z',
+      place: '现场',
+      interviewee: '张三',
+      officerIds: [handlerMainId, handlerAssistId],
+      attachmentName: '待收尾笔录.txt',
+    };
+    const heldInquiry = await postJson(`/api/cases/${caseId}/inquiries`, 'P-236-H1', inquiryInput);
+    expect(heldInquiry.status).toBe(200);
+    expect(heldInquiry.body.result).toBe('warnings');
+    expect(heldInquiry.body.warnings).toEqual([
+      expect.objectContaining({ level: 'warn', code: 'X03', ruleKey: 'X03', message: '待收尾状态下只能撤案或结案' }),
+    ]);
+    expect(await cloned.prisma.caseInquiryRecord.count({ where: { caseId } })).toBe(0);
+    expect(await trails('case.inquiry-recorded', caseId)).toEqual([
+      expect.objectContaining({ outcome: 'failed', reason: 'X03' }),
+    ]);
+    expect(await confirmationRows(caseId)).toEqual([]);
+
+    const unknown = await postJson(`/api/cases/${caseId}/inquiries`, 'P-236-H1', {
+      ...inquiryInput,
+      confirmedRuleKeys: ['NO-SUCH'],
+    });
+    expect(unknown.status).toBe(400);
+    expect(unknown.body.reason).toBe('unknown-rule-key');
+    expect(await cloned.prisma.caseInquiryRecord.count({ where: { caseId } })).toBe(0);
+    expect(await confirmationRows(caseId)).toEqual([]);
+
+    const savedInquiry = await postJson(`/api/cases/${caseId}/inquiries`, 'P-236-H1', {
+      ...inquiryInput,
+      confirmedRuleKeys: ['X03'],
+    });
+    expect(savedInquiry.status).toBe(200);
+    expect(savedInquiry.body.result).toBe('inquiry-recorded');
+    expect(await cloned.prisma.caseInquiryRecord.count({ where: { caseId } })).toBe(1);
+    const inquiryRows = await confirmationRows(caseId);
+    expect(inquiryRows).toHaveLength(1);
+    const inquiryDetail = JSON.parse(inquiryRows[0]?.detail ?? '{}') as {
+      confirmerId: string;
+      step: string;
+      ruleKeys: Array<{ ruleKey: string; version: string }>;
+      warnings: Array<{ ruleKey: string; code: string }>;
+    };
+    expect(inquiryDetail).toMatchObject({ confirmerId: handlerMainId, step: 'case.inquiry-recorded' });
+    expect(inquiryDetail.ruleKeys).toEqual([{ ruleKey: 'X03', version: '1' }]);
+    expect(inquiryDetail.warnings[0]?.ruleKey).toBe('X03');
+
+    const heldNotice = await postJson(`/api/cases/${caseId}/party-notices`, 'P-236-H1', {
+      occasion: 'suspend',
+      note: '已书面告知当事人',
+    });
+    expect(heldNotice.status).toBe(200);
+    expect(heldNotice.body.result).toBe('warnings');
+    expect((heldNotice.body.warnings as Array<{ ruleKey: string }>)[0]?.ruleKey).toBe('X03');
+    expect(await cloned.prisma.casePartyNotice.count({ where: { caseId } })).toBe(0);
+
+    const savedNotice = await postJson(`/api/cases/${caseId}/party-notices`, 'P-236-H1', {
+      occasion: 'suspend',
+      note: '已书面告知当事人',
+      confirmedRuleKeys: ['X03'],
+    });
+    expect(savedNotice.status).toBe(200);
+    expect(savedNotice.body.result).toBe('party-notice-recorded');
+    expect(await cloned.prisma.casePartyNotice.count({ where: { caseId } })).toBe(1);
+    const noticeRows = await confirmationRows(caseId);
+    expect(noticeRows).toHaveLength(2);
+    const noticeDetail = JSON.parse(noticeRows[1]?.detail ?? '{}') as { step: string };
+    expect(noticeDetail.step).toBe('case.party-notice-recorded');
+
+    const violationInput = {
+      behaviorDescription: '硬化地面',
+      parties: ['张三'],
+      startedOn: '2026-10-01',
+      endedOn: '2026-10-20',
+      recognition: 'one-off',
+    };
+    const heldViolation = await postJson(`/api/cases/${caseId}/violations`, 'P-236-H1', violationInput);
+    expect(heldViolation.status).toBe(200);
+    expect(heldViolation.body.result).toBe('warnings');
+    expect((heldViolation.body.warnings as Array<{ ruleKey: string }>)[0]?.ruleKey).toBe('X03');
+    expect(await cloned.prisma.caseViolationRecord.count({ where: { caseId } })).toBe(0);
+
+    const savedViolation = await postJson(`/api/cases/${caseId}/violations`, 'P-236-H1', {
+      ...violationInput,
+      confirmedRuleKeys: ['X03'],
+    });
+    expect(savedViolation.status).toBe(200);
+    expect(savedViolation.body.result).toBe('violation-recorded');
+    expect(await cloned.prisma.caseViolationRecord.count({ where: { caseId } })).toBe(1);
+    const violationRows = await confirmationRows(caseId);
+    expect(violationRows).toHaveLength(3);
+    const violationDetail = JSON.parse(violationRows[2]?.detail ?? '{}') as { step: string };
+    expect(violationDetail.step).toBe('case.violation-recorded');
+  });
+
+  it('待收尾带 X03 确认键重提，X20 与 X12 硬阻断仍是 409，不落库也不写确认留痕', async () => {
+    const caseId = await fileCase();
+    await runProcedure(caseId, { kind: 'terminate', reason: 'other' });
+    const oneOfficer = await postJson(`/api/cases/${caseId}/inquiries`, 'P-236-H1', {
+      occurredAt: '2026-10-27T01:00:00.000Z',
+      place: '现场',
+      interviewee: '张三',
+      officerIds: [handlerMainId],
+      attachmentName: '笔录.txt',
+      confirmedRuleKeys: ['X03'],
+    });
+    expect(oneOfficer.status).toBe(409);
+    expect(oneOfficer.body.reason).toBe('X20');
+    expect(await cloned.prisma.caseInquiryRecord.count({ where: { caseId } })).toBe(0);
+    expect(await confirmationRows(caseId)).toEqual([]);
+
+    const withdrawn = await runProcedure(caseId, { kind: 'withdraw', reason: 'limitation-expired' });
+    expect(withdrawn).toMatchObject({ status: 'withdrawn' });
+    const terminal = await postJson(`/api/cases/${caseId}/party-notices`, 'P-236-H1', {
+      occasion: 'suspend',
+      note: '已书面告知当事人',
+      confirmedRuleKeys: ['X03'],
+    });
+    expect(terminal.status).toBe(409);
+    expect(terminal.body.reason).toBe('X12');
+    expect(await cloned.prisma.casePartyNotice.count({ where: { caseId } })).toBe(0);
+    expect(await confirmationRows(caseId)).toEqual([]);
+  });
+
   it('撤案原因不对拒绝；撤案后终态，再写为 X12', async () => {
     const caseId = await fileCase();
     await runProcedure(caseId, { kind: 'terminate', reason: 'fact-not-established' });

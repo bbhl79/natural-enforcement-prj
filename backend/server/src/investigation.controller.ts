@@ -36,9 +36,20 @@ export class InvestigationController {
       readonly startedOn?: unknown;
       readonly endedOn?: unknown;
       readonly recognition?: unknown;
+      readonly confirmedRuleKeys?: unknown;
+      readonly confirmReasons?: unknown;
     },
   ): Promise<void> {
-    const outcome = await this.investigation.saveViolation(req.actor as ActorRef, id, body);
+    const confirmation = readConfirmation(body);
+    const outcome = await this.investigation.saveViolation(req.actor as ActorRef, id, {
+      behaviorDescription: body.behaviorDescription,
+      parties: body.parties,
+      startedOn: body.startedOn,
+      endedOn: body.endedOn,
+      recognition: body.recognition,
+      confirmedRuleKeys: confirmation.confirmedRuleKeys,
+      confirmReasons: confirmation.confirmReasons,
+    });
     res.status(outcome.status).json(outcome.body);
   }
 
@@ -69,9 +80,20 @@ export class InvestigationController {
       readonly interviewee?: unknown;
       readonly officerIds?: unknown;
       readonly attachmentName?: unknown;
+      readonly confirmedRuleKeys?: unknown;
+      readonly confirmReasons?: unknown;
     },
   ): Promise<void> {
-    const outcome = await this.investigation.saveInquiry(req.actor as ActorRef, id, body);
+    const confirmation = readConfirmation(body);
+    const outcome = await this.investigation.saveInquiry(req.actor as ActorRef, id, {
+      occurredAt: body.occurredAt,
+      place: body.place,
+      interviewee: body.interviewee,
+      officerIds: body.officerIds,
+      attachmentName: body.attachmentName,
+      confirmedRuleKeys: confirmation.confirmedRuleKeys,
+      confirmReasons: confirmation.confirmReasons,
+    });
     res.status(outcome.status).json(outcome.body);
   }
 
@@ -81,9 +103,20 @@ export class InvestigationController {
     @Req() req: AuthenticatedRequest,
     @Res() res: HttpReply,
     @Param('id') id: string,
-    @Body() body: { readonly occasion?: unknown; readonly note?: unknown },
+    @Body() body: {
+      readonly occasion?: unknown;
+      readonly note?: unknown;
+      readonly confirmedRuleKeys?: unknown;
+      readonly confirmReasons?: unknown;
+    },
   ): Promise<void> {
-    const outcome = await this.investigation.saveNotice(req.actor as ActorRef, id, body);
+    const confirmation = readConfirmation(body);
+    const outcome = await this.investigation.saveNotice(req.actor as ActorRef, id, {
+      occasion: body.occasion,
+      note: body.note,
+      confirmedRuleKeys: confirmation.confirmedRuleKeys,
+      confirmReasons: confirmation.confirmReasons,
+    });
     res.status(outcome.status).json(outcome.body);
   }
 
