@@ -11,7 +11,7 @@ interface HttpReply {
 /**
  * 录入要件表单结构（#210）。
  * 前端渲染表单与服务端判定缺件读同一份声明（ADR 0018）；本接口只出声明，不写业务事实。
- * 查询参数：sourceCode（必填）、domain（必填）、types（可空，多值）。
+ * 查询参数：sourceCode、domain、types 均可空；来源或法域未选时只出公共层（登记页先出完整表单）。
  * 跨站读请求由 SameOriginReadGuard 拒绝。
  */
 @Controller('api')

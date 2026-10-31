@@ -43,13 +43,14 @@ describe('主区全宽、无常驻右侧调试栏', () => {
   });
 });
 
-describe('统一工作台无侧栏与登记壳布局', () => {
-  it('分区页签、水平步骤条与门闸预告都有样式', () => {
+describe('统一工作台无侧栏与登记页布局', () => {
+  it('分区页签有样式；登记页不再有开单前步骤条与门闸', () => {
     expect(rule('.ws-sec-tabs')).toContain('display:flex');
     expect(rule('.ws-sec-tab')).toContain('border-bottom');
-    expect(rule('.stepper')).toContain('display:flex');
-    expect(rule('.step-btn')).toContain('border-radius:999px');
-    expect(rule('.gate-preview')).toContain('grid-template-columns');
+    expect(cssBody).not.toContain('.stepper');
+    expect(cssBody).not.toContain('.step-btn');
+    expect(cssBody).not.toContain('.gate-card');
+    expect(cssBody).not.toContain('.gate-preview');
   });
 });
 

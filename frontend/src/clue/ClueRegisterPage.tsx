@@ -1,15 +1,16 @@
-// 线索登记页（#211；规格 E）。
+// 线索登记页（#211；规格 E；#296 R1）。
 //
-// 三层叠加的录入要件按后端声明渲染（ADR 0018）：公共层、来源层、类型层。
+// 登记页一进入即是完整表单：来源* 与法域* 置顶且初始为空，下拉含「请选择…」。
+// 要件按后端声明渲染（ADR 0018）：基本信息、来源补充、违法类型、材料四分区；
+// 来源未选时「来源补充」只给一行提示，法域未选时「违法类型」只给一行提示。
 // 枚举、分类与布尔类字段用规范选择控件（取值从声明的要件名里读，读不出才用文本）。
-// 公共层与来源层阻断项缺失时表单标红并保留已填内容；类型层缺件先给清单，确认后仍可保存。
+// 基本信息与来源补充阻断项缺失时表单标红并保留已填内容；违法类型缺件先给清单，确认后仍可保存。
 // 几何来源文件与普通附件随表单一次提交（multipart）。
 
-import { Suspense, useEffect, useState, type ChangeEvent, type ReactNode } from 'react';
-import { Await, Link, useAsyncError, useLoaderData, useRevalidator, useSearchParams } from 'react-router';
+import { useEffect, useState, type ChangeEvent, type ReactNode } from 'react';
+import { Link, useLoaderData, useSearchParams } from 'react-router';
 
 import { useAppDispatch, useAppSelector } from '../hooks';
-import { ErrorCard } from '../shell/StatusPages';
 import {
   CLUE_REGISTER,
   DOMAIN_LABEL,
@@ -43,8 +44,11 @@ export const EMPTY_REGISTER_INPUT: RegisterInput = {
   spatialSource: null,
 };
 
-/** 已在顶部卡片渲染的要件：分组里不再重复渲染。 */
+/** 已在基本信息分区手工渲染的要件：分区里不再重复渲染。 */
 const TOP_LEVEL_KEYS: ReadonlySet<string> = new Set(['clue.source', 'clue.domain', 'clue.initial_types']);
+
+/** 材料分区渲染的要件。 */
+const MATERIAL_KEYS: ReadonlySet<string> = new Set(['clue.materials', 'clue.tags']);
 
 /** 保存失败：状态码与校验码（缺件键）。 */
 export interface RegisterFailure {
@@ -73,7 +77,7 @@ function basisOf(item: FormSchemaItem): ReactNode {
 
 /**
  * 录入表单（纯渲染，单测直接渲染）。
- * 缺件键在 rules 里即标红；类型层缺件另给清单，确认后可保存。
+ * 缺件键在 rules 里即标红；违法类型缺件另给清单，确认后可保存。
  */
 export function ClueRegisterForm({
   reference,
@@ -89,7 +93,7 @@ export function ClueRegisterForm({
   onTypesChange,
 }: {
   reference: ClueReference;
-  schema: FormSchema | null;
+  schema: FormSchema;
   input: RegisterInput;
   failure: RegisterFailure | null;
   busy: boolean;
@@ -107,6 +111,34 @@ export function ClueRegisterForm({
   const setValue = (key: string, next: string) =>
     onInput({ ...input, values: { ...input.values, [key]: next } });
   const errorOf = (key: string) => (blocking.has(key) ? '这一项必填，保存前请补上。' : null);
+  // 来源或法域为空时服务端先回整体校验码，同样落到对应下拉上标红。
+  const sourceError =
+    blocking.has('clue.source') || blocking.has('source-code-invalid')
+      ? '这一项必填，保存前请补上。'
+      : null;
+  const domainError =
+    blocking.has('clue.domain') || blocking.has('domain-invalid')
+      ? '这一项必填，保存前请补上。'
+      : null;
+
+  const sourceGroupNames = new Set(reference.sources.map((source) => source.group));
+  const isSourceItem = (item: FormSchemaItem) => sourceGroupNames.has(item.group);
+  const basicItems = schema.items.filter(
+    (item) =>
+      !TOP_LEVEL_KEYS.has(item.key) &&
+      !MATERIAL_KEYS.has(item.key) &&
+      !isTypeLayerKey(item.key) &&
+      !isSourceItem(item),
+  );
+  const sourceSelected = input.sourceCode !== '';
+  const domainSelected = input.domain !== '';
+  // 换选择后新要件还在路上时，不把上一份声明的来源／类型要件挂在新选择下。
+  const sourceMatches = sourceSelected && schema.source.code === input.sourceCode;
+  const domainMatches = domainSelected && schema.domain === input.domain;
+  const sourceItems = sourceMatches ? schema.items.filter(isSourceItem) : [];
+  const typeItems = domainMatches ? schema.items.filter((item) => isTypeLayerKey(item.key)) : [];
+  const materialItems = schema.items.filter((item) => MATERIAL_KEYS.has(item.key));
+  const domainTypes = reference.types.filter((type) => type.domain === input.domain);
 
   const control = (item: FormSchemaItem): ReactNode => {
     const options = optionsOf(item);
@@ -194,6 +226,27 @@ export function ClueRegisterForm({
     return <input {...common} />;
   };
 
+  const row = (item: FormSchemaItem) => {
+    const error = errorOf(item.key);
+    return (
+      <div className="form-row" key={item.key} data-key={item.key}>
+        <label htmlFor={`clue-${item.key.replace(/[^a-z0-9]+/gi, '-')}`}>
+          {item.label}
+          {item.required ? <span className="req">*</span> : null}
+        </label>
+        <div>
+          {control(item)}
+          {error ? <div className="err" data-error={item.key}>{error}</div> : null}
+          {item.condition ? <div className="help">{item.condition}</div> : null}
+          {isTypeLayerKey(item.key) ? (
+            <div className="help">违法类型要件：缺项不拦登记，确认后保存并留作常驻缺件。</div>
+          ) : null}
+          {basisOf(item)}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <form
       onSubmit={(event) => {
@@ -228,20 +281,15 @@ export function ClueRegisterForm({
       ) : null}
       {typeGaps.length > 0 ? (
         <div className="banner amber" data-role="type-gaps">
-          <div>{`类型层还有 ${typeGaps.length} 项要件没填：${typeGaps.map((key) => key).join('、')}`}</div>
+          <div>{`违法类型还有 ${typeGaps.length} 项要件没填：${typeGaps.map((key) => key).join('、')}`}</div>
           <div>确认后仍可保存，这几项会成为常驻缺件，之后在详情里补齐。</div>
           <button type="button" className="btn btn-primary" data-role="confirm-save" disabled={busy} onClick={() => onSubmit(true)}>
             确认并保存
           </button>
         </div>
       ) : null}
-      <div className="card gate-card" data-role="register-gate">
-        <div className="card-h">
-          {schema === null ? '先选线索来源和法域' : '线索来源与法域'}
-          <span className="hint">
-            {schema === null ? '两项都选齐后，本页展开明细表单' : '来源与法域决定叠加的要件'}
-          </span>
-        </div>
+      <div className="card" data-group="基本信息">
+        <div className="card-h">基本信息</div>
         <div className="form-row">
           <label htmlFor="clue-source">线索来源<span className="req">*</span></label>
           <div>
@@ -251,13 +299,16 @@ export function ClueRegisterForm({
               value={input.sourceCode}
               onChange={(event) => onSourceChange(event.target.value)}
             >
-              <option value="">请选择线索来源</option>
+              <option value="">请选择…</option>
               {reference.sources.map((source) => (
                 <option key={source.code} value={source.code}>
                   {`${source.name}（${source.code}）`}
                 </option>
               ))}
             </select>
+            {sourceError ? (
+              <div className="err" data-error="clue.source">{sourceError}</div>
+            ) : null}
           </div>
         </div>
         <div className="form-row">
@@ -269,38 +320,78 @@ export function ClueRegisterForm({
               value={input.domain}
               onChange={(event) => onDomainChange(event.target.value)}
             >
-              <option value="">请选择法域</option>
+              <option value="">请选择…</option>
               {(Object.keys(DOMAIN_LABEL) as (keyof typeof DOMAIN_LABEL)[]).map((domain) => (
                 <option key={domain} value={domain}>
                   {DOMAIN_LABEL[domain]}
                 </option>
               ))}
             </select>
-            {schema === null ? null : (
-              <div className="help">土地与矿产录面状几何。测绘与规划录点位：一条线索只对应一个点位，一个文件多个点或点面混合一律拒绝。</div>
-            )}
+            {domainError ? (
+              <div className="err" data-error="clue.domain">{domainError}</div>
+            ) : null}
+            <div className="help">土地与矿产录面状几何。测绘与规划录点位：一条线索只对应一个点位，一个文件多个点或点面混合一律拒绝。</div>
           </div>
         </div>
-        {schema === null ? (
-          <>
-            <div className="gate-preview" data-role="gate-preview">
-              <div className="gp"><b>公共层</b>选定后展开</div>
-              <div className="gp"><b>来源层</b>选定后展开</div>
-              <div className="gp"><b>类型层</b>选定后展开</div>
-              <div className="gp"><b>随附材料</b>选定后展开</div>
-            </div>
-            <div className="help" style={{ marginTop: 10 }}>
-              本系统处理的所有线索都从工作台「登记新线索」进入；来源或法域未选齐前，不会进入空白页，请在本卡内完成选择。
-            </div>
-          </>
+        {basicItems.map(row)}
+        <div className="form-row">
+          <label htmlFor="clue-subject-unknown">
+            当事人不明
+          </label>
+          <div>
+            <select
+              id="clue-subject-unknown"
+              className="select"
+              value={input.subjectUnknown ? '是' : '否'}
+              onChange={(event) => onInput({ ...input, subjectUnknown: event.target.value === '是' })}
+            >
+              <option value="否">否</option>
+              <option value="是">是</option>
+            </select>
+            <div className="help">当事人不明不妨碍登记与分派。</div>
+          </div>
+        </div>
+        <div className="form-row">
+          <label htmlFor="clue-anonymity-confirmed">
+            匿名附件已移除反映人身份信息
+          </label>
+          <div>
+            <select
+              id="clue-anonymity-confirmed"
+              className="select"
+              value={input.anonymityConfirmed ? '是' : '否'}
+              onChange={(event) => onInput({ ...input, anonymityConfirmed: event.target.value === '是' })}
+            >
+              <option value="否">否</option>
+              <option value="是">是</option>
+            </select>
+            <div className="help">匿名线索带附件时须主动确认已移除反映人身份信息。</div>
+          </div>
+        </div>
+      </div>
+      <div className="card" data-group="来源补充">
+        <div className="card-h">来源补充</div>
+        {sourceSelected ? (
+          sourceItems.length > 0 ? (
+            sourceItems.map(row)
+          ) : sourceMatches ? (
+            <div className="help">所选来源没有额外要件。</div>
+          ) : (
+            <div className="help">载入来源补充…</div>
+          )
         ) : (
-          <div className="form-row" data-key="clue.initial_types">
-            <label>初步涉嫌违法类型</label>
-            <div>
-              <div className="checks">
-                {reference.types
-                  .filter((type) => input.domain === '' || type.domain === input.domain)
-                  .map((type) => (
+          <div className="help" data-role="source-pending">请先选线索来源</div>
+        )}
+      </div>
+      <div className="card" data-group="违法类型">
+        <div className="card-h">违法类型</div>
+        {domainSelected ? (
+          <>
+            <div className="form-row" data-key="clue.initial_types">
+              <label>初步涉嫌违法类型</label>
+              <div>
+                <div className="checks">
+                  {domainTypes.map((type) => (
                     <label key={type.code}>
                       <input
                         type="checkbox"
@@ -316,100 +407,38 @@ export function ClueRegisterForm({
                       {` ${type.name}（${type.code}）`}
                     </label>
                   ))}
+                </div>
+                <div className="help">可留空，可多选。选了哪些类型，就叠加哪些违法类型要件。</div>
               </div>
-              <div className="help">可留空，可多选。选了哪些类型，类型层就叠加哪些要件。</div>
             </div>
-          </div>
+            {typeItems.map(row)}
+          </>
+        ) : (
+          <div className="help" data-role="domain-pending">请先选法域</div>
         )}
       </div>
-      {schema === null ? null : schema.groups.map((group) => (
-        <div className="card" key={group.name} data-group={group.name}>
-          <div className="card-h">{group.name}</div>
-          {group.items.filter((item) => !TOP_LEVEL_KEYS.has(item.key)).map((item) => {
-            const error = errorOf(item.key);
-            return (
-              <div className="form-row" key={item.key} data-key={item.key}>
-                <label htmlFor={`clue-${item.key.replace(/[^a-z0-9]+/gi, '-')}`}>
-                  {item.label}
-                  {item.required ? <span className="req">*</span> : null}
-                </label>
-                <div>
-                  {control(item)}
-                  {error ? <div className="err" data-error={item.key}>{error}</div> : null}
-                  {item.condition ? <div className="help">{item.condition}</div> : null}
-                  {isTypeLayerKey(item.key) ? (
-                    <div className="help">类型层要件：缺项不拦登记，确认后保存并留作常驻缺件。</div>
-                  ) : null}
-                  {basisOf(item)}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ))}
-      {schema === null ? null : (
-        <div className="card">
-          <div className="card-h">当事人不明与匿名提示</div>
-          <div className="form-row">
-            <label htmlFor="clue-subject-unknown">
-              当事人不明
-            </label>
-            <div>
-              <select
-                id="clue-subject-unknown"
-                className="select"
-                value={input.subjectUnknown ? '是' : '否'}
-                onChange={(event) => onInput({ ...input, subjectUnknown: event.target.value === '是' })}
-              >
-                <option value="否">否</option>
-                <option value="是">是</option>
-              </select>
-              <div className="help">当事人不明不妨碍登记与分派。</div>
-            </div>
-          </div>
-          <div className="form-row">
-            <label htmlFor="clue-anonymity-confirmed">
-              匿名附件已移除反映人身份信息
-            </label>
-            <div>
-              <select
-                id="clue-anonymity-confirmed"
-                className="select"
-                value={input.anonymityConfirmed ? '是' : '否'}
-                onChange={(event) => onInput({ ...input, anonymityConfirmed: event.target.value === '是' })}
-              >
-                <option value="否">否</option>
-                <option value="是">是</option>
-              </select>
-              <div className="help">匿名线索带附件时须主动确认已移除反映人身份信息。</div>
-            </div>
-          </div>
-          <div className="actions">
-            <Link className="btn" to="/clue">取消</Link>
-            <button type="submit" className="btn btn-primary" data-requires={CLUE_REGISTER} disabled={busy}>
-              保存
-            </button>
-          </div>
-        </div>
-      )}
+      <div className="card" data-group="材料">
+        <div className="card-h">材料</div>
+        {materialItems.map(row)}
+      </div>
+      <div className="actions" style={{ margin: '4px 0 12px' }}>
+        <Link className="btn" to="/clue">取消</Link>
+        <button type="submit" className="btn btn-primary" data-requires={CLUE_REGISTER} disabled={busy}>
+          保存
+        </button>
+      </div>
     </form>
   );
 }
 
-function LoadError({ what }: { what: string }) {
-  useAsyncError();
-  const revalidator = useRevalidator();
-  return <ErrorCard what={what} onRetry={() => void revalidator.revalidate()} />;
-}
-
 /**
- * 登记新线索（#211）。来源、法域与类型在地址里；其余内容在本页内存里。
- * 开单门闸：来源与法域在同一张卡内选齐后就地展开明细；新办不预填法域。
+ * 登记新线索（#211；#296 R1）。来源、法域与类型在地址里；其余内容在本页内存里。
+ * 首屏即完整表单；来源补充与违法类型按来源、法域的选中状态显隐。
  */
 export default function ClueRegisterPage({ embedded = false }: { readonly embedded?: boolean }) {
   const { reference, schema } = useLoaderData() as {
     reference: ClueReference;
-    schema: Promise<FormSchema | null> | null;
+    schema: FormSchema;
   };
   const [params, setParams] = useSearchParams();
   const dispatch = useAppDispatch();
@@ -436,6 +465,19 @@ export default function ClueRegisterPage({ embedded = false }: { readonly embedd
     );
   }, [searchString]);
 
+  // 依赖显隐后，已隐藏分区的取值不再随报文提交：只留当前声明里的要件键。
+  useEffect(() => {
+    const known = new Set(schema.items.map((item) => item.key));
+    setInput((prev) => {
+      const values = Object.fromEntries(
+        Object.entries(prev.values).filter(([entryKey]) => known.has(entryKey)),
+      );
+      return Object.keys(values).length === Object.keys(prev.values).length
+        ? prev
+        : { ...prev, values };
+    });
+  }, [schema]);
+
   const update = (next: Record<string, string>) => {
     const merged = new URLSearchParams(params);
     for (const [entryKey, value] of Object.entries(next)) {
@@ -461,10 +503,10 @@ export default function ClueRegisterPage({ embedded = false }: { readonly embedd
     setResult(null);
     setFailure({ status: outcome.status, rules: outcome.rules });
   };
-  const form = (resolvedSchema: FormSchema | null) => (
+  const form = () => (
     <ClueRegisterForm
       reference={reference}
-      schema={resolvedSchema}
+      schema={schema}
       input={input}
       failure={failure}
       busy={busy}
@@ -476,8 +518,9 @@ export default function ClueRegisterPage({ embedded = false }: { readonly embedd
         change({ ...input, sourceCode });
       }}
       onDomainChange={(domain) => {
-        update({ domain });
-        change({ ...input, domain });
+        // 违法类型按法域取值：换法域就清空已选类型，避免把别的法域的类型带过去。
+        update({ domain, types: '' });
+        change({ ...input, domain, types: [] });
       }}
       onTypesChange={(types) => {
         update({ types: types.join(',') });
@@ -507,20 +550,12 @@ export default function ClueRegisterPage({ embedded = false }: { readonly embedd
           <div>
             <h1>登记新线索</h1>
             <div className="desc">
-              表单与随附材料一次提交。带 <span className="req">*</span> 的为必填；公共层与来源层缺项拦登记，类型层缺项确认后可保存。
+              表单与随附材料一次提交。带 <span className="req">*</span> 的为必填；基本信息与来源补充缺项拦登记，违法类型缺项确认后可保存。
             </div>
           </div>
         </div>
       )}
-      {schema === null ? (
-        form(null)
-      ) : (
-        <Suspense fallback={<div className="card" aria-busy="true">载入录入要件…</div>}>
-          <Await resolve={schema} errorElement={<LoadError what="录入要件" />}>
-            {(resolvedSchema: FormSchema | null) => form(resolvedSchema)}
-          </Await>
-        </Suspense>
-      )}
+      {form()}
     </>
   );
 }

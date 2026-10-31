@@ -1,8 +1,8 @@
 // 统一工作台（一级入口）。主区二分页：待办｜登记新线索；工作台无侧栏。
 // 录入＝总入口：本系统处理的所有线索都从「登记新线索」进入。
-// 登记壳内用水平步骤条 ① 登记 → ② 内业核查 → ③ 分派决定；②③ 带 clue 参数打开既有线索时，
-// 保留线索上下文续办；环节切换不丢线索。#214 的续办语义保持不变。
-import { Fragment, useCallback, useEffect, useState } from 'react';
+// 登记分区不渲染开单前步骤条：一进入即是完整表单；保存后结果里的链接可带 clue 参数
+// 打开内业核查／分派决定，保留线索上下文续办。#214 的续办语义保持不变。
+import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router';
 
 import { ClueVerificationTab } from '../clue/ClueVerificationTab';
@@ -20,13 +20,6 @@ function quoted(roles: readonly string[]): string {
   if (marks.length <= 1) return marks.join('');
   return `${marks.slice(0, -1).join('、')}和${marks.at(-1)}`;
 }
-
-/** 登记壳的水平步骤条：① 登记 → ② 内业核查 → ③ 分派决定；②③ 需已保存线索。 */
-const STEPS = [
-  { step: '1', label: '① 登记' },
-  { step: '2', label: '② 内业核查' },
-  { step: '3', label: '③ 分派决定' },
-] as const;
 
 /** ②内业核查续办：带线索上下文打开既有线索的核查页签。 */
 function VerificationContinue({ clueId }: { readonly clueId: string }) {
@@ -175,8 +168,8 @@ const SUPERVISION_ROLE = '监督';
 
 /**
  * 统一工作台。主区二分页：待办｜登记新线索。
- * 地址带 step=1|2|3 或落在 /workbench/register 时进登记壳；否则进待办。
- * ②／③ 带 clue=<id> 时续办该线索，环节切换保留线索上下文。
+ * 地址带 step=1|2|3 或落在 /workbench/register 时进登记分区；否则进待办。
+ * 登记分区不渲染开单前步骤条；②／③ 带 clue=<id> 时续办该线索。
  */
 export default function WorkbenchPage() {
   const operator = useAppSelector((root) => root.login.operator);
@@ -187,9 +180,8 @@ export default function WorkbenchPage() {
   const registerPath =
     pathname === CLUE_REGISTER_PATH || pathname.startsWith(`${CLUE_REGISTER_PATH}/`);
   const flow = registerPath || params.get('section') === 'flow' || stepParam !== '';
-  const step = flow ? (STEPS.find((item) => item.step === stepParam)?.step ?? '1') : '';
+  const step = flow ? (stepParam === '2' || stepParam === '3' ? stepParam : '1') : '';
   const clueId = params.get('clue') ?? '';
-  const [stepNotice, setStepNotice] = useState<string | null>(null);
 
   // 看板卡片计数：仅在待办分区加载。
   const [counts, setCounts] = useState<WorkbenchCardCounts | null>(null);
@@ -244,40 +236,6 @@ export default function WorkbenchPage() {
       ) : null}
       {flow ? (
         <>
-          <div className="stepper" role="navigation" aria-label="线索办理步骤">
-            {STEPS.map((item, index) => {
-              const isCurrent = item.step === step;
-              const locked = item.step !== '1' && clueId === '';
-              const className = ['step-btn', isCurrent ? 'on' : '', locked ? 'dim' : '']
-                .filter((value) => value !== '')
-                .join(' ');
-              return (
-                <Fragment key={item.step}>
-                  {index > 0 ? <span className="arr" aria-hidden="true">→</span> : null}
-                  {locked ? (
-                    <button
-                      type="button"
-                      className={className}
-                      onClick={() => setStepNotice('请先在「① 登记」保存线索，再进入后续步骤。')}
-                    >
-                      {item.label}
-                    </button>
-                  ) : (
-                    <Link
-                      className={className}
-                      to={stepTarget(item.step)}
-                      aria-current={isCurrent ? 'step' : undefined}
-                    >
-                      {item.label}
-                    </Link>
-                  )}
-                </Fragment>
-              );
-            })}
-          </div>
-          {stepNotice === null ? null : (
-            <div className="banner amber" role="status" data-role="step-notice">{stepNotice}</div>
-          )}
           {step === '1' ? <ClueRegisterPage embedded /> : null}
           {step === '3' && clueId !== '' ? <ClueDispatchSection clueId={clueId} /> : null}
           {step === '3' && clueId === '' ? (

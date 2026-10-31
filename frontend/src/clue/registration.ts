@@ -37,12 +37,12 @@ export interface FormSchemaItem {
   readonly basisNote?: string;
 }
 
-/** 叠加后的录入表单结构。 */
+/** 叠加后的录入表单结构。来源与法域未选时为空串，只有公共层要件。 */
 export interface FormSchema {
   readonly result: 'listed';
   readonly declarationVersion: string;
   readonly source: { readonly code: string; readonly name: string; readonly group: string };
-  readonly domain: ClueDomain;
+  readonly domain: ClueDomain | '';
   readonly types: readonly { readonly code: string; readonly name: string }[];
   readonly groups: readonly { readonly name: string; readonly items: readonly FormSchemaItem[] }[];
   readonly items: readonly FormSchemaItem[];
@@ -181,8 +181,8 @@ export function clueReferenceLoader(store: SessionStore) {
 
 /**
  * 录入页的 loader。来源、法域与类型在地址里（换这三样即换叠加的要件），
- * 地址是唯一事实源，分享与收藏都带着它。参照清单先取回，门闸首屏即可选；
- * 来源或法域未选时暂无叠加结果。
+ * 地址是唯一事实源，分享与收藏都带着它。参照清单先取回，表单首屏即出；
+ * 来源或法域未选时服务端只出公共层，来源补充与违法类型按依赖显隐。
  */
 export function clueRegisterLoader(store: SessionStore) {
   return async ({ request }: { request: Request }) => {
@@ -190,12 +190,11 @@ export function clueRegisterLoader(store: SessionStore) {
     const sourceCode = url.searchParams.get('sourceCode') ?? '';
     const domain = url.searchParams.get('domain') ?? '';
     const types = (url.searchParams.get('types') ?? '').split(',').filter((value) => value !== '');
-    const reference = await loadReference(store.dispatch);
-    const schema =
-      sourceCode === '' || domain === ''
-        ? null
-        : loadFormSchema(store.dispatch, { sourceCode, domain, types });
-    schema?.catch(() => undefined);
+    // 表单要按声明渲染，进页就要有结果：参照与要件一起取回，不流式展开。
+    const [reference, schema] = await Promise.all([
+      loadReference(store.dispatch),
+      loadFormSchema(store.dispatch, { sourceCode, domain, types }),
+    ]);
     return { reference, schema };
   };
 }

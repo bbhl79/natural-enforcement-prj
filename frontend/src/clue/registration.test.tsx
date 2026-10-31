@@ -44,41 +44,47 @@ function item(partial: Partial<FormSchemaItem> & Pick<FormSchemaItem, 'key' | 'l
   };
 }
 
+const SCHEMA_GROUPS: FormSchema['groups'] = [
+  {
+    name: '线索基本信息',
+    items: [
+      item({ key: 'clue.source', label: '线索来源（编码单选）', required: true, consequence: '阻断' }),
+      item({ key: 'clue.domain', label: '法域', required: true, consequence: '阻断' }),
+      item({ key: 'clue.location', label: '位置（空间对象，CGCS2000）', required: true, consequence: '阻断' }),
+      item({ key: 'clue.received_at', label: '收到或发现的时间', required: true, consequence: '阻断' }),
+      item({ key: 'clue.narrative', label: '反映的情况', required: true, consequence: '阻断' }),
+      item({ key: 'clue.initial_types', label: '初步涉嫌违法类型（多值，可空）' }),
+    ],
+  },
+  {
+    name: '材料与标签',
+    items: [
+      item({ key: 'clue.materials', label: '随附材料', group: '材料与标签' }),
+      item({ key: 'clue.tags', label: '标签（一组词）', group: '材料与标签' }),
+    ],
+  },
+  {
+    name: '主动发现',
+    items: [
+      item({ key: 'clue.finder', label: '发现人', group: '主动发现', required: true, consequence: '阻断' }),
+    ],
+  },
+  {
+    name: '违法主体',
+    items: [
+      item({ key: 'type.land_demo.subject_name', label: '违法主体名称（取值：名称｜无法确定）', group: '违法主体', required: true, consequence: '阻断' }),
+    ],
+  },
+];
+
 const SCHEMA: FormSchema = {
   result: 'listed',
   declarationVersion: 'requirements-2026-10-24-01',
   source: { code: '16', name: '日常巡查', group: '主动发现' },
   domain: 'land',
   types: [],
-  groups: [
-    {
-      name: '线索基本信息',
-      items: [
-        item({ key: 'clue.source', label: '线索来源（编码单选）', required: true, consequence: '阻断' }),
-        item({ key: 'clue.domain', label: '法域', required: true, consequence: '阻断' }),
-        item({ key: 'clue.location', label: '位置（空间对象，CGCS2000）', required: true, consequence: '阻断' }),
-        item({ key: 'clue.received_at', label: '收到或发现的时间', required: true, consequence: '阻断' }),
-        item({ key: 'clue.narrative', label: '反映的情况', required: true, consequence: '阻断' }),
-        item({ key: 'clue.initial_types', label: '初步涉嫌违法类型（多值，可空）' }),
-      ],
-    },
-    {
-      name: '材料与标签',
-      items: [
-        item({ key: 'clue.materials', label: '随附材料', group: '材料与标签' }),
-        item({ key: 'clue.tags', label: '标签（一组词）', group: '材料与标签' }),
-      ],
-    },
-    {
-      name: '主动发现',
-      items: [
-        item({ key: 'clue.finder', label: '发现人', group: '主动发现', required: true, consequence: '阻断' }),
-        item({ key: 'clue.reporter_anonymous', label: '是否匿名', group: '群众举报', required: true, consequence: '阻断' }),
-        item({ key: 'type.land_demo.subject_name', label: '违法主体名称（取值：名称｜无法确定）', group: '违法主体', required: true, consequence: '阻断' }),
-      ],
-    },
-  ],
-  items: [],
+  groups: SCHEMA_GROUPS,
+  items: SCHEMA_GROUPS.flatMap((group) => group.items),
 };
 
 const INPUT: RegisterInput = {
@@ -147,7 +153,7 @@ describe('缺件分层', () => {
   });
 });
 
-describe('登记壳地址与门闸初值', () => {
+describe('登记壳地址与新办初值', () => {
   it('旧 /clue/register 归到工作台登记壳，步骤地址保留 clue 续办', () => {
     expect(registerStepPath(1)).toBe('/workbench/register?step=1');
     expect(registerStepPath(3, 'C1')).toBe('/workbench/register?step=3&clue=C1');
@@ -168,30 +174,64 @@ describe('登记壳地址与门闸初值', () => {
   });
 });
 
-describe('录入表单', () => {
-  it('开单门闸：来源与法域未选齐时卡内保留下拉与展开预告，不出现空态', () => {
-    const html = render({ schema: null, input: EMPTY_REGISTER_INPUT });
-    expect(html).toContain('data-role="register-gate"');
-    expect(html).toContain('data-role="gate-preview"');
-    expect(html).toContain('先选线索来源和法域');
-    expect(html).toContain('请选择线索来源');
-    expect(html).toContain('请选择法域');
-    // 门闸未完成不出现保存按钮，也不退回只有文案的空态。
-    expect(html).not.toContain('data-requires="clue.register"');
-    expect(html).not.toContain('class="empty"');
+describe('录入表单（R1 四分区）', () => {
+  it('一进入即完整表单：无门闸与预告砖，四个分区齐全，保存按钮常在', () => {
+    const html = render({ input: EMPTY_REGISTER_INPUT });
+    expect(html).not.toContain('data-role="register-gate"');
+    expect(html).not.toContain('data-role="gate-preview"');
+    expect(html).toContain('data-group="基本信息"');
+    expect(html).toContain('data-group="来源补充"');
+    expect(html).toContain('data-group="违法类型"');
+    expect(html).toContain('data-group="材料"');
+    expect(html).toContain('data-requires="clue.register"');
+    const groups = ['基本信息', '来源补充', '违法类型', '材料'].map((name) =>
+      html.indexOf(`data-group="${name}"`),
+    );
+    expect(groups).toEqual([...groups].sort((left, right) => left - right));
   });
 
-  it('按叠加后的要件渲染：来源与法域用选择控件，位置与材料用文件项', () => {
+  it('来源与法域置顶且皆空，下拉含「请选择…」', () => {
+    const html = render({ input: EMPTY_REGISTER_INPUT });
+    expect(html).toContain('id="clue-source"');
+    expect(html).toContain('id="clue-domain"');
+    expect(html).toContain('请选择…');
+    expect(html).not.toMatch(/<option[^>]*selected[^>]*value="land"/);
+    expect(html).not.toMatch(/<option[^>]*selected[^>]*value="16"/);
+  });
+
+  it('未选来源：来源补充只给一行提示，选后出现来源要件', () => {
+    const empty = render({ input: EMPTY_REGISTER_INPUT });
+    expect(empty).toContain('data-role="source-pending"');
+    expect(empty).toContain('请先选线索来源');
+    expect(empty).not.toContain('发现人');
+    const full = render();
+    expect(full).not.toContain('data-role="source-pending"');
+    expect(full).toContain('发现人');
+  });
+
+  it('未选法域：违法类型只给一行提示，选后出现类型多选与类型要件', () => {
+    const empty = render({ input: EMPTY_REGISTER_INPUT });
+    expect(empty).toContain('data-role="domain-pending"');
+    expect(empty).toContain('请先选法域');
+    expect(empty).not.toContain('data-type="land_approve_without_authority"');
+    const full = render();
+    expect(full).not.toContain('data-role="domain-pending"');
+    expect(full).toContain('data-type="land_approve_without_authority"');
+    expect(full).toContain('违法主体名称');
+  });
+
+  it('分区标题不用工程层名；来源与法域用选择控件，位置与材料用文件项', () => {
     const html = render();
-    expect(html).toContain('线索来源');
-    expect(html).toContain('发现人');
+    expect(html).not.toContain('公共层');
+    expect(html).not.toContain('来源层');
+    expect(html).not.toContain('类型层');
     expect(html).toContain('data-role="spatial-source"');
     expect(html).toContain('data-role="attachment"');
-    expect(html).toContain('<select');
     expect(html).toContain('日常巡查（16）');
+    expect(html).toContain('巡查发现硬化地面');
   });
 
-  it('公共层或来源层阻断项缺失：标红并保留已填内容', () => {
+  it('基本信息或来源补充阻断项缺失：标红并保留已填内容', () => {
     const html = render({
       failure: { status: 400, rules: ['clue.finder'] },
       input: { ...INPUT, values: { 'clue.narrative': '巡查发现硬化地面' } },
@@ -201,7 +241,20 @@ describe('录入表单', () => {
     expect(html).toContain('data-role="blocking"');
   });
 
-  it('类型层缺件：先给清单并提供确认保存，不按阻断处理', () => {
+  it('来源或法域为空提交：服务端整体校验码也落到对应下拉标红', () => {
+    const source = render({
+      input: EMPTY_REGISTER_INPUT,
+      failure: { status: 400, rules: ['source-code-invalid'] },
+    });
+    expect(source).toContain('data-error="clue.source"');
+    const domain = render({
+      input: EMPTY_REGISTER_INPUT,
+      failure: { status: 400, rules: ['domain-invalid'] },
+    });
+    expect(domain).toContain('data-error="clue.domain"');
+  });
+
+  it('违法类型缺件：先给清单并提供确认保存，不按阻断处理', () => {
     const html = render({ failure: { status: 400, rules: ['type.land_demo.subject_name'] } });
     expect(html).toContain('data-role="type-gaps"');
     expect(html).toContain('确认并保存');

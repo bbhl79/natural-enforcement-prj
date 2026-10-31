@@ -450,28 +450,27 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('工作台三环节步骤条（#214）', () => {
-  it('ws-existing-context：step3 带线索上下文打开，环节切换不丢线索', async () => {
+describe('工作台登记分区（#214 续办）', () => {
+  it('ws-existing-context：step3 带线索上下文打开，分派办理容器已挂载', async () => {
     serve({
       '/api/clues/clue-1/dispatch': [200, JSON.parse(JSON.stringify(view()))],
       '/api/org-units': TREE,
     });
     const { html } = await renderRoute(fresh(), '/workbench?step=3&clue=clue-1');
-    // 静态渲染不执行 useEffect：分派办理容器已挂载（取数中），步骤条完整。
+    // 静态渲染不执行 useEffect：分派办理容器已挂载（取数中）。
     expect(html).toContain('aria-busy="true"');
-    // 环节切换保留线索上下文（HTML 属性里 & 转义为 &amp;）。
-    expect(html).toContain('step=1&amp;clue=clue-1');
-    expect(html).toContain('step=2&amp;clue=clue-1');
+    // 登记分区不渲染开单前步骤条。
+    expect(html).not.toContain('aria-label="线索办理步骤"');
   });
 
-  it('step3 不带线索：提示打开线索，不丢步骤条', async () => {
+  it('step3 不带线索：提示打开线索，可回到登记新线索', async () => {
     serve({});
     const { html } = await renderRoute(fresh(), '/workbench?step=3');
     expect(html).toContain('打开一条线索后开始分派决定');
     expect(html).toContain('/workbench/register?step=1');
   });
 
-  it('step2 带线索：续办内业核查的容器已挂载，环节切换不丢线索', async () => {
+  it('step2 带线索：续办内业核查的容器已挂载，不开单前步骤条', async () => {
     serve({
       '/api/clues/clue-1/verification': [
         200,
@@ -494,7 +493,7 @@ describe('工作台三环节步骤条（#214）', () => {
     });
     const { html } = await renderRoute(fresh(), '/workbench?step=2&clue=clue-1');
     expect(html).toContain('aria-busy="true"');
-    expect(html).toContain('step=3&amp;clue=clue-1');
+    expect(html).not.toContain('aria-label="线索办理步骤"');
   });
 });
 
