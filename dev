@@ -54,7 +54,10 @@ NGINX_IMAGE='nginx:1.29.8@sha256:1881968aff6f7cdcc4b888c00a11f4ce241ad7ec957e0cb
 FRONTEND_IMAGE='natural-enforcement/frontend:dev'
 # HTTP 进程本地镜像（ADR 0004：dev build 构建；容器内 3000，不映射宿主）
 SERVER_IMAGE='natural-enforcement/server:dev'
-# localhost 证书在仓库外（#94 / #80 开发侧）。dev up 生成，nginx 只读挂载，不入库。
+# 宿主 nginx 本地镜像（default.conf 经 Dockerfile COPY；compose 只按 image 引用）
+NGINX_DEV_IMAGE='natural-enforcement/nginx:dev'
+# localhost 证书在仓库外（#94 / #80 开发侧）。dev up 生成后 tar 灌进命名卷 nginx-certs；
+# 宿主目录仍保留供 curl --cacert；compose 不再 bind 该路径（Podman machine 下 WSL home 不可见）。
 DEV_CERT_DIR="${HOME}/.local/share/natural-enforcement/dev-certs"
 export NE_DEV_CERT_DIR="$DEV_CERT_DIR"
 HTTPS_PORT="$NGINX_PORT"
@@ -143,7 +146,7 @@ usage() {
            注意：e2e 层会销毁本项目数据卷做从零拉起（E1 证据），勿在需保留数据时运行。
   build    全量构建 = 环境自举：拉取工具链与 infra 镜像（按 infra/VERSIONS.md 钉定引用，
            已在场即跳过）+ 前端编译（产物写回宿主 frontend/dist，已 gitignore）+ 后端编译
-           （tsc 全程序编译）+ frontend 与 server 本地镜像构建。镜像拉取只发生在本命令语义内
+           （tsc 全程序编译）+ frontend / server / nginx 本地镜像构建。镜像拉取只发生在本命令语义内
            （up/db 不隐式构建或拉取，US13）。不 push 不部署。
   check    一条命令 = build + lint 全量 + test all，本地即 CI 全绿。三项一律跑齐；
            build 前置是因为镜像与产物是 lint/测试层的运行前提（非改集合语义）。
@@ -186,6 +189,7 @@ cmd_up() {
     exit 1
   fi
   ensure_dev_certs
+  seed_nginx_certs_volume
   # --wait：等 db/redis 健康检查通过再返回——迁移/种子要求 db 真正就绪，
   # 冷卷首次 initdb 较慢，不等待会赢不了就绪竞态（#57 回归实测踩中）。
   "${COMPOSE[@]}" up -d --wait --wait-timeout 120
@@ -259,6 +263,33 @@ ensure_dev_certs() {
       -subj "/CN=localhost" \
       -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" && tar -C /tmp/certs -cf - .' \
     | tar -C "$DEV_CERT_DIR" -xf -
+}
+
+# 把宿主 DEV_CERT_DIR 灌进 compose 命名卷 nginx-certs（只挂命名卷，不挂 WSL home）。
+# 每次 up 前刷新，确保证书与 curl --cacert 同源。
+seed_nginx_certs_volume() {
+  if [ ! -s "$DEV_CERT_DIR/localhost.crt" ] || [ ! -s "$DEV_CERT_DIR/localhost.key" ]; then
+    echo "[FAIL] 证书缺失：$DEV_CERT_DIR（请先 ensure_dev_certs）" >&2
+    exit 1
+  fi
+  if ! docker image inspect "$NGINX_IMAGE" >/dev/null 2>&1; then
+    echo "[FAIL] 无法灌证书卷：nginx 基础镜像缺失 $NGINX_IMAGE" >&2
+    exit 1
+  fi
+  local vol="${PROJECT}_nginx-certs"
+  # 预先按 compose 约定建卷并打上项目标签，避免「already exists but was not created by Docker Compose」警告。
+  if ! docker volume inspect "$vol" >/dev/null 2>&1; then
+    docker volume create \
+      --label "com.docker.compose.project=${PROJECT}" \
+      --label "com.docker.compose.volume=nginx-certs" \
+      "$vol" >/dev/null
+  fi
+  echo "dev：把 localhost 证书灌进命名卷 ${vol}…"
+  tar -C "$DEV_CERT_DIR" -cf - . \
+    | docker run --rm --pull=never -i \
+        -v "${vol}:/certs" \
+        "$NGINX_IMAGE" \
+        sh -c 'mkdir -p /certs && tar -x -f - -C /certs'
 }
 
 check_services() {
@@ -597,8 +628,8 @@ cmd_db() {
 # 后端编译说明：根 tsconfig 为全程序 noEmit 编译（队列包以 node type-stripping 直跑 .ts，
 # allowImportingTsExtensions 前置即 noEmit），故后端「编译」= 全程序类型化编译门；
 # JS 产物（emit）待第一个真实运行入口（首个业务切片）再开，不预先发明打包形态。
-# 镜像范围：frontend 本地镜像多阶段构建（frontend/Dockerfile）；infra 镜像（db/redis/
-# rustfs/nginx，钉定 tag+digest）本地拉取即视为可用，不重复构建。
+# 镜像范围：frontend/server/nginx 本地镜像（各自 Dockerfile）；其余 infra 镜像（db/redis/
+# rustfs + nginx 基础镜像，钉定 tag+digest）本地拉取即视为可用，不重复构建。
 # 不 push 不部署；产物/依赖只进容器与命名卷，不入库（E6）。
 build_frontend() {
   require_toolchain_image
@@ -624,6 +655,12 @@ build_server() {
   require_toolchain_image
   echo "build：构建 HTTP 进程本地镜像 $SERVER_IMAGE（容器内监听 3000）…"
   docker build --tag "$SERVER_IMAGE" --file "$ROOT/backend/server/Dockerfile" "$ROOT"
+}
+
+build_nginx() {
+  # 基础镜像已由 ensure_images 按 digest 拉到本地；不传 --pull。
+  echo "build：构建宿主 nginx 本地镜像 $NGINX_DEV_IMAGE（钉定 nginx + COPY default.conf）…"
+  docker build --tag "$NGINX_DEV_IMAGE" --file "$ROOT/infra/nginx/Dockerfile" "$ROOT/infra/nginx"
 }
 
 build_backend() {
@@ -660,12 +697,16 @@ ensure_images() {
   }
   local -a imgs=() roles=() missing=()
   local img role seen=" " i
-  # 工具链镜像先行：LINT_IMAGE 不在 compose 清单里（上方注释已记）
+  # 工具链与 nginx 基础镜像先行：二者都不在 compose 服务 image 清单里
+  # （compose nginx 已改为本地镜像 NGINX_DEV_IMAGE；基础镜像仍供证书签发/灌卷/快照写入）
   imgs+=("$LINT_IMAGE"); roles+=("工具链镜像")
+  imgs+=("$NGINX_IMAGE"); roles+=("nginx 基础镜像")
   while IFS= read -r img; do
     [ -z "$img" ] && continue
     [ "$img" = "$FRONTEND_IMAGE" ] && continue   # 本地构建镜像，不拉
     [ "$img" = "$SERVER_IMAGE" ] && continue     # 本地构建镜像，不拉
+    [ "$img" = "$NGINX_DEV_IMAGE" ] && continue  # 本地构建镜像，不拉
+    [ "$img" = "$NGINX_IMAGE" ] && continue      # 已在上方单独登记
     case "$seen" in *" $img "*) continue ;; esac # 去重：同一镜像不并发拉两次
     seen="$seen$img "
     imgs+=("$img"); roles+=("infra 镜像")
@@ -747,7 +788,8 @@ cmd_build() {
   build_frontend
   build_backend
   build_server
-  echo "build：全量构建完成（工具链+infra 镜像就位、前端编译、后端编译、前端与 HTTP 进程本地镜像；产物已写回宿主并 gitignore）。"
+  build_nginx
+  echo "build：全量构建完成（工具链+infra 镜像就位、前端编译、后端编译、frontend/server/nginx 本地镜像；产物已写回宿主并 gitignore）。"
 }
 
 require_toolchain_image() {
