@@ -250,14 +250,14 @@ ensure_dev_certs() {
   fi
   mkdir -p "$DEV_CERT_DIR"
   echo "dev：在仓库外生成 localhost 证书（$DEV_CERT_DIR）…"
-  # 不 bind WSL home：openssl 在容器内写 /certs，经 stdout tar 回写宿主。
+  # 不 bind WSL home：openssl 在容器内可写 /tmp/certs，经 stdout tar 回写宿主。
   docker run --rm --pull=never --user "$(id -u):$(id -g)" \
     "$NGINX_IMAGE" \
-    sh -c 'mkdir -p /certs && openssl req -x509 -newkey rsa:2048 -sha256 -days 825 -nodes \
-      -keyout /certs/localhost.key \
-      -out /certs/localhost.crt \
+    sh -c 'mkdir -p /tmp/certs && openssl req -x509 -newkey rsa:2048 -sha256 -days 825 -nodes \
+      -keyout /tmp/certs/localhost.key \
+      -out /tmp/certs/localhost.crt \
       -subj "/CN=localhost" \
-      -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" && tar -C /certs -cf - .' \
+      -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" && tar -C /tmp/certs -cf - .' \
     | tar -C "$DEV_CERT_DIR" -xf -
 }
 
