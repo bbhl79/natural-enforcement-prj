@@ -32,6 +32,7 @@
 .console .user-meta{font-size:12px;line-height:1.25}
 .console .user-meta span{color:var(--muted)}
 .console .link-btn{border:0;background:transparent;color:var(--muted);font-size:13px}
+.console a.link-btn{text-decoration:none}
 .console .shell{display:flex;min-height:calc(100vh - 52px)}
 .console .sidenav{width:196px;background:var(--white);border-right:1px solid var(--border);padding:12px 10px;flex-shrink:0}
 .console .nav-section{font-size:11px;color:#a8a29e;padding:14px 12px 6px}
@@ -87,6 +88,20 @@
 .console .input:disabled,.console .input.ro{background:var(--gray-bg);color:#57534e}
 .console .help{font-size:12px;color:var(--muted);margin-top:4px}
 .console .err{font-size:12px;color:var(--danger);margin-top:4px}
+/* 口令强度（#292）：弱／中／强三段条 + 公开规则勾选清单。 */
+.console .pw-strength-head{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:var(--muted)}
+.console .pw-strength-head strong{font-weight:600}
+.console .pw-strength[data-level="weak"] .pw-strength-head strong{color:var(--danger)}
+.console .pw-strength[data-level="medium"] .pw-strength-head strong{color:var(--amber)}
+.console .pw-strength[data-level="strong"] .pw-strength-head strong{color:var(--ok)}
+.console .pw-strength-bar{display:flex;gap:4px;margin-top:6px}
+.console .pw-strength-bar span{flex:1;height:6px;border-radius:999px;background:#e7e5e4}
+.console .pw-strength-bar span.on.weak{background:var(--danger)}
+.console .pw-strength-bar span.on.medium{background:#dc6803}
+.console .pw-strength-bar span.on.strong{background:var(--ok)}
+.console .pw-rules{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:3px 12px;margin-top:8px;font-size:12px;color:var(--muted)}
+.console .pw-rules li{display:flex;gap:5px;align-items:flex-start;line-height:1.45}
+.console .pw-rules li.fail{color:var(--danger)}
 .console .checks{display:flex;gap:14px;flex-wrap:wrap;padding-top:7px}
 .console .checks label{display:inline-flex;gap:5px;align-items:center}
 .console .checks-col{display:flex;flex-direction:column;gap:6px;padding:8px 0}

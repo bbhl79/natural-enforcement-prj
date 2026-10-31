@@ -38,6 +38,9 @@ export const PASSWORD_HISTORY_HINT = '不能与最近 5 次使用过的口令相
 /** 并发改密被拒（409 concurrent-change，#132）。v0.4 无此状态，工程稿：不露结果码。 */
 export const PASSWORD_CONCURRENT_TEXT = '口令刚被另一次操作修改，本次修改没有生效。请重新填写后再试。';
 
+/** 两次输入的新口令不一致（#292）。 */
+export const PASSWORD_MISMATCH_TEXT = '两次输入的新口令不一致';
+
 export interface OperatorSession {
   name: string;
   code: string;
@@ -58,6 +61,7 @@ export interface LoginState {
   passwordChangeKind: PasswordChangeKind | null;
   currentPassword: string;
   newPassword: string;
+  confirmPassword: string;
   ruleCodes: string[];
   currentPasswordRejected: boolean;
   /** 并发改密被拒（409 concurrent-change，#132）：出红色横幅。 */
@@ -89,6 +93,7 @@ const initialState: LoginState = {
   passwordChangeKind: null,
   currentPassword: '',
   newPassword: '',
+  confirmPassword: '',
   ruleCodes: [],
   currentPasswordRejected: false,
   concurrentChangeRejected: false,
@@ -288,11 +293,13 @@ export const submitPassword = createAsyncThunk<
 >(
   'login/submitPassword',
   async (_, { getState, rejectWithValue, dispatch }) => {
-    const { currentPassword, newPassword } = getState().login;
+    const { currentPassword, newPassword, phase } = getState().login;
+    // 强制改密门禁（首登／过期）不带当前口令；自愿改密必须带当前口令。
+    const forced = phase === 'password-change-required';
     const response = await fetch('/api/auth/password', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ currentPassword, newPassword }),
+      body: JSON.stringify(forced ? { newPassword } : { currentPassword, newPassword }),
     });
     const body = (await response.json()) as { result?: string; rules?: string[] };
     const denied = passwordChangeKindFromDenial(response.status, body.result);
@@ -316,6 +323,7 @@ export const submitPassword = createAsyncThunk<
   {
     condition: (_, { getState }) => {
       const state = getState().login;
+      if (state.phase === 'password-change-required') return state.newPassword !== '';
       return state.currentPassword !== '' && state.newPassword !== '';
     },
   },
@@ -354,6 +362,10 @@ const loginSlice = createSlice({
       state.ruleCodes = [];
       state.concurrentChangeRejected = false;
     },
+    setConfirmPassword(state, action: PayloadAction<string>) {
+      state.confirmPassword = action.payload;
+      state.concurrentChangeRejected = false;
+    },
     dismissExpiryNotice(state) {
       state.expiryNoticeDismissed = true;
     },
@@ -363,6 +375,12 @@ const loginSlice = createSlice({
       state.passwordChangeKind = action.payload;
       state.operator = null;
       state.screen = 'default';
+      state.currentPassword = '';
+      state.newPassword = '';
+      state.confirmPassword = '';
+      state.ruleCodes = [];
+      state.currentPasswordRejected = false;
+      state.concurrentChangeRejected = false;
     },
     /** 已登录时接口返回 401：会话已结束（P1）。 */
     sessionEnded(state) {
@@ -407,6 +425,12 @@ const loginSlice = createSlice({
           state.passwordChangeKind = action.payload.result === 'password-expired' ? 'expired' : 'first-login';
           state.operator = null;
           state.screen = 'default';
+          state.currentPassword = '';
+          state.newPassword = '';
+          state.confirmPassword = '';
+          state.ruleCodes = [];
+          state.currentPasswordRejected = false;
+          state.concurrentChangeRejected = false;
           return;
         }
         state.phase = 'anonymous';
@@ -443,6 +467,12 @@ const loginSlice = createSlice({
           state.phase = 'password-change-required';
           state.passwordChangeKind = action.payload.result === 'password-expired' ? 'expired' : 'first-login';
           state.screen = 'default';
+          state.currentPassword = '';
+          state.newPassword = '';
+          state.confirmPassword = '';
+          state.ruleCodes = [];
+          state.currentPasswordRejected = false;
+          state.concurrentChangeRejected = false;
           return;
         }
         if (action.payload.result === 'locked' || action.payload.result === 'deactivated') {
@@ -472,6 +502,7 @@ const loginSlice = createSlice({
         state.noticeTag = action.payload.noticeTag ?? null;
         state.currentPassword = '';
         state.newPassword = '';
+        state.confirmPassword = '';
         state.ruleCodes = [];
         state.currentPasswordRejected = false;
         state.concurrentChangeRejected = false;
@@ -515,6 +546,7 @@ const loginSlice = createSlice({
         state.password = '';
         state.currentPassword = '';
         state.newPassword = '';
+        state.confirmPassword = '';
         state.ruleCodes = [];
         state.currentPasswordRejected = false;
         state.concurrentChangeRejected = false;
@@ -534,6 +566,7 @@ export const {
   forgotPassword,
   setCurrentPassword,
   setNewPassword,
+  setConfirmPassword,
   dismissExpiryNotice,
   enterPasswordChange,
   sessionEnded,

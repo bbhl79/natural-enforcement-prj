@@ -7,29 +7,35 @@ import { BarePage } from '../shell/StatusPages';
 import {
   logout,
   PASSWORD_CONCURRENT_TEXT,
-  PASSWORD_HISTORY_HINT,
-  PASSWORD_RULE_TEXT,
-  setCurrentPassword,
+  PASSWORD_MISMATCH_TEXT,
+  setConfirmPassword,
   setNewPassword,
   submitPassword,
 } from './loginSlice';
+import PasswordStrength, { evaluatePasswordStrength, PasswordRuleFeedback } from './PasswordStrength';
 
 const INPUT_STYLE = { height: 44 } as const;
 
-/** 改口令页（#91；版式按原型 v0.4 P2 forced / forcedExpired）。 */
+/** 强制改密页（#91；#292：首登／过期只填新口令与确认，不要当前口令）。 */
 export default function PasswordPage() {
   const dispatch = useAppDispatch();
   const state = useAppSelector((root) => root.login);
   const [params] = useSearchParams();
   const redirected = safeNext(params.get('next')) !== null;
   const locked = state.screen === 'locked';
-  const canSubmit = !locked && state.currentPassword !== '' && state.newPassword !== '';
+  const strength = evaluatePasswordStrength({ password: state.newPassword });
+  const mismatch = state.confirmPassword !== '' && state.confirmPassword !== state.newPassword;
+  const canSubmit = !locked
+    && state.newPassword !== ''
+    && state.confirmPassword === state.newPassword
+    && strength.passed;
   const explanation = state.passwordChangeKind === 'expired'
     ? '口令已超过 90 天，必须更换口令。完成前不能使用其他功能。'
     : '首次登录必须更换初始口令。完成前不能使用其他功能。';
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!canSubmit) return;
     void dispatch(submitPassword());
   }
 
@@ -45,25 +51,10 @@ export default function PasswordPage() {
           {locked ? (
             <div className="banner amber" role="status">账号已锁定。请联系本单位管理员解锁。</div>
           ) : null}
-          {state.currentPasswordRejected ? (
-            <div className="banner danger" role="status">当前口令不正确。</div>
-          ) : null}
           {state.concurrentChangeRejected ? (
             <div className="banner danger" role="status" data-reason="concurrent-change">{PASSWORD_CONCURRENT_TEXT}</div>
           ) : null}
           <form onSubmit={onSubmit}>
-            <input
-              className="input"
-              name="currentPassword"
-              type="password"
-              autoComplete="current-password"
-              placeholder="当前口令"
-              aria-label="当前口令"
-              style={{ ...INPUT_STYLE, marginBottom: 10 }}
-              value={state.currentPassword}
-              disabled={locked}
-              onChange={(event) => dispatch(setCurrentPassword(event.target.value))}
-            />
             <input
               className="input"
               name="newPassword"
@@ -76,20 +67,25 @@ export default function PasswordPage() {
               disabled={locked}
               onChange={(event) => dispatch(setNewPassword(event.target.value))}
             />
-            {/* 命中口令历史（P2 forcedReused，#132）：单句拒绝提示，替换常驻的历史规则提示。 */}
-            {state.ruleCodes.includes('reused') ? (
-              <div className="err" data-reason="password-reused" style={{ marginBottom: 12 }}>
-                {PASSWORD_RULE_TEXT.reused}
+            <PasswordStrength password={state.newPassword} />
+            <PasswordRuleFeedback ruleCodes={state.ruleCodes} />
+            <input
+              className="input"
+              name="confirmPassword"
+              type="password"
+              autoComplete="new-password"
+              placeholder="确认新口令"
+              aria-label="确认新口令"
+              style={{ ...INPUT_STYLE, marginBottom: 4 }}
+              value={state.confirmPassword}
+              disabled={locked}
+              onChange={(event) => dispatch(setConfirmPassword(event.target.value))}
+            />
+            {mismatch ? (
+              <div className="err" role="status" data-reason="confirm-mismatch" style={{ marginBottom: 10 }}>
+                {PASSWORD_MISMATCH_TEXT}
               </div>
-            ) : state.ruleCodes.length > 0 ? (
-              <ul className="err" style={{ margin: '0 0 12px 18px' }}>
-                {state.ruleCodes.map((code) => (
-                  <li key={code}>{PASSWORD_RULE_TEXT[code] ?? code}</li>
-                ))}
-              </ul>
-            ) : (
-              <div className="help" style={{ marginBottom: 12 }}>{PASSWORD_HISTORY_HINT}</div>
-            )}
+            ) : null}
             <button
               className="btn btn-primary"
               type="submit"

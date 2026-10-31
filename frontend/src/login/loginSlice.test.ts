@@ -16,8 +16,10 @@ import reducer, {
   logout,
   PASSWORD_CONCURRENT_TEXT,
   PASSWORD_HISTORY_HINT,
+  PASSWORD_MISMATCH_TEXT,
   PASSWORD_RULE_TEXT,
   passwordChangeKindFromDenial,
+  setConfirmPassword,
   setCurrentPassword,
   setNewPassword,
   setPassword,
@@ -236,8 +238,13 @@ describe('登录页', () => {
     const { html } = await renderRoute(view, '/auth/password');
     expect(html).toContain('必须改口令');
     expect(html).toContain('首次登录必须更换初始口令');
-    expect(html).toContain('placeholder="当前口令"');
+    // #292：强制页不要当前口令，只有新口令与确认新口令。
+    expect(html).not.toContain('placeholder="当前口令"');
+    expect(html.replace(/<[^>]*>/g, ' ')).not.toContain('当前口令');
+    expect(html).not.toContain('当前口令不正确');
     expect(html).toContain('placeholder="新口令"');
+    expect(html).toContain('placeholder="确认新口令"');
+    expect(html).toContain('data-level="weak"');
     expect(html).not.toContain('class="sidenav"');
     expect(html).not.toContain('placeholder="手机号"');
   });
@@ -254,6 +261,125 @@ describe('登录页', () => {
     });
     const { html } = await renderRoute(view, '/auth/password');
     expect(html).toContain('口令已超过 90 天，必须更换口令');
+  });
+
+  it('两次输入的新口令不一致：不可提交并提示', async () => {
+    const state = reducer(
+      reducer(undefined, setNewPassword('Brand-new-pass-92!')),
+      setConfirmPassword('Other-new-pass-92!'),
+    );
+    const html = await passwordPageHtml(state);
+    expect(html).toContain(PASSWORD_MISMATCH_TEXT);
+    expect(html).toContain('data-reason="confirm-mismatch"');
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>更换口令<\/button>/);
+  });
+
+  it('确认一致且公开规则全过时可以提交；公开规则未全过仍不可提交', async () => {
+    const ready = reducer(
+      reducer(undefined, setNewPassword('Brand-new-pass-92!')),
+      setConfirmPassword('Brand-new-pass-92!'),
+    );
+    const readyHtml = await passwordPageHtml(ready);
+    expect(readyHtml).not.toContain(PASSWORD_MISMATCH_TEXT);
+    expect(readyHtml).toContain('data-level="strong"');
+    expect(readyHtml).not.toMatch(/<button[^>]*disabled[^>]*>更换口令<\/button>/);
+
+    const weak = reducer(
+      reducer(undefined, setNewPassword('short')),
+      setConfirmPassword('short'),
+    );
+    const weakHtml = await passwordPageHtml(weak);
+    expect(weakHtml).toContain('data-level="weak"');
+    expect(weakHtml).toContain('data-rule="too-short"');
+    expect(weakHtml).toMatch(/<button[^>]*disabled[^>]*>更换口令<\/button>/);
+  });
+
+  it('强制改密提交不带当前口令，成功后清空确认', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ result: 'established' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        result: 'authenticated',
+        name: '丁经办',
+        code: 'P-95-OK',
+        orgName: '第一执法支队',
+        roles: ['经办'],
+      }), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const forced = reducer(
+      reducer(undefined, enterPasswordChange('first-login')),
+      setNewPassword('Brand-new-pass-92!'),
+    );
+    const view = configureStore({
+      reducer: { login: reducer },
+      preloadedState: { login: { ...forced, confirmPassword: 'Brand-new-pass-92!' } },
+    });
+    await view.dispatch(submitPassword());
+    expect(fetchMock).toHaveBeenCalledWith('/api/auth/password', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ newPassword: 'Brand-new-pass-92!' }),
+    });
+    const state = view.getState().login;
+    expect(state.phase).toBe('authenticated');
+    expect(state.confirmPassword).toBe('');
+    expect(state.newPassword).toBe('');
+  });
+
+  it('自愿改密页有当前口令，确认不一致时不可提交', async () => {
+    const entered = reducer(
+      undefined,
+      submitLogin.fulfilled(
+        { name: '丁经办', code: 'P-95-OK', orgName: '第一执法支队', roles: ['经办'], opcodes: [] },
+        'req-account',
+        undefined,
+      ),
+    );
+    const filled = reducer(
+      reducer(
+        reducer(entered, setCurrentPassword('Old-pass-97!')),
+        setNewPassword('Brand-new-pass-92!'),
+      ),
+      setConfirmPassword('Other-new-pass-92!'),
+    );
+    const view = configureStore({
+      reducer: { login: reducer },
+      preloadedState: { login: filled },
+    });
+    const { html } = await renderRoute(view, '/account/password');
+    expect(html).toContain('<h1>修改口令</h1>');
+    expect(html).toContain('placeholder="当前口令"');
+    expect(html).toContain('placeholder="新口令"');
+    expect(html).toContain('placeholder="确认新口令"');
+    expect(html).toContain('data-level="');
+    expect(html).toContain(PASSWORD_MISMATCH_TEXT);
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>保存新口令<\/button>/);
+    // 顶栏用户区可进入个人中心改口令。
+    expect(html).toContain('href="/account/password"');
+  });
+
+  it('自愿改密新口令与当前口令相同：本地提示并禁用提交', async () => {
+    const entered = reducer(
+      undefined,
+      submitLogin.fulfilled(
+        { name: '丁经办', code: 'P-95-OK', orgName: '第一执法支队', roles: ['经办'], opcodes: [] },
+        'req-same',
+        undefined,
+      ),
+    );
+    const filled = reducer(
+      reducer(
+        reducer(entered, setCurrentPassword('Brand-new-pass-92!')),
+        setNewPassword('Brand-new-pass-92!'),
+      ),
+      setConfirmPassword('Brand-new-pass-92!'),
+    );
+    const view = configureStore({
+      reducer: { login: reducer },
+      preloadedState: { login: filled },
+    });
+    const { html } = await renderRoute(view, '/account/password');
+    expect(html).toContain(PASSWORD_RULE_TEXT['same-as-current']);
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>保存新口令<\/button>/);
   });
 
   it('规则码一次显示为全部中文提示', async () => {
@@ -443,8 +569,9 @@ describe('登录页', () => {
     expect(html).toContain('class="banner amber"');
     expect(html).toContain('账号已锁定。请联系本单位管理员解锁。');
     expect(html).not.toContain('当前口令不正确');
-    expect(html).toMatch(/placeholder="当前口令"[^>]*disabled/);
+    expect(html).not.toContain('placeholder="当前口令"');
     expect(html).toMatch(/placeholder="新口令"[^>]*disabled/);
+    expect(html).toMatch(/placeholder="确认新口令"[^>]*disabled/);
   });
 
   it('改口令提交当前口令和新口令', async () => {

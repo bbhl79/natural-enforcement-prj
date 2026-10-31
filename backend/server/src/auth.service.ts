@@ -336,29 +336,39 @@ export class AuthService {
       });
       return { status: 401, body: { result: 'locked' } };
     }
-    const currentHash = await this.credentials.authenticate(active.account.id, input.currentPassword);
-    if (!currentHash) {
-      const snapshot = this.nextFailure(active.account, now);
-      await this.directory.saveFailure(active.account.id, snapshot);
-      if (snapshot.count >= LOCK_AFTER) {
+    const gate = passwordGate(active.account.passwordChangedAt, now);
+    const forced = gate !== null;
+    let currentHash: string | null;
+    if (forced) {
+      // 首登／过期门禁没有当前口令可验：散列从库中读取，供历史比对与条件更新（#292）。
+      currentHash = await this.credentials.currentPasswordHash(active.account.id);
+    } else {
+      currentHash = await this.credentials.authenticate(active.account.id, input.currentPassword);
+      if (!currentHash) {
+        const snapshot = this.nextFailure(active.account, now);
+        await this.directory.saveFailure(active.account.id, snapshot);
+        if (snapshot.count >= LOCK_AFTER) {
+          await this.audit.append({
+            action: 'login.locked',
+            ...partiesOf(active.account, input.sourceIp),
+          });
+          return { status: 401, body: { result: 'locked' } };
+        }
         await this.audit.append({
-          action: 'login.locked',
+          action: 'login.failed',
+          reason: 'bad-credential',
           ...partiesOf(active.account, input.sourceIp),
         });
-        return { status: 401, body: { result: 'locked' } };
+        return { status: 400, body: { result: 'invalid-credential' } };
       }
-      await this.audit.append({
-        action: 'login.failed',
-        reason: 'bad-credential',
-        ...partiesOf(active.account, input.sourceIp),
-      });
-      return { status: 400, body: { result: 'invalid-credential' } };
+      await this.directory.clearFailure(active.account.id);
     }
-    await this.directory.clearFailure(active.account.id);
     const rules = rejectedPasswordRules({
       password: input.newPassword,
       personnelCode: active.account.code,
-      currentPassword: input.currentPassword,
+      // 强制门禁不验当前口令；但客户端若仍带来，可照常判 same-as-current。
+      // 没带时由下面的历史比对兜底（与当前散列相同即回 reused）。
+      currentPassword: input.currentPassword === '' ? undefined : input.currentPassword,
     });
     if (rules.length > 0) return { status: 400, body: { result: 'non-compliant', rules } };
     // 历史比对只在其余口令规则全部通过后做（ADR 0015）。本人命中历史只回 reused，
@@ -366,8 +376,8 @@ export class AuthService {
     if (await this.credentials.isReused(active.account.id, input.newPassword, currentHash)) {
       return { status: 400, body: { result: 'non-compliant', rules: ['reused'] } };
     }
-    const gate = passwordGate(active.account.passwordChangedAt, now);
-    // 条件更新 + 追加历史同一事务（ADR 0015）：期望值是认证时读到的散列。
+    // 条件更新 + 追加历史同一事务（ADR 0015）：期望值是强制门禁读到的库中散列，
+    // 或自愿改密认证时读到的散列。
     const rotated = await this.credentials.changePassword(active.account.id, input.newPassword, now, currentHash);
     if (!rotated) {
       // 并发已换掉散列：本次不写库，回 409，拒绝留痕写 account.password-rejected（操作码为空，本人改密）。

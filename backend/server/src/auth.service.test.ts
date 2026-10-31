@@ -111,17 +111,39 @@ let trail: Entry[];
 let gate: SourceGate;
 let capacity: number;
 let authenticateCalls: number;
+let currentHashCalls: number;
+let storedCurrentHash: string | null;
+let reused: boolean;
+let reuseChecks: Array<{ personnelId: string; plain: string; currentHash: string | null }>;
+let rotations: Array<{ personnelId: string; plain: string; at: Date; expectedHash: string | null }>;
+let rotationAccepted: boolean;
 
 function service(): AuthService {
   const audit: AuditTrailPort = { append: async (entry) => { trail.push(entry); } };
   const credentials = {
-    // 认证成功交回当前散列（#132）：改密拿它作条件更新的期望值。
+    // 认证成功交回当前散列（#132）：自愿改密拿它作条件更新的期望值。
     authenticate: async (_id: string, plain: string) => {
       authenticateCalls += 1;
-      return plain === GOOD ? 'fake-current-hash' : null;
+      return plain === GOOD ? storedCurrentHash : null;
     },
-    isReused: async () => false,
-    changePassword: async () => true,
+    // 强制改密门禁没有当前口令可验，直接读库中散列（#292）。
+    currentPasswordHash: async () => {
+      currentHashCalls += 1;
+      return storedCurrentHash;
+    },
+    isReused: async (personnelId: string, plain: string, currentHash: string | null) => {
+      reuseChecks.push({ personnelId, plain, currentHash });
+      return reused;
+    },
+    changePassword: async (
+      personnelId: string,
+      plain: string,
+      at: Date,
+      expectedHash: string | null,
+    ) => {
+      rotations.push({ personnelId, plain, at, expectedHash });
+      return rotationAccepted;
+    },
   } as unknown as CredentialService;
   return new AuthService(
     directory,
@@ -192,6 +214,12 @@ beforeEach(() => {
   gate = new SourceGate();
   capacity = 7500;
   authenticateCalls = 0;
+  currentHashCalls = 0;
+  storedCurrentHash = 'fake-current-hash';
+  reused = false;
+  reuseChecks = [];
+  rotations = [];
+  rotationAccepted = true;
 });
 
 describe('口令登录判定顺序（十个分支）', () => {
@@ -298,6 +326,156 @@ describe('口令登录判定顺序（十个分支）', () => {
     expect(actions()).toEqual(['login.succeeded']);
     const [row] = await sessions.listActive(account.id);
     expect(row?.absoluteEndsAt).toEqual(new Date(T0 + 8 * 60 * MINUTE));
+  });
+});
+
+/** 登录一次拿到活动会话；清掉登录留痕，只观察改密本身。 */
+async function activeSession(patch: Partial<LoginAccount> = {}) {
+  const account = addAccount(patch);
+  await login(GOOD);
+  const row = sessions.rows.find((item) => item.personnelId === account.id)!;
+  trail.length = 0;
+  authenticateCalls = 0;
+  currentHashCalls = 0;
+  reuseChecks = [];
+  rotations = [];
+  return { account, active: { row, account: { ...account } } };
+}
+
+function changePassword(
+  active: { row: SessionRow; account: LoginAccount },
+  currentPassword: string,
+  newPassword: string,
+) {
+  return service().changePassword({ active, sourceIp: IP, currentPassword, newPassword });
+}
+
+describe('本人改口令的门禁（#292）', () => {
+  it('首登强制改密：不带当前口令也能改，散列取自库中当前值', async () => {
+    const { active } = await activeSession({ passwordChangedAt: null });
+    const outcome = await changePassword(active, '', 'Brand-new-pass-92!');
+    expect(outcome).toEqual({ status: 200, body: { result: 'established' } });
+    expect(authenticateCalls).toBe(0);
+    expect(currentHashCalls).toBe(1);
+    expect(reuseChecks).toEqual([{
+      personnelId: 'acct-1',
+      plain: 'Brand-new-pass-92!',
+      currentHash: 'fake-current-hash',
+    }]);
+    expect(rotations).toHaveLength(1);
+    expect(rotations[0]).toMatchObject({
+      personnelId: 'acct-1',
+      expectedHash: 'fake-current-hash',
+    });
+    expect(actions()).toEqual(['account.password-changed', 'login.succeeded']);
+    expect(trail[0]).toMatchObject({ action: 'account.password-changed', reason: 'first-login' });
+  });
+
+  it('过期强制改密：不验当前口令，传错也不拦截；留痕原因为 expired', async () => {
+    const { active } = await activeSession({ passwordChangedAt: new Date(T0 - 91 * DAY) });
+    const outcome = await changePassword(active, 'wrong-current', 'Brand-new-pass-92!');
+    expect(outcome).toEqual({ status: 200, body: { result: 'established' } });
+    expect(authenticateCalls).toBe(0);
+    expect(currentHashCalls).toBe(1);
+    expect(trail[0]).toMatchObject({ action: 'account.password-changed', reason: 'expired' });
+  });
+
+  it('强制改密仍拒不合规口令与历史重复', async () => {
+    const { active } = await activeSession({ passwordChangedAt: null });
+    const weak = await changePassword(active, '', 'short');
+    expect(weak).toMatchObject({ status: 400, body: { result: 'non-compliant' } });
+    if (weak.body.result === 'non-compliant') expect(weak.body.rules).toContain('too-short');
+    expect(reuseChecks).toEqual([]);
+    expect(rotations).toEqual([]);
+
+    // 强制页不带当前口令；若客户端仍带来，等同时照常回 same-as-current。
+    const same = await changePassword(active, 'Brand-new-pass-92!', 'Brand-new-pass-92!');
+    expect(same).toEqual({ status: 400, body: { result: 'non-compliant', rules: ['same-as-current'] } });
+    expect(reuseChecks).toEqual([]);
+
+    reused = true;
+    const history = await changePassword(active, '', 'Brand-new-pass-92!');
+    expect(history).toEqual({ status: 400, body: { result: 'non-compliant', rules: ['reused'] } });
+    expect(rotations).toEqual([]);
+  });
+
+  it('自愿改密不带当前口令：拒绝并计一次失败，不读库中散列', async () => {
+    const { active } = await activeSession();
+    const outcome = await changePassword(active, '', 'Brand-new-pass-92!');
+    expect(outcome).toEqual({ status: 400, body: { result: 'invalid-credential' } });
+    expect(authenticateCalls).toBe(1);
+    expect(currentHashCalls).toBe(0);
+    expect(rotations).toEqual([]);
+    expect(directory.accounts.get('acct-1')!.failureCount).toBe(1);
+    expect(actions()).toEqual(['login.failed']);
+  });
+
+  it('自愿改密当前口令错误：拒绝并计一次失败', async () => {
+    const { active } = await activeSession();
+    const outcome = await changePassword(active, 'wrong-current', 'Brand-new-pass-92!');
+    expect(outcome).toEqual({ status: 400, body: { result: 'invalid-credential' } });
+    expect(authenticateCalls).toBe(1);
+    expect(rotations).toEqual([]);
+    expect(directory.accounts.get('acct-1')!.failureCount).toBe(1);
+  });
+
+  it('自愿改密连错到第 5 次：锁定 30 分钟，不写库', async () => {
+    const { active } = await activeSession();
+    active.account.failureCount = 4;
+    active.account.failureWindowStartedAt = new Date(T0 - MINUTE);
+    const outcome = await changePassword(active, 'wrong-current', 'Brand-new-pass-92!');
+    expect(outcome).toEqual({ status: 401, body: { result: 'locked' } });
+    expect(directory.accounts.get('acct-1')!.lockedUntil).toEqual(new Date(T0 + 30 * MINUTE));
+    expect(rotations).toEqual([]);
+  });
+
+  it('自愿改密当前口令正确：成功，期望散列与历史比对用认证返回的散列', async () => {
+    const { active } = await activeSession();
+    const outcome = await changePassword(active, GOOD, 'Brand-new-pass-92!');
+    expect(outcome).toEqual({ status: 200, body: { result: 'established' } });
+    expect(authenticateCalls).toBe(1);
+    expect(currentHashCalls).toBe(0);
+    expect(reuseChecks).toEqual([{
+      personnelId: 'acct-1',
+      plain: 'Brand-new-pass-92!',
+      currentHash: 'fake-current-hash',
+    }]);
+    expect(rotations[0]).toMatchObject({ expectedHash: 'fake-current-hash' });
+    expect(trail[0]).toMatchObject({ action: 'account.password-changed', reason: 'voluntary' });
+  });
+
+  it('自愿改密新口令与当前口令相同：只回 same-as-current，不做历史比对', async () => {
+    const { active } = await activeSession();
+    const outcome = await changePassword(active, GOOD, GOOD);
+    expect(outcome).toEqual({ status: 400, body: { result: 'non-compliant', rules: ['same-as-current'] } });
+    expect(reuseChecks).toEqual([]);
+    expect(rotations).toEqual([]);
+  });
+
+  it('自愿改密仍拒不合规口令与历史重复', async () => {
+    const { active } = await activeSession();
+    const weak = await changePassword(active, GOOD, 'short');
+    expect(weak).toMatchObject({ status: 400, body: { result: 'non-compliant' } });
+    if (weak.body.result === 'non-compliant') expect(weak.body.rules).toContain('too-short');
+    expect(rotations).toEqual([]);
+
+    reused = true;
+    const history = await changePassword(active, GOOD, 'Brand-new-pass-92!');
+    expect(history).toEqual({ status: 400, body: { result: 'non-compliant', rules: ['reused'] } });
+    expect(rotations).toEqual([]);
+  });
+
+  it('并发改密被拒：回 409 concurrent-change，并写 account.password-rejected', async () => {
+    const { active } = await activeSession();
+    rotationAccepted = false;
+    const outcome = await changePassword(active, GOOD, 'Brand-new-pass-92!');
+    expect(outcome).toEqual({ status: 409, body: { result: 'concurrent-change' } });
+    expect(actions()).toEqual(['account.password-rejected']);
+    expect(trail[0]).toMatchObject({
+      action: 'account.password-rejected',
+      outcome: 'failed',
+      reason: 'concurrent-change',
+    });
   });
 });
 

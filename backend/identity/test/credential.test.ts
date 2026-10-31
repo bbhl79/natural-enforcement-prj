@@ -43,6 +43,17 @@ describe('口令散列（argon2 0.45.1，#52）', () => {
     await expect(service.authenticate('missing', 's3cret-pass')).resolves.toBeNull();
   });
 
+  it('currentPasswordHash 只读当前散列、不验真（#292 强制改密）', async () => {
+    const hash = await new CredentialService(noopStore()).hashPassword('s3cret-pass');
+    const service = new CredentialService(noopStore({
+      known: { passwordHash: hash },
+      blank: { passwordHash: null },
+    }));
+    await expect(service.currentPasswordHash('known')).resolves.toBe(hash);
+    await expect(service.currentPasswordHash('blank')).resolves.toBeNull();
+    await expect(service.currentPasswordHash('missing')).resolves.toBeNull();
+  });
+
   it('验真成功且已存参数与定版不符时按定版重写，上次改密时间不变', async () => {
     const changedAt = new Date('2026-01-15T00:00:00.000Z');
     const row = {
@@ -158,6 +169,9 @@ describe('口令历史（ADR 0015，#132）', () => {
       retiredAt: at,
     });
     await expect(service.verifyHash(String(rotations[0]!.passwordHash), 'New-pass-1!')).resolves.toBe(true);
+    // 强制门禁读不到当前散列时按空期望值走条件更新（#292），不伪造空串做验真。
+    await expect(service.changePassword('p1', 'New-pass-1!', at, null)).resolves.toBe(true);
+    expect(rotations[1]).toMatchObject({ personnelId: 'p1', expectedHash: null });
     hit = false;
     await expect(service.changePassword('p1', 'New-pass-1!', at, 'stale-hash')).resolves.toBe(false);
   });
