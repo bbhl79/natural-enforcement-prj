@@ -196,8 +196,8 @@ describe('一级五总入口与路由定型（#207 导航锁、#209 执行票）
     expect(workbench.html).not.toContain('class="sidenav"');
     expect(workbench.html).not.toContain('data-menu="board"');
     expect(workbench.html).not.toContain('data-menu="step-register"');
-    expect(workbench.html).toContain('aria-label="工作台分区"');
-    expect(workbench.html).toContain('登记新线索');
+    expect(workbench.html).toContain('我的待办 · 统一清单');
+    expect(workbench.html).toContain('录入线索');
   });
 
   it('案件中心、统筹督导的二级是规划中占位，带规划中标记', async () => {
@@ -245,13 +245,17 @@ describe('录入＝总入口：工作台登记壳与旧路由（#296）', () => 
   /** 内勤：可登记线索。 */
   const REGISTER = ['clue.read', 'clue.register'];
 
-  it('工作台主区顶「待办｜登记新线索」，无侧栏也无三入口并列', async () => {
+  it('工作台主区＝统一待办清单：页头「录入线索」进登记壳，无「待办｜登记」分区标签', async () => {
     serve(person(['经办'], CLERK));
     const { html } = await renderRoute(fresh(), '/workbench');
-    expect(html).toContain('aria-label="工作台分区"');
-    expect(html).toContain('>待办</a>');
-    expect(html).toContain('登记新线索');
-    expect(html).toContain('本系统处理的所有线索都从「登记新线索」进入');
+    expect(html).toContain('我的待办 · 统一清单');
+    expect(html).toContain('href="/workbench/register"');
+    expect(html).toContain('录入线索');
+    expect(html).toContain('全部事项类型');
+    expect(html).toContain('已超期');
+    expect(html).toContain('点色仅为示意；无办理时限规则时全部按等待时长排序');
+    expect(html).not.toContain('ws-sec-tabs');
+    expect(html).not.toContain('aria-label="工作台分区"');
     expect(html).not.toContain('线索录入入口');
     expect(html).not.toContain('① 线索录入');
   });
@@ -271,6 +275,7 @@ describe('录入＝总入口：工作台登记壳与旧路由（#296）', () => 
     expect(html).toContain('data-role="domain-pending"');
     expect(html).toContain('请先选法域');
     expect(html).toContain('data-requires="clue.register"');
+    expect(html).toContain('← 返回待办');
     // 新办法域为空：不预选「土地」。
     expect(html).not.toMatch(/<option[^>]*selected[^>]*value="land"/);
   });
@@ -289,6 +294,8 @@ describe('录入＝总入口：工作台登记壳与旧路由（#296）', () => 
     serve(person(['内勤'], REGISTER), REGISTER_ROUTES);
     const section = await renderRoute(fresh(), '/workbench?section=flow');
     expect(section.html).toContain('data-group="基本信息"');
+    expect(section.html).toContain('← 返回待办');
+    expect(section.html).not.toContain('ws-sec-tabs');
     const step = await renderRoute(fresh(), '/workbench?step=2&clue=clue-1');
     expect(step.html).not.toContain('aria-label="线索办理步骤"');
     // 未取到核查视图时仍显示载入容器，不退回待办。
@@ -298,10 +305,10 @@ describe('录入＝总入口：工作台登记壳与旧路由（#296）', () => 
     expect(fallback.html).not.toContain('aria-label="线索办理步骤"');
   });
 
-  it('线索中心只做查筛台账，页头提示并可去工作台登记', async () => {
+  it('线索中心只做查筛台账，页头提示并可去工作台录入线索', async () => {
     serve(person(['经办'], CLERK));
     const { html } = await renderRoute(fresh(), '/clue');
-    expect(html).toContain('去工作台登记');
+    expect(html).toContain('去工作台录入线索');
     expect(html).toContain('href="/workbench/register"');
     expect(html).not.toContain('href="/clue/register"');
     expect(html).toContain('class="sidenav"');

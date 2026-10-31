@@ -44,9 +44,16 @@ describe('主区全宽、无常驻右侧调试栏', () => {
 });
 
 describe('统一工作台无侧栏与登记页布局', () => {
-  it('分区页签有样式；登记页不再有开单前步骤条与门闸', () => {
-    expect(rule('.ws-sec-tabs')).toContain('display:flex');
-    expect(rule('.ws-sec-tab')).toContain('border-bottom');
+  it('待办清单有三色点、图例与空态样式；不再有分区页签；登记页无步骤条与门闸', () => {
+    expect(rule('.todo-dot')).toContain('border-radius:50%');
+    expect(rule('.todo-dot.overdue')).toContain('#b91c1c');
+    expect(rule('.todo-dot.urgent')).toContain('#ea580c');
+    expect(rule('.todo-dot.ontime')).toContain('#2563eb');
+    expect(rule('.todo-legend')).toContain('display:flex');
+    expect(rule('.todo-filters')).toContain('display:flex');
+    expect(rule('.todo-empty')).toContain('text-align:center');
+    expect(cssBody).not.toContain('.ws-sec-tabs');
+    expect(cssBody).not.toContain('.ws-sec-tab');
     expect(cssBody).not.toContain('.stepper');
     expect(cssBody).not.toContain('.step-btn');
     expect(cssBody).not.toContain('.gate-card');

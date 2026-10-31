@@ -81,7 +81,7 @@ describe('顶栏一级五总入口（#207 导航锁）', () => {
 });
 
 describe('侧栏二级随一级切换（#207 导航锁）', () => {
-  it('统一工作台无侧栏二级：分区由主区「待办｜登记新线索」承担', () => {
+  it('统一工作台无侧栏二级：主区承担统一待办清单与录入线索', () => {
     expect(secondaryIds('workbench', CLERK)).toEqual([]);
     expect(visibleSecondaries('workbench', CLERK)).toEqual([]);
   });
