@@ -5,6 +5,7 @@
 import { createBrowserRouter, redirect, type LoaderFunctionArgs, type RouteObject } from 'react-router';
 
 import CaseConflictPage from './case/CaseConflictPage';
+import ChangePasswordPage from './account/ChangePasswordPage';
 import AdminHomePage from './admin/AdminHomePage';
 import { adminHomeLoader } from './admin/adminHome';
 import AuditPage from './admin/AuditPage';
@@ -169,6 +170,7 @@ export function appRoutes(store: RouterStore): RouteObject[] {
                 { id: 'personnel-card', path: 'admin/personnel/:id', loader: personnelCardLoader(store), element: <PersonnelCardPage /> },
                 { id: 'admin-roles', path: 'admin/roles', element: <PlannedCenterPage primary="admin" /> },
                 { id: 'admin-reference', path: 'admin/reference', element: <PlannedCenterPage primary="admin" /> },
+                { id: 'account-password', path: 'account/password', element: <ChangePasswordPage /> },
                 { id: 'not-found', path: '*', element: <NotFoundPage /> },
               ],
             },

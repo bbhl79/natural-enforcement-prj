@@ -90,6 +90,7 @@ export default function Topbar({ operator, onLogout }: {
                 <span>{`${operator.orgName ?? ''} · ${operator.roles.join('、')}`}</span>
               </div>
             </div>
+            <Link className="link-btn" to="/account/password" data-action="change-password">修改口令</Link>
             <button type="button" className="link-btn" onClick={onLogout}>退出</button>
           </>
         ) : null}

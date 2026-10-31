@@ -65,6 +65,15 @@ export class CredentialService {
   }
 
   /**
+   * 读取人员当前生效的口令散列，不做验真（#292）：强制改密门禁没有当前口令可验，
+   * 用库中散列作历史比对与条件更新的期望值。
+   */
+  async currentPasswordHash(personnelId: string): Promise<string | null> {
+    const personnel = await this.store.findPersonnelById(personnelId);
+    return personnel?.passwordHash ?? null;
+  }
+
+  /**
    * 历史比对（ADR 0015）：逐条调用 verifyHash，不比较散列串，也不重新计算散列去对比。
    * 每条历史散列自带随机盐；带旧 argon2 参数的条目照样能命中（参数写在 PHC 串里）。
    * 空散列（此前没有口令）跳过。
@@ -94,7 +103,7 @@ export class CredentialService {
     personnelId: string,
     plain: string,
     passwordChangedAt: Date,
-    expectedHash: string,
+    expectedHash: string | null,
   ): Promise<boolean> {
     return this.store.rotatePasswordHash({
       personnelId,

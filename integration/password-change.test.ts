@@ -189,9 +189,14 @@ describe('POST /api/auth/password', () => {
     })).id;
     const secretHash = (await cloned.prisma.authSession.findUniqueOrThrow({ where: { id: sessionId } })).secretHash;
 
-    const wrong = await postPassword(pair, 'not-the-current', NEW_PASSWORD);
+    // 首登强制门禁免验当前口令：传错当前口令也不回 invalid-credential，
+    // 新口令先被公开规则拒绝，会话仍停在强制改密。
+    const wrong = await postPassword(pair, 'not-the-current', 'x');
     expect(wrong.status).toBe(400);
-    expect(await wrong.json()).toEqual({ result: 'invalid-credential' });
+    expect(await wrong.json()).toEqual({
+      result: 'non-compliant',
+      rules: ['too-short', 'insufficient-classes'],
+    });
     const still = await fetch(`${baseUrl}/api/auth/session`, { headers: { cookie: pair } });
     expect(await still.json()).toMatchObject({
       result: 'password-change-required',
