@@ -43,6 +43,16 @@ describe('主区全宽、无常驻右侧调试栏', () => {
   });
 });
 
+describe('统一工作台无侧栏与登记壳布局', () => {
+  it('分区页签、水平步骤条与门闸预告都有样式', () => {
+    expect(rule('.ws-sec-tabs')).toContain('display:flex');
+    expect(rule('.ws-sec-tab')).toContain('border-bottom');
+    expect(rule('.stepper')).toContain('display:flex');
+    expect(rule('.step-btn')).toContain('border-radius:999px');
+    expect(rule('.gate-preview')).toContain('grid-template-columns');
+  });
+});
+
 describe('界面文案纪律（#207 交互锁）', () => {
   it('样式表里不出现票号、区块字母与「捞回」', () => {
     // content 属性是唯一会显示给用户的样式内文案。

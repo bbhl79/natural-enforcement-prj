@@ -468,7 +468,7 @@ describe('工作台三环节步骤条（#214）', () => {
     serve({});
     const { html } = await renderRoute(fresh(), '/workbench?step=3');
     expect(html).toContain('打开一条线索后开始分派决定');
-    expect(html).toContain('/workbench?step=1');
+    expect(html).toContain('/workbench/register?step=1');
   });
 
   it('step2 带线索：续办内业核查的容器已挂载，环节切换不丢线索', async () => {

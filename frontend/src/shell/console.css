@@ -147,3 +147,20 @@
 .console .dup-compare{padding:8px 0}
 .console .dup-compare svg{width:320px;height:200px;border:1px dashed var(--border);border-radius:8px;background:#fafaf9}
 .console .dup-legend{display:flex;gap:8px;margin-top:6px}
+/* 统一工作台：无侧栏，主区「待办｜登记新线索」二分页与登记壳步骤条。 */
+.console .ws-sec-tabs{display:flex;gap:0;margin:0 0 14px;border-bottom:1px solid var(--border)}
+.console .ws-sec-tab{border:none;background:transparent;padding:9px 18px;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2.5px solid transparent;margin-bottom:-1px;border-radius:0;height:auto;text-decoration:none;display:inline-flex;align-items:center}
+.console .ws-sec-tab:hover{color:var(--green-press)}
+.console .ws-sec-tab.on{color:var(--green-press);border-bottom-color:var(--green)}
+.console .stepper{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.console .step-btn{border:1px solid var(--border);background:#fff;border-radius:999px;padding:6px 16px;font-weight:600;color:var(--ink);text-decoration:none;display:inline-flex;align-items:center}
+.console .step-btn.on{background:var(--green);color:#fff;border-color:var(--green)}
+.console .step-btn.dim{opacity:.48;background:#f5f5f4;color:var(--muted);border-style:dashed;cursor:not-allowed}
+.console .step-btn.dim:hover{opacity:.72}
+.console .arr{color:var(--muted)}
+/* 开单门闸：来源*、法域* 在同一张卡内，选齐后就地展开明细。 */
+.console .gate-card{border-color:#b7d7c8;background:linear-gradient(180deg,#f7fbf9 0%,#fff 48%)}
+.console .gate-preview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}
+.console .gate-preview .gp{border:1px dashed #d6d3d1;border-radius:8px;padding:10px 12px;background:#fafaf9;color:var(--muted);font-size:12px;text-align:center}
+.console .gate-preview .gp b{display:block;color:#57534e;margin-bottom:2px;font-size:13px}
+.console .banner.blue{color:#175cd3;background:#eff8ff}

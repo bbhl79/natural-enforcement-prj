@@ -25,9 +25,8 @@ import {
 } from './admin/personnel';
 import LoginPage from './login/LoginPage';
 import PasswordPage from './login/PasswordPage';
-import ClueRegisterPage from './clue/ClueRegisterPage';
 import { clueCenterLoader } from './clue/center';
-import { clueRegisterLoader } from './clue/registration';
+import { CLUE_REGISTER_PATH, clueRegisterLoader } from './clue/registration';
 import ClueCenterPage from './pages/ClueCenterPage';
 import CaseDeadlinePage from './case/CaseDeadlinePage';
 import CaseFinalizePage from './case/CaseFinalizePage';
@@ -69,6 +68,32 @@ export function homeRedirect() {
   return redirect('/workbench');
 }
 
+/**
+ * 工作台登记壳的参照取数：只有进入登记壳（含旧 ?step= 续办）才预取。
+ * 待办分区不取登记参照；②③ 续办也不需要。
+ */
+export function workbenchLoader(store: RouterStore) {
+  return async (args: LoaderFunctionArgs) => {
+    const url = new URL(args.request.url);
+    const flow =
+      url.pathname === CLUE_REGISTER_PATH ||
+      url.pathname.startsWith(`${CLUE_REGISTER_PATH}/`) ||
+      url.searchParams.has('step') ||
+      url.searchParams.get('section') === 'flow';
+    if (!flow) return null;
+    const step = url.searchParams.get('step');
+    // ②③ 续办不需要登记参照；其余（含缺省与非法值回落①）都要。
+    if (step === '2' || step === '3') return null;
+    return clueRegisterLoader(store)(args);
+  };
+}
+
+/** 旧 /clue/register 并入工作台登记壳，保留来源、法域与步骤参数。 */
+export function legacyClueRegisterLoader() {
+  return ({ request }: LoaderFunctionArgs) =>
+    redirect(`${CLUE_REGISTER_PATH}${new URL(request.url).search}`);
+}
+
 export function appRoutes(store: RouterStore): RouteObject[] {
   return [
     {
@@ -91,7 +116,13 @@ export function appRoutes(store: RouterStore): RouteObject[] {
               errorElement: <AppShellError />,
               children: [
                 { id: 'home', index: true, loader: homeRedirect },
-                { id: 'workbench', path: 'workbench', element: <WorkbenchPage /> },
+                { id: 'workbench', path: 'workbench', loader: workbenchLoader(store), element: <WorkbenchPage /> },
+                {
+                  id: 'workbench-register',
+                  path: 'workbench/register',
+                  loader: workbenchLoader(store),
+                  element: <WorkbenchPage />,
+                },
                 {
                   id: 'clue',
                   path: 'clue',
@@ -101,8 +132,7 @@ export function appRoutes(store: RouterStore): RouteObject[] {
                 {
                   id: 'clue-register',
                   path: 'clue/register',
-                  loader: clueRegisterLoader(store),
-                  element: <ClueRegisterPage />,
+                  loader: legacyClueRegisterLoader(),
                 },
                 { id: 'case', path: 'case', element: <PlannedCenterPage primary="case" /> },
                 {

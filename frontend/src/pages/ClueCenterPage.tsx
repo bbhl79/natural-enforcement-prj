@@ -19,7 +19,7 @@ import { ClueVerificationTab } from '../clue/ClueVerificationTab';
 import { fillGaps, type ClueDetail } from '../clue/detail';
 import { readReporter, type DuplicateView } from '../clue/duplicate';
 import { type ClueListPage, type ClueListRow } from '../clue/list';
-import { DOMAIN_LABEL } from '../clue/registration';
+import { CLUE_REGISTER_PATH, DOMAIN_LABEL } from '../clue/registration';
 import { type TrailEntry } from '../clue/trail';
 import { retryVerification, type VerificationView } from '../clue/verification';
 import {
@@ -240,9 +240,20 @@ export default function ClueCenterPage() {
       <div className="page-h">
         <div>
           <h1>线索中心</h1>
-          <div className="desc">全部登记的线索统一进这里，可按视图、筛选与关键词查询。</div>
+          <div className="desc">
+            全部登记的线索统一进这里，可按视图、筛选与关键词查询；新办线索请到「统一工作台 · 登记新线索」。
+          </div>
         </div>
-        <Link className="btn btn-primary" to="/clue/register">登记线索</Link>
+      </div>
+      <div
+        className="banner blue"
+        data-role="register-entry"
+        style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}
+      >
+        <span>新办线索请到「统一工作台 · 登记新线索」；本中心只做查询、筛选与台账流转。</span>
+        <Link className="btn btn-sm btn-primary" style={{ marginLeft: 'auto' }} to={CLUE_REGISTER_PATH}>
+          去工作台登记
+        </Link>
       </div>
 
       {/* 列表卡片 */}

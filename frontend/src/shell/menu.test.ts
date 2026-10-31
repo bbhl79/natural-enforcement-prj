@@ -81,19 +81,9 @@ describe('顶栏一级五总入口（#207 导航锁）', () => {
 });
 
 describe('侧栏二级随一级切换（#207 导航锁）', () => {
-  it('统一工作台二级是待办看板与线索录入三环节', () => {
-    expect(secondaryIds('workbench', CLERK)).toEqual([
-      'board',
-      'step-register',
-      'step-verify',
-      'step-dispatch',
-    ]);
-    expect(visibleSecondaries('workbench', CLERK).map((item) => item.path)).toEqual([
-      '/workbench',
-      '/workbench?step=1',
-      '/workbench?step=2',
-      '/workbench?step=3',
-    ]);
+  it('统一工作台无侧栏二级：分区由主区「待办｜登记新线索」承担', () => {
+    expect(secondaryIds('workbench', CLERK)).toEqual([]);
+    expect(visibleSecondaries('workbench', CLERK)).toEqual([]);
   });
 
   it('线索中心二级是四个视图，地址带视图参数', () => {
@@ -171,11 +161,11 @@ describe('当前所在一级与二级', () => {
     expect(activeSecondaryKey('clue', '/clue', '?view=remind&q=abc')).toBe('clue-remind');
   });
 
-  it('工作台按步骤参数判定命中项', () => {
-    expect(activeSecondaryKey('workbench', '/workbench', '')).toBe('board');
-    expect(activeSecondaryKey('workbench', '/workbench', '?step=1')).toBe('step-register');
-    expect(activeSecondaryKey('workbench', '/workbench', '?step=2')).toBe('step-verify');
-    expect(activeSecondaryKey('workbench', '/workbench', '?step=3')).toBe('step-dispatch');
+  it('工作台不再有侧栏二级命中项', () => {
+    expect(activeSecondaryKey('workbench', '/workbench', '')).toBeNull();
+    expect(activeSecondaryKey('workbench', '/workbench', '?step=1')).toBeNull();
+    expect(activeSecondaryKey('workbench', '/workbench/register', '?step=1')).toBeNull();
+    expect(activeSecondaryKey('workbench', '/workbench', '?step=3')).toBeNull();
   });
 
   it('管理台二级按最长地址前缀命中', () => {

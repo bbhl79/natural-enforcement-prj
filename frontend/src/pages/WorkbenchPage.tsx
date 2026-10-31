@@ -1,13 +1,15 @@
-// 统一工作台（一级入口）。待办看板的取数与线索录入三环节的办理界面由后续业务范围接入，
-// 本页先给壳层：看板占位、录入三环节入口、以及按身份给出的角色说明。
-// #214：三环节步骤条走通——②内业核查与③分派决定带 clue 参数打开既有线索时，
-// 保留线索上下文续办；环节切换不丢线索。
-import { useCallback, useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router';
+// 统一工作台（一级入口）。主区二分页：待办｜登记新线索；工作台无侧栏。
+// 录入＝总入口：本系统处理的所有线索都从「登记新线索」进入。
+// 登记壳内用水平步骤条 ① 登记 → ② 内业核查 → ③ 分派决定；②③ 带 clue 参数打开既有线索时，
+// 保留线索上下文续办；环节切换不丢线索。#214 的续办语义保持不变。
+import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Link, useLocation, useSearchParams } from 'react-router';
 
 import { ClueVerificationTab } from '../clue/ClueVerificationTab';
 import ClueDispatchSection from '../clue/ClueDispatchSection';
+import ClueRegisterPage from '../clue/ClueRegisterPage';
 import { loadDesignationTodos, type DesignationTodoItem } from '../clue/dispatch';
+import { CLUE_REGISTER_PATH, registerStepPath } from '../clue/registration';
 import { loadVerification, retryVerification, type VerificationView } from '../clue/verification';
 import { useAppDispatch, useAppSelector } from '../hooks';
 import { ErrorCard } from '../shell/StatusPages';
@@ -19,11 +21,11 @@ function quoted(roles: readonly string[]): string {
   return `${marks.slice(0, -1).join('、')}和${marks.at(-1)}`;
 }
 
-/** 线索录入三环节：与侧栏二级一致，键位固定。 */
+/** 登记壳的水平步骤条：① 登记 → ② 内业核查 → ③ 分派决定；②③ 需已保存线索。 */
 const STEPS = [
-  { step: '1', label: '① 线索录入', desc: '登记来源、要件与空间位置，保存后线索进入线索中心。' },
-  { step: '2', label: '② 内业核查', desc: '土地类与矿产类线索自动核查，逐面比对未结案线索。' },
-  { step: '3', label: '③ 分派决定', desc: '集中看到疑似重复与命中比例，完成决定并落到承办机构与承办人。' },
+  { step: '1', label: '① 登记' },
+  { step: '2', label: '② 内业核查' },
+  { step: '3', label: '③ 分派决定' },
 ] as const;
 
 /** ②内业核查续办：带线索上下文打开既有线索的核查页签。 */
@@ -81,7 +83,7 @@ function DesignationTodos() {
           <div>
             {`${item.requestingOrgName}报请：${item.reason}`}
             {item.proposedOrgName ? `（拟归属：${item.proposedOrgName}）` : ''}{' '}
-            <Link className="btn btn-sm" to={`/workbench?step=3&clue=${item.clueId}`}>
+            <Link className="btn btn-sm" to={registerStepPath(3, item.clueId)}>
               处理
             </Link>
           </div>
@@ -172,69 +174,120 @@ const LEADER_ROLES = ['法制审核', '行政审核', '行政审批'] as const;
 const SUPERVISION_ROLE = '监督';
 
 /**
- * 统一工作台。地址带 step=1|2|3 时进对应环节；不带时进待办看板。
+ * 统一工作台。主区二分页：待办｜登记新线索。
+ * 地址带 step=1|2|3 或落在 /workbench/register 时进登记壳；否则进待办。
  * ②／③ 带 clue=<id> 时续办该线索，环节切换保留线索上下文。
  */
 export default function WorkbenchPage() {
   const operator = useAppSelector((root) => root.login.operator);
   const dispatch = useAppDispatch();
+  const { pathname } = useLocation();
   const [params] = useSearchParams();
-  const step = params.get('step') ?? '';
+  const stepParam = params.get('step') ?? '';
+  const registerPath =
+    pathname === CLUE_REGISTER_PATH || pathname.startsWith(`${CLUE_REGISTER_PATH}/`);
+  const flow = registerPath || params.get('section') === 'flow' || stepParam !== '';
+  const step = flow ? (STEPS.find((item) => item.step === stepParam)?.step ?? '1') : '';
   const clueId = params.get('clue') ?? '';
+  const [stepNotice, setStepNotice] = useState<string | null>(null);
 
-  // 看板卡片计数：仅在无 step 时加载。
+  // 看板卡片计数：仅在待办分区加载。
   const [counts, setCounts] = useState<WorkbenchCardCounts | null>(null);
   const [countsError, setCountsError] = useState(false);
   useEffect(() => {
-    if (step !== '') return;
+    if (flow) return;
     setCounts(null);
     setCountsError(false);
     loadCardCounts(dispatch).then(setCounts, () => setCountsError(true));
-  }, [dispatch, step]);
+  }, [dispatch, flow]);
   if (!operator) return null;
-  const current = STEPS.find((item) => item.step === step);
-  const stepTarget = (target: string) =>
-    clueId === '' ? `/workbench?step=${target}` : `/workbench?step=${target}&clue=${clueId}`;
+
+  const reloadCounts = () => {
+    setCountsError(false);
+    loadCardCounts(dispatch).then(setCounts, () => setCountsError(true));
+  };
+  const stepTarget = (target: string) => registerStepPath(target, clueId);
+
   return (
     <>
       <div className="crumb"><b>统一工作台</b></div>
       <div className="page-h">
         <div>
           <h1>统一工作台</h1>
-          <div className="desc">{`${operator.orgName ?? ''} · ${operator.roles.join('、')}`}</div>
+          <div className="desc">
+            {`${operator.orgName ?? ''} · ${operator.roles.join('、')}　·　单入口：待办与登记新线索在页内切换；本系统处理的所有线索都从「登记新线索」进入`}
+          </div>
         </div>
+      </div>
+      <div className="ws-sec-tabs" role="tablist" aria-label="工作台分区">
+        <Link
+          role="tab"
+          aria-selected={!flow}
+          className={flow ? 'ws-sec-tab' : 'ws-sec-tab on'}
+          to="/workbench"
+        >
+          待办
+        </Link>
+        <Link
+          role="tab"
+          aria-selected={flow}
+          className={flow ? 'ws-sec-tab on' : 'ws-sec-tab'}
+          to={CLUE_REGISTER_PATH}
+        >
+          登记新线索
+        </Link>
       </div>
       {operator.roles.length > 1 ? (
         <div className="banner gray">
           {`你同时担任${quoted(operator.roles)}。顶栏的五个一级入口都可进入，不用换一个登录标识重新登录。`}
         </div>
       ) : null}
-      {current ? (
+      {flow ? (
         <>
-          <div className="card">
-            <div className="card-h">
-              {current.label}
-              <span className="hint">线索录入入口</span>
-            </div>
-            <div className="desc" style={{ marginBottom: 10 }}>{current.desc}</div>
-            <div className="checks">
-              {STEPS.map((item) => (
-                <Link
-                  key={item.step}
-                  className={item.step === step ? 'btn btn-sm btn-primary' : 'btn btn-sm'}
-                  to={stepTarget(item.step)}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </div>
+          <div className="stepper" role="navigation" aria-label="线索办理步骤">
+            {STEPS.map((item, index) => {
+              const isCurrent = item.step === step;
+              const locked = item.step !== '1' && clueId === '';
+              const className = ['step-btn', isCurrent ? 'on' : '', locked ? 'dim' : '']
+                .filter((value) => value !== '')
+                .join(' ');
+              return (
+                <Fragment key={item.step}>
+                  {index > 0 ? <span className="arr" aria-hidden="true">→</span> : null}
+                  {locked ? (
+                    <button
+                      type="button"
+                      className={className}
+                      onClick={() => setStepNotice('请先在「① 登记」保存线索，再进入后续步骤。')}
+                    >
+                      {item.label}
+                    </button>
+                  ) : (
+                    <Link
+                      className={className}
+                      to={stepTarget(item.step)}
+                      aria-current={isCurrent ? 'step' : undefined}
+                    >
+                      {item.label}
+                    </Link>
+                  )}
+                </Fragment>
+              );
+            })}
           </div>
+          {stepNotice === null ? null : (
+            <div className="banner amber" role="status" data-role="step-notice">{stepNotice}</div>
+          )}
+          {step === '1' ? <ClueRegisterPage embedded /> : null}
           {step === '3' && clueId !== '' ? <ClueDispatchSection clueId={clueId} /> : null}
           {step === '3' && clueId === '' ? (
             <div className="card">
               <div className="empty">
                 <div className="t">打开一条线索后开始分派决定</div>
-                <div>从待办看板或线索中心打开待分派决定的线索，这里集中展示疑似重复并完成派／不派。</div>
+                <div>从待办或线索中心打开待分派决定的线索，这里集中展示疑似重复并完成派／不派。</div>
+                <div className="checks" style={{ justifyContent: 'center', marginTop: 10 }}>
+                  <Link className="btn btn-sm" to={stepTarget('1')}>回到登记新线索</Link>
+                </div>
               </div>
             </div>
           ) : null}
@@ -244,15 +297,8 @@ export default function WorkbenchPage() {
               <div className="empty">
                 <div className="t">打开一条线索后查看内业核查</div>
                 <div>土地类与矿产类线索保存后自动核查；没跑成时重跑提示一直挂到跑成，线索仍可分派。</div>
-              </div>
-            </div>
-          ) : null}
-          {step === '1' ? (
-            <div className="card">
-              <div className="empty">
-                <div className="t">线索登记</div>
-                <div>
-                  <Link className="btn btn-primary" to="/clue/register">进入线索登记</Link>
+                <div className="checks" style={{ justifyContent: 'center', marginTop: 10 }}>
+                  <Link className="btn btn-sm" to={stepTarget('1')}>回到登记新线索</Link>
                 </div>
               </div>
             </div>
@@ -267,13 +313,7 @@ export default function WorkbenchPage() {
               <span className="hint">按你当前身份给出待办与概览</span>
             </div>
             {countsError ? (
-              <ErrorCard
-                what="看板计数"
-                onRetry={() => {
-                  setCountsError(false);
-                  loadCardCounts(dispatch).then(setCounts, () => setCountsError(true));
-                }}
-              />
+              <ErrorCard what="看板计数" onRetry={reloadCounts} />
             ) : !counts ? (
               <div className="card" aria-busy="true">
                 <div className="skel" />
@@ -292,19 +332,6 @@ export default function WorkbenchPage() {
                 ) : null}
               </>
             )}
-          </div>
-          <div className="card">
-            <div className="card-h">
-              线索录入入口
-              <span className="hint">三环节逐步推进</span>
-            </div>
-            <div className="checks">
-              {STEPS.map((item) => (
-                <Link key={item.step} className="btn btn-sm" to={`/workbench?step=${item.step}`}>
-                  {item.label}
-                </Link>
-              ))}
-            </div>
           </div>
         </>
       )}

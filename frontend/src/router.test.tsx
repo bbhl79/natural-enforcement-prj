@@ -37,6 +37,12 @@ const ADMIN_ROUTES: Record<string, [number, Json]> = {
   '/api/admin/locked-personnel': [200, { personnel: [] }],
   '/api/admin/audit/summary': SUMMARY,
 };
+/** 登记参照：开单门闸的来源下拉。 */
+const CLUE_REFERENCE: [number, Json] = [200, {
+  result: 'listed',
+  sources: [{ code: '16', name: '日常巡查', group: '主动发现' }],
+  types: [{ code: 'land_demo', name: '示例违法类型', domain: 'land' }],
+}];
 /** 内勤：业务读码，外加选承办机构用的 org.tree.read（#105:178）。 */
 const INTAKE = ['clue.read', 'case.read', 'org.tree.read'];
 
@@ -165,15 +171,18 @@ describe('一级五总入口与路由定型（#207 导航锁、#209 执行票）
     expect(html).toContain('系统管理');
   });
 
-  it('二级侧栏随一级切换', async () => {
+  it('统一工作台无侧栏；其它一级侧栏随一级切换', async () => {
     serve(person(['经办'], CLERK));
     const clue = await renderRoute(fresh(), '/clue');
+    expect(clue.html).toContain('class="sidenav"');
     expect(clue.html).toContain('data-menu="clue-all"');
     expect(clue.html).not.toContain('data-menu="step-register"');
     const workbench = await renderRoute(fresh(), '/workbench');
-    expect(workbench.html).toContain('data-menu="board"');
-    expect(workbench.html).toContain('data-menu="step-register"');
-    expect(workbench.html).not.toContain('data-menu="clue-all"');
+    expect(workbench.html).not.toContain('class="sidenav"');
+    expect(workbench.html).not.toContain('data-menu="board"');
+    expect(workbench.html).not.toContain('data-menu="step-register"');
+    expect(workbench.html).toContain('aria-label="工作台分区"');
+    expect(workbench.html).toContain('登记新线索');
   });
 
   it('案件中心、统筹督导的二级是规划中占位，带规划中标记', async () => {
@@ -214,6 +223,67 @@ describe('一级五总入口与路由定型（#207 导航锁、#209 执行票）
     expect(text).not.toMatch(/#[0-9]+/);
     expect(text).not.toMatch(/Issue/i);
     expect(text).not.toContain('捞回');
+  });
+});
+
+describe('录入＝总入口：工作台登记壳与旧路由（#296）', () => {
+  /** 内勤：可登记线索。 */
+  const REGISTER = ['clue.read', 'clue.register'];
+
+  it('工作台主区顶「待办｜登记新线索」，无侧栏也无三入口并列', async () => {
+    serve(person(['经办'], CLERK));
+    const { html } = await renderRoute(fresh(), '/workbench');
+    expect(html).toContain('aria-label="工作台分区"');
+    expect(html).toContain('>待办</a>');
+    expect(html).toContain('登记新线索');
+    expect(html).toContain('本系统处理的所有线索都从「登记新线索」进入');
+    expect(html).not.toContain('线索录入入口');
+    expect(html).not.toContain('① 线索录入');
+  });
+
+  it('/workbench/register 打开开单门闸：来源*／法域* 下拉可用', async () => {
+    serve(person(['内勤'], REGISTER), { '/api/clue/reference': CLUE_REFERENCE });
+    const { html } = await renderRoute(fresh(), '/workbench/register');
+    expect(html).toContain('data-role="register-gate"');
+    expect(html).toContain('data-role="gate-preview"');
+    expect(html).toContain('① 登记');
+    expect(html).toContain('② 内业核查');
+    expect(html).toContain('③ 分派决定');
+    expect(html).toContain('请选择线索来源');
+    expect(html).toContain('请选择法域');
+    expect(html).not.toContain('data-requires="clue.register"');
+    // 新办法域为空：不预选「土地」。
+    expect(html).not.toMatch(/<option[^>]*selected[^>]*value="land"/);
+  });
+
+  it('旧 /clue/register 跳转工作台登记壳，并保留查询参数', async () => {
+    serve(person(['内勤'], REGISTER), { '/api/clue/reference': CLUE_REFERENCE });
+    const { router, html } = await renderRoute(fresh(), '/clue/register?sourceCode=16');
+    expect(router.state.location.pathname).toBe('/workbench/register');
+    expect(router.state.location.search).toBe('?sourceCode=16');
+    expect(html).toContain('data-role="register-gate"');
+    expect(html).toContain('日常巡查（16）');
+  });
+
+  it('?section=flow 等价于登记壳，既有 ?step= 续办地址仍可用', async () => {
+    serve(person(['内勤'], REGISTER), { '/api/clue/reference': CLUE_REFERENCE });
+    const section = await renderRoute(fresh(), '/workbench?section=flow');
+    expect(section.html).toContain('data-role="register-gate"');
+    const step = await renderRoute(fresh(), '/workbench?step=2&clue=clue-1');
+    expect(step.html).toContain('aria-label="线索办理步骤"');
+    // 未取到核查视图时仍显示载入容器，不退回待办。
+    expect(step.html).toContain('aria-busy="true"');
+    const fallback = await renderRoute(fresh(), '/workbench?step=9');
+    expect(fallback.html).toContain('data-role="register-gate"');
+  });
+
+  it('线索中心只做查筛台账，页头提示并可去工作台登记', async () => {
+    serve(person(['经办'], CLERK));
+    const { html } = await renderRoute(fresh(), '/clue');
+    expect(html).toContain('去工作台登记');
+    expect(html).toContain('href="/workbench/register"');
+    expect(html).not.toContain('href="/clue/register"');
+    expect(html).toContain('class="sidenav"');
   });
 });
 

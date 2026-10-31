@@ -10,6 +10,8 @@ import { ClueRegisterForm, EMPTY_REGISTER_INPUT } from './ClueRegisterPage';
 import {
   newIdempotencyKey,
   optionsOf,
+  registerInputFromQuery,
+  registerStepPath,
   requiredKeys,
   splitRules,
   submitRegistration,
@@ -145,7 +147,40 @@ describe('缺件分层', () => {
   });
 });
 
+describe('登记壳地址与门闸初值', () => {
+  it('旧 /clue/register 归到工作台登记壳，步骤地址保留 clue 续办', () => {
+    expect(registerStepPath(1)).toBe('/workbench/register?step=1');
+    expect(registerStepPath(3, 'C1')).toBe('/workbench/register?step=3&clue=C1');
+  });
+
+  it('新办不预填法域；地址显式带来源法域时才回填', () => {
+    expect(EMPTY_REGISTER_INPUT.domain).toBe('');
+    expect(registerInputFromQuery(new URLSearchParams(''))).toEqual({
+      sourceCode: '',
+      domain: '',
+      types: [],
+    });
+    expect(registerInputFromQuery(new URLSearchParams('sourceCode=16&domain=land&types=t1,t2'))).toEqual({
+      sourceCode: '16',
+      domain: 'land',
+      types: ['t1', 't2'],
+    });
+  });
+});
+
 describe('录入表单', () => {
+  it('开单门闸：来源与法域未选齐时卡内保留下拉与展开预告，不出现空态', () => {
+    const html = render({ schema: null, input: EMPTY_REGISTER_INPUT });
+    expect(html).toContain('data-role="register-gate"');
+    expect(html).toContain('data-role="gate-preview"');
+    expect(html).toContain('先选线索来源和法域');
+    expect(html).toContain('请选择线索来源');
+    expect(html).toContain('请选择法域');
+    // 门闸未完成不出现保存按钮，也不退回只有文案的空态。
+    expect(html).not.toContain('data-requires="clue.register"');
+    expect(html).not.toContain('class="empty"');
+  });
+
   it('按叠加后的要件渲染：来源与法域用选择控件，位置与材料用文件项', () => {
     const html = render();
     expect(html).toContain('线索来源');
