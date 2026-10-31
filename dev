@@ -174,6 +174,25 @@ require_compose_file() {
   fi
 }
 
+# frontend／server 镜像更新时 compose 只重建这两个服务；nginx 进程仍缓存启动时
+# 解析的上游 IP（#294），表现为页面与 /api/health 502。若 frontend 或 server
+# 的创建时间晚于 nginx 启动时间，强制重建 nginx 以重新解析上游。
+# 不改 default.conf（docker／podman resolver 地址不同，不用变量 proxy_pass）。
+refresh_nginx_if_upstreams_newer() {
+  local nginx_cid frontend_cid server_cid nginx_started fe_created srv_created
+  nginx_cid="$("${COMPOSE[@]}" ps -q nginx 2>/dev/null || true)"
+  frontend_cid="$("${COMPOSE[@]}" ps -q frontend 2>/dev/null || true)"
+  server_cid="$("${COMPOSE[@]}" ps -q server 2>/dev/null || true)"
+  [ -n "$nginx_cid" ] && [ -n "$frontend_cid" ] && [ -n "$server_cid" ] || return 0
+  nginx_started="$(docker inspect -f '{{.State.StartedAt}}' "$nginx_cid")"
+  fe_created="$(docker inspect -f '{{.Created}}' "$frontend_cid")"
+  srv_created="$(docker inspect -f '{{.Created}}' "$server_cid")"
+  if [[ "$fe_created" > "$nginx_started" ]] || [[ "$srv_created" > "$nginx_started" ]]; then
+    echo "dev up：frontend／server 新于 nginx，重建 nginx 以刷新上游解析…"
+    "${COMPOSE[@]}" up -d --force-recreate --no-deps --wait --wait-timeout 60 nginx
+  fi
+}
+
 cmd_up() {
   require_compose_file
   local missing=0 img
@@ -193,6 +212,7 @@ cmd_up() {
   # --wait：等 db/redis 健康检查通过再返回——迁移/种子要求 db 真正就绪，
   # 冷卷首次 initdb 较慢，不等待会赢不了就绪竞态（#57 回归实测踩中）。
   "${COMPOSE[@]}" up -d --wait --wait-timeout 120
+  refresh_nginx_if_upstreams_newer
   echo "dev up：基础设施容器已就绪。检查迁移与种子（幂等，已完成自动跳过）…"
   db_migrate
   db_seed
