@@ -92,6 +92,27 @@ export REDIS_URL="redis://${REDIS_HOST}:6379"
 CACHE_VOLUMES=(-v "${PROJECT}-corepack:/root/.cache/node/corepack" -v "${PROJECT}-pnpm-cache:/root/.cache/pnpm")
 INSTALL_FLAGS=(--frozen-lockfile --ignore-scripts --config.strict-dep-builds=false --store-dir /pnpm/store --prefer-offline)
 
+# 经 stdin tar 灌源进容器 /work，避免 WSL home → Podman machine 的 bind 只见空目录。
+# 排除项对齐 .dockerignore／.gitignore 重产物；node_modules／pnpm store 仍用命名卷。
+seed_repo_to_stdin() {
+  # ustar：工具链镜像是 alpine BusyBox tar，吃不下 GNU 默认 pax。
+  tar -C "$ROOT" --format=ustar \
+    --exclude='.git' \
+    --exclude='node_modules' \
+    --exclude='*/node_modules' \
+    --exclude='dist' \
+    --exclude='*/dist' \
+    --exclude='.run' \
+    --exclude='e2e/results' \
+    --exclude='coverage' \
+    --exclude='*.tsbuildinfo' \
+    --exclude='.env' \
+    --exclude='.env.local' \
+    --exclude='frontend/prototype/admin-console/screens' \
+    --exclude='docs/screens' \
+    -cf - .
+}
+
 usage() {
   cat <<'EOF'
 自然执法工程 开发入口（唯一本地入口，十命令：#46/#47 定案，切片10 #57 完备）
@@ -229,14 +250,15 @@ ensure_dev_certs() {
   fi
   mkdir -p "$DEV_CERT_DIR"
   echo "dev：在仓库外生成 localhost 证书（$DEV_CERT_DIR）…"
+  # 不 bind WSL home：openssl 在容器内写 /certs，经 stdout tar 回写宿主。
   docker run --rm --pull=never --user "$(id -u):$(id -g)" \
-    -v "$DEV_CERT_DIR:/certs" \
     "$NGINX_IMAGE" \
-    openssl req -x509 -newkey rsa:2048 -sha256 -days 825 -nodes \
+    sh -c 'mkdir -p /certs && openssl req -x509 -newkey rsa:2048 -sha256 -days 825 -nodes \
       -keyout /certs/localhost.key \
       -out /certs/localhost.crt \
       -subj "/CN=localhost" \
-      -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+      -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" && tar -C /certs -cf - .' \
+    | tar -C "$DEV_CERT_DIR" -xf -
 }
 
 check_services() {
@@ -399,23 +421,22 @@ cmd_health() {
 }
 
 # 队列探测（#55）：容器内安装依赖后运行 packages/queue 探测入口。
-# 挂载形态与 lint/test 一致：仓库只读，依赖只进容器/命名卷（防 root 属主泄漏入库）。
+# 灌源形态与 lint/test 一致：tar 进 /work，依赖只进容器/命名卷（防 root 属主泄漏入库）。
 # --pull=never：工具链镜像缺失时失败并提示先 dev build，不借健康检查隐式拉取（US13）。
 run_queue_probe() {
   if ! docker image inspect "$LINT_IMAGE" >/dev/null 2>&1; then
     echo "工具链镜像缺失：$LINT_IMAGE。请先执行 dev build。队列探测不会隐式拉取。"
     return 1
   fi
-  docker run --rm --pull=never --network "${PROJECT}_default" \
+  seed_repo_to_stdin | docker run --rm --pull=never -i --network "${PROJECT}_default" \
     -e REDIS_URL="$REDIS_URL" \
     -e COREPACK_ENABLE_DOWNLOAD_PROMPT=0 \
-    -v "$ROOT:/repo:ro" \
     -v "${PROJECT}-queue-node-modules:/work/node_modules" \
     -v "${PROJECT}-queue-store:/pnpm/store" \
     "${CACHE_VOLUMES[@]}" \
     -w /work \
     "$LINT_IMAGE" \
-    sh -c "cp -a /repo/. /work/ && corepack enable 2>/dev/null && pnpm install ${INSTALL_FLAGS[*]} >/dev/null && node packages/queue/src/probe.ts"
+    sh -c "set -e; mkdir -p /work; tar -x -f - -C /work; corepack enable 2>/dev/null; pnpm install ${INSTALL_FLAGS[*]} >/dev/null; node packages/queue/src/probe.ts"
 }
 
 # 检查 1：容器依赖漏入库（E6 前半）——仓库内出现 node_modules 等即失败
@@ -462,9 +483,8 @@ lint_image() {
   echo "lint image：工具链镜像与定案表一致且在场。"
 }
 
-# 检查 4：ESLint 全量。工作区只读挂载于 /repo；
-# 容器内复制到可写层 /work 执行（node_modules 与 pnpm store 挂命名卷，显式读写挂载），
-# 仓库根是只读挂载，任何写回仓库的企图都会直接失败。
+# 检查 4：ESLint 全量。经 stdin tar 灌源进 /work（不 bind 仓库根，兼容 Podman machine）；
+# node_modules 与 pnpm store 挂命名卷。灌源只读语义由宿主 tar 内容决定，容器不写回仓库。
 # 安装一律 --ignore-scripts + --config.strict-dep-builds=false：
 # - bullmq 传递依赖 msgpackr-extract 带原生构建脚本，工具链容器（alpine 无编译链）不构建，
 #   走其纯 JS 回退（BullMQ 不依赖该原生加速）；
@@ -472,14 +492,13 @@ lint_image() {
 #   被拦构建脚本默认报 ERR_PNPM_IGNORED_BUILDS 使安装失败。
 lint_eslint() {
   echo "lint：容器内安装依赖并运行 ESLint 全量检查（首次较慢）…"
-  docker run --rm --pull=never \
-    -v "$ROOT:/repo:ro" \
+  seed_repo_to_stdin | docker run --rm --pull=never -i \
     -v "${PROJECT}-lint-node-modules:/work/node_modules" \
     -v "${PROJECT}-lint-store:/pnpm/store" \
     "${CACHE_VOLUMES[@]}" \
     -w /work \
     "$LINT_IMAGE" \
-    sh -c "cp -a /repo/. /work/ && corepack enable && pnpm install ${INSTALL_FLAGS[*]} && pnpm run lint"
+    sh -c "set -e; mkdir -p /work; tar -x -f - -C /work; corepack enable; pnpm install ${INSTALL_FLAGS[*]}; pnpm run lint"
 }
 
 # lint 全量 = 五项顺序执行；<子项> 单跑一项（leak/structural/structural-probe/image/eslint）。
@@ -501,7 +520,7 @@ cmd_lint() {
 }
 
 # ---------- dev db 数据语义（#49） ----------
-# 运行模型：Prisma 7.10.0 CLI 与种子在工具链容器内执行（仓库只读挂载，不留 node_modules）；
+# 运行模型：Prisma 7.10.0 CLI 与种子在工具链容器内执行（tar 灌源，不留 node_modules）；
 # 容器接入 compose 项目网络，经服务名 db 连库。迁移/种子一律幂等：已应用/已存在即跳过。
 
 # 确保 db 容器在场（缺则建），并复用 up 的镜像缺失契约（不隐式拉取/构建）
@@ -522,16 +541,15 @@ ensure_db() {
 # 镜像必须已由 dev build 拉到本地；--pull=never，缺失即失败，db 不隐式拉取。
 run_db_toolchain() {
   require_toolchain_image
-  docker run --rm --pull=never \
+  seed_repo_to_stdin | docker run --rm --pull=never -i \
     --network "${PROJECT}_default" \
     -e DATABASE_URL="$DATABASE_URL" \
-    -v "$ROOT:/repo:ro" \
     -v "${PROJECT}-db-node-modules:/work/node_modules" \
     -v "${PROJECT}-pnpm-store:/pnpm/store" \
     "${CACHE_VOLUMES[@]}" \
     -w /work \
     "$LINT_IMAGE" \
-    sh -c "set -e; cp -a /repo/. /work/; corepack enable; pnpm install ${INSTALL_FLAGS[*]}; cd backend/prisma; $1"
+    sh -c "set -e; mkdir -p /work; tar -x -f - -C /work; corepack enable; pnpm install ${INSTALL_FLAGS[*]}; cd backend/prisma; $1"
 }
 
 db_migrate() {
@@ -586,15 +604,16 @@ build_frontend() {
   require_toolchain_image
   mkdir -p "$ROOT/frontend/dist"
   echo "build：容器内前端编译（tsc + vite build，产物写回宿主 frontend/dist）…"
-  docker run --rm --pull=never \
-    -v "$ROOT:/repo:ro" \
-    -v "$ROOT/frontend/dist:/out" \
+  # 灌源与 dist 回写均走 tar 管道，避免 WSL home bind 进机/写回失败。
+  # install／build 日志走 stderr，stdout 专留给 dist tar。
+  seed_repo_to_stdin | docker run --rm --pull=never -i \
     -v "${PROJECT}-build-node-modules:/work/node_modules" \
     -v "${PROJECT}-build-store:/pnpm/store" \
     "${CACHE_VOLUMES[@]}" \
     -w /work \
     "$LINT_IMAGE" \
-    sh -c "cp -a /repo/. /work/ && corepack enable && pnpm install ${INSTALL_FLAGS[*]} && pnpm --filter frontend build && cp -a /work/frontend/dist/. /out/ && chown -R \"\$(stat -c '%u:%g' /out)\" /out"
+    sh -c "set -e; mkdir -p /work; tar -x -f - -C /work; corepack enable; pnpm install ${INSTALL_FLAGS[*]} >&2; pnpm --filter frontend build >&2; tar -C /work/frontend/dist -cf - ." \
+    | tar -C "$ROOT/frontend/dist" -xf -
   echo "build：构建前端本地镜像 $FRONTEND_IMAGE（多阶段：node 编译 → nginx 运行）…"
   # 基础镜像已由 ensure_images 按 digest 拉到本地（工具链与 infra 镜像同批并发拉取）。
   # 不传 --pull：构建只用本地钉定镜像，不在 build 之外再走一次注册表。
@@ -610,14 +629,13 @@ build_server() {
 build_backend() {
   require_toolchain_image
   echo "build：容器内后端编译（tsc 全程序编译门：shield/queue/storage + backend 七模块）…"
-  docker run --rm --pull=never \
-    -v "$ROOT:/repo:ro" \
+  seed_repo_to_stdin | docker run --rm --pull=never -i \
     -v "${PROJECT}-build-backend-node-modules:/work/node_modules" \
     -v "${PROJECT}-build-backend-store:/pnpm/store" \
     "${CACHE_VOLUMES[@]}" \
     -w /work \
     "$LINT_IMAGE" \
-    sh -c "cp -a /repo/. /work/ && corepack enable && pnpm install ${INSTALL_FLAGS[*]} && pnpm run typecheck"
+    sh -c "set -e; mkdir -p /work; tar -x -f - -C /work; corepack enable; pnpm install ${INSTALL_FLAGS[*]}; pnpm run typecheck"
   echo "build：后端编译通过。"
 }
 
@@ -744,17 +762,16 @@ require_toolchain_image() {
 test_unit() {
   # unit 层（#46 三层映射：unit = 纯单元 + 契约测试，无库）。
   # 容器内安装依赖并运行 Vitest 契约断言 + tsc --noEmit 类型检查；
-  # 挂载形态与 lint 一致：仓库只读，依赖只进容器/命名卷。
+  # 灌源形态与 lint 一致：tar 进 /work，依赖只进容器/命名卷。
   require_toolchain_image
   echo "test：容器内运行 unit 层测试（shield 契约断言 + 队列设施单测 + 前端 health 单测 + 类型检查）…"
-  docker run --rm --pull=never \
-    -v "$ROOT:/repo:ro" \
+  seed_repo_to_stdin | docker run --rm --pull=never -i \
     -v "${PROJECT}-test-node-modules:/work/node_modules" \
     -v "${PROJECT}-test-store:/pnpm/store" \
     "${CACHE_VOLUMES[@]}" \
     -w /work \
     "$LINT_IMAGE" \
-    sh -c "cp -a /repo/. /work/ && corepack enable && pnpm install ${INSTALL_FLAGS[*]} && pnpm test && pnpm run typecheck"
+    sh -c "set -e; mkdir -p /work; tar -x -f - -C /work; corepack enable; pnpm install ${INSTALL_FLAGS[*]}; pnpm test; pnpm run typecheck"
   echo "test：unit 层全部通过。"
 }
 
@@ -831,16 +848,15 @@ test_integration() {
   ensure_db
   rebuild_it_template
   echo "test：容器内运行 integration 层 Vitest 需库用例（integration/**/*.test.ts）…"
-  docker run --rm --pull=never \
+  seed_repo_to_stdin | docker run --rm --pull=never -i \
     --network "${PROJECT}_default" \
     -e DATABASE_URL="$(it_template_database_url)" \
-    -v "$ROOT:/repo:ro" \
     -v "${PROJECT}-integration-node-modules:/work/node_modules" \
     -v "${PROJECT}-integration-store:/pnpm/store" \
     "${CACHE_VOLUMES[@]}" \
     -w /work \
     "$LINT_IMAGE" \
-    sh -c "set -e; cp -a /repo/. /work/; corepack enable; pnpm install ${INSTALL_FLAGS[*]}; cd backend/prisma; pnpm exec prisma generate; cd /work; if ls integration/*.test.ts >/dev/null 2>&1; then pnpm exec tsc -p integration --noEmit; pnpm exec vitest run --config integration/vitest.config.mts; else echo 'integration：暂无 Vitest 需库用例'; fi"
+    sh -c "set -e; mkdir -p /work; tar -x -f - -C /work; corepack enable; pnpm install ${INSTALL_FLAGS[*]}; cd backend/prisma; pnpm exec prisma generate; cd /work; if ls integration/*.test.ts >/dev/null 2>&1; then pnpm exec tsc -p integration --noEmit; pnpm exec vitest run --config integration/vitest.config.mts; else echo 'integration：暂无 Vitest 需库用例'; fi"
   # 可执行脚本用例：integration/*.sh（非 _ 开头），按文件名排序逐条执行
   local script found=0
   for script in "$ROOT"/integration/*.sh; do
