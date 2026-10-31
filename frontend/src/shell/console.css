@@ -147,9 +147,26 @@
 .console .dup-compare{padding:8px 0}
 .console .dup-compare svg{width:320px;height:200px;border:1px dashed var(--border);border-radius:8px;background:#fafaf9}
 .console .dup-legend{display:flex;gap:8px;margin-top:6px}
-/* 统一工作台：无侧栏，主区「待办｜登记新线索」二分页。 */
-.console .ws-sec-tabs{display:flex;gap:0;margin:0 0 14px;border-bottom:1px solid var(--border)}
-.console .ws-sec-tab{border:none;background:transparent;padding:9px 18px;font-size:13px;font-weight:600;color:var(--muted);border-bottom:2.5px solid transparent;margin-bottom:-1px;border-radius:0;height:auto;text-decoration:none;display:inline-flex;align-items:center}
-.console .ws-sec-tab:hover{color:var(--green-press)}
-.console .ws-sec-tab.on{color:var(--green-press);border-bottom-color:var(--green)}
+/* 统一工作台：无侧栏。主区＝统一待办清单（F1，#297）；「录入线索」进登记表单。 */
 .console .banner.blue{color:#175cd3;background:#eff8ff}
+.console .wb-back{border:none;background:transparent;color:var(--green-press);font-weight:600;font-size:13px;cursor:pointer;padding:0;margin-bottom:8px;display:inline-block;text-decoration:none}
+.console .wb-back:hover{text-decoration:underline}
+/* 待办清单：三色点＋图例＋轻筛选＋空态。 */
+.console .todo-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 10px}
+.console .todo-filters .input,.console .todo-filters .select{width:auto;height:30px;font-size:12px;min-width:150px}
+.console .todo-filters .input{min-width:240px;max-width:340px}
+.console .todo-count{margin-left:auto;font-size:12px;color:var(--muted)}
+.console .todo-legend{display:flex;align-items:center;gap:14px;font-size:12px;color:var(--muted);margin:0 0 8px;flex-wrap:wrap}
+.console .todo-legend span{display:inline-flex;align-items:center;gap:6px}
+.console .todo-dot{display:inline-block;width:10px;height:10px;border-radius:50%;flex-shrink:0;vertical-align:middle}
+.console .todo-dot.overdue{background:#b91c1c;box-shadow:0 0 0 2px rgba(185,28,28,.18)}
+.console .todo-dot.urgent{background:#ea580c;box-shadow:0 0 0 2px rgba(234,88,12,.16)}
+.console .todo-dot.ontime{background:#2563eb;box-shadow:0 0 0 2px rgba(37,99,235,.14)}
+.console .todo-table td,.console .todo-table th{vertical-align:middle}
+.console .todo-table tr.todo-row:hover{background:#f0fdf4}
+.console .todo-dot-cell{text-align:center}
+.console .todo-title-link{color:var(--green-press);font-weight:600;text-decoration:none;font-size:13px}
+.console .todo-title-link:hover{text-decoration:underline}
+.console .todo-from,.console .todo-wait{color:var(--muted);font-size:12px}
+.console .todo-empty{padding:48px 20px;text-align:center;background:#fafaf9;border:1px dashed #d6d3d1;border-radius:12px;margin-top:8px}
+.console .todo-empty .msg{font-size:15px;font-weight:600;color:#334155;margin-bottom:14px}

@@ -241,7 +241,7 @@ export default function ClueCenterPage() {
         <div>
           <h1>线索中心</h1>
           <div className="desc">
-            全部登记的线索统一进这里，可按视图、筛选与关键词查询；新办线索请到「统一工作台 · 登记新线索」。
+            全部登记的线索统一进这里，可按视图、筛选与关键词查询；新办线索请到「统一工作台 · 录入线索」。
           </div>
         </div>
       </div>
@@ -250,9 +250,9 @@ export default function ClueCenterPage() {
         data-role="register-entry"
         style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}
       >
-        <span>新办线索请到「统一工作台 · 登记新线索」；本中心只做查询、筛选与台账流转。</span>
+        <span>新办线索请到「统一工作台 · 录入线索」；本中心只做查询、筛选与台账流转。</span>
         <Link className="btn btn-sm btn-primary" style={{ marginLeft: 'auto' }} to={CLUE_REGISTER_PATH}>
-          去工作台登记
+          去工作台录入线索
         </Link>
       </div>
 
