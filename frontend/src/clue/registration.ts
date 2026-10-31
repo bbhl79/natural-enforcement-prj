@@ -37,12 +37,12 @@ export interface FormSchemaItem {
   readonly basisNote?: string;
 }
 
-/** 叠加后的录入表单结构。 */
+/** 叠加后的录入表单结构。来源与法域未选时为空串，只有公共层要件。 */
 export interface FormSchema {
   readonly result: 'listed';
   readonly declarationVersion: string;
   readonly source: { readonly code: string; readonly name: string; readonly group: string };
-  readonly domain: ClueDomain;
+  readonly domain: ClueDomain | '';
   readonly types: readonly { readonly code: string; readonly name: string }[];
   readonly groups: readonly { readonly name: string; readonly items: readonly FormSchemaItem[] }[];
   readonly items: readonly FormSchemaItem[];
@@ -84,6 +84,27 @@ export interface RegisterBody {
     readonly otherRatio: number;
     readonly intersectionArea: number;
   }[];
+}
+
+/** 工作台「登记新线索」壳的友好地址；旧 /clue/register 也归到这里。 */
+export const CLUE_REGISTER_PATH = '/workbench/register';
+
+/** 登记壳内的步骤地址：保留既有 ?step= 续办语义。 */
+export function registerStepPath(step: string | number, clueId = ''): string {
+  const params = new URLSearchParams({ step: String(step) });
+  if (clueId !== '') params.set('clue', clueId);
+  return `${CLUE_REGISTER_PATH}?${params.toString()}`;
+}
+
+/** 从地址读登记初值：来源、法域与类型可分享；新办不预填法域。 */
+export function registerInputFromQuery(
+  search: URLSearchParams,
+): Pick<RegisterInput, 'sourceCode' | 'domain' | 'types'> {
+  return {
+    sourceCode: search.get('sourceCode') ?? '',
+    domain: search.get('domain') ?? '',
+    types: (search.get('types') ?? '').split(',').filter((value) => value !== ''),
+  };
 }
 
 export type RegisterResult =
@@ -160,7 +181,8 @@ export function clueReferenceLoader(store: SessionStore) {
 
 /**
  * 录入页的 loader。来源、法域与类型在地址里（换这三样即换叠加的要件），
- * 地址是唯一事实源，分享与收藏都带着它。来源或法域未选时暂无叠加结果。
+ * 地址是唯一事实源，分享与收藏都带着它。参照清单先取回，表单首屏即出；
+ * 来源或法域未选时服务端只出公共层，来源补充与违法类型按依赖显隐。
  */
 export function clueRegisterLoader(store: SessionStore) {
   return async ({ request }: { request: Request }) => {
@@ -168,13 +190,11 @@ export function clueRegisterLoader(store: SessionStore) {
     const sourceCode = url.searchParams.get('sourceCode') ?? '';
     const domain = url.searchParams.get('domain') ?? '';
     const types = (url.searchParams.get('types') ?? '').split(',').filter((value) => value !== '');
-    const reference = loadReference(store.dispatch);
-    const schema =
-      sourceCode === '' || domain === ''
-        ? Promise.resolve<FormSchema | null>(null)
-        : loadFormSchema(store.dispatch, { sourceCode, domain, types });
-    reference.catch(() => undefined);
-    schema.catch(() => undefined);
+    // 表单要按声明渲染，进页就要有结果：参照与要件一起取回，不流式展开。
+    const [reference, schema] = await Promise.all([
+      loadReference(store.dispatch),
+      loadFormSchema(store.dispatch, { sourceCode, domain, types }),
+    ]);
     return { reference, schema };
   };
 }

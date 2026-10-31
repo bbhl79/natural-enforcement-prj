@@ -313,12 +313,35 @@ describe('#210 form-schema 接口', () => {
       .toBeGreaterThan(singleBody.items.length);
   });
 
+  it('来源与法域可空：未选时只出公共层，只选来源时出来源补充', async () => {
+    const empty = await schemaOf('P-INTAKE-HQ', '');
+    expect(empty.status).toBe(200);
+    const emptyBody = empty.body as {
+      source: { code: string };
+      domain: string;
+      items: { key: string }[];
+    };
+    expect(emptyBody.source.code).toBe('');
+    expect(emptyBody.domain).toBe('');
+    expect(emptyBody.items.map((item) => item.key)).toEqual(PUBLIC_LAYER_ITEMS.map((item) => item.key));
+
+    const sourceOnly = await schemaOf('P-INTAKE-HQ', 'sourceCode=301');
+    expect(sourceOnly.status).toBe(200);
+    const sourceKeys = (sourceOnly.body as { items: { key: string }[] }).items.map((item) => item.key);
+    expect(sourceKeys).toContain('clue.verifiable_basis');
+    expect(sourceKeys.some((key) => key.startsWith('type.'))).toBe(false);
+
+    const domainOnly = await schemaOf('P-INTAKE-HQ', 'domain=land');
+    expect(domainOnly.status).toBe(200);
+    const domainKeys = (domainOnly.body as { items: { key: string }[] }).items.map((item) => item.key);
+    expect(domainKeys).not.toContain('clue.verifiable_basis');
+  });
+
   it('来源编码、法域、类型编码不合法一律 400', async () => {
     for (const query of [
       'sourceCode=9999&domain=land',
       'sourceCode=301&domain=space',
       'sourceCode=301&domain=land&types=land_not_a_type',
-      'domain=land',
     ]) {
       const { status, body } = await schemaOf('P-INTAKE-HQ', query);
       expect({ query, status }, query).toEqual({ query, status: 400 });

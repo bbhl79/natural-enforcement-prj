@@ -142,13 +142,8 @@ export function primaryIsPlanned(primary: PrimaryKey): boolean {
   return items.length > 0 && items.every((item) => item.planned);
 }
 
-/** 侧栏二级菜单。键位固定，顺序固定。 */
+/** 侧栏二级菜单。键位固定，顺序固定。统一工作台无侧栏，分区由主区页签承担。 */
 export const SECONDARY_ENTRIES: readonly SecondaryEntry[] = [
-  // 统一工作台：待办看板与线索录入三环节（环节内容由对应业务范围接入）
-  { id: 'board', primary: 'workbench', label: '待办看板', path: '/workbench' },
-  { id: 'step-register', primary: 'workbench', label: '① 线索录入', path: '/workbench?step=1' },
-  { id: 'step-verify', primary: 'workbench', label: '② 内业核查', path: '/workbench?step=2' },
-  { id: 'step-dispatch', primary: 'workbench', label: '③ 分派决定', path: '/workbench?step=3' },
   // 线索中心：四个视图与 /clue?view= 对应
   ...CLUE_VIEWS.map((view) => ({
     id: `clue-${view.id}`,

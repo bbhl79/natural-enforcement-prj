@@ -11,12 +11,14 @@ import {
 
 /**
  * 左侧二级侧栏：随顶栏一级入口切换。
+ * 统一工作台无侧栏：主区用「待办｜登记新线索」页签切换，画布全宽。
  * 本人看不见的一级（无系统管理权限）不出现在顶栏，侧栏也不出该一级的条目。
  * highlight 为 false 时不高亮任何项（无权限页，原型 P2-forbidden）。
  */
 export default function SideNav({ opcodes, highlight = true }: { opcodes: readonly string[]; highlight?: boolean }) {
   const { pathname, search } = useLocation();
   const primary = activePrimaryKey(pathname);
+  if (primary === 'workbench') return null;
   const visible = visiblePrimaries(opcodes);
   const allowed = primary !== null && visible.some((item) => item.id === primary);
   const items = allowed ? visibleSecondaries(primary as PrimaryKey, opcodes) : [];
