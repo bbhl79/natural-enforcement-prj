@@ -1,0 +1,6 @@
+{
+  "journey": "filing-approval",
+  "identityRefs": ["REPLACE_ME"],
+  "payload": {},
+  "notes": "内容由人后续填写。本文件为最小合法字段包模板；复制为 input.json 后填充。"
+}
