@@ -7,7 +7,7 @@
 
 | id | 名称 | 路径 | 角色 | 选择器策略 | fragile |
 | ---- | ---- | ---- | ---- | ---- | ---- |
-| `nav.auth.login` | 登录 | `/auth/login` | 未登录 | role=textbox 手机号/口令；提交按钮按 name | false |
+| `nav.auth.login` | 登录 | `/auth/login` | 未登录 | `getByRole('textbox',{name:'手机号'})`；`input[name=password]`（勿用 getByLabel('密码')：会命中「显示密码」按钮）；`getByRole('button',{name:'登录'})` | false |
 | `nav.auth.password` | 强制改密 | `/auth/password` | 首登 | 当前口令/新口令表单 | false |
 | `nav.account.password` | 账户改密 | `/account/password` | 已登录 | TBD | true |
 
@@ -16,7 +16,7 @@
 | id | 名称 | 路径 | 角色入口 | 关联 scenario | 选择器策略 | fragile |
 | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
 | `nav.workbench` | 统一工作台 | `/workbench` | 各业务角色 | — | 主导航「工作台」 | false |
-| `nav.workbench.register` | 线索登记壳 | `/workbench/register` | 内勤等有登记权 | `vf-sc-register-*` | 来源/法域控件；叙事；位置；提交 | true |
+| `nav.workbench.register` | 线索登记壳 | `/workbench/register` | 内勤等有登记权 | `vf-sc-register-*`、`vf-sc-verify-loop-ui-login-register` | `#clue-source`（线索来源*）；`#clue-domain`（法域*）；`button[type=submit].btn-primary`「保存」；动态要件 `htmlFor=clue-<key>`；确认 `button[data-role=confirm-save]` | true |
 | `nav.clue.center` | 线索中心 | `/clue` | 内勤/经办/监督 | `vf-sc-dispatch-*`、`vf-sc-duplicate-*` | 列表行、分派/决定操作 | true |
 | `nav.clue.register.legacy` | 旧登记入口 | `/clue/register` → 重定向工作台 | — | — | 勿直接测；应落到 register 壳 | false |
 
@@ -57,3 +57,9 @@
 ## 维护
 
 见 [`maintenance.md`](maintenance.md)。
+
+## UI P0 探活
+
+- 入口：`harness/ui/run-ui-p0.sh`（默认 headless；`HEADED=1` 切 headed）。
+- 场景：`vf-sc-verify-loop-ui-login-register`（driver=`ui`）。
+- 选择器以上表为准；失败先改本地图再改断言。

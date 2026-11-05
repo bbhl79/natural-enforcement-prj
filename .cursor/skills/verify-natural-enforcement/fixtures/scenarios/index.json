@@ -9,6 +9,7 @@
     "vf-sc-register-survey-report",
     "vf-sc-verify-loop-land-register",
     "vf-sc-verify-loop-survey-register",
+    "vf-sc-verify-loop-ui-login-register",
     "vf-sc-workbench-after-filing"
   ],
   "negatives": [

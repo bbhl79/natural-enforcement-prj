@@ -41,5 +41,6 @@ Scenario 形状见 `fixtures/scenarios/schema.md`。
 ## 当前范围
 
 - 已落地：身份夹具；01/02 hardFields；API negatives；`harness/` + integration 入口；跑次契约。
-- 本轮**不做** Playwright / CDP / Feature Map 实机探活。
+- UI 环（最小子集）：`harness/ui/run-ui-p0.sh` + `vf-sc-verify-loop-ui-login-register`（登录→登记壳字段；默认 headless）。
+- 全链「录入→核查→分派」UI 与 Feature Map 深探另票；本环不引入 CI Playwright 依赖。
 - 未实现产品阶段只标 `latent`，不得标成 runnable。
