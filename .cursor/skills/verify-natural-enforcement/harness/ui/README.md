@@ -21,3 +21,8 @@ CLUE_ID=<clue-id> EXPECT_STATUS=in_pool ./.cursor/skills/verify-natural-enforcem
 - `CLUE_ID` 缺省时只验登录，并记 `clue-context=skipped`。
 - step2 断言「内业核查」卡片与状态标签；step3 断言 `data-role` 面板或无权限兜底文案。
 - 缩范围：UI 全量登记提交尚未跑；线索由 API 造数后带入。
+
+- step2 字段级：`verificationStatusLabel`（已完成／没跑成／…）与自动核查文案。
+- step3 字段级：`data-role=decide-*|assign-*`、`#dispatch-org`、`#dispatch-main`。
+- 点击写：默认 `UI_CLICK_WRITE=1` 尽量点 decide-dispatch／assign-org／assign-people；禁用记 skipped 不算红；`UI_CLICK_WRITE=0` 只读。
+- E 待办：同跑次打开 `/workbench` 观察「待分派决定／待派机构／重跑核查」文案（空清单不判红）。

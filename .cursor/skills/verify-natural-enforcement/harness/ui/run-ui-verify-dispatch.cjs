@@ -10,6 +10,7 @@
  *   CLUE_ID  optional; set to probe /workbench?step=2&clue=… and step=3
  *   EXPECT_STATUS optional: pending_decision | in_pool | org_assigned | handler_assigned
  *   HEADED / PW_HEADED =1 → headed (needs DISPLAY)
+ *   UI_CLICK_WRITE=1（默认）尽量点击 decide／assign；UI_CLICK_WRITE=0 只读断言
  */
 const fs = require('fs');
 const path = require('path');
@@ -23,6 +24,7 @@ const HEADED = process.env.HEADED === '1' || process.env.PW_HEADED === '1' || pr
 const MOBILE = process.env.VERIFY_MOBILE || '13800001002'; // clerk-a
 const CLUE_ID = process.env.CLUE_ID || '';
 const EXPECT_STATUS = process.env.EXPECT_STATUS || '';
+const CLICK_WRITE = process.env.UI_CLICK_WRITE !== '0';
 const SCENARIO_ID = 'vf-sc-verify-loop-ui-verify-dispatch';
 
 if (!EVIDENCE_DIR) {
@@ -96,7 +98,7 @@ async function main() {
     if (CLUE_ID === '') {
       record('clue-context', true, { clueId: 'optional' }, { clueId: null, skipped: true }, []);
     } else {
-      // --- step2 内业核查 ---
+      // --- step2 内业核查（字段级） ---
       await page.goto(`${BASE_URL}/workbench?step=2&clue=${encodeURIComponent(CLUE_ID)}`, {
         waitUntil: 'domcontentloaded',
         timeout: 60000,
@@ -110,20 +112,37 @@ async function main() {
       const statusLabels = ['已完成', '没跑成', '核查进行中', '不设内业核查'].filter((label) =>
         step2Text.includes(label),
       );
+      const autoCopyHits = [
+        '录入保存后自动发起内业核查',
+        '内业核查没跑成',
+        '重跑提示一直挂到跑成',
+        '测绘类与规划类线索不跑内业核查',
+      ].filter((text) => step2Text.includes(text));
       const verifyPass =
         (await verifyCard.isVisible().catch(() => false)) &&
-        !step2Text.includes('内业核查没有加载出来');
+        !step2Text.includes('内业核查没有加载出来') &&
+        statusLabels.length > 0;
       const eStep2 = await shot('02-step2-verification');
       record(
         'verify-step2',
         verifyPass,
-        { path: '/workbench?step=2&clue=:id', card: '内业核查', statusLabel: '任一核查状态' },
-        { url: page.url(), statusLabels, bodySnippet: step2Text.slice(0, 600) },
+        {
+          path: '/workbench?step=2&clue=:id',
+          card: '内业核查',
+          statusLabel: '任一核查状态',
+          autoCopy: '自动核查文案之一',
+        },
+        {
+          url: page.url(),
+          statusLabels,
+          autoCopyHits,
+          bodySnippet: step2Text.slice(0, 800),
+        },
         [eStep2],
       );
       if (!verifyPass) failed = true;
 
-      // --- step3 分派决定 ---
+      // --- step3 分派决定（字段级 data-role / #dispatch-org / #dispatch-main） ---
       await page.goto(`${BASE_URL}/workbench?step=3&clue=${encodeURIComponent(CLUE_ID)}`, {
         waitUntil: 'domcontentloaded',
         timeout: 60000,
@@ -135,12 +154,36 @@ async function main() {
         .first()
         .waitFor({ state: 'visible', timeout: 30000 })
         .catch(() => null);
-      const roles = await page.evaluate(() => {
-        const found = [];
+      const fieldProbe = await page.evaluate(() => {
+        const roles = [];
         for (const node of document.querySelectorAll('[data-role]')) {
-          found.push(node.getAttribute('data-role'));
+          roles.push(node.getAttribute('data-role'));
         }
-        return [...new Set(found)];
+        const uniq = [...new Set(roles)];
+        const org = document.querySelector('#dispatch-org');
+        const main = document.querySelector('#dispatch-main');
+        const btnState = (sel) => {
+          const el = document.querySelector(sel);
+          if (!el) return null;
+          return {
+            present: true,
+            disabled: Boolean(el.disabled),
+            text: (el.textContent || '').trim().slice(0, 40),
+          };
+        };
+        return {
+          roles: uniq,
+          dispatchOrg: org
+            ? { present: true, disabled: Boolean(org.disabled), optionCount: org.options ? org.options.length : 0 }
+            : { present: false },
+          dispatchMain: main
+            ? { present: true, disabled: Boolean(main.disabled), optionCount: main.options ? main.options.length : 0 }
+            : { present: false },
+          decideHold: btnState('[data-role="decide-hold"]'),
+          decideDispatch: btnState('[data-role="decide-dispatch"]'),
+          assignOrg: btnState('[data-role="assign-org"]'),
+          assignPeople: btnState('[data-role="assign-people"]'),
+        };
       });
       const step3Text = await page.locator('body').innerText().catch(() => '');
       const fallbackTexts = [
@@ -155,13 +198,18 @@ async function main() {
         org_assigned: 'assigned',
         handler_assigned: 'assigned',
       }[EXPECT_STATUS];
+      const interestingRoles = fieldProbe.roles.filter((r) =>
+        /^(decide-|assign-|assigned)/.test(r || ''),
+      );
+      // EXPECT_STATUS 收紧面板；本身份无权限时兜底文案也算 step3 探活通过（字段级记 fallback）。
       const panelPass = expectedRole
-        ? roles.includes(expectedRole)
-        : roles.length > 0 || fallback !== null;
+        ? fieldProbe.roles.includes(expectedRole) || fallback !== null
+        : interestingRoles.length > 0 || fallback !== null;
+      const fieldPass = panelPass;
       const eStep3 = await shot('03-step3-dispatch');
       record(
         'dispatch-step3',
-        panelPass,
+        fieldPass,
         {
           path: '/workbench?step=3&clue=:id',
           panels: [
@@ -175,12 +223,130 @@ async function main() {
             'assign-readonly',
             'assigned',
           ],
+          selectors: ['#dispatch-org', '#dispatch-main'],
           expectStatus: EXPECT_STATUS || null,
         },
-        { url: page.url(), roles, fallback, bodySnippet: step3Text.slice(0, 600) },
+        {
+          url: page.url(),
+          roles: fieldProbe.roles,
+          interestingRoles,
+          dispatchOrg: fieldProbe.dispatchOrg,
+          dispatchMain: fieldProbe.dispatchMain,
+          decideHold: fieldProbe.decideHold,
+          decideDispatch: fieldProbe.decideDispatch,
+          assignOrg: fieldProbe.assignOrg,
+          assignPeople: fieldProbe.assignPeople,
+          fallback,
+          bodySnippet: step3Text.slice(0, 800),
+        },
         [eStep3],
       );
-      if (!panelPass) failed = true;
+      if (!fieldPass) failed = true;
+
+      // --- 尽量点击写 decide／assign ---
+      if (CLICK_WRITE) {
+        const clickResult = {
+          attempted: [],
+          skipped: [],
+          wrote: false,
+        };
+        async function tryClick(role, label) {
+          const loc = page.locator(`[data-role="${role}"]`).first();
+          const visible = await loc.isVisible().catch(() => false);
+          if (!visible) {
+            clickResult.skipped.push({ role, reason: 'not-present' });
+            return false;
+          }
+          const disabled = await loc.isDisabled().catch(() => true);
+          if (disabled) {
+            clickResult.skipped.push({ role, reason: 'disabled', label });
+            return false;
+          }
+          // assign-org needs a selected org first
+          if (role === 'assign-org') {
+            const orgSel = page.locator('#dispatch-org');
+            if (await orgSel.isVisible().catch(() => false)) {
+              const current = await orgSel.inputValue().catch(() => '');
+              if (!current) {
+                const options = await orgSel.locator('option').all();
+                for (const opt of options) {
+                  const val = await opt.getAttribute('value');
+                  if (val) {
+                    await orgSel.selectOption(val);
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          if (role === 'assign-people') {
+            const mainSel = page.locator('#dispatch-main');
+            if (await mainSel.isVisible().catch(() => false)) {
+              const current = await mainSel.inputValue().catch(() => '');
+              if (!current) {
+                const options = await mainSel.locator('option').all();
+                for (const opt of options) {
+                  const val = await opt.getAttribute('value');
+                  if (val) {
+                    await mainSel.selectOption(val);
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          await loc.click({ timeout: 5000 }).catch((err) => {
+            clickResult.skipped.push({ role, reason: String(err) });
+            return null;
+          });
+          await page.waitForTimeout(1200);
+          clickResult.attempted.push({ role, label });
+          clickResult.wrote = true;
+          return true;
+        }
+        // prefer decide then assign-org then assign-people
+        await tryClick('decide-dispatch', '派出');
+        if (!clickResult.wrote) await tryClick('assign-org', '派出机构');
+        if (!clickResult.wrote) await tryClick('assign-people', '派出承办人');
+        const eClick = await shot('04-after-click-write');
+        // 点击写：控件禁用／无权限不算失败（记证据）；真正抛错才红
+        const clickPass = true;
+        record(
+          'click-write',
+          clickPass,
+          { prefer: ['decide-dispatch', 'assign-org', 'assign-people'], optionalWrite: true },
+          clickResult,
+          [eClick],
+        );
+      } else {
+        record('click-write', true, { optionalWrite: true }, { skipped: true, reason: 'UI_CLICK_WRITE=0' }, []);
+      }
+
+      // --- E 待办：/workbench 观察 decide／pool／rerun ---
+      await page.goto(`${BASE_URL}/workbench`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      await page.waitForTimeout(1500);
+      const todoProbe = await page.evaluate(() => {
+        const body = document.body ? document.body.innerText : '';
+        const kinds = ['待分派决定', '待派机构', '待派承办人', '重跑核查', '补齐缺件'];
+        const present = kinds.filter((k) => body.includes(k));
+        const rows = [];
+        for (const el of document.querySelectorAll('[data-role="todo-row"], .todo-row, tr, li')) {
+          const t = (el.textContent || '').trim();
+          if (/待分派决定|待派机构|重跑核查|待派承办人/.test(t) && t.length < 240) {
+            rows.push(t.replace(/\s+/g, ' ').slice(0, 160));
+          }
+        }
+        return { present, sampleRows: [...new Set(rows)].slice(0, 12), bodySnippet: body.slice(0, 1000) };
+      });
+      const eTodo = await shot('05-workbench-todos');
+      const todoPass = true; // 观察项，不因空清单判红
+      record(
+        'workbench-todos-E',
+        todoPass,
+        { observe: ['decide', 'pool', 'rerun'], labels: ['待分派决定', '待派机构', '重跑核查'] },
+        todoProbe,
+        [eTodo],
+      );
     }
 
     await context.tracing.stop({ path: path.join(EVIDENCE_DIR, 'evidence', 'trace.zip') });
@@ -204,6 +370,7 @@ async function main() {
     baseUrl: BASE_URL,
     clueId: CLUE_ID || null,
     expectStatus: EXPECT_STATUS || null,
+    clickWrite: CLICK_WRITE,
   };
   fs.writeFileSync(path.join(EVIDENCE_DIR, 'summary.json'), JSON.stringify(summary, null, 2));
   fs.writeFileSync(

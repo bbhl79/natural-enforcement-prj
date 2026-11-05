@@ -18,7 +18,7 @@
 | `nav.workbench` | 统一工作台 | `/workbench` | 各业务角色 | — | 主导航「工作台」 | false |
 | `nav.workbench.register` | 线索登记壳 | `/workbench/register` | 内勤等有登记权 | `vf-sc-register-*`、`vf-sc-verify-loop-ui-login-register` | `#clue-source`（线索来源*）；`#clue-domain`（法域*）；`button[type=submit].btn-primary`「保存」；动态要件 `htmlFor=clue-<key>`；确认 `button[data-role=confirm-save]` | true |
 | `nav.workbench.verify.step2` | 内业核查续办 | `/workbench?step=2&clue=:id`；可选 `/clue?tab=verification&clue=:id` | 经办/内勤 | `vf-sc-verify-loop-ui-verify-dispatch` | `.card` 含「内业核查」；状态标签「已完成／没跑成／核查进行中／不设内业核查」；错误卡「内业核查没有加载出来」不算通过 | false |
-| `nav.workbench.dispatch.step3` | 分派决定续办 | `/workbench?step=3&clue=:id` | 经办/内勤/监督 | `vf-sc-verify-loop-ui-verify-dispatch` | `[data-role=decide-panel]`、`[data-role=decide-hold]`、`[data-role=decide-dispatch]`、`[data-role=assign-org-panel]`、`[data-role=assign-org]`、`[data-role=assign-people-panel]`、`[data-role=assign-people]`、`[data-role=assign-readonly]`、`[data-role=assigned]`；无权限兜底文案「待分派池的线索由本机构内勤派出」／「分派决定由录入人完成」 | true |
+| `nav.workbench.dispatch.step3` | 分派决定续办 | `/workbench?step=3&clue=:id` | 经办/内勤/监督 | `vf-sc-verify-loop-ui-verify-dispatch` | `[data-role=decide-panel]`、`[data-role=decide-hold]`、`[data-role=decide-dispatch]`、`[data-role=assign-org-panel]`、`[data-role=assign-org]`、`[data-role=assign-people-panel]`、`[data-role=assign-people]`、`[data-role=assign-readonly]`、`[data-role=assigned]`、`#dispatch-org`、`#dispatch-main`；无权限兜底文案「待分派池的线索由本机构内勤派出」／「分派决定由录入人完成」；`UI_CLICK_WRITE` 尽量点 decide-dispatch／assign-org／assign-people（禁用则记 skipped） | true |
 | `nav.clue.center` | 线索中心 | `/clue` | 内勤/经办/监督 | `vf-sc-dispatch-*`、`vf-sc-duplicate-*` | 列表行、分派/决定操作 | true |
 | `nav.clue.register.legacy` | 旧登记入口 | `/clue/register` → 重定向工作台 | — | — | 勿直接测；应落到 register 壳 | false |
 
@@ -64,7 +64,7 @@
 
 - 登录与登记壳：`harness/ui/run-ui-p0.sh`；场景 `vf-sc-verify-loop-ui-login-register`（driver=`ui`）。
 - 核查／分派续办：`harness/ui/run-ui-verify-dispatch.sh`；场景 `vf-sc-verify-loop-ui-verify-dispatch`（driver=`ui`）。
-  - `CLUE_ID=<id>` 时打开 `/workbench?step=2&clue=` 与 `/workbench?step=3&clue=`，断言上表 step2／step3 选择器。
+  - `CLUE_ID=<id>` 时打开 `/workbench?step=2&clue=` 与 `/workbench?step=3&clue=`，字段级断言 verificationStatus 标签／自动核查文案／data-role／`#dispatch-org`／`#dispatch-main`；并观察 `/workbench` 待办 decide／pool／rerun（E）。
   - 不传 `CLUE_ID` 只验登录；`EXPECT_STATUS=pending_decision|in_pool|org_assigned|handler_assigned` 可收紧面板断言。
   - 证据落 `.run/verify-*`（PNG／webm／trace）；默认 headless，`HEADED=1` 切 headed。
 - 缩范围：UI 全量登记提交尚未跑；线索由 API 造数后经 `CLUE_ID` 带入。
