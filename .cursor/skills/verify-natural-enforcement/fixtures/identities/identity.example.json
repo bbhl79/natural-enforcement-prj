@@ -1,0 +1,12 @@
+{
+  "id": "REPLACE_ME",
+  "role": "REPLACE_ME",
+  "displayName": "REPLACE_ME",
+  "mobile": "REPLACE_ME",
+  "passwordRef": {
+    "env": "VERIFY_PASSWORD_REPLACE_ME",
+    "secretsFile": ".run/verify-secrets.local.json",
+    "key": "REPLACE_ME"
+  },
+  "notes": "内容由人后续填写。口令只引用，不写明文。"
+}

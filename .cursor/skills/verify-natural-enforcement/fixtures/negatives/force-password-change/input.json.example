@@ -1,0 +1,6 @@
+{
+  "negative": "force-password-change",
+  "identityRefs": ["REPLACE_ME"],
+  "payload": {},
+  "notes": "内容由人后续填写。本文件为负例输入模板；复制为 input.json 后填充。"
+}
