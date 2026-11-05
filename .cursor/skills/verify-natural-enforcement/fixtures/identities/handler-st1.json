@@ -1,0 +1,12 @@
+{
+  "id": "handler-st1",
+  "role": "经办",
+  "displayName": "甲所主办甲",
+  "mobile": "13900002004",
+  "passwordRef": {
+    "env": "VERIFY_PASSWORD_SEED",
+    "secretsFile": ".run/verify-secrets.local.json",
+    "key": "seed"
+  },
+  "notes": "对应 P-HANDLER-ST1；任职甲区执法所（ORG-STATION-A）。本环不登录此身份：mainFrom 按工号从分派视图候选解析；integration 用 admin API 种入。"
+}

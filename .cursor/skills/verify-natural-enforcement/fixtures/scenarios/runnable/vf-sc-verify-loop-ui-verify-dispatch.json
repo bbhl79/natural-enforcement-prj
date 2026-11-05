@@ -1,0 +1,56 @@
+{
+  "id": "vf-sc-verify-loop-ui-verify-dispatch",
+  "status": "runnable",
+  "driver": "ui",
+  "kind": "happy",
+  "title": "UI 探活：登录→step2 内业核查→step3 分派面板",
+  "profileRefs": [
+    "vf-case-02-occupy-without-approval"
+  ],
+  "identityRefs": [
+    "clerk-a"
+  ],
+  "featureMapRefs": [
+    "nav.auth.login",
+    "nav.workbench.verify.step2",
+    "nav.workbench.dispatch.step3"
+  ],
+  "steps": [
+    {
+      "id": "login",
+      "action": "ui-assert",
+      "featureMapRef": "nav.auth.login"
+    },
+    {
+      "id": "verify-step2",
+      "action": "ui-assert",
+      "featureMapRef": "nav.workbench.verify.step2"
+    },
+    {
+      "id": "dispatch-step3",
+      "action": "ui-assert",
+      "featureMapRef": "nav.workbench.dispatch.step3"
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assert": [
+      {
+        "path": "ui.login.visible",
+        "op": "eq",
+        "value": true
+      },
+      {
+        "path": "ui.verify.card",
+        "op": "eq",
+        "value": true
+      },
+      {
+        "path": "ui.dispatch.panel",
+        "op": "eq",
+        "value": true
+      }
+    ]
+  },
+  "notes": "缩范围：仅 step2／step3 探活；UI 全量登记提交尚未跑。runner 见 harness/ui/run-ui-verify-dispatch.sh；无 CLUE_ID 时只验登录并记 skipped。"
+}

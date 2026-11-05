@@ -1,6 +1,19 @@
 # API Verification harness
 
-读 `fixtures/scenarios` / `fixtures/negatives` → 投影 case-profile `system` → 登录 → `POST /api/clues` → 评结构化 oracle → 写 `.run/verify-<runId>/`。
+读 `fixtures/scenarios` / `fixtures/negatives` → 登录 → 按步骤执行 → 评结构化 oracle → 写 `.run/verify-<runId>/`。
+
+## 动作
+
+| action | 说明 |
+| ---- | ---- |
+| `register-clue` | 投影 case-profile `system` 后 `POST /api/clues`；`body.id` 写入后续步骤的 `clueId` |
+| `poll-verification` | 短轮询 `GET /api/clues/:id/verification`（默认 10 次／500ms）；done／failed／not_required／running 都记证据，worker 没跑成不判红 |
+| `read-dispatch` | `GET /api/clues/:id/dispatch`，留 suggestion／candidates 证据 |
+| `decide` | 仅当视图状态 `pending_decision` 时 `POST /api/clues/:id/decide`；否则记 skipped 证据继续 |
+| `assign-org` | `POST /api/clues/:id/assign-org`；机构按 `orgUnitCode` 从 `/api/org-units` 解析，或 `orgUnitFrom=assignment` |
+| `assign-people` | `POST /api/clues/:id/assign-people`；主办／协办按工号从视图 `candidates` 解析 |
+
+分派视图默认用本步身份读取；承办机构内勤读不到录入机构视图时，步骤可声明 `viewIdentityRef`（如录入人）单独读视图。
 
 入口：容器内 `./dev test integration`（`integration/verify-skill-loop.test.ts`）。
 禁止在宿主机 `pnpm install`。
