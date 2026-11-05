@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * Verification UI P0 (headless default): login → workbench/register field-level.
  * Shrink: full 录入→核查→分派 chain deferred; nearest subset = auth + register shell.
