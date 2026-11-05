@@ -1,0 +1,169 @@
+{
+  "id": "vf-case-11-transfer-illegal",
+  "title": "vf-东莞-非法转让土地",
+  "quality": "A",
+  "source": {
+    "feishuFolderToken": "Pvo9fHTOylQGmJd0V86cr1jQnZe",
+    "feishuDocToken": "EkhIdD4OMo14JqxpdrFcR7tGnwg",
+    "feishuTitle": "11.东莞-非法转让土地",
+    "seedCity": "东莞"
+  },
+  "domain": "land",
+  "sourceCode": "502",
+  "types": [
+    "land_transfer_illegal"
+  ],
+  "party": {
+    "kind": "person",
+    "displayName": "vf-张三",
+    "subjectUnknown": false
+  },
+  "spatial": {
+    "kind": "face",
+    "geojson": {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              113.22,
+              23.08
+            ],
+            [
+              113.23,
+              23.08
+            ],
+            [
+              113.23,
+              23.09
+            ],
+            [
+              113.22,
+              23.09
+            ],
+            [
+              113.22,
+              23.08
+            ]
+          ]
+        ]
+      },
+      "properties": {}
+    },
+    "addressNarrative": "广州市XX区XX街道某地块（合成图斑）"
+  },
+  "orgBinding": {
+    "enteredOrgCode": "ORG-DEPT-A",
+    "handlingOrgCode": "ORG-STATION-A"
+  },
+  "stages": {
+    "register": {
+      "status": "populated",
+      "receivedAt": "2026-10-20",
+      "narrative": "vf-上级交办：涉嫌非法转让土地",
+      "system": {
+        "sourceCode": "502",
+        "domain": "land",
+        "types": [
+          "land_transfer_illegal"
+        ],
+        "subjectUnknown": false,
+        "anonymityConfirmed": false,
+        "confirm": true,
+        "values": {
+          "clue.received_at": "2026-10-20",
+          "clue.narrative": "vf-上级交办：涉嫌非法转让土地",
+          "clue.assign_doc_no": "vf-交办〔2026〕X号",
+          "clue.assign_org": "vf-上级自然资源主管部门"
+        },
+        "spatialSource": {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  113.22,
+                  23.08
+                ],
+                [
+                  113.23,
+                  23.08
+                ],
+                [
+                  113.23,
+                  23.09
+                ],
+                [
+                  113.22,
+                  23.09
+                ],
+                [
+                  113.22,
+                  23.08
+                ]
+              ]
+            ]
+          },
+          "properties": {}
+        }
+      }
+    },
+    "verify": {
+      "status": "populated",
+      "summary": "现场核查确认涉嫌违法事实，建议立案"
+    },
+    "dispatch": {
+      "status": "populated",
+      "orgCode": "ORG-STATION-A",
+      "note": "夹具手工分派至甲区执法所"
+    },
+    "filing": {
+      "status": "populated",
+      "conclusion": "file",
+      "partyNames": [
+        "vf-张三"
+      ],
+      "system": {
+        "conclusion": "file",
+        "partyNames": [
+          "vf-张三"
+        ]
+      }
+    },
+    "investigate": {
+      "status": "populated",
+      "summary": "调查取证完成（笔录/书证已脱敏摘要）"
+    },
+    "hearing": {
+      "status": "populated",
+      "summary": "已告知陈述申辩与听证权利"
+    },
+    "legal_review": {
+      "status": "populated",
+      "summary": "法制审核通过"
+    },
+    "collective": {
+      "status": "thin",
+      "summary": "重大案件集体讨论（若适用）"
+    },
+    "decision": {
+      "status": "populated",
+      "summary": "作出行政处罚决定（数额已改写为测试值）"
+    },
+    "serve": {
+      "status": "populated",
+      "summary": "决定书已送达"
+    },
+    "execute": {
+      "status": "populated",
+      "summary": "罚没已执行或整改已落实（摘要）"
+    },
+    "close": {
+      "status": "populated",
+      "summary": "结案呈批通过"
+    }
+  },
+  "notes": "由飞书案卷范本脱敏广州化生成；几何与地址为合成；不得当作真实案件。"
+}

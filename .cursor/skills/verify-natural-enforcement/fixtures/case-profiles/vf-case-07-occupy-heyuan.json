@@ -1,0 +1,159 @@
+{
+  "id": "vf-case-07-occupy-heyuan",
+  "title": "vf-河源-非法占地",
+  "quality": "C",
+  "source": {
+    "feishuFolderToken": "Pvo9fHTOylQGmJd0V86cr1jQnZe",
+    "feishuDocToken": "PwmpdT6u8obpqFxt87Hcb1runYc",
+    "feishuTitle": "7.河源-非法占地",
+    "seedCity": "河源"
+  },
+  "domain": "land",
+  "sourceCode": "16",
+  "types": [
+    "land_occupy_without_approval"
+  ],
+  "party": {
+    "kind": "person",
+    "displayName": "vf-当事人丁",
+    "subjectUnknown": false
+  },
+  "spatial": {
+    "kind": "face",
+    "geojson": {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              113.34,
+              23.05
+            ],
+            [
+              113.35,
+              23.05
+            ],
+            [
+              113.35,
+              23.06
+            ],
+            [
+              113.34,
+              23.06
+            ],
+            [
+              113.34,
+              23.05
+            ]
+          ]
+        ]
+      },
+      "properties": {}
+    },
+    "addressNarrative": "广州市XX区XX街道某地块（合成图斑）"
+  },
+  "orgBinding": {
+    "enteredOrgCode": "ORG-DEPT-A",
+    "handlingOrgCode": "ORG-STATION-A"
+  },
+  "stages": {
+    "register": {
+      "status": "thin",
+      "receivedAt": "2026-10-20",
+      "narrative": "vf-非法占地建设",
+      "system": {
+        "sourceCode": "16",
+        "domain": "land",
+        "types": [
+          "land_occupy_without_approval"
+        ],
+        "subjectUnknown": false,
+        "anonymityConfirmed": false,
+        "confirm": true,
+        "values": {
+          "clue.received_at": "2026-10-20",
+          "clue.narrative": "vf-非法占地建设",
+          "clue.finder": "vf-巡查员甲",
+          "clue.patrol_no": "vf-XC-2026-16"
+        },
+        "spatialSource": {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  113.34,
+                  23.05
+                ],
+                [
+                  113.35,
+                  23.05
+                ],
+                [
+                  113.35,
+                  23.06
+                ],
+                [
+                  113.34,
+                  23.06
+                ],
+                [
+                  113.34,
+                  23.05
+                ]
+              ]
+            ]
+          },
+          "properties": {}
+        }
+      }
+    },
+    "verify": {
+      "status": "thin"
+    },
+    "dispatch": {
+      "status": "thin",
+      "orgCode": "ORG-STATION-A"
+    },
+    "filing": {
+      "status": "thin",
+      "conclusion": "file",
+      "partyNames": [
+        "vf-当事人丁"
+      ],
+      "system": {
+        "conclusion": "file",
+        "partyNames": [
+          "vf-当事人丁"
+        ]
+      }
+    },
+    "investigate": {
+      "status": "absent"
+    },
+    "hearing": {
+      "status": "absent"
+    },
+    "legal_review": {
+      "status": "absent"
+    },
+    "collective": {
+      "status": "absent"
+    },
+    "decision": {
+      "status": "absent"
+    },
+    "serve": {
+      "status": "absent"
+    },
+    "execute": {
+      "status": "absent"
+    },
+    "close": {
+      "status": "absent"
+    }
+  },
+  "notes": "由飞书案卷范本脱敏广州化生成；几何与地址为合成；不得当作真实案件。"
+}

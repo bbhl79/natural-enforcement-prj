@@ -1,10 +1,22 @@
-# Feature Map（占位）
+# Feature Map
 
-本目录存放 Verification Skill 的 Feature Map。
+Verification Skill 的 **UI 导航说明书**（Lauren Tan）：功能层级、到达路径、快捷键、DOM 选择器。
+让 Agent 按图操作，而不是在界面里瞎转。
 
-内容由人后续填写。本轮只建空壳，不编造功能清单或映射表。
+## 文件
 
-建议落盘文件名（后人选用，非强制）：
+| 文件 | 用途 |
+| ---- | ---- |
+| `feature-map.md` | 主地图（初版可由 Agent 探索生成，人补强） |
+| `maintenance.md` | 地图漂移时如何更新 |
 
-- `feature-map.md` — 功能点与旅程／夹具对照
-- `p0-scope.md` — P0 验收范围说明
+## 与夹具关系
+
+- Scenario 通过 `featureMapRefs` 挂到地图节点。
+- 案卷 / case-profiles **不**替代 Feature Map；程序节点只用来核对地图是否漏能力。
+
+## 选择器策略
+
+1. 优先 `role` + accessible name / label。
+2. 稳定 `data-testid`（若产品已挂）。
+3. 脆弱 CSS/xpath 必须在条目上标 `fragile: true` 与风险说明。

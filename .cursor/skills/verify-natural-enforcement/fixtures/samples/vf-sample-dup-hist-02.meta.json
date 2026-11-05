@@ -1,0 +1,9 @@
+{
+  "id": "vf-sample-dup-hist-02",
+  "purpose": "duplicate-check-history",
+  "relatedJourney": "verify-duplicate",
+  "relatedScenario": "vf-sc-duplicate-land-overlap",
+  "relatedProfile": "vf-case-02-occupy-without-approval",
+  "summary": "vf-土地硬底化历史面状样本，与后登重叠线索共用同一合成多边形以触发疑似重复。",
+  "notes": "无生产敏感明文；几何取自 profile spatial。"
+}

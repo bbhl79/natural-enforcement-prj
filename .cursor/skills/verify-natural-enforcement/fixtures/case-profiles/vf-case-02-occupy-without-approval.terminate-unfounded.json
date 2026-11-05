@@ -1,0 +1,324 @@
+{
+  "id": "vf-case-02-occupy-without-approval.terminate-unfounded",
+  "role": "variant",
+  "title": "vf-非法占地（终止调查·事实不成立）",
+  "quality": "A",
+  "source": {
+    "feishuFolderToken": "Pvo9fHTOylQGmJd0V86cr1jQnZe",
+    "feishuDocToken": "N3whdiKhwo0LnSxFpG1cWBVvnrh",
+    "feishuTitle": "2.深圳-非法占地",
+    "seedCity": "深圳"
+  },
+  "domain": "land",
+  "sourceCode": "16",
+  "types": [
+    "land_occupy_without_approval"
+  ],
+  "party": {
+    "kind": "person",
+    "displayName": "vf-当事人甲",
+    "subjectUnknown": false
+  },
+  "spatial": {
+    "kind": "face",
+    "geojson": {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              113.24,
+              23.05
+            ],
+            [
+              113.25,
+              23.05
+            ],
+            [
+              113.25,
+              23.06
+            ],
+            [
+              113.24,
+              23.06
+            ],
+            [
+              113.24,
+              23.05
+            ]
+          ]
+        ]
+      },
+      "properties": {}
+    },
+    "addressNarrative": "广州市XX区XX街道某地块（合成图斑）"
+  },
+  "orgBinding": {
+    "enteredOrgCode": "ORG-DEPT-A",
+    "handlingOrgCode": "ORG-STATION-A"
+  },
+  "timeline": [
+    {
+      "at": "2026-10-06",
+      "stage": "register",
+      "summary": "巡查发现擅自占地硬底化约100平方米"
+    },
+    {
+      "at": "2026-10-06",
+      "stage": "verify",
+      "summary": "现场勘测与询问，建议立案"
+    },
+    {
+      "at": "2026-10-09",
+      "stage": "filing",
+      "summary": "立案呈批批准"
+    },
+    {
+      "at": "2026-10-15",
+      "stage": "investigate",
+      "summary": "补充勘测，面积复核为 vf-120.6 平方米"
+    },
+    {
+      "at": "2026-10-22",
+      "stage": "investigate",
+      "summary": "查明临时用地手续合法，违法事实不成立"
+    },
+    {
+      "at": "2026-10-23",
+      "stage": "investigate",
+      "summary": "终止调查呈批批准，建议撤案"
+    },
+    {
+      "at": "2026-10-24",
+      "stage": "close",
+      "summary": "撤案结案"
+    }
+  ],
+  "processEvents": [
+    {
+      "id": "pe-02-filing",
+      "kind": "filing-approval",
+      "doc": "立案呈批表",
+      "stage": "filing",
+      "procedureRef": "规程 2.6",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "未批占地硬底化，建议立案",
+          "at": "2026-10-09"
+        },
+        {
+          "role": "行政审核",
+          "actorRef": "review-a",
+          "opinion": "拟同意立案",
+          "at": "2026-10-09"
+        },
+        {
+          "role": "行政审批",
+          "actorRef": "approve-hq",
+          "opinion": "同意立案",
+          "at": "2026-10-09"
+        }
+      ],
+      "consultations": [],
+      "outcome": "approved"
+    },
+    {
+      "id": "pe-02-stop",
+      "kind": "stop-order-approval",
+      "doc": "责令停止违法行为通知书",
+      "stage": "investigate",
+      "procedureRef": "规程 3",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "建议责令停止继续硬化施工",
+          "at": "2026-10-16"
+        },
+        {
+          "role": "行政审批",
+          "actorRef": "approve-hq",
+          "opinion": "同意发出",
+          "at": "2026-10-16"
+        }
+      ],
+      "consultations": [],
+      "outcome": "approved"
+    },
+    {
+      "id": "pe-02-terminate",
+      "kind": "terminate-approval",
+      "doc": "终止调查决定呈批表",
+      "stage": "investigate",
+      "procedureRef": "规程 3.5(1)",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "违法事实不成立，建议终止调查并撤案",
+          "at": "2026-10-23"
+        },
+        {
+          "role": "行政审核",
+          "actorRef": "review-a",
+          "opinion": "拟同意终止调查",
+          "at": "2026-10-23"
+        },
+        {
+          "role": "行政审批",
+          "actorRef": "approve-hq",
+          "opinion": "同意终止调查",
+          "at": "2026-10-23"
+        }
+      ],
+      "consultations": [
+        {
+          "dept": "vf-规划会办科",
+          "actorRef": null,
+          "opinion": "临时用地手续核验属实",
+          "at": "2026-10-23"
+        }
+      ],
+      "outcome": "approved"
+    },
+    {
+      "id": "pe-02-close-withdraw",
+      "kind": "close-approval",
+      "doc": "结案/撤案呈批",
+      "stage": "close",
+      "procedureRef": "规程 3.5 / 10",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "终止调查后建议撤案",
+          "at": "2026-10-24"
+        },
+        {
+          "role": "行政审批",
+          "actorRef": "approve-hq",
+          "opinion": "同意撤案",
+          "at": "2026-10-24"
+        }
+      ],
+      "consultations": [],
+      "outcome": "approved"
+    }
+  ],
+  "stages": {
+    "register": {
+      "status": "populated",
+      "receivedAt": "2026-10-06",
+      "narrative": "vf-巡查发现当事人擅自占地硬底化，约100平方米",
+      "system": {
+        "sourceCode": "16",
+        "domain": "land",
+        "types": [
+          "land_occupy_without_approval"
+        ],
+        "subjectUnknown": false,
+        "anonymityConfirmed": false,
+        "confirm": true,
+        "values": {
+          "clue.received_at": "2026-10-06",
+          "clue.narrative": "vf-巡查发现当事人擅自占地硬底化，约100平方米",
+          "clue.finder": "vf-巡查员甲",
+          "clue.patrol_no": "vf-XC-2026-16"
+        },
+        "spatialSource": {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  113.24,
+                  23.05
+                ],
+                [
+                  113.25,
+                  23.05
+                ],
+                [
+                  113.25,
+                  23.06
+                ],
+                [
+                  113.24,
+                  23.06
+                ],
+                [
+                  113.24,
+                  23.05
+                ]
+              ]
+            ]
+          },
+          "properties": {}
+        }
+      }
+    },
+    "verify": {
+      "status": "populated",
+      "summary": "巡查核查属实，建议立案"
+    },
+    "dispatch": {
+      "status": "populated",
+      "orgCode": "ORG-STATION-A"
+    },
+    "filing": {
+      "status": "populated",
+      "conclusion": "file",
+      "partyNames": [
+        "vf-当事人甲"
+      ],
+      "system": {
+        "conclusion": "file",
+        "partyNames": [
+          "vf-当事人甲"
+        ]
+      }
+    },
+    "investigate": {
+      "status": "populated",
+      "termination": {
+        "reason": "违法事实不成立",
+        "code": "fact-unfounded",
+        "at": "2026-10-23"
+      },
+      "summary": "终止调查"
+    },
+    "hearing": {
+      "status": "absent"
+    },
+    "legal_review": {
+      "status": "absent"
+    },
+    "collective": {
+      "status": "absent"
+    },
+    "decision": {
+      "status": "absent"
+    },
+    "serve": {
+      "status": "absent"
+    },
+    "execute": {
+      "status": "absent"
+    },
+    "close": {
+      "status": "populated",
+      "summary": "撤案",
+      "disposition": "withdraw"
+    }
+  },
+  "notes": "立案后深入调查发现硬底化属合法临时用地范围内，终止调查并撤案。",
+  "derivedFrom": "vf-case-02-occupy-without-approval",
+  "branch": "terminate-unfounded",
+  "procedureRef": [
+    "规程 3.5 调查终止"
+  ]
+}

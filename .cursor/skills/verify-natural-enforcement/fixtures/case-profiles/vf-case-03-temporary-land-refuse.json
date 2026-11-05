@@ -1,0 +1,162 @@
+{
+  "id": "vf-case-03-temporary-land-refuse",
+  "title": "vf-珠海-临时用地拒不归还",
+  "quality": "B",
+  "source": {
+    "feishuFolderToken": "Pvo9fHTOylQGmJd0V86cr1jQnZe",
+    "feishuDocToken": "GGhidwsDKoqDwTxbYJ3cOKPtnOf",
+    "feishuTitle": "3.珠海-临时用地拒不归还",
+    "seedCity": "珠海"
+  },
+  "domain": "land",
+  "sourceCode": "16",
+  "types": [
+    "land_temporary_land_refuse"
+  ],
+  "party": {
+    "kind": "org",
+    "displayName": "vf-某临时用地使用单位",
+    "subjectUnknown": false
+  },
+  "spatial": {
+    "kind": "face",
+    "geojson": {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              113.26,
+              23.05
+            ],
+            [
+              113.27,
+              23.05
+            ],
+            [
+              113.27,
+              23.06
+            ],
+            [
+              113.26,
+              23.06
+            ],
+            [
+              113.26,
+              23.05
+            ]
+          ]
+        ]
+      },
+      "properties": {}
+    },
+    "addressNarrative": "广州市XX区XX街道某地块（合成图斑）"
+  },
+  "orgBinding": {
+    "enteredOrgCode": "ORG-DEPT-A",
+    "handlingOrgCode": "ORG-STATION-A"
+  },
+  "stages": {
+    "register": {
+      "status": "populated",
+      "receivedAt": "2026-10-20",
+      "narrative": "vf-临时使用土地期满拒不归还",
+      "system": {
+        "sourceCode": "16",
+        "domain": "land",
+        "types": [
+          "land_temporary_land_refuse"
+        ],
+        "subjectUnknown": false,
+        "anonymityConfirmed": false,
+        "confirm": true,
+        "values": {
+          "clue.received_at": "2026-10-20",
+          "clue.narrative": "vf-临时使用土地期满拒不归还",
+          "clue.finder": "vf-巡查员甲",
+          "clue.patrol_no": "vf-XC-2026-16"
+        },
+        "spatialSource": {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  113.26,
+                  23.05
+                ],
+                [
+                  113.27,
+                  23.05
+                ],
+                [
+                  113.27,
+                  23.06
+                ],
+                [
+                  113.26,
+                  23.06
+                ],
+                [
+                  113.26,
+                  23.05
+                ]
+              ]
+            ]
+          },
+          "properties": {}
+        }
+      }
+    },
+    "verify": {
+      "status": "populated",
+      "summary": "核查完成"
+    },
+    "dispatch": {
+      "status": "populated",
+      "orgCode": "ORG-STATION-A"
+    },
+    "filing": {
+      "status": "populated",
+      "conclusion": "file",
+      "partyNames": [
+        "vf-某临时用地使用单位"
+      ],
+      "system": {
+        "conclusion": "file",
+        "partyNames": [
+          "vf-某临时用地使用单位"
+        ]
+      }
+    },
+    "investigate": {
+      "status": "thin",
+      "summary": "调查材料不完整摘录"
+    },
+    "hearing": {
+      "status": "thin"
+    },
+    "legal_review": {
+      "status": "thin"
+    },
+    "collective": {
+      "status": "absent"
+    },
+    "decision": {
+      "status": "thin",
+      "summary": "有处罚决定摘要"
+    },
+    "serve": {
+      "status": "thin"
+    },
+    "execute": {
+      "status": "thin"
+    },
+    "close": {
+      "status": "thin"
+    }
+  },
+  "notes": "由飞书案卷范本脱敏广州化生成；几何与地址为合成；不得当作真实案件。"
+}

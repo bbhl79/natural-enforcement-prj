@@ -1,0 +1,52 @@
+{
+  "id": "vf-sc-register-dispatch-land-patrol",
+  "status": "runnable",
+  "title": "土地巡查线索登记并分派",
+  "profileRefs": [
+    "vf-case-02-occupy-without-approval"
+  ],
+  "identityRefs": [
+    "clerk-a",
+    "intake-hq"
+  ],
+  "featureMapRefs": [
+    "nav.workbench.register",
+    "nav.clue.center"
+  ],
+  "steps": [
+    {
+      "id": "login-clerk",
+      "action": "login",
+      "identityRef": "clerk-a"
+    },
+    {
+      "id": "register",
+      "action": "register-clue",
+      "fromProfile": "vf-case-02-occupy-without-approval",
+      "path": "stages.register.system"
+    },
+    {
+      "id": "login-intake",
+      "action": "login",
+      "identityRef": "intake-hq"
+    },
+    {
+      "id": "assign-org",
+      "action": "dispatch-assign-org",
+      "orgCode": "ORG-STATION-A"
+    },
+    {
+      "id": "assign-people",
+      "action": "dispatch-assign-people",
+      "mainCode": "P-CLERK-A"
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assertions": [
+      "after register: status in_pool or pending_decision",
+      "after assign-org: clue handlingOrg matches ORG-STATION-A",
+      "after assign-people: main handler assigned"
+    ]
+  }
+}

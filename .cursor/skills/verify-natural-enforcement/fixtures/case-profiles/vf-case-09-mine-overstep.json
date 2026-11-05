@@ -1,0 +1,169 @@
+{
+  "id": "vf-case-09-mine-overstep",
+  "title": "vf-惠州-越界开采",
+  "quality": "A",
+  "source": {
+    "feishuFolderToken": "Pvo9fHTOylQGmJd0V86cr1jQnZe",
+    "feishuDocToken": "ORaZdWcHDoACPtxuzlLcFRivnFe",
+    "feishuTitle": "9.惠州-越界开采",
+    "seedCity": "惠州"
+  },
+  "domain": "mineral",
+  "sourceCode": "2203",
+  "types": [
+    "mineral_mine_overstep"
+  ],
+  "party": {
+    "kind": "org",
+    "displayName": "vf-某石场有限公司",
+    "subjectUnknown": false
+  },
+  "spatial": {
+    "kind": "face",
+    "geojson": {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              113.38,
+              23.05
+            ],
+            [
+              113.39,
+              23.05
+            ],
+            [
+              113.39,
+              23.06
+            ],
+            [
+              113.38,
+              23.06
+            ],
+            [
+              113.38,
+              23.05
+            ]
+          ]
+        ]
+      },
+      "properties": {}
+    },
+    "addressNarrative": "广州市XX区XX街道某地块（合成图斑）"
+  },
+  "orgBinding": {
+    "enteredOrgCode": "ORG-DEPT-A",
+    "handlingOrgCode": "ORG-STATION-A"
+  },
+  "stages": {
+    "register": {
+      "status": "populated",
+      "receivedAt": "2026-10-20",
+      "narrative": "vf-部门移送：超越批准矿区范围采矿",
+      "system": {
+        "sourceCode": "2203",
+        "domain": "mineral",
+        "types": [
+          "mineral_mine_overstep"
+        ],
+        "subjectUnknown": false,
+        "anonymityConfirmed": false,
+        "confirm": true,
+        "values": {
+          "clue.received_at": "2026-10-20",
+          "clue.narrative": "vf-部门移送：超越批准矿区范围采矿",
+          "clue.transfer_doc_no": "vf-移送〔2026〕X号",
+          "clue.transfer_org": "vf-移送机关"
+        },
+        "spatialSource": {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  113.38,
+                  23.05
+                ],
+                [
+                  113.39,
+                  23.05
+                ],
+                [
+                  113.39,
+                  23.06
+                ],
+                [
+                  113.38,
+                  23.06
+                ],
+                [
+                  113.38,
+                  23.05
+                ]
+              ]
+            ]
+          },
+          "properties": {}
+        }
+      }
+    },
+    "verify": {
+      "status": "populated",
+      "summary": "现场核查确认涉嫌违法事实，建议立案"
+    },
+    "dispatch": {
+      "status": "populated",
+      "orgCode": "ORG-STATION-A",
+      "note": "夹具手工分派至甲区执法所"
+    },
+    "filing": {
+      "status": "populated",
+      "conclusion": "file",
+      "partyNames": [
+        "vf-某石场有限公司"
+      ],
+      "system": {
+        "conclusion": "file",
+        "partyNames": [
+          "vf-某石场有限公司"
+        ]
+      }
+    },
+    "investigate": {
+      "status": "populated",
+      "summary": "调查取证完成（笔录/书证已脱敏摘要）"
+    },
+    "hearing": {
+      "status": "populated",
+      "summary": "已告知陈述申辩与听证权利"
+    },
+    "legal_review": {
+      "status": "populated",
+      "summary": "法制审核通过"
+    },
+    "collective": {
+      "status": "thin",
+      "summary": "重大案件集体讨论（若适用）"
+    },
+    "decision": {
+      "status": "populated",
+      "summary": "作出行政处罚决定（数额已改写为测试值）"
+    },
+    "serve": {
+      "status": "populated",
+      "summary": "决定书已送达"
+    },
+    "execute": {
+      "status": "populated",
+      "summary": "罚没已执行或整改已落实（摘要）"
+    },
+    "close": {
+      "status": "populated",
+      "summary": "结案呈批通过"
+    }
+  },
+  "notes": "由飞书案卷范本脱敏广州化生成；几何与地址为合成；不得当作真实案件。"
+}

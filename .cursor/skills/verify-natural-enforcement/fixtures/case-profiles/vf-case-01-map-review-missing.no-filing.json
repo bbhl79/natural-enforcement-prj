@@ -1,0 +1,185 @@
+{
+  "id": "vf-case-01-map-review-missing.no-filing",
+  "role": "variant",
+  "title": "vf-问题地图（核查后不予立案）",
+  "quality": "A",
+  "source": {
+    "feishuFolderToken": "Pvo9fHTOylQGmJd0V86cr1jQnZe",
+    "feishuDocToken": "M0yIdeKhkoXvpcxvDAqcJBGAnkS",
+    "feishuTitle": "1.广州-非法测绘",
+    "seedCity": "广州"
+  },
+  "domain": "survey",
+  "sourceCode": "305",
+  "types": [
+    "survey_map_review_missing"
+  ],
+  "party": {
+    "kind": "org",
+    "displayName": "vf-广州某信息科技有限公司",
+    "subjectUnknown": false
+  },
+  "spatial": {
+    "kind": "point",
+    "geojson": {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          113.22,
+          23.05
+        ]
+      },
+      "properties": {}
+    },
+    "addressNarrative": "广州市XX区XX街道XX号（合成地址）"
+  },
+  "orgBinding": {
+    "enteredOrgCode": "ORG-DEPT-A",
+    "handlingOrgCode": "ORG-STATION-A"
+  },
+  "timeline": [
+    {
+      "at": "2026-10-19",
+      "stage": "register",
+      "summary": "群众举报"
+    },
+    {
+      "at": "2026-10-20",
+      "stage": "verify",
+      "summary": "核查：商品已下架且无法证实曾销售问题地图"
+    },
+    {
+      "at": "2026-10-21",
+      "stage": "filing",
+      "summary": "不予立案呈批批准"
+    }
+  ],
+  "processEvents": [
+    {
+      "id": "pe-01nf-filing",
+      "kind": "filing-approval",
+      "doc": "立案（不予立案）呈批表",
+      "stage": "filing",
+      "procedureRef": "规程 2.6",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "证据不足以证明违法行为存在，建议不予立案",
+          "at": "2026-10-21"
+        },
+        {
+          "role": "行政审核",
+          "actorRef": "review-a",
+          "opinion": "拟同意不予立案",
+          "at": "2026-10-21"
+        },
+        {
+          "role": "行政审批",
+          "actorRef": "approve-hq",
+          "opinion": "同意不予立案",
+          "at": "2026-10-21"
+        }
+      ],
+      "consultations": [
+        {
+          "dept": "vf-测管会办科",
+          "actorRef": null,
+          "opinion": "现有材料难以认定附着地图曾对外销售",
+          "at": "2026-10-21"
+        }
+      ],
+      "outcome": "approved"
+    }
+  ],
+  "stages": {
+    "register": {
+      "status": "populated",
+      "receivedAt": "2026-10-19",
+      "narrative": "vf-群众举报电话：天猫销售附着问题地图商品",
+      "system": {
+        "sourceCode": "305",
+        "domain": "survey",
+        "types": [
+          "survey_map_review_missing"
+        ],
+        "subjectUnknown": false,
+        "anonymityConfirmed": false,
+        "confirm": true,
+        "values": {
+          "clue.received_at": "2026-10-19",
+          "clue.narrative": "vf-群众举报电话：天猫销售附着问题地图商品",
+          "clue.reporter_anonymous": "false",
+          "clue.verifiable_basis": "vf-举报记录摘要"
+        },
+        "spatialSource": {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              113.22,
+              23.05
+            ]
+          },
+          "properties": {}
+        }
+      }
+    },
+    "verify": {
+      "status": "populated",
+      "summary": "现场检查确认问题地图未送审，发出责令停止通知"
+    },
+    "dispatch": {
+      "status": "populated",
+      "orgCode": "ORG-STATION-A",
+      "note": "手工分派至甲区执法所"
+    },
+    "filing": {
+      "status": "populated",
+      "conclusion": "no-case",
+      "partyNames": [
+        "vf-广州某信息科技有限公司"
+      ],
+      "reason": "违法事实无法证实",
+      "system": {
+        "conclusion": "no-case",
+        "partyNames": [
+          "vf-广州某信息科技有限公司"
+        ],
+        "reason": "违法事实无法证实"
+      }
+    },
+    "investigate": {
+      "status": "absent"
+    },
+    "hearing": {
+      "status": "absent"
+    },
+    "legal_review": {
+      "status": "absent"
+    },
+    "collective": {
+      "status": "absent"
+    },
+    "decision": {
+      "status": "absent"
+    },
+    "serve": {
+      "status": "absent"
+    },
+    "execute": {
+      "status": "absent"
+    },
+    "close": {
+      "status": "populated",
+      "summary": "不予立案后办结（随线索程序）"
+    }
+  },
+  "notes": "核查后认为违法事实不成立或依法不应立案；后续调查及处罚槽 absent。",
+  "derivedFrom": "vf-case-01-map-review-missing",
+  "branch": "no-filing",
+  "procedureRef": [
+    "规程 2.6 不予立案"
+  ]
+}

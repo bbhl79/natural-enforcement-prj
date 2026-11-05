@@ -1,0 +1,122 @@
+{
+  "id": "vf-case-20-survey-qual-fraud",
+  "title": "vf-揭阳-欺骗取得资质",
+  "quality": "B",
+  "source": {
+    "feishuFolderToken": "Pvo9fHTOylQGmJd0V86cr1jQnZe",
+    "feishuDocToken": "HgEEdZyoxoAX33xNDIJc1m9inhb",
+    "feishuTitle": "20.揭阳-欺骗取得资质",
+    "seedCity": "揭阳"
+  },
+  "domain": "survey",
+  "sourceCode": "301",
+  "types": [
+    "survey_qualification_fraud"
+  ],
+  "party": {
+    "kind": "org",
+    "displayName": "vf-某规划编制单位",
+    "subjectUnknown": false
+  },
+  "spatial": {
+    "kind": "point",
+    "geojson": {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          113.2,
+          23.11
+        ]
+      },
+      "properties": {}
+    },
+    "addressNarrative": "广州市XX区XX街道XX号（合成地址）"
+  },
+  "orgBinding": {
+    "enteredOrgCode": "ORG-DEPT-A",
+    "handlingOrgCode": "ORG-STATION-A"
+  },
+  "stages": {
+    "register": {
+      "status": "populated",
+      "receivedAt": "2026-10-20",
+      "narrative": "vf-以欺骗手段取得资质证书承揽编制工作",
+      "system": {
+        "sourceCode": "301",
+        "domain": "survey",
+        "types": [
+          "survey_qualification_fraud"
+        ],
+        "subjectUnknown": false,
+        "anonymityConfirmed": false,
+        "confirm": true,
+        "values": {
+          "clue.received_at": "2026-10-20",
+          "clue.narrative": "vf-以欺骗手段取得资质证书承揽编制工作",
+          "clue.reporter_anonymous": "false",
+          "clue.verifiable_basis": "vf-举报记录摘要"
+        },
+        "spatialSource": {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              113.2,
+              23.11
+            ]
+          },
+          "properties": {}
+        }
+      }
+    },
+    "verify": {
+      "status": "populated",
+      "summary": "核查完成"
+    },
+    "dispatch": {
+      "status": "populated",
+      "orgCode": "ORG-STATION-A"
+    },
+    "filing": {
+      "status": "populated",
+      "conclusion": "file",
+      "partyNames": [
+        "vf-某规划编制单位"
+      ],
+      "system": {
+        "conclusion": "file",
+        "partyNames": [
+          "vf-某规划编制单位"
+        ]
+      }
+    },
+    "investigate": {
+      "status": "thin",
+      "summary": "调查材料不完整摘录"
+    },
+    "hearing": {
+      "status": "thin"
+    },
+    "legal_review": {
+      "status": "thin"
+    },
+    "collective": {
+      "status": "absent"
+    },
+    "decision": {
+      "status": "thin",
+      "summary": "有处罚决定摘要"
+    },
+    "serve": {
+      "status": "thin"
+    },
+    "execute": {
+      "status": "thin"
+    },
+    "close": {
+      "status": "thin"
+    }
+  },
+  "notes": "由飞书案卷范本脱敏广州化生成；几何与地址为合成；不得当作真实案件。"
+}

@@ -1,0 +1,513 @@
+{
+  "id": "vf-case-02-occupy-without-approval.suspend-resume",
+  "role": "variant",
+  "title": "vf-非法占地（调查中止后恢复）",
+  "quality": "A",
+  "source": {
+    "feishuFolderToken": "Pvo9fHTOylQGmJd0V86cr1jQnZe",
+    "feishuDocToken": "N3whdiKhwo0LnSxFpG1cWBVvnrh",
+    "feishuTitle": "2.深圳-非法占地",
+    "seedCity": "深圳"
+  },
+  "domain": "land",
+  "sourceCode": "16",
+  "types": [
+    "land_occupy_without_approval"
+  ],
+  "party": {
+    "kind": "person",
+    "displayName": "vf-当事人甲",
+    "subjectUnknown": false
+  },
+  "spatial": {
+    "kind": "face",
+    "geojson": {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              113.24,
+              23.05
+            ],
+            [
+              113.25,
+              23.05
+            ],
+            [
+              113.25,
+              23.06
+            ],
+            [
+              113.24,
+              23.06
+            ],
+            [
+              113.24,
+              23.05
+            ]
+          ]
+        ]
+      },
+      "properties": {}
+    },
+    "addressNarrative": "广州市XX区XX街道某地块（合成图斑）"
+  },
+  "orgBinding": {
+    "enteredOrgCode": "ORG-DEPT-A",
+    "handlingOrgCode": "ORG-STATION-A"
+  },
+  "timeline": [
+    {
+      "at": "2026-10-06",
+      "stage": "register",
+      "summary": "巡查发现擅自占地硬底化约100平方米"
+    },
+    {
+      "at": "2026-10-06",
+      "stage": "verify",
+      "summary": "现场勘测与询问，建议立案"
+    },
+    {
+      "at": "2026-10-09",
+      "stage": "filing",
+      "summary": "立案呈批批准"
+    },
+    {
+      "at": "2026-10-18",
+      "stage": "investigate",
+      "summary": "中止调查待勘测报告"
+    },
+    {
+      "at": "2026-10-25",
+      "stage": "investigate",
+      "summary": "恢复调查"
+    },
+    {
+      "at": "2026-10-15",
+      "stage": "investigate",
+      "summary": "补充勘测，面积复核为 vf-120.6 平方米"
+    },
+    {
+      "at": "2026-11-05",
+      "stage": "investigate",
+      "summary": "调查报告与审理"
+    },
+    {
+      "at": "2026-11-08",
+      "stage": "legal_review",
+      "summary": "法制审核通过"
+    },
+    {
+      "at": "2026-11-10",
+      "stage": "decision",
+      "summary": "处理决定呈批（含会办）"
+    },
+    {
+      "at": "2026-11-12",
+      "stage": "hearing",
+      "summary": "告知与听证告知；未申请听证"
+    },
+    {
+      "at": "2026-11-20",
+      "stage": "decision",
+      "summary": "处罚决定审批"
+    },
+    {
+      "at": "2026-11-21",
+      "stage": "serve",
+      "summary": "决定书送达"
+    },
+    {
+      "at": "2026-12-05",
+      "stage": "execute",
+      "summary": "罚款缴纳；责令退还土地整改中"
+    },
+    {
+      "at": "2026-12-20",
+      "stage": "close",
+      "summary": "结案呈批批准"
+    }
+  ],
+  "processEvents": [
+    {
+      "id": "pe-02-filing",
+      "kind": "filing-approval",
+      "doc": "立案呈批表",
+      "stage": "filing",
+      "procedureRef": "规程 2.6",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "未批占地硬底化，建议立案",
+          "at": "2026-10-09"
+        },
+        {
+          "role": "行政审核",
+          "actorRef": "review-a",
+          "opinion": "拟同意立案",
+          "at": "2026-10-09"
+        },
+        {
+          "role": "行政审批",
+          "actorRef": "approve-hq",
+          "opinion": "同意立案",
+          "at": "2026-10-09"
+        }
+      ],
+      "consultations": [],
+      "outcome": "approved"
+    },
+    {
+      "id": "pe-02v-suspend",
+      "kind": "suspend-approval",
+      "doc": "中止调查决定呈批表",
+      "stage": "investigate",
+      "procedureRef": "规程 3.4",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "勘测报告未出，建议中止",
+          "at": "2026-10-18"
+        },
+        {
+          "role": "行政审核",
+          "actorRef": "review-a",
+          "opinion": "拟同意",
+          "at": "2026-10-18"
+        },
+        {
+          "role": "行政审批",
+          "actorRef": "approve-hq",
+          "opinion": "同意中止",
+          "at": "2026-10-18"
+        }
+      ],
+      "consultations": [
+        {
+          "dept": "vf-耕保会办科",
+          "actorRef": null,
+          "opinion": "同意待正式勘测后再续查",
+          "at": "2026-10-18"
+        }
+      ],
+      "outcome": "approved"
+    },
+    {
+      "id": "pe-02-stop",
+      "kind": "stop-order-approval",
+      "doc": "责令停止违法行为通知书",
+      "stage": "investigate",
+      "procedureRef": "规程 3",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "建议责令停止继续硬化施工",
+          "at": "2026-10-16"
+        },
+        {
+          "role": "行政审批",
+          "actorRef": "approve-hq",
+          "opinion": "同意发出",
+          "at": "2026-10-16"
+        }
+      ],
+      "consultations": [],
+      "outcome": "approved"
+    },
+    {
+      "id": "pe-02-panel",
+      "kind": "case-hearing-panel",
+      "doc": "违法案件审理记录",
+      "stage": "investigate",
+      "procedureRef": "规程 5",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "汇报面积复核与拟处罚档次",
+          "at": "2026-11-05"
+        },
+        {
+          "role": "行政审核",
+          "actorRef": "review-a",
+          "opinion": "同意转入处理决定呈批",
+          "at": "2026-11-05"
+        }
+      ],
+      "consultations": [
+        {
+          "dept": "vf-耕保会办科",
+          "actorRef": null,
+          "opinion": "占用地类以勘测报告为准，无异议",
+          "at": "2026-11-05"
+        }
+      ],
+      "outcome": "approved"
+    },
+    {
+      "id": "pe-02-legal",
+      "kind": "legal-review",
+      "doc": "重大执法决定法制审核意见书",
+      "stage": "legal_review",
+      "procedureRef": "规程 6",
+      "chain": [
+        {
+          "role": "法制审核",
+          "actorRef": "legal-st",
+          "opinion": "审核予以通过",
+          "at": "2026-11-08"
+        }
+      ],
+      "consultations": [],
+      "outcome": "approved"
+    },
+    {
+      "id": "pe-02-decision",
+      "kind": "decision-approval",
+      "doc": "违法案件处理决定呈批表",
+      "stage": "decision",
+      "procedureRef": "规程 7",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "拟责令退还土地、没收新建构筑物、并处罚款（测试数额）",
+          "at": "2026-11-10"
+        },
+        {
+          "role": "行政审核",
+          "actorRef": "review-a",
+          "opinion": "拟同意呈批示",
+          "at": "2026-11-10"
+        },
+        {
+          "role": "行政审批",
+          "actorRef": "approve-hq",
+          "opinion": "同意",
+          "at": "2026-11-10"
+        }
+      ],
+      "consultations": [
+        {
+          "dept": "vf-耕保会办科",
+          "actorRef": null,
+          "opinion": "同意拟处理建议",
+          "at": "2026-11-10"
+        },
+        {
+          "dept": "vf-规划会办科",
+          "actorRef": null,
+          "opinion": "用地规划手续缺失认定无异议",
+          "at": "2026-11-10"
+        }
+      ],
+      "outcome": "approved"
+    },
+    {
+      "id": "pe-02-hearing",
+      "kind": "hearing",
+      "doc": "行政处罚听证告知书",
+      "stage": "hearing",
+      "procedureRef": "规程 8.3",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "送达听证告知",
+          "at": "2026-11-12"
+        }
+      ],
+      "consultations": [],
+      "outcome": "not-applied"
+    },
+    {
+      "id": "pe-02-penalty",
+      "kind": "penalty-approval",
+      "doc": "行政处罚决定审批表",
+      "stage": "decision",
+      "procedureRef": "规程 8",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "呈示",
+          "at": "2026-11-20"
+        },
+        {
+          "role": "行政审核",
+          "actorRef": "review-a",
+          "opinion": "拟同意",
+          "at": "2026-11-20"
+        },
+        {
+          "role": "行政审批",
+          "actorRef": "approve-hq",
+          "opinion": "同意",
+          "at": "2026-11-20"
+        }
+      ],
+      "consultations": [],
+      "outcome": "approved"
+    },
+    {
+      "id": "pe-02-close",
+      "kind": "close-approval",
+      "doc": "结案呈批表",
+      "stage": "close",
+      "procedureRef": "规程 10",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "执行到位，建议结案",
+          "at": "2026-12-20"
+        },
+        {
+          "role": "行政审核",
+          "actorRef": "review-a",
+          "opinion": "拟同意",
+          "at": "2026-12-20"
+        },
+        {
+          "role": "行政审批",
+          "actorRef": "approve-hq",
+          "opinion": "同意结案",
+          "at": "2026-12-20"
+        }
+      ],
+      "consultations": [],
+      "outcome": "approved"
+    }
+  ],
+  "stages": {
+    "register": {
+      "status": "populated",
+      "receivedAt": "2026-10-06",
+      "narrative": "vf-巡查发现当事人擅自占地硬底化，约100平方米",
+      "system": {
+        "sourceCode": "16",
+        "domain": "land",
+        "types": [
+          "land_occupy_without_approval"
+        ],
+        "subjectUnknown": false,
+        "anonymityConfirmed": false,
+        "confirm": true,
+        "values": {
+          "clue.received_at": "2026-10-06",
+          "clue.narrative": "vf-巡查发现当事人擅自占地硬底化，约100平方米",
+          "clue.finder": "vf-巡查员甲",
+          "clue.patrol_no": "vf-XC-2026-16"
+        },
+        "spatialSource": {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  113.24,
+                  23.05
+                ],
+                [
+                  113.25,
+                  23.05
+                ],
+                [
+                  113.25,
+                  23.06
+                ],
+                [
+                  113.24,
+                  23.06
+                ],
+                [
+                  113.24,
+                  23.05
+                ]
+              ]
+            ]
+          },
+          "properties": {}
+        }
+      }
+    },
+    "verify": {
+      "status": "populated",
+      "summary": "巡查核查属实，建议立案"
+    },
+    "dispatch": {
+      "status": "populated",
+      "orgCode": "ORG-STATION-A"
+    },
+    "filing": {
+      "status": "populated",
+      "conclusion": "file",
+      "partyNames": [
+        "vf-当事人甲"
+      ],
+      "system": {
+        "conclusion": "file",
+        "partyNames": [
+          "vf-当事人甲"
+        ]
+      }
+    },
+    "investigate": {
+      "status": "populated",
+      "summary": "勘测复核面积 vf-120.6 平方米；责令停止后仍部分未整改（种子叙事改写）",
+      "areaSqm": 120.6,
+      "suspend": {
+        "reason": "委托勘测尚未出具正式报告",
+        "from": "2026-10-18",
+        "to": "2026-10-25",
+        "resumeNote": "勘测报告送达，恢复调查"
+      }
+    },
+    "hearing": {
+      "status": "populated",
+      "hearingRequest": {
+        "applied": false,
+        "informedAt": "2026-11-12"
+      }
+    },
+    "legal_review": {
+      "status": "populated",
+      "result": "passed"
+    },
+    "collective": {
+      "status": "absent",
+      "summary": "本 canonical 未走集体讨论"
+    },
+    "decision": {
+      "status": "populated",
+      "summary": "责令退还土地；没收新建构筑物；罚款（测试数额）",
+      "penalty": {
+        "orderReturnLand": true,
+        "confiscateStructures": true,
+        "fine": 50000
+      }
+    },
+    "serve": {
+      "status": "populated"
+    },
+    "execute": {
+      "status": "populated",
+      "summary": "罚款已缴；退还土地整改完成"
+    },
+    "close": {
+      "status": "populated"
+    }
+  },
+  "notes": "等待勘测报告期间中止，报告出具后恢复。",
+  "derivedFrom": "vf-case-02-occupy-without-approval",
+  "branch": "suspend-resume",
+  "procedureRef": [
+    "规程 3.4 调查中止"
+  ]
+}

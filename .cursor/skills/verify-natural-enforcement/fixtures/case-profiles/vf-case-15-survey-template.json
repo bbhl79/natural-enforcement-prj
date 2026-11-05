@@ -1,0 +1,122 @@
+{
+  "id": "vf-case-15-survey-template",
+  "title": "vf-湛江-测绘案卷范本",
+  "quality": "B",
+  "source": {
+    "feishuFolderToken": "Pvo9fHTOylQGmJd0V86cr1jQnZe",
+    "feishuDocToken": "Z5QddyRpnolF6axBwbBchkbFnUb",
+    "feishuTitle": "15.湛江-测绘案卷范本",
+    "seedCity": "湛江"
+  },
+  "domain": "survey",
+  "sourceCode": "305",
+  "types": [
+    "survey_map_review_missing"
+  ],
+  "party": {
+    "kind": "org",
+    "displayName": "vf-某测绘相关单位",
+    "subjectUnknown": false
+  },
+  "spatial": {
+    "kind": "point",
+    "geojson": {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          113.3,
+          23.08
+        ]
+      },
+      "properties": {}
+    },
+    "addressNarrative": "广州市XX区XX街道XX号（合成地址）"
+  },
+  "orgBinding": {
+    "enteredOrgCode": "ORG-DEPT-A",
+    "handlingOrgCode": "ORG-STATION-A"
+  },
+  "stages": {
+    "register": {
+      "status": "populated",
+      "receivedAt": "2026-10-20",
+      "narrative": "vf-测绘类行政处罚案卷范本",
+      "system": {
+        "sourceCode": "305",
+        "domain": "survey",
+        "types": [
+          "survey_map_review_missing"
+        ],
+        "subjectUnknown": false,
+        "anonymityConfirmed": false,
+        "confirm": true,
+        "values": {
+          "clue.received_at": "2026-10-20",
+          "clue.narrative": "vf-测绘类行政处罚案卷范本",
+          "clue.reporter_anonymous": "false",
+          "clue.verifiable_basis": "vf-举报记录摘要"
+        },
+        "spatialSource": {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              113.3,
+              23.08
+            ]
+          },
+          "properties": {}
+        }
+      }
+    },
+    "verify": {
+      "status": "populated",
+      "summary": "核查完成"
+    },
+    "dispatch": {
+      "status": "populated",
+      "orgCode": "ORG-STATION-A"
+    },
+    "filing": {
+      "status": "populated",
+      "conclusion": "file",
+      "partyNames": [
+        "vf-某测绘相关单位"
+      ],
+      "system": {
+        "conclusion": "file",
+        "partyNames": [
+          "vf-某测绘相关单位"
+        ]
+      }
+    },
+    "investigate": {
+      "status": "thin",
+      "summary": "调查材料不完整摘录"
+    },
+    "hearing": {
+      "status": "thin"
+    },
+    "legal_review": {
+      "status": "thin"
+    },
+    "collective": {
+      "status": "absent"
+    },
+    "decision": {
+      "status": "thin",
+      "summary": "有处罚决定摘要"
+    },
+    "serve": {
+      "status": "thin"
+    },
+    "execute": {
+      "status": "thin"
+    },
+    "close": {
+      "status": "thin"
+    }
+  },
+  "notes": "由飞书案卷范本脱敏广州化生成；几何与地址为合成；不得当作真实案件。"
+}

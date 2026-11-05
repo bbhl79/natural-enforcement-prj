@@ -1,0 +1,162 @@
+{
+  "id": "vf-case-17-mine-overstep-zq",
+  "title": "vf-肇庆-越界开采",
+  "quality": "B",
+  "source": {
+    "feishuFolderToken": "Pvo9fHTOylQGmJd0V86cr1jQnZe",
+    "feishuDocToken": "RbAddQL6XoJDeVxvbEMckUSRnlg",
+    "feishuTitle": "17.肇庆-越界开采",
+    "seedCity": "肇庆"
+  },
+  "domain": "mineral",
+  "sourceCode": "2203",
+  "types": [
+    "mineral_mine_overstep"
+  ],
+  "party": {
+    "kind": "org",
+    "displayName": "vf-某采矿企业",
+    "subjectUnknown": false
+  },
+  "spatial": {
+    "kind": "face",
+    "geojson": {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              113.34,
+              23.08
+            ],
+            [
+              113.35,
+              23.08
+            ],
+            [
+              113.35,
+              23.09
+            ],
+            [
+              113.34,
+              23.09
+            ],
+            [
+              113.34,
+              23.08
+            ]
+          ]
+        ]
+      },
+      "properties": {}
+    },
+    "addressNarrative": "广州市XX区XX街道某地块（合成图斑）"
+  },
+  "orgBinding": {
+    "enteredOrgCode": "ORG-DEPT-A",
+    "handlingOrgCode": "ORG-STATION-A"
+  },
+  "stages": {
+    "register": {
+      "status": "populated",
+      "receivedAt": "2026-10-20",
+      "narrative": "vf-越界开采矿产资源",
+      "system": {
+        "sourceCode": "2203",
+        "domain": "mineral",
+        "types": [
+          "mineral_mine_overstep"
+        ],
+        "subjectUnknown": false,
+        "anonymityConfirmed": false,
+        "confirm": true,
+        "values": {
+          "clue.received_at": "2026-10-20",
+          "clue.narrative": "vf-越界开采矿产资源",
+          "clue.transfer_doc_no": "vf-移送〔2026〕X号",
+          "clue.transfer_org": "vf-移送机关"
+        },
+        "spatialSource": {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  113.34,
+                  23.08
+                ],
+                [
+                  113.35,
+                  23.08
+                ],
+                [
+                  113.35,
+                  23.09
+                ],
+                [
+                  113.34,
+                  23.09
+                ],
+                [
+                  113.34,
+                  23.08
+                ]
+              ]
+            ]
+          },
+          "properties": {}
+        }
+      }
+    },
+    "verify": {
+      "status": "populated",
+      "summary": "核查完成"
+    },
+    "dispatch": {
+      "status": "populated",
+      "orgCode": "ORG-STATION-A"
+    },
+    "filing": {
+      "status": "populated",
+      "conclusion": "file",
+      "partyNames": [
+        "vf-某采矿企业"
+      ],
+      "system": {
+        "conclusion": "file",
+        "partyNames": [
+          "vf-某采矿企业"
+        ]
+      }
+    },
+    "investigate": {
+      "status": "thin",
+      "summary": "调查材料不完整摘录"
+    },
+    "hearing": {
+      "status": "thin"
+    },
+    "legal_review": {
+      "status": "thin"
+    },
+    "collective": {
+      "status": "absent"
+    },
+    "decision": {
+      "status": "thin",
+      "summary": "有处罚决定摘要"
+    },
+    "serve": {
+      "status": "thin"
+    },
+    "execute": {
+      "status": "thin"
+    },
+    "close": {
+      "status": "thin"
+    }
+  },
+  "notes": "由飞书案卷范本脱敏广州化生成；几何与地址为合成；不得当作真实案件。"
+}

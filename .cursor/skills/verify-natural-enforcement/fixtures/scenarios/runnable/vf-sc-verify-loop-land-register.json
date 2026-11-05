@@ -1,0 +1,50 @@
+{
+  "id": "vf-sc-verify-loop-land-register",
+  "status": "runnable",
+  "driver": "api",
+  "kind": "happy",
+  "title": "土地巡查登记（Verification 环 happy）",
+  "profileRefs": [
+    "vf-case-02-occupy-without-approval"
+  ],
+  "identityRefs": [
+    "clerk-a"
+  ],
+  "featureMapRefs": [],
+  "steps": [
+    {
+      "id": "register",
+      "action": "register-clue",
+      "fromProfile": "vf-case-02-occupy-without-approval",
+      "path": "stages.register.system",
+      "identityRef": "clerk-a"
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assert": [
+      {
+        "path": "http.status",
+        "op": "in",
+        "value": [
+          200,
+          201
+        ]
+      },
+      {
+        "path": "body.result",
+        "op": "eq",
+        "value": "registered"
+      },
+      {
+        "path": "body.status",
+        "op": "in",
+        "value": [
+          "in_pool",
+          "pending_decision"
+        ]
+      }
+    ]
+  },
+  "notes": "精简环：只登记，挂 vf-case-02；与 vf-sc-neg-missing-narrative 成对。"
+}

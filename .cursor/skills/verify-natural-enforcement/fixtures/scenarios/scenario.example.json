@@ -1,0 +1,38 @@
+{
+  "id": "vf-sc-example",
+  "status": "latent",
+  "driver": "api",
+  "kind": "happy",
+  "title": "示例场景（勿直接跑）",
+  "profileRefs": [
+    "vf-case-01-map-review-missing"
+  ],
+  "identityRefs": [
+    "clerk-a"
+  ],
+  "featureMapRefs": [],
+  "steps": [
+    {
+      "id": "register",
+      "action": "register-clue",
+      "fromProfile": "vf-case-01-map-review-missing",
+      "path": "stages.register.system",
+      "identityRef": "clerk-a"
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assert": [
+      {
+        "path": "http.status",
+        "op": "in",
+        "value": [
+          200,
+          201
+        ]
+      }
+    ]
+  },
+  "expectedOutcomesPath": null,
+  "notes": "复制到 runnable/、negatives/ 或 latent/ 后填写；见 schema.md。"
+}

@@ -1,0 +1,34 @@
+{
+  "id": "vf-sc-register-planning",
+  "status": "runnable",
+  "title": "规划未取得工程规划许可线索登记",
+  "profileRefs": [
+    "vf-case-04-build-without-permit"
+  ],
+  "identityRefs": [
+    "clerk-a"
+  ],
+  "featureMapRefs": [
+    "nav.workbench.register"
+  ],
+  "steps": [
+    {
+      "id": "login",
+      "action": "login",
+      "identityRef": "clerk-a"
+    },
+    {
+      "id": "register",
+      "action": "register-clue",
+      "fromProfile": "vf-case-04-build-without-permit",
+      "path": "stages.register.system"
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assertions": [
+      "httpStatus in [200,201]",
+      "domain planning"
+    ]
+  }
+}

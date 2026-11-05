@@ -1,0 +1,53 @@
+{
+  "id": "vf-sc-neg-idempotency-conflict",
+  "status": "runnable",
+  "driver": "api",
+  "kind": "negative",
+  "title": "同幂等键异报文冲突",
+  "profileRefs": [
+    "vf-case-02-occupy-without-approval"
+  ],
+  "identityRefs": [
+    "clerk-a"
+  ],
+  "featureMapRefs": [],
+  "steps": [
+    {
+      "id": "register-first",
+      "action": "register-clue",
+      "fromProfile": "vf-case-02-occupy-without-approval",
+      "path": "stages.register.system",
+      "identityRef": "clerk-a",
+      "idempotencyKey": "vf-idem-conflict-1"
+    },
+    {
+      "id": "register-conflict",
+      "action": "register-clue",
+      "fromProfile": "vf-case-02-occupy-without-approval",
+      "path": "stages.register.system",
+      "identityRef": "clerk-a",
+      "idempotencyKey": "vf-idem-conflict-1",
+      "mutate": {
+        "setValues": {
+          "clue.narrative": "vf-另一次反映（幂等冲突）"
+        }
+      }
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assert": [
+      {
+        "path": "http.status",
+        "op": "eq",
+        "value": 409
+      },
+      {
+        "path": "body.result",
+        "op": "eq",
+        "value": "already-exists"
+      }
+    ]
+  },
+  "notes": "末步观测评 oracle；首步须先成功写入。"
+}

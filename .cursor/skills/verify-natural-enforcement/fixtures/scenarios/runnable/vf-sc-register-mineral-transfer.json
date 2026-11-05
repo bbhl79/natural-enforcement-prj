@@ -1,0 +1,35 @@
+{
+  "id": "vf-sc-register-mineral-transfer",
+  "status": "runnable",
+  "title": "矿产部门移送线索登记",
+  "profileRefs": [
+    "vf-case-09-mine-overstep"
+  ],
+  "identityRefs": [
+    "clerk-a"
+  ],
+  "featureMapRefs": [
+    "nav.workbench.register"
+  ],
+  "steps": [
+    {
+      "id": "login",
+      "action": "login",
+      "identityRef": "clerk-a"
+    },
+    {
+      "id": "register",
+      "action": "register-clue",
+      "fromProfile": "vf-case-09-mine-overstep",
+      "path": "stages.register.system"
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assertions": [
+      "httpStatus in [200,201]",
+      "domain mineral",
+      "sourceCode 2203"
+    ]
+  }
+}

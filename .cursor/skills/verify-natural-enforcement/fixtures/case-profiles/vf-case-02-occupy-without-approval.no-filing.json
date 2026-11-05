@@ -1,0 +1,224 @@
+{
+  "id": "vf-case-02-occupy-without-approval.no-filing",
+  "role": "variant",
+  "title": "vf-非法占地（不予立案）",
+  "quality": "A",
+  "source": {
+    "feishuFolderToken": "Pvo9fHTOylQGmJd0V86cr1jQnZe",
+    "feishuDocToken": "N3whdiKhwo0LnSxFpG1cWBVvnrh",
+    "feishuTitle": "2.深圳-非法占地",
+    "seedCity": "深圳"
+  },
+  "domain": "land",
+  "sourceCode": "16",
+  "types": [
+    "land_occupy_without_approval"
+  ],
+  "party": {
+    "kind": "person",
+    "displayName": "vf-当事人甲",
+    "subjectUnknown": false
+  },
+  "spatial": {
+    "kind": "face",
+    "geojson": {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              113.24,
+              23.05
+            ],
+            [
+              113.25,
+              23.05
+            ],
+            [
+              113.25,
+              23.06
+            ],
+            [
+              113.24,
+              23.06
+            ],
+            [
+              113.24,
+              23.05
+            ]
+          ]
+        ]
+      },
+      "properties": {}
+    },
+    "addressNarrative": "广州市XX区XX街道某地块（合成图斑）"
+  },
+  "orgBinding": {
+    "enteredOrgCode": "ORG-DEPT-A",
+    "handlingOrgCode": "ORG-STATION-A"
+  },
+  "timeline": [
+    {
+      "at": "2026-10-06",
+      "stage": "register",
+      "summary": "巡查发现"
+    },
+    {
+      "at": "2026-10-07",
+      "stage": "verify",
+      "summary": "现场已拆除硬化并恢复种植条件"
+    },
+    {
+      "at": "2026-10-08",
+      "stage": "filing",
+      "summary": "不予立案呈批批准"
+    }
+  ],
+  "processEvents": [
+    {
+      "id": "pe-02nf-filing",
+      "kind": "filing-approval",
+      "doc": "立案（不予立案）呈批表",
+      "stage": "filing",
+      "procedureRef": "规程 2.6",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "现状已恢复，建议不予立案",
+          "at": "2026-10-08"
+        },
+        {
+          "role": "行政审核",
+          "actorRef": "review-a",
+          "opinion": "拟同意",
+          "at": "2026-10-08"
+        },
+        {
+          "role": "行政审批",
+          "actorRef": "approve-hq",
+          "opinion": "同意不予立案",
+          "at": "2026-10-08"
+        }
+      ],
+      "consultations": [
+        {
+          "dept": "vf-耕保会办科",
+          "actorRef": null,
+          "opinion": "现场复核同意不予立案建议",
+          "at": "2026-10-08"
+        }
+      ],
+      "outcome": "approved"
+    }
+  ],
+  "stages": {
+    "register": {
+      "status": "populated",
+      "receivedAt": "2026-10-06",
+      "narrative": "vf-巡查发现当事人擅自占地硬底化，约100平方米",
+      "system": {
+        "sourceCode": "16",
+        "domain": "land",
+        "types": [
+          "land_occupy_without_approval"
+        ],
+        "subjectUnknown": false,
+        "anonymityConfirmed": false,
+        "confirm": true,
+        "values": {
+          "clue.received_at": "2026-10-06",
+          "clue.narrative": "vf-巡查发现当事人擅自占地硬底化，约100平方米",
+          "clue.finder": "vf-巡查员甲",
+          "clue.patrol_no": "vf-XC-2026-16"
+        },
+        "spatialSource": {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  113.24,
+                  23.05
+                ],
+                [
+                  113.25,
+                  23.05
+                ],
+                [
+                  113.25,
+                  23.06
+                ],
+                [
+                  113.24,
+                  23.06
+                ],
+                [
+                  113.24,
+                  23.05
+                ]
+              ]
+            ]
+          },
+          "properties": {}
+        }
+      }
+    },
+    "verify": {
+      "status": "populated",
+      "summary": "巡查核查属实，建议立案"
+    },
+    "dispatch": {
+      "status": "populated",
+      "orgCode": "ORG-STATION-A"
+    },
+    "filing": {
+      "status": "populated",
+      "conclusion": "no-case",
+      "partyNames": [
+        "vf-当事人甲"
+      ],
+      "reason": "违法行为已消除且依法可不立案",
+      "system": {
+        "conclusion": "no-case",
+        "partyNames": [
+          "vf-当事人甲"
+        ],
+        "reason": "违法行为已消除且依法可不立案"
+      }
+    },
+    "investigate": {
+      "status": "absent"
+    },
+    "hearing": {
+      "status": "absent"
+    },
+    "legal_review": {
+      "status": "absent"
+    },
+    "collective": {
+      "status": "absent"
+    },
+    "decision": {
+      "status": "absent"
+    },
+    "serve": {
+      "status": "absent"
+    },
+    "execute": {
+      "status": "absent"
+    },
+    "close": {
+      "status": "populated",
+      "summary": "不予立案办结"
+    }
+  },
+  "notes": "核查后属历史已拆除、现状已恢复，建议不予立案。",
+  "derivedFrom": "vf-case-02-occupy-without-approval",
+  "branch": "no-filing",
+  "procedureRef": [
+    "规程 2.6 不予立案"
+  ]
+}

@@ -1,0 +1,162 @@
+{
+  "id": "vf-case-10-farmland-destroy",
+  "title": "vf-汕尾-破坏基本农田",
+  "quality": "B",
+  "source": {
+    "feishuFolderToken": "Pvo9fHTOylQGmJd0V86cr1jQnZe",
+    "feishuDocToken": "R9X3daE67opoShxJodxcIqvgntb",
+    "feishuTitle": "10.汕尾-破坏基本农田",
+    "seedCity": "汕尾"
+  },
+  "domain": "land",
+  "sourceCode": "16",
+  "types": [
+    "land_farmland_permanent"
+  ],
+  "party": {
+    "kind": "person",
+    "displayName": "vf-刘某",
+    "subjectUnknown": false
+  },
+  "spatial": {
+    "kind": "face",
+    "geojson": {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              113.2,
+              23.08
+            ],
+            [
+              113.21,
+              23.08
+            ],
+            [
+              113.21,
+              23.09
+            ],
+            [
+              113.2,
+              23.09
+            ],
+            [
+              113.2,
+              23.08
+            ]
+          ]
+        ]
+      },
+      "properties": {}
+    },
+    "addressNarrative": "广州市XX区XX街道某地块（合成图斑）"
+  },
+  "orgBinding": {
+    "enteredOrgCode": "ORG-DEPT-A",
+    "handlingOrgCode": "ORG-STATION-A"
+  },
+  "stages": {
+    "register": {
+      "status": "populated",
+      "receivedAt": "2026-10-20",
+      "narrative": "vf-破坏或者擅自改变基本农田",
+      "system": {
+        "sourceCode": "16",
+        "domain": "land",
+        "types": [
+          "land_farmland_permanent"
+        ],
+        "subjectUnknown": false,
+        "anonymityConfirmed": false,
+        "confirm": true,
+        "values": {
+          "clue.received_at": "2026-10-20",
+          "clue.narrative": "vf-破坏或者擅自改变基本农田",
+          "clue.finder": "vf-巡查员甲",
+          "clue.patrol_no": "vf-XC-2026-16"
+        },
+        "spatialSource": {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  113.2,
+                  23.08
+                ],
+                [
+                  113.21,
+                  23.08
+                ],
+                [
+                  113.21,
+                  23.09
+                ],
+                [
+                  113.2,
+                  23.09
+                ],
+                [
+                  113.2,
+                  23.08
+                ]
+              ]
+            ]
+          },
+          "properties": {}
+        }
+      }
+    },
+    "verify": {
+      "status": "populated",
+      "summary": "核查完成"
+    },
+    "dispatch": {
+      "status": "populated",
+      "orgCode": "ORG-STATION-A"
+    },
+    "filing": {
+      "status": "populated",
+      "conclusion": "file",
+      "partyNames": [
+        "vf-刘某"
+      ],
+      "system": {
+        "conclusion": "file",
+        "partyNames": [
+          "vf-刘某"
+        ]
+      }
+    },
+    "investigate": {
+      "status": "thin",
+      "summary": "调查材料不完整摘录"
+    },
+    "hearing": {
+      "status": "thin"
+    },
+    "legal_review": {
+      "status": "thin"
+    },
+    "collective": {
+      "status": "absent"
+    },
+    "decision": {
+      "status": "thin",
+      "summary": "有处罚决定摘要"
+    },
+    "serve": {
+      "status": "thin"
+    },
+    "execute": {
+      "status": "thin"
+    },
+    "close": {
+      "status": "thin"
+    }
+  },
+  "notes": "由飞书案卷范本脱敏广州化生成；几何与地址为合成；不得当作真实案件。"
+}

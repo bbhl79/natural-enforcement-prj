@@ -1,0 +1,32 @@
+{
+  "id": "vf-sc-latent-decision",
+  "status": "latent",
+  "title": "处罚决定（latent）",
+  "profileRefs": [
+    "vf-case-13-mine-without-license"
+  ],
+  "identityRefs": [
+    "clerk-a",
+    "legal-st",
+    "approve-hq"
+  ],
+  "featureMapRefs": [
+    "nav.case.validity"
+  ],
+  "requiredStage": "decision",
+  "steps": [
+    {
+      "id": "blocked",
+      "action": "noop",
+      "reason": "product-capability-missing-or-unmapped"
+    }
+  ],
+  "oracle": {
+    "kind": "future",
+    "assertions": [
+      "when product exposes decision, scenario becomes runnable",
+      "outcomes must match profile stages.decision facts"
+    ]
+  },
+  "notes": "禁止标 runnable 直至 Feature Map 与产品能力确认。"
+}

@@ -1,0 +1,33 @@
+{
+  "runnable": [
+    "vf-sc-collaborate-handoff",
+    "vf-sc-duplicate-land-overlap",
+    "vf-sc-filing-after-dispatch",
+    "vf-sc-register-dispatch-land-patrol",
+    "vf-sc-register-mineral-transfer",
+    "vf-sc-register-planning",
+    "vf-sc-register-survey-report",
+    "vf-sc-verify-loop-land-register",
+    "vf-sc-verify-loop-survey-register",
+    "vf-sc-workbench-after-filing"
+  ],
+  "negatives": [
+    "vf-sc-neg-missing-narrative",
+    "vf-sc-neg-supervisor-register",
+    "vf-sc-neg-land-point-geometry",
+    "vf-sc-neg-type-unconfirmed",
+    "vf-sc-neg-idempotency-conflict"
+  ],
+  "latent": [
+    "vf-sc-latent-close",
+    "vf-sc-latent-consult-dissent",
+    "vf-sc-latent-decision",
+    "vf-sc-latent-hearing",
+    "vf-sc-latent-investigate",
+    "vf-sc-latent-legal-review",
+    "vf-sc-latent-legal-review-return",
+    "vf-sc-latent-no-filing-survey",
+    "vf-sc-latent-serve",
+    "vf-sc-latent-suspend-resume-land"
+  ]
+}

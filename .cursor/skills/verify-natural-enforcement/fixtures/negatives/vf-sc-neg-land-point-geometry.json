@@ -1,0 +1,48 @@
+{
+  "id": "vf-sc-neg-land-point-geometry",
+  "status": "runnable",
+  "driver": "api",
+  "kind": "negative",
+  "title": "土地法域交 Point 几何被拒",
+  "profileRefs": [
+    "vf-case-02-occupy-without-approval"
+  ],
+  "identityRefs": [
+    "clerk-a"
+  ],
+  "featureMapRefs": [],
+  "steps": [
+    {
+      "id": "register",
+      "action": "register-clue",
+      "fromProfile": "vf-case-02-occupy-without-approval",
+      "path": "stages.register.system",
+      "identityRef": "clerk-a",
+      "mutate": {
+        "overrideSpatial": {
+          "type": "Point",
+          "coordinates": [
+            113.24,
+            23.05
+          ]
+        }
+      }
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assert": [
+      {
+        "path": "http.status",
+        "op": "eq",
+        "value": 400
+      },
+      {
+        "path": "body.rules",
+        "op": "includes",
+        "value": "spatial-geometry-type-rejected"
+      }
+    ]
+  },
+  "notes": "domain=land 须面；Point 打穿空间校验。"
+}

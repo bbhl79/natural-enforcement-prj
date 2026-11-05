@@ -1,0 +1,65 @@
+{
+  "id": "vf-sc-filing-after-dispatch",
+  "status": "runnable",
+  "title": "分派后立案呈批（临时用地逾期未复垦）",
+  "profileRefs": [
+    "vf-case-16-temporary-reclaim-default"
+  ],
+  "identityRefs": [
+    "clerk-a",
+    "intake-hq",
+    "review-a",
+    "approve-hq"
+  ],
+  "featureMapRefs": [
+    "nav.workbench.register",
+    "nav.clue.center",
+    "nav.workbench"
+  ],
+  "steps": [
+    {
+      "id": "register",
+      "action": "register-clue",
+      "fromProfile": "vf-case-16-temporary-reclaim-default",
+      "path": "stages.register.system",
+      "identityRef": "clerk-a"
+    },
+    {
+      "id": "dispatch",
+      "action": "dispatch-full",
+      "orgCode": "ORG-STATION-A",
+      "mainCode": "P-CLERK-A",
+      "identityRef": "intake-hq"
+    },
+    {
+      "id": "file-draft",
+      "action": "filing-draft",
+      "fromProfile": "vf-case-16-temporary-reclaim-default",
+      "path": "stages.filing.system",
+      "identityRef": "clerk-a"
+    },
+    {
+      "id": "file-submit",
+      "action": "filing-submit",
+      "identityRef": "clerk-a"
+    },
+    {
+      "id": "file-review",
+      "action": "filing-review",
+      "identityRef": "review-a"
+    },
+    {
+      "id": "file-approve",
+      "action": "filing-approve",
+      "identityRef": "approve-hq"
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assertions": [
+      "case status filed or equivalent",
+      "partyNames contains vf-某混凝土有限公司"
+    ]
+  },
+  "notes": "若产品立案 API 路径与步骤名不一致，以 Feature Map 实机补强后改 steps，不改 profile。"
+}

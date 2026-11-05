@@ -1,0 +1,122 @@
+{
+  "id": "vf-case-04-build-without-permit",
+  "title": "vf-汕头-未取得建设工程规划许可证",
+  "quality": "B",
+  "source": {
+    "feishuFolderToken": "Pvo9fHTOylQGmJd0V86cr1jQnZe",
+    "feishuDocToken": "ATJddjVg9omarAxhje7cuFFmnod",
+    "feishuTitle": "4.汕头-未取得建设工程规划许可证",
+    "seedCity": "汕头"
+  },
+  "domain": "planning",
+  "sourceCode": "16",
+  "types": [
+    "planning_build_without_permit"
+  ],
+  "party": {
+    "kind": "org",
+    "displayName": "vf-某建设单位",
+    "subjectUnknown": false
+  },
+  "spatial": {
+    "kind": "point",
+    "geojson": {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          113.28,
+          23.05
+        ]
+      },
+      "properties": {}
+    },
+    "addressNarrative": "广州市XX区XX街道XX号（合成地址）"
+  },
+  "orgBinding": {
+    "enteredOrgCode": "ORG-DEPT-A",
+    "handlingOrgCode": "ORG-STATION-A"
+  },
+  "stages": {
+    "register": {
+      "status": "populated",
+      "receivedAt": "2026-10-20",
+      "narrative": "vf-未取得建设工程规划许可证实施建设",
+      "system": {
+        "sourceCode": "16",
+        "domain": "planning",
+        "types": [
+          "planning_build_without_permit"
+        ],
+        "subjectUnknown": false,
+        "anonymityConfirmed": false,
+        "confirm": true,
+        "values": {
+          "clue.received_at": "2026-10-20",
+          "clue.narrative": "vf-未取得建设工程规划许可证实施建设",
+          "clue.finder": "vf-巡查员甲",
+          "clue.patrol_no": "vf-XC-2026-16"
+        },
+        "spatialSource": {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              113.28,
+              23.05
+            ]
+          },
+          "properties": {}
+        }
+      }
+    },
+    "verify": {
+      "status": "populated",
+      "summary": "核查完成"
+    },
+    "dispatch": {
+      "status": "populated",
+      "orgCode": "ORG-STATION-A"
+    },
+    "filing": {
+      "status": "populated",
+      "conclusion": "file",
+      "partyNames": [
+        "vf-某建设单位"
+      ],
+      "system": {
+        "conclusion": "file",
+        "partyNames": [
+          "vf-某建设单位"
+        ]
+      }
+    },
+    "investigate": {
+      "status": "thin",
+      "summary": "调查材料不完整摘录"
+    },
+    "hearing": {
+      "status": "thin"
+    },
+    "legal_review": {
+      "status": "thin"
+    },
+    "collective": {
+      "status": "absent"
+    },
+    "decision": {
+      "status": "thin",
+      "summary": "有处罚决定摘要"
+    },
+    "serve": {
+      "status": "thin"
+    },
+    "execute": {
+      "status": "thin"
+    },
+    "close": {
+      "status": "thin"
+    }
+  },
+  "notes": "由飞书案卷范本脱敏广州化生成；几何与地址为合成；不得当作真实案件。"
+}

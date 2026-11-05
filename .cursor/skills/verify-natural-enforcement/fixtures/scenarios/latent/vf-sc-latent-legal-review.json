@@ -1,0 +1,32 @@
+{
+  "id": "vf-sc-latent-legal-review",
+  "status": "latent",
+  "title": "法制审核（latent）",
+  "profileRefs": [
+    "vf-case-09-mine-overstep"
+  ],
+  "identityRefs": [
+    "clerk-a",
+    "legal-st",
+    "approve-hq"
+  ],
+  "featureMapRefs": [
+    "nav.case.review"
+  ],
+  "requiredStage": "legal_review",
+  "steps": [
+    {
+      "id": "blocked",
+      "action": "noop",
+      "reason": "product-capability-missing-or-unmapped"
+    }
+  ],
+  "oracle": {
+    "kind": "future",
+    "assertions": [
+      "when product exposes legal_review, scenario becomes runnable",
+      "outcomes must match profile stages.legal_review facts"
+    ]
+  },
+  "notes": "禁止标 runnable 直至 Feature Map 与产品能力确认。"
+}

@@ -1,0 +1,21 @@
+{
+  "id": "vf-sc-latent-consult-dissent",
+  "status": "latent",
+  "title": "会办异议后退回再呈批（latent）",
+  "profileRefs": ["vf-case-02-occupy-without-approval.consult-dissent-then-pass"],
+  "identityRefs": ["clerk-a", "review-a", "approve-hq"],
+  "featureMapRefs": ["nav.case.review", "nav.workbench"],
+  "requiredStage": "decision",
+  "procedureRef": ["规程 5", "规程 7"],
+  "steps": [
+    {"id": "blocked", "action": "noop", "reason": "product-capability-missing-or-unmapped"}
+  ],
+  "oracle": {
+    "kind": "future",
+    "assertions": [
+      "first decision-approval outcome returned due to consultation dissent",
+      "consultation-only fixup recorded",
+      "second decision-approval outcome approved"
+    ]
+  }
+}

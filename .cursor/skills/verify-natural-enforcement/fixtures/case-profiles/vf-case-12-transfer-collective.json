@@ -1,0 +1,159 @@
+{
+  "id": "vf-case-12-transfer-collective",
+  "title": "vf-中山-非法出租集体土地",
+  "quality": "C",
+  "source": {
+    "feishuFolderToken": "Pvo9fHTOylQGmJd0V86cr1jQnZe",
+    "feishuDocToken": "IERPd9Vv2oPxjuxxpudcOdbJnRe",
+    "feishuTitle": "12.中山-非法出租集体土地",
+    "seedCity": "中山"
+  },
+  "domain": "land",
+  "sourceCode": "16",
+  "types": [
+    "land_transfer_collective"
+  ],
+  "party": {
+    "kind": "org",
+    "displayName": "vf-某村集体经济组织",
+    "subjectUnknown": false
+  },
+  "spatial": {
+    "kind": "face",
+    "geojson": {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              113.24,
+              23.08
+            ],
+            [
+              113.25,
+              23.08
+            ],
+            [
+              113.25,
+              23.09
+            ],
+            [
+              113.24,
+              23.09
+            ],
+            [
+              113.24,
+              23.08
+            ]
+          ]
+        ]
+      },
+      "properties": {}
+    },
+    "addressNarrative": "广州市XX区XX街道某地块（合成图斑）"
+  },
+  "orgBinding": {
+    "enteredOrgCode": "ORG-DEPT-A",
+    "handlingOrgCode": "ORG-STATION-A"
+  },
+  "stages": {
+    "register": {
+      "status": "thin",
+      "receivedAt": "2026-10-20",
+      "narrative": "vf-非法出租集体土地用于非农业建设",
+      "system": {
+        "sourceCode": "16",
+        "domain": "land",
+        "types": [
+          "land_transfer_collective"
+        ],
+        "subjectUnknown": false,
+        "anonymityConfirmed": false,
+        "confirm": true,
+        "values": {
+          "clue.received_at": "2026-10-20",
+          "clue.narrative": "vf-非法出租集体土地用于非农业建设",
+          "clue.finder": "vf-巡查员甲",
+          "clue.patrol_no": "vf-XC-2026-16"
+        },
+        "spatialSource": {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  113.24,
+                  23.08
+                ],
+                [
+                  113.25,
+                  23.08
+                ],
+                [
+                  113.25,
+                  23.09
+                ],
+                [
+                  113.24,
+                  23.09
+                ],
+                [
+                  113.24,
+                  23.08
+                ]
+              ]
+            ]
+          },
+          "properties": {}
+        }
+      }
+    },
+    "verify": {
+      "status": "thin"
+    },
+    "dispatch": {
+      "status": "thin",
+      "orgCode": "ORG-STATION-A"
+    },
+    "filing": {
+      "status": "thin",
+      "conclusion": "file",
+      "partyNames": [
+        "vf-某村集体经济组织"
+      ],
+      "system": {
+        "conclusion": "file",
+        "partyNames": [
+          "vf-某村集体经济组织"
+        ]
+      }
+    },
+    "investigate": {
+      "status": "absent"
+    },
+    "hearing": {
+      "status": "absent"
+    },
+    "legal_review": {
+      "status": "absent"
+    },
+    "collective": {
+      "status": "absent"
+    },
+    "decision": {
+      "status": "absent"
+    },
+    "serve": {
+      "status": "absent"
+    },
+    "execute": {
+      "status": "absent"
+    },
+    "close": {
+      "status": "absent"
+    }
+  },
+  "notes": "由飞书案卷范本脱敏广州化生成；几何与地址为合成；不得当作真实案件。"
+}

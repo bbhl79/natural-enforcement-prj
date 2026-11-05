@@ -1,0 +1,22 @@
+{
+  "id": "vf-sc-latent-no-filing-survey",
+  "status": "latent",
+  "title": "测绘线索核查后不予立案（latent）",
+  "profileRefs": ["vf-case-01-map-review-missing.no-filing"],
+  "identityRefs": ["clerk-a", "review-a", "approve-hq"],
+  "featureMapRefs": ["nav.workbench", "nav.clue.center"],
+  "requiredStage": "filing",
+  "procedureRef": ["规程 2.6"],
+  "steps": [
+    {"id": "blocked", "action": "noop", "reason": "wire-to-filing-no-case-when-ui-ready"}
+  ],
+  "oracle": {
+    "kind": "future",
+    "assertions": [
+      "filing conclusion no-case",
+      "processEvents pe-01nf-filing outcome approved",
+      "no case record created"
+    ]
+  },
+  "notes": "立案呈批选不予立案；会办意见已在 profile。"
+}

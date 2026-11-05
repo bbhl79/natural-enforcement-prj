@@ -1,0 +1,162 @@
+{
+  "id": "vf-case-05-farmland-permanent",
+  "title": "vf-佛山-非法占用永久基本农田",
+  "quality": "B",
+  "source": {
+    "feishuFolderToken": "Pvo9fHTOylQGmJd0V86cr1jQnZe",
+    "feishuDocToken": "DZ7jd4peroh9eJxFz1QcdD4Pn3b",
+    "feishuTitle": "5.佛山-非法占用永久基本农田",
+    "seedCity": "佛山"
+  },
+  "domain": "land",
+  "sourceCode": "16",
+  "types": [
+    "land_farmland_permanent"
+  ],
+  "party": {
+    "kind": "person",
+    "displayName": "vf-当事人乙",
+    "subjectUnknown": false
+  },
+  "spatial": {
+    "kind": "face",
+    "geojson": {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              113.3,
+              23.05
+            ],
+            [
+              113.31,
+              23.05
+            ],
+            [
+              113.31,
+              23.06
+            ],
+            [
+              113.3,
+              23.06
+            ],
+            [
+              113.3,
+              23.05
+            ]
+          ]
+        ]
+      },
+      "properties": {}
+    },
+    "addressNarrative": "广州市XX区XX街道某地块（合成图斑）"
+  },
+  "orgBinding": {
+    "enteredOrgCode": "ORG-DEPT-A",
+    "handlingOrgCode": "ORG-STATION-A"
+  },
+  "stages": {
+    "register": {
+      "status": "populated",
+      "receivedAt": "2026-10-20",
+      "narrative": "vf-非法占用永久基本农田",
+      "system": {
+        "sourceCode": "16",
+        "domain": "land",
+        "types": [
+          "land_farmland_permanent"
+        ],
+        "subjectUnknown": false,
+        "anonymityConfirmed": false,
+        "confirm": true,
+        "values": {
+          "clue.received_at": "2026-10-20",
+          "clue.narrative": "vf-非法占用永久基本农田",
+          "clue.finder": "vf-巡查员甲",
+          "clue.patrol_no": "vf-XC-2026-16"
+        },
+        "spatialSource": {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  113.3,
+                  23.05
+                ],
+                [
+                  113.31,
+                  23.05
+                ],
+                [
+                  113.31,
+                  23.06
+                ],
+                [
+                  113.3,
+                  23.06
+                ],
+                [
+                  113.3,
+                  23.05
+                ]
+              ]
+            ]
+          },
+          "properties": {}
+        }
+      }
+    },
+    "verify": {
+      "status": "populated",
+      "summary": "核查完成"
+    },
+    "dispatch": {
+      "status": "populated",
+      "orgCode": "ORG-STATION-A"
+    },
+    "filing": {
+      "status": "populated",
+      "conclusion": "file",
+      "partyNames": [
+        "vf-当事人乙"
+      ],
+      "system": {
+        "conclusion": "file",
+        "partyNames": [
+          "vf-当事人乙"
+        ]
+      }
+    },
+    "investigate": {
+      "status": "thin",
+      "summary": "调查材料不完整摘录"
+    },
+    "hearing": {
+      "status": "thin"
+    },
+    "legal_review": {
+      "status": "thin"
+    },
+    "collective": {
+      "status": "absent"
+    },
+    "decision": {
+      "status": "thin",
+      "summary": "有处罚决定摘要"
+    },
+    "serve": {
+      "status": "thin"
+    },
+    "execute": {
+      "status": "thin"
+    },
+    "close": {
+      "status": "thin"
+    }
+  },
+  "notes": "由飞书案卷范本脱敏广州化生成；几何与地址为合成；不得当作真实案件。"
+}

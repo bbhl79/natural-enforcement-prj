@@ -1,7 +1,6 @@
-# samples — 查重「历史关联」样本占位
+# samples — 查重「历史关联」样本
 
-本目录存放 Verification 查重旅程所需的历史关联样本元数据。
+查重 runnable scenario 所需的历史关联元数据。
+真实几何与叙事以对应 `case-profiles` 为准；本目录只放 meta。
 
-**内容由人后续填写。** 本轮只建占位。
-
-建议：复制 `sample.meta.example.json` 为具体样本文件后填写；样本本体若含敏感数据，放独立库或不进 git。
+已有：`vf-sample-dup-hist-02.meta.json`（挂 `vf-sc-duplicate-land-overlap`）。
