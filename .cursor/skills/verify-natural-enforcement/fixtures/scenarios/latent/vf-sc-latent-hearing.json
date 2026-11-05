@@ -1,0 +1,32 @@
+{
+  "id": "vf-sc-latent-hearing",
+  "status": "latent",
+  "title": "告知与听证（latent）",
+  "profileRefs": [
+    "vf-case-11-transfer-illegal"
+  ],
+  "identityRefs": [
+    "clerk-a",
+    "legal-st",
+    "approve-hq"
+  ],
+  "featureMapRefs": [
+    "nav.case.review"
+  ],
+  "requiredStage": "hearing",
+  "steps": [
+    {
+      "id": "blocked",
+      "action": "noop",
+      "reason": "product-capability-missing-or-unmapped"
+    }
+  ],
+  "oracle": {
+    "kind": "future",
+    "assertions": [
+      "when product exposes hearing, scenario becomes runnable",
+      "outcomes must match profile stages.hearing facts"
+    ]
+  },
+  "notes": "禁止标 runnable 直至 Feature Map 与产品能力确认。"
+}

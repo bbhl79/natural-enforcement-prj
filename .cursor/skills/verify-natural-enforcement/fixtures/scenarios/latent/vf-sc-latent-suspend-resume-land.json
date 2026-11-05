@@ -1,0 +1,22 @@
+{
+  "id": "vf-sc-latent-suspend-resume-land",
+  "status": "latent",
+  "title": "土地案调查中止后恢复（latent）",
+  "profileRefs": ["vf-case-02-occupy-without-approval.suspend-resume"],
+  "identityRefs": ["clerk-a", "review-a", "approve-hq"],
+  "featureMapRefs": ["nav.case.investigation"],
+  "requiredStage": "investigate",
+  "procedureRef": ["规程 3.4"],
+  "steps": [
+    {"id": "blocked", "action": "noop", "reason": "product-capability-missing-or-unmapped"}
+  ],
+  "oracle": {
+    "kind": "future",
+    "assertions": [
+      "suspend approval chain recorded",
+      "case investigation status suspended then resumed",
+      "timeline contains suspend from/to dates from profile"
+    ]
+  },
+  "notes": "产品具备中止/恢复调查能力后改为 runnable；过程数据见 profile.processEvents。"
+}

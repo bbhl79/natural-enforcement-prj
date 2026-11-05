@@ -1,82 +1,71 @@
-# Verification 测试数据框架
+# Verification 夹具（Agent 判据语料）
 
-本目录是即将落地的 Verification Skill 的**测试数据框架**。
+本目录是 `verify-natural-enforcement` 的**业务判据**，不是传统 e2e 数据仓。
+Agent 对照这里的 profile / scenario 自判对错；修好产品后同一语料再跑必须变绿。
 
-**内容由人后续在 Cursor 中填写。** 本轮只建目录、约定、空模板与本说明，不编造业务字段内容。
+## 三层模型
 
-## 谁填什么
+| 层 | 路径 | 稳定性 | 说明 |
+| ---- | ---- | ---- | ---- |
+| Case Profiles | `case-profiles/` | 高：语义不随产品阶段删改 | 案卷脱敏事实槽（线索→结案） |
+| Scenarios | `scenarios/runnable/`、`scenarios/latent/` | 中：可增量启用 | 引用 profile；`latent` 禁止假绿 |
+| Identities / journeys 薄封装 | `identities/`、`journeys/`、`negatives/`、`samples/` | 既有 | journeys 逐步改为 scenario 投影；勿另写第二套叙事 |
 
-| 路径 | 谁填 | 填什么 |
+原始案卷只缓存在 `.run/verify-case-seeds/`（gitignore），**不进 git**。
+
+## 与 e2e、跑次证据
+
+| 位置 | 用途 | 进 git |
 | ---- | ---- | ---- |
-| `identities/` | 人 | 角色身份夹具（经办／内勤／负责人等）；口令只写引用，不写明文 |
-| `journeys/*/` | 人 | 各 P0 旅程的最小合法字段包与期望结果 |
-| `negatives/*/` | 人 | 负例场景的输入与期望阻断／失败表现 |
-| `samples/` | 人 | 查重用「历史关联」样本元数据 |
-| `../features/` | 人 | Feature Map（本轮空壳） |
-| `.run/verify-*` | 跑次自动／执行者 | 跑次证据、截图、日志；**不进 git** |
+| 本目录 | Verification 固化判据 | 是（脱敏；口令除外） |
+| `e2e/testdata/` | 产品 e2e | 是；**不混放** |
+| `.run/verify-*` | 单次跑证据 | 否 |
+| `.run/verify-case-seeds/` | 飞书抽取中间稿 | 否 |
 
-## 与 e2e/testdata、.run/verify-* 的分工
+## 命名
 
-| 位置 | 用途 | 是否进 git |
-| ---- | ---- | ---- |
-| `.cursor/skills/verify-natural-enforcement/fixtures/` | Verification Skill 固化夹具与模板；与产品 e2e 隔离 | **进仓固化**（模板与约定；真实口令除外） |
-| `e2e/testdata/` | 现有产品 e2e 测试数据 | 进仓（既有约定）；**本框架不与之混放** |
-| `.run/verify-*` | 单次验证跑次的证据产物（日志、截图、报告） | **不进 git**（根 `.gitignore` 已忽略 `.run/`） |
+- 业务可见字符串前缀：`vf-`
+- Profile id：`vf-case-NN-<slug>`
+- Scenario id：`vf-sc-<stage>-<slug>`
+- 几何：广州一带示意坐标（约 113–114°E，23–23.2°N）；测绘类用点，土地/矿产用面
 
-原则：夹具进仓固化；跑次证据进 `.run` 且 gitignore。
+## 身份
 
-## 身份夹具字段约定（`identities/`）
+见 `identities/`。口令只引用 `VERIFY_PASSWORD_SEED` 或 `.run/verify-secrets.local.json` 的 `seed`。
 
-每个身份可用一份 JSON 描述。字段约定：
+## 跑次证据契约
+
+目录：`.run/verify-<runId>/`
+
+| 文件 | 内容 |
+| ---- | ---- |
+| `manifest.json` | `runId`、开始/结束时间、环境、scenario 列表 |
+| `steps/<scenarioId>/<n>-<step>.json` | 单步：`expected`、`actual`、`pass`、证据相对路径 |
+| `evidence/` | 截图、DOM 摘要、响应片段、日志 |
+| `summary.json` | 总结果：`passed` / `failed` / `blocked`；失败项指向 step |
+
+失败时 Agent 必须能只凭失败包复现意图，无需人喂截图。
+
+## Case Profile 槽位
+
+每份 profile 的 `stages` 键（缺省用 `absent`）：
+
+`register` · `verify` · `dispatch` · `filing` · `investigate` · `hearing` · `legal_review` · `collective` · `decision` · `serve` · `execute` · `close`
+
+每槽：`status`（`populated`|`thin`|`absent`）+ 脱敏事实 + 可选 `system` 映射（sourceCode、domain、types、spatial、partyNames…）。
+
+Schema 说明见 `case-profiles/schema.md`。
+
+## Scenario
 
 | 字段 | 说明 |
 | ---- | ---- |
-| `id` | 夹具稳定标识（如 `handler-01`） |
-| `role` | 角色标签（经办／内勤／负责人等；具体枚举后人填） |
-| `displayName` | 显示名占位 |
-| `mobile` | 手机号占位（测试号段或虚构号，禁止个人真实号码） |
-| `passwordRef` | 口令引用，**禁止**写入生产／个人真实口令明文 |
+| `id` / `status` | `runnable` 或 `latent` |
+| `profileRefs` | 引用的 case-profile id |
+| `identityRefs` | 身份夹具 id |
+| `featureMapRefs` | Feature Map 节点 id |
+| `steps` | 操作步骤（可引用 profile.system 投影） |
+| `oracle` | 结构化 `assert[]`（`path` / `op` / `value`）；见 `RUN-CONTRACT.md` |
+| `driver` | API 环用 `api`；负例见 `negatives/` |
 
-`passwordRef` 推荐形态（二选一或并用说明）：
-
-- 环境变量名：`"passwordRef": { "env": "VERIFY_PASSWORD_HANDLER_01" }`
-- 本地 secrets 文件路径（该文件本身不进 git）：`"passwordRef": { "secretsFile": ".run/verify-secrets.local.json", "key": "handler-01" }`
-
-见 `identities/schema.md` 与 `identities/identity.example.json`。
-
-## 每条 journey 目录的文件形态
-
-每个 `journeys/<name>/` 至少准备：
-
-| 文件 | 用途 |
-| ---- | ---- |
-| `input.json.example` | 旅程输入字段包模板；复制为 `input.json` 后由人填写 |
-| `expected-outcomes.md.example` | 期望结果说明模板；复制为 `expected-outcomes.md` 后由人填写 |
-| `README.md`（可选） | 该旅程备注、前置条件、依赖身份 |
-
-负例目录 `negatives/<name>/` 采用相同形态。
-
-复制用法示例：
-
-```bash
-cp input.json.example input.json
-cp expected-outcomes.md.example expected-outcomes.md
-```
-
-`*.example` 进 git。填好的 `input.json`／`expected-outcomes.md` 是否进 git 由人在填内容时决定；含敏感信息则留本地或放 secrets，勿提交明文口令。
-
-## 命名与隔离约定
-
-- 夹具数据前缀建议：`vf-`（verify fixtures），用于业务侧可识别的测试主体／线索标题等占位，避免与真人业务混淆。
-- 验证跑次使用**独立库／独立环境**，不污染开发库。
-- 本框架路径固定在 `.cursor/skills/verify-natural-enforcement/fixtures/`，不写入 `e2e/testdata/`。
-
-## samples（查重历史关联）
-
-`samples/` 存放查重用「历史关联」样本的占位与元数据模板。真实样本内容由人后续填写。
-
-## 明确声明
-
-- 本轮交付仅为脚手架：目录、约定、空模板、README。
-- **旅程业务字段、负例具体断言、身份真实测试账号、Playwright 脚本、完整 SKILL 正文均不在本轮范围。**
-- 后人填写时不得把生产／个人真实口令写入仓库。
+模板：`scenarios/scenario.example.json`。API harness：`../harness/`，入口 `integration/verify-skill-loop.test.ts`。

@@ -1,0 +1,32 @@
+{
+  "id": "vf-sc-latent-close",
+  "status": "latent",
+  "title": "结案定型（latent）",
+  "profileRefs": [
+    "vf-case-14-occupy-highway"
+  ],
+  "identityRefs": [
+    "clerk-a",
+    "legal-st",
+    "approve-hq"
+  ],
+  "featureMapRefs": [
+    "nav.case.finalize"
+  ],
+  "requiredStage": "close",
+  "steps": [
+    {
+      "id": "blocked",
+      "action": "noop",
+      "reason": "product-capability-missing-or-unmapped"
+    }
+  ],
+  "oracle": {
+    "kind": "future",
+    "assertions": [
+      "when product exposes close, scenario becomes runnable",
+      "outcomes must match profile stages.close facts"
+    ]
+  },
+  "notes": "禁止标 runnable 直至 Feature Map 与产品能力确认。"
+}

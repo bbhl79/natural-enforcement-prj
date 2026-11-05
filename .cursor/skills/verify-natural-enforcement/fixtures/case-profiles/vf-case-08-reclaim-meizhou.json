@@ -1,0 +1,162 @@
+{
+  "id": "vf-case-08-reclaim-meizhou",
+  "title": "vf-梅州-非法占地复垦",
+  "quality": "B",
+  "source": {
+    "feishuFolderToken": "Pvo9fHTOylQGmJd0V86cr1jQnZe",
+    "feishuDocToken": "GLKIdNBgwoWkKvxATiGcivphnpg",
+    "feishuTitle": "8.梅州-非法占地复垦",
+    "seedCity": "梅州"
+  },
+  "domain": "land",
+  "sourceCode": "16",
+  "types": [
+    "land_reclaim_obligation"
+  ],
+  "party": {
+    "kind": "person",
+    "displayName": "vf-张某",
+    "subjectUnknown": false
+  },
+  "spatial": {
+    "kind": "face",
+    "geojson": {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              113.36,
+              23.05
+            ],
+            [
+              113.37,
+              23.05
+            ],
+            [
+              113.37,
+              23.06
+            ],
+            [
+              113.36,
+              23.06
+            ],
+            [
+              113.36,
+              23.05
+            ]
+          ]
+        ]
+      },
+      "properties": {}
+    },
+    "addressNarrative": "广州市XX区XX街道某地块（合成图斑）"
+  },
+  "orgBinding": {
+    "enteredOrgCode": "ORG-DEPT-A",
+    "handlingOrgCode": "ORG-STATION-A"
+  },
+  "stages": {
+    "register": {
+      "status": "populated",
+      "receivedAt": "2026-10-20",
+      "narrative": "vf-擅自压占土地且不履行复垦义务，面积约200平方米",
+      "system": {
+        "sourceCode": "16",
+        "domain": "land",
+        "types": [
+          "land_reclaim_obligation"
+        ],
+        "subjectUnknown": false,
+        "anonymityConfirmed": false,
+        "confirm": true,
+        "values": {
+          "clue.received_at": "2026-10-20",
+          "clue.narrative": "vf-擅自压占土地且不履行复垦义务，面积约200平方米",
+          "clue.finder": "vf-巡查员甲",
+          "clue.patrol_no": "vf-XC-2026-16"
+        },
+        "spatialSource": {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  113.36,
+                  23.05
+                ],
+                [
+                  113.37,
+                  23.05
+                ],
+                [
+                  113.37,
+                  23.06
+                ],
+                [
+                  113.36,
+                  23.06
+                ],
+                [
+                  113.36,
+                  23.05
+                ]
+              ]
+            ]
+          },
+          "properties": {}
+        }
+      }
+    },
+    "verify": {
+      "status": "populated",
+      "summary": "核查完成"
+    },
+    "dispatch": {
+      "status": "populated",
+      "orgCode": "ORG-STATION-A"
+    },
+    "filing": {
+      "status": "populated",
+      "conclusion": "file",
+      "partyNames": [
+        "vf-张某"
+      ],
+      "system": {
+        "conclusion": "file",
+        "partyNames": [
+          "vf-张某"
+        ]
+      }
+    },
+    "investigate": {
+      "status": "thin",
+      "summary": "调查材料不完整摘录"
+    },
+    "hearing": {
+      "status": "thin"
+    },
+    "legal_review": {
+      "status": "thin"
+    },
+    "collective": {
+      "status": "absent"
+    },
+    "decision": {
+      "status": "thin",
+      "summary": "有处罚决定摘要"
+    },
+    "serve": {
+      "status": "thin"
+    },
+    "execute": {
+      "status": "thin"
+    },
+    "close": {
+      "status": "thin"
+    }
+  },
+  "notes": "由飞书案卷范本脱敏广州化生成；几何与地址为合成；不得当作真实案件。"
+}

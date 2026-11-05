@@ -1,0 +1,532 @@
+{
+  "id": "vf-case-01-map-review-missing.hearing-then-adjust",
+  "role": "variant",
+  "title": "vf-问题地图（听证后改拟处罚）",
+  "quality": "A",
+  "source": {
+    "feishuFolderToken": "Pvo9fHTOylQGmJd0V86cr1jQnZe",
+    "feishuDocToken": "M0yIdeKhkoXvpcxvDAqcJBGAnkS",
+    "feishuTitle": "1.广州-非法测绘",
+    "seedCity": "广州"
+  },
+  "domain": "survey",
+  "sourceCode": "305",
+  "types": [
+    "survey_map_review_missing"
+  ],
+  "party": {
+    "kind": "org",
+    "displayName": "vf-广州某信息科技有限公司",
+    "subjectUnknown": false
+  },
+  "spatial": {
+    "kind": "point",
+    "geojson": {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          113.22,
+          23.05
+        ]
+      },
+      "properties": {}
+    },
+    "addressNarrative": "广州市XX区XX街道XX号（合成地址）"
+  },
+  "orgBinding": {
+    "enteredOrgCode": "ORG-DEPT-A",
+    "handlingOrgCode": "ORG-STATION-A"
+  },
+  "timeline": [
+    {
+      "at": "2026-10-19",
+      "stage": "register",
+      "summary": "群众电话举报天猫销售附着问题地图商品"
+    },
+    {
+      "at": "2026-10-20",
+      "stage": "verify",
+      "summary": "现场检查与询问，责令停止违法行为"
+    },
+    {
+      "at": "2026-10-21",
+      "stage": "filing",
+      "summary": "立案呈批批准"
+    },
+    {
+      "at": "2026-10-23",
+      "stage": "investigate",
+      "summary": "二次检查，调取销售明细"
+    },
+    {
+      "at": "2026-11-02",
+      "stage": "investigate",
+      "summary": "地图内容鉴定与市局认定意见"
+    },
+    {
+      "at": "2026-11-05",
+      "stage": "investigate",
+      "summary": "调查报告完成"
+    },
+    {
+      "at": "2026-11-07",
+      "stage": "investigate",
+      "summary": "案件审理"
+    },
+    {
+      "at": "2026-11-08",
+      "stage": "legal_review",
+      "summary": "重大执法决定法制审核通过"
+    },
+    {
+      "at": "2026-11-10",
+      "stage": "decision",
+      "summary": "处理决定呈批（含会办）"
+    },
+    {
+      "at": "2026-11-13",
+      "stage": "hearing",
+      "summary": "处罚告知与听证告知送达；当事人未申请听证"
+    },
+    {
+      "at": "2026-11-21",
+      "stage": "collective",
+      "summary": "单位负责人集体讨论（较重处罚）"
+    },
+    {
+      "at": "2026-11-22",
+      "stage": "decision",
+      "summary": "行政处罚决定审批与决定书"
+    },
+    {
+      "at": "2026-11-23",
+      "stage": "serve",
+      "summary": "决定书送达"
+    },
+    {
+      "at": "2026-12-01",
+      "stage": "execute",
+      "summary": "罚没款缴清"
+    },
+    {
+      "at": "2026-12-11",
+      "stage": "close",
+      "summary": "结案呈批批准"
+    }
+  ],
+  "processEvents": [
+    {
+      "id": "pe-01-stop-order",
+      "kind": "stop-order-approval",
+      "doc": "责令停止违法行为通知书呈批（摘要）",
+      "stage": "verify",
+      "procedureRef": "规程 3 / 制止",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "建议责令立即停止并下架问题地图商品",
+          "at": "2026-10-21"
+        },
+        {
+          "role": "行政审批",
+          "actorRef": "approve-hq",
+          "opinion": "同意发出责令停止通知",
+          "at": "2026-10-21"
+        }
+      ],
+      "consultations": [],
+      "outcome": "approved"
+    },
+    {
+      "id": "pe-01-filing",
+      "kind": "filing-approval",
+      "doc": "立案（不予立案）呈批表",
+      "stage": "filing",
+      "procedureRef": "规程 2.6",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "核查属实，建议立案查处",
+          "at": "2026-10-21"
+        },
+        {
+          "role": "行政审核",
+          "actorRef": "review-a",
+          "opinion": "建议立案",
+          "at": "2026-10-21"
+        },
+        {
+          "role": "行政审批",
+          "actorRef": "approve-hq",
+          "opinion": "同意立案",
+          "at": "2026-10-21"
+        }
+      ],
+      "consultations": [],
+      "outcome": "approved"
+    },
+    {
+      "id": "pe-01-hearing-panel",
+      "kind": "case-hearing-panel",
+      "doc": "违法案件审理记录",
+      "stage": "investigate",
+      "procedureRef": "规程 5 案件审理",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "汇报案情与拟处理建议",
+          "at": "2026-11-07"
+        },
+        {
+          "role": "行政审核",
+          "actorRef": "review-a",
+          "opinion": "事实清楚、证据充分，同意拟处理意见",
+          "at": "2026-11-07"
+        }
+      ],
+      "consultations": [
+        {
+          "dept": "vf-测管会办科",
+          "actorRef": null,
+          "opinion": "对地图未送审定性无异议",
+          "at": "2026-11-07"
+        }
+      ],
+      "outcome": "approved"
+    },
+    {
+      "id": "pe-01-legal",
+      "kind": "legal-review",
+      "doc": "重大执法决定法制审核意见书",
+      "stage": "legal_review",
+      "procedureRef": "规程 6",
+      "chain": [
+        {
+          "role": "法制审核",
+          "actorRef": "legal-st",
+          "opinion": "主体合法、事实清楚、程序合法，审核予以通过",
+          "at": "2026-11-08"
+        }
+      ],
+      "consultations": [],
+      "outcome": "approved"
+    },
+    {
+      "id": "pe-01-decision-approval",
+      "kind": "decision-approval",
+      "doc": "违法案件处理决定呈批表",
+      "stage": "decision",
+      "procedureRef": "规程 7",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "拟警告、没收违法所得 vf-110000 元、并处罚款 vf-60000 元",
+          "at": "2026-11-10"
+        },
+        {
+          "role": "行政审核",
+          "actorRef": "review-a",
+          "opinion": "拟同意，呈批示",
+          "at": "2026-11-10"
+        },
+        {
+          "role": "行政审批",
+          "actorRef": "approve-hq",
+          "opinion": "同意上述意见",
+          "at": "2026-11-10"
+        }
+      ],
+      "consultations": [
+        {
+          "dept": "vf-测管会办科",
+          "actorRef": null,
+          "opinion": "对主要违法事实及案件定性无意见",
+          "at": "2026-11-10"
+        }
+      ],
+      "outcome": "approved"
+    },
+    {
+      "id": "pe-01-collective",
+      "kind": "collective-discussion",
+      "doc": "行政处罚案件单位负责人集体讨论笔录",
+      "stage": "collective",
+      "procedureRef": "规程 7 / 行政处罚法集体讨论",
+      "chain": [
+        {
+          "role": "行政审批",
+          "actorRef": "approve-hq",
+          "opinion": "主持讨论，同意拟处罚内容",
+          "at": "2026-11-21"
+        },
+        {
+          "role": "法制审核",
+          "actorRef": "legal-st",
+          "opinion": "同意拟处罚意见",
+          "at": "2026-11-21"
+        },
+        {
+          "role": "行政审核",
+          "actorRef": "review-a",
+          "opinion": "同意",
+          "at": "2026-11-21"
+        }
+      ],
+      "consultations": [],
+      "outcome": "approved"
+    },
+    {
+      "id": "pe-01-hearing-rights",
+      "kind": "hearing",
+      "doc": "行政处罚告知书 / 听证告知书",
+      "stage": "hearing",
+      "procedureRef": "规程 8.3",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "告知陈述申辩与听证权利并送达",
+          "at": "2026-11-13"
+        },
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "受理听证申请并排期",
+          "at": "2026-11-14"
+        }
+      ],
+      "consultations": [],
+      "outcome": "applied",
+      "notes": "当事人在期限内书面申请听证"
+    },
+    {
+      "id": "pe-01-penalty",
+      "kind": "penalty-approval",
+      "doc": "行政处罚决定审批表",
+      "stage": "decision",
+      "procedureRef": "规程 8",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "妥否呈示",
+          "at": "2026-11-22"
+        },
+        {
+          "role": "行政审核",
+          "actorRef": "review-a",
+          "opinion": "拟同意呈示",
+          "at": "2026-11-22"
+        },
+        {
+          "role": "行政审批",
+          "actorRef": "approve-hq",
+          "opinion": "同意",
+          "at": "2026-11-22"
+        }
+      ],
+      "consultations": [],
+      "outcome": "approved"
+    },
+    {
+      "id": "pe-01-close",
+      "kind": "close-approval",
+      "doc": "自然资源违法案件结案呈批表",
+      "stage": "close",
+      "procedureRef": "规程 10",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "罚没已执行、商品已下架，建议结案",
+          "at": "2026-12-11"
+        },
+        {
+          "role": "行政审核",
+          "actorRef": "review-a",
+          "opinion": "拟同意呈批示",
+          "at": "2026-12-11"
+        },
+        {
+          "role": "行政审批",
+          "actorRef": "approve-hq",
+          "opinion": "同意结案",
+          "at": "2026-12-11"
+        }
+      ],
+      "consultations": [],
+      "outcome": "approved"
+    },
+    {
+      "id": "pe-01-hearing-held",
+      "kind": "hearing",
+      "doc": "行政处罚听证笔录 / 听证报告",
+      "stage": "hearing",
+      "procedureRef": "规程 8.3",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "组织听证，记录当事人从轻请求",
+          "at": "2026-11-18"
+        }
+      ],
+      "consultations": [],
+      "outcome": "adjusted",
+      "notes": "听证意见部分成立：主动消除后果情节可再从轻"
+    },
+    {
+      "id": "pe-01-decision-re",
+      "kind": "decision-approval",
+      "doc": "违法案件处理决定呈批表（听证后调整）",
+      "stage": "decision",
+      "procedureRef": "规程 7.1",
+      "chain": [
+        {
+          "role": "经办",
+          "actorRef": "clerk-a",
+          "opinion": "拟将罚款由 vf-60000 调整为 vf-40000，余项不变",
+          "at": "2026-11-19"
+        },
+        {
+          "role": "行政审核",
+          "actorRef": "review-a",
+          "opinion": "拟同意调整",
+          "at": "2026-11-19"
+        },
+        {
+          "role": "行政审批",
+          "actorRef": "approve-hq",
+          "opinion": "同意按听证后方案呈批",
+          "at": "2026-11-19"
+        }
+      ],
+      "consultations": [
+        {
+          "dept": "vf-测管会办科",
+          "actorRef": null,
+          "opinion": "同意调整后的罚款幅度",
+          "at": "2026-11-19"
+        }
+      ],
+      "outcome": "adjusted"
+    }
+  ],
+  "stages": {
+    "register": {
+      "status": "populated",
+      "receivedAt": "2026-10-19",
+      "narrative": "vf-群众举报电话：天猫销售附着问题地图商品",
+      "system": {
+        "sourceCode": "305",
+        "domain": "survey",
+        "types": [
+          "survey_map_review_missing"
+        ],
+        "subjectUnknown": false,
+        "anonymityConfirmed": false,
+        "confirm": true,
+        "values": {
+          "clue.received_at": "2026-10-19",
+          "clue.narrative": "vf-群众举报电话：天猫销售附着问题地图商品",
+          "clue.reporter_anonymous": "false",
+          "clue.verifiable_basis": "vf-举报记录摘要"
+        },
+        "spatialSource": {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              113.22,
+              23.05
+            ]
+          },
+          "properties": {}
+        }
+      }
+    },
+    "verify": {
+      "status": "populated",
+      "summary": "现场检查确认问题地图未送审，发出责令停止通知"
+    },
+    "dispatch": {
+      "status": "populated",
+      "orgCode": "ORG-STATION-A",
+      "note": "手工分派至甲区执法所"
+    },
+    "filing": {
+      "status": "populated",
+      "conclusion": "file",
+      "partyNames": [
+        "vf-广州某信息科技有限公司"
+      ],
+      "system": {
+        "conclusion": "file",
+        "partyNames": [
+          "vf-广州某信息科技有限公司"
+        ]
+      }
+    },
+    "investigate": {
+      "status": "populated",
+      "summary": "鉴定、认定意见、销售明细、调查报告齐备",
+      "evidenceNotes": [
+        "地图内容鉴定意见书",
+        "市局地图认定意见",
+        "销售明细表"
+      ]
+    },
+    "hearing": {
+      "status": "populated",
+      "hearingRequest": {
+        "applied": true,
+        "informedAt": "2026-11-13",
+        "appliedAt": "2026-11-14",
+        "heldAt": "2026-11-18"
+      },
+      "summary": "听证后改拟"
+    },
+    "legal_review": {
+      "status": "populated",
+      "summary": "法制审核一次通过",
+      "result": "passed"
+    },
+    "collective": {
+      "status": "populated",
+      "summary": "较重处罚，负责人集体讨论通过"
+    },
+    "decision": {
+      "status": "populated",
+      "summary": "警告；没收 vf-110000；罚款调为 vf-40000（听证后）",
+      "penalty": {
+        "warning": true,
+        "forfeitIllegalGains": 110000,
+        "fine": 40000
+      }
+    },
+    "serve": {
+      "status": "populated",
+      "summary": "决定书直接送达"
+    },
+    "execute": {
+      "status": "populated",
+      "summary": "2026-12-01 缴清罚没款；商品已下架"
+    },
+    "close": {
+      "status": "populated",
+      "summary": "结案呈批批准"
+    }
+  },
+  "notes": "当事人申请听证；听证后采纳部分意见，调低罚款并重新走处理决定呈批。",
+  "derivedFrom": "vf-case-01-map-review-missing",
+  "branch": "hearing-then-adjust",
+  "procedureRef": [
+    "规程 8.3 听证",
+    "规程 7.1"
+  ]
+}

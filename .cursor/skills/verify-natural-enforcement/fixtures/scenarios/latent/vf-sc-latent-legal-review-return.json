@@ -1,0 +1,21 @@
+{
+  "id": "vf-sc-latent-legal-review-return",
+  "status": "latent",
+  "title": "法审退回补正后再通过（latent）",
+  "profileRefs": ["vf-case-01-map-review-missing.legal-review-reject-then-pass"],
+  "identityRefs": ["clerk-a", "legal-st"],
+  "featureMapRefs": ["nav.case.review"],
+  "requiredStage": "legal_review",
+  "procedureRef": ["规程 6"],
+  "steps": [
+    {"id": "blocked", "action": "noop", "reason": "product-capability-missing-or-unmapped"}
+  ],
+  "oracle": {
+    "kind": "future",
+    "assertions": [
+      "first legal-review outcome returned",
+      "second legal-review outcome approved",
+      "processEvents contain pe-01-legal-1 and pe-01-legal-2"
+    ]
+  }
+}

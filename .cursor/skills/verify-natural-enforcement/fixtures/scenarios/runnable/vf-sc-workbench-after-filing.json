@@ -1,0 +1,35 @@
+{
+  "id": "vf-sc-workbench-after-filing",
+  "status": "runnable",
+  "title": "立案后工作台可见案件入口",
+  "profileRefs": [
+    "vf-case-16-temporary-reclaim-default"
+  ],
+  "identityRefs": [
+    "clerk-a"
+  ],
+  "featureMapRefs": [
+    "nav.workbench"
+  ],
+  "dependsOn": [
+    "vf-sc-filing-after-dispatch"
+  ],
+  "steps": [
+    {
+      "id": "open-workbench",
+      "action": "navigate",
+      "target": "/workbench"
+    },
+    {
+      "id": "assert-case-visible",
+      "action": "assert-visible",
+      "textContains": "vf-某混凝土"
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assertions": [
+      "workbench shows filed case entry for vf party"
+    ]
+  }
+}

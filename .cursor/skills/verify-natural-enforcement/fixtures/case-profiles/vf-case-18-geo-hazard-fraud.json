@@ -1,0 +1,159 @@
+{
+  "id": "vf-case-18-geo-hazard-fraud",
+  "title": "vf-清远-地质灾害弄虚作假",
+  "quality": "C",
+  "source": {
+    "feishuFolderToken": "Pvo9fHTOylQGmJd0V86cr1jQnZe",
+    "feishuDocToken": "SjcBdDIyro5PKlxRzfmcvrIYnNh",
+    "feishuTitle": "18.清远-地质灾害弄虚作假",
+    "seedCity": "清远"
+  },
+  "domain": "mineral",
+  "sourceCode": "19",
+  "types": [
+    "mineral_other"
+  ],
+  "party": {
+    "kind": "org",
+    "displayName": "vf-某地质灾害治理施工单位",
+    "subjectUnknown": false
+  },
+  "spatial": {
+    "kind": "face",
+    "geojson": {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              113.36,
+              23.08
+            ],
+            [
+              113.37,
+              23.08
+            ],
+            [
+              113.37,
+              23.09
+            ],
+            [
+              113.36,
+              23.09
+            ],
+            [
+              113.36,
+              23.08
+            ]
+          ]
+        ]
+      },
+      "properties": {}
+    },
+    "addressNarrative": "广州市XX区XX街道某地块（合成图斑）"
+  },
+  "orgBinding": {
+    "enteredOrgCode": "ORG-DEPT-A",
+    "handlingOrgCode": "ORG-STATION-A"
+  },
+  "stages": {
+    "register": {
+      "status": "thin",
+      "receivedAt": "2026-10-20",
+      "narrative": "vf-地质灾害治理工程施工弄虚作假、降低工程质量",
+      "system": {
+        "sourceCode": "19",
+        "domain": "mineral",
+        "types": [
+          "mineral_other"
+        ],
+        "subjectUnknown": false,
+        "anonymityConfirmed": false,
+        "confirm": true,
+        "values": {
+          "clue.received_at": "2026-10-20",
+          "clue.narrative": "vf-地质灾害治理工程施工弄虚作假、降低工程质量",
+          "clue.transfer_doc_no": "vf-移送〔2026〕X号",
+          "clue.transfer_org": "vf-移送机关"
+        },
+        "spatialSource": {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  113.36,
+                  23.08
+                ],
+                [
+                  113.37,
+                  23.08
+                ],
+                [
+                  113.37,
+                  23.09
+                ],
+                [
+                  113.36,
+                  23.09
+                ],
+                [
+                  113.36,
+                  23.08
+                ]
+              ]
+            ]
+          },
+          "properties": {}
+        }
+      }
+    },
+    "verify": {
+      "status": "thin"
+    },
+    "dispatch": {
+      "status": "thin",
+      "orgCode": "ORG-STATION-A"
+    },
+    "filing": {
+      "status": "thin",
+      "conclusion": "file",
+      "partyNames": [
+        "vf-某地质灾害治理施工单位"
+      ],
+      "system": {
+        "conclusion": "file",
+        "partyNames": [
+          "vf-某地质灾害治理施工单位"
+        ]
+      }
+    },
+    "investigate": {
+      "status": "absent"
+    },
+    "hearing": {
+      "status": "absent"
+    },
+    "legal_review": {
+      "status": "absent"
+    },
+    "collective": {
+      "status": "absent"
+    },
+    "decision": {
+      "status": "absent"
+    },
+    "serve": {
+      "status": "absent"
+    },
+    "execute": {
+      "status": "absent"
+    },
+    "close": {
+      "status": "absent"
+    }
+  },
+  "notes": "由飞书案卷范本脱敏广州化生成；几何与地址为合成；不得当作真实案件。"
+}

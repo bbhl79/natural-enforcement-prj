@@ -1,0 +1,32 @@
+{
+  "id": "vf-sc-latent-serve",
+  "status": "latent",
+  "title": "送达（latent）",
+  "profileRefs": [
+    "vf-case-01-map-review-missing"
+  ],
+  "identityRefs": [
+    "clerk-a",
+    "legal-st",
+    "approve-hq"
+  ],
+  "featureMapRefs": [
+    "nav.case.center"
+  ],
+  "requiredStage": "serve",
+  "steps": [
+    {
+      "id": "blocked",
+      "action": "noop",
+      "reason": "product-capability-missing-or-unmapped"
+    }
+  ],
+  "oracle": {
+    "kind": "future",
+    "assertions": [
+      "when product exposes serve, scenario becomes runnable",
+      "outcomes must match profile stages.serve facts"
+    ]
+  },
+  "notes": "禁止标 runnable 直至 Feature Map 与产品能力确认。"
+}

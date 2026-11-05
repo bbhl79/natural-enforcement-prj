@@ -1,0 +1,12 @@
+{
+  "id": "super-hq",
+  "role": "监督",
+  "displayName": "市局监督",
+  "mobile": "13800001011",
+  "passwordRef": {
+    "env": "VERIFY_PASSWORD_SEED",
+    "secretsFile": ".run/verify-secrets.local.json",
+    "key": "seed"
+  },
+  "notes": "对应开发种子 P-SUPER-HQ；任职根机构自然执法总队（ORG-HQ）。可看无所属机构留痕（区监督不可）。来源 backend/prisma/seed.mjs。"
+}

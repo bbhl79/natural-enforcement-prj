@@ -1,0 +1,39 @@
+{
+  "id": "vf-sc-collaborate-handoff",
+  "status": "runnable",
+  "title": "线索协作交接（非法转让土地叙事）",
+  "profileRefs": [
+    "vf-case-11-transfer-illegal"
+  ],
+  "identityRefs": [
+    "clerk-a",
+    "intake-hq",
+    "clerk-b"
+  ],
+  "featureMapRefs": [
+    "nav.clue.center"
+  ],
+  "steps": [
+    {
+      "id": "register",
+      "action": "register-clue",
+      "fromProfile": "vf-case-11-transfer-illegal",
+      "path": "stages.register.system",
+      "identityRef": "clerk-a"
+    },
+    {
+      "id": "handoff",
+      "action": "collaborate-handoff",
+      "proposedOrgCode": "ORG-DEPT-B",
+      "reason": "vf-跨支队协作测试",
+      "identityRef": "intake-hq"
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assertions": [
+      "handoff request recorded or org updated per product rules"
+    ]
+  },
+  "notes": "identityRefs 含 clerk-a 虽未在数组列出登录：步骤内显式 identityRef。补全 identityRefs。"
+}

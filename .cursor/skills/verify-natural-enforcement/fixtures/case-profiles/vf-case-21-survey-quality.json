@@ -1,0 +1,119 @@
+{
+  "id": "vf-case-21-survey-quality",
+  "title": "vf-云浮-重大遗漏评估报告",
+  "quality": "C",
+  "source": {
+    "feishuFolderToken": "Pvo9fHTOylQGmJd0V86cr1jQnZe",
+    "feishuDocToken": "C1WZdquiOoaPLAxvdiLcKtPLn0d",
+    "feishuTitle": "21.云浮-重大遗漏评估报告",
+    "seedCity": "云浮"
+  },
+  "domain": "survey",
+  "sourceCode": "802",
+  "types": [
+    "survey_quality_unqualified"
+  ],
+  "party": {
+    "kind": "org",
+    "displayName": "vf-某评估机构",
+    "subjectUnknown": false
+  },
+  "spatial": {
+    "kind": "point",
+    "geojson": {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          113.22,
+          23.11
+        ]
+      },
+      "properties": {}
+    },
+    "addressNarrative": "广州市XX区XX街道XX号（合成地址）"
+  },
+  "orgBinding": {
+    "enteredOrgCode": "ORG-DEPT-A",
+    "handlingOrgCode": "ORG-STATION-A"
+  },
+  "stages": {
+    "register": {
+      "status": "thin",
+      "receivedAt": "2026-10-20",
+      "narrative": "vf-出具有重大遗漏的评估报告",
+      "system": {
+        "sourceCode": "802",
+        "domain": "survey",
+        "types": [
+          "survey_quality_unqualified"
+        ],
+        "subjectUnknown": false,
+        "anonymityConfirmed": false,
+        "confirm": true,
+        "values": {
+          "clue.received_at": "2026-10-20",
+          "clue.narrative": "vf-出具有重大遗漏的评估报告",
+          "clue.transfer_doc_no": "vf-移送〔2026〕X号",
+          "clue.transfer_org": "vf-移送机关"
+        },
+        "spatialSource": {
+          "type": "Feature",
+          "geometry": {
+            "type": "Point",
+            "coordinates": [
+              113.22,
+              23.11
+            ]
+          },
+          "properties": {}
+        }
+      }
+    },
+    "verify": {
+      "status": "thin"
+    },
+    "dispatch": {
+      "status": "thin",
+      "orgCode": "ORG-STATION-A"
+    },
+    "filing": {
+      "status": "thin",
+      "conclusion": "file",
+      "partyNames": [
+        "vf-某评估机构"
+      ],
+      "system": {
+        "conclusion": "file",
+        "partyNames": [
+          "vf-某评估机构"
+        ]
+      }
+    },
+    "investigate": {
+      "status": "absent"
+    },
+    "hearing": {
+      "status": "absent"
+    },
+    "legal_review": {
+      "status": "absent"
+    },
+    "collective": {
+      "status": "absent"
+    },
+    "decision": {
+      "status": "absent"
+    },
+    "serve": {
+      "status": "absent"
+    },
+    "execute": {
+      "status": "absent"
+    },
+    "close": {
+      "status": "absent"
+    }
+  },
+  "notes": "由飞书案卷范本脱敏广州化生成；几何与地址为合成；不得当作真实案件。"
+}

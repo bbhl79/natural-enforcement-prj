@@ -1,0 +1,49 @@
+{
+  "id": "vf-sc-neg-missing-narrative",
+  "status": "runnable",
+  "driver": "api",
+  "kind": "negative",
+  "title": "缺 clue.narrative 登记被拒",
+  "profileRefs": [
+    "vf-case-02-occupy-without-approval"
+  ],
+  "identityRefs": [
+    "clerk-a"
+  ],
+  "featureMapRefs": [],
+  "steps": [
+    {
+      "id": "register",
+      "action": "register-clue",
+      "fromProfile": "vf-case-02-occupy-without-approval",
+      "path": "stages.register.system",
+      "identityRef": "clerk-a",
+      "mutate": {
+        "omitValues": [
+          "clue.narrative"
+        ]
+      }
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assert": [
+      {
+        "path": "http.status",
+        "op": "eq",
+        "value": 400
+      },
+      {
+        "path": "body.result",
+        "op": "eq",
+        "value": "non-compliant"
+      },
+      {
+        "path": "body.rules",
+        "op": "includes",
+        "value": "clue.narrative"
+      }
+    ]
+  },
+  "notes": "公共层阻断；对照 integration/clue-registration 缺 narrative。"
+}

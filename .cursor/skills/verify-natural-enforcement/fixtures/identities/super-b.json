@@ -1,0 +1,12 @@
+{
+  "id": "super-b",
+  "role": "监督",
+  "displayName": "乙区监督",
+  "mobile": "13800001008",
+  "passwordRef": {
+    "env": "VERIFY_PASSWORD_SEED",
+    "secretsFile": ".run/verify-secrets.local.json",
+    "key": "seed"
+  },
+  "notes": "对应开发种子 P-SUPER-B；任职第二执法支队（ORG-DEPT-B）。只读监督视图；unauthorized-admin 等负例可引用。来源 backend/prisma/seed.mjs。"
+}

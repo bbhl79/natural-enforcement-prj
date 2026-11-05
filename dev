@@ -909,17 +909,36 @@ test_integration() {
   }
   ensure_db
   rebuild_it_template
+  mkdir -p "$ROOT/.run"
+  docker volume create "${PROJECT}-verify-run" >/dev/null
   echo "test：容器内运行 integration 层 Vitest 需库用例（integration/**/*.test.ts）…"
   seed_repo_to_stdin | docker run --rm --pull=never -i \
     --network "${PROJECT}_default" \
     -e DATABASE_URL="$(it_template_database_url)" \
     -v "${PROJECT}-integration-node-modules:/work/node_modules" \
     -v "${PROJECT}-integration-store:/pnpm/store" \
+    -v "${PROJECT}-verify-run:/work/.run" \
     "${CACHE_VOLUMES[@]}" \
     -w /work \
     "$LINT_IMAGE" \
-    sh -c "set -e; mkdir -p /work; tar -x -f - -C /work; corepack enable; pnpm install ${INSTALL_FLAGS[*]}; cd backend/prisma; pnpm exec prisma generate; cd /work; if ls integration/*.test.ts >/dev/null 2>&1; then pnpm exec tsc -p integration --noEmit; pnpm exec vitest run --config integration/vitest.config.mts; else echo 'integration：暂无 Vitest 需库用例'; fi"
+    sh -c "set -e; mkdir -p /work /work/.run; tar -x -f - -C /work; corepack enable; pnpm install ${INSTALL_FLAGS[*]}; cd backend/prisma; pnpm exec prisma generate; cd /work; if ls integration/*.test.ts >/dev/null 2>&1; then pnpm exec tsc -p integration --noEmit; pnpm exec vitest run --config integration/vitest.config.mts ${INTEGRATION_VITEST_ARGS:-}; else echo 'integration：暂无 Vitest 需库用例'; fi"
+  # Podman machine 看不见 WSL home bind-mount：证据走 named volume，再 tar 抽回宿主 .run
+  docker volume create "${PROJECT}-verify-run" >/dev/null
+  mkdir -p "$ROOT/.run"
+  docker run --rm --pull=never \
+    -v "${PROJECT}-verify-run:/from:ro" \
+    -w /from \
+    "$LINT_IMAGE" \
+    tar -c -f - . \
+    | tar -x -f - -C "$ROOT/.run"
+  echo "test：已将容器 .run 证据抽回宿主 $ROOT/.run"
   # 可执行脚本用例：integration/*.sh（非 _ 开头），按文件名排序逐条执行
+  # INTEGRATION_SKIP_SCRIPTS=1 跳过 *.sh（verify-skill-loop 快路径；e3 拖红另记债）
+  if [ "${INTEGRATION_SKIP_SCRIPTS:-}" = 1 ]; then
+    echo "test：跳过 integration/*.sh（INTEGRATION_SKIP_SCRIPTS=1）"
+    echo "test：integration 层 Vitest 段完成。"
+    return 0
+  fi
   local script found=0
   for script in "$ROOT"/integration/*.sh; do
     [ -e "$script" ] || continue

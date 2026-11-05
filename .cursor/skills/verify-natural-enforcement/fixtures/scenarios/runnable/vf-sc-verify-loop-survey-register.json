@@ -1,0 +1,50 @@
+{
+  "id": "vf-sc-verify-loop-survey-register",
+  "status": "runnable",
+  "driver": "api",
+  "kind": "happy",
+  "title": "测绘问题地图登记（Verification 环 happy）",
+  "profileRefs": [
+    "vf-case-01-map-review-missing"
+  ],
+  "identityRefs": [
+    "clerk-a"
+  ],
+  "featureMapRefs": [],
+  "steps": [
+    {
+      "id": "register",
+      "action": "register-clue",
+      "fromProfile": "vf-case-01-map-review-missing",
+      "path": "stages.register.system",
+      "identityRef": "clerk-a"
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assert": [
+      {
+        "path": "http.status",
+        "op": "in",
+        "value": [
+          200,
+          201
+        ]
+      },
+      {
+        "path": "body.result",
+        "op": "eq",
+        "value": "registered"
+      },
+      {
+        "path": "body.status",
+        "op": "in",
+        "value": [
+          "in_pool",
+          "pending_decision"
+        ]
+      }
+    ]
+  },
+  "notes": "精简环：只登记，挂 vf-case-01；与 vf-sc-neg-type-unconfirmed 成对。"
+}

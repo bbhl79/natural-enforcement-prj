@@ -1,0 +1,37 @@
+{
+  "id": "vf-sc-neg-type-unconfirmed",
+  "status": "runnable",
+  "driver": "api",
+  "kind": "negative",
+  "title": "类型层未确认登记被拒",
+  "profileRefs": [
+    "vf-case-01-map-review-missing"
+  ],
+  "identityRefs": [
+    "clerk-a"
+  ],
+  "featureMapRefs": [],
+  "steps": [
+    {
+      "id": "register",
+      "action": "register-clue",
+      "fromProfile": "vf-case-01-map-review-missing",
+      "path": "stages.register.system",
+      "identityRef": "clerk-a",
+      "mutate": {
+        "setConfirm": false
+      }
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assert": [
+      {
+        "path": "http.status",
+        "op": "eq",
+        "value": 400
+      }
+    ]
+  },
+  "notes": "01 带 survey_map_review_missing；confirm false → 400。"
+}

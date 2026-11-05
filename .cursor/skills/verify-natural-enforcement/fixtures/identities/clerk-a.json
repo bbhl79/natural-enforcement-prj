@@ -1,0 +1,12 @@
+{
+  "id": "clerk-a",
+  "role": "经办",
+  "displayName": "乙经办",
+  "mobile": "13800001002",
+  "passwordRef": {
+    "env": "VERIFY_PASSWORD_SEED",
+    "secretsFile": ".run/verify-secrets.local.json",
+    "key": "seed"
+  },
+  "notes": "对应开发种子 P-CLERK-A；任职第一执法支队（ORG-DEPT-A）；执法证有效（CERT-VALID-A）。登记／核查等一线旅程首选。来源 backend/prisma/seed.mjs。"
+}

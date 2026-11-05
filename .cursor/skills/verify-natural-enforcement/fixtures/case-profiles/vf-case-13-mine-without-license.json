@@ -1,0 +1,169 @@
+{
+  "id": "vf-case-13-mine-without-license",
+  "title": "vf-江门-非法采矿",
+  "quality": "A",
+  "source": {
+    "feishuFolderToken": "Pvo9fHTOylQGmJd0V86cr1jQnZe",
+    "feishuDocToken": "CPvAdVAY3oDV7Mx5S33cKgWvnSd",
+    "feishuTitle": "13.江门-非法采矿",
+    "seedCity": "江门"
+  },
+  "domain": "mineral",
+  "sourceCode": "16",
+  "types": [
+    "mineral_mine_without_license"
+  ],
+  "party": {
+    "kind": "org",
+    "displayName": "vf-某建材有限公司",
+    "subjectUnknown": false
+  },
+  "spatial": {
+    "kind": "face",
+    "geojson": {
+      "type": "Feature",
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              113.26,
+              23.08
+            ],
+            [
+              113.27,
+              23.08
+            ],
+            [
+              113.27,
+              23.09
+            ],
+            [
+              113.26,
+              23.09
+            ],
+            [
+              113.26,
+              23.08
+            ]
+          ]
+        ]
+      },
+      "properties": {}
+    },
+    "addressNarrative": "广州市XX区XX街道某地块（合成图斑）"
+  },
+  "orgBinding": {
+    "enteredOrgCode": "ORG-DEPT-A",
+    "handlingOrgCode": "ORG-STATION-A"
+  },
+  "stages": {
+    "register": {
+      "status": "populated",
+      "receivedAt": "2026-10-20",
+      "narrative": "vf-未经批准擅自开采矿产资源",
+      "system": {
+        "sourceCode": "16",
+        "domain": "mineral",
+        "types": [
+          "mineral_mine_without_license"
+        ],
+        "subjectUnknown": false,
+        "anonymityConfirmed": false,
+        "confirm": true,
+        "values": {
+          "clue.received_at": "2026-10-20",
+          "clue.narrative": "vf-未经批准擅自开采矿产资源",
+          "clue.finder": "vf-巡查员甲",
+          "clue.patrol_no": "vf-XC-2026-16"
+        },
+        "spatialSource": {
+          "type": "Feature",
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [
+                  113.26,
+                  23.08
+                ],
+                [
+                  113.27,
+                  23.08
+                ],
+                [
+                  113.27,
+                  23.09
+                ],
+                [
+                  113.26,
+                  23.09
+                ],
+                [
+                  113.26,
+                  23.08
+                ]
+              ]
+            ]
+          },
+          "properties": {}
+        }
+      }
+    },
+    "verify": {
+      "status": "populated",
+      "summary": "现场核查确认涉嫌违法事实，建议立案"
+    },
+    "dispatch": {
+      "status": "populated",
+      "orgCode": "ORG-STATION-A",
+      "note": "夹具手工分派至甲区执法所"
+    },
+    "filing": {
+      "status": "populated",
+      "conclusion": "file",
+      "partyNames": [
+        "vf-某建材有限公司"
+      ],
+      "system": {
+        "conclusion": "file",
+        "partyNames": [
+          "vf-某建材有限公司"
+        ]
+      }
+    },
+    "investigate": {
+      "status": "populated",
+      "summary": "调查取证完成（笔录/书证已脱敏摘要）"
+    },
+    "hearing": {
+      "status": "populated",
+      "summary": "已告知陈述申辩与听证权利"
+    },
+    "legal_review": {
+      "status": "populated",
+      "summary": "法制审核通过"
+    },
+    "collective": {
+      "status": "thin",
+      "summary": "重大案件集体讨论（若适用）"
+    },
+    "decision": {
+      "status": "populated",
+      "summary": "作出行政处罚决定（数额已改写为测试值）"
+    },
+    "serve": {
+      "status": "populated",
+      "summary": "决定书已送达"
+    },
+    "execute": {
+      "status": "populated",
+      "summary": "罚没已执行或整改已落实（摘要）"
+    },
+    "close": {
+      "status": "populated",
+      "summary": "结案呈批通过"
+    }
+  },
+  "notes": "由飞书案卷范本脱敏广州化生成；几何与地址为合成；不得当作真实案件。"
+}

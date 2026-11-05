@@ -1,0 +1,42 @@
+{
+  "id": "vf-sc-register-survey-report",
+  "status": "runnable",
+  "title": "测绘问题地图线索登记（群众举报）",
+  "profileRefs": [
+    "vf-case-01-map-review-missing"
+  ],
+  "identityRefs": [
+    "clerk-a"
+  ],
+  "featureMapRefs": [
+    "nav.workbench.register"
+  ],
+  "steps": [
+    {
+      "id": "login",
+      "action": "login",
+      "identityRef": "clerk-a"
+    },
+    {
+      "id": "open-register",
+      "action": "navigate",
+      "target": "/workbench/register",
+      "featureMapRef": "nav.workbench.register"
+    },
+    {
+      "id": "submit",
+      "action": "register-clue",
+      "fromProfile": "vf-case-01-map-review-missing",
+      "path": "stages.register.system"
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assertions": [
+      "httpStatus in [200,201]",
+      "body.result in [registered, already-exists] or body.status in [in_pool, pending_decision]",
+      "body.code matches /^CL\\d{10}$/ when newly registered"
+    ]
+  },
+  "notes": "点状 spatial；domain=survey；sourceCode=305。"
+}

@@ -1,0 +1,49 @@
+{
+  "id": "vf-sc-duplicate-land-overlap",
+  "status": "runnable",
+  "title": "土地面状疑似重复（60% 重叠）",
+  "profileRefs": [
+    "vf-case-02-occupy-without-approval"
+  ],
+  "sampleRefs": [
+    "vf-sample-dup-hist-02"
+  ],
+  "identityRefs": [
+    "clerk-a"
+  ],
+  "featureMapRefs": [
+    "nav.workbench.register",
+    "nav.clue.center"
+  ],
+  "steps": [
+    {
+      "id": "login",
+      "action": "login",
+      "identityRef": "clerk-a"
+    },
+    {
+      "id": "register-a",
+      "action": "register-clue",
+      "fromProfile": "vf-case-02-occupy-without-approval",
+      "path": "stages.register.system",
+      "narrativeSuffix": "历史样本A"
+    },
+    {
+      "id": "register-b",
+      "action": "register-clue",
+      "fromProfile": "vf-case-02-occupy-without-approval",
+      "path": "stages.register.system",
+      "useSamePolygon": true,
+      "narrativeSuffix": "重叠样本B"
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assertions": [
+      "second registration status pending_decision",
+      "hits length >= 1",
+      "selfRatio >= 0.6"
+    ]
+  },
+  "notes": "与 integration 疑似重复用例同策略：同一 polygon 再登一次。"
+}

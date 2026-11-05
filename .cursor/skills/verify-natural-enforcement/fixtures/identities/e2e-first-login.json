@@ -1,0 +1,12 @@
+{
+  "id": "e2e-first-login",
+  "role": "经办",
+  "displayName": "首登冒烟",
+  "mobile": "13800001010",
+  "passwordRef": {
+    "env": "VERIFY_PASSWORD_SEED",
+    "secretsFile": ".run/verify-secrets.local.json",
+    "key": "seed"
+  },
+  "notes": "对应开发种子 P-E2E-99；任职第一执法支队（ORG-DEPT-A）。专供首登／强制改密（e2e/cases/04-first-login.sh、negative force-password-change）。passwordChangedAt 种子留空。来源 backend/prisma/seed.mjs。"
+}

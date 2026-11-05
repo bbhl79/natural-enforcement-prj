@@ -1,0 +1,32 @@
+{
+  "id": "vf-sc-latent-investigate",
+  "status": "latent",
+  "title": "调查取证阶段（latent）",
+  "profileRefs": [
+    "vf-case-01-map-review-missing"
+  ],
+  "identityRefs": [
+    "clerk-a",
+    "legal-st",
+    "approve-hq"
+  ],
+  "featureMapRefs": [
+    "nav.case.investigation"
+  ],
+  "requiredStage": "investigate",
+  "steps": [
+    {
+      "id": "blocked",
+      "action": "noop",
+      "reason": "product-capability-missing-or-unmapped"
+    }
+  ],
+  "oracle": {
+    "kind": "future",
+    "assertions": [
+      "when product exposes investigate, scenario becomes runnable",
+      "outcomes must match profile stages.investigate facts"
+    ]
+  },
+  "notes": "禁止标 runnable 直至 Feature Map 与产品能力确认。"
+}

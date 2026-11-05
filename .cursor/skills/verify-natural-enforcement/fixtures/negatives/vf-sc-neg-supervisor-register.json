@@ -1,0 +1,34 @@
+{
+  "id": "vf-sc-neg-supervisor-register",
+  "status": "runnable",
+  "driver": "api",
+  "kind": "negative",
+  "title": "监督角色登记被拒",
+  "profileRefs": [
+    "vf-case-02-occupy-without-approval"
+  ],
+  "identityRefs": [
+    "super-b"
+  ],
+  "featureMapRefs": [],
+  "steps": [
+    {
+      "id": "register",
+      "action": "register-clue",
+      "fromProfile": "vf-case-02-occupy-without-approval",
+      "path": "stages.register.system",
+      "identityRef": "super-b"
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assert": [
+      {
+        "path": "http.status",
+        "op": "eq",
+        "value": 403
+      }
+    ]
+  },
+  "notes": "P-SUPER-B 无写权限。"
+}
