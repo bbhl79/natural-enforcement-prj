@@ -23,6 +23,9 @@ printf '%s\n' '{"seed":"<与 SEED_PASSWORD 相同>"}' > .run/verify-secrets.loca
 | `clerk-a` | P-CLERK-A | 经办 | 乙经办 | 13800001002 |
 | `clerk-b` | P-CLERK-B | 经办 | 丙经办 | 13800001003 |
 | `intake-hq` | P-INTAKE-HQ | 内勤 | 市局内勤 | 13800001004 |
+| `intake-a` | P-INTAKE-A（integration 种入） | 内勤 | 甲区内勤 | 13900002001 |
+| `intake-st` | P-INTAKE-ST（integration 种入） | 内勤 | 甲所内勤 | 13900002003 |
+| `handler-st1` | P-HANDLER-ST1（integration 种入） | 经办 | 甲所主办甲 | 13900002004 |
 | `legal-st` | P-LEGAL-ST | 法制审核 | 甲所法制 | 13800001005 |
 | `review-a` | P-REVIEW-A | 行政审核 | 甲区审核 | 13800001006 |
 | `approve-hq` | P-APPROVE-HQ | 行政审批 | 市局审批 | 13800001007 |

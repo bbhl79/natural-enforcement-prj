@@ -43,8 +43,31 @@ export interface ScenarioStep {
   readonly fromProfile?: string;
   readonly path?: string;
   readonly identityRef?: string;
+  /** 读分派视图用的身份；写动作仍用 identityRef。缺省同 identityRef。 */
+  readonly viewIdentityRef?: string;
   readonly idempotencyKey?: string;
   readonly mutate?: StepMutate;
+  /** poll-verification：轮询次数（默认 10，上限 15）。 */
+  readonly pollAttempts?: number;
+  /** poll-verification：轮询间隔毫秒（默认 500）。 */
+  readonly pollIntervalMs?: number;
+  /** decide：dispatch｜hold；默认 dispatch。 */
+  readonly decision?: string;
+  readonly acknowledged?: boolean;
+  readonly conflictResolution?: string;
+  readonly conflictBasis?: string;
+  /** 写动作的并发前置状态；缺省沿用上下文。 */
+  readonly expectedStatus?: string;
+  /** assign-org：按机构编码解析 id（如 ORG-STATION-A）。 */
+  readonly orgUnitCode?: string;
+  /** assign-org：从分派视图取机构，目前支持 assignment。 */
+  readonly orgUnitFrom?: string;
+  /** assign-people：主办人选的人员工号（如 P-HANDLER-ST1）；缺省取候选第一人。 */
+  readonly mainFrom?: string;
+  /** assign-people：协办人选的人员工号。 */
+  readonly assistFrom?: string[];
+  readonly designate?: boolean;
+  readonly reason?: string;
 }
 
 export interface ApiScenario {

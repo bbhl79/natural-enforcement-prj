@@ -1,0 +1,76 @@
+{
+  "id": "vf-sc-verify-loop-land-verify-dispatch",
+  "status": "runnable",
+  "driver": "api",
+  "kind": "happy",
+  "title": "土地线索：登记→核查轮询→分派两步→已派承办人（Verification 环）",
+  "profileRefs": [
+    "vf-case-02-occupy-without-approval"
+  ],
+  "identityRefs": [
+    "clerk-a",
+    "intake-a",
+    "intake-st"
+  ],
+  "featureMapRefs": [
+    "nav.workbench.verify.step2",
+    "nav.workbench.dispatch.step3"
+  ],
+  "steps": [
+    {
+      "id": "register",
+      "action": "register-clue",
+      "fromProfile": "vf-case-02-occupy-without-approval",
+      "path": "stages.register.system",
+      "identityRef": "clerk-a"
+    },
+    {
+      "id": "poll-verification",
+      "action": "poll-verification",
+      "identityRef": "clerk-a",
+      "pollAttempts": 5,
+      "pollIntervalMs": 500
+    },
+    {
+      "id": "decide",
+      "action": "decide",
+      "identityRef": "clerk-a",
+      "decision": "dispatch",
+      "acknowledged": true
+    },
+    {
+      "id": "assign-org",
+      "action": "assign-org",
+      "identityRef": "intake-a",
+      "orgUnitCode": "ORG-STATION-A"
+    },
+    {
+      "id": "assign-people",
+      "action": "assign-people",
+      "identityRef": "intake-st",
+      "viewIdentityRef": "clerk-a",
+      "mainFrom": "P-HANDLER-ST1"
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assert": [
+      {
+        "path": "http.status",
+        "op": "eq",
+        "value": 200
+      },
+      {
+        "path": "body.result",
+        "op": "eq",
+        "value": "people-assigned"
+      },
+      {
+        "path": "body.status",
+        "op": "eq",
+        "value": "handler_assigned"
+      }
+    ]
+  },
+  "notes": "前置：integration 用 admin API 种 P-INTAKE-A／P-INTAKE-ST／P-HANDLER-ST1。decide 仅在 pending_decision 时执行；本 canon 登记无重合，通常记 skipped 证据。核查轮询含 running（worker 未起）与 failed（投递失败）都算观测成功。UI 全量登记提交尚未跑。"
+}

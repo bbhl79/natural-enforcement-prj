@@ -47,10 +47,19 @@
 
 | 字段 | 说明 |
 | ---- | ---- |
-| `action` | 本轮 API harness：`register-clue`（登录隐式） |
-| `fromProfile` + `path` | 投影 profile 上的 `system` 对象 |
-| `identityRef` | 覆盖默认登记身份 |
+| `action` | `register-clue`／`poll-verification`／`read-dispatch`／`decide`／`assign-org`／`assign-people` |
+| `fromProfile` + `path` | register-clue 投影 profile 上的 `system` 对象 |
+| `identityRef` | 本步登录身份；缺省沿用上一步 |
+| `viewIdentityRef` | 读分派视图用的身份；写动作仍用 `identityRef`（承办机构内勤读不到录入机构视图时用） |
 | `idempotencyKey` | 可选；固定幂等键 |
 | `mutate` | 可选：`omitValues`、`setValues`、`setConfirm`、`overrideSpatial` |
+| `pollAttempts` / `pollIntervalMs` | poll-verification：次数（默认 10，上限 15）与间隔（默认 500ms） |
+| `decision` / `acknowledged` | decide：`dispatch`／`hold` 与已知晓 |
+| `expectedStatus` | 写动作并发前置状态；缺省沿用上下文 |
+| `orgUnitCode` | assign-org：按机构编码解析 id（如 `ORG-STATION-A`） |
+| `orgUnitFrom` | assign-org：从分派视图取机构，目前支持 `assignment` |
+| `mainFrom` / `assistFrom` | assign-people：按工号从候选解析主办／协办；`mainFrom` 缺省取第一人 |
+
+多步链上下文：`register-clue` 成功后把响应 `body.id` 作为后续步骤的 `clueId`，把 `body.status` 作为 `expectedStatus` 缺省值。
 
 负例 JSON 与 runnable 同形，存放于 `fixtures/negatives/`（`status: runnable`，`driver: api`，`kind: negative`）。

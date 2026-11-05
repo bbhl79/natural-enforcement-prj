@@ -8,8 +8,10 @@
     "vf-sc-register-planning",
     "vf-sc-register-survey-report",
     "vf-sc-verify-loop-land-register",
+    "vf-sc-verify-loop-land-verify-dispatch",
     "vf-sc-verify-loop-survey-register",
     "vf-sc-verify-loop-ui-login-register",
+    "vf-sc-verify-loop-ui-verify-dispatch",
     "vf-sc-workbench-after-filing"
   ],
   "negatives": [
