@@ -1,0 +1,50 @@
+{
+  "id": "vf-sc-verify-loop-ui-login-register",
+  "status": "runnable",
+  "driver": "ui",
+  "kind": "happy",
+  "title": "UI P0：登录→登记壳字段（Verification 环）",
+  "profileRefs": [
+    "vf-case-02-occupy-without-approval"
+  ],
+  "identityRefs": [
+    "clerk-a"
+  ],
+  "featureMapRefs": [
+    "nav.auth.login",
+    "nav.workbench.register"
+  ],
+  "steps": [
+    {
+      "id": "login-fields",
+      "action": "ui-assert",
+      "featureMapRef": "nav.auth.login"
+    },
+    {
+      "id": "register-shell-fields",
+      "action": "ui-assert",
+      "featureMapRef": "nav.workbench.register"
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assert": [
+      {
+        "path": "ui.login.visible",
+        "op": "eq",
+        "value": true
+      },
+      {
+        "path": "ui.register.source.visible",
+        "op": "eq",
+        "value": true
+      },
+      {
+        "path": "ui.register.domain.visible",
+        "op": "eq",
+        "value": true
+      }
+    ]
+  },
+  "notes": "缩子集：不做分派／核查 UI。跑 harness/ui/run-ui-p0.sh；证据 .run/verify-*。"
+}

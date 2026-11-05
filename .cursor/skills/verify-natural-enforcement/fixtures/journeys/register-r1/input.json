@@ -1,0 +1,14 @@
+{
+  "journey": "register-r1",
+  "identityRefs": [
+    "clerk-a"
+  ],
+  "scenarioRef": "vf-sc-verify-loop-ui-login-register",
+  "profileRef": "vf-case-02-occupy-without-approval",
+  "payload": {
+    "sourceCode": "16",
+    "domain": "land",
+    "path": "/workbench/register"
+  },
+  "notes": "UI P0 最近邻：登录+登记壳字段；业务事实以 case-profile vf-case-02 为准。"
+}
