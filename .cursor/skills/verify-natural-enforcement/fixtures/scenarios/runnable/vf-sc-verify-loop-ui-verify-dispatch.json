@@ -52,5 +52,5 @@
       }
     ]
   },
-  "notes": "缩范围：仅 step2／step3 探活；UI 全量登记提交尚未跑。runner 见 harness/ui/run-ui-verify-dispatch.sh；无 CLUE_ID 时只验登录并记 skipped。"
+  "notes": "CLUE_ID必填才能覆盖续办。UI_CLICK_WRITE=1要求pending_decision且录入人可决定，决定后同身份mayAssignOrg=true。两次真实POST和回读均通过才记点击写通过。UI_CLICK_WRITE=0仅只读探活，不代表点击写。完整入口run-ui-full-loop.sh。"
 }

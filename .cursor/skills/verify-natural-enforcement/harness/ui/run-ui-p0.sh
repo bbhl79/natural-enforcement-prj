@@ -36,6 +36,9 @@ STAGE_DIR="$STAGE_ROOT/verify-${RUN_ID}"
 mkdir -p "$EVIDENCE_HOST/evidence" "$EVIDENCE_HOST/steps" "$STAGE_DIR/evidence" "$STAGE_DIR/steps"
 cp "$ROOT/.cursor/skills/verify-natural-enforcement/harness/ui/run-ui-p0.cjs" "$STAGE_DIR/run-ui-p0.cjs"
 
+cp "$ROOT/.cursor/skills/verify-natural-enforcement/harness/ui/register-full.cjs" "$STAGE_DIR/register-full.cjs"
+cp "$ROOT/.cursor/skills/verify-natural-enforcement/fixtures/journeys/register-full-click-write/input.json" "$STAGE_DIR/register-full-input.json"
+
 BASE_URL_HOST="${BASE_URL:-https://localhost:8080}"
 BASE_URL_CTR="$BASE_URL_HOST"
 case "$BASE_URL_CTR" in
@@ -56,9 +59,12 @@ DOCKER_ARGS=(
   --add-host "host.docker.internal:${HOST_IP}"
   -v "$STAGE_DIR:/work/evidence"
   -e "EVIDENCE_DIR=/work/evidence"
+  -e "UI_SCENARIO_ID=${UI_SCENARIO_ID:-}"
   -e "BASE_URL=$BASE_URL_CTR"
   -e "SEED_PASSWORD=${SEED_PASSWORD:-Seed-pass-52}"
   -e "UI_FILL=${UI_FILL:-0}"
+  -e "UI_SUBMIT=${UI_SUBMIT:-0}"
+  -e "VERIFY_NEW_PASSWORD=${VERIFY_NEW_PASSWORD:-Verify-skill-loop-52!}"
   -e "VERIFY_MOBILE=${VERIFY_MOBILE:-13800001002}"
   -e "HEADED=$HEADED_FLAG"
   -e "PW_HEADED=$HEADED_FLAG"

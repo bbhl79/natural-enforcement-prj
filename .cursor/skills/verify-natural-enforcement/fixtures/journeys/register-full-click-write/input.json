@@ -1,0 +1,56 @@
+{
+  "journey": "register-full-click-write",
+  "identityRef": "intake-hq",
+  "mobile": "13800001004",
+  "sourceCode": "16",
+  "domain": "mineral",
+  "types": [
+    "mineral_mine_without_license"
+  ],
+  "targetOrgName": "第一执法支队",
+  "values": {
+    "clue.received_at": "2026-11-06",
+    "clue.narrative": "vf-全量登记验证：未经批准擅自开采矿产资源（合成，非真实案件）",
+    "clue.finder": "vf-总队巡查员",
+    "clue.patrol_no": "vf-XC-20261106",
+    "clue.campaign_no": "不适用（日常巡查）",
+    "clue.satellite_batch": "vf-辅助卫片-20261106",
+    "clue.satellite_plot": "vf-图斑-001",
+    "type.mineral_mine_without_license.mine_situation": "未取得采矿许可证擅自采矿",
+    "type.mineral_mine_without_license.commodity": "建筑用砂岩",
+    "type.mineral_mine_without_license.output_clue": "vf-估算采出100吨，价值线索10000元，未外销",
+    "clue.tags": "vf-全量登记-{runKey}-{suffix}，vf-点击写-{runKey}-{suffix}"
+  },
+  "spatialSource": {
+    "type": "Feature",
+    "geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            113.36,
+            23.18
+          ],
+          [
+            113.37,
+            23.18
+          ],
+          [
+            113.37,
+            23.19
+          ],
+          [
+            113.36,
+            23.19
+          ],
+          [
+            113.36,
+            23.18
+          ]
+        ]
+      ]
+    },
+    "properties": {}
+  },
+  "notes": "仅验证夹具。两次UI完整登记同一矿产面，第二次正式重复命中进入pending_decision。土地和矿产均自动核查。本机核查failed不改变本旅程的pending_decision前置要求。不新建产品种子账号；现有intake-hq在本人录入的总队线索上可分派。 标签每条唯一，避开已发现的产品同名标签复用FK缺陷；该缺陷未修，失败证据保留。"
+}

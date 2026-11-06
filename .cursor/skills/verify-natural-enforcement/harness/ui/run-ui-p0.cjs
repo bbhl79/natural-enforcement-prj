@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * Verification UI P0 (headless default): login → workbench/register field-level.
- * Shrink: full 录入→核查→分派 chain deferred; nearest subset = auth + register shell.
+ * UI_SUBMIT=1：按验证夹具全量登记两条重合矿产面，目标必须 pending_decision。
  * Env:
  *   BASE_URL   default https://host.docker.internal:8080
  *   EVIDENCE_DIR  required (mapped to .run/verify-<id>/)
@@ -20,6 +20,9 @@ const SEED_PASSWORD = process.env.SEED_PASSWORD || 'Seed-pass-52';
 const NEW_PASSWORD = process.env.VERIFY_NEW_PASSWORD || 'Verify-skill-loop-52!';
 const HEADED = process.env.HEADED === '1' || process.env.PW_HEADED === '1' || process.argv.includes('--headed');
 const UI_FILL = process.env.UI_FILL === '1';
+const UI_SUBMIT = process.env.UI_SUBMIT === '1';
+let registration = null;
+const SCENARIO_ID = process.env.UI_SCENARIO_ID || 'vf-sc-verify-loop-ui-login-register';
 const MOBILE = process.env.VERIFY_MOBILE || '13800001002'; // clerk-a
 
 if (!EVIDENCE_DIR) {
@@ -32,7 +35,7 @@ fs.mkdirSync(path.join(EVIDENCE_DIR, 'steps'), { recursive: true });
 
 const steps = [];
 function record(stepId, pass, expected, actual, evidence = []) {
-  const row = { scenarioId: 'vf-sc-verify-loop-ui-login-register', stepId, pass, expected, actual, evidence };
+  const row = { scenarioId: SCENARIO_ID, stepId, pass, expected, actual, evidence };
   steps.push(row);
   fs.writeFileSync(path.join(EVIDENCE_DIR, 'steps', `${stepId}.json`), JSON.stringify(row, null, 2));
   console.log(JSON.stringify({ stepId, pass, actual }));
@@ -117,6 +120,7 @@ async function main() {
       await page.goto(`${BASE_URL}/workbench/register`, { waitUntil: 'domcontentloaded', timeout: 60000 });
     }
 
+    await page.locator('#clue-source').waitFor({ state: 'visible', timeout: 30000 });
     const eReg = await shot('03-register-shell');
     const source = page.locator('#clue-source');
     const domain = page.locator('#clue-domain');
@@ -132,7 +136,7 @@ async function main() {
     }, { sourceOk, domainOk, saveOk, url: page.url() }, [eReg]);
     if (!regPass) failed = true;
 
-    if (UI_FILL && regPass) {
+    if (UI_FILL && !UI_SUBMIT && regPass) {
       await source.selectOption({ value: '16' }).catch(async () => {
         await source.selectOption({ label: /巡查|16/ }).catch(() => {});
       });
@@ -151,6 +155,19 @@ async function main() {
       }, [eFill]);
     }
 
+    if (UI_SUBMIT) {
+      const assert = require('node:assert/strict');
+      const { registerFull } = require('./register-full.cjs');
+      const fixture = JSON.parse(fs.readFileSync(path.join(EVIDENCE_DIR, 'register-full-input.json'), 'utf8'));
+      assert.equal(MOBILE, fixture.mobile, '全量登记需使用夹具指定的池所属机构内勤');
+      fixture.runKey = require('node:crypto').randomUUID();
+      const peer = await registerFull({ page, baseUrl: BASE_URL, fixture, record, shot, suffix: 'peer' });
+      registration = await registerFull({ page, baseUrl: BASE_URL, fixture, record, shot, suffix: 'target' });
+      assert.equal(registration.status, 'pending_decision', '重合矿产面必须进入待分派决定');
+      assert.ok(registration.hits.some((hit) => hit.otherClueId === peer.id), '必须命中本轮UI创建的peer');
+      record('registration-pending-decision', true, { status: 'pending_decision', peerId: peer.id }, { clueId: registration.id, peerId: peer.id, status: registration.status, hits: registration.hits });
+    }
+
     await context.tracing.stop({ path: path.join(EVIDENCE_DIR, 'evidence', 'trace.zip') });
   } catch (err) {
     failed = true;
@@ -164,17 +181,19 @@ async function main() {
 
   const summary = {
     status: failed ? 'failed' : 'passed',
-    failed: steps.filter((s) => !s.pass).map((s) => `vf-sc-verify-loop-ui-login-register/${s.stepId}`),
+    failed: steps.filter((s) => !s.pass).map((s) => `${SCENARIO_ID}/${s.stepId}`),
     runDir: EVIDENCE_DIR,
     mode: HEADED ? 'headed' : 'headless',
     baseUrl: BASE_URL,
+    fullSubmit: UI_SUBMIT,
+    registration,
   };
   fs.writeFileSync(path.join(EVIDENCE_DIR, 'summary.json'), JSON.stringify(summary, null, 2));
   fs.writeFileSync(path.join(EVIDENCE_DIR, 'manifest.json'), JSON.stringify({
     runId: path.basename(EVIDENCE_DIR).replace(/^verify-/, ''),
     environment: 'verify-local-ui',
     mode: summary.mode,
-    scenarios: ['vf-sc-verify-loop-ui-login-register'],
+    scenarios: [SCENARIO_ID],
     driver: 'playwright-docker',
   }, null, 2));
   console.log(JSON.stringify(summary));

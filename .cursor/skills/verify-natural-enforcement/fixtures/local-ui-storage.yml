@@ -1,0 +1,24 @@
+# 仅供本机验证。补附件上传依赖，不改产品compose或业务规则。
+services:
+  server:
+    # 与产品main相同的应用与worker，仅打开错误日志供验证失败包定位。
+    command:
+      - node
+      - --import
+      - /work/backend/server/register.mjs
+      - --input-type=module
+      - -e
+      - |
+        import { createRequire } from 'node:module';
+        import { createApplication } from './backend/server/src/persistence.module.ts';
+        const require = createRequire(new URL('./backend/server/package.json', import.meta.url));
+        const { Logger, ConsoleLogger } = require('@nestjs/common');
+        const app = await createApplication(process.env.DATABASE_URL, undefined, undefined, { verificationWorker: true });
+        Logger.overrideLogger(new ConsoleLogger());
+        await app.listen(3000, '0.0.0.0');
+    environment:
+      RUSTFS_ENDPOINT: "${RUSTFS_ENDPOINT:?}"
+      RUSTFS_REGION: "${RUSTFS_REGION:?}"
+      RUSTFS_ACCESS_KEY: "${RUSTFS_ACCESS_KEY:?}"
+      RUSTFS_SECRET_KEY: "${RUSTFS_SECRET_KEY:?}"
+      RUSTFS_BUCKET: ne-verify-ui
