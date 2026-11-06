@@ -1,0 +1,13 @@
+# 验证运行时补丁。只在自动核查验证期间与 infra/docker-compose.yml 叠用。
+# 产品 compose 没有把对象存储运行参数送进 server。登记要写空间文件，缺这些参数会 500。
+# 值只引用 infra/runtime.env 里的开发夹具名，不写客户地址，不写新的字面量密钥。
+# 验证结束由 apply-layer-overlay.sh restore 卸掉，server 回到产品 compose。
+
+services:
+  server:
+    environment:
+      RUSTFS_ENDPOINT: http://rustfs:9000
+      RUSTFS_REGION: "${RUSTFS_REGION:?缺少 RUSTFS_REGION，见 infra/runtime.env}"
+      RUSTFS_BUCKET: "${RUSTFS_BUCKET:?缺少 RUSTFS_BUCKET，见 infra/runtime.env}"
+      RUSTFS_ACCESS_KEY: "${RUSTFS_ACCESS_KEY:?缺少 RUSTFS_ACCESS_KEY，见 infra/runtime.env}"
+      RUSTFS_SECRET_KEY: "${RUSTFS_SECRET_KEY:?缺少 RUSTFS_SECRET_KEY，见 infra/runtime.env}"
