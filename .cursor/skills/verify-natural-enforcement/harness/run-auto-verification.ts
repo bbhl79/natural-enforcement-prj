@@ -198,4 +198,8 @@ async function main(): Promise<void> {
   if (summary.status !== 'passed') process.exitCode = 1;
 }
 
-await main();
+// integration 的 tsc 按 NodeNext 把本文件当 CommonJS，顶层 await 会报 TS1309。
+main().catch((error: unknown) => {
+  console.error(error);
+  process.exitCode = 1;
+});
