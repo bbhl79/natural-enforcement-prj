@@ -70,3 +70,11 @@ UI_CLICK_WRITE=0 CLUE_ID=<clue-id> EXPECT_STATUS=in_pool ./.cursor/skills/verify
 本机另一次原样重跑出现认证会话并发错误：`auth_session` 的 `last_seen_at` 倒退保护触发500。
 该次页面未加载的截图、trace与服务日志保留，不能写成通过。
 本票不改认证会话守卫，也不加自动重试掩盖该失败。
+
+## 承办机构内勤派出承办人
+
+```bash
+./.cursor/skills/verify-natural-enforcement/harness/ui/run-ui-assign-people.sh
+```
+
+甲所内勤登录后打开 `/workbench?step=3&clue=`，点击现有「派出承办人」。证据在 `.run/verify-assign-people-*`，脚本用 `cp` 再复制到 `artifacts/`。
