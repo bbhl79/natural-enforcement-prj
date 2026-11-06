@@ -12,6 +12,15 @@
 | `decide` | 仅当视图状态 `pending_decision` 时 `POST /api/clues/:id/decide`；否则记 skipped 证据继续 |
 | `assign-org` | `POST /api/clues/:id/assign-org`；机构按 `orgUnitCode` 从 `/api/org-units` 解析，或 `orgUnitFrom=assignment` |
 | `assign-people` | `POST /api/clues/:id/assign-people`；主办／协办按工号从视图 `candidates` 解析 |
+| `read-dispatch-buttons` | 矩阵里的每个身份自己 `GET /api/clues/:id/dispatch`，核已有按钮开关。403 原样记下。 |
+
+下一待办按钮（不改权限、不改工作台过滤）：
+
+```bash
+.cursor/skills/verify-natural-enforcement/harness/run-next-todo-buttons.sh
+```
+
+页面只 headless。证据在 `.run/verify-<runId>/`。甲所内勤打不开分派页是修前基线。
 
 分派视图默认用本步身份读取；承办机构内勤读不到录入机构视图时，步骤可声明 `viewIdentityRef`（如录入人）单独读视图。
 

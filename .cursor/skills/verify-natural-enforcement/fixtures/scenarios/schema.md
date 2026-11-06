@@ -47,7 +47,7 @@
 
 | 字段 | 说明 |
 | ---- | ---- |
-| `action` | `register-clue`／`poll-verification`／`read-dispatch`／`read-side-effects`／`retry-verification`／`decide`／`assign-org`／`assign-people` |
+| `action` | `register-clue`／`poll-verification`／`read-dispatch`／`read-side-effects`／`read-dispatch-buttons`／`retry-verification`／`decide`／`assign-org`／`assign-people` |
 | `fromProfile` + `path` | register-clue 投影 profile 上的 `system` 对象 |
 | `identityRef` | 本步登录身份；缺省沿用上一步 |
 | `viewIdentityRef` | 读分派视图用的身份；写动作仍用 `identityRef`（承办机构内勤读不到录入机构视图时用） |
@@ -62,6 +62,8 @@
 | `orgUnitCode` | assign-org：按机构编码解析 id（如 `ORG-STATION-A`） |
 | `orgUnitFrom` | assign-org：从分派视图取机构，目前支持 `assignment` |
 | `mainFrom` / `assistFrom` | assign-people：按工号从候选解析主办／协办；`mainFrom` 缺省取第一人 |
+| `matrix` | read-dispatch-buttons：每个身份直接读 `GET /api/clues/:id/dispatch`。核对 `http`、`reason`、`mayDecide`、`mayAssignOrg`、`mayAssignPeople`、`mayReassignOrg`。未写的开关不核。 |
+| `expectClueStatus` | read-dispatch-buttons：200 响应里的线索主状态 |
 
 多步链上下文：`register-clue` 成功后把响应 `body.id` 作为后续步骤的 `clueId`，把 `body.status` 作为 `expectedStatus` 缺省值。
 

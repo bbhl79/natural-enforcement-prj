@@ -19,6 +19,7 @@
 | `nav.workbench.register` | 线索登记壳 | `/workbench/register` | 内勤等有登记权 | `vf-sc-register-*`、`vf-sc-verify-loop-ui-login-register` | `#clue-source`（线索来源*）；`#clue-domain`（法域*）；`button[type=submit].btn-primary`「保存」；动态要件 `htmlFor=clue-<key>`；确认 `button[data-role=confirm-save]` | true |
 | `nav.workbench.verify.step2` | 内业核查续办 | `/workbench?step=2&clue=:id`；可选 `/clue?view=all&clue=:id&tab=verification` | 经办/内勤 | `vf-sc-verify-loop-ui-verify-dispatch`、`vf-sc-auto-verify-land-success`、`vf-sc-auto-verify-land-partial`、`vf-sc-auto-verify-land-empty-failed`、`vf-sc-auto-verify-land-duplicate`、`vf-sc-auto-verify-mineral-success` | `.card` 含「内业核查」；状态标签「已完成／没跑成／核查进行中／不设内业核查」；图层三态「有相交／无相交／查不成」；相交比例如 `100.0%`、`25.0%`；「下载核查报告」「下载分析图」；失败时「手动重跑」「线索照常可以分派」「缺图层」；错误卡「内业核查没有加载出来」不算通过 | false |
 | `nav.workbench.dispatch.step3` | 分派决定续办 | `/workbench?step=3&clue=:id` | 经办/内勤/监督 | `vf-sc-verify-loop-ui-verify-dispatch` | `[data-role=decide-panel]`、`[data-role=decide-hold]`、`[data-role=decide-dispatch]`、`[data-role=assign-org-panel]`、`[data-role=assign-org]`、`[data-role=assign-people-panel]`、`[data-role=assign-people]`、`[data-role=assign-readonly]`、`[data-role=assigned]`、`#dispatch-org`、`#dispatch-main`；无权限兜底文案「待分派池的线索由本机构内勤派出」／「分派决定由录入人完成」；`UI_CLICK_WRITE` 尽量点 decide-dispatch／assign-org／assign-people（禁用则记 skipped） | true |
+| `nav.workbench.dispatch.buttons` | 分派按钮按状态与身份 | 待办标题链到 `/workbench/register?step=3&clue=:id`（与 `/workbench?step=3&clue=:id` 同一办理页） | 录入人／录入机构内勤／承办机构内勤 | `vf-sc-next-todo-buttons` | 待分派决定：录入人见 `decide-dispatch`（有未结案重合时文案「已知晓并派出」）与 `decide-hold`「不派」；其他人见「分派决定由录入人完成」。待派机构：录入机构内勤见 `assign-org`「派出机构」；录入人见「待分派池的线索由本机构内勤派出」。已派机构：能打开页面的人见 `assigned`「承办机构」；录入人无「派出承办人」「重新分派」；录入机构内勤见 `assign-org`「重新分派」、无「派出承办人」。承办机构内勤打开该页得到「分派办理没有加载出来」（GET dispatch 403 `scope-denied`，修前基线，读取仍只按录入机构） | true |
 | `nav.clue.center` | 线索中心 | `/clue`；查重页签 `/clue?view=all&clue=:id&tab=duplicate` | 内勤/经办/监督 | `vf-sc-dispatch-*`、`vf-sc-duplicate-*`、`vf-sc-auto-verify-land-success`、`vf-sc-auto-verify-land-duplicate` | 列表行；查重页签「没有疑似重复」或「与 … 疑似重复」加表头「占本线索」 | true |
 | `nav.clue.register.legacy` | 旧登记入口 | `/clue/register` → 重定向工作台 | — | — | 勿直接测；应落到 register 壳 | false |
 
@@ -68,4 +69,5 @@
   - 不传 `CLUE_ID` 只验登录；`EXPECT_STATUS=pending_decision|in_pool|org_assigned|handler_assigned` 可收紧面板断言。
   - 证据落 `.run/verify-*`（PNG／webm／trace）；默认 headless，`HEADED=1` 切 headed。
 - 缩范围：UI 全量登记提交尚未跑；线索由 API 造数后经 `CLUE_ID` 带入。
+- 下一待办按钮：`harness/run-next-todo-buttons.sh`；场景 `vf-sc-next-todo-buttons`。API 核 `mayDecide`／`mayAssignOrg`／`mayAssignPeople`／`mayReassignOrg`。页面只读，不点写。甲所内勤 403 是修前基线。
 - 选择器以上表为准；失败先改本地图再改断言。

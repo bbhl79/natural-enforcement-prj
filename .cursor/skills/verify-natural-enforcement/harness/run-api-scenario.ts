@@ -556,7 +556,79 @@ async function runStep(
     return readSideEffects(ctx, step, run, cookie);
   }
 
+  if (step.action === 'read-dispatch-buttons') {
+    return readDispatchButtons(ctx, step, run);
+  }
+
   throw new Error(`本轮 harness 不支持 action=${step.action}`);
+}
+
+const BUTTON_FLAGS = ['mayDecide', 'mayAssignOrg', 'mayAssignPeople', 'mayReassignOrg'] as const;
+
+/** 各身份自己读分派视图。承办机构内勤读录入机构被拒时，原样记下 403，不改读取机构。 */
+async function readDispatchButtons(
+  ctx: HarnessContext,
+  step: ScenarioStep,
+  run: ScenarioContext,
+): Promise<StepResult> {
+  const clueId = requireClueId(step, run);
+  const matrix = step.matrix ?? [];
+  if (matrix.length === 0) throw new Error(`step ${step.id} 缺少 matrix`);
+  const rows: Record<string, unknown>[] = [];
+  const misses: string[] = [];
+  for (const expect of matrix) {
+    const cookie = await cookieOfIdentity(ctx, expect.identityRef);
+    const viewed = await jsonRequest(ctx, cookie, 'GET', `/api/clues/${clueId}/dispatch`);
+    const listed = await jsonRequest(
+      ctx,
+      cookie,
+      'GET',
+      '/api/clues?view=assign&page=1&size=100',
+    );
+    const found =
+      listed.http.status === 200 &&
+      listOf(listed.body.rows).some((item) => asText(item.id) === clueId);
+    const row = {
+      identityRef: expect.identityRef,
+      http: viewed.http.status,
+      reason: asText(viewed.body.reason),
+      status: asText(viewed.body.status),
+      mayDecide: viewed.body.mayDecide === true,
+      mayAssignOrg: viewed.body.mayAssignOrg === true,
+      mayAssignPeople: viewed.body.mayAssignPeople === true,
+      mayReassignOrg: viewed.body.mayReassignOrg === true,
+      listedInAssignView: found,
+    };
+    rows.push(row);
+    if (row.http !== expect.http) misses.push(`${expect.identityRef} http=${row.http}`);
+    if (expect.reason !== undefined && row.reason !== expect.reason) {
+      misses.push(`${expect.identityRef} reason=${row.reason}`);
+    }
+    for (const flag of BUTTON_FLAGS) {
+      if (expect[flag] !== undefined && row[flag] !== expect[flag]) {
+        misses.push(`${expect.identityRef} ${flag}=${String(row[flag])}`);
+      }
+    }
+  }
+  const readable = rows.find((row) => row.http === 200);
+  const clueStatus = asText(readable?.status);
+  if (clueStatus !== '') run.status = clueStatus;
+  if (step.expectClueStatus !== undefined && clueStatus !== step.expectClueStatus) {
+    misses.push(`clueStatus=${clueStatus}`);
+  }
+  const facts = { clueStatus, rows };
+  return {
+    observation: {
+      http: { status: 200 },
+      body: {
+        result: 'button-matrix',
+        readScope: 'entered-org-only',
+        facts,
+      },
+    },
+    pass: misses.length === 0,
+    note: { action: 'read-dispatch-buttons', clueId, misses, facts },
+  };
 }
 
 /** 跑单个 API scenario，写证据；oracle 评末步观测。 */

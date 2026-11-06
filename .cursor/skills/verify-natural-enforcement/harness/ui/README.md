@@ -30,3 +30,11 @@ CLUE_ID=<clue-id> EXPECT_STATUS=in_pool ./.cursor/skills/verify-natural-enforcem
 - step3 字段级：`data-role=decide-*|assign-*`、`#dispatch-org`、`#dispatch-main`。
 - 点击写：默认 `UI_CLICK_WRITE=1` 尽量点 decide-dispatch／assign-org／assign-people；禁用记 skipped 不算红；`UI_CLICK_WRITE=0` 只读。
 - E 待办：同跑次打开 `/workbench` 观察「待分派决定／待派机构／重跑核查」文案（空清单不判红）。
+
+## 下一待办按钮（状态 × 身份）
+
+```bash
+.cursor/skills/verify-natural-enforcement/harness/run-next-todo-buttons.sh
+```
+
+只读核对已有按钮。不点写。甲所内勤 `GET /api/clues/:id/dispatch` 403 是修前基线。工作台清单只做观察，不另写过滤规则。没有 rsync 时，脚本用 cp 把阶段目录里的截图、trace 拷进 `.run`。

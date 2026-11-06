@@ -74,6 +74,24 @@ export interface ScenarioStep {
   readonly assistFrom?: string[];
   readonly designate?: boolean;
   readonly reason?: string;
+  /**
+   * read-dispatch-buttons：按身份读分派视图，核对已有按钮开关。
+   * 不改工作台清单过滤，也不改分派视图的读取机构。
+   */
+  readonly matrix?: readonly DispatchButtonExpect[];
+  /** read-dispatch-buttons：成功读取的视图主状态必须是这个值。 */
+  readonly expectClueStatus?: string;
+}
+
+/** 一个身份在分派视图上的按钮开关。403 行只核 http 与 reason。 */
+export interface DispatchButtonExpect {
+  readonly identityRef: string;
+  readonly http: number;
+  readonly reason?: string;
+  readonly mayDecide?: boolean;
+  readonly mayAssignOrg?: boolean;
+  readonly mayAssignPeople?: boolean;
+  readonly mayReassignOrg?: boolean;
 }
 
 export interface ApiScenario {
