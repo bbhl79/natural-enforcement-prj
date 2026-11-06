@@ -2,15 +2,15 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * Verification step2／step3 UI 探活（headless default）。
- * 缩范围：不做 UI 全量登记提交（尚未跑）；线索由 API 造数后经 CLUE_ID 带入。
+ * 全量登记入口 run-ui-full-loop.sh；CLUE_ID 为本轮真实UI登记所得。
  * Env:
  *   BASE_URL   default https://host.docker.internal:8080
  *   EVIDENCE_DIR  required (mapped to .run/verify-<id>/)
  *   SEED_PASSWORD  default Seed-pass-52
- *   CLUE_ID  optional; set to probe /workbench?step=2&clue=… and step=3
+ *   CLUE_ID  点击写必填；只读时可省略。用于探测 /workbench?step=2&clue=… and step=3
  *   EXPECT_STATUS optional: pending_decision | in_pool | org_assigned | handler_assigned
  *   HEADED / PW_HEADED =1 → headed (needs DISPLAY)
- *   UI_CLICK_WRITE=1（默认）尽量点击 decide／assign；UI_CLICK_WRITE=0 只读断言
+ *   UI_CLICK_WRITE=1（默认）必须顺序点击 decide／assign-org；UI_CLICK_WRITE=0 只读断言
  */
 const fs = require('fs');
 const path = require('path');
@@ -25,7 +25,7 @@ const MOBILE = process.env.VERIFY_MOBILE || '13800001002'; // clerk-a
 const CLUE_ID = process.env.CLUE_ID || '';
 const EXPECT_STATUS = process.env.EXPECT_STATUS || '';
 const CLICK_WRITE = process.env.UI_CLICK_WRITE !== '0';
-const SCENARIO_ID = 'vf-sc-verify-loop-ui-verify-dispatch';
+const SCENARIO_ID = process.env.UI_SCENARIO_ID || 'vf-sc-verify-loop-ui-verify-dispatch';
 
 if (!EVIDENCE_DIR) {
   console.error('EVIDENCE_DIR required');
@@ -96,7 +96,8 @@ async function main() {
     if (!loginPass) failed = true;
 
     if (CLUE_ID === '') {
-      record('clue-context', true, { clueId: 'optional' }, { clueId: null, skipped: true }, []);
+      record('clue-context', !CLICK_WRITE, { clueId: '点击写必填' }, { clueId: null, skipped: true }, []);
+      if (CLICK_WRITE) failed = true;
     } else {
       // --- step2 内业核查（字段级） ---
       await page.goto(`${BASE_URL}/workbench?step=2&clue=${encodeURIComponent(CLUE_ID)}`, {
@@ -201,9 +202,9 @@ async function main() {
       const interestingRoles = fieldProbe.roles.filter((r) =>
         /^(decide-|assign-|assigned)/.test(r || ''),
       );
-      // EXPECT_STATUS 收紧面板；本身份无权限时兜底文案也算 step3 探活通过（字段级记 fallback）。
+      // 只读探活可接受无权限兜底；点击写必须命中实际面板。
       const panelPass = expectedRole
-        ? fieldProbe.roles.includes(expectedRole) || fallback !== null
+        ? fieldProbe.roles.includes(expectedRole) || (!CLICK_WRITE && fallback !== null)
         : interestingRoles.length > 0 || fallback !== null;
       const fieldPass = panelPass;
       const eStep3 = await shot('03-step3-dispatch');
@@ -243,83 +244,55 @@ async function main() {
       );
       if (!fieldPass) failed = true;
 
-      // --- 尽量点击写 decide／assign ---
+      // 点击写必须同时完成decide和派机构；缺权限、跳过、HTTP失败均判红。
       if (CLICK_WRITE) {
-        const clickResult = {
-          attempted: [],
-          skipped: [],
-          wrote: false,
-        };
-        async function tryClick(role, label) {
-          const loc = page.locator(`[data-role="${role}"]`).first();
-          const visible = await loc.isVisible().catch(() => false);
-          if (!visible) {
-            clickResult.skipped.push({ role, reason: 'not-present' });
-            return false;
-          }
-          const disabled = await loc.isDisabled().catch(() => true);
-          if (disabled) {
-            clickResult.skipped.push({ role, reason: 'disabled', label });
-            return false;
-          }
-          // assign-org needs a selected org first
-          if (role === 'assign-org') {
-            const orgSel = page.locator('#dispatch-org');
-            if (await orgSel.isVisible().catch(() => false)) {
-              const current = await orgSel.inputValue().catch(() => '');
-              if (!current) {
-                const options = await orgSel.locator('option').all();
-                for (const opt of options) {
-                  const val = await opt.getAttribute('value');
-                  if (val) {
-                    await orgSel.selectOption(val);
-                    break;
-                  }
-                }
-              }
-            }
-          }
-          if (role === 'assign-people') {
-            const mainSel = page.locator('#dispatch-main');
-            if (await mainSel.isVisible().catch(() => false)) {
-              const current = await mainSel.inputValue().catch(() => '');
-              if (!current) {
-                const options = await mainSel.locator('option').all();
-                for (const opt of options) {
-                  const val = await opt.getAttribute('value');
-                  if (val) {
-                    await mainSel.selectOption(val);
-                    break;
-                  }
-                }
-              }
-            }
-          }
-          await loc.click({ timeout: 5000 }).catch((err) => {
-            clickResult.skipped.push({ role, reason: String(err) });
-            return null;
-          });
-          await page.waitForTimeout(1200);
-          clickResult.attempted.push({ role, label });
-          clickResult.wrote = true;
-          return true;
+        const assert = require('node:assert/strict');
+        async function readView() {
+          const response = await page.request.get(`${BASE_URL}/api/clues/${CLUE_ID}/dispatch`);
+          assert.equal(response.status(), 200);
+          return response.json();
         }
-        // prefer decide then assign-org then assign-people
-        await tryClick('decide-dispatch', '派出');
-        if (!clickResult.wrote) await tryClick('assign-org', '派出机构');
-        if (!clickResult.wrote) await tryClick('assign-people', '派出承办人');
-        const eClick = await shot('04-after-click-write');
-        // 点击写：控件禁用／无权限不算失败（记证据）；真正抛错才红
-        const clickPass = true;
-        record(
-          'click-write',
-          clickPass,
-          { prefer: ['decide-dispatch', 'assign-org', 'assign-people'], optionalWrite: true },
-          clickResult,
-          [eClick],
-        );
+        let view = await readView();
+        record('click-write-precondition', view.status === 'pending_decision' && view.mayDecide,
+          { status: 'pending_decision', mayDecide: true }, { mobile: MOBILE, ...view }, [await shot('04-before-decide')]);
+        assert.equal(view.status, 'pending_decision');
+        assert.equal(view.mayDecide, true);
+        async function clickWrite(role, endpoint, expectedStatus) {
+          const button = page.locator(`[data-role="${role}"]`);
+          await button.waitFor({ state: 'visible' });
+          assert.equal(await button.isDisabled(), false, `${role}已禁用`);
+          const responsePromise = page.waitForResponse((response) => new URL(response.url()).pathname === `/api/clues/${CLUE_ID}/${endpoint}` && response.request().method() === 'POST');
+          await button.click();
+          const response = await responsePromise;
+          const body = await response.json();
+          const requestBody = response.request().postDataJSON();
+          record(`click-${role}`, response.status() === 200 && body.status === expectedStatus,
+            { http: 200, status: expectedStatus, control: role }, { http: response.status(), requestBody, body }, [await shot(`05-${role}`)]);
+          assert.equal(response.status(), 200, JSON.stringify(body));
+          assert.equal(body.status, expectedStatus);
+          assert.equal(body.clueId, CLUE_ID);
+          return body;
+        }
+        await clickWrite('decide-dispatch', 'decide', 'in_pool');
+        await page.locator('#dispatch-org').waitFor({ state: 'visible' });
+        view = await readView();
+        record('click-write-assign-permission', view.status === 'in_pool' && view.mayAssignOrg,
+          { status: 'in_pool', mayAssignOrg: true }, { mobile: MOBILE, ...view });
+        assert.equal(view.status, 'in_pool');
+        assert.equal(view.mayAssignOrg, true);
+        const org = page.locator('#dispatch-org');
+        await org.selectOption({ label: process.env.ASSIGN_ORG_NAME || '第一执法支队' });
+        const selectedOrg = await org.inputValue();
+        assert.ok(selectedOrg);
+        await clickWrite('assign-org', 'assign-org', 'org_assigned');
+        view = await readView();
+        assert.equal(view.status, 'org_assigned');
+        assert.equal(view.assignment.orgUnitId, selectedOrg);
+        await page.locator('[data-role="assigned"]').waitFor({ state: 'visible' });
+        record('click-write', true, { status: 'org_assigned', requiredWrites: ['decide-dispatch', 'assign-org'] },
+          { mobile: MOBILE, clueId: CLUE_ID, status: view.status, assignment: view.assignment }, [await shot('06-after-click-write')]);
       } else {
-        record('click-write', true, { optionalWrite: true }, { skipped: true, reason: 'UI_CLICK_WRITE=0' }, []);
+        record('click-write', true, { readOnly: true }, { skipped: true, reason: 'UI_CLICK_WRITE=0；不代表点击写通过' }, []);
       }
 
       // --- E 待办：/workbench 观察 decide／pool／rerun ---

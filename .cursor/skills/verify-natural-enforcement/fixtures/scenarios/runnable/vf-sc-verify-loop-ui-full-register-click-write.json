@@ -1,0 +1,77 @@
+{
+  "id": "vf-sc-verify-loop-ui-full-register-click-write",
+  "status": "runnable",
+  "driver": "ui",
+  "kind": "happy",
+  "title": "登录后R1全量登记真提交，正式重复命中后实点决定和派机构",
+  "profileRefs": [
+    "vf-case-13-mine-without-license"
+  ],
+  "identityRefs": [
+    "intake-hq"
+  ],
+  "featureMapRefs": [
+    "nav.auth.login",
+    "nav.workbench.register",
+    "nav.workbench.verify.step2",
+    "nav.workbench.dispatch.step3"
+  ],
+  "steps": [
+    {
+      "id": "register-peer-submit",
+      "action": "ui-assert",
+      "featureMapRef": "nav.workbench.register"
+    },
+    {
+      "id": "register-target-submit",
+      "action": "ui-assert",
+      "featureMapRef": "nav.workbench.register"
+    },
+    {
+      "id": "registration-pending-decision",
+      "action": "ui-assert",
+      "featureMapRef": "nav.workbench.dispatch.step3"
+    },
+    {
+      "id": "verify-step2",
+      "action": "ui-assert",
+      "featureMapRef": "nav.workbench.verify.step2"
+    },
+    {
+      "id": "click-decide-dispatch",
+      "action": "ui-assert",
+      "featureMapRef": "nav.workbench.dispatch.step3"
+    },
+    {
+      "id": "click-assign-org",
+      "action": "ui-assert",
+      "featureMapRef": "nav.workbench.dispatch.step3"
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assert": [
+      {
+        "path": "registration.http",
+        "op": "eq",
+        "value": 201
+      },
+      {
+        "path": "registration.status",
+        "op": "eq",
+        "value": "pending_decision"
+      },
+      {
+        "path": "decide.status",
+        "op": "eq",
+        "value": "in_pool"
+      },
+      {
+        "path": "assignOrg.status",
+        "op": "eq",
+        "value": "org_assigned"
+      }
+    ]
+  },
+  "notes": "入口 harness/ui/run-ui-full-loop.sh。字段取 fixtures/journeys/register-full-click-write/input.json。独立UI runner逐步断言并生成steps，不由API runner评ui路径。未覆盖派承办人。仅headless。"
+}

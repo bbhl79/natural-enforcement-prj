@@ -16,9 +16,9 @@
 | id | 名称 | 路径 | 角色入口 | 关联 scenario | 选择器策略 | fragile |
 | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
 | `nav.workbench` | 统一工作台 | `/workbench` | 各业务角色 | — | 主导航「工作台」 | false |
-| `nav.workbench.register` | 线索登记壳 | `/workbench/register` | 内勤等有登记权 | `vf-sc-register-*`、`vf-sc-verify-loop-ui-login-register` | `#clue-source`（线索来源*）；`#clue-domain`（法域*）；`button[type=submit].btn-primary`「保存」；动态要件 `htmlFor=clue-<key>`；确认 `button[data-role=confirm-save]` | true |
-| `nav.workbench.verify.step2` | 内业核查续办 | `/workbench?step=2&clue=:id`；可选 `/clue?view=all&clue=:id&tab=verification` | 经办/内勤 | `vf-sc-verify-loop-ui-verify-dispatch`、`vf-sc-auto-verify-land-success`、`vf-sc-auto-verify-land-partial`、`vf-sc-auto-verify-land-empty-failed`、`vf-sc-auto-verify-land-duplicate`、`vf-sc-auto-verify-mineral-success` | `.card` 含「内业核查」；状态标签「已完成／没跑成／核查进行中／不设内业核查」；图层三态「有相交／无相交／查不成」；相交比例如 `100.0%`、`25.0%`；「下载核查报告」「下载分析图」；失败时「手动重跑」「线索照常可以分派」「缺图层」；错误卡「内业核查没有加载出来」不算通过 | false |
-| `nav.workbench.dispatch.step3` | 分派决定续办 | `/workbench?step=3&clue=:id` | 经办/内勤/监督 | `vf-sc-verify-loop-ui-verify-dispatch` | `[data-role=decide-panel]`、`[data-role=decide-hold]`、`[data-role=decide-dispatch]`、`[data-role=assign-org-panel]`、`[data-role=assign-org]`、`[data-role=assign-people-panel]`、`[data-role=assign-people]`、`[data-role=assign-readonly]`、`[data-role=assigned]`、`#dispatch-org`、`#dispatch-main`；无权限兜底文案「待分派池的线索由本机构内勤派出」／「分派决定由录入人完成」；`UI_CLICK_WRITE` 尽量点 decide-dispatch／assign-org／assign-people（禁用则记 skipped） | true |
+| `nav.workbench.register` | R1完整线索登记 | `/workbench/register` | 内勤等有登记权 | `vf-sc-register-*`、`vf-sc-verify-loop-ui-login-register`、`vf-sc-verify-loop-ui-full-register-click-write` | `#clue-source`（线索来源*）；`#clue-domain`（法域*）；`button[type=submit].btn-primary`「保存」；动态要件 `htmlFor=clue-<key>`；确认 `button[data-role=confirm-save]` | true |
+| `nav.workbench.verify.step2` | 内业核查续办 | `/workbench?step=2&clue=:id`；可选 `/clue?view=all&clue=:id&tab=verification` | 经办/内勤 | `vf-sc-verify-loop-ui-verify-dispatch`、`vf-sc-verify-loop-ui-full-register-click-write`、`vf-sc-auto-verify-land-success`、`vf-sc-auto-verify-land-partial`、`vf-sc-auto-verify-land-empty-failed`、`vf-sc-auto-verify-land-duplicate`、`vf-sc-auto-verify-mineral-success` | `.card` 含「内业核查」；状态标签「已完成／没跑成／核查进行中／不设内业核查」；图层三态「有相交／无相交／查不成」；相交比例如 `100.0%`、`25.0%`；「下载核查报告」「下载分析图」；失败时「手动重跑」「线索照常可以分派」「缺图层」；错误卡「内业核查没有加载出来」不算通过 | false |
+| `nav.workbench.dispatch.step3` | 分派决定续办 | `/workbench?step=3&clue=:id` | 经办/内勤/监督 | `vf-sc-verify-loop-ui-verify-dispatch`、`vf-sc-verify-loop-ui-full-register-click-write` | `[data-role=decide-panel]`、`[data-role=decide-hold]`、`[data-role=decide-dispatch]`、`[data-role=assign-org-panel]`、`[data-role=assign-org]`、`[data-role=assign-people-panel]`、`[data-role=assign-people]`、`[data-role=assign-readonly]`、`[data-role=assigned]`、`#dispatch-org`、`#dispatch-main`；无权限兜底文案「待分派池的线索由本机构内勤派出」／「分派决定由录入人完成」；`UI_CLICK_WRITE=1` 必须在 `pending_decision` 实点 `decide-dispatch`，回读 `in_pool` 且 `mayAssignOrg=true` 后选择 `#dispatch-org` 并实点 `assign-org`，POST 200 与回读 `org_assigned` 才通过；禁用、跳过、HTTP 错误均失败 | true |
 | `nav.clue.center` | 线索中心 | `/clue`；查重页签 `/clue?view=all&clue=:id&tab=duplicate` | 内勤/经办/监督 | `vf-sc-dispatch-*`、`vf-sc-duplicate-*`、`vf-sc-auto-verify-land-success`、`vf-sc-auto-verify-land-duplicate` | 列表行；查重页签「没有疑似重复」或「与 … 疑似重复」加表头「占本线索」 | true |
 | `nav.clue.register.legacy` | 旧登记入口 | `/clue/register` → 重定向工作台 | — | — | 勿直接测；应落到 register 壳 | false |
 
@@ -65,7 +65,16 @@
 - 登录与登记壳：`harness/ui/run-ui-p0.sh`；场景 `vf-sc-verify-loop-ui-login-register`（driver=`ui`）。
 - 核查／分派续办：`harness/ui/run-ui-verify-dispatch.sh`；场景 `vf-sc-verify-loop-ui-verify-dispatch`（driver=`ui`）。
   - `CLUE_ID=<id>` 时打开 `/workbench?step=2&clue=` 与 `/workbench?step=3&clue=`，字段级断言 verificationStatus 标签／自动核查文案／data-role／`#dispatch-org`／`#dispatch-main`；并观察 `/workbench` 待办 decide／pool／rerun（E）。
-  - 不传 `CLUE_ID` 只验登录；`EXPECT_STATUS=pending_decision|in_pool|org_assigned|handler_assigned` 可收紧面板断言。
+  - `UI_CLICK_WRITE=0` 且不传 `CLUE_ID` 时只验登录；点击写不传 id 即失败；`EXPECT_STATUS=pending_decision|in_pool|org_assigned|handler_assigned` 可收紧面板断言。
   - 证据落 `.run/verify-*`（PNG／webm／trace）；默认 headless，`HEADED=1` 切 headed。
-- 缩范围：UI 全量登记提交尚未跑；线索由 API 造数后经 `CLUE_ID` 带入。
+- 全量登记与点击写：`harness/ui/run-ui-full-loop.sh`，场景 `vf-sc-verify-loop-ui-full-register-click-write`。
+  - 复用 `intake-hq`，以总队内勤身份登记本人总队线索，不给支队线索额外权限，不新增产品种子账号。
+  - 两次 UI 登记同一矿产面。公共项、来源全部可见项、违法类型全部项、附件、标签、两项是非选择均填。未知字段或空控件使旅程失败。
+  - 两次保存要求 HTTP 201、零缺件、持久化回读成功。第二条须命中本轮 peer 并处于 `pending_decision`。
+  - 正式重复命中使主状态进入 `pending_decision`。土地和矿产均自动核查；本机缺图层时核查会 failed，但本旅程仍须回读到 `pending_decision` 后才能点决定。
+  - step2 观察核查状态，不宣称核查成功。step3 实点“已知晓并派出”后实点“派出机构”，派至第一执法支队。
+  - 本入口禁止 headed。证据分为 `.run/verify-<run>-register` 与 `.run/verify-<run>-dispatch`。派承办人不在本旅程范围。
 - 选择器以上表为准；失败先改本地图再改断言。
+
+- 本机完整附件旅程入口为 `harness/ui/run-ui-full-loop-local.sh`。它临时补验证专属存储运行参数并初始化 `ne-verify-ui` 桶，退出恢复原编排。
+- 已发现同名标签复用触发 `clue_tag_library_fkey` 的产品缺陷。本票不修。成功旅程每条使用唯一合成标签，标签复用不属于已通过覆盖。
