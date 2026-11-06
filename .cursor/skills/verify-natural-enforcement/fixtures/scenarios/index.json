@@ -12,6 +12,11 @@
     "vf-sc-verify-loop-survey-register",
     "vf-sc-verify-loop-ui-login-register",
     "vf-sc-verify-loop-ui-verify-dispatch",
+    "vf-sc-auto-verify-land-empty-failed",
+    "vf-sc-auto-verify-land-success",
+    "vf-sc-auto-verify-land-partial",
+    "vf-sc-auto-verify-land-duplicate",
+    "vf-sc-auto-verify-mineral-success",
     "vf-sc-workbench-after-filing"
   ],
   "negatives": [

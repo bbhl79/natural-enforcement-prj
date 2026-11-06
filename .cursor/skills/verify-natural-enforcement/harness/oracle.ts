@@ -1,6 +1,6 @@
 /** 结构化 oracle 断言（见 fixtures/RUN-CONTRACT.md）。 */
 
-export type AssertOp = 'eq' | 'in' | 'includes';
+export type AssertOp = 'eq' | 'in' | 'includes' | 'gt' | 'lt';
 
 export interface OracleAssert {
   readonly path: string;
@@ -79,6 +79,21 @@ function evalOne(obs: StepObservation, item: OracleAssert): AssertFailure | null
         expected: item.value,
         actual,
         message: `${item.path} expected includes ${JSON.stringify(item.value)}, got ${JSON.stringify(actual)}`,
+      };
+    }
+    case 'gt':
+    case 'lt': {
+      const ok =
+        typeof actual === 'number' &&
+        typeof item.value === 'number' &&
+        (item.op === 'gt' ? actual > item.value : actual < item.value);
+      if (ok) return null;
+      return {
+        path: item.path,
+        op: item.op,
+        expected: item.value,
+        actual,
+        message: `${item.path} expected ${item.op} ${JSON.stringify(item.value)}, got ${JSON.stringify(actual)}`,
       };
     }
     default:

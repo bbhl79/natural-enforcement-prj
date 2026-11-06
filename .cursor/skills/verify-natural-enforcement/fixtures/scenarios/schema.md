@@ -47,13 +47,16 @@
 
 | 字段 | 说明 |
 | ---- | ---- |
-| `action` | `register-clue`／`poll-verification`／`read-dispatch`／`decide`／`assign-org`／`assign-people` |
+| `action` | `register-clue`／`poll-verification`／`read-dispatch`／`read-side-effects`／`retry-verification`／`decide`／`assign-org`／`assign-people` |
 | `fromProfile` + `path` | register-clue 投影 profile 上的 `system` 对象 |
 | `identityRef` | 本步登录身份；缺省沿用上一步 |
 | `viewIdentityRef` | 读分派视图用的身份；写动作仍用 `identityRef`（承办机构内勤读不到录入机构视图时用） |
 | `idempotencyKey` | 可选；固定幂等键 |
 | `mutate` | 可选：`omitValues`、`setValues`、`setConfirm`、`overrideSpatial` |
-| `pollAttempts` / `pollIntervalMs` | poll-verification：次数（默认 10，上限 15）与间隔（默认 500ms） |
+| `pollAttempts` / `pollIntervalMs` | poll-verification：次数（默认 10，上限 60）与间隔（默认 500ms） |
+| `expectVerificationStatus` | poll-verification：收紧到 `done` 或 `failed` 才算过。缺省时 running 也算观测到 |
+| `dispatchIdentityRef` / `listIdentityRef` | read-side-effects：另用该身份读分派视图或待分派列表 |
+| `strictSteps` | scenario 级。为 true 时任一步失败则整条失败 |
 | `decision` / `acknowledged` | decide：`dispatch`／`hold` 与已知晓 |
 | `expectedStatus` | 写动作并发前置状态；缺省沿用上下文 |
 | `orgUnitCode` | assign-org：按机构编码解析 id（如 `ORG-STATION-A`） |

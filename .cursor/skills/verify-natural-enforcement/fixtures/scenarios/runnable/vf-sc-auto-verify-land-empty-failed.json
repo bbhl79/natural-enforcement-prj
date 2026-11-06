@@ -1,0 +1,96 @@
+{
+  "id": "vf-sc-auto-verify-land-empty-failed",
+  "status": "runnable",
+  "driver": "api",
+  "kind": "happy",
+  "strictSteps": true,
+  "title": "土地线索：图层地址为空时查不成，重跑仍失败，分派不被挡住",
+  "profileRefs": ["vf-case-02-occupy-without-approval"],
+  "identityRefs": ["clerk-a", "intake-a"],
+  "featureMapRefs": ["nav.workbench.verify.step2", "nav.workbench.dispatch.step3"],
+  "requiresLayers": "empty",
+  "steps": [
+    {
+      "id": "register",
+      "action": "register-clue",
+      "fromProfile": "vf-case-02-occupy-without-approval",
+      "path": "stages.register.system",
+      "identityRef": "clerk-a",
+      "mutate": {
+        "setValues": {
+          "clue.narrative": "vf-自动核查空地址查不成"
+        },
+        "overrideSpatial": {
+          "type": "Feature",
+          "properties": {},
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [113.541, 23.351],
+                [113.549, 23.351],
+                [113.549, 23.359],
+                [113.541, 23.359],
+                [113.541, 23.351]
+              ]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "poll-failed",
+      "action": "poll-verification",
+      "identityRef": "clerk-a",
+      "expectVerificationStatus": "failed",
+      "pollAttempts": 60,
+      "pollIntervalMs": 500
+    },
+    {
+      "id": "retry",
+      "action": "retry-verification",
+      "identityRef": "clerk-a"
+    },
+    {
+      "id": "poll-retried",
+      "action": "poll-verification",
+      "identityRef": "clerk-a",
+      "expectVerificationStatus": "failed",
+      "pollAttempts": 60,
+      "pollIntervalMs": 500
+    },
+    {
+      "id": "assign-org",
+      "action": "assign-org",
+      "identityRef": "intake-a",
+      "orgUnitCode": "ORG-STATION-A"
+    },
+    {
+      "id": "side-effects",
+      "action": "read-side-effects",
+      "identityRef": "clerk-a"
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assert": [
+      { "path": "http.status", "op": "eq", "value": 200 },
+      { "path": "body.facts.verificationStatus", "op": "eq", "value": "failed" },
+      { "path": "body.facts.triggers", "op": "includes", "value": "auto" },
+      { "path": "body.facts.triggers", "op": "includes", "value": "manual" },
+      { "path": "body.facts.trigger", "op": "eq", "value": "manual" },
+      { "path": "body.facts.runNo", "op": "gt", "value": 1 },
+      { "path": "body.facts.failureCategory", "op": "eq", "value": "deterministic" },
+      { "path": "body.facts.unavailableCount", "op": "eq", "value": 7 },
+      { "path": "body.facts.unavailableReasons", "op": "includes", "value": "service-not-configured" },
+      { "path": "body.facts.missingLayerNames", "op": "includes", "value": "永久基本农田" },
+      { "path": "body.facts.hasArtifacts", "op": "eq", "value": false },
+      { "path": "body.facts.reportHttp", "op": "eq", "value": 404 },
+      { "path": "body.facts.analysisHttp", "op": "eq", "value": 404 },
+      { "path": "body.facts.canRetry", "op": "eq", "value": true },
+      { "path": "body.facts.clueStatus", "op": "eq", "value": "org_assigned" },
+      { "path": "body.facts.dispatchStatus", "op": "eq", "value": "org_assigned" }
+    ]
+  },
+  "notes": "保留场景：NE_LAYER_URL_* 全空。保存后自动核查启动，七层查不成，原因 service-not-configured，确定性失败，不生成报告。手动重跑再失败一次。失败不拦分派：本机构内勤 intake-a 仍能把线索派到 ORG-STATION-A，主状态变为已派机构。"
+}

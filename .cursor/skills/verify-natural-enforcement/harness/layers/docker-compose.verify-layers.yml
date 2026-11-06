@@ -1,0 +1,41 @@
+# 验证专用 compose overlay。
+# 只在自动核查验证时与 infra/docker-compose.yml 叠用。
+# 不改产品编排文件。退出验证后由 harness 卸掉本文件并重建 server，图层地址回到清单里的空值。
+# 这里的地址是 compose 网络内的假服务，不是客户图层 URL。
+
+services:
+  verify-layers:
+    image: node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1
+    pull_policy: never
+    command: ["node", "/opt/fake-layer-server.mjs"]
+    environment:
+      VERIFY_LAYER_PORT: "8099"
+      VERIFY_LAYER_HOST: "0.0.0.0"
+    volumes:
+      - ${VERIFY_FAKE_LAYER_FILE:?缺少 VERIFY_FAKE_LAYER_FILE}:/opt/fake-layer-server.mjs:ro
+    ports:
+      - "18099:8099"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8099/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  server:
+    environment:
+      NE_LAYER_URL_PERMANENT_FARMLAND: http://verify-layers:8099/query
+      NE_LAYER_URL_ECOLOGICAL_REDLINE: http://verify-layers:8099/query
+      NE_LAYER_URL_URBAN_DEVELOPMENT_BOUNDARY: http://verify-layers:8099/query
+      NE_LAYER_URL_CULTIVATED_LAND: http://verify-layers:8099/query
+      NE_LAYER_URL_LAND_CONVERSION_APPROVAL: http://verify-layers:8099/query
+      NE_LAYER_URL_CONSTRUCTION_LAND_PERMIT: http://verify-layers:8099/query
+      NE_LAYER_URL_LAND_SUPPLY_REDLINE: http://verify-layers:8099/query
+    depends_on:
+      verify-layers:
+        condition: service_healthy

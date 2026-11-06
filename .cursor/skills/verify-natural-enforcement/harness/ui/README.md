@@ -11,6 +11,10 @@
 UI_FILL=1 ./.cursor/skills/verify-natural-enforcement/harness/ui/run-ui-p0.sh
 ```
 
+## 自动核查四条夹具
+
+由 `harness/run-auto-verification.sh` 调用 `run-ui-auto-verification.sh`。只 headless。证据落在当次 `.run/verify-*/ui/`。不要传 `HEADED=1`。
+
 ## 核查／分派续办（step2／step3）
 
 ```bash

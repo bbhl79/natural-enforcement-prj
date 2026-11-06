@@ -43,4 +43,5 @@ Scenario 形状见 `fixtures/scenarios/schema.md`。
 - 已落地：身份夹具；01/02 hardFields；API negatives；`harness/` + integration 入口；跑次契约。
 - UI 环（最小子集）：`harness/ui/run-ui-p0.sh` + `vf-sc-verify-loop-ui-login-register`（登录→登记壳字段；默认 headless）。
 - 全链「录入→核查→分派」UI 与 Feature Map 深探另票；本环不引入 CI Playwright 依赖。
+- 开发环境自动核查：`harness/run-auto-verification.sh`。空地址仍走查不成。假图层 overlay 在 `harness/layers/`，说现有适配器的查询协议。四条 scenario：`vf-sc-auto-verify-land-success`、`partial`、`duplicate`、`empty-failed`。页面取证只 headless，证据在 `.run/verify-*`。验证结束会卸 overlay。
 - 未实现产品阶段只标 `latent`，不得标成 runnable。

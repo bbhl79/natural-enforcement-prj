@@ -1,0 +1,74 @@
+{
+  "id": "vf-sc-auto-verify-mineral-success",
+  "status": "runnable",
+  "driver": "api",
+  "kind": "happy",
+  "strictSteps": true,
+  "title": "矿产线索：假图层七层有相交，自动核查完成",
+  "profileRefs": ["vf-case-09-mine-overstep"],
+  "identityRefs": ["clerk-a"],
+  "featureMapRefs": ["nav.workbench.verify.step2"],
+  "requiresLayers": "configured",
+  "steps": [
+    {
+      "id": "register",
+      "action": "register-clue",
+      "fromProfile": "vf-case-09-mine-overstep",
+      "path": "stages.register.system",
+      "identityRef": "clerk-a",
+      "mutate": {
+        "setValues": {
+          "clue.narrative": "vf-矿产自动核查成功：七层有相交"
+        },
+        "overrideSpatial": {
+          "type": "Feature",
+          "properties": {},
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [113.261, 23.071],
+                [113.269, 23.071],
+                [113.269, 23.079],
+                [113.261, 23.079],
+                [113.261, 23.071]
+              ]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "poll-verification",
+      "action": "poll-verification",
+      "identityRef": "clerk-a",
+      "expectVerificationStatus": "done",
+      "pollAttempts": 60,
+      "pollIntervalMs": 500
+    },
+    {
+      "id": "side-effects",
+      "action": "read-side-effects",
+      "identityRef": "clerk-a"
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assert": [
+      { "path": "http.status", "op": "eq", "value": 200 },
+      { "path": "body.facts.domain", "op": "eq", "value": "mineral" },
+      { "path": "body.facts.verificationStatus", "op": "eq", "value": "done" },
+      { "path": "body.facts.trigger", "op": "eq", "value": "auto" },
+      { "path": "body.facts.runNo", "op": "eq", "value": 1 },
+      { "path": "body.facts.overlappedCount", "op": "eq", "value": 7 },
+      { "path": "body.facts.unavailableCount", "op": "eq", "value": 0 },
+      { "path": "body.facts.positiveOverlapRatios", "op": "includes", "value": 1 },
+      { "path": "body.facts.hasArtifacts", "op": "eq", "value": true },
+      { "path": "body.facts.reportHttp", "op": "eq", "value": 200 },
+      { "path": "body.facts.analysisHttp", "op": "eq", "value": 200 },
+      { "path": "body.facts.clueStatus", "op": "eq", "value": "in_pool" },
+      { "path": "body.facts.duplicateGroupCount", "op": "eq", "value": 0 }
+    ]
+  },
+  "notes": "矿产与土地共用七类核查图层和同一适配器。经度带 [113.2, 113.3) 且避开已有土地图斑。假图层 overlay 打开后跑。空地址失败仍由土地夹具覆盖。"
+}

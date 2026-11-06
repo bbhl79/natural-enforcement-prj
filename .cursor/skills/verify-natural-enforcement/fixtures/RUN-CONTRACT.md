@@ -55,7 +55,7 @@ Scenario 废止人话断言为主。`driver: "api"` 时使用：
 | 字段 | 说明 |
 | ---- | ---- |
 | `path` | 点分路径，根为步骤观测：`http.status`、`body.*` |
-| `op` | `eq` / `in` / `includes` |
+| `op` | `eq` / `in` / `includes` / `gt` / `lt`（后两个只比有限数字） |
 | `value` | 期望标量、列表（`in`）或成员（`includes` 对数组） |
 
 Harness 对**该 scenario 最后一步**的观测评 `assert`；任一条失败则 step `pass: false`，summary `failed`。

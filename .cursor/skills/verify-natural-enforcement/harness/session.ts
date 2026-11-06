@@ -31,7 +31,22 @@ export class SessionCache {
       }),
     });
     if (login.status !== 200) {
-      throw new Error(`登录失败 ${identity.id}: HTTP ${login.status}`);
+      // 持久开发库上，上一跑次已经把种子口令换成验证口令。再用验证口令登录，不再改密。
+      const again = await fetch(`${this.baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          mobilePhone: identity.mobile,
+          password: NEW_PASSWORD,
+          rememberMe: false,
+        }),
+      });
+      if (again.status !== 200) {
+        throw new Error(`登录失败 ${identity.id}: HTTP ${login.status}`);
+      }
+      const reused = sessionCookie(again);
+      this.cookies.set(identity.id, reused);
+      return reused;
     }
     const cookie = sessionCookie(login);
     const changed = await fetch(`${this.baseUrl}/api/auth/password`, {

@@ -1,0 +1,75 @@
+{
+  "id": "vf-sc-auto-verify-land-partial",
+  "status": "runnable",
+  "driver": "api",
+  "kind": "happy",
+  "strictSteps": true,
+  "title": "土地线索：部分图层有相交且相交比例不足一，核查仍完成",
+  "profileRefs": ["vf-case-02-occupy-without-approval"],
+  "identityRefs": ["clerk-a"],
+  "featureMapRefs": ["nav.workbench.verify.step2", "nav.clue.center"],
+  "requiresLayers": "configured",
+  "steps": [
+    {
+      "id": "register",
+      "action": "register-clue",
+      "fromProfile": "vf-case-02-occupy-without-approval",
+      "path": "stages.register.system",
+      "identityRef": "clerk-a",
+      "mutate": {
+        "setValues": {
+          "clue.narrative": "vf-自动核查部分命中：三层有相交四层无相交"
+        },
+        "overrideSpatial": {
+          "type": "Feature",
+          "properties": {},
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [113.341, 23.151],
+                [113.349, 23.151],
+                [113.349, 23.159],
+                [113.341, 23.159],
+                [113.341, 23.151]
+              ]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "poll-verification",
+      "action": "poll-verification",
+      "identityRef": "clerk-a",
+      "expectVerificationStatus": "done",
+      "pollAttempts": 60,
+      "pollIntervalMs": 500
+    },
+    {
+      "id": "side-effects",
+      "action": "read-side-effects",
+      "identityRef": "clerk-a"
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assert": [
+      { "path": "http.status", "op": "eq", "value": 200 },
+      { "path": "body.facts.verificationStatus", "op": "eq", "value": "done" },
+      { "path": "body.facts.trigger", "op": "eq", "value": "auto" },
+      { "path": "body.facts.overlappedCount", "op": "eq", "value": 3 },
+      { "path": "body.facts.noOverlapCount", "op": "eq", "value": 4 },
+      { "path": "body.facts.unavailableCount", "op": "eq", "value": 0 },
+      { "path": "body.facts.positiveOverlapRatios", "op": "includes", "value": 0.25 },
+      { "path": "body.facts.hasArtifacts", "op": "eq", "value": true },
+      { "path": "body.facts.reportHttp", "op": "eq", "value": 200 },
+      { "path": "body.facts.analysisHttp", "op": "eq", "value": 200 },
+      { "path": "body.facts.reportOverlapAreas", "op": "includes", "value": 250 },
+      { "path": "body.facts.analysisKinds", "op": "includes", "value": "intersection" },
+      { "path": "body.facts.clueStatus", "op": "eq", "value": "in_pool" },
+      { "path": "body.facts.duplicateGroupCount", "op": "eq", "value": 0 }
+    ]
+  },
+  "notes": "现有核查结果没有单独的「部分命中」状态。本夹具用已有三态与相交比例表达：运行 done；永久基本农田、生态保护红线、城镇开发边界为 overlapped，页面相交比例 25.0%（overlap 250 / feature 1000），界外面积大于 0；其余四层 no_overlap。经度带 [113.3, 113.4)。"
+}

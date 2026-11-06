@@ -1,0 +1,101 @@
+{
+  "id": "vf-sc-auto-verify-land-duplicate",
+  "status": "runnable",
+  "driver": "api",
+  "kind": "happy",
+  "strictSteps": true,
+  "title": "土地线索：同一图斑再登记，自动核查完成且疑似重复待录入人决定",
+  "profileRefs": ["vf-case-02-occupy-without-approval"],
+  "identityRefs": ["clerk-a"],
+  "featureMapRefs": ["nav.workbench.verify.step2", "nav.workbench.dispatch.step3", "nav.clue.center"],
+  "requiresLayers": "configured",
+  "steps": [
+    {
+      "id": "register-a",
+      "action": "register-clue",
+      "fromProfile": "vf-case-02-occupy-without-approval",
+      "path": "stages.register.system",
+      "identityRef": "clerk-a",
+      "mutate": {
+        "setValues": {
+          "clue.narrative": "vf-疑似重复对方线索"
+        },
+        "overrideSpatial": {
+          "type": "Feature",
+          "properties": {},
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [113.441, 23.251],
+                [113.449, 23.251],
+                [113.449, 23.259],
+                [113.441, 23.259],
+                [113.441, 23.251]
+              ]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "register-b",
+      "action": "register-clue",
+      "fromProfile": "vf-case-02-occupy-without-approval",
+      "path": "stages.register.system",
+      "identityRef": "clerk-a",
+      "mutate": {
+        "setValues": {
+          "clue.narrative": "vf-疑似重复本线索"
+        },
+        "overrideSpatial": {
+          "type": "Feature",
+          "properties": {},
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [113.441, 23.251],
+                [113.449, 23.251],
+                [113.449, 23.259],
+                [113.441, 23.259],
+                [113.441, 23.251]
+              ]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "poll-verification",
+      "action": "poll-verification",
+      "identityRef": "clerk-a",
+      "expectVerificationStatus": "done",
+      "pollAttempts": 60,
+      "pollIntervalMs": 500
+    },
+    {
+      "id": "side-effects",
+      "action": "read-side-effects",
+      "identityRef": "clerk-a"
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assert": [
+      { "path": "http.status", "op": "eq", "value": 200 },
+      { "path": "body.facts.verificationStatus", "op": "eq", "value": "done" },
+      { "path": "body.facts.trigger", "op": "eq", "value": "auto" },
+      { "path": "body.facts.hasArtifacts", "op": "eq", "value": true },
+      { "path": "body.facts.reportHttp", "op": "eq", "value": 200 },
+      { "path": "body.facts.analysisHttp", "op": "eq", "value": 200 },
+      { "path": "body.facts.overlappedCount", "op": "eq", "value": 7 },
+      { "path": "body.facts.duplicateGroupCount", "op": "gt", "value": 0 },
+      { "path": "body.facts.maxSelfRatio", "op": "gt", "value": 0.6 },
+      { "path": "body.facts.clueStatus", "op": "eq", "value": "pending_decision" },
+      { "path": "body.facts.mayDecide", "op": "eq", "value": true },
+      { "path": "body.facts.mayAssignOrg", "op": "eq", "value": false }
+    ]
+  },
+  "notes": "疑似重复按现有规则：逐面交集占任一方达到 60% 即命中。两条线索使用同一面，后登记的一条进待分派决定，下一待办归录入人 clerk-a（mayDecide）。图层事实与成功场景相同，经度带 [113.4, 113.5)。不改对方线索主状态。"
+}
