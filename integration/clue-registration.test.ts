@@ -1,6 +1,7 @@
 // #211 线索登记接口。
 // 断言打在克隆库上：登记成功、缺件阻断、类型层确认后保存、附件与几何校验、
-// 幂等（同 key 同报文回首次结果、异报文 409）、疑似重复逐面命中、以及监督无写权限。
+// 幂等（同 key 同报文回首次结果、异报文 409）、疑似重复逐面命中、监督无写权限，
+// 以及复用已有同名标签时挂上库里那一行（不再把未入库的候选 id 写成外键）。
 // 存储用记录写的假端口：校验不通过时断言「一个字节都没写」。
 import type { AddressInfo } from 'node:net';
 
@@ -106,6 +107,7 @@ interface RegisterOptions {
   readonly confirm?: boolean;
   readonly subjectUnknown?: boolean;
   readonly anonymityConfirmed?: boolean;
+  readonly tags?: string;
 }
 
 async function register(options: RegisterOptions = {}): Promise<{ status: number; body: RegisterResponseBody }> {
@@ -120,6 +122,7 @@ async function register(options: RegisterOptions = {}): Promise<{ status: number
   if (options.anonymityConfirmed !== undefined) {
     form.set('anonymityConfirmed', String(options.anonymityConfirmed));
   }
+  if (options.tags !== undefined) form.set('tags', options.tags);
   if (options.polygon !== null) {
     form.set(
       'spatial-source',
@@ -356,6 +359,34 @@ describe('#211 线索登记', () => {
     const reverse = await cloned.prisma.clueSpatialHit.findMany({ where: { clueId: first.body.id } });
     expect(reverse).toHaveLength(1);
     expect(reverse[0]?.otherClueId).toBe(second.body.id);
+  });
+
+  it('复用已有同名标签：第二次登记成功，两条线索挂同一标签库行', async () => {
+    const tagName = '复用标签耕地硬化';
+    const first = await register({
+      values: BASE_VALUES,
+      polygon: geojsonPolygon(square(40)),
+      tags: tagName,
+    });
+    expect(first.status).toBe(201);
+    const second = await register({
+      values: { ...BASE_VALUES, 'clue.narrative': '另一处复用同一标签的硬化地面' },
+      polygon: geojsonPolygon(square(41)),
+      tags: tagName,
+    });
+    expect(second.status).toBe(201);
+
+    const library = await cloned.prisma.clueTagLibrary.findMany({ where: { name: tagName } });
+    expect(library).toHaveLength(1);
+    const libraryId = library[0]?.id ?? '';
+    expect(libraryId).not.toBe('');
+
+    const attached = await cloned.prisma.clueTag.findMany({
+      where: { name: tagName, clueId: { in: [first.body.id ?? '', second.body.id ?? ''] } },
+    });
+    expect(attached).toHaveLength(2);
+    expect(attached.every((row) => row.libraryId === libraryId)).toBe(true);
+    expect(attached.map((row) => row.clueId).sort()).toEqual([first.body.id, second.body.id].sort());
   });
 
   it('监督无写权限：403，存储零写入', async () => {
