@@ -47,8 +47,14 @@ export interface ScenarioStep {
   readonly viewIdentityRef?: string;
   readonly idempotencyKey?: string;
   readonly mutate?: StepMutate;
-  /** poll-verification：轮询次数（默认 10，上限 15）。 */
+  /** poll-verification：轮询次数（默认 10，上限 60）。 */
   readonly pollAttempts?: number;
+  /** poll-verification：收紧到这个核查状态才算过。缺省时 done／failed／not_required／running 都算观测到。 */
+  readonly expectVerificationStatus?: string;
+  /** read-side-effects：用这个身份再读一次分派视图，记录 mayDecide／mayAssignOrg。 */
+  readonly dispatchIdentityRef?: string;
+  /** read-side-effects：用这个身份读待分派列表，找本线索那一行。 */
+  readonly listIdentityRef?: string;
   /** poll-verification：轮询间隔毫秒（默认 500）。 */
   readonly pollIntervalMs?: number;
   /** decide：dispatch｜hold；默认 dispatch。 */
@@ -78,6 +84,8 @@ export interface ApiScenario {
   readonly profileRefs: string[];
   readonly identityRefs: string[];
   readonly steps: ScenarioStep[];
+  /** 为 true 时，任一步 pass 为 false 则整条 scenario 失败。 */
+  readonly strictSteps?: boolean;
   readonly oracle: {
     readonly kind: string;
     readonly assert: OracleAssert[];

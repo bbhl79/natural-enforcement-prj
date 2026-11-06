@@ -172,6 +172,148 @@ async function postRegister(
   return { http: { status: response.status }, body };
 }
 
+function asNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+async function readText(
+  ctx: HarnessContext,
+  cookie: string,
+  path: string,
+): Promise<{ status: number; text: string }> {
+  const response = await fetch(`${ctx.baseUrl}${path}`, { headers: { cookie } });
+  return { status: response.status, text: await response.text() };
+}
+
+function layerRows(body: Record<string, unknown>): readonly Record<string, unknown>[] {
+  const current = recordOf(body.current);
+  return listOf(current?.layers);
+}
+
+/** 把核查、报告、分析图、查重、分派收成 oracle 能点到的 facts。 */
+async function readSideEffects(
+  ctx: HarnessContext,
+  step: ScenarioStep,
+  run: ScenarioContext,
+  cookie: string,
+): Promise<StepResult> {
+  const clueId = requireClueId(step, run);
+  const verification = await jsonRequest(ctx, cookie, 'GET', `/api/clues/${clueId}/verification`);
+  const duplicate = await jsonRequest(ctx, cookie, 'GET', `/api/clues/${clueId}/duplicates`);
+  const dispatch = await jsonRequest(ctx, cookie, 'GET', `/api/clues/${clueId}/dispatch`);
+  const report = await readText(ctx, cookie, `/api/clues/${clueId}/verification/report`);
+  const analysis = await readText(ctx, cookie, `/api/clues/${clueId}/verification/analysis`);
+
+  let otherDispatch: Record<string, unknown> | null = null;
+  if (step.dispatchIdentityRef) {
+    const otherCookie = await cookieOfIdentity(ctx, step.dispatchIdentityRef);
+    const viewed = await jsonRequest(ctx, otherCookie, 'GET', `/api/clues/${clueId}/dispatch`);
+    otherDispatch = {
+      identityRef: step.dispatchIdentityRef,
+      http: viewed.http.status,
+      status: asText(viewed.body.status),
+      mayDecide: viewed.body.mayDecide === true,
+      mayAssignOrg: viewed.body.mayAssignOrg === true,
+    };
+  }
+
+  let listRow: Record<string, unknown> | null = null;
+  if (step.listIdentityRef) {
+    const listCookie = await cookieOfIdentity(ctx, step.listIdentityRef);
+    const listed = await jsonRequest(
+      ctx,
+      listCookie,
+      'GET',
+      '/api/clues?view=assign&page=1&size=100',
+    );
+    const row = listOf(listed.body.rows).find((item) => asText(item.id) === clueId) ?? null;
+    listRow = {
+      identityRef: step.listIdentityRef,
+      http: listed.http.status,
+      found: row !== null,
+      status: asText(row?.status),
+      verificationStatus: asText(row?.verificationStatus),
+    };
+  }
+
+  const layers = layerRows(verification.body);
+  const states = layers.map((layer) => asText(layer.state));
+  const reasons = layers.map((layer) => asText(layer.unavailableReason)).filter((reason) => reason !== '');
+  const positiveRatios = layers
+    .map((layer) => asNumber(layer.overlapRatio))
+    .filter((ratio): ratio is number => ratio !== null && ratio > 0);
+  const current = recordOf(verification.body.current);
+  const runs = listOf(verification.body.runs);
+  const missing = listOf(current?.missingLayers).map((layer) => asText(layer.name)).filter((name) => name !== '');
+  const groups = listOf(duplicate.body.groups);
+  const ratios = groups.flatMap((group) =>
+    listOf(group.faces)
+      .map((face) => asNumber(face.selfRatio))
+      .filter((ratio): ratio is number => ratio !== null),
+  );
+  let reportOverlapAreas: number[] = [];
+  let analysisKinds: string[] = [];
+  try {
+    const parsed = JSON.parse(report.text) as { layers?: { overlapArea?: number }[] };
+    reportOverlapAreas = (parsed.layers ?? [])
+      .map((layer) => layer.overlapArea)
+      .filter((area): area is number => typeof area === 'number');
+  } catch {
+    reportOverlapAreas = [];
+  }
+  try {
+    const parsed = JSON.parse(analysis.text) as { features?: { properties?: { kind?: string } }[] };
+    analysisKinds = (parsed.features ?? [])
+      .map((feature) => feature.properties?.kind ?? '')
+      .filter((kind) => kind !== '');
+  } catch {
+    analysisKinds = [];
+  }
+
+  const facts = {
+    verificationStatus: asText(verification.body.verificationStatus),
+    verificationStatusLabel: asText(verification.body.verificationStatusLabel),
+    clueStatus: asText(verification.body.clueStatus),
+    canRetry: verification.body.canRetry === true,
+    trigger: asText(current?.trigger),
+    triggers: runs.map((item) => asText(item.trigger)),
+    runNo: asNumber(current?.runNo) ?? 0,
+    failureCategory: current?.failureCategory ?? null,
+    missingLayerNames: missing,
+    layerStates: states,
+    unavailableReasons: reasons,
+    overlappedCount: states.filter((state) => state === 'overlapped').length,
+    noOverlapCount: states.filter((state) => state === 'no_overlap').length,
+    unavailableCount: states.filter((state) => state === 'unavailable').length,
+    positiveOverlapRatios: positiveRatios,
+    hasArtifacts: verification.body.artifacts !== null && verification.body.artifacts !== undefined,
+    reportHttp: report.status,
+    analysisHttp: analysis.status,
+    reportOverlapAreas,
+    analysisKinds,
+    duplicateGroupCount: groups.length,
+    maxSelfRatio: ratios.length === 0 ? 0 : Math.max(...ratios),
+    mayDecide: dispatch.body.mayDecide === true,
+    mayAssignOrg: dispatch.body.mayAssignOrg === true,
+    dispatchStatus: asText(dispatch.body.status),
+    otherDispatch,
+    listRow,
+  };
+  const observation: StepObservation = {
+    http: { status: verification.http.status },
+    body: { facts, verification: verification.body, duplicate: duplicate.body, dispatch: dispatch.body },
+  };
+  const pass =
+    verification.http.status === 200 &&
+    duplicate.http.status === 200 &&
+    dispatch.http.status === 200;
+  return {
+    observation,
+    pass,
+    note: { action: 'read-side-effects', clueId, facts },
+  };
+}
+
 function requireClueId(step: ScenarioStep, run: ScenarioContext): string {
   if (run.clueId === '') throw new Error(`step ${step.id} 缺少上下文 clueId（需先 register-clue）`);
   return run.clueId;
@@ -243,7 +385,7 @@ async function runStep(
 
   if (step.action === 'poll-verification') {
     const clueId = requireClueId(step, run);
-    const attempts = Math.min(15, Math.max(1, step.pollAttempts ?? 10));
+    const attempts = Math.min(60, Math.max(1, step.pollAttempts ?? 10));
     const intervalMs = Math.max(0, step.pollIntervalMs ?? 500);
     const history: { attempt: number; http: number; verificationStatus: string; label: string }[] = [];
     let observation: StepObservation = { http: { status: 0 }, body: {} };
@@ -267,10 +409,16 @@ async function runStep(
       if (attempt < attempts) await sleep(intervalMs);
     }
     const finalStatus = history.at(-1)?.verificationStatus ?? '';
-    // worker 没跑成或未起都只记录观测，不把整环判红。
+    const expectedStatus = step.expectVerificationStatus ?? '';
+    // 未收紧时：worker 没跑成或未起都只记录观测，不把整环判红。
+    // 收紧后：只有落到指定核查状态才算过。空地址失败与图层查成用的是这条。
+    const statusOk =
+      expectedStatus === ''
+        ? OBSERVED_VERIFICATION.has(finalStatus)
+        : finalStatus === expectedStatus;
     return {
       observation,
-      pass: observation.http.status === 200 && OBSERVED_VERIFICATION.has(finalStatus),
+      pass: observation.http.status === 200 && statusOk,
       note: {
         action: 'poll-verification',
         attemptsUsed: history.length,
@@ -390,6 +538,23 @@ async function runStep(
     };
   }
 
+  if (step.action === 'retry-verification') {
+    const clueId = requireClueId(step, run);
+    const observation = await jsonRequest(ctx, cookie, 'POST', `/api/clues/${clueId}/verification/retry`);
+    return {
+      observation,
+      pass: observation.http.status === 200,
+      note: {
+        action: 'retry-verification',
+        verificationStatus: asText(observation.body.verificationStatus),
+      },
+    };
+  }
+
+  if (step.action === 'read-side-effects') {
+    return readSideEffects(ctx, step, run, cookie);
+  }
+
   throw new Error(`本轮 harness 不支持 action=${step.action}`);
 }
 
@@ -430,8 +595,10 @@ export async function runApiScenario(
     orgUnitIds: new Map(),
   };
   let last: StepResult | null = null;
+  let stepsPass = true;
   for (const step of scenario.steps) {
     last = await runStep(ctx, step, run);
+    if (!last.pass) stepsPass = false;
     const isLast = step === scenario.steps[scenario.steps.length - 1];
     if (!isLast) {
       const evidence = {
@@ -468,7 +635,8 @@ export async function runApiScenario(
   const asserts = scenario.oracle?.assert ?? [];
   const failures = evaluateOracle(last.observation, asserts);
   // 末步以 oracle 为准：负例的「正确拒绝」本身就是动作层面的非 2xx。
-  const pass = failures.length === 0;
+  // strictSteps 另要求中间步也过，避免轮询没落到指定状态仍被末步 oracle 放过。
+  const pass = failures.length === 0 && (scenario.strictSteps !== true || stepsPass);
   const lastStep = scenario.steps[scenario.steps.length - 1];
   const evidence = {
     http: last.observation.http,

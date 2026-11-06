@@ -1,0 +1,84 @@
+{
+  "id": "vf-sc-auto-verify-land-success",
+  "status": "runnable",
+  "driver": "api",
+  "kind": "happy",
+  "strictSteps": true,
+  "title": "土地线索：假图层七层有相交，自动核查完成并进入待分派",
+  "profileRefs": ["vf-case-02-occupy-without-approval"],
+  "identityRefs": ["clerk-a", "intake-a"],
+  "featureMapRefs": ["nav.workbench.verify.step2", "nav.workbench.dispatch.step3", "nav.clue.center"],
+  "requiresLayers": "configured",
+  "steps": [
+    {
+      "id": "register",
+      "action": "register-clue",
+      "fromProfile": "vf-case-02-occupy-without-approval",
+      "path": "stages.register.system",
+      "identityRef": "clerk-a",
+      "mutate": {
+        "setValues": {
+          "clue.narrative": "vf-自动核查成功：七层有相交"
+        },
+        "overrideSpatial": {
+          "type": "Feature",
+          "properties": {},
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [113.241, 23.051],
+                [113.249, 23.051],
+                [113.249, 23.059],
+                [113.241, 23.059],
+                [113.241, 23.051]
+              ]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "poll-verification",
+      "action": "poll-verification",
+      "identityRef": "clerk-a",
+      "expectVerificationStatus": "done",
+      "pollAttempts": 60,
+      "pollIntervalMs": 500
+    },
+    {
+      "id": "side-effects",
+      "action": "read-side-effects",
+      "identityRef": "clerk-a",
+      "dispatchIdentityRef": "intake-a",
+      "listIdentityRef": "intake-a"
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assert": [
+      { "path": "http.status", "op": "eq", "value": 200 },
+      { "path": "body.facts.verificationStatus", "op": "eq", "value": "done" },
+      { "path": "body.facts.trigger", "op": "eq", "value": "auto" },
+      { "path": "body.facts.runNo", "op": "eq", "value": 1 },
+      { "path": "body.facts.overlappedCount", "op": "eq", "value": 7 },
+      { "path": "body.facts.unavailableCount", "op": "eq", "value": 0 },
+      { "path": "body.facts.positiveOverlapRatios", "op": "includes", "value": 1 },
+      { "path": "body.facts.hasArtifacts", "op": "eq", "value": true },
+      { "path": "body.facts.reportHttp", "op": "eq", "value": 200 },
+      { "path": "body.facts.analysisHttp", "op": "eq", "value": 200 },
+      { "path": "body.facts.reportOverlapAreas", "op": "includes", "value": 1000 },
+      { "path": "body.facts.analysisKinds", "op": "includes", "value": "clue-part" },
+      { "path": "body.facts.analysisKinds", "op": "includes", "value": "layer-feature" },
+      { "path": "body.facts.analysisKinds", "op": "includes", "value": "intersection" },
+      { "path": "body.facts.clueStatus", "op": "eq", "value": "in_pool" },
+      { "path": "body.facts.duplicateGroupCount", "op": "eq", "value": 0 },
+      { "path": "body.facts.mayDecide", "op": "eq", "value": false },
+      { "path": "body.facts.mayAssignOrg", "op": "eq", "value": false },
+      { "path": "body.facts.otherDispatch.mayAssignOrg", "op": "eq", "value": true },
+      { "path": "body.facts.listRow.status", "op": "eq", "value": "in_pool" },
+      { "path": "body.facts.listRow.verificationStatus", "op": "eq", "value": "done" }
+    ]
+  },
+  "notes": "须先叠验证 overlay，七个 NE_LAYER_URL_* 指向假图层。经度带 [113.2, 113.3) 让假服务七层都回相交比例 1。无查重命中，主状态进待分派池。下一待办归本机构内勤（intake-a 的 mayAssignOrg）。录入人 clerk-a 不能派机构。"
+}
