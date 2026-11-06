@@ -17,9 +17,9 @@
 | ---- | ---- | ---- | ---- | ---- | ---- | ---- |
 | `nav.workbench` | 统一工作台 | `/workbench` | 各业务角色 | — | 主导航「工作台」 | false |
 | `nav.workbench.register` | 线索登记壳 | `/workbench/register` | 内勤等有登记权 | `vf-sc-register-*`、`vf-sc-verify-loop-ui-login-register` | `#clue-source`（线索来源*）；`#clue-domain`（法域*）；`button[type=submit].btn-primary`「保存」；动态要件 `htmlFor=clue-<key>`；确认 `button[data-role=confirm-save]` | true |
-| `nav.workbench.verify.step2` | 内业核查续办 | `/workbench?step=2&clue=:id`；可选 `/clue?tab=verification&clue=:id` | 经办/内勤 | `vf-sc-verify-loop-ui-verify-dispatch` | `.card` 含「内业核查」；状态标签「已完成／没跑成／核查进行中／不设内业核查」；错误卡「内业核查没有加载出来」不算通过 | false |
+| `nav.workbench.verify.step2` | 内业核查续办 | `/workbench?step=2&clue=:id`；可选 `/clue?view=all&clue=:id&tab=verification` | 经办/内勤 | `vf-sc-verify-loop-ui-verify-dispatch`、`vf-sc-auto-verify-land-success`、`vf-sc-auto-verify-land-partial`、`vf-sc-auto-verify-land-empty-failed`、`vf-sc-auto-verify-land-duplicate` | `.card` 含「内业核查」；状态标签「已完成／没跑成／核查进行中／不设内业核查」；图层三态「有相交／无相交／查不成」；相交比例如 `100.0%`、`25.0%`；「下载核查报告」「下载分析图」；失败时「手动重跑」「线索照常可以分派」「缺图层」；错误卡「内业核查没有加载出来」不算通过 | false |
 | `nav.workbench.dispatch.step3` | 分派决定续办 | `/workbench?step=3&clue=:id` | 经办/内勤/监督 | `vf-sc-verify-loop-ui-verify-dispatch` | `[data-role=decide-panel]`、`[data-role=decide-hold]`、`[data-role=decide-dispatch]`、`[data-role=assign-org-panel]`、`[data-role=assign-org]`、`[data-role=assign-people-panel]`、`[data-role=assign-people]`、`[data-role=assign-readonly]`、`[data-role=assigned]`、`#dispatch-org`、`#dispatch-main`；无权限兜底文案「待分派池的线索由本机构内勤派出」／「分派决定由录入人完成」；`UI_CLICK_WRITE` 尽量点 decide-dispatch／assign-org／assign-people（禁用则记 skipped） | true |
-| `nav.clue.center` | 线索中心 | `/clue` | 内勤/经办/监督 | `vf-sc-dispatch-*`、`vf-sc-duplicate-*` | 列表行、分派/决定操作 | true |
+| `nav.clue.center` | 线索中心 | `/clue`；查重页签 `/clue?view=all&clue=:id&tab=duplicate` | 内勤/经办/监督 | `vf-sc-dispatch-*`、`vf-sc-duplicate-*`、`vf-sc-auto-verify-land-success`、`vf-sc-auto-verify-land-duplicate` | 列表行；查重页签「没有疑似重复」或「与 … 疑似重复」加表头「占本线索」 | true |
 | `nav.clue.register.legacy` | 旧登记入口 | `/clue/register` → 重定向工作台 | — | — | 勿直接测；应落到 register 壳 | false |
 
 ## 案件

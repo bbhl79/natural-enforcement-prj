@@ -15,6 +15,14 @@
 
 分派视图默认用本步身份读取；承办机构内勤读不到录入机构视图时，步骤可声明 `viewIdentityRef`（如录入人）单独读视图。
 
+开发环境自动核查（空地址失败，以及假图层上的成功、部分命中、疑似重复）：
+
+```bash
+.cursor/skills/verify-natural-enforcement/harness/run-auto-verification.sh
+```
+
+假图层说明见 `layers/README.md`。页面取证只 headless。
+
 入口：容器内 `./dev test integration`（`integration/verify-skill-loop.test.ts`）。
 禁止在宿主机 `pnpm install`。
 
