@@ -3,7 +3,7 @@
 // POST /api/clues/:id/decide        分派决定（派／不派，默认不派／已知晓／举报必派）
 // POST /api/clues/:id/assign-org    派机构（首次分派／重新分派／指定管辖）
 // POST /api/clues/:id/assign-people 派主办／协办
-// GET  /api/clues/:id/dispatch      分派视图（决定步、两步分派与辖区建议共用一个取数口）
+// GET  /api/clues/:id/dispatch      分派视图（录入机构或已有承办机构可读；写规则不放宽）
 //
 // 状态写动作带 expectedStatus，冲突 409 concurrent-change；失败一方有失败留痕、业务行不变。
 
