@@ -17,6 +17,7 @@ const LAYER_SCENARIOS = [
   'vf-sc-auto-verify-land-success',
   'vf-sc-auto-verify-land-partial',
   'vf-sc-auto-verify-land-duplicate',
+  'vf-sc-auto-verify-mineral-success',
 ] as const;
 
 function arg(name: string): string {
@@ -99,6 +100,7 @@ async function writeManifest(runDir: string, baseUrl: string): Promise<void> {
       success: await clueOf(runDir, 'vf-sc-auto-verify-land-success', 'register').catch(() => null),
       partial: await clueOf(runDir, 'vf-sc-auto-verify-land-partial', 'register').catch(() => null),
       duplicate: await clueOf(runDir, 'vf-sc-auto-verify-land-duplicate', 'register-b').catch(() => null),
+      mineral: await clueOf(runDir, 'vf-sc-auto-verify-mineral-success', 'register').catch(() => null),
     },
   };
   await fs.writeFile(path.join(runDir, 'clue-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
@@ -107,13 +109,41 @@ async function writeManifest(runDir: string, baseUrl: string): Promise<void> {
 async function main(): Promise<void> {
   const runId = arg('--run-id');
   const baseUrl = (process.env.VERIFY_BASE_URL ?? 'https://localhost:8080').replace(/\/$/, '');
-  const scenarios = [...EMPTY_SCENARIOS, ...LAYER_SCENARIOS];
+  const mineralOnly = process.env.VERIFY_PHASE === 'mineral';
+  const scenarios = mineralOnly
+    ? ['vf-sc-auto-verify-mineral-success']
+    : [...EMPTY_SCENARIOS, ...LAYER_SCENARIOS];
   const writer = new EvidenceWriter(runId, scenarios, 'cursor-cloud-vm');
   await writer.init();
   const sessions = new SessionCache(baseUrl);
   const ctx = { baseUrl, sessions };
   let blocked = false;
   try {
+    if (mineralOnly) {
+      overlay('on');
+      await runApiScenario(ctx, 'vf-sc-auto-verify-mineral-success', writer);
+      await writeManifest(writer.runDir, baseUrl);
+      const mineralUi = uiHook('mineral', writer.runDir);
+      if (mineralUi !== null) {
+        await writer.writeStep({
+          scenarioId: '_ui',
+          stepId: 'mineral',
+          pass: false,
+          expected: { exit: 0 },
+          actual: { error: mineralUi },
+          evidence: [],
+        });
+      }
+      const summary = await writer.finish(blocked ? 'blocked' : 'passed');
+      await writeManifest(writer.runDir, baseUrl);
+      const manifestPath = path.join(writer.runDir, 'clue-manifest.json');
+      const manifest = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as Record<string, unknown>;
+      manifest.summary = summary;
+      await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+      console.log(JSON.stringify({ status: summary.status, runDir: writer.runDir, failed: summary.failed }));
+      if (summary.status !== 'passed') process.exitCode = 1;
+      return;
+    }
     await ensureIntake(sessions, baseUrl);
     overlay('off');
     for (const id of EMPTY_SCENARIOS) {

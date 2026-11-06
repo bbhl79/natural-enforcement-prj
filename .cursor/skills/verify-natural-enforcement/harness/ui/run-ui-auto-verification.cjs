@@ -177,6 +177,34 @@ async function main() {
       }
     }
 
+    if (ONLY === 'mineral' || ONLY === 'all') {
+      const mineral = clues.mineral;
+      if (!mineral?.clueId) {
+        record('mineral', 'missing-clue', false, { clueId: 'required' }, { mineral }, []);
+        failed = true;
+      } else {
+        failed =
+          (await runCase(browser, 'mineral', CLERK_MOBILE, async (page, scenarioId) => {
+            await openWorkbench(page, 2, mineral.clueId);
+            const text = await bodyText(page);
+            const missing = includesAll(text, ['已完成', '有相交', '100.0%', '下载核查报告', '下载分析图']);
+            const picture = await shot(page, scenarioId, '01-step2');
+            const report = await saveDownload(page, mineral.clueId, 'report', scenarioId);
+            const analysis = await saveDownload(page, mineral.clueId, 'analysis', scenarioId);
+            const downloadsOk = report.status === 200 && analysis.status === 200;
+            record(
+              scenarioId,
+              'step2',
+              missing.length === 0 && downloadsOk,
+              { texts: ['已完成', '有相交', '100.0%', '下载核查报告', '下载分析图'], domain: 'mineral' },
+              { missing, report, analysis, snippet: text.slice(0, 500) },
+              [picture, report.rel, analysis.rel],
+            );
+            return missing.length > 0 || !downloadsOk;
+          })) || failed;
+      }
+    }
+
     if (ONLY === 'layers' || ONLY === 'all') {
       const success = clues.success;
       if (!success?.clueId) {

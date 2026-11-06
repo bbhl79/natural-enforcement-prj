@@ -271,6 +271,7 @@ async function readSideEffects(
   }
 
   const facts = {
+    domain: asText(verification.body.domain),
     verificationStatus: asText(verification.body.verificationStatus),
     verificationStatusLabel: asText(verification.body.verificationStatusLabel),
     clueStatus: asText(verification.body.clueStatus),
