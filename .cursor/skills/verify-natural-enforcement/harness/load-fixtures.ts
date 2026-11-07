@@ -35,6 +35,12 @@ export interface StepMutate {
   readonly setValues?: Record<string, string>;
   readonly setConfirm?: boolean;
   readonly overrideSpatial?: unknown;
+  /**
+   * 为 true 时，按 VERIFY_SPATIAL_SALT 平移 overrideSpatial。
+   * 同一跑次内相对位置不变。待派机构与待分派决定仍重合。已派机构那条不与它们重合。
+   * 平移后不撞上以往跑次留在开发库里的面。
+   */
+  readonly isolateSpatial?: boolean;
 }
 
 export interface ScenarioStep {
@@ -74,6 +80,24 @@ export interface ScenarioStep {
   readonly assistFrom?: string[];
   readonly designate?: boolean;
   readonly reason?: string;
+  /**
+   * read-dispatch-buttons：各身份自己读分派视图，核对已有按钮开关。
+   * 不改产品读取范围，也不改工作台清单过滤。
+   */
+  readonly matrix?: readonly DispatchButtonExpect[];
+  /** read-dispatch-buttons：200 响应里的线索主状态必须是这个值。 */
+  readonly expectClueStatus?: string;
+}
+
+/** 一个身份在分派视图上的按钮开关。403 行只核 http 与 reason。 */
+export interface DispatchButtonExpect {
+  readonly identityRef: string;
+  readonly http: number;
+  readonly reason?: string;
+  readonly mayDecide?: boolean;
+  readonly mayAssignOrg?: boolean;
+  readonly mayAssignPeople?: boolean;
+  readonly mayReassignOrg?: boolean;
 }
 
 export interface ApiScenario {

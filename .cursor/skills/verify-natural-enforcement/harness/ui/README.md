@@ -78,3 +78,14 @@ UI_CLICK_WRITE=0 CLUE_ID=<clue-id> EXPECT_STATUS=in_pool ./.cursor/skills/verify
 ```
 
 甲所内勤登录后打开 `/workbench?step=3&clue=`，点击现有「派出承办人」。证据在 `.run/verify-assign-people-*`，脚本用 `cp` 再复制到 `artifacts/`。
+
+## 下一待办按钮（状态 × 身份）
+
+```bash
+.cursor/skills/verify-natural-enforcement/harness/run-next-todo-buttons.sh
+```
+
+只读核对已有按钮。不点写。
+未派机构时，甲所内勤打开办理页得到「分派办理没有加载出来」（GET dispatch 403 `scope-denied`）。
+已派到甲所后，同一页可见「派出承办人」和「重新分派」，不再出现「分派办理没有加载出来」。
+工作台清单只做观察，不另写过滤规则。没有 rsync 时，脚本用 cp 把截图和 trace 拷进 `.run`。

@@ -12,8 +12,19 @@
 | `decide` | 仅当视图状态 `pending_decision` 时 `POST /api/clues/:id/decide`；否则记 skipped 证据继续 |
 | `assign-org` | `POST /api/clues/:id/assign-org`；机构按 `orgUnitCode` 从 `/api/org-units` 解析，或 `orgUnitFrom=assignment` |
 | `assign-people` | `POST /api/clues/:id/assign-people`；主办／协办按工号从视图 `candidates` 解析 |
+| `read-dispatch-buttons` | 矩阵里的每个身份自己 `GET /api/clues/:id/dispatch`，核已有按钮开关。403 原样记下。 |
 
-分派视图默认用本步身份读取；承办机构内勤读不到录入机构视图时，步骤可声明 `viewIdentityRef`（如录入人）单独读视图。
+下一待办按钮（不改产品权限，不改工作台过滤）：
+
+```bash
+.cursor/skills/verify-natural-enforcement/harness/run-next-todo-buttons.sh
+```
+
+页面只 headless，不点写。证据在 `.run/verify-<runId>/`。
+分派视图读取按录入机构或已有承办机构的并集核对。`readScope` 为 `entered-or-assigned-org`。
+未派机构时，甲所内勤仍是 403 `scope-denied`。已派到甲所后，甲所内勤 200，且 `mayAssignPeople=true`。
+
+分派视图默认用本步身份读取。未派机构时承办机构内勤读不到录入机构视图，步骤可声明 `viewIdentityRef`（如录入人）单独读视图。
 
 开发环境自动核查（空地址失败，以及假图层上的成功、部分命中、疑似重复）：
 

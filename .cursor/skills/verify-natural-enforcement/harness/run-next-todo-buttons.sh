@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# 下一待办按钮：API 矩阵 + headless 页面。
+# 不改产品权限。不叠假图层。不改产品编排。
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../../.." && pwd)"
+cd "$ROOT"
+RUN_ID="${VERIFY_RUN_ID:-$(TZ=Asia/Shanghai date +%Y%m%dT%H%M%S)-next-todo-buttons}"
+RUN_DIR="$ROOT/.run/verify-${RUN_ID}"
+mkdir -p "$RUN_DIR"
+CERT="${HOME}/.local/share/natural-enforcement/dev-certs/localhost.crt"
+
+echo "[next-todo-buttons] run=$RUN_DIR"
+if ! command -v docker >/dev/null 2>&1; then
+  echo "[FAIL] 本机没有 docker" | tee "$RUN_DIR/stack-blocked.txt"
+  exit 1
+fi
+
+./dev up
+
+export NODE_EXTRA_CA_CERTS="$CERT"
+export VERIFY_BASE_URL="${VERIFY_BASE_URL:-https://localhost:8080}"
+export VERIFY_SPATIAL_SALT="$RUN_ID"
+export VERIFY_EXTRA_PASSWORDS="${VERIFY_EXTRA_PASSWORDS:-Verify-assign-52!,Station-init-52!}"
+set +e
+node --experimental-transform-types --disable-warning=ExperimentalWarning \
+  "$ROOT/.cursor/skills/verify-natural-enforcement/harness/run-next-todo-buttons.ts" \
+  --run-id "$RUN_ID"
+API_RC=$?
+set -e
+
+MANIFEST="$RUN_DIR/clue-manifest.json"
+UI_RC=0
+if [[ -f "$MANIFEST" ]]; then
+  set +e
+  VERIFY_RUN_DIR="$RUN_DIR" \
+    VERIFY_EXTRA_PASSWORDS="$VERIFY_EXTRA_PASSWORDS" \
+    "$ROOT/.cursor/skills/verify-natural-enforcement/harness/ui/run-ui-next-todo-buttons.sh" \
+    "$MANIFEST"
+  UI_RC=$?
+  set -e
+fi
+if [[ "$API_RC" -ne 0 || "$UI_RC" -ne 0 ]]; then
+  echo "[next-todo-buttons] api=$API_RC ui=$UI_RC" >&2
+  exit 1
+fi
