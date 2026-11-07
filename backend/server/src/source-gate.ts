@@ -12,6 +12,11 @@ export const SOURCE_GATE_ALLOWED_SOURCES_ENV = 'NE_SOURCE_GATE_ALLOWED_SOURCES';
 
 const NON_PRODUCTION_DEPLOYMENTS = new Set(['dev', 'verify']);
 
+/** 与本仓库的 ProcessEnv 对齐：没有字符串索引签名，只含声明过的名字。 */
+type SourceGateEnv = Readonly<
+  Pick<ProcessEnv, 'NODE_ENV' | typeof SOURCE_GATE_DEPLOYMENT_ENV | typeof SOURCE_GATE_ALLOWED_SOURCES_ENV>
+>;
+
 interface Bucket {
   windowStartedAt: number;
   count: number;
@@ -23,9 +28,7 @@ interface Bucket {
  * 同时满足两项才返回名单：NE_DEPLOYMENT 为 dev 或 verify，NODE_ENV 去掉首尾空白后不是 production。
  * 其余情况返回空集。生产进程保持原闸。名单默认空。
  */
-export function resolveSourceGateAllowlist(
-  env: Readonly<Record<string, string | undefined>>,
-): ReadonlySet<string> {
+export function resolveSourceGateAllowlist(env: SourceGateEnv): ReadonlySet<string> {
   if ((env.NODE_ENV ?? '').trim() === 'production') return new Set();
   const deployment = (env[SOURCE_GATE_DEPLOYMENT_ENV] ?? '').trim();
   if (!NON_PRODUCTION_DEPLOYMENTS.has(deployment)) return new Set();
@@ -43,9 +46,7 @@ function parseAllowedSources(raw: string | undefined): ReadonlySet<string> {
 }
 
 /** 用当前进程环境构造来源地址闸。启动包只经这一处读允许名单。 */
-export function sourceGateForProcess(
-  env: Readonly<Record<string, string | undefined>>,
-): SourceGate {
+export function sourceGateForProcess(env: SourceGateEnv): SourceGate {
   return new SourceGate(resolveSourceGateAllowlist(env));
 }
 
