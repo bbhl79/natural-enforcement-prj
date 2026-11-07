@@ -4,3 +4,6 @@
 真实几何与叙事以对应 `case-profiles` 为准；本目录只放 meta。
 
 已有：`vf-sample-dup-hist-02.meta.json`（挂 `vf-sc-duplicate-land-overlap`）。
+该样本不是超长期终态 peer。
+超长期终态 peer 在 `fixtures/seeds/vf-hist-ancient-peer.json`。
+入口是 `harness/run-hist-dup-no-lookback.sh`。
