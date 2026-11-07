@@ -38,7 +38,7 @@ esac
 echo "[ui-next-todo-buttons] headless stage=$STAGE_DIR evidence=$EVIDENCE_HOST base=$BASE_URL_CTR"
 set +e
 docker run --rm \
-  --add-host "host.docker.internal:host-gateway" \
+  --add-host "host.docker.internal:${VF_HOST_IP:-host-gateway}" \
   -v "$STAGE_DIR:/work/evidence" \
   -e "EVIDENCE_DIR=/work/evidence" \
   -e "MANIFEST=/work/evidence/clue-manifest.json" \
