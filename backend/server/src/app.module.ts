@@ -83,7 +83,12 @@ import { PersonnelProfilesService } from './personnel-profiles.service.ts';
 import { SecrecyReportController } from './secrecy-report.controller.ts';
 import { SecrecyReportService } from './secrecy-report.service.ts';
 import { SessionGuard } from './session.guard.ts';
-import { SourceGate, sourceGateForProcess } from './source-gate.ts';
+import {
+  SOURCE_GATE_ALLOWED_SOURCES_ENV,
+  SOURCE_GATE_DEPLOYMENT_ENV,
+  SourceGate,
+  sourceGateForProcess,
+} from './source-gate.ts';
 import { StorageQuarantineController } from './storage-quarantine.controller.ts';
 import { StorageQuarantineService } from './storage-quarantine.service.ts';
 import { WorkbenchController } from './workbench.controller.ts';
@@ -180,7 +185,14 @@ import { WorkbenchService } from './workbench.service.ts';
     ClueDuplicateService,
     ClueCenterService,
     WorkbenchService,
-    { provide: SourceGate, useFactory: () => sourceGateForProcess(process.env) },
+    {
+      provide: SourceGate,
+      useFactory: () => sourceGateForProcess({
+        NODE_ENV: process.env.NODE_ENV,
+        [SOURCE_GATE_DEPLOYMENT_ENV]: process.env[SOURCE_GATE_DEPLOYMENT_ENV],
+        [SOURCE_GATE_ALLOWED_SOURCES_ENV]: process.env[SOURCE_GATE_ALLOWED_SOURCES_ENV],
+      }),
+    },
     { provide: APP_GUARD, useClass: SessionGuard },
   ],
 })

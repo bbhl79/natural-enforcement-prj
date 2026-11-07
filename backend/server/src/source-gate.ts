@@ -12,10 +12,12 @@ export const SOURCE_GATE_ALLOWED_SOURCES_ENV = 'NE_SOURCE_GATE_ALLOWED_SOURCES';
 
 const NON_PRODUCTION_DEPLOYMENTS = new Set(['dev', 'verify']);
 
-/** 与本仓库的 ProcessEnv 对齐：没有字符串索引签名，只含声明过的名字。 */
-type SourceGateEnv = Readonly<
-  Pick<ProcessEnv, 'NODE_ENV' | typeof SOURCE_GATE_DEPLOYMENT_ENV | typeof SOURCE_GATE_ALLOWED_SOURCES_ENV>
->;
+/** 本闸只读这三个名字。单独声明，避免撞上仓内另一份 ProcessEnv。 */
+interface SourceGateEnv {
+  readonly NODE_ENV?: string | undefined;
+  readonly NE_DEPLOYMENT?: string | undefined;
+  readonly NE_SOURCE_GATE_ALLOWED_SOURCES?: string | undefined;
+}
 
 interface Bucket {
   windowStartedAt: number;
