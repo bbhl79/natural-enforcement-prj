@@ -22,6 +22,10 @@ export interface NewSession {
 export interface SessionStore {
   insert(row: NewSession): Promise<void>;
   findBySecretHash(secretHash: string): Promise<SessionRow | null>;
+  /**
+   * 把活动时间向前推进。库中时间已不早于本次，或会话已结束时，不写。
+   * 这样后到的更早更新不会触发「last_seen_at 不可倒退」。
+   */
   touch(id: string, lastSeenAt: Date): Promise<void>;
   /**
    * 结束一段尚未结束的会话（条件更新：ended_at 为空才写），返回是否实际结束。

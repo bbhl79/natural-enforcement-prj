@@ -250,7 +250,12 @@ class PrismaSessionStore implements SessionStore {
   }
 
   async touch(id: string, lastSeenAt: Date): Promise<void> {
-    await this.prisma.authSession.update({ where: { id }, data: { lastSeenAt } });
+    // 条件更新：只在会话未结束、且库中时间更早时推进。
+    // 并发或重跑时后写的时间更早，无条件 UPDATE 会触发「last_seen_at 不可倒退」并变成 500。
+    await this.prisma.authSession.updateMany({
+      where: { id, endedAt: null, lastSeenAt: { lt: lastSeenAt } },
+      data: { lastSeenAt },
+    });
   }
 
   async end(id: string, endedAt: Date, reason: string): Promise<boolean> {
