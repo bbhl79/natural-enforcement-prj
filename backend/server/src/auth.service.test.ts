@@ -626,3 +626,15 @@ describe('会话结束的先后（#116）', () => {
     expect(sessions.rows.find((row) => row.id === created[2])!.endedAt).toBeNull();
   });
 });
+
+describe('来源地址闸允许名单（#317）', () => {
+  it('名单内来源记满十次后口令正确仍写 login.succeeded', async () => {
+    gate = new SourceGate(new Set([IP]));
+    addAccount();
+    blockSource();
+    const outcome = await login(GOOD);
+    expect(outcome.status).toBe(200);
+    expect(actions()).toEqual(['login.succeeded']);
+    expect(gate.blocked(IP, new Date(clock.millis))).toBe(false);
+  });
+});
