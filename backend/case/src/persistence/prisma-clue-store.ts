@@ -1883,6 +1883,7 @@ export class PrismaClueStore implements ClueStore {
   /**
    * 标签 create-on-use：库里没有的当场新建，共享库随登记留痕。
    * 已有同名标签时只挂线索，不新建库行。
+   * 挂线索必须用库里那一行的 id。候选 libraryId 只在新建库行时写入。
    */
   private async insertTags(
     clueId: string,
@@ -1891,15 +1892,20 @@ export class PrismaClueStore implements ClueStore {
     if (tags.length === 0) return;
     const names = tags.map((tag) => tag.name);
     const existing = await this.prisma.clueTagLibrary.findMany({ where: { name: { in: names } } });
-    const known = new Set(existing.map((row) => row.name));
-    const fresh = tags.filter((tag) => !known.has(tag.name));
+    const libraryIdByName = new Map(existing.map((row) => [row.name, row.id]));
+    const fresh = tags.filter((tag) => !libraryIdByName.has(tag.name));
     if (fresh.length > 0) {
       await this.prisma.clueTagLibrary.createMany({
         data: fresh.map((tag) => ({ id: tag.libraryId, name: tag.name })),
       });
     }
     await this.prisma.clueTag.createMany({
-      data: tags.map((tag) => ({ id: tag.id, clueId, libraryId: tag.libraryId, name: tag.name })),
+      data: tags.map((tag) => ({
+        id: tag.id,
+        clueId,
+        libraryId: libraryIdByName.get(tag.name) ?? tag.libraryId,
+        name: tag.name,
+      })),
     });
   }
 
