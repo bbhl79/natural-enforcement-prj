@@ -36,6 +36,10 @@ printf '%s\n' '{"seed":"<与 SEED_PASSWORD 相同>"}' > .run/verify-secrets.loca
 
 旅程 `identityRefs` 填上表 `id`。
 
+业务跑次只读取本目录和已声明口令。
+不得在 scenario 里遍历口令。
+身份准备见 `../../harness/IDENTITY-PREP.md`。
+
 不收录 `e2e/cases/06-bootstrap.sh`、`07-day-one.sh` 运行时临时建出的人员；那些账号用例结束即删，不进本目录。
 
 `identity.example.json` 仍是字段模板，不参与跑次引用。

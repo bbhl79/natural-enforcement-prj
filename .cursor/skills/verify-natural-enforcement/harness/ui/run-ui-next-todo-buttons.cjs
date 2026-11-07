@@ -11,22 +11,30 @@
  *   EVIDENCE_DIR
  *   MANIFEST  clue-manifest.json
  *   SEED_PASSWORD
- *   VERIFY_NEW_PASSWORD
- *   VERIFY_EXTRA_PASSWORDS
+ *   VERIFY_LOGIN_PASSWORD  可选。设置后整次只使用这一口令。
+ *   VERIFY_NEW_PASSWORD  仅用于登录已成功后的一次产品更换口令。
  */
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
+
+function loadAuthGate() {
+  const candidates = [
+    path.join(__dirname, 'auth-gate.cjs'),
+    path.join(__dirname, '..', 'auth-gate.cjs'),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return require(candidate);
+  }
+  throw new Error('缺少 auth-gate.cjs');
+}
+const { AuthGateError, changePasswordOnce, isAuthGateError, loginPageOnce, loginPassword } = loadAuthGate();
 
 const BASE_URL = (process.env.BASE_URL || 'https://host.docker.internal:8080').replace(/\/$/, '');
 const EVIDENCE_DIR = process.env.EVIDENCE_DIR;
 const MANIFEST = process.env.MANIFEST || '';
 const SEED_PASSWORD = process.env.SEED_PASSWORD || 'Seed-pass-52';
 const NEW_PASSWORD = process.env.VERIFY_NEW_PASSWORD || 'Verify-skill-loop-52!';
-const EXTRA_PASSWORDS = (process.env.VERIFY_EXTRA_PASSWORDS || '')
-  .split(',')
-  .map((item) => item.trim())
-  .filter((item) => item.length > 0);
 const HEADED = process.env.HEADED === '1' || process.env.PW_HEADED === '1';
 const SCENARIO_ID = 'vf-sc-next-todo-buttons';
 
@@ -150,6 +158,7 @@ function record(stepId, pass, expected, actual, evidence) {
 async function main() {
   const browser = await chromium.launch({ headless: !HEADED });
   let failed = false;
+  let blocked = false;
   try {
     for (const person of PEOPLE) {
       const context = await browser.newContext({
@@ -166,42 +175,18 @@ async function main() {
         return rel;
       };
 
-      async function doLogin(pw) {
-        await page.goto(`${BASE_URL}/auth/login`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-        await page.getByRole('textbox', { name: '手机号' }).waitFor({ state: 'visible', timeout: 30000 });
-        await page.getByRole('textbox', { name: '手机号' }).fill(person.mobile);
-        await page.locator('input[name="password"]').fill(pw);
-        await Promise.all([
-          page.waitForURL((url) => !String(url).includes('/auth/login'), { timeout: 20000 }).catch(() => null),
-          page.getByRole('button', { name: '登录' }).click(),
-        ]);
-        await page.waitForTimeout(800);
-      }
-
-      const passwords = [SEED_PASSWORD, NEW_PASSWORD, ...EXTRA_PASSWORDS];
-      for (const password of passwords) {
-        if (!page.url().includes('/auth/login') && page.url() !== 'about:blank') break;
-        await doLogin(password);
-      }
-      if (page.url().includes('/auth/password')) {
-        await page.locator('input[name="newPassword"]').fill(NEW_PASSWORD);
-        await page.locator('input[name="confirmPassword"]').fill(NEW_PASSWORD);
-        await Promise.all([
-          page.waitForURL((url) => !String(url).includes('password'), { timeout: 30000 }).catch(() => null),
-          page.getByRole('button', { name: '更换口令' }).click(),
-        ]);
-        await page.waitForTimeout(800);
-      }
+      await loginPageOnce(page, BASE_URL, person.mobile, loginPassword(SEED_PASSWORD));
+      await changePasswordOnce(page, NEW_PASSWORD);
       const loginPass = !page.url().includes('/auth/login') && !page.url().includes('/auth/password');
       const eLogin = await shot(`${person.id}-00-login`);
       record(
         `login-${person.id}`,
         loginPass,
-        { identity: person.id },
+        { identity: person.id, attempts: 1 },
         { url: page.url(), label: person.label },
         [eLogin],
       );
-      if (!loginPass) failed = true;
+      if (!loginPass) throw new AuthGateError('auth-rejected', null, `${person.id} 登录未离开门禁页`);
 
       await page.goto(`${BASE_URL}/workbench`, { waitUntil: 'domcontentloaded', timeout: 60000 });
       await page.locator('text=我的待办').first().waitFor({ state: 'visible', timeout: 30000 }).catch(() => null);
@@ -344,12 +329,13 @@ async function main() {
       await context.close();
     }
   } catch (err) {
-    failed = true;
+    if (isAuthGateError(err)) blocked = true;
+    else failed = true;
     record('harness-error', false, { ok: true }, { error: String((err && err.stack) || err) }, []);
   }
   await browser.close();
   const summary = {
-    status: failed ? 'failed' : 'passed',
+    status: blocked ? 'blocked' : failed ? 'failed' : 'passed',
     failed: steps.filter((row) => !row.pass).map((row) => row.stepId),
     mode: HEADED ? 'headed' : 'headless',
     baseUrl: BASE_URL,
@@ -357,7 +343,7 @@ async function main() {
   };
   fs.writeFileSync(path.join(EVIDENCE_DIR, 'summary.json'), JSON.stringify(summary, null, 2));
   console.log(JSON.stringify(summary));
-  process.exit(failed ? 1 : 0);
+  process.exit(blocked || failed ? 1 : 0);
 }
 
 main().catch((err) => {

@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+import { summaryStatus } from './auth-gate.cjs';
 import { repoRoot } from './paths.ts';
 
 export interface RunManifest {
@@ -72,11 +73,10 @@ export class EvidenceWriter {
     this.manifest.endedAt = new Date().toISOString();
     await this.writeJson('manifest.json', this.manifest);
     const summary: RunSummary = {
-      status: this.failed.length > 0 && status === 'passed' ? 'failed' : status,
+      status: summaryStatus(status, this.failed.length),
       failed: [...this.failed],
       runDir: this.runDir,
     };
-    if (this.failed.length > 0) summary.status = 'failed';
     await this.writeJson('summary.json', summary);
     return summary;
   }

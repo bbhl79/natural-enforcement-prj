@@ -6,6 +6,18 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
 
+function loadAuthGate() {
+  const candidates = [
+    path.join(__dirname, 'auth-gate.cjs'),
+    path.join(__dirname, '..', 'auth-gate.cjs'),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return require(candidate);
+  }
+  throw new Error('缺少 auth-gate.cjs');
+}
+const { changePasswordOnce, isAuthGateError, loginPageOnce, loginPassword } = loadAuthGate();
+
 const BASE_URL = (process.env.BASE_URL || 'https://host.docker.internal:8080').replace(/\/$/, '');
 const EVIDENCE_DIR = process.env.EVIDENCE_DIR;
 const ONLY = process.env.VERIFY_UI_ONLY || 'all';
@@ -41,29 +53,8 @@ async function shot(page, scenarioId, name) {
 }
 
 async function login(page, mobile) {
-  async function once(password) {
-    await page.goto(`${BASE_URL}/auth/login`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.getByRole('textbox', { name: '手机号' }).waitFor({ state: 'visible', timeout: 30000 });
-    await page.getByRole('textbox', { name: '手机号' }).fill(mobile);
-    await page.locator('input[name="password"]').fill(password);
-    await Promise.all([
-      page.waitForURL((url) => !String(url).includes('/auth/login'), { timeout: 20000 }).catch(() => null),
-      page.getByRole('button', { name: '登录' }).click(),
-    ]);
-    await page.waitForTimeout(600);
-  }
-  await once(SEED_PASSWORD);
-  if (page.url().includes('/auth/login')) await once(NEW_PASSWORD);
-  if (page.url().includes('/auth/password')) {
-    await page.locator('input[name="newPassword"]').fill(NEW_PASSWORD);
-    await page.locator('input[name="confirmPassword"]').fill(NEW_PASSWORD);
-    await Promise.all([
-      page.waitForURL((url) => !String(url).includes('password'), { timeout: 30000 }).catch(() => null),
-      page.getByRole('button', { name: '更换口令' }).click(),
-    ]);
-    await page.waitForTimeout(600);
-  }
-  return !page.url().includes('/auth/login') && !page.url().includes('/auth/password');
+  await loginPageOnce(page, BASE_URL, mobile, loginPassword(SEED_PASSWORD));
+  await changePasswordOnce(page, NEW_PASSWORD);
 }
 
 async function openWorkbench(page, step, clueId) {
@@ -109,26 +100,31 @@ async function runCase(browser, scenarioId, mobile, visit) {
     }
   });
   let failed = false;
+  let gateError = null;
   try {
-    const loggedIn = await login(page, mobile);
+    await login(page, mobile);
     const loginShot = await shot(page, scenarioId, '00-login');
-    record(scenarioId, 'login', loggedIn, { leaveLogin: true }, { url: page.url(), mobile }, [loginShot]);
-    if (!loggedIn) {
-      failed = true;
-    } else {
-      failed = (await visit(page, scenarioId)) || failed;
-    }
+    record(scenarioId, 'login', true, { leaveLogin: true, attempts: 1 }, { url: page.url(), mobile }, [loginShot]);
+    failed = (await visit(page, scenarioId)) || failed;
   } catch (error) {
-    failed = true;
-    record(scenarioId, 'exception', false, { ok: true }, { error: String(error) }, []);
+    if (isAuthGateError(error)) {
+      record(scenarioId, 'login', false, { blocked: true }, { error: error.message, url: page.url() }, []);
+      gateError = error;
+    } else {
+      failed = true;
+      record(scenarioId, 'exception', false, { ok: true }, { error: String(error) }, []);
+    }
+  } finally {
+    fs.mkdirSync(path.join(EVIDENCE_DIR, scenarioId), { recursive: true });
+    fs.writeFileSync(
+      path.join(EVIDENCE_DIR, scenarioId, 'http.json'),
+      JSON.stringify(httpLog, null, 2),
+    );
+    const traceRel = `${scenarioId}/trace.zip`;
+    await context.tracing.stop({ path: path.join(EVIDENCE_DIR, traceRel) }).catch(() => null);
+    await context.close();
   }
-  fs.writeFileSync(
-    path.join(EVIDENCE_DIR, scenarioId, 'http.json'),
-    JSON.stringify(httpLog, null, 2),
-  );
-  const traceRel = `${scenarioId}/trace.zip`;
-  await context.tracing.stop({ path: path.join(EVIDENCE_DIR, traceRel) });
-  await context.close();
+  if (gateError) throw gateError;
   return failed;
 }
 
@@ -330,6 +326,13 @@ async function main() {
 }
 
 main().catch((error) => {
+  const blocked = isAuthGateError(error);
+  const summary = { status: blocked ? 'blocked' : 'failed', only: ONLY, error: String(error) };
+  try {
+    fs.writeFileSync(path.join(EVIDENCE_DIR, 'summary.json'), JSON.stringify(summary, null, 2));
+  } catch {
+    // 证据目录不可写时仍以非零退出。
+  }
   console.error(error);
   process.exit(1);
 });

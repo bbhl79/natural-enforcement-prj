@@ -9,6 +9,26 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
 
+function loadAuthGate() {
+  const candidates = [
+    path.join(__dirname, 'auth-gate.cjs'),
+    path.join(__dirname, '..', 'auth-gate.cjs'),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return require(candidate);
+  }
+  throw new Error('缺少 auth-gate.cjs');
+}
+const {
+  AuthGateError,
+  assertLoginAccepted,
+  assertNoSourceOverride,
+  changePasswordOnce,
+  isAuthGateError,
+  loginPageOnce,
+  loginPassword,
+} = loadAuthGate();
+
 const BASE_URL = (process.env.BASE_URL || 'https://host.docker.internal:8080').replace(/\/$/, '');
 const EVIDENCE_DIR = process.env.EVIDENCE_DIR;
 const SEED_PASSWORD = process.env.SEED_PASSWORD || 'Seed-pass-52';
@@ -59,31 +79,30 @@ async function getJson(cookie, apiPath) {
   return { status: response.status, body: await readBody(response) };
 }
 
-async function loginMobile(mobile, passwords) {
-  let last = null;
-  for (const password of passwords) {
-    const response = await fetch(`${BASE_URL}/api/auth/login`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ mobilePhone: mobile, password, rememberMe: false }),
+async function loginOnce(mobile, password) {
+  const headers = { 'content-type': 'application/json' };
+  assertNoSourceOverride(headers);
+  const response = await fetch(`${BASE_URL}/api/auth/login`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ mobilePhone: mobile, password, rememberMe: false }),
+  });
+  const body = await readBody(response);
+  assertLoginAccepted(response.status, body);
+  const cookie = sessionCookie(response);
+  const result = body.result;
+  let current = password;
+  if (result === 'password-change-required' || result === 'password-expired') {
+    const changed = await postJson(cookie, '/api/auth/password', {
+      currentPassword: password,
+      newPassword: FINAL_PASSWORD,
     });
-    const body = await readBody(response);
-    last = { status: response.status, body };
-    if (response.status !== 200) continue;
-    const cookie = sessionCookie(response);
-    const result = body.result;
-    if (result === 'password-change-required' || result === 'password-expired') {
-      const changed = await postJson(cookie, '/api/auth/password', {
-        currentPassword: password,
-        newPassword: FINAL_PASSWORD,
-      });
-      if (changed.status !== 200) {
-        throw new Error(`改密失败 ${mobile} ${changed.status} ${JSON.stringify(changed.body)}`);
-      }
+    if (changed.status !== 200) {
+      throw new AuthGateError('auth-rejected', changed.status, JSON.stringify(changed.body));
     }
-    return cookie;
+    current = FINAL_PASSWORD;
   }
-  throw new Error(`登录失败 ${mobile} ${JSON.stringify(last)}`);
+  return { cookie, password: current };
 }
 
 function square(offset) {
@@ -126,8 +145,9 @@ async function registerClue(cookie, offset) {
 
 async function main() {
   const notes = [];
-  const admin = await loginMobile('13800001231', [FINAL_PASSWORD, SEED_PASSWORD]);
-  const hq = await loginMobile('13800001004', [FINAL_PASSWORD, SEED_PASSWORD]);
+  const declared = loginPassword(SEED_PASSWORD);
+  const admin = (await loginOnce('13800001231', declared)).cookie;
+  const hq = (await loginOnce('13800001004', declared)).cookie;
   const tree = await getJson(hq, '/api/org-units');
   if (tree.status !== 200) throw new Error(`机构树 ${tree.status} ${JSON.stringify(tree.body)}`);
   const units = tree.body.orgUnits || [];
@@ -145,29 +165,33 @@ async function main() {
       roles: spec.roles,
     });
     notes.push({ ensure: spec.code, status: created.status, result: created.body.result, conflict: created.body.conflict });
-    if (created.status === 200) return loginMobile(spec.mobile, [INITIAL_PASSWORD]);
+    if (created.status === 200) return loginOnce(spec.mobile, INITIAL_PASSWORD);
     if (created.status === 409 && created.body.result === 'already-exists') {
-      return loginMobile(spec.mobile, [FINAL_PASSWORD, INITIAL_PASSWORD]);
+      if (!process.env.VERIFY_LOGIN_PASSWORD) {
+        throw new AuthGateError('auth-rejected', 409, `身份 ${spec.code} 已存在且未声明单一登录口令`);
+      }
+      return loginOnce(spec.mobile, process.env.VERIFY_LOGIN_PASSWORD);
     }
     throw new Error(`建员失败 ${spec.code} ${created.status} ${JSON.stringify(created.body)}`);
   }
 
-  const intake = await ensureClerk({
+  const intake = (await ensureClerk({
     code: 'P-INTAKE-A',
     name: '甲区内勤',
     orgUnitId: deptA.id,
     mobile: '13900002001',
     roles: ['内勤'],
-  });
-  const stationClerk = await ensureClerk({
+  })).cookie;
+  const stationSession = await ensureClerk({
     code: 'P-INTAKE-ST',
     name: '甲所内勤',
     orgUnitId: station.id,
     mobile: '13900002003',
     roles: ['内勤'],
   });
-  const clerk = await loginMobile('13800001002', [FINAL_PASSWORD, SEED_PASSWORD]);
-  const outsider = await loginMobile('13800001008', [FINAL_PASSWORD, SEED_PASSWORD]);
+  const stationClerk = stationSession.cookie;
+  const clerk = (await loginOnce('13800001002', declared)).cookie;
+  const outsider = (await loginOnce('13800001008', declared)).cookie;
 
   const offset = 59;
   const first = await registerClue(clerk, offset);
@@ -237,24 +261,13 @@ async function main() {
   };
 
   let failed = false;
+  let blocked = false;
   try {
-    await page.goto(`${BASE_URL}/auth/login`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await page.getByRole('textbox', { name: '手机号' }).fill('13900002003');
-    await page.locator('input[name="password"]').fill(FINAL_PASSWORD);
-    await Promise.all([
-      page.waitForURL((url) => !String(url).includes('/auth/login'), { timeout: 20000 }).catch(() => null),
-      page.getByRole('button', { name: '登录' }).click(),
-    ]);
-    await page.waitForTimeout(800);
-    if (page.url().includes('/auth/password')) {
-      await page.locator('input[name="newPassword"]').fill(FINAL_PASSWORD);
-      await page.locator('input[name="confirmPassword"]').fill(FINAL_PASSWORD);
-      await page.getByRole('button', { name: '更换口令' }).click();
-      await page.waitForTimeout(800);
-    }
+    await loginPageOnce(page, BASE_URL, '13900002003', stationSession.password);
+    await changePasswordOnce(page, FINAL_PASSWORD);
     await shot('01-after-login');
     if (page.url().includes('/auth/login') || page.url().includes('/auth/password')) {
-      throw new Error(`甲所内勤未离开登录 ${page.url()}`);
+      throw new AuthGateError('auth-rejected', null, `甲所内勤未离开登录 ${page.url()}`);
     }
 
     await page.goto(`${BASE_URL}/workbench?step=3&clue=${encodeURIComponent(clueId)}`, {
@@ -305,7 +318,8 @@ async function main() {
       throw new Error(`未写到 handler_assigned：页面 ${posted.status()} 回读 ${afterRead.body.status}`);
     }
   } catch (error) {
-    failed = true;
+    if (isAuthGateError(error)) blocked = true;
+    else failed = true;
     await shot('error').catch(() => null);
     writeJson('error.json', { message: String((error && error.stack) || error) });
   }
@@ -317,17 +331,22 @@ async function main() {
   await browser.close();
 
   const summary = {
-    status: failed ? 'failed' : 'passed',
+    status: blocked ? 'blocked' : failed ? 'failed' : 'passed',
     clueId,
     baseUrl: BASE_URL,
     mode: 'headless',
   };
   fs.writeFileSync(path.join(EVIDENCE_DIR, 'summary.json'), JSON.stringify(summary, null, 2));
   console.log(JSON.stringify(summary));
-  process.exit(failed ? 1 : 0);
+  process.exit(blocked || failed ? 1 : 0);
 }
 
 main().catch((error) => {
+  const blocked = isAuthGateError(error);
+  fs.writeFileSync(
+    path.join(EVIDENCE_DIR, 'summary.json'),
+    JSON.stringify({ status: blocked ? 'blocked' : 'failed', error: String((error && error.stack) || error) }, null, 2),
+  );
   fs.writeFileSync(
     path.join(EVIDENCE_DIR, 'evidence', 'error.json'),
     JSON.stringify({ message: String((error && error.stack) || error) }, null, 2),

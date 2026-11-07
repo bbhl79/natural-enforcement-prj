@@ -37,6 +37,16 @@
 入口：容器内 `./dev test integration`（`integration/verify-skill-loop.test.ts`）。
 禁止在宿主机 `pnpm install`。
 
+## 认证与传输门禁
+
+登录不是 200，或传输地址不可达时，summary 为 `blocked`，进程退出。
+同一次跑不得再试口令，不得改来源，不得清 Redis，不得用 SQL 改密，不得为清门禁重启。
+`BASE_URL` 不得指向 compose 服务名 `nginx`。
+`host.docker.internal` 不可达时停止。
+身份准备见 `IDENTITY-PREP.md`。
+业务跑次只使用 `VERIFY_LOGIN_PASSWORD` 或夹具种子口令中的一个。
+P1、P2、P3 不在本目录实现。见 `BACKLOG-STUBS.md`。
+
 本轮必绿：`vf-sc-verify-loop-survey-register`（01）、`vf-sc-verify-loop-land-register`（02）、
 `vf-sc-neg-type-unconfirmed`（01）、`vf-sc-neg-missing-narrative`（02）。
 

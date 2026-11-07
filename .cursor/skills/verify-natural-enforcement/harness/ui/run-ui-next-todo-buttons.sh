@@ -25,6 +25,7 @@ STAGE_ROOT="${VF_UI_STAGE_ROOT:-/tmp/ne-verify-ui}"
 STAGE_DIR="$STAGE_ROOT/next-todo-buttons-$(date +%H%M%S)-$$"
 mkdir -p "$EVIDENCE_HOST/evidence" "$EVIDENCE_HOST/steps" "$STAGE_DIR/evidence" "$STAGE_DIR/steps"
 cp "$ROOT/.cursor/skills/verify-natural-enforcement/harness/ui/run-ui-next-todo-buttons.cjs" "$STAGE_DIR/run-ui-next-todo-buttons.cjs"
+cp "$ROOT/.cursor/skills/verify-natural-enforcement/harness/auth-gate.cjs" "$STAGE_DIR/auth-gate.cjs"
 cp "$MANIFEST" "$STAGE_DIR/clue-manifest.json"
 
 BASE_URL_HOST="${BASE_URL:-https://localhost:8080}"
@@ -36,20 +37,32 @@ case "$BASE_URL_CTR" in
 esac
 
 echo "[ui-next-todo-buttons] headless stage=$STAGE_DIR evidence=$EVIDENCE_HOST base=$BASE_URL_CTR"
+HOST_IP="${VF_HOST_IP:-$(ip -4 addr show eth0 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1)}"
+if [[ -z "$HOST_IP" ]]; then
+  echo "[BLOCKED] host.docker.internal 缺少可达的 VF_HOST_IP。停止。" >&2
+  exit 1
+fi
+# shellcheck source=../transport-gate.sh
+. "$ROOT/.cursor/skills/verify-natural-enforcement/harness/transport-gate.sh"
+verify_transport_or_block "$BASE_URL_CTR" "$HOST_IP"
+LOGIN_ENV=()
+if [[ -n "${VERIFY_LOGIN_PASSWORD:-}" ]]; then
+  LOGIN_ENV+=(-e "VERIFY_LOGIN_PASSWORD=${VERIFY_LOGIN_PASSWORD}")
+fi
 set +e
 docker run --rm \
-  --add-host "host.docker.internal:${VF_HOST_IP:-host-gateway}" \
+  --add-host "host.docker.internal:${HOST_IP}" \
   -v "$STAGE_DIR:/work/evidence" \
   -e "EVIDENCE_DIR=/work/evidence" \
   -e "MANIFEST=/work/evidence/clue-manifest.json" \
   -e "BASE_URL=$BASE_URL_CTR" \
   -e "SEED_PASSWORD=${SEED_PASSWORD:-Seed-pass-52}" \
   -e "VERIFY_NEW_PASSWORD=${VERIFY_NEW_PASSWORD:-Verify-skill-loop-52!}" \
-  -e "VERIFY_EXTRA_PASSWORDS=${VERIFY_EXTRA_PASSWORDS:-}" \
   -e "HEADED=0" \
   -e "PLAYWRIGHT_BROWSERS_PATH=/ms-playwright" \
   -e "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1" \
   -e "npm_config_cache=/tmp/npm-cache" \
+  "${LOGIN_ENV[@]}" \
   "$BROWSER_IMAGE" \
   bash -lc 'cd /work/evidence && npm init -y >/dev/null 2>&1 && npm install --no-fund --no-audit playwright@1.64.1 && node run-ui-next-todo-buttons.cjs'
 RC=$?

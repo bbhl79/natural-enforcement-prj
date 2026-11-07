@@ -7,6 +7,7 @@
  *   BASE_URL   default https://host.docker.internal:8080
  *   EVIDENCE_DIR  required (mapped to .run/verify-<id>/)
  *   SEED_PASSWORD  default Seed-pass-52
+ *   VERIFY_LOGIN_PASSWORD  可选。设置后整次只使用这一口令。
  *   CLUE_ID  点击写必填；只读时可省略。用于探测 /workbench?step=2&clue=… and step=3
  *   EXPECT_STATUS optional: pending_decision | in_pool | org_assigned | handler_assigned
  *   HEADED / PW_HEADED =1 → headed (needs DISPLAY)
@@ -15,6 +16,18 @@
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
+
+function loadAuthGate() {
+  const candidates = [
+    path.join(__dirname, 'auth-gate.cjs'),
+    path.join(__dirname, '..', 'auth-gate.cjs'),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return require(candidate);
+  }
+  throw new Error('缺少 auth-gate.cjs');
+}
+const { AuthGateError, changePasswordOnce, isAuthGateError, loginPageOnce, loginPassword } = loadAuthGate();
 
 const BASE_URL = (process.env.BASE_URL || 'https://host.docker.internal:8080').replace(/\/$/, '');
 const EVIDENCE_DIR = process.env.EVIDENCE_DIR;
@@ -63,37 +76,14 @@ async function main() {
   };
 
   let failed = false;
+  let blocked = false;
   try {
-    async function doLogin(pw) {
-      await page.goto(`${BASE_URL}/auth/login`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-      await page.getByRole('textbox', { name: '手机号' }).waitFor({ state: 'visible', timeout: 30000 });
-      await page.getByRole('textbox', { name: '手机号' }).fill(MOBILE);
-      await page.locator('input[name="password"]').fill(pw);
-      await Promise.all([
-        page.waitForURL((url) => !String(url).includes('/auth/login'), { timeout: 20000 }).catch(() => null),
-        page.getByRole('button', { name: '登录' }).click(),
-      ]);
-      await page.waitForTimeout(800);
-      return page.url();
-    }
-
-    let afterLogin = await doLogin(SEED_PASSWORD);
-    if (afterLogin.includes('/auth/login')) {
-      afterLogin = await doLogin(NEW_PASSWORD);
-    }
-    if (page.url().includes('/auth/password')) {
-      await page.locator('input[name="newPassword"]').fill(NEW_PASSWORD);
-      await page.locator('input[name="confirmPassword"]').fill(NEW_PASSWORD);
-      await Promise.all([
-        page.waitForURL((url) => !String(url).includes('password'), { timeout: 30000 }).catch(() => null),
-        page.getByRole('button', { name: '更换口令' }).click(),
-      ]);
-      await page.waitForTimeout(800);
-    }
+    await loginPageOnce(page, BASE_URL, MOBILE, loginPassword(SEED_PASSWORD));
+    await changePasswordOnce(page, NEW_PASSWORD);
     const eLogin = await shot('01-after-login');
     const loginPass = !page.url().includes('/auth/login') && !page.url().includes('/auth/password');
-    record('login', loginPass, { leaveLoginOrChangePassword: true }, { url: page.url() }, [eLogin]);
-    if (!loginPass) failed = true;
+    record('login', loginPass, { leaveLoginOrChangePassword: true, attempts: 1 }, { url: page.url() }, [eLogin]);
+    if (!loginPass) throw new AuthGateError('auth-rejected', null, '登录后仍停在登录页或更换口令页');
 
     if (CLUE_ID === '') {
       record('clue-context', !CLICK_WRITE, { clueId: '点击写必填' }, { clueId: null, skipped: true }, []);
@@ -324,7 +314,8 @@ async function main() {
 
     await context.tracing.stop({ path: path.join(EVIDENCE_DIR, 'evidence', 'trace.zip') });
   } catch (err) {
-    failed = true;
+    if (isAuthGateError(err)) blocked = true;
+    else failed = true;
     const e = await shot('error').catch(() => null);
     record('harness-error', false, { ok: true }, { error: String((err && err.stack) || err) }, e ? [e] : []);
     try {
@@ -336,7 +327,7 @@ async function main() {
   await browser.close();
 
   const summary = {
-    status: failed ? 'failed' : 'passed',
+    status: blocked ? 'blocked' : failed ? 'failed' : 'passed',
     failed: steps.filter((s) => !s.pass).map((s) => `${SCENARIO_ID}/${s.stepId}`),
     runDir: EVIDENCE_DIR,
     mode: HEADED ? 'headed' : 'headless',
@@ -361,7 +352,7 @@ async function main() {
     ),
   );
   console.log(JSON.stringify(summary));
-  process.exit(failed ? 1 : 0);
+  process.exit(blocked || failed ? 1 : 0);
 }
 
 main().catch((err) => {

@@ -1,5 +1,11 @@
 import type { IdentityFixture } from './load-fixtures.ts';
 import { resolveSeedPassword } from './load-fixtures.ts';
+import {
+  assertLoginAccepted,
+  assertNoSourceOverride,
+  AuthGateError,
+  loginPassword,
+} from './auth-gate.cjs';
 
 const NEW_PASSWORD = 'Verify-skill-loop-52!';
 
@@ -10,7 +16,23 @@ function sessionCookie(response: Response): string {
   return pair;
 }
 
-/** 按身份夹具登录并强制改密；同 mobile 复用 Cookie。 */
+async function readBody(response: Response): Promise<unknown> {
+  const raw = await response.text();
+  if (raw === '') return {};
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return raw;
+  }
+}
+
+function resultOf(body: unknown): string {
+  if (typeof body !== 'object' || body === null || !('result' in body)) return '';
+  const result = body.result;
+  return typeof result === 'string' ? result : '';
+}
+
+/** 按身份夹具登录一次。失败即停。同 mobile 只复用已成功的 Cookie。 */
 export class SessionCache {
   private readonly cookies = new Map<string, string>();
 
@@ -20,51 +42,32 @@ export class SessionCache {
     const known = this.cookies.get(identity.id);
     if (known) return known;
 
-    const seedPassword = resolveSeedPassword(identity);
+    const headers = { 'content-type': 'application/json' };
+    assertNoSourceOverride(headers);
+    const password = loginPassword(resolveSeedPassword(identity));
     const login = await fetch(`${this.baseUrl}/api/auth/login`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers,
       body: JSON.stringify({
         mobilePhone: identity.mobile,
-        password: seedPassword,
+        password,
         rememberMe: false,
       }),
     });
-    if (login.status !== 200) {
-      // 持久开发库上，上一跑次已经把种子口令换成验证口令。再用验证口令登录，不再改密。
-      const extras = (process.env.VERIFY_EXTRA_PASSWORDS ?? '')
-        .split(',')
-        .map((item) => item.trim())
-        .filter((item) => item.length > 0);
-      let reused: string | null = null;
-      for (const password of [NEW_PASSWORD, ...extras]) {
-        const again = await fetch(`${this.baseUrl}/api/auth/login`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({
-            mobilePhone: identity.mobile,
-            password,
-            rememberMe: false,
-          }),
-        });
-        if (again.status !== 200) continue;
-        reused = sessionCookie(again);
-        break;
-      }
-      if (reused === null) {
-        throw new Error(`登录失败 ${identity.id}: HTTP ${login.status}`);
-      }
-      this.cookies.set(identity.id, reused);
-      return reused;
-    }
+    const body = await readBody(login);
+    assertLoginAccepted(login.status, body);
     const cookie = sessionCookie(login);
-    const changed = await fetch(`${this.baseUrl}/api/auth/password`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', cookie },
-      body: JSON.stringify({ currentPassword: seedPassword, newPassword: NEW_PASSWORD }),
-    });
-    if (changed.status !== 200) {
-      throw new Error(`改密失败 ${identity.id}: HTTP ${changed.status}`);
+    const result = resultOf(body);
+    if (result === 'password-change-required' || result === 'password-expired') {
+      const changed = await fetch(`${this.baseUrl}/api/auth/password`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie },
+        body: JSON.stringify({ currentPassword: password, newPassword: NEW_PASSWORD }),
+      });
+      if (changed.status !== 200) {
+        const detail = await changed.text();
+        throw new AuthGateError('auth-rejected', changed.status, detail);
+      }
     }
     this.cookies.set(identity.id, cookie);
     return cookie;
