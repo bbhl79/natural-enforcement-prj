@@ -40,3 +40,9 @@
 ```bash
 node --experimental-transform-types --disable-warning=ExperimentalWarning .cursor/skills/verify-natural-enforcement/harness/layers/protocol-self-check.mjs
 ```
+
+## 挂载约束（Podman / WSL）
+
+假图层脚本经命名卷 `verify-fake-layer` 灌入（`apply-layer-overlay.sh on` 时 tar 写入），**不要**再 bind WSL home 路径。
+Podman machine 看不见 WSL home：bind 后挂载点会变成空目录，容器报 `Cannot find module '/opt/.../fake-layer-server.mjs'`。
+同产品 `nginx-certs` 定案。页面取证脚本（`run-ui-auto-verification.sh` 等）证据先落 `/mnt/c/.../ne-verify-ui` 再回拷 `.run/`。

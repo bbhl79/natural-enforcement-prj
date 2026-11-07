@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
 # 承办机构内勤点击「派出承办人」直到 handler_assigned。默认 headless。
-# 证据先写入 .run/verify-assign-people-*，再用 cp 复制到工作区 artifacts/。不用 rsync。
+# Podman machine / Docker Desktop 看不见 WSL home bind-mount：
+# 证据与脚本先落 /mnt/c/.../ne-verify-ui 再回拷仓库 .run/（对齐 run-ui-p0.sh）。
+# 证据写入 .run/verify-assign-people-*，再用 cp 复制到工作区 artifacts/。
 set -euo pipefail
+
+# Podman machine：非登录壳也要接上 DOCKER_HOST（见 ~/.config/podman/docker-env.sh）。
+if [ -f "${HOME}/.config/podman/docker-env.sh" ]; then
+  # shellcheck disable=SC1091
+  . "${HOME}/.config/podman/docker-env.sh"
+fi
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../../../.." && pwd)"
 BROWSER_IMAGE='mcr.microsoft.com/playwright:v1.64.1-jammy-amd64@sha256:5eb4ef2b80d9c5af9dccb9155b29be324461c8bbaed41b989db5e86545e7fd38'
 if ! grep -qF "$BROWSER_IMAGE" "$ROOT/infra/VERSIONS.md"; then
@@ -16,7 +24,10 @@ fi
 
 RUN_ID="${VERIFY_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-uid$(head -c 2 /dev/urandom | od -An -tx1 | tr -d ' ')}"
 EVIDENCE_HOST="$ROOT/.run/verify-assign-people-${RUN_ID}"
-mkdir -p "$EVIDENCE_HOST/evidence"
+STAGE_ROOT="${VF_UI_STAGE_ROOT:-/mnt/c/Users/bbhl7/AppData/Local/Temp/ne-verify-ui}"
+STAGE_DIR="$STAGE_ROOT/assign-people-${RUN_ID}"
+mkdir -p "$EVIDENCE_HOST/evidence" "$STAGE_DIR/evidence"
+cp "$ROOT/.cursor/skills/verify-natural-enforcement/harness/ui/run-ui-assign-people.cjs" "$STAGE_DIR/run-ui-assign-people.cjs"
 
 BASE_URL_HOST="${BASE_URL:-https://localhost:8080}"
 BASE_URL_CTR="$BASE_URL_HOST"
@@ -26,12 +37,17 @@ case "$BASE_URL_CTR" in
     ;;
 esac
 
-echo "[ui-assign-people] headless evidence=$EVIDENCE_HOST base=$BASE_URL_CTR"
+HOST_IP="${VF_HOST_IP:-$(ip -4 addr show eth0 | awk '/inet /{print $2}' | cut -d/ -f1)}"
+if [[ -z "$HOST_IP" ]]; then
+  echo "[FAIL] cannot resolve WSL eth0 IPv4 for host.docker.internal" >&2
+  exit 1
+fi
+
+echo "[ui-assign-people] headless stage=$STAGE_DIR evidence=$EVIDENCE_HOST base=$BASE_URL_CTR host=$HOST_IP"
 set +e
 docker run --rm \
-  --add-host "host.docker.internal:host-gateway" \
-  -v "$EVIDENCE_HOST:/work/evidence" \
-  -v "$ROOT/.cursor/skills/verify-natural-enforcement/harness/ui/run-ui-assign-people.cjs:/work/run-ui-assign-people.cjs:ro" \
+  --add-host "host.docker.internal:${HOST_IP}" \
+  -v "$STAGE_DIR:/work/evidence" \
   -e EVIDENCE_DIR=/work/evidence \
   -e "BASE_URL=$BASE_URL_CTR" \
   -e "SEED_PASSWORD=${SEED_PASSWORD:-Seed-pass-52}" \
@@ -41,9 +57,16 @@ docker run --rm \
   -e NODE_TLS_REJECT_UNAUTHORIZED=0 \
   -e npm_config_cache=/tmp/npm-cache \
   "$BROWSER_IMAGE" \
-  bash -lc 'mkdir -p /tmp/pw && cd /tmp/pw && npm init -y >/dev/null 2>&1 && npm install --no-fund --no-audit playwright@1.64.1 && NODE_PATH=/tmp/pw/node_modules node /work/run-ui-assign-people.cjs'
+  bash -lc 'cd /work/evidence && npm init -y >/dev/null 2>&1 && npm install --no-fund --no-audit playwright@1.64.1 && node run-ui-assign-people.cjs'
 RC=$?
 set -e
+
+if command -v rsync >/dev/null 2>&1; then
+  rsync -a --exclude node_modules --exclude package-lock.json --exclude package.json "$STAGE_DIR/" "$EVIDENCE_HOST/"
+else
+  tar -C "$STAGE_DIR" --exclude=node_modules --exclude=package-lock.json --exclude=package.json -cf - . \
+    | tar -C "$EVIDENCE_HOST" -xf -
+fi
 
 ARTIFACT_DIR="$ROOT/artifacts/assign-people-${RUN_ID}"
 mkdir -p "$ARTIFACT_DIR"
