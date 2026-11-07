@@ -1,17 +1,15 @@
 // 登记一块与超长期 peer 重叠的新线索，读 historicalGroups，断言年龄不少于 4 年。
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
+import { ageYears, isAncient, parseRegisteredAt } from './ancient-peer-age.cjs';
 import { AuthGateError } from './auth-gate.cjs';
-import { ageYears, isAncient, parseRegisteredAt } from './ancient-peer-age.mjs';
 import { loadIdentity } from './load-fixtures.ts';
+import { repoRoot } from './paths.ts';
 import { SessionCache } from './session.ts';
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const root = path.resolve(here, '../../../..');
 const fixturePath = path.join(
-  root,
+  repoRoot(),
   '.cursor/skills/verify-natural-enforcement/fixtures/seeds/vf-hist-ancient-peer.json',
 );
 
@@ -64,7 +62,7 @@ function listOf(value: unknown): Record<string, unknown>[] {
 }
 
 function runDir(): string {
-  return process.env.VERIFY_RUN_DIR ?? path.join(root, '.run/verify-hist-dup-no-lookback');
+  return process.env.VERIFY_RUN_DIR ?? path.join(repoRoot(), '.run/verify-hist-dup-no-lookback');
 }
 
 function writeSummary(summary: Summary): void {
