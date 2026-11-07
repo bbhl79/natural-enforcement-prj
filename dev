@@ -126,6 +126,7 @@ usage() {
   up       幂等拉起基础设施容器（db/redis/rustfs/nginx/frontend/server）；永不删除已有数据。
            镜像缺失时非 0 退出并提示先 dev build——本命令不隐式构建。
            若仓库外 localhost 证书缺失，在拉起前生成并挂进 nginx。
+           拉起后检查文件桶：没有则建带对象锁的桶，并打开版本控制。已就绪则跳过。
   down     停止并清理容器与网络；数据卷保留。
   health   逐行检查：容器存活 / db 连通 / 队列连通（经队列接口真实投递
            健康检查任务并确认消费，非裸 redis ping）/ 前端页面可访问 /
@@ -174,6 +175,71 @@ require_compose_file() {
   fi
 }
 
+# 文件桶在 dev up 时初始化。对象锁只能在建桶时启用，已有桶只补版本控制与默认保留。
+# 脚本经 stdin 进已有 server 镜像，不改镜像、不写字面量密钥。RustFS 未监听时重试。
+ensure_files_bucket() {
+  echo "dev up：检查文件桶（对象锁与版本控制；已就绪则跳过）…"
+  if "${COMPOSE[@]}" exec -T -w /work server \
+    node --import ./backend/server/register.mjs --disable-warning=ExperimentalWarning --input-type=module <<'EOF'
+import { createS3Client } from './packages/storage/src/s3-client.ts';
+
+function textOf(err) {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function isS3(err) {
+  return typeof err === 'object' && err !== null && 'status' in err;
+}
+
+const endpoint = process.env.RUSTFS_ENDPOINT ?? '';
+const region = process.env.RUSTFS_REGION ?? '';
+const accessKey = process.env.RUSTFS_ACCESS_KEY ?? '';
+const secretKey = process.env.RUSTFS_SECRET_KEY ?? '';
+const bucket = process.env.RUSTFS_BUCKET ?? '';
+if (endpoint === '' || region === '' || accessKey === '' || secretKey === '' || bucket === '') {
+  console.error('[FAIL] server 进程缺少 RUSTFS_ENDPOINT、RUSTFS_REGION、RUSTFS_BUCKET、RUSTFS_ACCESS_KEY 或 RUSTFS_SECRET_KEY。');
+  process.exit(1);
+}
+
+const client = createS3Client({ endpoint, region, accessKey, secretKey });
+
+let exists = false;
+for (let i = 1; i <= 30; i += 1) {
+  try {
+    exists = await client.bucketExists(bucket);
+    break;
+  } catch (err) {
+    if (isS3(err) || i === 30) {
+      console.error(`[FAIL] 连接对象存储失败：${textOf(err)}`);
+      process.exit(1);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+}
+
+try {
+  if (!exists) {
+    await client.createBucket(bucket, { objectLockEnabled: true });
+  }
+  let versioning = await client.getVersioning(bucket);
+  if (versioning !== 'Enabled') {
+    await client.setVersioning(bucket, 'Enabled');
+    versioning = await client.getVersioning(bucket);
+  }
+  await client.setDefaultRetention(bucket, { mode: 'COMPLIANCE', years: 100 });
+  console.log(`dev up：文件桶 ${bucket} 已就绪（新建=${exists ? '否' : '是'}，versioning=${versioning}，保留=COMPLIANCE/100年）。`);
+} catch (err) {
+  console.error(`[FAIL] 文件桶 ${bucket} 初始化失败：${textOf(err)}`);
+  process.exit(1);
+}
+EOF
+  then
+    return 0
+  fi
+  echo "[FAIL] dev up：文件桶未就绪。对象锁只能在建桶时启用。已有桶没有对象锁时，先删掉该桶，再执行 dev up。" >&2
+  exit 1
+}
+
 # frontend／server 镜像更新时 compose 只重建这两个服务；nginx 进程仍缓存启动时
 # 解析的上游 IP（#294），表现为页面与 /api/health 502。若 frontend 或 server
 # 的创建时间晚于 nginx 启动时间，强制重建 nginx 以重新解析上游。
@@ -213,6 +279,7 @@ cmd_up() {
   # 冷卷首次 initdb 较慢，不等待会赢不了就绪竞态（#57 回归实测踩中）。
   "${COMPOSE[@]}" up -d --wait --wait-timeout 120
   refresh_nginx_if_upstreams_newer
+  ensure_files_bucket
   echo "dev up：基础设施容器已就绪。检查迁移与种子（幂等，已完成自动跳过）…"
   db_migrate
   db_seed
