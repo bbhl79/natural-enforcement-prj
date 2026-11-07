@@ -69,3 +69,7 @@
 多步链上下文：`register-clue` 成功后把响应 `body.id` 作为后续步骤的 `clueId`，把 `body.status` 作为 `expectedStatus` 缺省值。
 
 负例 JSON 与 runnable 同形，存放于 `fixtures/negatives/`（`status: runnable`，`driver: api`，`kind: negative`）。
+
+scenario 不写登录重试、换源、清库、改密或重启。
+这些失败由 harness 记 `blocked` 并停止。
+见 `../RUN-CONTRACT.md`。

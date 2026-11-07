@@ -3,6 +3,8 @@
 - **默认 headless**；`HEADED=1` / `PW_HEADED=1` / `--headed` 切 headed（WSLg：`DISPLAY=:0`）。
 - 跑在 **Docker Playwright 镜像**（定案见 `infra/VERSIONS.md`），宿主不装 `@playwright`。
 - 证据：`.run/verify-<id>/`（summary / steps / evidence PNG+trace+video）。
+- 登录失败或 `host.docker.internal` 不可达时，summary 为 `blocked` 并退出。
+- 脚本不遍历口令，不把 `BASE_URL` 改到 compose 服务名后继续。
 
 ## P0：登录与登记壳
 

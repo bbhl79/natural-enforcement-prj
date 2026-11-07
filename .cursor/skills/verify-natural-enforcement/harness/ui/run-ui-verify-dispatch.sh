@@ -34,6 +34,7 @@ STAGE_ROOT="${VF_UI_STAGE_ROOT:-/mnt/c/Users/bbhl7/AppData/Local/Temp/ne-verify-
 STAGE_DIR="$STAGE_ROOT/verify-${RUN_ID}"
 mkdir -p "$EVIDENCE_HOST/evidence" "$EVIDENCE_HOST/steps" "$STAGE_DIR/evidence" "$STAGE_DIR/steps"
 cp "$ROOT/.cursor/skills/verify-natural-enforcement/harness/ui/run-ui-verify-dispatch.cjs" "$STAGE_DIR/run-ui-verify-dispatch.cjs"
+cp "$ROOT/.cursor/skills/verify-natural-enforcement/harness/auth-gate.cjs" "$STAGE_DIR/auth-gate.cjs"
 
 BASE_URL_HOST="${BASE_URL:-https://localhost:8080}"
 BASE_URL_CTR="$BASE_URL_HOST"
@@ -49,6 +50,10 @@ if [[ -z "$HOST_IP" ]]; then
   echo "[FAIL] cannot resolve WSL eth0 IPv4 for host.docker.internal" >&2
   exit 1
 fi
+
+# shellcheck source=../transport-gate.sh
+. "$ROOT/.cursor/skills/verify-natural-enforcement/harness/transport-gate.sh"
+verify_transport_or_block "$BASE_URL_CTR" "$HOST_IP"
 
 DOCKER_ARGS=(
   --rm
@@ -67,6 +72,10 @@ DOCKER_ARGS=(
   -e "HEADED=$HEADED_FLAG"
   -e "PW_HEADED=$HEADED_FLAG"
 )
+
+if [[ -n "${VERIFY_LOGIN_PASSWORD:-}" ]]; then
+  DOCKER_ARGS+=(-e "VERIFY_LOGIN_PASSWORD=${VERIFY_LOGIN_PASSWORD}")
+fi
 
 if [[ "$HEADED_FLAG" == "1" ]]; then
   DOCKER_ARGS+=(-e "DISPLAY=${DISPLAY:-:0}")

@@ -3,9 +3,11 @@
 // 本文件不改产品进程里的业务规则。overlay 的打开与关闭由同目录脚本执行。
 
 import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+import { AuthGateError } from './auth-gate.cjs';
 import { EvidenceWriter } from './evidence.ts';
 import { loadIdentity } from './load-fixtures.ts';
 import { repoRoot } from './paths.ts';
@@ -35,7 +37,18 @@ function uiHook(only: string, runDir: string): string | null {
     cwd: repoRoot(),
     env: { ...process.env, VERIFY_UI_ONLY: only, VERIFY_RUN_DIR: runDir },
   });
-  if (result.status !== 0) return `页面取证 ${only} 退出 ${result.status ?? 'signal'}`;
+  if (result.status !== 0) {
+    const summaryFile = path.join(runDir, 'ui', only, 'summary.json');
+    try {
+      const summary = JSON.parse(readFileSync(summaryFile, 'utf8')) as { status?: string };
+      if (summary.status === 'blocked') {
+        throw new AuthGateError('auth-rejected', null, `页面取证 ${only} 认证门禁停止`);
+      }
+    } catch (error) {
+      if (error instanceof AuthGateError) throw error;
+    }
+    return `页面取证 ${only} 退出 ${result.status ?? 'signal'}`;
+  }
   return null;
 }
 

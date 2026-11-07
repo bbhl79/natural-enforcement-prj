@@ -64,7 +64,8 @@ Harness 对**该 scenario 最后一步**的观测评 `assert`；任一条失败�
 
 ## summary.json
 
-`passed` | `failed` | `blocked`（环境/登录不可用）。
+`passed` | `failed` | `blocked`（认证失败、来源受限或传输不可达）。
+`blocked` 不得改记为业务 `failed` 后继续。
 `failed` 时列出失败 `scenarioId/stepId`。
 
 ## 闭环规则
@@ -74,3 +75,10 @@ Harness 对**该 scenario 最后一步**的观测评 `assert`；任一条失败�
 3. `latent` scenario 出现在跑批中只能记 `blocked`/`skipped`，不得记 `passed`。
 4. Feature Map 选择器导致的失败：先改地图再改断言。
 5. 故意改坏 oracle 或产品字段名 → 出红包 → 改回 → 同 scenario 再跑必须变绿。
+6. 认证失败、来源受限、传输不可达记 `blocked`。
+7. `blocked` 的跑次不得入账。
+8. 不得在同一次跑里遍历口令、更换来源、清 Redis、用 SQL 改密或重启进程后继续。
+9. 业务步骤只消费已声明口令。
+10. 业务步骤不改人员记录，不清锁定。
+11. 登录已成功且产品要求更换口令时，只允许这一次产品更换。
+12. 身份准备必须单独执行，并保留前后快照。见 `../harness/IDENTITY-PREP.md`。
