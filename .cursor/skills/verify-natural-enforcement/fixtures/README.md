@@ -28,6 +28,7 @@ Agent 对照这里的 profile / scenario 自判对错；修好产品后同一语
 - Profile id：`vf-case-NN-<slug>`
 - Scenario id：`vf-sc-<stage>-<slug>`
 - 几何：广州一带示意坐标（约 113–114°E，23–23.2°N）；测绘类用点，土地/矿产用面
+- 超长期历史 peer 的图斑故意离开上述示意带，也离开盐移带。见 `seeds/`。
 
 ## 身份
 

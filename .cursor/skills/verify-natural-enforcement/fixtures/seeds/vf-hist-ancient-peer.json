@@ -1,0 +1,41 @@
+{
+  "id": "vf-hist-ancient-peer",
+  "purpose": "historical-duplicate-no-lookback",
+  "code": "CL9000000001",
+  "idempotencyKey": "vf-seed-hist-ancient-transferred-out",
+  "requestDigest": "vf-seed-hist-ancient-peer",
+  "status": "transferred_out",
+  "disposition": "transfer",
+  "recordedAt": "2019-01-01T00:00:00.000Z",
+  "registeredAt": "2019-01-01T00:00:00.000Z",
+  "minAgeYears": 4,
+  "sourceCode": "16",
+  "domain": "land",
+  "actorCode": "P-CLERK-A",
+  "enteredOrgCode": "ORG-DEPT-A",
+  "narrative": "vf-超长期终态历史peer，供无回溯上限样本。",
+  "location": "vf-历史查重夹具图斑",
+  "transferredOrg": "vf-历史移送机关",
+  "documentNo": "vf-移-2019-0001",
+  "note": "vf-播种时写入 disposition.recorded_at。本夹具不改写已有行。",
+  "ids": {
+    "clue": "01D03BBF00000VF0HST0PEER01",
+    "spatialObject": "01D03BBF00000VF0HST0SPAT00",
+    "spatialPart": "01D03BBF00000VF0HST0PART00",
+    "disposition": "01D03BBF00000VF0HST0XFER00",
+    "locationValue": "01D03BBF00000VF0HST0MARK01",
+    "session": "01D03BBF00000VF0HST0SESS00"
+  },
+  "polygon": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [112.01, 22.01],
+        [112.018, 22.01],
+        [112.018, 22.018],
+        [112.01, 22.018],
+        [112.01, 22.01]
+      ]
+    ]
+  }
+}

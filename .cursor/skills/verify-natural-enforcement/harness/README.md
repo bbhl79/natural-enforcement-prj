@@ -45,7 +45,8 @@
 `host.docker.internal` 不可达时停止。
 身份准备见 `IDENTITY-PREP.md`。
 业务跑次只使用 `VERIFY_LOGIN_PASSWORD` 或夹具种子口令中的一个。
-P1、P2、P3 不在本目录实现。见 `BACKLOG-STUBS.md`。
+P1 无回溯上限样本的 driver 是 `run-hist-dup-no-lookback.sh`。
+其余 P1 项、P2、P3 见 `BACKLOG-STUBS.md`。
 
 本轮必绿：`vf-sc-verify-loop-survey-register`（01）、`vf-sc-verify-loop-land-register`（02）、
 `vf-sc-neg-type-unconfirmed`（01）、`vf-sc-neg-missing-narrative`（02）。
