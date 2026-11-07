@@ -1,0 +1,221 @@
+{
+  "id": "vf-sc-next-todo-buttons",
+  "status": "runnable",
+  "driver": "api",
+  "kind": "happy",
+  "strictSteps": true,
+  "title": "下一待办按钮：状态加身份，按分派视图读并集核对已有按钮",
+  "profileRefs": ["vf-case-02-occupy-without-approval"],
+  "identityRefs": ["clerk-a", "intake-a", "intake-st"],
+  "featureMapRefs": ["nav.workbench.dispatch.buttons"],
+  "steps": [
+    {
+      "id": "register-pool",
+      "action": "register-clue",
+      "fromProfile": "vf-case-02-occupy-without-approval",
+      "path": "stages.register.system",
+      "identityRef": "clerk-a",
+      "mutate": {
+        "isolateSpatial": true,
+        "setValues": {
+          "clue.narrative": "vf-下一待办按钮：待派机构"
+        },
+        "overrideSpatial": {
+          "type": "Feature",
+          "properties": {},
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [113.801, 23.401],
+                [113.809, 23.401],
+                [113.809, 23.409],
+                [113.801, 23.409],
+                [113.801, 23.401]
+              ]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "buttons-in-pool",
+      "action": "read-dispatch-buttons",
+      "expectClueStatus": "in_pool",
+      "matrix": [
+        {
+          "identityRef": "clerk-a",
+          "http": 200,
+          "mayDecide": false,
+          "mayAssignOrg": false,
+          "mayAssignPeople": false,
+          "mayReassignOrg": false
+        },
+        {
+          "identityRef": "intake-a",
+          "http": 200,
+          "mayDecide": false,
+          "mayAssignOrg": true,
+          "mayAssignPeople": false,
+          "mayReassignOrg": false
+        },
+        {
+          "identityRef": "intake-st",
+          "http": 403,
+          "reason": "scope-denied"
+        }
+      ]
+    },
+    {
+      "id": "register-decide",
+      "action": "register-clue",
+      "fromProfile": "vf-case-02-occupy-without-approval",
+      "path": "stages.register.system",
+      "identityRef": "clerk-a",
+      "mutate": {
+        "isolateSpatial": true,
+        "setValues": {
+          "clue.narrative": "vf-下一待办按钮：待分派决定"
+        },
+        "overrideSpatial": {
+          "type": "Feature",
+          "properties": {},
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [113.801, 23.401],
+                [113.809, 23.401],
+                [113.809, 23.409],
+                [113.801, 23.409],
+                [113.801, 23.401]
+              ]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "buttons-pending",
+      "action": "read-dispatch-buttons",
+      "expectClueStatus": "pending_decision",
+      "matrix": [
+        {
+          "identityRef": "clerk-a",
+          "http": 200,
+          "mayDecide": true,
+          "mayAssignOrg": false,
+          "mayAssignPeople": false,
+          "mayReassignOrg": false
+        },
+        {
+          "identityRef": "intake-a",
+          "http": 200,
+          "mayDecide": false,
+          "mayAssignOrg": false,
+          "mayAssignPeople": false,
+          "mayReassignOrg": false
+        },
+        {
+          "identityRef": "intake-st",
+          "http": 403,
+          "reason": "scope-denied"
+        }
+      ]
+    },
+    {
+      "id": "register-org",
+      "action": "register-clue",
+      "fromProfile": "vf-case-02-occupy-without-approval",
+      "path": "stages.register.system",
+      "identityRef": "clerk-a",
+      "mutate": {
+        "isolateSpatial": true,
+        "setValues": {
+          "clue.narrative": "vf-下一待办按钮：已派机构"
+        },
+        "overrideSpatial": {
+          "type": "Feature",
+          "properties": {},
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [113.901, 23.501],
+                [113.909, 23.501],
+                [113.909, 23.509],
+                [113.901, 23.509],
+                [113.901, 23.501]
+              ]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "assign-org",
+      "action": "assign-org",
+      "identityRef": "intake-a",
+      "orgUnitCode": "ORG-STATION-A",
+      "expectedStatus": "in_pool"
+    },
+    {
+      "id": "buttons-org-assigned",
+      "action": "read-dispatch-buttons",
+      "expectClueStatus": "org_assigned",
+      "matrix": [
+        {
+          "identityRef": "clerk-a",
+          "http": 200,
+          "mayDecide": false,
+          "mayAssignOrg": false,
+          "mayAssignPeople": false,
+          "mayReassignOrg": false
+        },
+        {
+          "identityRef": "intake-a",
+          "http": 200,
+          "mayDecide": false,
+          "mayAssignOrg": false,
+          "mayAssignPeople": false,
+          "mayReassignOrg": true
+        },
+        {
+          "identityRef": "intake-st",
+          "http": 200,
+          "mayDecide": false,
+          "mayAssignOrg": false,
+          "mayAssignPeople": true,
+          "mayReassignOrg": true
+        }
+      ]
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assert": [
+      { "path": "body.result", "op": "eq", "value": "button-matrix" },
+      { "path": "body.readScope", "op": "eq", "value": "entered-or-assigned-org" },
+      { "path": "body.facts.clueStatus", "op": "eq", "value": "org_assigned" },
+      { "path": "body.facts.rows.0.identityRef", "op": "eq", "value": "clerk-a" },
+      { "path": "body.facts.rows.0.http", "op": "eq", "value": 200 },
+      { "path": "body.facts.rows.0.mayDecide", "op": "eq", "value": false },
+      { "path": "body.facts.rows.0.mayAssignOrg", "op": "eq", "value": false },
+      { "path": "body.facts.rows.0.mayAssignPeople", "op": "eq", "value": false },
+      { "path": "body.facts.rows.0.mayReassignOrg", "op": "eq", "value": false },
+      { "path": "body.facts.rows.1.identityRef", "op": "eq", "value": "intake-a" },
+      { "path": "body.facts.rows.1.http", "op": "eq", "value": 200 },
+      { "path": "body.facts.rows.1.mayDecide", "op": "eq", "value": false },
+      { "path": "body.facts.rows.1.mayAssignOrg", "op": "eq", "value": false },
+      { "path": "body.facts.rows.1.mayAssignPeople", "op": "eq", "value": false },
+      { "path": "body.facts.rows.1.mayReassignOrg", "op": "eq", "value": true },
+      { "path": "body.facts.rows.2.identityRef", "op": "eq", "value": "intake-st" },
+      { "path": "body.facts.rows.2.http", "op": "eq", "value": 200 },
+      { "path": "body.facts.rows.2.mayDecide", "op": "eq", "value": false },
+      { "path": "body.facts.rows.2.mayAssignOrg", "op": "eq", "value": false },
+      { "path": "body.facts.rows.2.mayAssignPeople", "op": "eq", "value": true },
+      { "path": "body.facts.rows.2.mayReassignOrg", "op": "eq", "value": true }
+    ]
+  },
+  "notes": "按钮按现行 affordance。readScope 是录入机构或已有承办机构的并集（entered-or-assigned-org）。待分派决定的「派出／不派」只归录入人 clerk-a。待派机构的「派出机构」只归录入机构内勤 intake-a。这两段都还没有承办机构，甲所内勤 intake-st 读 GET /api/clues/:id/dispatch 仍是 403 scope-denied。已派到甲所后，intake-st 返回 200，mayAssignPeople=true，mayReassignOrg=true，mayDecide 与 mayAssignOrg 仍为 false。clerk-a 没有「派出承办人」和「重新分派」。intake-a 有「重新分派」，没有「派出承办人」。决定与派机构写仍在录入侧。派承办人写在承办侧。本场景不点写。工作台清单是否出现该线索只写入证据 listedInAssignView，不写成过滤规则。isolateSpatial 只平移验证用的面，避免撞上开发库里已有的面。"
+}

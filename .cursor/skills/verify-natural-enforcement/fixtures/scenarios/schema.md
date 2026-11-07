@@ -47,12 +47,12 @@
 
 | 字段 | 说明 |
 | ---- | ---- |
-| `action` | `register-clue`／`poll-verification`／`read-dispatch`／`read-side-effects`／`retry-verification`／`decide`／`assign-org`／`assign-people` |
+| `action` | `register-clue`／`poll-verification`／`read-dispatch`／`read-side-effects`／`read-dispatch-buttons`／`retry-verification`／`decide`／`assign-org`／`assign-people` |
 | `fromProfile` + `path` | register-clue 投影 profile 上的 `system` 对象 |
 | `identityRef` | 本步登录身份；缺省沿用上一步 |
-| `viewIdentityRef` | 读分派视图用的身份；写动作仍用 `identityRef`（承办机构内勤读不到录入机构视图时用） |
+| `viewIdentityRef` | 读分派视图用的身份；写动作仍用 `identityRef`。未派机构时承办机构内勤读不到录入机构视图，可改用录入人。已派到该承办机构后，承办机构内勤自己能读。 |
 | `idempotencyKey` | 可选；固定幂等键 |
-| `mutate` | 可选：`omitValues`、`setValues`、`setConfirm`、`overrideSpatial` |
+| `mutate` | 可选：`omitValues`、`setValues`、`setConfirm`、`overrideSpatial`、`isolateSpatial` |
 | `pollAttempts` / `pollIntervalMs` | poll-verification：次数（默认 10，上限 60）与间隔（默认 500ms） |
 | `expectVerificationStatus` | poll-verification：收紧到 `done` 或 `failed` 才算过。缺省时 running 也算观测到 |
 | `dispatchIdentityRef` / `listIdentityRef` | read-side-effects：另用该身份读分派视图或待分派列表 |
@@ -62,6 +62,9 @@
 | `orgUnitCode` | assign-org：按机构编码解析 id（如 `ORG-STATION-A`） |
 | `orgUnitFrom` | assign-org：从分派视图取机构，目前支持 `assignment` |
 | `mainFrom` / `assistFrom` | assign-people：按工号从候选解析主办／协办；`mainFrom` 缺省取第一人 |
+| `matrix` | read-dispatch-buttons：每个身份直接读 `GET /api/clues/:id/dispatch`。核对 `http`、`reason`、`mayDecide`、`mayAssignOrg`、`mayAssignPeople`、`mayReassignOrg`。未写的开关不核。 |
+| `expectClueStatus` | read-dispatch-buttons：200 响应里的线索主状态 |
+| `isolateSpatial` | register-clue 的 `mutate`。为 true 时按 `VERIFY_SPATIAL_SALT` 平移 `overrideSpatial`。同一跑次内相对位置不变。 |
 
 多步链上下文：`register-clue` 成功后把响应 `body.id` 作为后续步骤的 `clueId`，把 `body.status` 作为 `expectedStatus` 缺省值。
 

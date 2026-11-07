@@ -57,6 +57,35 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * 把本步面平移到一块空域。同一 VERIFY_SPATIAL_SALT 下，相对位置保持不变。
+ * 待派机构与待分派决定两条仍重合。已派机构那条保持原有间隔，不与它们重合。
+ */
+function isolateSpatial(spatial: unknown, enabled: boolean): unknown {
+  if (!enabled || spatial === null || spatial === undefined) return spatial;
+  const digits = (process.env.VERIFY_SPATIAL_SALT ?? '').replace(/\D/g, '');
+  const salt = digits.length > 0 ? Number.parseInt(digits.slice(-8), 10) : Date.now() % 1_000_000_000;
+  const cell = salt % 6400;
+  const col = cell % 80;
+  const row = Math.floor(cell / 80);
+  const dx = 5 + col * 0.02;
+  const dy = 5 + row * 0.02;
+  return shiftPositions(spatial, dx, dy);
+}
+
+function shiftPositions(value: unknown, dx: number, dy: number): unknown {
+  if (!Array.isArray(value)) {
+    if (typeof value !== 'object' || value === null) return value;
+    const next: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value)) next[key] = shiftPositions(item, dx, dy);
+    return next;
+  }
+  if (value.length >= 2 && typeof value[0] === 'number' && typeof value[1] === 'number') {
+    return [value[0] + dx, value[1] + dy, ...value.slice(2)];
+  }
+  return value.map((item) => shiftPositions(item, dx, dy));
+}
+
 async function jsonRequest(
   ctx: HarnessContext,
   cookie: string,
@@ -119,8 +148,10 @@ function applyMutate(system: RegisterSystem, step: ScenarioStep): RegisterSystem
   }
   let confirm = system.confirm;
   if (mutate?.setConfirm !== undefined) confirm = mutate.setConfirm;
-  const spatialSource =
-    mutate?.overrideSpatial !== undefined ? mutate.overrideSpatial : system.spatialSource;
+  const spatialSource = isolateSpatial(
+    mutate?.overrideSpatial !== undefined ? mutate.overrideSpatial : system.spatialSource,
+    mutate?.isolateSpatial === true,
+  );
   return {
     ...system,
     values,
@@ -556,7 +587,83 @@ async function runStep(
     return readSideEffects(ctx, step, run, cookie);
   }
 
+  if (step.action === 'read-dispatch-buttons') {
+    return readDispatchButtons(ctx, step, run);
+  }
+
   throw new Error(`本轮 harness 不支持 action=${step.action}`);
+}
+
+const BUTTON_FLAGS = ['mayDecide', 'mayAssignOrg', 'mayAssignPeople', 'mayReassignOrg'] as const;
+
+/**
+ * 各身份自己读分派视图。
+ * 未派机构时，承办机构内勤得到 403 scope-denied。
+ * 已派到该承办机构时得到 200。readScope 记为 entered-or-assigned-org。
+ */
+async function readDispatchButtons(
+  ctx: HarnessContext,
+  step: ScenarioStep,
+  run: ScenarioContext,
+): Promise<StepResult> {
+  const clueId = requireClueId(step, run);
+  const matrix = step.matrix ?? [];
+  if (matrix.length === 0) throw new Error(`step ${step.id} 缺少 matrix`);
+  const rows: Record<string, unknown>[] = [];
+  const misses: string[] = [];
+  for (const expect of matrix) {
+    const cookie = await cookieOfIdentity(ctx, expect.identityRef);
+    const viewed = await jsonRequest(ctx, cookie, 'GET', `/api/clues/${clueId}/dispatch`);
+    const listed = await jsonRequest(
+      ctx,
+      cookie,
+      'GET',
+      '/api/clues?view=assign&page=1&size=100',
+    );
+    const found =
+      listed.http.status === 200 &&
+      listOf(listed.body.rows).some((item) => asText(item.id) === clueId);
+    const row = {
+      identityRef: expect.identityRef,
+      http: viewed.http.status,
+      reason: asText(viewed.body.reason),
+      status: asText(viewed.body.status),
+      mayDecide: viewed.body.mayDecide === true,
+      mayAssignOrg: viewed.body.mayAssignOrg === true,
+      mayAssignPeople: viewed.body.mayAssignPeople === true,
+      mayReassignOrg: viewed.body.mayReassignOrg === true,
+      listedInAssignView: found,
+    };
+    rows.push(row);
+    if (row.http !== expect.http) misses.push(`${expect.identityRef} http=${row.http}`);
+    if (expect.reason !== undefined && row.reason !== expect.reason) {
+      misses.push(`${expect.identityRef} reason=${row.reason}`);
+    }
+    for (const flag of BUTTON_FLAGS) {
+      if (expect[flag] !== undefined && row[flag] !== expect[flag]) {
+        misses.push(`${expect.identityRef} ${flag}=${String(row[flag])}`);
+      }
+    }
+  }
+  const readable = rows.find((row) => row.http === 200);
+  const clueStatus = asText(readable?.status);
+  if (clueStatus !== '') run.status = clueStatus;
+  if (step.expectClueStatus !== undefined && clueStatus !== step.expectClueStatus) {
+    misses.push(`clueStatus=${clueStatus}`);
+  }
+  const facts = { clueStatus, rows };
+  return {
+    observation: {
+      http: { status: 200 },
+      body: {
+        result: 'button-matrix',
+        readScope: 'entered-or-assigned-org',
+        facts,
+      },
+    },
+    pass: misses.length === 0,
+    note: { action: 'read-dispatch-buttons', clueId, misses, facts },
+  };
 }
 
 /** 跑单个 API scenario，写证据；oracle 评末步观测。 */
