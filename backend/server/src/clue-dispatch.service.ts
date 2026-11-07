@@ -6,9 +6,11 @@
 // 但仍由人完成决定。决定「派」进待分派池，「不派」进 held。
 //
 // 两步分派：接收侧内勤派机构（clue.org.assign，首次分派／重新分派／指定管辖），
-// 承办机构内勤再派主办／协办（clue.handler.assign）。线索阶段换到另一机构一律经报请
-// 指定管辖（#228）：已分派后 designate=false 只能在当前承办机构内重新分派（原承办机构
-// 内勤或上级内勤，理由必填、留痕），目标是另一机构的 409 designation-required，出路是
+// 承办机构内勤再派主办／协办（clue.handler.assign）。分派视图读取是录入机构与已有
+// 承办机构的 clue.read 并集；决定步、派机构、派承办人的写规则不随读取放宽。
+// 线索阶段换到另一机构一律经报请指定管辖（#228）：已分派后 designate=false 只能在
+// 当前承办机构内重新分派（原承办机构内勤或上级内勤，理由必填、留痕），目标是另一机构
+// 的 409 designation-required，出路是
 // 报请指定管辖（clue.designate.request）；上级以 designate=true 指定管辖（含主动指定）
 // 照旧。指定管辖之后下级不能再重新分派（409 designated-lock）。状态写动作带
 // expectedStatus，冲突 409 concurrent-change，失败一方有失败留痕、业务行不变。
@@ -218,21 +220,47 @@ export class ClueDispatchService {
   async readView(actor: ActorRef, clueId: string): Promise<DispatchViewOutcome> {
     const context = await this.clues.readDispatchContext(clueId);
     if (!context) return { status: 404, body: { result: 'not-found' } };
-    try {
-      await this.access.authorize(actor, READ_OPCODE, context.enteredOrgId, {
-        resourceType: 'clue',
-        resourceId: clueId,
-      });
-    } catch (error) {
-      if (!isAccessDenied(error)) throw error;
-      return { status: 403, body: { reason: error.reason } };
-    }
+    const denied = await this.authorizeViewRead(actor, context);
+    if (denied) return { status: 403, body: { reason: denied } };
     const account = await this.directory.findById(actor.personnelId);
     const suggestion = await this.suggestion.buildFor(context);
     const pendingDesignation = await this.clues.readPendingDesignationRequest(clueId);
     const designation = await this.designationView(pendingDesignation);
     const affordance = await this.affordances(actor, account, context, designation);
     return { status: 200, body: await this.buildView(context, suggestion, affordance, designation) };
+  }
+
+  /**
+   * 分派视图读范围：录入机构，或已有承办机构，任一 clue.read 即通过。
+   * 先 check，只对命中的那一侧 authorize。
+   * 承办机构内勤读时，不因录入机构未命中而先写 authz.denied。
+   * 两侧都不命中时，只对录入机构 authorize 一次。
+   */
+  private async authorizeViewRead(
+    actor: ActorRef,
+    context: ClueDispatchContext,
+  ): Promise<DenyReason | null> {
+    const resource = { resourceType: 'clue', resourceId: context.clueId };
+    const targets = [context.enteredOrgId];
+    const assignedOrgId = context.assignment?.orgUnitId ?? null;
+    if (assignedOrgId !== null && assignedOrgId !== context.enteredOrgId) {
+      targets.push(assignedOrgId);
+    }
+    let hit: string | null = null;
+    for (const orgId of targets) {
+      const decision = await this.access.check(actor, READ_OPCODE, orgId, resource);
+      if (decision.allowed) {
+        hit = orgId;
+        break;
+      }
+    }
+    try {
+      await this.access.authorize(actor, READ_OPCODE, hit ?? context.enteredOrgId, resource);
+    } catch (error) {
+      if (!isAccessDenied(error)) throw error;
+      return error.reason;
+    }
+    return null;
   }
 
   /** 分派决定（录入人本人；默认不派／已知晓／举报必派）。 */

@@ -74,6 +74,7 @@
   - 正式重复命中使主状态进入 `pending_decision`。土地和矿产均自动核查；本机缺图层时核查会 failed，但本旅程仍须回读到 `pending_decision` 后才能点决定。
   - step2 观察核查状态，不宣称核查成功。step3 实点“已知晓并派出”后实点“派出机构”，派至第一执法支队。
   - 本入口禁止 headed。证据分为 `.run/verify-<run>-register` 与 `.run/verify-<run>-dispatch`。派承办人不在本旅程范围。
+- 承办机构内勤派承办人：`harness/ui/run-ui-assign-people.sh`。甲所内勤打开 `/workbench?step=3&clue=`，点 `[data-role=assign-people]`「派出承办人」，回读 `handler_assigned`。查重命中控件在决定步 `[data-role=hit-groups]`；辖区建议在派机构面板 `[data-role=suggestion]` 或 `[data-role=suggestion-empty]`。证据用 `cp` 落到 `.run/verify-assign-people-*`。
 - 选择器以上表为准；失败先改本地图再改断言。
 
 - 本机完整附件旅程入口为 `harness/ui/run-ui-full-loop-local.sh`。它临时补验证专属存储运行参数并初始化 `ne-verify-ui` 桶，退出恢复原编排。

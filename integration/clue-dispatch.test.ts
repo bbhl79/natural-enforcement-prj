@@ -253,6 +253,64 @@ interface TrailRow {
   readonly resource_id: string | null;
 }
 
+interface DispatchReadBody {
+  readonly result?: string;
+  readonly reason?: string;
+  readonly status?: string;
+  readonly mayAssignPeople?: boolean;
+  readonly mayDecide?: boolean;
+  readonly mayAssignOrg?: boolean;
+  readonly hitGroups?: readonly unknown[];
+  readonly suggestion?: {
+    readonly result?: string;
+    readonly suggestions?: readonly unknown[];
+    readonly unavailableReason?: string | null;
+  };
+  readonly assignment?: { readonly orgUnitId?: string } | null;
+}
+
+/** 分派视图。 */
+async function readDispatch(
+  clueId: string,
+  code: string,
+): Promise<{ status: number; body: DispatchReadBody }> {
+  const response = await fetch(`${baseUrl}/api/clues/${clueId}/dispatch`, {
+    headers: { cookie: await cookieOf(code) },
+  });
+  return { status: response.status, body: (await response.json()) as DispatchReadBody };
+}
+
+interface DenialRow {
+  readonly reason: string | null;
+  readonly opcode: string | null;
+  readonly target_org_unit_id: string | null;
+}
+
+/** 该线索的 authz.denied 行，按写入顺序。 */
+async function denialsOf(resourceId: string): Promise<DenialRow[]> {
+  return cloned.prisma.$queryRaw<DenialRow[]>`
+    SELECT reason, opcode, target_org_unit_id
+    FROM audit_trail
+    WHERE action = 'authz.denied' AND resource_id = ${resourceId}
+    ORDER BY created_at ASC, id ASC
+  `;
+}
+
+/** 录入机构内勤把一条有查重命中的线索派到甲所，停在已派机构。 */
+async function orgAssignedWithHits(offset: number): Promise<string> {
+  const first = await register({ polygon: geojsonPolygon(square(offset)) });
+  expect(first.status).toBe(201);
+  const second = await register({ polygon: geojsonPolygon(square(offset)) });
+  expect(second.status).toBe(201);
+  expect(second.body.status).toBe('pending_decision');
+  const clueId = second.body.id ?? '';
+  const decided = await decide(clueId, { decision: 'dispatch', acknowledged: true });
+  expect(decided.status).toBe(200);
+  const assigned = await assignOrg(clueId, { orgUnitId: stationAId }, 'P-INTAKE-A');
+  expect(assigned.status).toBe(200);
+  return clueId;
+}
+
 /** 留痕行：留痕只许经设施包追加，读取走原生 SQL（委托名不出现在用例里）。 */
 async function trailOf(action: string, resourceId?: string): Promise<TrailRow[]> {
   if (resourceId === undefined) {
@@ -912,5 +970,91 @@ describe('P7 个案判断规划类分派校验', () => {
     const clueId = await seedClueAtPendingDecision('planning_completion_data_unreported', { lng: 113.3, lat: 23.3 });
     const outcome = await decide(clueId, { decision: 'dispatch' });
     expect(outcome.status).toBe(200);
+  });
+});
+
+describe('分派视图读范围：录入机构或已有承办机构', () => {
+  it('未派机构时承办机构内勤仍 403，且只留一行录入机构拒绝', async () => {
+    const pooled = await register({ polygon: geojsonPolygon(square(56)) });
+    expect(pooled.status).toBe(201);
+    expect(pooled.body.status).toBe('in_pool');
+    const clueId = pooled.body.id ?? '';
+    const before = await denialsOf(clueId);
+
+    const station = await readDispatch(clueId, 'P-INTAKE-ST');
+    expect(station.status).toBe(403);
+    expect(station.body.reason).toBe('scope-denied');
+
+    const after = await denialsOf(clueId);
+    expect(after).toHaveLength(before.length + 1);
+    expect(after.at(-1)).toMatchObject({
+      reason: 'scope-denied',
+      opcode: 'clue.read',
+      target_org_unit_id: deptAId,
+    });
+  });
+
+  it('已派到甲所后：承办机构内勤能读且不写录入机构拒绝；录入侧仍能读；乙区内勤 403 只留一行', async () => {
+    const clueId = await orgAssignedWithHits(57);
+    const before = await denialsOf(clueId);
+
+    const station = await readDispatch(clueId, 'P-INTAKE-ST');
+    expect(station.status).toBe(200);
+    expect(station.body.result).toBe('dispatch-view');
+    expect(station.body.status).toBe('org_assigned');
+    expect(station.body.mayAssignPeople).toBe(true);
+    expect(station.body.mayDecide).toBe(false);
+    expect(station.body.mayAssignOrg).toBe(false);
+    expect(station.body.assignment?.orgUnitId).toBe(stationAId);
+    expect(station.body.hitGroups?.length ?? 0).toBeGreaterThan(0);
+    expect(station.body.suggestion?.result).toBe('listed');
+    expect(Array.isArray(station.body.suggestion?.suggestions)).toBe(true);
+
+    const intake = await readDispatch(clueId, 'P-INTAKE-A');
+    expect(intake.status).toBe(200);
+    expect(intake.body.mayAssignPeople).toBe(false);
+    expect(intake.body.hitGroups?.length ?? 0).toBeGreaterThan(0);
+
+    const clerk = await readDispatch(clueId, 'P-CLERK-A');
+    expect(clerk.status).toBe(200);
+    expect(clerk.body.mayAssignPeople).toBe(false);
+
+    expect(await denialsOf(clueId)).toHaveLength(before.length);
+
+    const outsider = await readDispatch(clueId, 'P-INTAKE-B');
+    expect(outsider.status).toBe(403);
+    expect(outsider.body.reason).toBe('scope-denied');
+    const denied = await denialsOf(clueId);
+    expect(denied).toHaveLength(before.length + 1);
+    expect(denied.at(-1)).toMatchObject({
+      reason: 'scope-denied',
+      opcode: 'clue.read',
+      target_org_unit_id: deptAId,
+    });
+  });
+
+  it('写路径不变：录入机构内勤不能派承办人，承办机构内勤仍能派到已派承办人', async () => {
+    const clueId = await orgAssignedWithHits(58);
+    const blocked = await assignPeople(clueId, { mainId: handlerSt1 }, 'P-INTAKE-A');
+    expect(blocked.status).toBe(403);
+    expect(blocked.body.reason).toBe('permission-denied');
+    const unchanged = await cloned.prisma.clue.findUnique({ where: { id: clueId } });
+    expect(unchanged?.status).toBe('org_assigned');
+
+    const written = await assignPeople(
+      clueId,
+      { mainId: handlerSt1, assistIds: [handlerSt2] },
+      'P-INTAKE-ST',
+    );
+    expect(written.status).toBe(200);
+    expect(written.body.status).toBe('handler_assigned');
+
+    const station = await readDispatch(clueId, 'P-INTAKE-ST');
+    expect(station.status).toBe(200);
+    expect(station.body.status).toBe('handler_assigned');
+    expect(station.body.mayAssignPeople).toBe(false);
+    const intake = await readDispatch(clueId, 'P-INTAKE-A');
+    expect(intake.status).toBe(200);
+    expect(intake.body.mayAssignPeople).toBe(false);
   });
 });
