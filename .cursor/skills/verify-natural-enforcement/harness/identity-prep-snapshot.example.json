@@ -1,0 +1,15 @@
+{
+  "takenAt": "2026-11-07T18:00:00.000Z",
+  "gitTip": "7ccdeeef3b398a80cc34c7ffe60ec72b28ba4181",
+  "baseUrl": "https://host.docker.internal:8080",
+  "expectedClient": "host.docker.internal",
+  "sourceIp": "10.89.3.1",
+  "health": { "status": "ok" },
+  "containers": [
+    { "name": "nginx", "id": "abc123", "startedAt": "2026-11-07T17:28:20.000Z" }
+  ],
+  "latestAuthAction": null,
+  "identities": [
+    { "id": "clerk-a", "mobile": "13800001002", "passwordChangedAt": null }
+  ]
+}

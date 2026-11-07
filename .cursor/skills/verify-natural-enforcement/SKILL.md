@@ -33,6 +33,28 @@
 结构化 oracle 与证据契约见 `fixtures/RUN-CONTRACT.md`。
 Scenario 形状见 `fixtures/scenarios/schema.md`。
 
+## 认证与传输门禁
+
+登录响应不是 200 时，跑次记 `blocked` 并退出。
+正文含 `login.source-limited`、`source-limited` 或「来源受限」时，原因是 `source-limited`。
+其余认证失败的原因是 `auth-rejected`。
+传输地址不可达时，同样记 `blocked`。
+不得把 `blocked` 改记成业务失败后继续扫下一场景。
+不得遍历口令。
+不得用 SQL 改口令或清锁定。
+不得清 Redis。
+不得为清空 SourceGate 内存而重启进程。
+不得更换来源地址后继续同一次取证。
+`host.docker.internal` 不可达时停止。
+不得改用 compose 服务名 `nginx` 继续。
+身份准备与验证跑分离。
+规则见 `harness/IDENTITY-PREP.md`。
+业务跑次只消费一个已声明口令。
+登录已成功且产品要求更换口令时，只提交这一次产品更换。
+P1、P2、P3 仍是缺口。
+清单见 `harness/BACKLOG-STUBS.md`。
+本技能不实现这些缺口。
+
 ## 失败闭环（演示纪律）
 
 故意改坏 `oracle.assert` 或产品字段名 → harness 出红包 → 改回 → 同 scenario 再跑必须变绿。

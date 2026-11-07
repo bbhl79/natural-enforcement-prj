@@ -21,7 +21,9 @@ fi
 export NODE_EXTRA_CA_CERTS="$CERT"
 export VERIFY_BASE_URL="${VERIFY_BASE_URL:-https://localhost:8080}"
 export VERIFY_SPATIAL_SALT="$RUN_ID"
-export VERIFY_EXTRA_PASSWORDS="${VERIFY_EXTRA_PASSWORDS:-Verify-assign-52!,Station-init-52!}"
+# shellcheck source=transport-gate.sh
+. "$ROOT/.cursor/skills/verify-natural-enforcement/harness/transport-gate.sh"
+verify_transport_or_block "$VERIFY_BASE_URL" ""
 set +e
 node --experimental-transform-types --disable-warning=ExperimentalWarning \
   "$ROOT/.cursor/skills/verify-natural-enforcement/harness/run-next-todo-buttons.ts" \
@@ -29,12 +31,20 @@ node --experimental-transform-types --disable-warning=ExperimentalWarning \
 API_RC=$?
 set -e
 
+SUMMARY="$RUN_DIR/summary.json"
+if [[ -f "$SUMMARY" ]]; then
+  STATUS="$(node -e 'const fs=require("node:fs"); const s=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(String(s.status??""));' "$SUMMARY")"
+  if [[ "$STATUS" == "blocked" ]]; then
+    echo "[next-todo-buttons] summary=blocked 停止。不启动页面取证。" >&2
+    exit 1
+  fi
+fi
+
 MANIFEST="$RUN_DIR/clue-manifest.json"
 UI_RC=0
 if [[ -f "$MANIFEST" ]]; then
   set +e
   VERIFY_RUN_DIR="$RUN_DIR" \
-    VERIFY_EXTRA_PASSWORDS="$VERIFY_EXTRA_PASSWORDS" \
     "$ROOT/.cursor/skills/verify-natural-enforcement/harness/ui/run-ui-next-todo-buttons.sh" \
     "$MANIFEST"
   UI_RC=$?

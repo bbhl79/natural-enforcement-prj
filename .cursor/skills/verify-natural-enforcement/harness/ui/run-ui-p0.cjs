@@ -7,12 +7,25 @@
  *   BASE_URL   default https://host.docker.internal:8080
  *   EVIDENCE_DIR  required (mapped to .run/verify-<id>/)
  *   SEED_PASSWORD  default Seed-pass-52
+ *   VERIFY_LOGIN_PASSWORD  可选。设置后整次只使用这一口令。
  *   HEADED / PW_HEADED =1 → headed (needs DISPLAY)
  *   UI_FILL=1 → also select source/domain and fill narrative if present
  */
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
+
+function loadAuthGate() {
+  const candidates = [
+    path.join(__dirname, 'auth-gate.cjs'),
+    path.join(__dirname, '..', 'auth-gate.cjs'),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return require(candidate);
+  }
+  throw new Error('缺少 auth-gate.cjs');
+}
+const { AuthGateError, changePasswordOnce, isAuthGateError, loginPageOnce, loginPassword } = loadAuthGate();
 
 const BASE_URL = (process.env.BASE_URL || 'https://host.docker.internal:8080').replace(/\/$/, '');
 const EVIDENCE_DIR = process.env.EVIDENCE_DIR;
@@ -61,6 +74,7 @@ async function main() {
   };
 
   let failed = false;
+  let blocked = false;
   try {
     // --- login ---
     await page.goto(`${BASE_URL}/auth/login`, { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -71,53 +85,20 @@ async function main() {
     const submit = page.getByRole('button', { name: '登录' });
     const loginVisible = await phone.isVisible() && await password.isVisible() && await submit.isVisible();
     record('login-fields', loginVisible, { selectors: ['aria-label=手机号', 'aria-label=密码', 'button:登录'] }, { visible: loginVisible }, [eLogin]);
-    if (!loginVisible) failed = true;
+    if (!loginVisible) throw new Error('登录页缺少手机号、口令或登录按钮');
 
-    async function doLogin(pw) {
-      await page.goto(`${BASE_URL}/auth/login`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-      await page.getByRole('textbox', { name: '手机号' }).waitFor({ state: 'visible', timeout: 30000 });
-      await page.getByRole('textbox', { name: '手机号' }).fill(MOBILE);
-      await page.locator('input[name="password"]').fill(pw);
-      await Promise.all([
-        page.waitForURL((url) => !String(url).includes('/auth/login') || String(url).includes('password'), { timeout: 20000 }).catch(() => null),
-        page.getByRole('button', { name: '登录' }).click(),
-      ]);
-      await page.waitForTimeout(800);
-      return page.url();
-    }
-
-    let afterLogin = await doLogin(SEED_PASSWORD);
-    if (afterLogin.includes('/auth/login')) {
-      // seed may already have been rotated on this DB
-      afterLogin = await doLogin(NEW_PASSWORD);
-    }
+    await loginPageOnce(page, BASE_URL, MOBILE, loginPassword(SEED_PASSWORD));
     const eAfterLogin = await shot('02-after-login');
-    record('login-submit', !afterLogin.includes('/auth/login') || afterLogin.includes('password'), {
-      leaveLogin: true,
-    }, { url: afterLogin }, [eAfterLogin]);
-    if (afterLogin.includes('/auth/login') && !afterLogin.includes('password')) {
-      failed = true;
-    }
-
-    // force password change? (#292: first-login only new+confirm, no current)
-    if (page.url().includes('/auth/password') || /\/password(\?|$)/.test(page.url()) || page.url().includes('/account/password')) {
+    record('login-submit', true, { leaveLogin: true, attempts: 1 }, { url: page.url() }, [eAfterLogin]);
+    if (page.url().includes('/auth/password') || page.url().includes('/account/password')) {
       const ePw = await shot('02b-password-change');
-      await page.locator('input[name="newPassword"]').fill(NEW_PASSWORD);
-      await page.locator('input[name="confirmPassword"]').fill(NEW_PASSWORD);
-      const btn = page.getByRole('button', { name: '更换口令' });
-      await Promise.all([
-        page.waitForURL((url) => !String(url).includes('password'), { timeout: 30000 }).catch(() => null),
-        btn.click(),
-      ]);
-      await page.waitForTimeout(800);
-      record('password-change', !page.url().includes('password'), { button: '更换口令' }, { url: page.url() }, [ePw]);
-      if (page.url().includes('password')) failed = true;
+      await changePasswordOnce(page, NEW_PASSWORD);
+      record('password-change', true, { button: '更换口令', once: true }, { url: page.url() }, [ePw]);
     }
 
     await page.goto(`${BASE_URL}/workbench/register`, { waitUntil: 'domcontentloaded', timeout: 60000 });
     if (page.url().includes('/auth/login')) {
-      await doLogin(NEW_PASSWORD);
-      await page.goto(`${BASE_URL}/workbench/register`, { waitUntil: 'domcontentloaded', timeout: 60000 });
+      throw new AuthGateError('auth-rejected', null, '进入登记页时回到登录页');
     }
 
     await page.locator('#clue-source').waitFor({ state: 'visible', timeout: 30000 });
@@ -170,7 +151,8 @@ async function main() {
 
     await context.tracing.stop({ path: path.join(EVIDENCE_DIR, 'evidence', 'trace.zip') });
   } catch (err) {
-    failed = true;
+    if (isAuthGateError(err)) blocked = true;
+    else failed = true;
     const e = await shot('error').catch(() => null);
     record('harness-error', false, { ok: true }, { error: String(err && err.stack || err) }, e ? [e] : []);
     try { await context.tracing.stop({ path: path.join(EVIDENCE_DIR, 'evidence', 'trace.zip') }); } catch {}
@@ -180,7 +162,7 @@ async function main() {
   await browser.close();
 
   const summary = {
-    status: failed ? 'failed' : 'passed',
+    status: blocked ? 'blocked' : failed ? 'failed' : 'passed',
     failed: steps.filter((s) => !s.pass).map((s) => `${SCENARIO_ID}/${s.stepId}`),
     runDir: EVIDENCE_DIR,
     mode: HEADED ? 'headed' : 'headless',
@@ -197,7 +179,7 @@ async function main() {
     driver: 'playwright-docker',
   }, null, 2));
   console.log(JSON.stringify(summary));
-  process.exit(failed ? 1 : 0);
+  process.exit(blocked || failed ? 1 : 0);
 }
 
 main().catch((err) => {

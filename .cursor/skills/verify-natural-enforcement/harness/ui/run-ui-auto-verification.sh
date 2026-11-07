@@ -35,6 +35,7 @@ STAGE_ROOT="${VF_UI_STAGE_ROOT:-/mnt/c/Users/bbhl7/AppData/Local/Temp/ne-verify-
 STAGE_DIR="$STAGE_ROOT/auto-verification-$(basename "$RUN_DIR")-$ONLY"
 mkdir -p "$UI_DIR" "$STAGE_DIR"
 cp "$ROOT/.cursor/skills/verify-natural-enforcement/harness/ui/run-ui-auto-verification.cjs" "$STAGE_DIR/run-ui-auto-verification.cjs"
+cp "$ROOT/.cursor/skills/verify-natural-enforcement/harness/auth-gate.cjs" "$STAGE_DIR/auth-gate.cjs"
 cp "$RUN_DIR/clue-manifest.json" "$STAGE_DIR/clue-manifest.json"
 
 BASE_URL_HOST="${BASE_URL:-https://localhost:8080}"
@@ -52,7 +53,15 @@ if [[ -z "$HOST_IP" ]]; then
   exit 1
 fi
 
+# shellcheck source=../transport-gate.sh
+. "$ROOT/.cursor/skills/verify-natural-enforcement/harness/transport-gate.sh"
+verify_transport_or_block "$BASE_URL_CTR" "$HOST_IP"
+
 echo "[ui-auto-verification] only=$ONLY headless stage=$STAGE_DIR evidence=$UI_DIR base=$BASE_URL_CTR host=$HOST_IP"
+LOGIN_ENV=()
+if [[ -n "${VERIFY_LOGIN_PASSWORD:-}" ]]; then
+  LOGIN_ENV+=(-e "VERIFY_LOGIN_PASSWORD=${VERIFY_LOGIN_PASSWORD}")
+fi
 set +e
 docker run --rm \
   --add-host "host.docker.internal:${HOST_IP}" \
@@ -66,6 +75,7 @@ docker run --rm \
   -e "PLAYWRIGHT_BROWSERS_PATH=/ms-playwright" \
   -e "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1" \
   -e "npm_config_cache=/tmp/npm-cache" \
+  "${LOGIN_ENV[@]}" \
   "$BROWSER_IMAGE" \
   bash -lc 'cd /work/evidence && npm init -y >/dev/null 2>&1 && npm install --no-fund --no-audit playwright@1.64.1 && node run-ui-auto-verification.cjs'
 RC=$?

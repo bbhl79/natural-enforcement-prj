@@ -35,6 +35,7 @@ STAGE_ROOT="${VF_UI_STAGE_ROOT:-/mnt/c/Users/bbhl7/AppData/Local/Temp/ne-verify-
 STAGE_DIR="$STAGE_ROOT/verify-${RUN_ID}"
 mkdir -p "$EVIDENCE_HOST/evidence" "$EVIDENCE_HOST/steps" "$STAGE_DIR/evidence" "$STAGE_DIR/steps"
 cp "$ROOT/.cursor/skills/verify-natural-enforcement/harness/ui/run-ui-p0.cjs" "$STAGE_DIR/run-ui-p0.cjs"
+cp "$ROOT/.cursor/skills/verify-natural-enforcement/harness/auth-gate.cjs" "$STAGE_DIR/auth-gate.cjs"
 
 cp "$ROOT/.cursor/skills/verify-natural-enforcement/harness/ui/register-full.cjs" "$STAGE_DIR/register-full.cjs"
 cp "$ROOT/.cursor/skills/verify-natural-enforcement/fixtures/journeys/register-full-click-write/input.json" "$STAGE_DIR/register-full-input.json"
@@ -54,6 +55,10 @@ if [[ -z "$HOST_IP" ]]; then
   exit 1
 fi
 
+# shellcheck source=../transport-gate.sh
+. "$ROOT/.cursor/skills/verify-natural-enforcement/harness/transport-gate.sh"
+verify_transport_or_block "$BASE_URL_CTR" "$HOST_IP"
+
 DOCKER_ARGS=(
   --rm
   --add-host "host.docker.internal:${HOST_IP}"
@@ -69,6 +74,10 @@ DOCKER_ARGS=(
   -e "HEADED=$HEADED_FLAG"
   -e "PW_HEADED=$HEADED_FLAG"
 )
+
+if [[ -n "${VERIFY_LOGIN_PASSWORD:-}" ]]; then
+  DOCKER_ARGS+=(-e "VERIFY_LOGIN_PASSWORD=${VERIFY_LOGIN_PASSWORD}")
+fi
 
 if [[ "$HEADED_FLAG" == "1" ]]; then
   DOCKER_ARGS+=(-e "DISPLAY=${DISPLAY:-:0}")

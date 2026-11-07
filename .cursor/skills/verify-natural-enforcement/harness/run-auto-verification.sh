@@ -47,6 +47,9 @@ trap restore EXIT
 
 export NODE_EXTRA_CA_CERTS="$CERT"
 export VERIFY_BASE_URL="${VERIFY_BASE_URL:-https://localhost:8080}"
+# shellcheck source=transport-gate.sh
+. "$ROOT/.cursor/skills/verify-natural-enforcement/harness/transport-gate.sh"
+verify_transport_or_block "$VERIFY_BASE_URL" ""
 export VERIFY_UI_HOOK="$HOOK"
 node --experimental-transform-types --disable-warning=ExperimentalWarning \
   "$ROOT/.cursor/skills/verify-natural-enforcement/harness/run-auto-verification.ts" \

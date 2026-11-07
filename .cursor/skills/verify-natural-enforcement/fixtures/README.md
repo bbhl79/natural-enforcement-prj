@@ -31,7 +31,10 @@ Agent 对照这里的 profile / scenario 自判对错；修好产品后同一语
 
 ## 身份
 
-见 `identities/`。口令只引用 `VERIFY_PASSWORD_SEED` 或 `.run/verify-secrets.local.json` 的 `seed`。
+见 `identities/`。口令只引用 `VERIFY_PASSWORD_SEED`、`VERIFY_LOGIN_PASSWORD` 或 `.run/verify-secrets.local.json` 的 `seed`。
+业务跑次只消费其中一个口令。
+换口令、清锁定和来源允许表不在本目录的 scenario 里做。
+获准的准备路径见 `../harness/IDENTITY-PREP.md`。
 
 ## 跑次证据契约
 
