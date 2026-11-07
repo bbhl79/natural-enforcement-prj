@@ -7,7 +7,6 @@ import path from 'node:path';
 
 import { EvidenceWriter } from './evidence.ts';
 import { loadIdentity } from './load-fixtures.ts';
-import { repoRoot } from './paths.ts';
 import { runApiScenario } from './run-api-scenario.ts';
 import { SessionCache } from './session.ts';
 
