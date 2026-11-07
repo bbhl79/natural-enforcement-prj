@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
-# 自动核查页面取证。只跑 headless。证据写进本次 .run/verify-* ，不经 WSL 的 /mnt/c。
+# 自动核查页面取证。只跑 headless。
+# Podman machine / Docker Desktop 看不见 WSL home bind-mount：
+# 证据与脚本先落 /mnt/c/.../ne-verify-ui 再回拷仓库 .run/（对齐 run-ui-p0.sh）。
 # 参数：failure 或 layers。由 run-auto-verification.ts 经 VERIFY_UI_HOOK 调用。
 set -euo pipefail
+
+# Podman machine：非登录壳也要接上 DOCKER_HOST（见 ~/.config/podman/docker-env.sh）。
+if [ -f "${HOME}/.config/podman/docker-env.sh" ]; then
+  # shellcheck disable=SC1091
+  . "${HOME}/.config/podman/docker-env.sh"
+fi
 
 ONLY="${1:-${VERIFY_UI_ONLY:-all}}"
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../../../.." && pwd)"
@@ -23,18 +31,32 @@ if ! docker image inspect "$BROWSER_IMAGE" >/dev/null 2>&1; then
 fi
 
 UI_DIR="$RUN_DIR/ui/$ONLY"
-mkdir -p "$UI_DIR"
-cp "$ROOT/.cursor/skills/verify-natural-enforcement/harness/ui/run-ui-auto-verification.cjs" "$UI_DIR/run-ui-auto-verification.cjs"
-cp "$RUN_DIR/clue-manifest.json" "$UI_DIR/clue-manifest.json"
+STAGE_ROOT="${VF_UI_STAGE_ROOT:-/mnt/c/Users/bbhl7/AppData/Local/Temp/ne-verify-ui}"
+STAGE_DIR="$STAGE_ROOT/auto-verification-$(basename "$RUN_DIR")-$ONLY"
+mkdir -p "$UI_DIR" "$STAGE_DIR"
+cp "$ROOT/.cursor/skills/verify-natural-enforcement/harness/ui/run-ui-auto-verification.cjs" "$STAGE_DIR/run-ui-auto-verification.cjs"
+cp "$RUN_DIR/clue-manifest.json" "$STAGE_DIR/clue-manifest.json"
 
 BASE_URL_HOST="${BASE_URL:-https://localhost:8080}"
-BASE_URL_CTR="${BASE_URL_HOST/localhost/host.docker.internal}"
+BASE_URL_CTR="$BASE_URL_HOST"
+case "$BASE_URL_CTR" in
+  https://localhost:*|http://localhost:*)
+    BASE_URL_CTR="${BASE_URL_CTR/localhost/host.docker.internal}"
+    ;;
+esac
 
-echo "[ui-auto-verification] only=$ONLY headless evidence=$UI_DIR base=$BASE_URL_CTR"
+# Podman machine / Docker Desktop + WSL2：用 WSL eth0 IP，不用 Windows 默认网关。
+HOST_IP="${VF_HOST_IP:-$(ip -4 addr show eth0 | awk '/inet /{print $2}' | cut -d/ -f1)}"
+if [[ -z "$HOST_IP" ]]; then
+  echo "[FAIL] cannot resolve WSL eth0 IPv4 for host.docker.internal" >&2
+  exit 1
+fi
+
+echo "[ui-auto-verification] only=$ONLY headless stage=$STAGE_DIR evidence=$UI_DIR base=$BASE_URL_CTR host=$HOST_IP"
 set +e
 docker run --rm \
-  --add-host "host.docker.internal:host-gateway" \
-  -v "$UI_DIR:/work/evidence" \
+  --add-host "host.docker.internal:${HOST_IP}" \
+  -v "$STAGE_DIR:/work/evidence" \
   -e "EVIDENCE_DIR=/work/evidence" \
   -e "BASE_URL=$BASE_URL_CTR" \
   -e "VERIFY_UI_ONLY=$ONLY" \
@@ -48,5 +70,13 @@ docker run --rm \
   bash -lc 'cd /work/evidence && npm init -y >/dev/null 2>&1 && npm install --no-fund --no-audit playwright@1.64.1 && node run-ui-auto-verification.cjs'
 RC=$?
 set -e
-echo "[ui-auto-verification] exit=$RC only=$ONLY"
+
+if command -v rsync >/dev/null 2>&1; then
+  rsync -a --exclude node_modules --exclude package-lock.json --exclude package.json "$STAGE_DIR/" "$UI_DIR/"
+else
+  # 无 rsync 时用 tar 回拷，仍避开 WSL home bind。
+  tar -C "$STAGE_DIR" --exclude=node_modules --exclude=package-lock.json --exclude=package.json -cf - . \
+    | tar -C "$UI_DIR" -xf -
+fi
+echo "[ui-auto-verification] exit=$RC only=$ONLY evidence=$UI_DIR"
 exit "$RC"

@@ -4,6 +4,17 @@
 # 页面只用 headless。证据在 .run/verify-<日期>-auto-verification-dev-layers/。
 set -euo pipefail
 
+# Podman machine：非登录壳也要接上 DOCKER_HOST（见 ~/.config/podman/docker-env.sh）。
+if [ -f "${HOME}/.config/podman/docker-env.sh" ]; then
+  # shellcheck disable=SC1091
+  . "${HOME}/.config/podman/docker-env.sh"
+fi
+
+# 宿主 apt 可能是 Node 22（无 --experimental-transform-types）。优先本机钉定的 Node 24。
+if [ -x "${HOME}/.local/node-v24.21.0/bin/node" ]; then
+  export PATH="${HOME}/.local/node-v24.21.0/bin:${PATH}"
+fi
+
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../../.." && pwd)"
 cd "$ROOT"
 RUN_ID="${VERIFY_RUN_ID:-$(TZ=Asia/Shanghai date +%Y%m%d)-auto-verification-dev-layers}"
