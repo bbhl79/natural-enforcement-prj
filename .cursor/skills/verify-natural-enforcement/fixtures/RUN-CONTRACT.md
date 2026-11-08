@@ -108,8 +108,69 @@ summary 写出时挂 `uncovered[]`，见下节。
 推导是确定性纯函数 `harness/discover/uncovered.ts`，无 I/O。
 应跑全集取本跑次意图跑的集合 `manifest.scenarios`，不扫目录。
 登记与实有漂移对账属后续票，不在 T1。
-`switch-unchecked` 机械报告矩阵省略；by-design 确认过滤（coverage-acks）属 T2。
-跨跑次 diff 键 = `kind+scenarioId+stepId+featureMapRef`，属 T2。
+`switch-unchecked` 机械报告矩阵省略；by-design 确认过滤见下节 coverage-acks。
+跨跑次 diff 键 = `kind+scenarioId+stepId+featureMapRef`，见下节 discover 报告。
+
+## discover 报告与 coverage-acks（发现器信号源 1，spec #322 T2）
+
+### 跨跑次 diff 与基线（纯函数）
+
+`harness/discover/diff-runs.ts` 是确定性纯函数，无 I/O：
+
+| 函数 | 职责 |
+| ---- | ---- |
+| `selectBaseline(runs)` | 基线 = 最近一次入账（非 `blocked`）跑次。时间戳取 `endedAt`，缺省回退 `startedAt`。无入账跑次返回 `null` |
+| `diffUncovered(baseline, current)` | 两份 `uncovered[]` 跨跑次 diff，产出 `{added, removed}`。`added` = 本跑次新增缺口；`removed` = 基线有、本跑次消失的缺口 |
+| `filterAcked(items, acks)` | 过滤已确认 by-design 的缺口，见下 coverage-acks |
+
+diff 键 = `kind+scenarioId+stepId+featureMapRef` 四元组。optional 字段缺省归一为空串，键稳定。`reason` 不进键。
+基线为 `null`（首跑或无入账跑次）时，本跑次全部缺口入 `added`。
+
+### diff 报告写口
+
+`harness/discover/report.ts` 是 discover 报告唯一写口。
+只写 `.run/discover/<runId>/diff-report.json`（根 `.gitignore` 已忽略 `.run/`）。
+`<runId>` = 被 diff 的当前跑次 id。
+写前校验目标路径必须在 `.run/` 下，越界抛错，不静默。
+报告形态：
+
+```json
+{
+  "runId": "20261105T120000Z-abcd",
+  "baselineRunId": "20261104T120000Z-efgh",
+  "added": [],
+  "removed": []
+}
+```
+
+`added`／`removed` 项 shape 同 `uncovered[]`，写前经 `filterAcked` 过滤已 ack 键。
+验证期只写报告，不自动开票：不建 GitHub issue，不写提案出口。
+信噪比达标后才开自动开票（spec #322 Q15），属后续票。
+
+### coverage-acks（by-design 确认态）
+
+`fixtures/coverage-acks.json` 是 by-design 确认清单，初始为空：
+
+```json
+{ "acks": [] }
+```
+
+确认权归 Lei Hu，代理只提案。代理不得自动写入 ack 值；落 ack 走人审 PR。
+每条 ack 形状：
+
+```json
+{ "key": "nav.workbench.dispatch.buttons", "keyType": "feature-map-node" }
+```
+
+| 字段 | 说明 |
+| ---- | ---- |
+| `key` | 地图节点 id 或路由 |
+| `keyType` | `feature-map-node`（地图节点）或 `route`（路由） |
+
+过滤语义（`filterAcked`，seam④）：首期只按缺口 `featureMapRef` 匹配 `feature-map-node` 类 ack。
+命中 ack 的缺口不再出现在 diff 报告，`added` 与 `removed` 都过滤。
+`route` 类 ack 首期不参与过滤，留 T5 能力枚举对账用。
+无 `featureMapRef` 的缺口首期不被 ack 过滤。
 
 ## 闭环规则
 
