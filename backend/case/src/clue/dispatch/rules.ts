@@ -33,6 +33,27 @@ export const ORG_ASSIGN_FROM_STATUSES = ['in_pool', 'org_assigned', 'handler_ass
 /** 派主办／协办允许的来源状态。 */
 export const PEOPLE_ASSIGN_FROM_STATUS = 'org_assigned';
 
+/**
+ * 分派视图可读机构：录入机构，加上已派且不同的承办机构。
+ * fault 为 drop-assigned-org-read 时去掉已派机构。缺省不改变并集。
+ */
+export function readUnionOrgIds(
+  enteredOrgId: string,
+  assignedOrgId: string | null,
+  fault: string | undefined,
+): readonly string[] {
+  const targets = [enteredOrgId];
+  if (
+    assignedOrgId !== null &&
+    assignedOrgId !== '' &&
+    assignedOrgId !== enteredOrgId &&
+    fault !== 'drop-assigned-org-read'
+  ) {
+    targets.push(assignedOrgId);
+  }
+  return targets;
+}
+
 /** 已分派状态：派机构在这两种状态下是重新分派或指定管辖。 */
 const ASSIGNED_STATUSES: readonly string[] = ['org_assigned', 'handler_assigned'];
 

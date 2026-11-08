@@ -7,6 +7,7 @@ import {
   DECIDE_FROM_STATUS,
   ORG_ASSIGN_FROM_STATUSES,
   PEOPLE_ASSIGN_FROM_STATUS,
+  readUnionOrgIds,
   STREET_UNAVAILABLE_REASONS,
   createStreetBoundaryPort,
   decideDispatch,
@@ -167,5 +168,13 @@ describe('街道镇边界查询端口', () => {
     const port = createStreetBoundaryPort({ serviceUrl: 'https://layers.example', fetchImpl });
     const outcome = await port.query({ clueId: 'c1', kind: 'point', parts: [part] });
     expect(outcome).toEqual({ ok: false, reason: STREET_UNAVAILABLE_REASONS.invalidResponse });
+  });
+});
+
+describe('读并集机构', () => {
+  it('缺省包含录入机构与不同的已派机构；drop-assigned-org-read 去掉已派机构', () => {
+    expect(readUnionOrgIds('entered', 'assigned', undefined)).toEqual(['entered', 'assigned']);
+    expect(readUnionOrgIds('entered', 'entered', '')).toEqual(['entered']);
+    expect(readUnionOrgIds('entered', 'assigned', 'drop-assigned-org-read')).toEqual(['entered']);
   });
 });

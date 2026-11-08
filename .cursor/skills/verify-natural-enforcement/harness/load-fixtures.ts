@@ -88,6 +88,8 @@ export interface ScenarioStep {
   readonly matrix?: readonly DispatchButtonExpect[];
   /** read-dispatch-buttons：200 响应里的线索主状态必须是这个值。 */
   readonly expectClueStatus?: string;
+  /** read-dispatch-buttons：200 响应的 assignment.orgUnitId 必须等于该机构编码。 */
+  readonly expectAssignmentOrgCode?: string;
 }
 
 /** 一个身份在分派视图上的按钮开关。403 行只核 http 与 reason。 */

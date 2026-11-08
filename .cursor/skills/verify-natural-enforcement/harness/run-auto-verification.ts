@@ -202,29 +202,91 @@ async function closeDiscover(
   return closed.exitSuggestion;
 }
 
-async function runJourney(runId: string): Promise<void> {
-  const writer = new EvidenceWriter(runId, ['vf-journey-clue-dispatch'], 'cursor-cloud-vm');
-  await writer.init();
+const JOURNEY_SCENARIO = 'vf-sc-journey-read-union';
+
+const JOURNEY_CALL_SITES = [
+  { stepId: 'seed-intake-a', identity: 'admin-hq', method: 'POST', path: '/api/admin/personnel' },
+  { stepId: 'seed-intake-st', identity: 'admin-hq', method: 'POST', path: '/api/admin/personnel' },
+  { stepId: 'register', identity: 'clerk-a', method: 'POST', path: '/api/clues' },
+  { stepId: 'read-union-before', identity: 'clerk-a', method: 'GET', path: '/api/clues/:id/dispatch' },
+  { stepId: 'read-union-before', identity: 'intake-st', method: 'GET', path: '/api/clues/:id/dispatch' },
+  { stepId: 'read-union-before', identity: 'clerk-b', method: 'GET', path: '/api/clues/:id/dispatch' },
+  { stepId: 'assign-org', identity: 'intake-a', method: 'POST', path: '/api/clues/:id/assign-org' },
+  { stepId: 'read-union-after', identity: 'clerk-a', method: 'GET', path: '/api/clues/:id/dispatch' },
+  { stepId: 'read-union-after', identity: 'intake-a', method: 'GET', path: '/api/clues/:id/dispatch' },
+  { stepId: 'read-union-after', identity: 'intake-st', method: 'GET', path: '/api/clues/:id/dispatch' },
+  { stepId: 'read-union-after', identity: 'clerk-b', method: 'GET', path: '/api/clues/:id/dispatch' },
+  { stepId: 'read-union-after', identity: 'admin-hq', method: 'GET', path: '/api/org-units' },
+] as const;
+
+async function ensureJourneyPerson(
+  sessions: SessionCache,
+  baseUrl: string,
+  input: { code: string; name: string; orgCode: string; mobilePhone: string },
+): Promise<void> {
+  const admin = await loadIdentity('admin-hq');
+  const cookie = await sessions.cookieOf(admin);
+  const tree = await fetch(`${baseUrl}/api/org-units`, { headers: { cookie } });
+  if (tree.status !== 200) throw new Error(`读取机构树失败：HTTP ${tree.status}`);
+  const body = (await tree.json()) as { orgUnits?: { id?: string; code?: string }[] };
+  const org = body.orgUnits?.find((unit) => unit.code === input.orgCode);
+  if (!org?.id) throw new Error(`机构树缺少 ${input.orgCode}`);
+  const created = await fetch(`${baseUrl}/api/admin/personnel`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', cookie },
+    body: JSON.stringify({
+      code: input.code,
+      name: input.name,
+      orgUnitId: org.id,
+      mobilePhone: input.mobilePhone,
+      initialPassword: 'Seed-pass-52',
+      roles: ['内勤'],
+    }),
+  });
+  if (created.status === 200 || created.status === 409) return;
+  const text = await created.text();
+  throw new Error(`种入 ${input.code} 失败：HTTP ${created.status} ${text.slice(0, 300)}`);
+}
+
+async function writeAuthorityNotes(writer: EvidenceWriter): Promise<void> {
   const sectionFile = path.join(
     repoRoot(),
     '.cursor/skills/verify-natural-enforcement/fixtures/journeys/clue-dispatch-baseline/section5.json',
   );
   const section = JSON.parse(await fs.readFile(sectionFile, 'utf8')) as {
-    candidates: { id: string; section: string; text: string; reason: string }[];
+    candidates: { id: string; section: string; text: string; status: string; reason: string }[];
   };
   for (const candidate of section.candidates) {
+    if (candidate.status === 'executable') continue;
     await writer.writeStep({
       scenarioId: 'vf-journey-clue-dispatch',
       stepId: candidate.id,
       pass: false,
       expected: { section: candidate.section, text: candidate.text },
-      actual: { evaluation: 'unevaluated', reason: candidate.reason },
+      actual: { evaluation: candidate.status, reason: candidate.reason },
       evidence: [
         '.cursor/skills/verify-natural-enforcement/fixtures/journeys/clue-dispatch-baseline/section5.json',
       ],
     });
   }
+}
+
+async function runJourney(runId: string, baseUrl: string): Promise<void> {
+  if (!process.env.VERIFY_SPATIAL_SALT) process.env.VERIFY_SPATIAL_SALT = runId;
+  const writer = new EvidenceWriter(
+    runId,
+    ['vf-journey-clue-dispatch', JOURNEY_SCENARIO],
+    'cursor-cloud-vm',
+  );
+  await writer.init();
+  await fs.writeFile(
+    path.join(writer.runDir, 'call-sites.json'),
+    `${JSON.stringify({ scenarioId: JOURNEY_SCENARIO, sites: JOURNEY_CALL_SITES }, null, 2)}\n`,
+    'utf8',
+  );
+  await writeAuthorityNotes(writer);
   const stackUnavailable = process.env.VERIFY_STACK === 'unavailable';
+  let blocked = stackUnavailable;
   if (stackUnavailable) {
     await writer.writeStep({
       scenarioId: '_harness',
@@ -232,27 +294,59 @@ async function runJourney(runId: string): Promise<void> {
       pass: false,
       expected: { ok: true },
       actual: {
-        error: '业务栈不可用。原因 stack-unavailable。',
+        error: '业务栈不可用。原因 stack-unavailable。读并集步骤未发出。',
         disposition: 'environment-blocked',
       },
-      evidence: [],
+      evidence: ['call-sites.json'],
     });
+  } else {
+    const sessions = new SessionCache(baseUrl);
+    const ctx = { baseUrl, sessions };
+    try {
+      await ensureJourneyPerson(sessions, baseUrl, {
+        code: 'P-INTAKE-A',
+        name: '甲区内勤',
+        orgCode: 'ORG-DEPT-A',
+        mobilePhone: '13900002001',
+      });
+      await ensureJourneyPerson(sessions, baseUrl, {
+        code: 'P-INTAKE-ST',
+        name: '甲所内勤',
+        orgCode: 'ORG-STATION-A',
+        mobilePhone: '13900002003',
+      });
+      await runApiScenario(ctx, JOURNEY_SCENARIO, writer);
+    } catch (error) {
+      blocked = true;
+      await writer.writeStep({
+        scenarioId: '_harness',
+        stepId: 'blocked',
+        pass: false,
+        expected: { ok: true },
+        actual: {
+          error: error instanceof Error ? error.message : String(error),
+          disposition: 'environment-blocked',
+        },
+        evidence: ['call-sites.json'],
+      });
+    }
   }
-  const summary = await writer.finish(stackUnavailable ? 'blocked' : 'passed');
+  const summary = await writer.finish(blocked ? 'blocked' : 'passed');
   const channels: DiscoverChannels = {
-    api: stackUnavailable ? 'blocked' : 'not-run',
+    api: blocked ? 'blocked' : summary.status,
     ui: 'not-run',
   };
   const exitSuggestion = await closeDiscover(writer, runId, 'journey', channels);
   console.log(
     JSON.stringify({
       status: summary.status,
-      acceptance: 'not-accepted',
+      acceptance: channels.api === 'passed' ? 'slice-read-union' : 'not-accepted',
       runDir: writer.runDir,
       failed: summary.failed,
+      fault: process.env.VERIFY_FAULT ?? '',
     }),
   );
-  process.exitCode = exitSuggestion;
+  process.exitCode = channels.api === 'failed' ? 1 : exitSuggestion;
 }
 
 async function main(): Promise<void> {
@@ -260,7 +354,7 @@ async function main(): Promise<void> {
   const baseUrl = (process.env.VERIFY_BASE_URL ?? 'https://localhost:8080').replace(/\/$/, '');
   const phase = process.env.VERIFY_PHASE ?? '';
   if (phase === 'journey') {
-    await runJourney(runId);
+    await runJourney(runId, baseUrl);
     return;
   }
   const mineralOnly = phase === 'mineral';

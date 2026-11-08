@@ -110,7 +110,11 @@ export function isNonProductMiss(record: StepRecord): boolean {
   if (record.pass) return false;
   if (typeof record.actual !== 'object' || record.actual === null) return false;
   const actual = record.actual as { evaluation?: unknown; disposition?: unknown };
-  return actual.evaluation === 'unverified' || actual.evaluation === 'unevaluated' || actual.disposition === 'environment-blocked';
+  return actual.evaluation === 'unverified'
+    || actual.evaluation === 'unevaluated'
+    || actual.evaluation === 'product-gap'
+    || actual.evaluation === 'not-in-slice'
+    || actual.disposition === 'environment-blocked';
 }
 
 /** 生成短 runId。 */

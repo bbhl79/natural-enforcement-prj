@@ -65,6 +65,7 @@
 | `mainFrom` / `assistFrom` | assign-people：按工号从候选解析主办／协办；`mainFrom` 缺省取第一人 |
 | `matrix` | read-dispatch-buttons：每个身份直接读 `GET /api/clues/:id/dispatch`。核对 `http`、`reason`、`mayDecide`、`mayAssignOrg`、`mayAssignPeople`、`mayReassignOrg`。未写的开关不核，记为 uncovered `switch-unchecked`；见 `../RUN-CONTRACT.md`。 |
 | `expectClueStatus` | read-dispatch-buttons：200 响应里的线索主状态 |
+| `expectAssignmentOrgCode` | read-dispatch-buttons：200 响应的 `assignment.orgUnitId` 必须等于该机构编码。 |
 | `isolateSpatial` | register-clue 的 `mutate`。为 true 时按 `VERIFY_SPATIAL_SALT` 平移 `overrideSpatial`。同一跑次内相对位置不变。 |
 
 多步链上下文：`register-clue` 成功后把响应 `body.id` 作为后续步骤的 `clueId`，把 `body.status` 作为 `expectedStatus` 缺省值。

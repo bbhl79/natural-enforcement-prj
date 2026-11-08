@@ -5,7 +5,13 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { classifyProposals } from './discover/classify-proposals.ts';
-import type { CoverageAck } from './discover/diff-runs.ts';
+import {
+  coarseAcks,
+  filterAcked,
+  selectBaseline,
+  type CoverageAck,
+  type RunSnapshot,
+} from './discover/diff-runs.ts';
 import {
   enumerateApiRoutes,
   enumerateClueViews,
@@ -16,7 +22,6 @@ import {
 import { reconcileCapabilities, type ScenarioUsage } from './discover/reconcile.ts';
 import { writeDiffReport, writeDiscoverJson } from './discover/report.ts';
 import { checkNodeSources, type AssertedNode } from './discover/source-check.ts';
-import type { RunSnapshot } from './discover/diff-runs.ts';
 import type { UncoveredItem } from './discover/uncovered.ts';
 import { clusterFailures, planClusterActions } from './discover/cluster-failures.ts';
 import { loadCoverageAcks } from './load-coverage-acks.ts';
@@ -62,19 +67,30 @@ interface SectionCandidate {
   readonly id: string;
   readonly section: string;
   readonly text: string;
-  readonly status: 'unevaluated';
+  readonly status: string;
   readonly reason: string;
 }
 
-function headShaOf(root: string): string {
+function gitStateOf(root: string): { headSha: string; dirty: boolean; porcelain: string } {
+  let headSha = 'unknown';
   try {
-    return execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], {
+    headSha = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
   } catch {
-    return 'unknown';
+    headSha = 'unknown';
   }
+  let porcelain = '';
+  try {
+    porcelain = execFileSync('git', ['-C', root, 'status', '--porcelain'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+  } catch {
+    porcelain = '';
+  }
+  return { headSha, dirty: porcelain.trim() !== '', porcelain };
 }
 
 async function readSection5(root: string): Promise<SectionCandidate[]> {
@@ -299,8 +315,11 @@ export async function runDiscoverClose(input: DiscoverCloseInput): Promise<{
   const summary = await readSummaryUncovered(input.runDir);
   const times = await readManifestTimes(input.runDir);
   const history = await loadHistory(root, input.runId);
+  const baseline = selectBaseline(history.snapshots);
+  const ignored = coarseAcks(acks);
   let diffBody: {
-    status: 'compared' | 'not-run';
+    status: 'compared' | 'first-run' | 'not-run';
+    compared: boolean;
     baselineRunId: string | null;
     added?: UncoveredItem[];
     removed?: UncoveredItem[];
@@ -311,6 +330,7 @@ export async function runDiscoverClose(input: DiscoverCloseInput): Promise<{
   if (summary === null || times === null) {
     diffBody = {
       status: 'not-run',
+      compared: false,
       baselineRunId: null,
       reason: '当前跑次缺少 summary.uncovered 或 manifest。不把缺省当成零缺口。',
       historySkipped: history.skipped,
@@ -323,8 +343,19 @@ export async function runDiscoverClose(input: DiscoverCloseInput): Promise<{
   } else if (input.channels.api === 'blocked') {
     diffBody = {
       status: 'not-run',
+      compared: false,
       baselineRunId: null,
       reason: '当前跑次 api 通道为 blocked。阻塞不入账，也不把 uncovered 写成业务零缺口。',
+      historySkipped: history.skipped,
+    };
+  } else if (baseline === null) {
+    filterAcked(summary.uncovered, acks);
+    diffBody = {
+      status: 'first-run',
+      compared: false,
+      baselineRunId: null,
+      coarseAcksIgnored: ignored,
+      reason: '无历史入账跑次。selectBaseline 返回 null。已调用 filterAcked。未把当前 uncovered 写成跨跑次 added。',
       historySkipped: history.skipped,
     };
   } else {
@@ -343,24 +374,31 @@ export async function runDiscoverClose(input: DiscoverCloseInput): Promise<{
     });
     diffBody = {
       status: 'compared',
+      compared: true,
       baselineRunId: diff.baselineRunId,
       added: diff.added,
       removed: diff.removed,
       coarseAcksIgnored: diff.coarseAcksIgnored,
-      reason: 'added 与 removed 只含机械 uncovered。权威第 5 节见 unevaluated，不在这两份清单里。',
+      reason: 'added 与 removed 是相对基线的机械 uncovered。权威条目见 authorityItems。',
       historySkipped: history.skipped,
     };
   }
 
+  const git = gitStateOf(root);
+  const slicePassed = input.mode === 'journey' && input.channels.api === 'passed';
   const report = {
     schema: 'verify-discover-report/1',
     runId: input.runId,
-    headSha: headShaOf(root),
+    headSha: git.headSha,
+    dirty: git.dirty,
+    dirtyPorcelain: git.dirty ? git.porcelain : '',
     mode: input.mode,
     command: input.command,
+    fault: process.env.VERIFY_FAULT ?? '',
     callChain: CALL_CHAIN,
     channels: input.channels,
-    journeyAcceptance: 'not-accepted',
+    uiNote: input.mode === 'journey' ? '本切片取证是跨身份 GET。不调用 UI 点击写。' : '',
+    journeyAcceptance: slicePassed ? 'slice-read-union' : 'not-accepted',
     indexDisk,
     latentUnverified:
       register === null
@@ -371,15 +409,16 @@ export async function runDiscoverClose(input: DiscoverCloseInput): Promise<{
     clusterActionsDryRun,
     ticketsOpened: false,
     proposals,
-    unevaluated: candidates,
+    authorityItems: candidates,
     sourceChecks,
     missingInputs,
     nextSteps: [
-      '第 5 节六条保持未评估，直到产品暴露对应观测面。',
-      '不要把 vf-sc-verify-loop-land-verify-dispatch 的内部状态当成 rev107 串景。',
-      'TE 在镜像 SHA 链、SourceGate 与目录访问核过之前，不把本报告当正式验收。',
+      '读并集切片：VERIFY_PHASE=journey 跑 vf-sc-journey-read-union。',
+      '注入：同一命令加 VERIFY_FAULT=drop-assigned-org-read。恢复：去掉该变量再跑。',
+      '签收是产品差距，不在本轮造功能。',
+      'TE 在 docker、SourceGate 与目录访问核过之前，不把 blocked 跑次当成切片通过。',
     ],
-    evidenceRefs: [input.runDir],
+    evidenceRefs: [input.runDir, path.join(input.runDir, 'call-sites.json')],
   };
 
   const reportPath = await writeDiscoverJson({
@@ -394,6 +433,6 @@ export async function runDiscoverClose(input: DiscoverCloseInput): Promise<{
   const fork = indexDisk.status === 'fork' || missingInputs.some((item) => item.status === 'failed');
   let exitSuggestion: 0 | 1 | 2 = 0;
   if (productBad || blocked || fork) exitSuggestion = 1;
-  else if (input.mode === 'journey') exitSuggestion = 2;
+  else if (input.mode === 'journey' && input.channels.api !== 'passed') exitSuggestion = 2;
   return { reportPath, exitSuggestion };
 }

@@ -617,6 +617,11 @@ async function readDispatchButtons(
     const found =
       listed.http.status === 200 &&
       listOf(listed.body.rows).some((item) => asText(item.id) === clueId);
+    const assignment = viewed.body.assignment;
+    const assignmentOrgUnitId =
+      assignment !== null && typeof assignment === 'object' && !Array.isArray(assignment)
+        ? asText((assignment as { orgUnitId?: unknown }).orgUnitId)
+        : '';
     const row = {
       identityRef: expect.identityRef,
       http: viewed.http.status,
@@ -626,6 +631,7 @@ async function readDispatchButtons(
       mayAssignOrg: viewed.body.mayAssignOrg === true,
       mayAssignPeople: viewed.body.mayAssignPeople === true,
       mayReassignOrg: viewed.body.mayReassignOrg === true,
+      assignmentOrgUnitId,
       listedInAssignView: found,
     };
     rows.push(row);
@@ -644,6 +650,22 @@ async function readDispatchButtons(
   if (clueStatus !== '') run.status = clueStatus;
   if (step.expectClueStatus !== undefined && clueStatus !== step.expectClueStatus) {
     misses.push(`clueStatus=${clueStatus}`);
+  }
+  if (step.expectAssignmentOrgCode !== undefined) {
+    const admin = await loadIdentity('admin-hq');
+    const adminCookie = await ctx.sessions.cookieOf(admin);
+    const expectedId = await resolveOrgUnitId(
+      ctx,
+      { ...step, orgUnitCode: step.expectAssignmentOrgCode },
+      adminCookie,
+      run,
+    );
+    for (const row of rows) {
+      if (row.http !== 200) continue;
+      if (row.assignmentOrgUnitId !== expectedId) {
+        misses.push(`${String(row.identityRef)} assignmentOrgUnitId=${String(row.assignmentOrgUnitId)}`);
+      }
+    }
   }
   const facts = { clueStatus, rows };
   return {

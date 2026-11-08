@@ -5,6 +5,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { readUnionOrgIds } from '../backend/case/src/clue/dispatch/rules.ts';
 import { EvidenceWriter } from '../.cursor/skills/verify-natural-enforcement/harness/evidence.ts';
 import { loadCoverageAcks } from '../.cursor/skills/verify-natural-enforcement/harness/load-coverage-acks.ts';
 import { loadScenario } from '../.cursor/skills/verify-natural-enforcement/harness/load-fixtures.ts';
@@ -89,6 +90,15 @@ describe('登记加载：index 分叉与 latent 未验证', () => {
   });
 });
 
+describe('读并集目标与故障开关', () => {
+  it('缺省包含录入机构与不同的已派机构；注入去掉已派机构', () => {
+    expect(readUnionOrgIds('entered', 'assigned', undefined)).toEqual(['entered', 'assigned']);
+    expect(readUnionOrgIds('entered', 'entered', undefined)).toEqual(['entered']);
+    expect(readUnionOrgIds('entered', 'assigned', 'drop-assigned-org-read')).toEqual(['entered']);
+    expect(readUnionOrgIds('entered', null, 'drop-assigned-org-read')).toEqual(['entered']);
+  });
+});
+
 describe('coverage-acks 形状与未评估收口', () => {
   it('真实清单是 { acks: [] }；裸数组明确失败', async () => {
     await expect(loadCoverageAcks(process.cwd())).resolves.toEqual([]);
@@ -143,15 +153,24 @@ describe('coverage-acks 形状与未评估收口', () => {
     const report = JSON.parse(await fs.readFile(closed.reportPath, 'utf8')) as {
       journeyAcceptance: string;
       ticketsOpened: boolean;
-      unevaluated: { id: string; status: string }[];
+      authorityItems: { id: string; status: string }[];
       sourceChecks: { verdict: string; authority: string }[];
-      missingInputs: { name: string; status: string }[];
+      missingInputs: { name: string; status: string; reason: string }[];
       latentUnverified: { status: string };
+      diff: { status: string };
     };
     expect(report.journeyAcceptance).toBe('not-accepted');
     expect(report.ticketsOpened).toBe(false);
-    expect(report.unevaluated).toHaveLength(6);
-    expect(report.unevaluated.every((item) => item.status === 'unevaluated')).toBe(true);
+    expect(report.authorityItems.map((item) => item.status).sort()).toEqual([
+      'executable',
+      'not-in-slice',
+      'not-in-slice',
+      'not-in-slice',
+      'product-gap',
+      'product-gap',
+    ]);
+    expect(report.authorityItems.find((item) => item.id === 's5-read-union')?.status).toBe('executable');
+    expect(report.diff.status === 'first-run' || report.diff.status === 'compared').toBe(true);
     expect(report.sourceChecks.some((item) => item.verdict === 'ok')).toBe(false);
     expect(report.missingInputs).toContainEqual({
       name: 'mappedEndpoints',

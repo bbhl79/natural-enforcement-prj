@@ -85,7 +85,14 @@ export function classifyFailure(record: FailureRecord): ClassifiedFailure | null
 
   const expected = recordOf(record.expected);
   const actual = recordOf(record.actual);
-  if (actual?.evaluation === 'unevaluated' || actual?.evaluation === 'unverified') return null;
+  if (
+    actual?.evaluation === 'unevaluated' ||
+    actual?.evaluation === 'unverified' ||
+    actual?.evaluation === 'product-gap' ||
+    actual?.evaluation === 'not-in-slice'
+  ) {
+    return null;
+  }
   if (actual?.disposition === 'environment-blocked') {
     return {
       scenarioId: record.scenarioId,

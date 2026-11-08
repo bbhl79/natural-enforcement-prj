@@ -105,7 +105,7 @@ services:
       # 仅 NE_DEPLOYMENT=dev 或 verify，且 NODE_ENV 不是 production 时，server 才使用名单。
       # NODE_ENV=production 时进程忽略名单，来源地址闸维持原规则。
       NE_DEPLOYMENT: "${NE_DEPLOYMENT:-}"
-      NE_SOURCE_GATE_ALLOWED_SOURCES: "${NE_SOURCE_GATE_ALLOWED_SOURCES:-}"
+      VERIFY_FAULT: "${VERIFY_FAULT:-}"
     depends_on:
       db:
         condition: service_healthy
