@@ -673,6 +673,8 @@ export async function runApiScenario(
   writer: EvidenceWriter,
 ): Promise<{ pass: boolean; observation: StepObservation | null }> {
   const scenario = await loadScenario(scenarioId);
+  // 注册元数据供 finish() 推导 uncovered（featureMapRef、matrix 未核开关）。
+  writer.registerScenario(scenarioId, scenario);
   if (scenario.status !== 'runnable') {
     await writer.writeStep({
       scenarioId,
