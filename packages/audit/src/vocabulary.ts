@@ -49,6 +49,8 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'clue.held',
   'clue.org-assigned',
   'clue.handler-assigned',
+  'clue.unit-received',
+  'clue.unit-received',
   // 移送与停用机构池重新指定（#216，规格 G）：登记移送、重新指定接收机构。
   'clue.pool-reassigned',
   // 报请指定管辖（#215，规格 G）：下级报请；受理人驳回（批准由 clue.org-assigned 承载）。

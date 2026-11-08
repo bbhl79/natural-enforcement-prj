@@ -76,6 +76,8 @@ function view(overrides: Partial<DispatchView> = {}): DispatchView {
     mayAssignOrg: false,
     mayReassignOrg: false,
     mayAssignPeople: false,
+    mayConfirmUnitReceipt: false,
+    unitReceipt: null,
     mayTransfer: false,
     mayRecordOther: false,
     designation: null,
@@ -217,6 +219,7 @@ describe('监督身份分派只读', () => {
         onDecide={noop}
         onAssignOrg={noop}
         onAssignPeople={noop}
+        onConfirmUnitReceipt={() => undefined}
         onTransfer={noop}
         onDesignateRequest={noop}
         onDesignateReject={noop}
@@ -249,7 +252,7 @@ describe('监督身份分派只读', () => {
   });
 
   it('已派机构与已派承办人仍展示报请和移送，写控件禁用', () => {
-    const assignment = { orgUnitId: 'o1', orgName: '天河区分局', kind: 'initial', designate: false };
+    const assignment = { assignmentId: 'ASG-TEST', orgUnitId: 'o1', orgName: '天河区分局', kind: 'initial', designate: false };
     const disabled = (html: string, attr: string) => {
       const tag = html.match(new RegExp(`<[^>]*${attr}[^>]*>`))?.[0] ?? '';
       expect(tag).toContain('disabled');
@@ -275,7 +278,7 @@ describe('监督身份分派只读', () => {
   it('已有进行中的报请时不展示报请入口，移送面板仍只读可见', () => {
     const html = body({
       status: 'org_assigned',
-      assignment: { orgUnitId: 'o1', orgName: '天河区分局', kind: 'initial', designate: false },
+      assignment: { assignmentId: 'ASG-TEST', orgUnitId: 'o1', orgName: '天河区分局', kind: 'initial', designate: false },
       designation: {
         requestId: 'r1',
         requestingOrgId: 'org-a',
@@ -525,6 +528,7 @@ describe('移送（自然资源部门以外机关）', () => {
           onDecide={() => undefined}
           onAssignOrg={() => undefined}
           onAssignPeople={() => undefined}
+          onConfirmUnitReceipt={() => undefined}
           onTransfer={() => undefined}
           onDesignateRequest={() => undefined}
           onDesignateReject={() => undefined}
@@ -580,6 +584,7 @@ describe('报请指定管辖与指定锁', () => {
         onDecide={noop}
         onAssignOrg={noop}
         onAssignPeople={noop}
+        onConfirmUnitReceipt={() => undefined}
         onTransfer={noop}
         onDesignateRequest={noop}
         onDesignateReject={noop}
@@ -683,6 +688,7 @@ describe('其他处置（#229）', () => {
         onDecide={() => undefined}
         onAssignOrg={() => undefined}
         onAssignPeople={() => undefined}
+        onConfirmUnitReceipt={() => undefined}
         onTransfer={() => undefined}
         onDesignateRequest={() => undefined}
         onDesignateReject={() => undefined}
@@ -702,6 +708,7 @@ describe('其他处置（#229）', () => {
         onDecide={() => undefined}
         onAssignOrg={() => undefined}
         onAssignPeople={() => undefined}
+        onConfirmUnitReceipt={() => undefined}
         onTransfer={() => undefined}
         onDesignateRequest={() => undefined}
         onDesignateReject={() => undefined}

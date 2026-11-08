@@ -59,6 +59,7 @@ import type { DesignationRequestView } from './clue-designation.service.ts';
 const DECIDE_OPCODE = 'clue.dispatch.decide';
 const ORG_OPCODE = 'clue.org.assign';
 const PEOPLE_OPCODE = 'clue.handler.assign';
+const RECEIPT_OPCODE = 'clue.handler.assign'; // #335 写权同承办内勤；对象级另判；不改主状态
 const READ_OPCODE = 'clue.read';
 
 /** 一个命中面对（决定步展示）。 */
@@ -95,11 +96,20 @@ export interface DispatchView {
   readonly dupComputedAt: string | null;
   readonly hitGroups: readonly DispatchHitGroup[];
   readonly assignment: {
+    readonly assignmentId: string;
     readonly orgUnitId: string;
     readonly orgName: string;
     readonly kind: string;
     readonly designate: boolean;
   } | null;
+  /** 单位签收（#335；未确认 null）。 */
+  readonly unitReceipt: {
+    readonly receivedAt: string;
+    readonly receivedBy: string;
+    readonly mode: string;
+  } | null;
+  /** 当前操作者能不能确认单位签收（承办机构内勤；未签收且已派机构）。 */
+  readonly mayConfirmUnitReceipt: boolean;
   readonly handlers: readonly { readonly personnelId: string; readonly code: string; readonly name: string; readonly role: string }[];
   /** 承办机构在职人员（派主办／协办的候选）。 */
   readonly candidates: readonly { readonly personnelId: string; readonly code: string; readonly name: string }[];
@@ -136,6 +146,29 @@ export type DispatchViewOutcome =
   | { readonly status: 404; readonly body: { readonly result: 'not-found' } };
 
 /** 分派决定结果。 */
+/** 单位签收确认结果（#335）。 */
+export type ConfirmUnitReceiptOutcome =
+  | {
+      readonly status: 200;
+      readonly body: {
+        readonly result: 'unit-received';
+        readonly clueId: string;
+        readonly code: string;
+        readonly status: string;
+        readonly assignmentId: string;
+        readonly unitReceipt: {
+          readonly receivedAt: string;
+          readonly receivedBy: string;
+          readonly mode: string;
+        };
+        readonly idempotent?: boolean;
+      };
+    }
+  | { readonly status: 400; readonly body: { readonly result: 'non-compliant'; readonly reason: string; readonly rules?: readonly string[] } }
+  | { readonly status: 403; readonly body: { readonly reason: DenyReason } }
+  | { readonly status: 404; readonly body: { readonly result: 'not-found' } }
+  | { readonly status: 409; readonly body: { readonly result: 'assignment-conflict' | 'invalid-state'; readonly reason: string } };
+
 export type DecideOutcome =
   | {
       readonly status: 200;
@@ -766,6 +799,121 @@ export class ClueDispatchService {
     });
   }
 
+  /** 单位签收确认（#335）：与 assignPeople 分离；主状态保持 org_assigned。 */
+  async confirmUnitReceipt(
+    actor: ActorRef,
+    clueId: string,
+    input: { readonly expectedAssignmentId: string },
+  ): Promise<ConfirmUnitReceiptOutcome> {
+    const context = await this.clues.readDispatchContext(clueId);
+    if (!context) return { status: 404, body: { result: 'not-found' } };
+    const account = await this.directory.findById(actor.personnelId);
+    const actorOrgId = account?.orgUnitId ?? '';
+    const actorCode = account?.code ?? null;
+    const assignment = context.assignment;
+    try {
+      await this.access.authorize(actor, RECEIPT_OPCODE, assignment?.orgUnitId ?? context.enteredOrgId, {
+        resourceType: 'clue',
+        resourceId: clueId,
+      });
+    } catch (error) {
+      if (!isAccessDenied(error)) throw error;
+      return { status: 403, body: { reason: error.reason } };
+    }
+    if (!assignment) {
+      return { status: 409, body: { result: 'invalid-state', reason: 'invalid-state' } };
+    }
+    const clerkHere =
+      (account?.roles ?? []).includes('内勤') && account?.orgUnitId === assignment.orgUnitId;
+    if (!clerkHere) {
+      await this.deny(actor, actorCode, actorOrgId, RECEIPT_OPCODE, clueId, assignment.orgUnitId);
+      return { status: 403, body: { reason: 'permission-denied' } };
+    }
+    const expectedAssignmentId = input.expectedAssignmentId.trim();
+    if (expectedAssignmentId === '') {
+      return {
+        status: 400,
+        body: { result: 'non-compliant', reason: 'invalid-form', rules: ['expected-assignment-required'] },
+      };
+    }
+    if (expectedAssignmentId !== assignment.id) {
+      return { status: 409, body: { result: 'assignment-conflict', reason: 'assignment-conflict' } };
+    }
+    const receivedAt = new Date();
+    return this.uow.run(async (tx) => {
+      const applied = await tx.clues.confirmUnitReceipt({
+        clueId,
+        expectedAssignmentId,
+        receivedBy: actor.personnelId,
+        receivedAt,
+        mode: 'manual',
+      });
+      if (applied === 'missing') {
+        return { status: 409 as const, body: { result: 'invalid-state' as const, reason: 'invalid-state' } };
+      }
+      if (applied === 'conflict') {
+        return {
+          status: 409 as const,
+          body: { result: 'assignment-conflict' as const, reason: 'assignment-conflict' },
+        };
+      }
+      const receipt = {
+        receivedAt: (assignment.unitReceivedAt ?? receivedAt).toISOString(),
+        receivedBy: assignment.unitReceivedBy ?? actor.personnelId,
+        mode: assignment.unitReceivedMode ?? 'manual',
+      };
+      if (applied === 'idempotent') {
+        await tx.audit.append({
+          action: 'clue.unit-received',
+          ...this.parties(actor, actorCode, actorOrgId, clueId, RECEIPT_OPCODE),
+          detail: JSON.stringify({
+            code: context.code,
+            assignmentId: assignment.id,
+            idempotent: true,
+            unitReceipt: receipt,
+          }),
+        });
+        return {
+          status: 200 as const,
+          body: {
+            result: 'unit-received' as const,
+            clueId,
+            code: context.code,
+            status: context.status,
+            assignmentId: assignment.id,
+            unitReceipt: receipt,
+            idempotent: true,
+          },
+        };
+      }
+      const fresh = {
+        receivedAt: receivedAt.toISOString(),
+        receivedBy: actor.personnelId,
+        mode: 'manual' as const,
+      };
+      await tx.audit.append({
+        action: 'clue.unit-received',
+        ...this.parties(actor, actorCode, actorOrgId, clueId, RECEIPT_OPCODE),
+        detail: JSON.stringify({
+          code: context.code,
+          assignmentId: assignment.id,
+          unitReceipt: fresh,
+        }),
+      });
+      return {
+        status: 200 as const,
+        body: {
+          result: 'unit-received' as const,
+          clueId,
+          code: context.code,
+          status: context.status,
+          assignmentId: assignment.id,
+          unitReceipt: fresh,
+        },
+      };
+    });
+  }
+
   /** 状态守卫：expectedStatus 不符即并发冲突；状态不在允许集合即 invalid-state。 */
   private stateGuard(
     actual: string,
@@ -811,6 +959,7 @@ export class ClueDispatchService {
     mayRequestDesignation: boolean;
     mayReviewDesignation: boolean;
     designationLocked: boolean;
+    mayConfirmUnitReceipt: boolean;
   }> {
     const roles = account?.roles ?? [];
     const actorOrg = account?.orgUnitId ?? null;
@@ -873,6 +1022,13 @@ export class ClueDispatchService {
       actorOrg !== null &&
       actorOrg === designation.reviewerOrgId;
     const designationLocked = await this.designationLockedFor(actorOrg, designation);
+    const mayConfirmUnitReceipt =
+      context.status === 'org_assigned' &&
+      context.assignment !== null &&
+      context.assignment.unitReceivedAt === null &&
+      roles.includes('内勤') &&
+      actorOrg !== null &&
+      actorOrg === context.assignment.orgUnitId;
     return {
       mayDecide,
       mayAssignOrg,
@@ -883,6 +1039,7 @@ export class ClueDispatchService {
       mayRequestDesignation,
       mayReviewDesignation,
       designationLocked,
+      mayConfirmUnitReceipt,
     };
   }
 
@@ -932,6 +1089,7 @@ export class ClueDispatchService {
       mayRequestDesignation: boolean;
       mayReviewDesignation: boolean;
       designationLocked: boolean;
+      mayConfirmUnitReceipt: boolean;
     },
     designation: DesignationRequestView | null,
   ): Promise<DispatchView> {
@@ -991,10 +1149,19 @@ export class ClueDispatchService {
       assignment:
         context.assignment && assignmentOrg
           ? {
+              assignmentId: context.assignment.id,
               orgUnitId: context.assignment.orgUnitId,
               orgName: assignmentOrg.name,
               kind: context.assignment.kind,
               designate: context.assignment.designate,
+            }
+          : null,
+      unitReceipt:
+        context.assignment && context.assignment.unitReceivedAt
+          ? {
+              receivedAt: context.assignment.unitReceivedAt.toISOString(),
+              receivedBy: context.assignment.unitReceivedBy ?? '',
+              mode: context.assignment.unitReceivedMode ?? 'manual',
             }
           : null,
       handlers,
@@ -1010,6 +1177,7 @@ export class ClueDispatchService {
       mayRequestDesignation: affordance.mayRequestDesignation,
       mayReviewDesignation: affordance.mayReviewDesignation,
       designationLocked: affordance.designationLocked,
+      mayConfirmUnitReceipt: affordance.mayConfirmUnitReceipt,
         typeCodes: context.typeCodes,
         hasCaseByCasePlanningType: hasCaseByCasePlanningType(context.typeCodes),
     };

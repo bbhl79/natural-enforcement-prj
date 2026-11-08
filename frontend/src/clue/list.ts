@@ -35,6 +35,8 @@ export interface ClueListRow {
   readonly narrative: string;
   readonly registeredAt: string;
   readonly hasGaps: boolean;
+  /** #335：列表可选；true=已单位签收。 */
+  readonly unitReceived?: boolean;
   readonly tags: readonly string[];
 }
 
