@@ -88,8 +88,34 @@ if [[ "$PHASE" == "journey" ]]; then
   fi
   # dev 把 COMPOSE_FILE 固定为基础编排，故障 overlay 不会被这次 up 带入。
   ./dev up
+  if [[ -n "${VERIFY_FAULT:-}" ]]; then
+    docker compose -p "$COMPOSE_PROJECT_NAME" \
+      -f "$ROOT/infra/docker-compose.yml" \
+      -f "$ROOT/.cursor/skills/verify-natural-enforcement/harness/layers/docker-compose.verify-fault.yml" \
+      up -d --no-deps --force-recreate server
+  else
+    docker compose -p "$COMPOSE_PROJECT_NAME" \
+      -f "$ROOT/infra/docker-compose.yml" \
+      up -d --no-deps --force-recreate server
+  fi
+  for _ in $(seq 1 40); do
+    cid="$(docker compose -p "$COMPOSE_PROJECT_NAME" -f "$ROOT/infra/docker-compose.yml" ps -q server || true)"
+    health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$cid" 2>/dev/null || true)"
+    if [[ "$health" == "healthy" ]]; then
+      break
+    fi
+    sleep 3
+  done
+  if [[ "${health:-}" != "healthy" ]]; then
+    echo "[FAIL] 隔离 server 未进入 healthy，不发业务请求" | tee "$RUN_DIR/stack-blocked.txt"
+    export VERIFY_STACK=unavailable
+    node --experimental-transform-types --disable-warning=ExperimentalWarning \
+      "$ROOT/.cursor/skills/verify-natural-enforcement/harness/run-auto-verification.ts" \
+      --run-id "$RUN_ID"
+    exit $?
+  fi
   export NODE_EXTRA_CA_CERTS="$CERT"
-  export VERIFY_BASE_URL="${VERIFY_BASE_URL:-https://localhost:8080}"
+  export VERIFY_BASE_URL="https://localhost:${NGINX_PORT}"
   # shellcheck source=transport-gate.sh
   . "$ROOT/.cursor/skills/verify-natural-enforcement/harness/transport-gate.sh"
   verify_transport_or_block "$VERIFY_BASE_URL" ""
