@@ -86,6 +86,23 @@ if [[ "$PHASE" == "journey" ]]; then
     echo "[FAIL] 拒绝默认项目名，不执行 dev up" | tee "$RUN_DIR/stack-blocked.txt"
     exit 1
   fi
+  # shellcheck source=../../../../tools/runtime-env-lib.sh
+  . "$ROOT/tools/runtime-env-lib.sh"
+  RUNTIME_ENV_FILE="$ROOT/infra/runtime.env"
+  runtime_env_load
+  percent_encode() {
+    printf '%s' "$1" | od -An -tx1 | awk '{
+      for (i = 1; i <= NF; i++) {
+        c = strtonum("0x" $i)
+        if ((c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c == 45 || c == 46 || c == 95 || c == 126)
+          printf "%c", c
+        else
+          printf "%%%s", toupper($i)
+      }
+    }'
+  }
+  export DATABASE_URL="postgresql://$(percent_encode "$POSTGRES_USER"):$(percent_encode "$POSTGRES_PASSWORD")@${POSTGRES_HOST}:5432/$(percent_encode "$POSTGRES_DB")"
+  export REDIS_URL="redis://${REDIS_HOST}:6379"
   # dev 把 COMPOSE_FILE 固定为基础编排，故障 overlay 不会被这次 up 带入。
   ./dev up
   if [[ -n "${VERIFY_FAULT:-}" ]]; then
