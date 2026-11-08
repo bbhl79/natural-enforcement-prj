@@ -10,6 +10,8 @@ import {
 import { evaluateOracle, type StepObservation } from './oracle.ts';
 import { EvidenceWriter, newRunId, type RunSummary } from './evidence.ts';
 import { SessionCache } from './session.ts';
+import { recordOf } from './record-of.ts';
+import { BUTTON_FLAGS } from './dispatch-buttons.ts';
 
 export interface HarnessContext {
   readonly baseUrl: string;
@@ -37,12 +39,6 @@ const OBSERVED_VERIFICATION = new Set(['done', 'failed', 'not_required', 'runnin
 
 function asText(value: unknown): string {
   return typeof value === 'string' ? value : '';
-}
-
-function recordOf(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
 }
 
 function listOf(value: unknown): readonly Record<string, unknown>[] {
@@ -593,8 +589,6 @@ async function runStep(
 
   throw new Error(`本轮 harness 不支持 action=${step.action}`);
 }
-
-const BUTTON_FLAGS = ['mayDecide', 'mayAssignOrg', 'mayAssignPeople', 'mayReassignOrg'] as const;
 
 /**
  * 各身份自己读分派视图。
