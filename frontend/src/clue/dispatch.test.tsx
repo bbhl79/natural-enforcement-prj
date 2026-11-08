@@ -346,7 +346,7 @@ describe('两步分派面板', () => {
   });
 
   it('已分派后重新分派不提供改机构：只剩当前承办机构，并引导报请指定管辖（#228）', () => {
-    const assignment = { orgUnitId: 'o1', orgName: '天河区分局', kind: 'initial', designate: false };
+    const assignment = { assignmentId: 'ASG-TEST', orgUnitId: 'o1', orgName: '天河区分局', kind: 'initial', designate: false };
     const html = renderToStaticMarkup(
       <AssignOrgPanel
         view={view({ status: 'org_assigned', assignment, mayReassignOrg: true })}
@@ -534,7 +534,7 @@ describe('移送（自然资源部门以外机关）', () => {
           onDesignateReject={() => undefined}
         />,
       );
-    const assignment = { orgUnitId: 'o1', orgName: '天河区分局', kind: 'initial', designate: false };
+    const assignment = { assignmentId: 'ASG-TEST', orgUnitId: 'o1', orgName: '天河区分局', kind: 'initial', designate: false };
     expect(render({ status: 'in_pool', mayDecide: false, mayAssignOrg: true, mayTransfer: true })).toContain(
       'data-role="transfer-panel"',
     );
@@ -672,6 +672,7 @@ describe('个案判断规划类主体冲突待定（#207 P7）', () => {
 
 describe('其他处置（#229）', () => {
   const assignment = {
+    assignmentId: 'ASG-TEST',
     orgUnitId: 'o1',
     orgName: '甲',
     kind: 'assign',
