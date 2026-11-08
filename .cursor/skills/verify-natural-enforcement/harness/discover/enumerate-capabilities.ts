@@ -24,6 +24,30 @@ export interface ApiRoute {
 const CONTROLLER_RE = /@Controller\(\s*(?:'([^']*)')?\s*\)/;
 const CLASS_NAME_RE = /export\s+class\s+(\w+)/;
 const METHOD_ROUTE_RE = /@(Get|Post|Put|Patch|Delete|Options|Head|All)\(\s*'([^']*)'\s*\)/g;
+const CONTROLLERS_SECTION_RE = /controllers:\s*\[([\s\S]*?)\]/;
+const CONTROLLER_CLASS_TOKEN_RE = /\b([A-Za-z_$][\w$]*Controller)\b/g;
+
+/** 控制器源码 → 导出类名；无 `export class` 返回 null。 */
+export function controllerClassName(controllerSource: string): string | null {
+  return CLASS_NAME_RE.exec(controllerSource)?.[1] ?? null;
+}
+
+/**
+ * app.module.ts 源码 → `controllers:` 数组登记的控制器类名集合。
+ * 注册是能力生效的前提：未登记的控制器文件不计能力。
+ */
+export function registeredControllerClasses(appModuleSource: string): Set<string> {
+  const section = CONTROLLERS_SECTION_RE.exec(appModuleSource);
+  const classes = new Set<string>();
+  if (section === null) return classes;
+  CONTROLLER_CLASS_TOKEN_RE.lastIndex = 0;
+  let match: RegExpExecArray | null = CONTROLLER_CLASS_TOKEN_RE.exec(section[1] ?? '');
+  while (match !== null) {
+    classes.add(match[1]);
+    match = CONTROLLER_CLASS_TOKEN_RE.exec(section[1] ?? '');
+  }
+  return classes;
+}
 
 /** 字符下标换算 1 起始行号。 */
 function lineAt(text: string, index: number): number {
@@ -79,7 +103,6 @@ export interface UiRoute {
 
 interface RouteContext {
   readonly parent: RouteContext | null;
-  readonly parentId: string | null;
   readonly line: number;
   id: string | null;
   path: string | null;
@@ -125,7 +148,7 @@ function joinPath(parent: string | null, child: string): string {
   return `${base}${child}`.replace(/\/+/g, '/');
 }
 
-/** 惰性计算完整路径：父级可能尚未收口，但父级字段已先赋值。 */
+/** 惰性计算完整路径：父级尚未收口时，父级字段已先赋值。 */
 function effectiveFullPath(ctx: RouteContext): string {
   if (ctx.fullPath !== null) return ctx.fullPath;
   if (ctx.path === null) {
@@ -148,7 +171,6 @@ export function enumerateUiRoutes(routerSource: string): UiRoute[] {
       const parent = stack.at(-1) ?? null;
       stack.push({
         parent,
-        parentId: parent?.id ?? null,
         line: index + 1,
         id: null,
         path: null,
@@ -172,7 +194,7 @@ export function enumerateUiRoutes(routerSource: string): UiRoute[] {
         path: ctx.path,
         fullPath: effectiveFullPath(ctx),
         index: ctx.index,
-        parentId: ctx.parentId,
+        parentId: ctx.parent?.id ?? null,
         line: ctx.line,
       });
     }
@@ -271,34 +293,46 @@ function sectionRange(lines: readonly string[], name: string): { from: number; t
   return null;
 }
 
+/** 单行起始的对象字面量 → 一条累积条目；非对象起始行返回 null。 */
+function parseEntryAt(
+  lines: readonly string[],
+  from: number,
+  to: number,
+): { entry: ParsedEntry; end: number } | null {
+  if (analyzeLine(lines[from]).opens === 0) return null;
+  const entry: ParsedEntry = {
+    id: '',
+    label: '',
+    path: '',
+    primary: null,
+    inMenu: false,
+    line: from + 1,
+  };
+  let depth = 0;
+  let i = from;
+  while (i <= to) {
+    const analyzed = analyzeLine(lines[i]);
+    depth += analyzed.opens;
+    fillEntry(entry, analyzed.code, i + 1);
+    depth -= analyzed.closes;
+    if (depth <= 0) break;
+    i += 1;
+  }
+  return { entry, end: i };
+}
+
 /** 解析一个菜单数组区的对象字面量条目；spread 行本身不产条目。 */
 function parseEntries(lines: readonly string[], from: number, to: number): ParsedEntry[] {
   const entries: ParsedEntry[] = [];
-  let current: ParsedEntry | null = null;
-  let depth = 0;
-
-  for (let i = from; i <= to; i += 1) {
-    const { code, opens, closes } = analyzeLine(lines[i]);
-    if (current === null) {
-      if (opens === 0) continue;
-      current = {
-        id: '',
-        label: '',
-        path: '',
-        primary: null,
-        inMenu: false,
-        line: i + 1,
-      };
-      depth = 0;
+  let i = from;
+  while (i <= to) {
+    const parsed = parseEntryAt(lines, i, to);
+    if (parsed === null) {
+      i += 1;
+      continue;
     }
-    depth += opens;
-    fillEntry(current, code, i + 1);
-    depth -= closes;
-    if (depth <= 0) {
-      if (current.id !== '') entries.push(current);
-      current = null;
-      depth = 0;
-    }
+    if (parsed.entry.id !== '') entries.push(parsed.entry);
+    i = parsed.end + 1;
   }
   return entries;
 }
@@ -380,37 +414,20 @@ export function enumerateMenu(sources: MenuSources): MenuCapabilities {
         i = skipSpreadBlock(lines, i, secondaryRange.to);
         continue;
       }
-      // 字面量条目：按源码顺序收集，多行对象累积到花括号平衡。
-      if (analyzeLine(line).opens === 0) continue;
-      const entry: ParsedEntry = {
-        id: '',
-        label: '',
-        path: '',
-        primary: null,
-        inMenu: false,
-        line: i + 1,
-      };
-      let depth = 0;
-      let j = i;
-      while (j <= secondaryRange.to) {
-        const analyzed = analyzeLine(lines[j]);
-        depth += analyzed.opens;
-        fillEntry(entry, analyzed.code, j + 1);
-        depth -= analyzed.closes;
-        if (depth <= 0) break;
-        j += 1;
-      }
-      if (entry.id !== '') {
+      // 字面量条目：复用 parseEntryAt 的多行对象累积。
+      const parsed = parseEntryAt(lines, i, secondaryRange.to);
+      if (parsed === null) continue;
+      if (parsed.entry.id !== '') {
         secondaries.push({
-          id: entry.id,
-          label: entry.label,
-          path: entry.path,
-          primary: entry.primary,
+          id: parsed.entry.id,
+          label: parsed.entry.label,
+          path: parsed.entry.path,
+          primary: parsed.entry.primary,
           planned: false,
-          line: entry.line,
+          line: parsed.entry.line,
         });
       }
-      i = j;
+      i = parsed.end;
     }
   }
 

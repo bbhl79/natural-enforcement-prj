@@ -13,6 +13,11 @@ import type {
   MenuCapabilities,
   UiRoute,
 } from './enumerate-capabilities.ts';
+import {
+  admittedNodeIds,
+  checkNodeSources,
+  type AssertedNode,
+} from './source-check.ts';
 
 /** `run-api-scenario.ts` runStep 分支里的 HTTP 调用模式（scenario 实际调用的单一来源）。 */
 export interface EndpointPattern {
@@ -56,11 +61,10 @@ export const ACTION_ENDPOINTS: Readonly<Record<string, readonly EndpointPattern[
   ],
 };
 
-/** scenario 静态用量：状态/驱动/地图引用/步骤 action。 */
+/** scenario 静态用量：状态/地图引用/步骤 action。 */
 export interface ScenarioUsage {
   readonly scenarioId: string;
   readonly status: 'runnable' | 'latent';
-  readonly driver?: 'api' | 'ui' | null;
   readonly featureMapRefs?: readonly string[];
   readonly actions?: readonly string[];
 }
@@ -68,12 +72,14 @@ export interface ScenarioUsage {
 /**
  * 标准寄存器：profiles stages +（#19 落地后的）标准链路由映射。
  * mappedRoutes 缺省空 = 标准链尚无可判节点，反向漂移不硬判（未知不报）。
- * authorityPending = 「等权威」键（地图节点 id / 路由 / stage 键），命中不计缺口。
+ * mappedEndpoints = 已登记标准链的 API 端点（`METHOD /path`）；只有这些端点参与
+ * 「API 路由无 scenario 调用」提案，避免 183 条全量产票压垮信噪比（Q15）。
+ * 「等权威」节点由 ReconcileInput.assertedNodes 经 source-check 判定，此处不另设键表。
  */
 export interface StandardRegister {
   readonly stages: readonly string[];
   readonly mappedRoutes?: readonly string[];
-  readonly authorityPending?: readonly string[];
+  readonly mappedEndpoints?: readonly string[];
 }
 
 /** 反向漂移判定范围：UI 路由（默认）或 scenario 轨。 */
@@ -87,12 +93,19 @@ export interface ReconcileInput {
   readonly featureMap: readonly FeatureMapNode[];
   readonly scenarios: readonly ScenarioUsage[];
   readonly register: StandardRegister;
+  /** 应然模型草案节点；经 source-check 判为待权威的节点不计对账缺口。 */
+  readonly assertedNodes?: readonly AssertedNode[];
   readonly acks?: readonly CoverageAck[];
   readonly reverseDriftScope?: ReverseDriftScope;
 }
 
-/** 提案类别：三类错位 + 反向漂移。 */
-export type ProposalKind = 'map-drift' | 'latent-stub' | 'runnable-regression' | 'reverse-drift';
+/** 提案类别：三类错位 + 反向漂移 + API 判据缺口。 */
+export type ProposalKind =
+  | 'map-drift'
+  | 'latent-stub'
+  | 'runnable-regression'
+  | 'reverse-drift'
+  | 'api-uncovered';
 
 /** 一条 issue 提案（数据结构；只立提案，不自动开票）。 */
 export interface DiscoverProposal {
@@ -121,7 +134,13 @@ export interface ReconcileResult {
   readonly summary: ReconcileSummary;
 }
 
-/** 路径归一：去 query/hash，去空段，参数名统一为 :param（跨源按同一页面匹配）。 */
+/**
+ * 路径归一：去 query/hash，去空段，参数名统一为 :param（跨源按同一页面匹配）。
+ * 已核实 `frontend/src/router.tsx` 的 path 字面量不含 query（测试锁定据此）。
+ * query 只出现在菜单与地图的视图键（如 `/clue?view=all`、`/workbench?step=2`），
+ * 归一到基路径才能与路由同键。若 router 将来引入 query 路径，须改为保留 query，
+ * 否则不同页面会被折叠成同键、漏报地图漂移。
+ */
 function canonicalPath(path: string): string {
   const clean = path.split(/[?#]/)[0] ?? '';
   const segments = clean
@@ -140,6 +159,14 @@ function canonicalAckKey(key: string): string {
   const methodMatch = /^([A-Za-z]+)\s+(.+)$/.exec(key.trim());
   if (methodMatch !== null) return canonicalEndpoint(methodMatch[1], methodMatch[2]);
   return canonicalPath(key.trim());
+}
+
+/** 「等权威」键归一：API 端点走 method+path，站内路径去 query，地图节点 id/scenario id 原样。 */
+function pendingKeyOf(key: string): string {
+  const methodMatch = /^([A-Za-z]+)\s+(.+)$/.exec(key.trim());
+  if (methodMatch !== null) return canonicalEndpoint(methodMatch[1], methodMatch[2]);
+  const trimmed = key.trim();
+  return trimmed.startsWith('/') ? canonicalPath(trimmed) : trimmed;
 }
 
 /** 一条 UI 能力（router 或菜单）；同一路径只保留首个来源，router 优先。 */
@@ -179,7 +206,7 @@ function endpointsOf(usage: ScenarioUsage): EndpointPattern[] {
   return endpoints;
 }
 
-/** 四环对账：产出三类错位与反向漂移的 issue 提案，并给出汇总计数。 */
+/** 四环对账：产出三类错位、反向漂移与 API 判据缺口的 issue 提案，并给出汇总计数。 */
 export function reconcileCapabilities(input: ReconcileInput): ReconcileResult {
   const proposals: DiscoverProposal[] = [];
   const acks = input.acks ?? [];
@@ -189,15 +216,20 @@ export function reconcileCapabilities(input: ReconcileInput): ReconcileResult {
   const routeAcks = new Set(
     acks.filter((ack) => ack.keyType === 'route').map((ack) => canonicalAckKey(ack.key)),
   );
-  const pending = new Set<string>(input.register.authorityPending ?? []);
-  for (const key of input.register.authorityPending ?? []) {
-    if (key.startsWith('/')) pending.add(canonicalPath(key));
-  }
-  const isPending = (key: string): boolean =>
-    pending.has(key) || (key.startsWith('/') && pending.has(canonicalPath(key)));
+
+  // 「等权威」只由 source-check 判定：待权威节点不进实现方向，也不计对账缺口。
+  const sourceChecks = checkNodeSources(input.assertedNodes ?? []);
+  const admitted = new Set(admittedNodeIds(sourceChecks));
+  const pending = new Set(
+    (input.assertedNodes ?? [])
+      .filter((node) => !admitted.has(node.nodeId))
+      .map((node) => pendingKeyOf(node.nodeId)),
+  );
+  const isPending = (key: string): boolean => pending.has(pendingKeyOf(key));
 
   const mapNodes = input.featureMap;
-  const mapIds = new Set(mapNodes.map((node) => node.id));
+  const mapById = new Map(mapNodes.map((node) => [node.id, node]));
+  const mapIds = new Set(mapById.keys());
   const mapPaths = new Set(
     mapNodes.flatMap((node) => (node.path === null ? [] : [canonicalPath(node.path)])),
   );
@@ -209,6 +241,8 @@ export function reconcileCapabilities(input: ReconcileInput): ReconcileResult {
   // 第一类错位 + 反向漂移：UI 路由/菜单有、地图无。
   const scope = input.reverseDriftScope ?? 'ui';
   const uiCaps = uiCapabilities(input);
+  // UI 输入为空表示无数据，不等于能力消失；此时不判 runnable 的 UI 路由缺口。
+  const hasUiData = uiCaps.length > 0;
   for (const capability of uiCaps) {
     if (mapPaths.has(capability.route)) continue;
     if (isPending(capability.route)) continue;
@@ -245,28 +279,48 @@ export function reconcileCapabilities(input: ReconcileInput): ReconcileResult {
     });
   }
 
-  // 第三类错位：runnable 能力消失（地图节点没了或 action 端点没了）。
-  const apiKeys = new Set(input.apiRoutes.map((route) => canonicalEndpoint(route.method, route.path)));
+  // 第三类错位：runnable 能力消失（地图节点没了、UI 路由/菜单没了或 action 端点没了）。
+  const apiKeys = new Set(
+    input.apiRoutes.map((route) => canonicalEndpoint(route.method, route.path)),
+  );
   const calledKeys = new Set<string>();
   for (const usage of runnable) {
-    for (const endpoint of endpointsOf(usage)) {
+    const endpoints = endpointsOf(usage);
+    for (const endpoint of endpoints) {
       const key = canonicalEndpoint(endpoint.method, endpoint.path);
       if (apiKeys.has(key)) calledKeys.add(key);
     }
 
     const refs = usage.featureMapRefs ?? [];
     for (const ref of refs) {
-      if (mapIds.has(ref) || isPending(ref) || nodeAcks.has(ref)) continue;
+      if (isPending(ref) || nodeAcks.has(ref)) continue;
+      const node = mapById.get(ref);
+      if (node === undefined) {
+        proposals.push({
+          kind: 'runnable-regression',
+          scenarioId: usage.scenarioId,
+          featureMapRef: ref,
+          labels: ['bug'],
+          reason: 'runnable scenario 引用的 Feature Map 节点不存在；能力已消失，转红/降级提案',
+        });
+        continue;
+      }
+      if (!hasUiData || node.path === null) continue;
+      const route = canonicalPath(node.path);
+      if (uiCaps.some((capability) => capability.route === route)) continue;
+      if (routeAcks.has(route)) continue;
       proposals.push({
         kind: 'runnable-regression',
         scenarioId: usage.scenarioId,
         featureMapRef: ref,
+        route: node.path,
         labels: ['bug'],
-        reason: 'runnable scenario 引用的 Feature Map 节点不存在；能力可能已消失，转红/降级提案',
+        reason:
+          'runnable scenario 引用的 Feature Map 节点仍在，但其 UI 路由/菜单已消失；能力假绿，转红/降级提案',
       });
     }
 
-    for (const endpoint of endpointsOf(usage)) {
+    for (const endpoint of endpoints) {
       const key = canonicalEndpoint(endpoint.method, endpoint.path);
       if (apiKeys.has(key) || isPending(key) || routeAcks.has(key)) continue;
       proposals.push({
@@ -276,9 +330,28 @@ export function reconcileCapabilities(input: ReconcileInput): ReconcileResult {
         endpoint: `${endpoint.method} ${endpoint.path}`,
         route: endpoint.path,
         labels: ['bug'],
-        reason: 'runnable scenario 的 action 映射端点不在 API 能力清单；后端路由可能已消失',
+        reason: 'runnable scenario 的 action 映射端点不在 API 能力清单；后端路由已消失，转红/降级提案',
       });
     }
+  }
+
+  // API 双向的第二向：标准链已登记端点却无 runnable scenario 调用。
+  // 只对 register.mappedEndpoints 显式登记的端点提案；183 条全量 route→scenario
+  // 缺覆盖不入提案（绝大多数为内部接口，全量产票会压垮信噪比，Q15）。
+  const mappedEndpoints = new Set((input.register.mappedEndpoints ?? []).map(canonicalAckKey));
+  const uncoveredEndpoints = new Set<string>();
+  for (const route of input.apiRoutes) {
+    const key = canonicalEndpoint(route.method, route.path);
+    if (!mappedEndpoints.has(key) || calledKeys.has(key) || uncoveredEndpoints.has(key)) continue;
+    if (isPending(key) || routeAcks.has(key)) continue;
+    uncoveredEndpoints.add(key);
+    proposals.push({
+      kind: 'api-uncovered',
+      endpoint: `${route.method} ${route.path}`,
+      route: route.path,
+      labels: ['enhancement'],
+      reason: 'API 路由已在标准链登记，但无 runnable scenario 调用；判据缺口提案',
+    });
   }
 
   // 反向漂移 scenario 轨：有实跑判据但标准链查无节点（仅在提供标准映射时判定）。
@@ -301,20 +374,12 @@ export function reconcileCapabilities(input: ReconcileInput): ReconcileResult {
     }
   }
 
-  const uiPageCount = input.uiRoutes.filter(
-    (route) =>
-      route.fullPath !== null &&
-      !route.index &&
-      canonicalPath(route.fullPath) !== '/' &&
-      canonicalPath(route.fullPath) !== '/*',
-  ).length;
-
   return {
     proposals,
     summary: {
       apiRoutes: input.apiRoutes.length,
       apiRoutesCalled: calledKeys.size,
-      uiRoutes: uiPageCount,
+      uiRoutes: uiCaps.filter((capability) => capability.source === 'router').length,
       mapNodes: mapNodes.length,
       runnableScenarios: runnable.length,
       standardStages: input.register.stages.length,

@@ -2,14 +2,19 @@
 // 夹具控制器/路由/菜单 → 能力清单；三类错位注入 → 断言各自动作。
 // 纯函数用例不连库；真实源码一致性用例由测试自身读盘后把文本交给纯函数。
 // 入口 ./dev test integration 仍会重建 it_template。
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
+  controllerClassName,
   enumerateApiRoutes,
   enumerateClueViews,
   enumerateFeatureMap,
   enumerateMenu,
   enumerateUiRoutes,
+  registeredControllerClasses,
   type ApiRoute,
   type FeatureMapNode,
   type MenuCapabilities,
@@ -50,7 +55,28 @@ const CONTROLLER_Y = [
   '}',
 ].join('\n');
 
+const APP_MODULE_FIXTURE = [
+  "import { Module } from '@nestjs/common';",
+  '',
+  '@Module({',
+  '  controllers: [',
+  '    XController,',
+  '    YController,',
+  '  ],',
+  '})',
+  'export class AppModule {}',
+].join('\n');
+
 describe('enumerateApiRoutes（seam⑤：控制器装饰器 → API 能力清单）', () => {
+  it('只认 app.module.ts controllers 数组登记的控制器类；未登记类不计能力', () => {
+    expect([...registeredControllerClasses(APP_MODULE_FIXTURE)].sort()).toEqual([
+      'XController',
+      'YController',
+    ]);
+    expect(controllerClassName(CONTROLLER_X)).toBe('XController');
+    expect(controllerClassName(CONTROLLER_Y)).toBe('YController');
+  });
+
   it('拼接类前缀与方法路径，空 @Controller() 用方法装饰器里的完整路径，带文件/类名/行号', () => {
     const routes = enumerateApiRoutes([
       { file: 'x.controller.ts', text: CONTROLLER_X },
@@ -279,7 +305,7 @@ function menuOf(secondaries: readonly MenuEntry[]): MenuCapabilities {
 }
 
 function scenario(usage: Partial<ScenarioUsage> & Pick<ScenarioUsage, 'scenarioId'>): ScenarioUsage {
-  return { status: 'runnable', driver: 'api', featureMapRefs: [], actions: [], ...usage };
+  return { status: 'runnable', featureMapRefs: [], actions: [], ...usage };
 }
 
 function register(overrides: Partial<StandardRegister> = {}): StandardRegister {
@@ -331,7 +357,8 @@ describe('reconcileCapabilities 第一类错位：产品有地图无 → 地图�
       menu: menuOf([]),
       featureMap: [],
       scenarios: [],
-      register: register({ authorityPending: ['/case/pending'] }),
+      register: register(),
+      assertedNodes: [{ nodeId: '/case/pending' }],
     };
 
     expect(proposalsOfKind(input, 'map-drift').map((proposal) => proposal.route)).toEqual([
@@ -360,7 +387,15 @@ describe('reconcileCapabilities 第二类错位：地图有判据无 → latent 
       scenarios: [
         scenario({ scenarioId: 'vf-sc-kept', featureMapRefs: ['nav.case.kept'], actions: ['read-dispatch'] }),
       ],
-      register: register({ authorityPending: ['nav.case.pending'] }),
+      register: register(),
+      assertedNodes: [
+        { nodeId: 'nav.case.pending' },
+        {
+          nodeId: 'nav.case.lonely',
+          legalBasis: [{ documentCode: 'doc_002', articleNo: '2.5' }],
+          roleBasis: ['经办'],
+        },
+      ],
       acks: [{ key: 'nav.case.phantom', keyType: 'feature-map-node' }],
     };
 
@@ -455,6 +490,93 @@ describe('reconcileCapabilities 第三类错位：runnable 能力消失 → 转�
 
     expect(proposalsOfKind(input, 'runnable-regression')).toEqual([]);
   });
+
+  it('runnable 引用的地图节点 UI 路由/菜单消失 → 转红/降级提案；UI 输入为空时不判', () => {
+    const base: ReconcileInput = {
+      apiRoutes: [],
+      uiRoutes: [uiRoute('workbench', '/workbench')],
+      menu: menuOf([]),
+      featureMap: [mapNode('nav.case.vanished', '/case/vanished')],
+      scenarios: [scenario({ scenarioId: 'vf-sc-vanished', featureMapRefs: ['nav.case.vanished'] })],
+      register: register(),
+    };
+
+    expect(proposalsOfKind(base, 'runnable-regression')).toEqual([
+      {
+        kind: 'runnable-regression',
+        scenarioId: 'vf-sc-vanished',
+        featureMapRef: 'nav.case.vanished',
+        route: '/case/vanished',
+        labels: ['bug'],
+        reason: expect.any(String),
+      },
+    ]);
+
+    const noUiData: ReconcileInput = { ...base, uiRoutes: [], menu: menuOf([]) };
+    expect(proposalsOfKind(noUiData, 'runnable-regression')).toEqual([]);
+
+    const routePresent: ReconcileInput = {
+      ...base,
+      uiRoutes: [uiRoute('case-vanished', '/case/vanished')],
+    };
+    expect(proposalsOfKind(routePresent, 'runnable-regression')).toEqual([]);
+  });
+});
+
+describe('reconcileCapabilities 等权威过滤：source-check 判定不进对账缺口', () => {
+  it('出处齐备节点不排除；缺角色依据节点从三类缺口同时排除', () => {
+    const input: ReconcileInput = {
+      apiRoutes: [],
+      uiRoutes: [uiRoute('case-ok', '/case/ok'), uiRoute('case-pending', '/case/pending')],
+      menu: menuOf([]),
+      featureMap: [
+        mapNode('nav.case.ok', '/case/ok'),
+        mapNode('nav.case.pending', '/case/pending'),
+      ],
+      scenarios: [],
+      register: register(),
+      assertedNodes: [
+        {
+          nodeId: 'nav.case.ok',
+          legalBasis: [{ documentCode: 'doc_002', articleNo: '2.5' }],
+          roleBasis: ['经办'],
+        },
+        { nodeId: 'nav.case.pending', legalBasis: [], roleBasis: ['经办'] },
+      ],
+    };
+
+    expect(proposalsOfKind(input, 'latent-stub').map((proposal) => proposal.featureMapRef)).toEqual([
+      'nav.case.ok',
+    ]);
+    expect(proposalsOfKind(input, 'map-drift')).toEqual([]);
+  });
+});
+
+describe('reconcileCapabilities API 双向：标准链登记端点无 scenario 调用 → 判据缺口提案', () => {
+  it('只对 mappedEndpoints 登记端点提案；已调用与未登记端点不入提案', () => {
+    const input: ReconcileInput = {
+      apiRoutes: [
+        apiRoute('POST', '/api/clues'),
+        apiRoute('GET', '/api/clues/registered'),
+        apiRoute('GET', '/api/clues/internal'),
+      ],
+      uiRoutes: [],
+      menu: menuOf([]),
+      featureMap: [],
+      scenarios: [scenario({ scenarioId: 'vf-sc-calls', actions: ['register-clue'] })],
+      register: register({ mappedEndpoints: ['GET /api/clues/registered'] }),
+    };
+
+    expect(proposalsOfKind(input, 'api-uncovered')).toEqual([
+      {
+        kind: 'api-uncovered',
+        endpoint: 'GET /api/clues/registered',
+        route: '/api/clues/registered',
+        labels: ['enhancement'],
+        reason: expect.any(String),
+      },
+    ]);
+  });
 });
 
 describe('reconcileCapabilities 反向漂移：产品有能力、标准链查无节点 → needs-triage 提案', () => {
@@ -534,6 +656,19 @@ describe('reconcileCapabilities 汇总与 action→端点映射单一来源', ()
     });
   });
 
+  it('ACTION_ENDPOINTS 与 run-api-scenario runStep 分派字面量一致（防静默漂移）', () => {
+    const runnerPath = path.join(
+      process.cwd(),
+      '.cursor/skills/verify-natural-enforcement/harness/run-api-scenario.ts',
+    );
+    const source = readFileSync(runnerPath, 'utf8');
+    const dispatched = new Set(
+      [...source.matchAll(/step\.action === '([^']+)'/g)].map((match) => match[1]),
+    );
+
+    expect([...dispatched].sort()).toEqual(Object.keys(ACTION_ENDPOINTS).sort());
+  });
+
   it('汇总输出 API/UI/地图/runnable 计数，供报告引用', () => {
     const input: ReconcileInput = {
       apiRoutes: [apiRoute('POST', '/api/clues'), apiRoute('GET', '/api/clues')],
@@ -587,6 +722,16 @@ describe('真实源码一致性（seam⑤：能力清单与静态代码一致）
         route.fullPath !== '/*',
     );
     expect(pages).toHaveLength(28);
+  });
+
+  it('router.tsx 的 path 字面量不含 query；去 query 归一仅作用于菜单/地图视图键', async () => {
+    const sources = await loadDiscoverSources(process.cwd());
+    const paths = [...sources.routerSource.matchAll(/\bpath:\s*['"]([^'"]*)['"]/g)].map(
+      (match) => match[1],
+    );
+
+    expect(paths).toHaveLength(30);
+    expect(paths.some((routePath) => routePath.includes('?'))).toBe(false);
   });
 
   it('menu.ts：一级 5、二级 14（含 5 个 planned），clue 视图 4 条保留 query', async () => {
