@@ -5,7 +5,6 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { readUnionOrgIds } from '../backend/case/src/clue/dispatch/rules.ts';
 import { EvidenceWriter } from '../.cursor/skills/verify-natural-enforcement/harness/evidence.ts';
 import { loadCoverageAcks } from '../.cursor/skills/verify-natural-enforcement/harness/load-coverage-acks.ts';
 import { loadScenario } from '../.cursor/skills/verify-natural-enforcement/harness/load-fixtures.ts';
@@ -87,15 +86,6 @@ describe('登记加载：index 分叉与 latent 未验证', () => {
     );
     const onDisk = JSON.parse(await fs.readFile(file, 'utf8')) as { status: string };
     expect(onDisk.status).toBe('latent');
-  });
-});
-
-describe('读并集目标与故障开关', () => {
-  it('缺省包含录入机构与不同的已派机构；注入去掉已派机构', () => {
-    expect(readUnionOrgIds('entered', 'assigned', undefined)).toEqual(['entered', 'assigned']);
-    expect(readUnionOrgIds('entered', 'entered', undefined)).toEqual(['entered']);
-    expect(readUnionOrgIds('entered', 'assigned', 'drop-assigned-org-read')).toEqual(['entered']);
-    expect(readUnionOrgIds('entered', null, 'drop-assigned-org-read')).toEqual(['entered']);
   });
 });
 

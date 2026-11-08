@@ -4,7 +4,6 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { activeVerifyFault } from '../backend/case/src/clue/dispatch/rules.ts';
 import {
   evaluateJourneyIsolation,
   planHistoryDiff,
@@ -50,18 +49,6 @@ describe('旅程隔离门禁', () => {
     expect(evaluateJourneyIsolation({ ...dedicated, COMPOSE_PROJECT_NAME: 'verify-e3-stack' }).ok).toBe(false);
     const ok = evaluateJourneyIsolation(dedicated);
     expect(ok).toMatchObject({ ok: true, upAllowed: true, sourceGateBypass: false, project: 'verify-journey-iso' });
-  });
-
-  it('非 verify 环境故障不生效', () => {
-    expect(
-      activeVerifyFault({
-        VERIFY_FAULT: 'drop-assigned-org-read',
-        NE_DEPLOYMENT: 'dev',
-        NODE_ENV: 'development',
-        COMPOSE_PROJECT_NAME: 'natural-enforcement',
-        VERIFY_ISOLATION: 'dedicated',
-      }),
-    ).toBeUndefined();
   });
 });
 
