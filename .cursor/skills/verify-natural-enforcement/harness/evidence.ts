@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { summaryStatus } from './auth-gate.cjs';
+import { discoverUncovered, type ScenarioMeta, type UncoveredItem } from './discover/uncovered.ts';
 import { repoRoot } from './paths.ts';
 
 export interface RunManifest {
@@ -26,12 +27,16 @@ export interface RunSummary {
   status: 'passed' | 'failed' | 'blocked';
   failed: string[];
   runDir: string;
+  /** 发现器信号源 1：本跑次机械推导的结构化缺口（spec #322 T1）。 */
+  uncovered: UncoveredItem[];
 }
 
 export class EvidenceWriter {
   readonly runDir: string;
   private readonly manifest: RunManifest;
   private readonly failed: string[] = [];
+  private readonly records: StepRecord[] = [];
+  private readonly scenarioMeta: Record<string, ScenarioMeta> = {};
 
   constructor(runId: string, scenarios: string[], environment = 'verify-local') {
     this.runDir = path.join(repoRoot(), '.run', `verify-${runId}`);
@@ -50,7 +55,13 @@ export class EvidenceWriter {
     await this.writeJson('manifest.json', this.manifest);
   }
 
+  /** 调用方传入 scenario 元数据，供 finish() 推导 uncovered；本类不加载 fixture。 */
+  registerScenario(scenarioId: string, meta: ScenarioMeta): void {
+    this.scenarioMeta[scenarioId] = meta;
+  }
+
   async writeStep(record: StepRecord, evidenceBody?: unknown): Promise<void> {
+    this.records.push(record);
     const stepDir = path.join(this.runDir, 'steps', record.scenarioId);
     await fs.mkdir(stepDir, { recursive: true });
     const safeId = record.stepId.replace(/[^\w.-]+/g, '_');
@@ -76,6 +87,11 @@ export class EvidenceWriter {
       status: summaryStatus(status, this.failed.length),
       failed: [...this.failed],
       runDir: this.runDir,
+      uncovered: discoverUncovered({
+        steps: this.records,
+        scenarios: this.scenarioMeta,
+        runnableIndex: this.manifest.scenarios,
+      }),
     };
     await this.writeJson('summary.json', summary);
     return summary;
