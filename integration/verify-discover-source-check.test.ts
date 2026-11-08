@@ -1,5 +1,5 @@
 // seam⑥（spec #322 Q16）：出处纪律校验纯函数。
-// 每条应然节点须带法规出处（文件编号 + 条款号）与角色依据；缺任一 → 待权威，只产决策票草案，
+// 每条应然节点须带法规出处（法规标识 + 条款号）与角色依据；缺任一 → 待权威，只产决策票草案，
 // 不进实现方向。本文件直接 import source-check.ts，不连库、不读写文件。
 import { describe, expect, it } from 'vitest';
 
@@ -61,13 +61,25 @@ describe('seam⑥：出处纪律校验（无出处标待权威、只产决策票
     expect(result.reason).toContain('第 1 条');
   });
 
-  it('法规出处缺文件编号 → 待权威，reason 指明文件编号', () => {
+  it('法规出处缺法规标识（文件编号与法规名都空）→ 待权威，reason 指明法规标识', () => {
     const [result] = checkNodeSources([
-      { ...FULL_NODE, legalBasis: [{ documentCode: '', articleNo: '2.5' }] },
+      { ...FULL_NODE, legalBasis: [{ documentCode: '', documentName: ' ', articleNo: '2.5' }] },
     ]);
 
     expect(result.verdict).toBe('pending-authority');
-    expect(result.reason).toContain('文件编号');
+    expect(result.reason).toContain('法规标识');
+  });
+
+  it('只填法规名 + 条款号（无文件编号）→ ok，对齐反馈模板「法规名 + 条款号」', () => {
+    const [result] = checkNodeSources([
+      {
+        ...FULL_NODE,
+        legalBasis: [{ documentName: '自然资源行政处罚办法', articleNo: '第 6 条' }],
+      },
+    ]);
+
+    expect(result.verdict).toBe('ok');
+    expect(result.decisionTicket).toBeNull();
   });
 
   it('多条法规出处第 2 条缺条款号 → reason 指明第 2 条', () => {

@@ -2,11 +2,15 @@
 // 纯函数，无 I/O：不读写文件、不建 issue。待权威节点只产决策票草案数据，
 // 由人/上层流程按 docs/agents/issue-tracker.md 开票；未批准前不进实现方向与对账缺口。
 
-/** 一条法规出处：文件编号 + 条款号（ADR 0019，法规名经文件表解析）。 */
+/**
+ * 一条法规出处：法规标识 + 条款号（spec #322 Q13「法规名 + 条款号」）。
+ * 法规标识 = 文件表编号（ADR 0019）或法规名，至少填一个；
+ * 与 `.github/ISSUE_TEMPLATE/feedback.md` 的「法规名 + 条款号」字段口径一致。
+ */
 export interface LegalCitation {
-  /** 文件表编号（如 doc_002）。 */
-  readonly documentCode: string;
-  /** 可选：法规名人读副本；以文件表为准，允许缺省。 */
+  /** 文件表编号（如 doc_002）；与 documentName 至少填一个。 */
+  readonly documentCode?: string;
+  /** 法规名（人读副本）；与 documentCode 至少填一个。 */
   readonly documentName?: string;
   /** 条款号（如 2.5、第 6 条、3.2.3.1(11)）。 */
   readonly articleNo: string;
@@ -42,13 +46,15 @@ function isBlank(value: string | undefined): boolean {
   return value === undefined || value.trim() === '';
 }
 
-/** 法规出处缺失项：整体缺，或某条缺文件编号/条款号。 */
+/** 法规出处缺失项：整体缺，或某条缺法规标识/条款号。 */
 function citationGaps(citations: readonly LegalCitation[] | undefined): string[] {
   if (citations === undefined || citations.length === 0) return ['法规出处'];
   const gaps: string[] = [];
   citations.forEach((citation, index) => {
     const missing: string[] = [];
-    if (isBlank(citation.documentCode)) missing.push('文件编号');
+    if (isBlank(citation.documentCode) && isBlank(citation.documentName)) {
+      missing.push('法规标识（文件编号或法规名）');
+    }
     if (isBlank(citation.articleNo)) missing.push('条款号');
     if (missing.length > 0) {
       gaps.push(`法规出处第 ${index + 1} 条缺${missing.join('、')}`);
