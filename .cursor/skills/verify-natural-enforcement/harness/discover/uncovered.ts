@@ -1,6 +1,8 @@
 // 发现器信号源 1（spec #322 首期 T1）：步骤记录 → uncovered[]。
 // 纯函数，无 I/O。harness 机械推导，禁人手写。
 import type { StepRecord } from '../evidence.ts';
+import { recordOf } from '../record-of.ts';
+import { BUTTON_FLAGS } from '../dispatch-buttons.ts';
 
 /** uncovered 缺口类别（spec #322 Q2 枚举）。 */
 export type UncoveredKind =
@@ -19,11 +21,9 @@ export interface UncoveredItem {
   reason: string;
 }
 
-/** read-dispatch-buttons 矩阵行期望；省略的开关即未核。 */
+/** read-dispatch-buttons 矩阵行期望；省略的开关即未核。http/reason 由 runner 核对，推导不读。 */
 export interface MatrixExpectMeta {
   readonly identityRef: string;
-  readonly http?: number;
-  readonly reason?: string;
   readonly mayDecide?: boolean;
   readonly mayAssignOrg?: boolean;
   readonly mayAssignPeople?: boolean;
@@ -37,10 +37,11 @@ export interface ScenarioStepMeta {
   readonly matrix?: readonly MatrixExpectMeta[];
 }
 
-/** scenario 元数据（只取推导所需字段；由调用方传入，不耦合 fixture 加载）。 */
+/**
+ * scenario 元数据（只取推导所需字段；由调用方传入，不耦合 fixture 加载）。
+ * status/driver 缺口由 StepRecord 的 expected/actual 检测，meta 不承载。
+ */
 export interface ScenarioMeta {
-  readonly status?: string;
-  readonly driver?: string;
   readonly featureMapRefs?: readonly string[];
   readonly steps?: readonly ScenarioStepMeta[];
 }
@@ -52,20 +53,11 @@ export interface DiscoverInput {
   readonly runnableIndex: readonly string[];
 }
 
-function recordOf(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
 /** featureMapRef 单值映射：取 scenario.featureMapRefs 首元素（非空时），否则省略。 */
 function featureMapRefOf(meta: ScenarioMeta | undefined): { featureMapRef?: string } {
   const ref = meta?.featureMapRefs?.[0];
   return ref !== undefined && ref !== '' ? { featureMapRef: ref } : {};
 }
-
-/** 分派视图四个按钮开关；与 run-api-scenario.ts BUTTON_FLAGS、schema.md matrix 一致。 */
-const BUTTON_FLAGS = ['mayDecide', 'mayAssignOrg', 'mayAssignPeople', 'mayReassignOrg'] as const;
 
 /** 步骤记录 → 结构化 uncovered[]。 */
 export function discoverUncovered(input: DiscoverInput): UncoveredItem[] {

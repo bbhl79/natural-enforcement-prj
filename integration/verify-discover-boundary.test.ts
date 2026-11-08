@@ -114,8 +114,6 @@ describe('seam③ 沙盒夹具仓：发现器全流程只写 .run/，产品/fixt
     for (const rel of [RUNNABLE_REL, LATENT_REL]) {
       const raw = JSON.parse(await fs.readFile(path.join(root, rel), 'utf8')) as { id: string } & ScenarioMeta;
       scenarios[raw.id] = {
-        status: raw.status,
-        driver: raw.driver,
         featureMapRefs: raw.featureMapRefs,
         steps: raw.steps,
       };

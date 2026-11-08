@@ -33,7 +33,6 @@ describe('discoverUncovered（seam①：步骤记录 → uncovered[]）', () => 
       steps: [skipStatus('vf-sc-latent-decision', 'latent')],
       scenarios: {
         'vf-sc-latent-decision': {
-          status: 'latent',
           featureMapRefs: ['nav.case.validity'],
           steps: [],
         },
@@ -54,7 +53,7 @@ describe('discoverUncovered（seam①：步骤记录 → uncovered[]）', () => 
   it('featureMapRefs 为空 → latent-skipped 省略 featureMapRef', () => {
     const input: DiscoverInput = {
       steps: [skipStatus('vf-sc-latent-close', 'latent')],
-      scenarios: { 'vf-sc-latent-close': { status: 'latent', featureMapRefs: [], steps: [] } },
+      scenarios: { 'vf-sc-latent-close': { featureMapRefs: [], steps: [] } },
       runnableIndex: ['vf-sc-latent-close'],
     };
 
@@ -81,7 +80,6 @@ describe('discoverUncovered（seam①：步骤记录 → uncovered[]）', () => 
       ],
       scenarios: {
         'vf-sc-ui-only': {
-          status: 'runnable',
           featureMapRefs: ['nav.workbench.register'],
           steps: [],
         },
@@ -117,8 +115,6 @@ describe('discoverUncovered（seam①：步骤记录 → uncovered[]）', () => 
       ],
       scenarios: {
         'vf-sc-decide': {
-          status: 'runnable',
-          driver: 'api',
           featureMapRefs: ['nav.case.decision'],
           steps: [{ id: 'decide', action: 'decide' }],
         },
@@ -157,16 +153,14 @@ describe('discoverUncovered（seam①：步骤记录 → uncovered[]）', () => 
       ],
       scenarios: {
         'vf-sc-buttons': {
-          status: 'runnable',
-          driver: 'api',
           featureMapRefs: ['nav.workbench.dispatch.buttons'],
           steps: [
             {
               id: 'read-buttons',
               action: 'read-dispatch-buttons',
               matrix: [
-                { identityRef: 'intake-a', http: 200, mayDecide: true, mayAssignOrg: true },
-                { identityRef: 'intake-st', http: 403, reason: 'scope-denied' },
+                { identityRef: 'intake-a', mayDecide: true, mayAssignOrg: true },
+                { identityRef: 'intake-st' },
               ],
             },
           ],
@@ -202,8 +196,6 @@ describe('discoverUncovered（seam①：步骤记录 → uncovered[]）', () => 
       ],
       scenarios: {
         'vf-sc-buttons-full': {
-          status: 'runnable',
-          driver: 'api',
           steps: [
             {
               id: 'read-buttons',
@@ -211,7 +203,6 @@ describe('discoverUncovered（seam①：步骤记录 → uncovered[]）', () => 
               matrix: [
                 {
                   identityRef: 'intake-a',
-                  http: 200,
                   mayDecide: true,
                   mayAssignOrg: true,
                   mayAssignPeople: false,
@@ -241,8 +232,8 @@ describe('discoverUncovered（seam①：步骤记录 → uncovered[]）', () => 
         },
       ],
       scenarios: {
-        'vf-sc-ran': { status: 'runnable', driver: 'api', steps: [] },
-        'vf-sc-missing': { status: 'runnable', driver: 'api', featureMapRefs: ['nav.workbench.register'], steps: [] },
+        'vf-sc-ran': { steps: [] },
+        'vf-sc-missing': { featureMapRefs: ['nav.workbench.register'], steps: [] },
       },
       runnableIndex: ['vf-sc-ran', 'vf-sc-missing'],
     };
@@ -269,7 +260,7 @@ describe('discoverUncovered（seam①：步骤记录 → uncovered[]）', () => 
           evidence: [],
         },
       ],
-      scenarios: { 'vf-sc-ran': { status: 'runnable', driver: 'api', steps: [{ id: 'register', action: 'register-clue' }] } },
+      scenarios: { 'vf-sc-ran': { steps: [{ id: 'register', action: 'register-clue' }] } },
       runnableIndex: ['vf-sc-ran'],
     };
 
@@ -282,7 +273,6 @@ describe('EvidenceWriter.finish() 挂载 uncovered[]（T1 验收）', () => {
     const writer = new EvidenceWriter(newRunId(), ['vf-sc-latent-decision']);
     await writer.init();
     writer.registerScenario('vf-sc-latent-decision', {
-      status: 'latent',
       featureMapRefs: ['nav.case.validity'],
       steps: [],
     });
@@ -312,8 +302,6 @@ describe('EvidenceWriter.finish() 挂载 uncovered[]（T1 验收）', () => {
     const writer = new EvidenceWriter(newRunId(), ['vf-sc-decide']);
     await writer.init();
     writer.registerScenario('vf-sc-decide', {
-      status: 'runnable',
-      driver: 'api',
       featureMapRefs: [],
       steps: [{ id: 'decide', action: 'decide' }],
     });
@@ -346,7 +334,7 @@ describe('EvidenceWriter.finish() 挂载 uncovered[]（T1 验收）', () => {
   it('blocked 跑次语义不变，仍挂 uncovered：未跑场景记 scenario-not-run', async () => {
     const writer = new EvidenceWriter(newRunId(), ['vf-sc-ran', 'vf-sc-not-run']);
     await writer.init();
-    writer.registerScenario('vf-sc-ran', { status: 'runnable', driver: 'api', steps: [] });
+    writer.registerScenario('vf-sc-ran', { steps: [] });
     await writer.writeStep({
       scenarioId: 'vf-sc-ran',
       stepId: 'register',
