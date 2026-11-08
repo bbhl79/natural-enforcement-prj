@@ -849,6 +849,12 @@ model ClueAssignment {
   /// 理由（重新分派与指定管辖必填；自由文本留业务行，不进留痕 detail）
   reason String?
   assignedAt DateTime  @default(now()) @db.Timestamptz(6) @map("assigned_at")
+  /// 单位签收时间（#335；手工确认后写入；未签收为空）
+  unitReceivedAt DateTime? @db.Timestamptz(6) @map("unit_received_at")
+  /// 单位签收人（人员 id）
+  unitReceivedBy String? @map("unit_received_by")
+  /// 单位签收模式：manual（本期仅手工）
+  unitReceivedMode String? @map("unit_received_mode")
   endedAt    DateTime? @db.Timestamptz(6) @map("ended_at")
   createdAt  DateTime   @default(now()) @db.Timestamptz(6) @map("created_at")
 

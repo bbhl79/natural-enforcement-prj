@@ -225,6 +225,8 @@ export type AuditAppend =
   | (AuditParties & { action: 'clue.org-assigned' })
   | (AuditParties & { action: 'clue.org-assigned'; outcome: 'failed'; reason: ClueOrgAssignedFailedReason })
   | (AuditParties & { action: 'clue.handler-assigned' })
+| (AuditParties & { action: 'clue.unit-received' })
+| (AuditParties & { action: 'clue.unit-received'; outcome: 'failed'; reason: string })
   | (AuditParties & { action: 'clue.handler-assigned'; outcome: 'failed'; reason: ClueHandlerAssignedFailedReason })
   // 处置登记（#216 移送、#217 不予立案／随旧线索办结，规格 G）：同一动作词承载两种处置入口。
   | (AuditParties & { action: 'clue.disposition-recorded' })

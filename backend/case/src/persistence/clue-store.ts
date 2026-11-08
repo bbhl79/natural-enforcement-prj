@@ -458,6 +458,7 @@ export interface ClueActiveHandler {
 
 /** 当前有效的分派事实（首次分派、重新分派或指定管辖）。 */
 export interface ClueActiveAssignment {
+  readonly id: string;
   readonly orgUnitId: string;
   /** 类别：initial | reassign | designate | pool-reassign。 */
   readonly kind: string;
@@ -467,6 +468,12 @@ export interface ClueActiveAssignment {
   readonly assignedBy: string;
   /** 操作人当时所属机构（指定管辖锁判定用；旧行为空）。 */
   readonly assignedByOrgId: string | null;
+  /** 单位签收时间（#335；未确认 null）。 */
+  readonly unitReceivedAt: Date | null;
+  /** 单位签收人（人员 id；未确认 null）。 */
+  readonly unitReceivedBy: string | null;
+  /** 单位签收模式（本期 manual；未确认 null）。 */
+  readonly unitReceivedMode: string | null;
 }
 
 /** 一条命中（含对方线索状态：决定步只把未结案命中算作「须已知晓」）。 */
@@ -697,6 +704,16 @@ export interface ClueHeldRow {
 }
 
 /** 派主办／协办的写入。 */
+/** 单位签收确认写入（#335）。 */
+export interface ClueUnitReceiptWrite {
+  readonly clueId: string;
+  readonly expectedAssignmentId: string;
+  readonly receivedBy: string;
+  readonly receivedAt: Date;
+  /** 本期固定 manual。 */
+  readonly mode: 'manual';
+}
+
 export interface CluePeopleAssignWrite {
   readonly clueId: string;
   readonly expectedStatus: string;
@@ -831,6 +848,12 @@ export interface ClueStore {
    * 返回 false 表示当前状态与 expectedStatus 不符（并发冲突），业务行不变。
    */
   assignPeople(write: CluePeopleAssignWrite): Promise<boolean>;
+  /**
+   * 单位签收确认（#335）：写入 unitReceivedAt/By/Mode；同 assignment 幂等；
+   * expectedAssignmentId 不符返回 conflict；无有效分派返回 missing。
+   * 不改变线索主状态，不写 Clue.receivedAt。
+   */
+  confirmUnitReceipt(write: ClueUnitReceiptWrite): Promise<true | 'idempotent' | 'conflict' | 'missing'>;
   /** 读撤回不派编排上下文（状态、登记人、当前命中集与对方承办机构）。 */
   readWithdrawContext(clueId: string): Promise<ClueWithdrawContext | null>;
   /**

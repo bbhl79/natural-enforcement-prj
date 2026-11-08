@@ -25,7 +25,8 @@ export type TodoKind =
   | 'rerun'
   | 'held'
   | 'remind'
-  | 'designate';
+  | 'designate'
+  | 'unit-receipt';
 
 /** 紧急程度：深红＝已超期、橙＝紧急、蓝＝还有时间。 */
 export type UrgencyLevel = 'overdue' | 'urgent' | 'ontime';
@@ -54,6 +55,7 @@ export const TODO_KINDS: readonly { readonly id: TodoKind; readonly label: strin
   { id: 'rerun', label: '重跑核查' },
   { id: 'remind', label: '处理结案提醒' },
   { id: 'designate', label: '受理指定管辖' },
+  { id: 'unit-receipt', label: '待签收' },
 ];
 
 /** 默认排序位次：深红 → 橙 → 蓝。 */
@@ -146,7 +148,13 @@ export function buildWorkbenchTodos(
       pushClueTodo(row, 'pool', '待派机构', '待分派（内勤池）', dispatchPath);
     }
     if (row.status === 'org_assigned') {
-      pushClueTodo(row, 'org-set', '待派承办人', '已派机构待指定主办', dispatchPath);
+      // #335：列表暂无签收字段时默认待签收；若行上标记已签收则只出示待派承办人。
+      const received = row.unitReceived === true;
+      if (!received) {
+        pushClueTodo(row, 'unit-receipt', '待签收', '已派机构待签收', dispatchPath);
+      } else {
+        pushClueTodo(row, 'org-set', '待派承办人', '已派机构待指定主办', dispatchPath);
+      }
     }
     if (row.hasGaps) {
       pushClueTodo(

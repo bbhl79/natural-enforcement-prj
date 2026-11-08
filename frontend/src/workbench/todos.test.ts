@@ -74,7 +74,7 @@ function designation(over: Partial<DesignationTodoItem> = {}): DesignationTodoIt
 }
 
 describe('事项类型派生', () => {
-  it('待分派决定 / 待派机构 / 待派承办人按状态各自成行，进工作台办理全页', () => {
+  it('待分派决定 / 待派机构 / 待签收按状态各自成行，进工作台办理全页', () => {
     const rows = buildWorkbenchTodos(
       {
         ...EMPTY,
@@ -92,8 +92,8 @@ describe('事项类型派生', () => {
     expect(byKind.get('decide')?.to).toBe('/workbench/register?step=3&clue=a');
     expect(byKind.get('pool')?.kindLabel).toBe('待派机构');
     expect(byKind.get('pool')?.stage).toBe('待分派（内勤池）');
-    expect(byKind.get('org-set')?.kindLabel).toBe('待派承办人');
-    expect(byKind.get('org-set')?.stage).toBe('已派机构待指定主办');
+    expect(byKind.get('unit-receipt')?.kindLabel).toBe('待签收');
+    expect(byKind.get('unit-receipt')?.stage).toBe('已派机构待签收');
   });
 
   it('已派承办人且无缺件、核查没失败：不产生待办行', () => {

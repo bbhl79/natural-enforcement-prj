@@ -780,6 +780,61 @@ export function TransferPanel({
   );
 }
 
+/** 单位签收确认（#335；与派人入口分开）。 */
+export function UnitReceiptPanel({
+  view,
+  busy,
+  failure,
+  onConfirm,
+  readOnly = false,
+}: {
+  view: DispatchView;
+  busy: boolean;
+  failure: string | null;
+  onConfirm: () => void;
+  readOnly?: boolean;
+}) {
+  if (view.unitReceipt) {
+    return (
+      <div className="card" data-role="unit-receipt-panel">
+        <div className="card-h">
+          单位签收
+          <span className="hint">已签收</span>
+        </div>
+        <div className="banner ok" data-role="unit-receipt-done">
+          {`已于 ${view.unitReceipt.receivedAt} 签收（模式：${view.unitReceipt.mode}）`}
+        </div>
+      </div>
+    );
+  }
+  if (!view.mayConfirmUnitReceipt && !readOnly) return null;
+  return (
+    <div className="card" data-role="unit-receipt-panel">
+      <div className="card-h">
+        待签收
+        <span className="hint">{readOnly ? '监督身份只读' : '承办机构内勤确认接收'}</span>
+      </div>
+      {failure ? <div className="banner danger" data-role="failure">{failure}</div> : null}
+      <div className="help">
+        {view.assignment
+          ? `请确认接收线索 ${view.code}（承办机构：${view.assignment.orgName}）。签收不改变主状态，派人仍在下一步。`
+          : `请确认接收线索 ${view.code}。`}
+      </div>
+      <div className="actions">
+        <button
+          type="button"
+          className="btn btn-primary"
+          data-role="confirm-unit-receipt"
+          disabled={readOnly || busy || !view.assignment}
+          title={readOnly ? '监督身份只读，不可签收' : undefined}
+          onClick={() => onConfirm()}
+        >
+          确认签收
+        </button>
+      </div>
+    </div>
+  );
+}
 /** 派主办／协办。 */
 export function AssignPeoplePanel({
   view,
@@ -873,6 +928,7 @@ export function ClueDispatchBody({
   onDecide,
   onAssignOrg,
   onAssignPeople,
+  onConfirmUnitReceipt,
   onTransfer,
   onOtherDisposition = () => undefined,
   onDesignateRequest,
@@ -886,6 +942,7 @@ export function ClueDispatchBody({
   onDecide: (decision: 'dispatch' | 'hold', acknowledged: boolean, conflictResolution?: string, conflictBasis?: string) => void;
   onAssignOrg: (input: { orgUnitId: string; reason: string; designate: boolean }) => void;
   onAssignPeople: (input: { mainId: string; assistIds: readonly string[] }) => void;
+  onConfirmUnitReceipt: () => void;
   onTransfer: (input: { transferOrg: string; documentNo: string; letterDate: string; reason: string; attachments: readonly File[] }) => void;
   onOtherDisposition?: (input: {
     readonly note: string;
@@ -963,6 +1020,12 @@ export function ClueDispatchBody({
               <div className="help" data-role="handlers">
                 {`承办人：${view.handlers.map((handler) => `${handler.name}（${handler.role === 'main' ? '主办' : '协办'}）`).join('、')}`}
               </div>
+            ) : null}
+            {(view.mayConfirmUnitReceipt || view.unitReceipt || (ro && view.status === 'org_assigned')) ? (
+              <UnitReceiptPanel view={view} busy={busy} failure={failure} onConfirm={onConfirmUnitReceipt} readOnly={ro} />
+            ) : null}
+            {showPeople && !view.unitReceipt && view.mayAssignPeople && !ro ? (
+              <div className="help" data-role="receipt-before-people-hint">建议先完成单位签收，再派出承办人（系统不强制拦截派人）。</div>
             ) : null}
             {showPeople ? (
               <AssignPeoplePanel view={view} busy={busy} failure={failure} onAssign={onAssignPeople} readOnly={ro} />

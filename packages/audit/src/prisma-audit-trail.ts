@@ -139,6 +139,7 @@ const FAILED_REASONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ['clue.held', new Set<string>(CLUE_DISPATCH_DECIDE_FAILED_REASONS)],
   ['clue.org-assigned', new Set<string>(CLUE_ORG_ASSIGNED_FAILED_REASONS)],
   ['clue.handler-assigned', new Set<string>(CLUE_HANDLER_ASSIGNED_FAILED_REASONS)],
+['clue.unit-received', new Set<string>(['concurrent-change', 'assignment-conflict', 'invalid-state', 'permission-denied', 'invalid-form'])],
   ['clue.pool-reassigned', new Set<string>(CLUE_POOL_REASSIGNED_FAILED_REASONS)],
   ['clue.designate-requested', new Set<string>(CLUE_DESIGNATE_REQUESTED_FAILED_REASONS)],
   ['clue.designate-rejected', new Set<string>(CLUE_DESIGNATE_REJECTED_FAILED_REASONS)],
