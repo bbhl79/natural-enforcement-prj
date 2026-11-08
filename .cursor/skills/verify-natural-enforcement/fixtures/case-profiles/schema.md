@@ -63,6 +63,38 @@
 }
 ```
 
+`source` 字段在摘要中从略，形状见下一节。
+
+## source（案卷来源与法规类型）
+
+`source` 记案卷的飞书来源与脱敏锚点，不是线索来源。线索来源编码写在顶层 `sourceCode`。
+
+```json
+"source": {
+  "feishuFolderToken": "Pvo9fHTOylQGmJd0V86cr1jQnZe",
+  "feishuDocToken": "M0yIdeKhkoXvpcxvDAqcJBGAnkS",
+  "feishuTitle": "1.广州-非法测绘",
+  "seedCity": "广州",
+  "legalBasis": [
+    { "documentCode": "doc_002", "articleNo": "2.6" }
+  ],
+  "roleBasis": ["经办", "行政审核", "行政审批"]
+}
+```
+
+| 字段 | 必填 | 说明 |
+| ---- | ---- | ---- |
+| `feishuFolderToken` | 是 | 飞书案卷所在文件夹 token（脱敏底稿） |
+| `feishuDocToken` | 是 | 飞书案卷正文 token（脱敏底稿） |
+| `feishuTitle` | 是 | 飞书案卷标题 |
+| `seedCity` | 是 | 种子城市 |
+| `legalBasis` | 否 | 法规类型出处：文件表编号 + 条款号（ADR 0019）。`documentCode` 取 `backend/geo-dict/src/reference-data/reference-data.generated.ts` 的 `DOCUMENTS` 编号，法规名由文件表解析，不写自由文本 |
+| `roleBasis` | 否 | 角色依据：取 `processEvents[].chain[].role` 的角色标签（经办／行政审核／行政审批／法制审核）；登记、分派等无呈批链的环节取 identities 的角色标签（如内勤）。对照 `fixtures/identities/` |
+
+`legalBasis` + `roleBasis` 合称法规类型，形状与 `harness/discover/source-check.ts` 的 `AssertedNode` 对齐（`nodeId` 取 profile `id`）。
+两字段都缺省时视为出处未钉死：进出处校验（seam⑥）标「待权威」，只产决策票，不进实现方向。
+本形状先行定义，既有 profile 数据不回填；回填走人审 PR。
+
 ## processEvents
 
 呈批、会办、审理、法审、集体讨论、听证相关过程的一等数据。按时间顺序排列。
