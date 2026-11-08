@@ -10,6 +10,8 @@ import {
 import { evaluateOracle, type StepObservation } from './oracle.ts';
 import { EvidenceWriter, newRunId, type RunSummary } from './evidence.ts';
 import { SessionCache } from './session.ts';
+import { recordOf } from './record-of.ts';
+import { BUTTON_FLAGS } from './dispatch-buttons.ts';
 
 export interface HarnessContext {
   readonly baseUrl: string;
@@ -37,12 +39,6 @@ const OBSERVED_VERIFICATION = new Set(['done', 'failed', 'not_required', 'runnin
 
 function asText(value: unknown): string {
   return typeof value === 'string' ? value : '';
-}
-
-function recordOf(value: unknown): Record<string, unknown> | null {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
 }
 
 function listOf(value: unknown): readonly Record<string, unknown>[] {
@@ -594,8 +590,6 @@ async function runStep(
   throw new Error(`本轮 harness 不支持 action=${step.action}`);
 }
 
-const BUTTON_FLAGS = ['mayDecide', 'mayAssignOrg', 'mayAssignPeople', 'mayReassignOrg'] as const;
-
 /**
  * 各身份自己读分派视图。
  * 未派机构时，承办机构内勤得到 403 scope-denied。
@@ -673,6 +667,8 @@ export async function runApiScenario(
   writer: EvidenceWriter,
 ): Promise<{ pass: boolean; observation: StepObservation | null }> {
   const scenario = await loadScenario(scenarioId);
+  // 注册元数据供 finish() 推导 uncovered（featureMapRef、matrix 未核开关）。
+  writer.registerScenario(scenarioId, scenario);
   if (scenario.status !== 'runnable') {
     await writer.writeStep({
       scenarioId,

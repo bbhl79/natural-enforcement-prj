@@ -40,6 +40,7 @@
 | `kind` | `happy` / `negative` / 省略 |
 | `profileRefs` | case-profile id |
 | `identityRefs` | identities id |
+| `featureMapRefs` | Feature Map 节点 id 数组，可空。uncovered 的 `featureMapRef` 取首元素；见 `../RUN-CONTRACT.md` |
 | `steps` | 见下 |
 | `oracle.assert` | 结构化断言；见 `../RUN-CONTRACT.md` |
 
@@ -62,7 +63,7 @@
 | `orgUnitCode` | assign-org：按机构编码解析 id（如 `ORG-STATION-A`） |
 | `orgUnitFrom` | assign-org：从分派视图取机构，目前支持 `assignment` |
 | `mainFrom` / `assistFrom` | assign-people：按工号从候选解析主办／协办；`mainFrom` 缺省取第一人 |
-| `matrix` | read-dispatch-buttons：每个身份直接读 `GET /api/clues/:id/dispatch`。核对 `http`、`reason`、`mayDecide`、`mayAssignOrg`、`mayAssignPeople`、`mayReassignOrg`。未写的开关不核。 |
+| `matrix` | read-dispatch-buttons：每个身份直接读 `GET /api/clues/:id/dispatch`。核对 `http`、`reason`、`mayDecide`、`mayAssignOrg`、`mayAssignPeople`、`mayReassignOrg`。未写的开关不核，记为 uncovered `switch-unchecked`；见 `../RUN-CONTRACT.md`。 |
 | `expectClueStatus` | read-dispatch-buttons：200 响应里的线索主状态 |
 | `isolateSpatial` | register-clue 的 `mutate`。为 true 时按 `VERIFY_SPATIAL_SALT` 平移 `overrideSpatial`。同一跑次内相对位置不变。 |
 

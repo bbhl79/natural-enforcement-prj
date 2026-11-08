@@ -107,6 +107,8 @@ export interface ApiScenario {
   readonly kind?: string;
   readonly profileRefs: string[];
   readonly identityRefs: string[];
+  /** Feature Map 节点引用；uncovered 的 featureMapRef 取首元素（spec #322 T1）。 */
+  readonly featureMapRefs?: string[];
   readonly steps: ScenarioStep[];
   /** 为 true 时，任一步 pass 为 false 则整条 scenario 失败。 */
   readonly strictSteps?: boolean;
