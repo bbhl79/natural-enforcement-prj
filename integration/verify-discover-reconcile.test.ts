@@ -394,6 +394,7 @@ describe('reconcileCapabilities 第二类错位：地图有判据无 → latent 
           nodeId: 'nav.case.lonely',
           legalBasis: [{ documentCode: 'doc_002', articleNo: '2.5' }],
           roleBasis: ['经办'],
+          authority: { pointer: 'test-fixture#confirmed', verified: true },
         },
       ],
       acks: [{ key: 'nav.case.phantom', keyType: 'feature-map-node' }],

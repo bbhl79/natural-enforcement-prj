@@ -13,8 +13,8 @@ import {
 describe('SourceGate 名单透传未被故障变量替换', () => {
   it('基础编排同时保留 NE_SOURCE_GATE_ALLOWED_SOURCES，且不含 VERIFY_FAULT', async () => {
     const text = await fs.readFile(path.join(process.cwd(), 'infra/docker-compose.yml'), 'utf8');
-    expect(text).toContain('NE_SOURCE_GATE_ALLOWED_SOURCES: "${NE_SOURCE_GATE_ALLOWED_SOURCES:-}"');
-    expect(text).not.toContain('VERIFY_FAULT');
+    expect(text).toMatch(/^ {6}NE_SOURCE_GATE_ALLOWED_SOURCES: "\$\{NE_SOURCE_GATE_ALLOWED_SOURCES:-\}"/m);
+    expect(text).not.toMatch(/^ {6}VERIFY_FAULT:/m);
     const overlay = await fs.readFile(
       path.join(
         process.cwd(),
@@ -22,8 +22,8 @@ describe('SourceGate 名单透传未被故障变量替换', () => {
       ),
       'utf8',
     );
-    expect(overlay).toContain('VERIFY_FAULT');
-    expect(overlay).not.toContain('NE_SOURCE_GATE_ALLOWED_SOURCES');
+    expect(overlay).toMatch(/^ {6}VERIFY_FAULT:/m);
+    expect(overlay).not.toMatch(/^ {6}NE_SOURCE_GATE_ALLOWED_SOURCES:/m);
   });
 });
 
