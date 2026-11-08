@@ -82,5 +82,5 @@
       { "path": "body.facts.rows.3.reason", "op": "eq", "value": "scope-denied" }
     ]
   },
-  "notes": "权威只取 USER LOCK rev3 §1 与 §1.2。登记用隔离面，避免撞上疑似重复后停在待分派决定。本场景不插入决定步。派机构前甲所内勤与乙区经办不在并集，GET 403。派到 ORG-STATION-A 后，录入机构与承办机构 GET 200，乙区仍 403。mayAssignPeople 只在承办机构内勤为 true。不把 harness 字符串 readScope 当并集证明。签收不在本场景。"
+  "notes": "权威只取 USER LOCK rev3 §1 的读并集，以及 §1.2 的 mayAssignPeople 旗标。本场景不发送 assign-people，真实写授权未测。不调用 UI。登记用隔离面。派机构前甲所内勤与乙区经办不在并集。派到 ORG-STATION-A 后，录入机构与承办机构 GET 200，乙区仍 403。不把 harness 字符串 readScope 当并集证明。签收不在本场景。"
 }

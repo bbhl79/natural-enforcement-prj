@@ -32,6 +32,7 @@ import {
   DECIDE_FROM_STATUS,
   ORG_ASSIGN_FROM_STATUSES,
   PEOPLE_ASSIGN_FROM_STATUS,
+  activeVerifyFault,
   readUnionOrgIds,
   decideDispatch,
   hasCaseByCasePlanningType,
@@ -245,7 +246,7 @@ export class ClueDispatchService {
     const targets = readUnionOrgIds(
       context.enteredOrgId,
       context.assignment?.orgUnitId ?? null,
-      process.env.VERIFY_FAULT,
+      activeVerifyFault(process.env),
     );
     let hit: string | null = null;
     for (const orgId of targets) {

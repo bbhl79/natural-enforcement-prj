@@ -37,6 +37,32 @@ export const PEOPLE_ASSIGN_FROM_STATUS = 'org_assigned';
  * 分派视图可读机构：录入机构，加上已派且不同的承办机构。
  * fault 为 drop-assigned-org-read 时去掉已派机构。缺省不改变并集。
  */
+export interface VerifyFaultEnv {
+  readonly VERIFY_FAULT?: string | undefined;
+  readonly NE_DEPLOYMENT?: string | undefined;
+  readonly NODE_ENV?: string | undefined;
+  readonly COMPOSE_PROJECT_NAME?: string | undefined;
+  readonly VERIFY_ISOLATION?: string | undefined;
+}
+
+const DEDICATED_VERIFY_PROJECT = /^verify-[a-z0-9][a-z0-9-]{2,40}$/;
+
+/**
+ * 故障变量只在隔离 verify 生效。
+ * production、普通 dev、默认项目名、未声明 dedicated 时一律当作未设置。
+ */
+export function activeVerifyFault(env: VerifyFaultEnv): string | undefined {
+  const fault = (env.VERIFY_FAULT ?? '').trim();
+  if (fault !== 'drop-assigned-org-read') return undefined;
+  if ((env.NODE_ENV ?? '').trim() === 'production') return undefined;
+  if ((env.NE_DEPLOYMENT ?? '').trim() !== 'verify') return undefined;
+  if ((env.VERIFY_ISOLATION ?? '').trim() !== 'dedicated') return undefined;
+  const project = (env.COMPOSE_PROJECT_NAME ?? '').trim();
+  if (!DEDICATED_VERIFY_PROJECT.test(project)) return undefined;
+  if (project === 'natural-enforcement' || project.includes('e3')) return undefined;
+  return fault;
+}
+
 export function readUnionOrgIds(
   enteredOrgId: string,
   assignedOrgId: string | null,

@@ -5,6 +5,7 @@ export {
   DUP_TERMINAL_STATUSES,
   ORG_ASSIGN_FROM_STATUSES,
   PEOPLE_ASSIGN_FROM_STATUS,
+  activeVerifyFault,
   readUnionOrgIds,
   decideDispatch,
   isOpenHit,

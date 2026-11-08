@@ -8,7 +8,6 @@ import { classifyProposals } from './discover/classify-proposals.ts';
 import {
   coarseAcks,
   filterAcked,
-  selectBaseline,
   type CoverageAck,
   type RunSnapshot,
 } from './discover/diff-runs.ts';
@@ -28,6 +27,8 @@ import { loadCoverageAcks } from './load-coverage-acks.ts';
 import { loadDiscoverSources } from './discover-sources.ts';
 import { loadFailureRecords } from './load-failure-records.ts';
 import { IndexDiskForkError, loadScenarioRegister } from './load-scenario-register.ts';
+import { activeVerifyFault } from '../../../../backend/case/src/clue/dispatch/rules.ts';
+import { planHistoryDiff } from './journey-isolation.ts';
 import { repoRoot } from './paths.ts';
 import { recordOf } from './record-of.ts';
 
@@ -315,10 +316,18 @@ export async function runDiscoverClose(input: DiscoverCloseInput): Promise<{
   const summary = await readSummaryUncovered(input.runDir);
   const times = await readManifestTimes(input.runDir);
   const history = await loadHistory(root, input.runId);
-  const baseline = selectBaseline(history.snapshots);
+  const requestedBaseline = process.env.VERIFY_DIFF_BASELINE ?? '';
+  const diffPlan = planHistoryDiff(
+    requestedBaseline,
+    history.snapshots.map((item) => ({
+      runId: item.runId,
+      status: item.status,
+      endedAt: item.endedAt,
+    })),
+  );
   const ignored = coarseAcks(acks);
   let diffBody: {
-    status: 'compared' | 'first-run' | 'not-run';
+    status: 'compared' | 'first-run' | 'not-run' | 'baseline-missing' | 'blocked-baseline' | 'interrupted';
     compared: boolean;
     baselineRunId: string | null;
     added?: UncoveredItem[];
@@ -344,18 +353,21 @@ export async function runDiscoverClose(input: DiscoverCloseInput): Promise<{
     diffBody = {
       status: 'not-run',
       compared: false,
-      baselineRunId: null,
+      baselineRunId: diffPlan.baselineRunId,
       reason: '当前跑次 api 通道为 blocked。阻塞不入账，也不把 uncovered 写成业务零缺口。',
       historySkipped: history.skipped,
     };
-  } else if (baseline === null) {
+  } else if (diffPlan.status !== 'compared' || diffPlan.baselineRunId === null) {
     filterAcked(summary.uncovered, acks);
     diffBody = {
-      status: 'first-run',
+      status: diffPlan.status === 'compared' ? 'first-run' : diffPlan.status,
       compared: false,
-      baselineRunId: null,
+      baselineRunId: diffPlan.baselineRunId,
       coarseAcksIgnored: ignored,
-      reason: '无历史入账跑次。selectBaseline 返回 null。已调用 filterAcked。未把当前 uncovered 写成跨跑次 added。',
+      reason:
+        diffPlan.status === 'first-run'
+          ? '无历史入账跑次。未把当前 uncovered 写成跨跑次 added。'
+          : `历史比较未进行：${diffPlan.status}。`,
       historySkipped: history.skipped,
     };
   } else {
@@ -366,9 +378,10 @@ export async function runDiscoverClose(input: DiscoverCloseInput): Promise<{
       endedAt: times.endedAt,
       uncovered: summary.uncovered,
     };
+    const chosen = history.snapshots.find((item) => item.runId === diffPlan.baselineRunId);
     const diff = await writeDiffReport({
       current,
-      history: history.snapshots,
+      history: chosen === undefined ? [] : [chosen],
       acks,
       root,
     });
@@ -385,6 +398,13 @@ export async function runDiscoverClose(input: DiscoverCloseInput): Promise<{
   }
 
   const git = gitStateOf(root);
+  const fault = activeVerifyFault({
+    VERIFY_FAULT: process.env.VERIFY_FAULT,
+    NE_DEPLOYMENT: process.env.NE_DEPLOYMENT,
+    NODE_ENV: process.env.NODE_ENV,
+    COMPOSE_PROJECT_NAME: process.env.COMPOSE_PROJECT_NAME,
+    VERIFY_ISOLATION: process.env.VERIFY_ISOLATION,
+  });
   const slicePassed = input.mode === 'journey' && input.channels.api === 'passed';
   const report = {
     schema: 'verify-discover-report/1',
@@ -394,11 +414,24 @@ export async function runDiscoverClose(input: DiscoverCloseInput): Promise<{
     dirtyPorcelain: git.dirty ? git.porcelain : '',
     mode: input.mode,
     command: input.command,
-    fault: process.env.VERIFY_FAULT ?? '',
+    faultActive: fault ?? '',
     callChain: CALL_CHAIN,
     channels: input.channels,
-    uiNote: input.mode === 'journey' ? '本切片取证是跨身份 GET。不调用 UI 点击写。' : '',
-    journeyAcceptance: slicePassed ? 'slice-read-union' : 'not-accepted',
+    uiNote: '本切片不调用 UI。ui 通道 not-run 不是 UI 汇合通过。',
+    claims: {
+      fullJourney: false,
+      uiConverged: false,
+      flagContract: slicePassed ? 'asserted' : 'not-run',
+      writeAuthorization: 'untested',
+      writeNote: '未发送 assign-people。mayAssignPeople 只是读响应旗标。真实写授权未测。',
+    },
+    journeyAcceptance: slicePassed ? 'api-read-union-flag-only' : 'not-accepted',
+    sourceGate: {
+      bypassed: false,
+      composePassthrough: 'NE_SOURCE_GATE_ALLOWED_SOURCES',
+      liveAuth: 'not-run',
+    },
+    injectRestore: 'not-run',
     indexDisk,
     latentUnverified:
       register === null
