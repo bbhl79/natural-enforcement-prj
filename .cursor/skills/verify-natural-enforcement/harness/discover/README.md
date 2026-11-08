@@ -84,7 +84,7 @@
   也不计对账缺口（`reconcile.ts` 只消费 `assertedNodes` 的判定结果，不另设键表）。
 - API 双向：scenario → 端点已判（`ACTION_ENDPOINTS` 与 runStep 分派字面量由测试对齐）。
   端点 → scenario 方向只对 `register.mappedEndpoints` 显式登记的标准链端点产
-  `api-uncovered` 提案；183 条全量 route→scenario 缺覆盖不入提案（多数为内部接口，
+  `api-uncovered` 提案；184 条全量 route→scenario 缺覆盖不入提案（多数为内部接口，
   全量产票会压垮信噪比，Q15）。
 - runnable 能力消失：地图节点不存在、action 端点不存在、或节点 UI 路由/菜单不在能力清单
   均产 `runnable-regression` 提案。UI 输入为空表示无数据，不判 UI 消失（避免误报）。

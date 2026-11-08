@@ -694,14 +694,20 @@ describe('reconcileCapabilities 汇总与 action→端点映射单一来源', ()
 });
 
 describe('真实源码一致性（seam⑤：能力清单与静态代码一致）', () => {
-  it('38 个控制器 / 183 条方法路由 / 46 GET + 137 POST / 无重复 / 全部 /api/ 开头', async () => {
+  it('38 个控制器 / 184 条方法路由 / 46 GET + 138 POST / 无重复 / 全部 /api/ 开头', async () => {
     const sources = await loadDiscoverSources(process.cwd());
     const routes = enumerateApiRoutes(sources.controllers);
 
     expect(sources.controllers).toHaveLength(38);
-    expect(routes).toHaveLength(183);
+    expect(routes).toHaveLength(184);
     expect(routes.filter((route) => route.method === 'GET')).toHaveLength(46);
-    expect(routes.filter((route) => route.method === 'POST')).toHaveLength(137);
+    expect(routes.filter((route) => route.method === 'POST')).toHaveLength(138);
+    expect(
+      routes.filter(
+        (route) =>
+          route.method === 'POST' && route.path === '/api/clues/:id/confirm-unit-receipt',
+      ),
+    ).toHaveLength(1);
     const keys = routes.map((route) => `${route.method} ${route.path}`);
     expect(new Set(keys).size).toBe(keys.length);
     expect(routes.every((route) => route.path.startsWith('/api/'))).toBe(true);

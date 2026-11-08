@@ -73,7 +73,7 @@ export interface ScenarioUsage {
  * 标准寄存器：profiles stages +（#19 落地后的）标准链路由映射。
  * mappedRoutes 缺省空 = 标准链尚无可判节点，反向漂移不硬判（未知不报）。
  * mappedEndpoints = 已登记标准链的 API 端点（`METHOD /path`）；只有这些端点参与
- * 「API 路由无 scenario 调用」提案，避免 183 条全量产票压垮信噪比（Q15）。
+ * 「API 路由无 scenario 调用」提案，避免 184 条全量产票压垮信噪比（Q15）。
  * 「等权威」节点由 ReconcileInput.assertedNodes 经 source-check 判定，此处不另设键表。
  */
 export interface StandardRegister {
@@ -336,7 +336,7 @@ export function reconcileCapabilities(input: ReconcileInput): ReconcileResult {
   }
 
   // API 双向的第二向：标准链已登记端点却无 runnable scenario 调用。
-  // 只对 register.mappedEndpoints 显式登记的端点提案；183 条全量 route→scenario
+  // 只对 register.mappedEndpoints 显式登记的端点提案；184 条全量 route→scenario
   // 缺覆盖不入提案（绝大多数为内部接口，全量产票会压垮信噪比，Q15）。
   const mappedEndpoints = new Set((input.register.mappedEndpoints ?? []).map(canonicalAckKey));
   const uncoveredEndpoints = new Set<string>();
