@@ -75,7 +75,7 @@ export class EvidenceWriter {
       await fs.writeFile(evFile, `${JSON.stringify(evidenceBody, null, 2)}\n`, 'utf8');
     }
 
-    if (!record.pass) {
+    if (!record.pass && !isNonProductMiss(record)) {
       this.failed.push(`${record.scenarioId}/${record.stepId}`);
     }
   }
@@ -100,6 +100,17 @@ export class EvidenceWriter {
   private async writeJson(rel: string, value: unknown): Promise<void> {
     await fs.writeFile(path.join(this.runDir, rel), `${JSON.stringify(value, null, 2)}\n`, 'utf8');
   }
+}
+
+/**
+ * 未验证与环境 blocked 不计入产品失败。
+ * 未验证：latent 或权威缺口。环境 blocked：栈／认证不可用，不改记业务失败。
+ */
+export function isNonProductMiss(record: StepRecord): boolean {
+  if (record.pass) return false;
+  if (typeof record.actual !== 'object' || record.actual === null) return false;
+  const actual = record.actual as { evaluation?: unknown; disposition?: unknown };
+  return actual.evaluation === 'unverified' || actual.evaluation === 'unevaluated' || actual.disposition === 'environment-blocked';
 }
 
 /** 生成短 runId。 */

@@ -26,6 +26,18 @@ export function runnableScenariosDir(): string {
   return path.join(fixturesRoot, 'scenarios', 'runnable');
 }
 
+export function latentScenariosDir(): string {
+  return path.join(fixturesRoot, 'scenarios', 'latent');
+}
+
+export function scenarioIndexPath(): string {
+  return path.join(fixturesRoot, 'scenarios', 'index.json');
+}
+
+export function coverageAcksPath(): string {
+  return path.join(fixturesRoot, 'coverage-acks.json');
+}
+
 export function negativesDir(): string {
   return path.join(fixturesRoot, 'negatives');
 }

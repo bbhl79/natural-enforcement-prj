@@ -665,7 +665,7 @@ export async function runApiScenario(
   ctx: HarnessContext,
   scenarioId: string,
   writer: EvidenceWriter,
-): Promise<{ pass: boolean; observation: StepObservation | null }> {
+): Promise<{ pass: boolean; observation: StepObservation | null; disposition?: 'unverified' }> {
   const scenario = await loadScenario(scenarioId);
   // 注册元数据供 finish() 推导 uncovered（featureMapRef、matrix 未核开关）。
   writer.registerScenario(scenarioId, scenario);
@@ -675,10 +675,11 @@ export async function runApiScenario(
       stepId: 'skip',
       pass: false,
       expected: { status: 'runnable' },
-      actual: { status: scenario.status },
+      actual: { status: scenario.status, evaluation: 'unverified' },
       evidence: [],
     });
-    return { pass: false, observation: null };
+    // 不执行 latent 步骤。夹具里的 stepId 即使字面是 blocked，也不记成环境 blocked。
+    return { pass: false, observation: null, disposition: 'unverified' };
   }
   if (scenario.driver !== 'api') {
     await writer.writeStep({
@@ -775,7 +776,7 @@ export async function runApiScenarios(
   try {
     for (const id of scenarioIds) {
       const result = await runApiScenario(ctx, id, writer);
-      if (!result.pass) allPass = false;
+      if (!result.pass && result.disposition !== 'unverified') allPass = false;
     }
     return writer.finish(allPass ? 'passed' : 'failed');
   } catch (error) {

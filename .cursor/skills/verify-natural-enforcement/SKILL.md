@@ -67,5 +67,6 @@ P1 的无回溯上限样本已有 driver。
 - 下一待办按钮：`harness/run-next-todo-buttons.sh`，场景 `vf-sc-next-todo-buttons`。按录入机构或已有承办机构的并集核对分派按钮。页面只 headless，不点写。
 - 全链「录入→核查→分派」UI 与 Feature Map 深探另票；本环不引入 CI Playwright 依赖。
 - 开发环境自动核查：`harness/run-auto-verification.sh`。空地址仍走查不成。假图层 overlay 在 `harness/layers/`，说现有适配器的查询协议。四条 scenario：`vf-sc-auto-verify-land-success`、`partial`、`duplicate`、`empty-failed`。页面取证只 headless，证据在 `.run/verify-*`。验证结束会卸 overlay。
+- 单旅程：`VERIFY_PHASE=journey harness/run-auto-verification.sh`。串景按线索段 rev107，不把自动核查写成派机构硬前置，不把单位签收写成个人接办。第 5 节候选未评估。退出码 2 不是产品通过。
 - 无回溯上限样本：`harness/run-hist-dup-no-lookback.sh`。栈起来之后播种一条 `transferred_out` peer。`disposition.recorded_at` 与 `registered_at` 为 `2019-01-01T00:00:00.000Z`。探测登记重叠面后读 `historicalGroups`。年龄不少于 4 年时 `anyAncientPeerInHist` 与 `noLookbackVerified` 为 true。播种不改写已有时间戳。
 - 未实现产品阶段只标 `latent`，不得标成 runnable。

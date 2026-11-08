@@ -1,0 +1,68 @@
+{
+  "id": "vf-journey-clue-dispatch",
+  "authority": {
+    "clueSegment": "线索段 v0.1.5 revision_id=107",
+    "userLock": "USER LOCK v0.1 revision_id=3",
+    "note": "原文不在本仓库。段号来自 2026-11-08 baseline-online。字段写入不表示权威已确认。"
+  },
+  "sequence": [
+    "登记入池",
+    "单位间分派",
+    "目标内勤签收",
+    "建议自动核查",
+    "目标内勤派人",
+    "主办与协办打开现场核查待办"
+  ],
+  "rejectedSequence": "核查→派机构→接办",
+  "candidates": [
+    {
+      "id": "s5-signoff-todo",
+      "section": "线索段 rev107 §3.3",
+      "text": "单位间分派提交后，目标单位内勤出现待办「待签收」；未签收前原派发方可「撤回重派」。",
+      "status": "unevaluated",
+      "reason": "仓内没有「待签收」或「撤回重派」的可观测动作。不把内部状态名当成这两句。"
+    },
+    {
+      "id": "s5-signoff-role",
+      "section": "线索段 rev107 §2.2／§3.4",
+      "text": "签收角色是被派单位内勤或配置签收角色；超时按配置自动签收并留痕。",
+      "status": "unevaluated",
+      "reason": "仓内没有签收动作。单位签收不写成个人接办。"
+    },
+    {
+      "id": "s5-assign-people-both",
+      "section": "线索段 rev107 §2.2／§3.3；USER LOCK rev3 §1.2",
+      "text": "派人仅目标或承办单位内勤；主办与协办双方待办可见。",
+      "status": "unevaluated",
+      "reason": "现有 assign-people 与 mayAssignPeople 不是「双方待办可见」的观测。不从代码补这条断言。"
+    },
+    {
+      "id": "s5-auto-verify-optional",
+      "section": "线索段 rev107 §2.4／§3.3／§3.6",
+      "text": "土地或矿产在单位到人之前建议自动核查。失败可跳过并标记「自动核查已跳过」，也可分到人后重跑。报告与元数据入卷。",
+      "status": "unevaluated",
+      "reason": "自动核查不是派机构硬前置。仓内没有「自动核查已跳过」标记可观测。"
+    },
+    {
+      "id": "s5-read-union",
+      "section": "USER LOCK rev3 §1",
+      "text": "GET 分派视图读等于 enteredOrgId 与 assignment.orgUnitId 的并集。写面不放宽。",
+      "status": "unevaluated",
+      "reason": "harness 字符串 entered-or-assigned-org 不能证明该并集。本轮不改写权限。"
+    },
+    {
+      "id": "s5-historical-matches",
+      "section": "USER LOCK rev3 §2",
+      "text": "关闭线索与发送方 transferred_out 参与 historical matches，无回溯上限。",
+      "status": "unevaluated",
+      "reason": "本旅程不执行该探针。不把另入口 run-hist-dup-no-lookback.sh 算进本跑次。"
+    }
+  ],
+  "outOfScope": [
+    "独立分派决定步",
+    "完整内部状态机",
+    "个人接办",
+    "分派前辖区建议同页只读",
+    "查重命中快照同页合同"
+  ]
+}

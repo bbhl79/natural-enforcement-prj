@@ -8,13 +8,14 @@ export interface UncoveredDiff {
   removed: UncoveredItem[];
 }
 
-/** diff 键四元组归一：optional 字段缺省归空串，键稳定（spec #322 Q2）。 */
+/** diff 键：optional 字段缺省归空串。identityRef 入键，新身份不算同一缺口。 */
 function keyOf(item: UncoveredItem): string {
   return JSON.stringify([
     item.kind,
     item.scenarioId ?? '',
     item.stepId ?? '',
     item.featureMapRef ?? '',
+    item.identityRef ?? '',
   ]);
 }
 
@@ -58,21 +59,55 @@ export function selectBaseline(runs: readonly RunSnapshot[]): RunSnapshot | null
 /** ack 键类型：地图节点或路由（spec #322 Q4）。首期过滤只用地图节点，路由留 T5。 */
 export type CoverageAckKeyType = 'feature-map-node' | 'route';
 
-/** by-design 确认态一条。确认权归 Lei Hu，代理只提案；初始清单为空。 */
+/**
+ * by-design 确认态一条。确认权归 Lei Hu，代理只提案；初始清单为空。
+ * 只有 kind + scenarioId + key 齐备，且 stepId／identityRef 与缺口一致时才过滤。
+ * 只写地图节点、不写步骤或身份的粗键不匹配任何缺口。
+ */
 export interface CoverageAck {
   readonly key: string;
   readonly keyType: CoverageAckKeyType;
+  readonly kind?: string;
+  readonly scenarioId?: string;
+  readonly stepId?: string;
+  readonly identityRef?: string;
 }
 
-/** 过滤已 ack 的缺口：首期按 featureMapRef 匹配地图节点 ack；路由类 ack 留 T5。 */
+function sameToken(left: string | undefined, right: string | undefined): boolean {
+  return (left ?? '') === (right ?? '');
+}
+
+/** 粗键：缺 kind 或 scenarioId，或不是地图节点键。这种 ack 不过滤缺口。 */
+export function isPreciseAck(ack: CoverageAck): boolean {
+  return (
+    ack.keyType === 'feature-map-node' &&
+    ack.key.trim() !== '' &&
+    (ack.kind ?? '').trim() !== '' &&
+    (ack.scenarioId ?? '').trim() !== ''
+  );
+}
+
+/** 精确匹配才过滤。新步骤、新身份、无 featureMapRef 的缺口不被粗键吞掉。 */
+export function ackMatches(ack: CoverageAck, item: UncoveredItem): boolean {
+  if (!isPreciseAck(ack)) return false;
+  if ((item.featureMapRef ?? '') === '') return false;
+  if (ack.key !== item.featureMapRef) return false;
+  if (ack.kind !== item.kind) return false;
+  if (ack.scenarioId !== item.scenarioId) return false;
+  if (!sameToken(ack.stepId, item.stepId)) return false;
+  if (!sameToken(ack.identityRef, item.identityRef)) return false;
+  return true;
+}
+
+/** 过滤已被精确 ack 命中的缺口。粗键与路由类 ack 一律保留原缺口。 */
 export function filterAcked(
   items: readonly UncoveredItem[],
   acks: readonly CoverageAck[],
 ): UncoveredItem[] {
-  const ackedNodes = new Set(
-    acks.filter((ack) => ack.keyType === 'feature-map-node').map((ack) => ack.key),
-  );
-  return items.filter(
-    (item) => item.featureMapRef === undefined || !ackedNodes.has(item.featureMapRef),
-  );
+  return items.filter((item) => !acks.some((ack) => ackMatches(ack, item)));
+}
+
+/** 报告用：这些 ack 因缺身份字段而未参与过滤，不能当成已确认零缺口。 */
+export function coarseAcks(acks: readonly CoverageAck[]): CoverageAck[] {
+  return acks.filter((ack) => !isPreciseAck(ack));
 }

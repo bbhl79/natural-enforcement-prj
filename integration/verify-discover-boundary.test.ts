@@ -86,7 +86,7 @@ async function seedSandbox(root: string): Promise<void> {
   await fs.writeFile(path.join(root, 'product', 'sample-controller.ts'), PRODUCT_SAMPLE, 'utf8');
   await fs.mkdir(path.join(root, 'fixtures/scenarios/runnable'), { recursive: true });
   await fs.mkdir(path.join(root, 'fixtures/scenarios/latent'), { recursive: true });
-  await fs.writeFile(path.join(root, ACKS_REL), '[]\n', 'utf8');
+  await fs.writeFile(path.join(root, ACKS_REL), '{ "acks": [] }\n', 'utf8');
   await fs.writeFile(
     path.join(root, 'fixtures/scenarios/index.json'),
     `${JSON.stringify(INDEX, null, 2)}\n`,
@@ -146,7 +146,10 @@ describe('seam③ 沙盒夹具仓：发现器全流程只写 .run/，产品/fixt
       endedAt: '2026-11-08T01:00:00Z',
       uncovered,
     };
-    const acks = JSON.parse(await fs.readFile(path.join(root, ACKS_REL), 'utf8')) as CoverageAck[];
+    const parsed = JSON.parse(await fs.readFile(path.join(root, ACKS_REL), 'utf8')) as {
+      acks: CoverageAck[];
+    };
+    const acks = parsed.acks;
 
     const report = await writeDiffReport({ current, history: [], acks, root });
 

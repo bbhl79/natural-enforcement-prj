@@ -540,6 +540,7 @@ describe('reconcileCapabilities 等权威过滤：source-check 判定不进对�
           nodeId: 'nav.case.ok',
           legalBasis: [{ documentCode: 'doc_002', articleNo: '2.5' }],
           roleBasis: ['经办'],
+          authority: { pointer: 'test-fixture#confirmed', verified: true },
         },
         { nodeId: 'nav.case.pending', legalBasis: [], roleBasis: ['经办'] },
       ],

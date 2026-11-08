@@ -10,6 +10,8 @@
     "vf-sc-verify-loop-land-register",
     "vf-sc-verify-loop-land-verify-dispatch",
     "vf-sc-verify-loop-survey-register",
+    "vf-sc-next-todo-buttons",
+    "vf-sc-verify-loop-ui-full-register-click-write",
     "vf-sc-verify-loop-ui-login-register",
     "vf-sc-verify-loop-ui-verify-dispatch",
     "vf-sc-auto-verify-land-empty-failed",

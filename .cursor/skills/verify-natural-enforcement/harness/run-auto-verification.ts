@@ -12,6 +12,7 @@ import { EvidenceWriter } from './evidence.ts';
 import { loadIdentity } from './load-fixtures.ts';
 import { repoRoot } from './paths.ts';
 import { runApiScenario } from './run-api-scenario.ts';
+import { runDiscoverClose, type DiscoverChannels } from './run-discover.ts';
 import { SessionCache } from './session.ts';
 
 const EMPTY_SCENARIOS = ['vf-sc-auto-verify-land-empty-failed'] as const;
@@ -119,10 +120,150 @@ async function writeManifest(runDir: string, baseUrl: string): Promise<void> {
   await fs.writeFile(path.join(runDir, 'clue-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 }
 
+function commandOf(phase: string): string {
+  if (phase === 'journey') {
+    return 'VERIFY_PHASE=journey .cursor/skills/verify-natural-enforcement/harness/run-auto-verification.sh';
+  }
+  if (phase === 'mineral') {
+    return 'VERIFY_PHASE=mineral .cursor/skills/verify-natural-enforcement/harness/run-auto-verification.sh';
+  }
+  return '.cursor/skills/verify-natural-enforcement/harness/run-auto-verification.sh';
+}
+
+async function listUiFailures(
+  runDir: string,
+  only: string,
+): Promise<{ scenarioId: string; stepId: string; source: string }[]> {
+  const dir = path.join(runDir, 'ui', only, 'steps');
+  let names: string[] = [];
+  try {
+    names = await fs.readdir(dir);
+  } catch {
+    return [];
+  }
+  const found: { scenarioId: string; stepId: string; source: string }[] = [];
+  for (const name of names.filter((item) => item.endsWith('.json')).sort()) {
+    try {
+      const parsed = JSON.parse(await fs.readFile(path.join(dir, name), 'utf8')) as {
+        scenarioId?: string;
+        stepId?: string;
+        pass?: boolean;
+      };
+      if (parsed.pass !== false) continue;
+      if (typeof parsed.scenarioId !== 'string' || typeof parsed.stepId !== 'string') continue;
+      found.push({
+        scenarioId: parsed.scenarioId,
+        stepId: parsed.stepId,
+        source: path.posix.join('ui', only, 'steps', name),
+      });
+    } catch {
+      found.push({ scenarioId: '_ui', stepId: name, source: path.posix.join('ui', only, 'steps', name) });
+    }
+  }
+  return found;
+}
+
+async function writeUiMiss(
+  writer: EvidenceWriter,
+  only: string,
+  message: string,
+): Promise<void> {
+  const failedSteps = await listUiFailures(writer.runDir, only);
+  const environment =
+    /browser image missing|没有 docker|cannot resolve WSL|transport|栈未启动|VERIFY_STACK/.test(message);
+  await writer.writeStep({
+    scenarioId: '_ui',
+    stepId: only,
+    pass: false,
+    expected: { exit: 0 },
+    actual: {
+      error: message,
+      failedSteps,
+      ...(environment ? { disposition: 'environment-blocked' } : {}),
+    },
+    evidence: failedSteps.map((step) => step.source),
+  });
+}
+
+async function closeDiscover(
+  writer: EvidenceWriter,
+  runId: string,
+  mode: string,
+  channels: DiscoverChannels,
+): Promise<number> {
+  const closed = await runDiscoverClose({
+    runDir: writer.runDir,
+    runId,
+    mode,
+    command: commandOf(mode),
+    channels,
+  });
+  console.log(JSON.stringify({ discoverReport: closed.reportPath, exitSuggestion: closed.exitSuggestion }));
+  return closed.exitSuggestion;
+}
+
+async function runJourney(runId: string): Promise<void> {
+  const writer = new EvidenceWriter(runId, ['vf-journey-clue-dispatch'], 'cursor-cloud-vm');
+  await writer.init();
+  const sectionFile = path.join(
+    repoRoot(),
+    '.cursor/skills/verify-natural-enforcement/fixtures/journeys/clue-dispatch-baseline/section5.json',
+  );
+  const section = JSON.parse(await fs.readFile(sectionFile, 'utf8')) as {
+    candidates: { id: string; section: string; text: string; reason: string }[];
+  };
+  for (const candidate of section.candidates) {
+    await writer.writeStep({
+      scenarioId: 'vf-journey-clue-dispatch',
+      stepId: candidate.id,
+      pass: false,
+      expected: { section: candidate.section, text: candidate.text },
+      actual: { evaluation: 'unevaluated', reason: candidate.reason },
+      evidence: [
+        '.cursor/skills/verify-natural-enforcement/fixtures/journeys/clue-dispatch-baseline/section5.json',
+      ],
+    });
+  }
+  const stackUnavailable = process.env.VERIFY_STACK === 'unavailable';
+  if (stackUnavailable) {
+    await writer.writeStep({
+      scenarioId: '_harness',
+      stepId: 'blocked',
+      pass: false,
+      expected: { ok: true },
+      actual: {
+        error: '业务栈不可用。原因 stack-unavailable。',
+        disposition: 'environment-blocked',
+      },
+      evidence: [],
+    });
+  }
+  const summary = await writer.finish(stackUnavailable ? 'blocked' : 'passed');
+  const channels: DiscoverChannels = {
+    api: stackUnavailable ? 'blocked' : 'not-run',
+    ui: 'not-run',
+  };
+  const exitSuggestion = await closeDiscover(writer, runId, 'journey', channels);
+  console.log(
+    JSON.stringify({
+      status: summary.status,
+      acceptance: 'not-accepted',
+      runDir: writer.runDir,
+      failed: summary.failed,
+    }),
+  );
+  process.exitCode = exitSuggestion;
+}
+
 async function main(): Promise<void> {
   const runId = arg('--run-id');
   const baseUrl = (process.env.VERIFY_BASE_URL ?? 'https://localhost:8080').replace(/\/$/, '');
-  const mineralOnly = process.env.VERIFY_PHASE === 'mineral';
+  const phase = process.env.VERIFY_PHASE ?? '';
+  if (phase === 'journey') {
+    await runJourney(runId);
+    return;
+  }
+  const mineralOnly = phase === 'mineral';
   const scenarios = mineralOnly
     ? ['vf-sc-auto-verify-mineral-success']
     : [...EMPTY_SCENARIOS, ...LAYER_SCENARIOS];
@@ -131,22 +272,16 @@ async function main(): Promise<void> {
   const sessions = new SessionCache(baseUrl);
   const ctx = { baseUrl, sessions };
   let blocked = false;
+  let failureUi: string | null = null;
+  let layersUi: string | null = null;
+  let uiRan = false;
   try {
     if (mineralOnly) {
       overlay('on');
       await runApiScenario(ctx, 'vf-sc-auto-verify-mineral-success', writer);
       await writeManifest(writer.runDir, baseUrl);
       const mineralUi = uiHook('mineral', writer.runDir);
-      if (mineralUi !== null) {
-        await writer.writeStep({
-          scenarioId: '_ui',
-          stepId: 'mineral',
-          pass: false,
-          expected: { exit: 0 },
-          actual: { error: mineralUi },
-          evidence: [],
-        });
-      }
+      if (mineralUi !== null) await writeUiMiss(writer, 'mineral', mineralUi);
       const summary = await writer.finish(blocked ? 'blocked' : 'passed');
       await writeManifest(writer.runDir, baseUrl);
       const manifestPath = path.join(writer.runDir, 'clue-manifest.json');
@@ -154,7 +289,11 @@ async function main(): Promise<void> {
       manifest.summary = summary;
       await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
       console.log(JSON.stringify({ status: summary.status, runDir: writer.runDir, failed: summary.failed }));
-      if (summary.status !== 'passed') process.exitCode = 1;
+      const mineralExit = await closeDiscover(writer, runId, 'mineral', {
+        api: summary.status,
+        ui: mineralUi === null ? 'passed' : 'failed',
+      });
+      process.exitCode = summary.status !== 'passed' ? 1 : mineralExit;
       return;
     }
     await ensureIntake(sessions, baseUrl);
@@ -163,33 +302,16 @@ async function main(): Promise<void> {
       await runApiScenario(ctx, id, writer);
     }
     await writeManifest(writer.runDir, baseUrl);
-    const failureUi = uiHook('failure', writer.runDir);
-    if (failureUi !== null) {
-      await writer.writeStep({
-        scenarioId: '_ui',
-        stepId: 'failure',
-        pass: false,
-        expected: { exit: 0 },
-        actual: { error: failureUi },
-        evidence: [],
-      });
-    }
+    uiRan = true;
+    failureUi = uiHook('failure', writer.runDir);
+    if (failureUi !== null) await writeUiMiss(writer, 'failure', failureUi);
     overlay('on');
     for (const id of LAYER_SCENARIOS) {
       await runApiScenario(ctx, id, writer);
     }
     await writeManifest(writer.runDir, baseUrl);
-    const layersUi = uiHook('layers', writer.runDir);
-    if (layersUi !== null) {
-      await writer.writeStep({
-        scenarioId: '_ui',
-        stepId: 'layers',
-        pass: false,
-        expected: { exit: 0 },
-        actual: { error: layersUi },
-        evidence: [],
-      });
-    }
+    layersUi = uiHook('layers', writer.runDir);
+    if (layersUi !== null) await writeUiMiss(writer, 'layers', layersUi);
   } catch (error) {
     blocked = true;
     await writer.writeStep({
@@ -208,7 +330,23 @@ async function main(): Promise<void> {
   manifest.summary = summary;
   await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
   console.log(JSON.stringify({ status: summary.status, runDir: writer.runDir, failed: summary.failed }));
-  if (summary.status !== 'passed') process.exitCode = 1;
+  const hookConfigured = Boolean(process.env.VERIFY_UI_HOOK);
+  const uiMessages = [failureUi, layersUi].filter((item): item is string => item !== null);
+  const uiBlocked = uiMessages.some((item) =>
+    /browser image missing|没有 docker|cannot resolve WSL|transport|栈未启动/.test(item),
+  );
+  const ui: DiscoverChannels['ui'] = !hookConfigured || !uiRan
+    ? 'not-run'
+    : uiMessages.length === 0
+      ? 'passed'
+      : uiBlocked
+        ? 'blocked'
+        : 'failed';
+  const batchExit = await closeDiscover(writer, runId, 'auto-verification', {
+    api: summary.status,
+    ui,
+  });
+  process.exitCode = summary.status !== 'passed' ? 1 : batchExit;
 }
 
 // integration 的 tsc 按 NodeNext 把本文件当 CommonJS，顶层 await 会报 TS1309。

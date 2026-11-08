@@ -141,6 +141,11 @@ export interface ReconcileResult {
  * 归一到基路径才能与路由同键。若 router 将来引入 query 路径，须改为保留 query，
  * 否则不同页面会被折叠成同键、漏报地图漂移。
  */
+/** 路径归一。对账与提案分类共用，避免 planned 路径口径分叉。 */
+export function canonicalRoute(path: string): string {
+  return canonicalPath(path);
+}
+
 function canonicalPath(path: string): string {
   const clean = path.split(/[?#]/)[0] ?? '';
   const segments = clean

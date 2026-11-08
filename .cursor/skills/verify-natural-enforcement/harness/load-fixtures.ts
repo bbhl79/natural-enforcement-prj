@@ -4,6 +4,7 @@ import path from 'node:path';
 import {
   caseProfilesDir,
   identitiesDir,
+  latentScenariosDir,
   negativesDir,
   runnableScenariosDir,
 } from './paths.ts';
@@ -133,10 +134,17 @@ export async function loadProfile(id: string): Promise<Record<string, unknown>> 
 
 export async function loadScenario(id: string): Promise<ApiScenario> {
   const runnable = path.join(runnableScenariosDir(), `${id}.json`);
+  const latent = path.join(latentScenariosDir(), `${id}.json`);
   const negative = path.join(negativesDir(), `${id}.json`);
   try {
     await fs.access(runnable);
     return readJson(runnable);
+  } catch {
+    // latent 只读加载。调用方不得把 status 改成 runnable。
+  }
+  try {
+    await fs.access(latent);
+    return readJson(latent);
   } catch {
     return readJson(negative);
   }

@@ -12,12 +12,14 @@ export type UncoveredKind =
   | 'switch-unchecked'
   | 'scenario-not-run';
 
-/** 一条结构化缺口。diff 键 = kind+scenarioId+stepId+featureMapRef（T2）。 */
+/** 一条结构化缺口。diff 键 = kind+scenarioId+stepId+featureMapRef+identityRef。 */
 export interface UncoveredItem {
   kind: UncoveredKind;
   scenarioId?: string;
   stepId?: string;
   featureMapRef?: string;
+  /** 矩阵行身份。缺省不参与区分；有值时新身份是另一条缺口。 */
+  identityRef?: string;
   reason: string;
 }
 
@@ -82,7 +84,7 @@ export function discoverUncovered(input: DiscoverInput): UncoveredItem[] {
         kind: 'latent-skipped',
         scenarioId: record.scenarioId,
         ...featureMapRefOf(meta),
-        reason: `scenario 状态=${String(actual.status)}，期望 runnable，跳过未覆盖`,
+        reason: `scenario 状态=${String(actual.status)}，期望 runnable。标未验证，不记环境 blocked，不提拔为 runnable`,
       });
       continue;
     }
@@ -113,26 +115,22 @@ export function discoverUncovered(input: DiscoverInput): UncoveredItem[] {
       continue;
     }
 
-    // switch-unchecked：read-dispatch-buttons 矩阵行省略的开关即未核。
-    // 按步骤聚合一条（diff 键含 stepId，不含 flag/identity）；只针对实跑步骤。
+    // switch-unchecked：每个身份单独一条。粗键 ack 不能吞掉另一身份的新缺口。
     const stepDef = meta?.steps?.find((step) => step.id === record.stepId);
     if (stepDef?.action === 'read-dispatch-buttons' && stepDef.matrix !== undefined) {
       const key = `${record.scenarioId}/${record.stepId}`;
       if (!switchReported.has(key)) {
-        const omitted: string[] = [];
+        switchReported.add(key);
         for (const row of stepDef.matrix) {
-          for (const flag of BUTTON_FLAGS) {
-            if (row[flag] === undefined) omitted.push(`${row.identityRef}.${flag}`);
-          }
-        }
-        if (omitted.length > 0) {
-          switchReported.add(key);
+          const omitted = BUTTON_FLAGS.filter((flag) => row[flag] === undefined);
+          if (omitted.length === 0) continue;
           items.push({
             kind: 'switch-unchecked',
             scenarioId: record.scenarioId,
             stepId: record.stepId,
+            identityRef: row.identityRef,
             ...featureMapRefOf(meta),
-            reason: `未核开关：${omitted.join('、')}`,
+            reason: `未核开关：${row.identityRef} ${omitted.join('、')}`,
           });
         }
       }

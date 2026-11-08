@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # 云端或本机开发栈上的自动核查验证入口。
-# 顺序：协议自检 → dev up → 空地址失败路径（含当时的页面）→ 假图层成功／部分命中／疑似重复（含页面）→ 卸掉 overlay。
-# 页面只用 headless。证据在 .run/verify-<日期>-auto-verification-dev-layers/。
+# 缺省顺序：协议自检 → dev up → 空地址失败路径（含当时的页面）→ 假图层成功／部分命中／疑似重复（含页面）→ 卸掉 overlay。
+# VERIFY_PHASE=journey：不启动业务栈，不打 overlay。第 5 节未评估。docker 缺失时记 blocked。
+# 页面只用 headless。证据在 .run/verify-<runId>/。发现器报告在 .run/discover/<runId>/。
 set -euo pipefail
 
 # Podman machine：非登录壳也要接上 DOCKER_HOST（见 ~/.config/podman/docker-env.sh）。
@@ -17,7 +18,12 @@ fi
 
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../../.." && pwd)"
 cd "$ROOT"
-RUN_ID="${VERIFY_RUN_ID:-$(TZ=Asia/Shanghai date +%Y%m%d)-auto-verification-dev-layers}"
+PHASE="${VERIFY_PHASE:-}"
+if [[ "$PHASE" == "journey" ]]; then
+  RUN_ID="${VERIFY_RUN_ID:-$(TZ=Asia/Shanghai date +%Y%m%d)-journey-clue-dispatch}"
+else
+  RUN_ID="${VERIFY_RUN_ID:-$(TZ=Asia/Shanghai date +%Y%m%d)-auto-verification-dev-layers}"
+fi
 RUN_DIR="$ROOT/.run/verify-${RUN_ID}"
 mkdir -p "$RUN_DIR"
 HOOK="$ROOT/.cursor/skills/verify-natural-enforcement/harness/ui/run-ui-auto-verification.sh"
@@ -28,6 +34,18 @@ echo "[auto-verification] run=$RUN_DIR host=$(uname -a)"
 node --experimental-transform-types --disable-warning=ExperimentalWarning \
   "$ROOT/.cursor/skills/verify-natural-enforcement/harness/layers/protocol-self-check.mjs" \
   >"$RUN_DIR/protocol-self-check.json"
+
+if [[ "$PHASE" == "journey" ]]; then
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "[FAIL] 本机没有 docker，业务栈未启动" | tee "$RUN_DIR/stack-blocked.txt"
+    export VERIFY_STACK=unavailable
+  fi
+  # 本轮不执行产品写，不 dev up，不碰 overlay。
+  node --experimental-transform-types --disable-warning=ExperimentalWarning \
+    "$ROOT/.cursor/skills/verify-natural-enforcement/harness/run-auto-verification.ts" \
+    --run-id "$RUN_ID"
+  exit $?
+fi
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "[FAIL] 本机没有 docker，业务栈未启动" | tee "$RUN_DIR/stack-blocked.txt"

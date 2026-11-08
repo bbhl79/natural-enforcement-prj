@@ -97,11 +97,34 @@ describe('filterAcked（seam④：已 ack 地图节点不再报）', () => {
       scenarioId: 'vf-sc-missing',
       reason: 'r',
     };
-    const acks: CoverageAck[] = [
+    const coarse: CoverageAck[] = [
       { key: 'nav.workbench.dispatch.buttons', keyType: 'feature-map-node' },
     ];
+    expect(filterAcked([acked, kept, noRef], coarse)).toEqual([acked, kept, noRef]);
 
-    expect(filterAcked([acked, kept, noRef], acks)).toEqual([kept, noRef]);
+    const precise: CoverageAck[] = [
+      {
+        key: 'nav.workbench.dispatch.buttons',
+        keyType: 'feature-map-node',
+        kind: 'switch-unchecked',
+        scenarioId: 'vf-sc-buttons',
+        stepId: 'read-buttons',
+      },
+    ];
+    expect(filterAcked([acked, kept, noRef], precise)).toEqual([kept, noRef]);
+
+    const otherIdentity: CoverageAck[] = [
+      {
+        key: 'nav.workbench.dispatch.buttons',
+        keyType: 'feature-map-node',
+        kind: 'switch-unchecked',
+        scenarioId: 'vf-sc-buttons',
+        stepId: 'read-buttons',
+        identityRef: 'intake-st',
+      },
+    ];
+    const withIdentity: UncoveredItem = { ...acked, identityRef: 'clerk-a' };
+    expect(filterAcked([withIdentity], otherIdentity)).toEqual([withIdentity]);
   });
 
   it('路由类 ack 首期不参与地图节点过滤（留 T5）', () => {
@@ -170,7 +193,15 @@ describe('writeDiffReport（seam②④：报告写口 + ack 过滤 + 写边界�
       endedAt: '2026-11-02T01:00:00Z',
       uncovered: [gapA, gapC, gapD],
     };
-    const acks: CoverageAck[] = [{ key: 'nav.acked', keyType: 'feature-map-node' }];
+    const acks: CoverageAck[] = [
+      {
+        key: 'nav.acked',
+        keyType: 'feature-map-node',
+        kind: 'switch-unchecked',
+        scenarioId: 'vf-sc-acked',
+        stepId: 'read-buttons',
+      },
+    ];
 
     const report = await writeDiffReport({ current, history: [baseline], acks, root });
 
@@ -179,6 +210,7 @@ describe('writeDiffReport（seam②④：报告写口 + ack 过滤 + 写边界�
       baselineRunId: 'base',
       added: [gapD],
       removed: [gapB],
+      coarseAcksIgnored: [],
     });
     const file = path.join(root, '.run', 'discover', 'cur', 'diff-report.json');
     const onDisk: unknown = JSON.parse(await fs.readFile(file, 'utf8'));
@@ -198,5 +230,24 @@ describe('writeDiffReport（seam②④：报告写口 + ack 过滤 + 写边界�
 
     await expect(writeDiffReport({ current, history: [], acks: [], root })).rejects.toThrow();
     expect(await fs.readdir(root)).toEqual([]);
+  });
+
+  it('discover 目录是指向 .run 外的符号链接时拒绝写入', async () => {
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'discover-outside-'));
+    try {
+      await fs.mkdir(path.join(root, '.run'), { recursive: true });
+      await fs.symlink(outside, path.join(root, '.run', 'discover'));
+      const current: RunSnapshot = {
+        runId: 'link-run',
+        status: 'passed',
+        startedAt: '2026-11-02T00:00:00Z',
+        endedAt: '2026-11-02T01:00:00Z',
+        uncovered: [],
+      };
+      await expect(writeDiffReport({ current, history: [], acks: [], root })).rejects.toThrow(/符号链接/);
+      expect(await fs.readdir(outside)).toEqual([]);
+    } finally {
+      await fs.rm(outside, { recursive: true, force: true });
+    }
   });
 });

@@ -16,11 +16,22 @@ export interface LegalCitation {
   readonly articleNo: string;
 }
 
+/**
+ * 权威确认。纯函数不读文件。
+ * verified 为 true 且 pointer 非空，才表示调用方已对照仓内原文。
+ * 只写字段、不带确认，不得当成 ok。
+ */
+export interface AuthorityConfirmation {
+  readonly pointer: string;
+  readonly verified: boolean;
+}
+
 /** 应然模型草案的一个节点。字段可缺省：缺省即待权威，由本校验拦下。 */
 export interface AssertedNode {
   readonly nodeId: string;
   readonly legalBasis?: readonly LegalCitation[];
   readonly roleBasis?: readonly string[];
+  readonly authority?: AuthorityConfirmation;
 }
 
 /** 校验判定：出处齐备或待权威。 */
@@ -37,6 +48,10 @@ export interface DecisionTicketDraft {
 export interface SourceCheckResult {
   readonly nodeId: string;
   readonly verdict: SourceVerdict;
+  /** 法规出处与角色依据字段是否齐。齐不等于权威已确认。 */
+  readonly fieldPresence: 'missing' | 'present';
+  /** 调用方是否已用非空指针确认权威。未确认不得进实现方向。 */
+  readonly authority: 'confirmed' | 'unconfirmed';
   readonly reason: string;
   readonly decisionTicket: DecisionTicketDraft | null;
 }
@@ -88,23 +103,43 @@ function decisionTicketOf(nodeId: string, gaps: readonly string[]): DecisionTick
   };
 }
 
+function authorityConfirmed(node: AssertedNode): boolean {
+  const pointer = node.authority?.pointer ?? '';
+  return node.authority?.verified === true && pointer.trim() !== '';
+}
+
 /** 逐节点校验出处纪律：一个节点一条结果，顺序与输入一致。 */
 export function checkNodeSources(nodes: readonly AssertedNode[]): SourceCheckResult[] {
   return nodes.map((node): SourceCheckResult => {
     const gaps = [...citationGaps(node.legalBasis), ...roleGaps(node.roleBasis)];
-    if (gaps.length === 0) {
+    if (gaps.length > 0) {
       return {
         nodeId: node.nodeId,
-        verdict: 'ok',
-        reason: `出处齐备：法规出处 ${node.legalBasis?.length ?? 0} 条、角色依据 ${node.roleBasis?.length ?? 0} 项`,
-        decisionTicket: null,
+        verdict: 'pending-authority',
+        fieldPresence: 'missing',
+        authority: 'unconfirmed',
+        reason: `待权威：${gaps.join('；')}。字段不齐。未批准前只产决策票，不进实现方向与对账缺口。`,
+        decisionTicket: decisionTicketOf(node.nodeId, gaps),
+      };
+    }
+    if (!authorityConfirmed(node)) {
+      const gapsPresent = ['字段存在，权威未确认'];
+      return {
+        nodeId: node.nodeId,
+        verdict: 'pending-authority',
+        fieldPresence: 'present',
+        authority: 'unconfirmed',
+        reason: `字段存在，权威未确认：法规出处 ${node.legalBasis?.length ?? 0} 条、角色依据 ${node.roleBasis?.length ?? 0} 项。未批准前只产决策方向，不进实现方向。`,
+        decisionTicket: decisionTicketOf(node.nodeId, gapsPresent),
       };
     }
     return {
       nodeId: node.nodeId,
-      verdict: 'pending-authority',
-      reason: `待权威：${gaps.join('；')}。未批准前只产决策票，不进实现方向与对账缺口。`,
-      decisionTicket: decisionTicketOf(node.nodeId, gaps),
+      verdict: 'ok',
+      fieldPresence: 'present',
+      authority: 'confirmed',
+      reason: `权威已确认：指针 ${node.authority?.pointer}。法规出处 ${node.legalBasis?.length ?? 0} 条、角色依据 ${node.roleBasis?.length ?? 0} 项`,
+      decisionTicket: null,
     };
   });
 }

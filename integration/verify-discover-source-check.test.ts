@@ -19,15 +19,29 @@ const FULL_NODE: AssertedNode = {
 };
 
 describe('seam⑥：出处纪律校验（无出处标待权威、只产决策票）', () => {
-  it('法规出处与角色依据齐备 → ok，不产决策票', () => {
-    const [result] = checkNodeSources([FULL_NODE]);
+  it('字段齐且调用方确认权威 → ok，不产决策票', () => {
+    const [result] = checkNodeSources([
+      { ...FULL_NODE, authority: { pointer: 'test-fixture#confirmed', verified: true } },
+    ]);
 
     expect(result).toEqual({
       nodeId: 'filing',
       verdict: 'ok',
-      reason: expect.stringContaining('法规出处'),
+      fieldPresence: 'present',
+      authority: 'confirmed',
+      reason: expect.stringContaining('权威已确认'),
       decisionTicket: null,
     });
+  });
+
+  it('字段齐但未确认权威 → 待权威，只产决策方向', () => {
+    const [result] = checkNodeSources([FULL_NODE]);
+
+    expect(result.verdict).toBe('pending-authority');
+    expect(result.fieldPresence).toBe('present');
+    expect(result.authority).toBe('unconfirmed');
+    expect(result.reason).toContain('权威未确认');
+    expect(result.decisionTicket?.labels).toEqual(['needs-triage']);
   });
 
   it('无法规出处 → 待权威，reason 指明缺法规出处，决策票草案带 needs-triage', () => {
@@ -70,16 +84,21 @@ describe('seam⑥：出处纪律校验（无出处标待权威、只产决策票
     expect(result.reason).toContain('法规标识');
   });
 
-  it('只填法规名 + 条款号（无文件编号）→ ok，对齐反馈模板「法规名 + 条款号」', () => {
-    const [result] = checkNodeSources([
+  it('只填法规名 + 条款号且确认权威 → ok；未确认则不是 ok', () => {
+    const legalBasis = [{ documentName: '自然资源行政处罚办法', articleNo: '第 6 条' }];
+    const unconfirmed = checkNodeSources([{ ...FULL_NODE, legalBasis }])[0];
+    expect(unconfirmed.verdict).toBe('pending-authority');
+    expect(unconfirmed.fieldPresence).toBe('present');
+
+    const confirmed = checkNodeSources([
       {
         ...FULL_NODE,
-        legalBasis: [{ documentName: '自然资源行政处罚办法', articleNo: '第 6 条' }],
+        legalBasis,
+        authority: { pointer: 'test-fixture#name', verified: true },
       },
-    ]);
-
-    expect(result.verdict).toBe('ok');
-    expect(result.decisionTicket).toBeNull();
+    ])[0];
+    expect(confirmed.verdict).toBe('ok');
+    expect(confirmed.decisionTicket).toBeNull();
   });
 
   it('多条法规出处第 2 条缺条款号 → reason 指明第 2 条', () => {
@@ -115,7 +134,7 @@ describe('seam⑥：出处纪律校验（无出处标待权威、只产决策票
 
   it('混合节点：admittedNodeIds 只含出处齐备节点，待权威节点不进实现方向', () => {
     const results = checkNodeSources([
-      FULL_NODE,
+      { ...FULL_NODE, authority: { pointer: 'test-fixture#confirmed', verified: true } },
       { nodeId: 'collective', legalBasis: [], roleBasis: ['法制审核'] },
     ]);
 
