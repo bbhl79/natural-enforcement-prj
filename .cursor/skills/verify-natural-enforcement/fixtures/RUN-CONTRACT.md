@@ -172,6 +172,27 @@ diff 键 = `kind+scenarioId+stepId+featureMapRef` 四元组。optional 字段缺
 `route` 类 ack 首期不参与过滤，留 T5 能力枚举对账用。
 无 `featureMapRef` 的缺口首期不被 ack 过滤。
 
+## 出处纪律校验（source-check，spec #322 二期 T7）
+
+`harness/discover/source-check.ts` 是确定性纯函数，无 I/O：不写文件、不建 issue。
+输入应然模型草案节点 `AssertedNode[]`，输出同序 `SourceCheckResult[]`。
+
+| 输入字段 | 说明 |
+| ---- | ---- |
+| `nodeId` | 环节 id |
+| `legalBasis` | 法规出处：`{ documentCode, articleNo }`，文件表编号 + 条款号（ADR 0019） |
+| `roleBasis` | 角色依据：角色标签数组，对照 `fixtures/identities/` |
+
+| 输出字段 | 说明 |
+| ---- | ---- |
+| `verdict` | `ok`（出处齐备）或 `pending-authority`（待权威） |
+| `reason` | 人读：齐备条数，或缺失项（缺法规出处／缺条款号／缺角色依据） |
+| `decisionTicket` | 待权威项的决策票草案，`labels` 恒为 `['needs-triage']`；`ok` 项为 `null` |
+
+待权威节点只产决策票，不进实现方向（`admittedNodeIds` 只放行 `ok` 节点），不计入对账缺口。
+开票由人按 `docs/agents/issue-tracker.md` 执行，发现器不自动开票。
+草案模板与样例见 `../harness/discover/README.md` 与 `../harness/discover/asserted-model-draft.sample.md`。
+
 ## 闭环规则
 
 1. 修复 Agent 必须以失败包为输入，不得要求人再贴截图。
