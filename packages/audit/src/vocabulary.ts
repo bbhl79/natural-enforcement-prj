@@ -49,7 +49,7 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
   'clue.held',
   'clue.org-assigned',
   'clue.handler-assigned',
-  'clue.unit-received',
+  // 单位手工签收确认（#335）：签收事实快照。
   'clue.unit-received',
   // 移送与停用机构池重新指定（#216，规格 G）：登记移送、重新指定接收机构。
   'clue.pool-reassigned',
@@ -1358,6 +1358,8 @@ export const AUDIT_DETAIL_ACTIONS = [
   'clue.held',
   'clue.org-assigned',
   'clue.handler-assigned',
+  // 单位手工签收确认（#335）：编号、分派 id 与签收事实（时间、人、方式）。
+  'clue.unit-received',
   // 撤回不派与结案（#217，规格 G）：撤回原因编码、处置类型、提醒 ID 与处理结果。
   'clue.withdrawn',
   'clue.disposition-recorded',
