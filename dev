@@ -111,6 +111,10 @@ seed_repo_to_stdin() {
     --exclude='*.tsbuildinfo' \
     --exclude='.env' \
     --exclude='.env.local' \
+    --exclude='*.local.js' \
+    --exclude='*.local' \
+    --exclude='backend/prisma/generated' \
+    --exclude='artifacts' \
     --exclude='frontend/prototype/admin-console/screens' \
     --exclude='docs/screens' \
     -cf - .
@@ -720,7 +724,12 @@ cmd_db() {
 # 不 push 不部署；产物/依赖只进容器与命名卷，不入库（E6）。
 build_frontend() {
   require_toolchain_image
-  mkdir -p "$ROOT/frontend/dist"
+  # 产物先落暂存目录再镜像回宿主：vite 的产物文件名带内容 hash，旧构建的 hash 文件不会
+  # 被新构建覆盖，tar 解包只叠加不删除——不清则宿主 dist 逐次累积历史产物（实测已积 22 个
+  # 旧 hash 文件）。镜像用 rsync --delete，只删本次构建没有的旧文件，不整目录 rm。
+  local stage
+  stage="$(mktemp -d)"
+  trap 'rm -rf "$stage"' RETURN
   echo "build：容器内前端编译（tsc + vite build，产物写回宿主 frontend/dist）…"
   # 灌源与 dist 回写均走 tar 管道，避免 WSL home bind 进机/写回失败。
   # install／build 日志走 stderr，stdout 专留给 dist tar。
@@ -731,7 +740,16 @@ build_frontend() {
     -w /work \
     "$LINT_IMAGE" \
     sh -c "set -e; mkdir -p /work; tar -x -f - -C /work; corepack enable; pnpm install ${INSTALL_FLAGS[*]} >&2; pnpm --filter frontend build >&2; tar -C /work/frontend/dist -cf - ." \
-    | tar -C "$ROOT/frontend/dist" -xf -
+    | tar -C "$stage" -xf -
+  mkdir -p "$ROOT/frontend/dist"
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete "$stage/" "$ROOT/frontend/dist/"
+  else
+    # 无 rsync 时退化为只叠加：旧 hash 产物会留在宿主 dist（只影响本地产物整洁，
+    # 不影响镜像——frontend/Dockerfile 是容器内自编译，宿主 dist 不进镜像）。
+    echo "build：未找到 rsync，跳过宿主 dist 的陈旧产物清理。" >&2
+    cp -a "$stage/." "$ROOT/frontend/dist/"
+  fi
   echo "build：构建前端本地镜像 $FRONTEND_IMAGE（多阶段：node 编译 → nginx 运行）…"
   # 基础镜像已由 ensure_images 按 digest 拉到本地（工具链与 infra 镜像同批并发拉取）。
   # 不传 --pull：构建只用本地钉定镜像，不在 build 之外再走一次注册表。
