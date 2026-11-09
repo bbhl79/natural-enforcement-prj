@@ -217,8 +217,17 @@ SCAN_TS_NAMES=(-name '*.ts' -o -name '*.tsx' -o -name '*.mts' -o -name '*.cts')
 # 后端设施、backend/prisma/*.mjs 装配依赖、*.cjs 校验器走 require。只扫 .ts 让这些形态
 # 落在兜底闸之外（本条为先决改动：加入后现有源码逐条复核，判定结果不变）。
 SCAN_CODE_NAMES=("${SCAN_TS_NAMES[@]}" -o -name '*.mjs' -o -name '*.cjs' -o -name '*.sh')
-SCAN_TS=(-type f \( "${SCAN_TS_NAMES[@]}" \))
-SCAN_CODE=(-type f \( "${SCAN_CODE_NAMES[@]}" \))
+# 生成产物排除（Prisma 7 生成客户端）。schema.prisma 的 generator client 把 output 定在
+# backend/prisma/generated/prisma（相对 backend/prisma/ 解析）。该目录是构建产物，不入库、
+# 不参与任何源码规则判定：生成的 model 类自带 update/updateMany/delete/deleteMany 方法，
+# 会被「只追加」「不物理删除」「参照数据不��改」类规则误判为业务 ORM 改写调用（实测 83 条
+# 假红：reference-data-no-mutation 25、spatial-no-orm-mutation 21、person-conflict-append-only
+# 15、case-history-append-only 10、agency-conflict-append-only 5、investigation-record-no-delete
+# 4、audit-facility-entry 3）。宿主工作树若残留该目录（有人手工跑过 prisma generate），闸必须
+# 仍能判绿——故按路径排除，不依赖 .gitignore：本闸用 find/grep 扫盘，不读 gitignore。
+SCAN_EXCLUDE_GENERATED=(-not -path "$BACKEND/prisma/generated/*")
+SCAN_TS=(-type f \( "${SCAN_TS_NAMES[@]}" \) "${SCAN_EXCLUDE_GENERATED[@]}")
+SCAN_CODE=(-type f \( "${SCAN_CODE_NAMES[@]}" \) "${SCAN_EXCLUDE_GENERATED[@]}")
 
 # 互引 specifier 的提取正则（唯一一份定义）：包名根/深路径导入
 # （@natural-enforcement/<mod>[/<…>]）、相对路径导入。第三方包（@nestjs/*、node: 等）
@@ -345,7 +354,7 @@ ensure_import_index() {
           REL_PATHS+=("$dir/$spec")   # 与老形态 realpath -m "$(dirname "$file")/$spec" 同参
         fi ;;
     esac
-  done < <(grep -rHnoZI -E "$SPEC_RE" "${inc[@]}" "${roots[@]}" 2>/dev/null \
+  done < <(grep -rHnoZI --exclude-dir=generated -E "$SPEC_RE" "${inc[@]}" "${roots[@]}" 2>/dev/null \
     | tr '\0' '\n' \
     | LC_ALL=C awk -v OFS='\t' '
         BEGIN { q = sprintf("%c", 39)
