@@ -11,6 +11,18 @@ coverage/
 .run/
 # e2e 运行产物（E6：显式读写挂载的写出侧；入库存 fixture 见 e2e/testdata/）
 e2e/results/
+# Agent harness 的验证产物目录（harness/ui/run-ui-assign-people.sh 每次运行写入
+# artifacts/assign-people-<runId>/；同一运行的证据另有 .run/ 副本，见 harness/ui/README.md）
+artifacts/
+
+# Prisma 生成客户端（backend/prisma/schema.prisma 的 generator client output）：
+# 构建产物，容器内由 prisma generate 产出（dev db seed / dev test integration /
+# backend/server/Dockerfile），不入库。结构闸按路径排除它——闸用 find 扫盘，不读 gitignore，
+# 见 tools/structural-test.sh 的 SCAN_EXCLUDE_GENERATED 注释。
+backend/prisma/generated/
+
+# 本机 Claude Code 会话目录（仅本机 .git/info/exclude 忽略过；新克隆需仓库级规则）
+.claude/
 
 # 本地环境
 .env
