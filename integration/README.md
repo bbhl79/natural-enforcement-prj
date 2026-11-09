@@ -6,7 +6,7 @@
 
 1. **Vitest 需库用例**：`integration/**/*.test.ts`，在工具链容器内运行（接入 compose
    项目网络，`DATABASE_URL` 已注入），跑测试前 harness 会自动 `prisma generate`。
-   配置文件 `vitest.config.ts` / `tsconfig.json` 自带，不并根 tsconfig（根 unit 层
+   配置文件 `vitest.config.mts` / `tsconfig.json` 自带，不并根 tsconfig（根 unit 层
    无库、无生成客户端，保持互不污染）。
 2. **可执行脚本用例**：`integration/*.sh`（非 `_` 开头），bash 自包含，用例只测外部
    可观察行为（退出码 + 人类可读输出），自行经 compose 访问服务（参考

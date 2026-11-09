@@ -11,7 +11,7 @@
 | `packages/shield` | 统一契约（非业务模块） | 公共出口仅 `src/index.ts` |
 | `backend/identity` | 身份组织 | 人员/机构（名称版本化，只失效不删除） |
 | `backend/geo-dict` | 空间字典 | 持有合规规则参考数据，不依赖任何业务模块（承载见 ADR 0016） |
-| `backend/case` | 案件聚合 | `clue`（线索，含立案前「线索登记域」写权）/ `dossier`（卷宗）/ `document`（文书） |
+| `backend/case` | 案件聚合 | 21 个子域：`agency-conflict`（机关利害关系）/ `closeout`（调查收尾）/ `clue`（线索，含立案前「线索登记域」写权）/ `comparison`（比对裁定）/ `conflict`（人员利害关系）/ `decision`（决定）/ `dossier`（卷宗）/ `filing`（立案呈批）/ `investigation`（调查）/ `legal-review`（法制审核）/ `marker`（案件标记）/ `notice`（告知与听证）/ `persistence`（适配器）/ `reassign`（改派）/ `return`（退回）/ `review`（案件复核）/ `secrecy-report`（保密报告）/ `state-machine`（状态机）/ `transfer`（移送）/ `validity`（效力）/ `dossier` 之外的 `document`（文书）为**规划占位目录**（只有 `.gitkeep`，尚无实现） |
 | `backend/approval` | 审批协同 | — |
 | `backend/supervision` | 监督统计 | — |
 | `backend/deadline` | 期限预警 | — |
@@ -24,12 +24,12 @@
 | identity | 不依赖任何业务模块；可经公共出口使用留痕设施包（ADR 0012） | — |
 | geo-dict | 不依赖任何业务模块 | — |
 | case | shield、identity、geo-dict | 只读引用 |
-| approval | shield、identity、case | 只读引用 + 订阅事件 |
+| approval | shield、identity、case | 只读引用（**「订阅事件」为规划描述，尚未落地**：全仓无事件总线、无发布方或订阅方） |
 | supervision | shield、identity、case | 只读，**单向**。业务模块无人依赖它。`backend/server` 启动包除外（ADR 0004） |
-| deadline | shield、case、approval、**geo-dict（#45 补丁 1：只读引用程序节点类型）** | case/approval 为订阅，geo-dict 为只读引用 |
-| frontend | shield + 各模块查询接口 | 不直连库、不依赖 backend 内部路径 |
+| deadline | shield、case、approval、**geo-dict（#45 补丁 1：只读引用程序节点类型）** | case/approval 为订阅（**规划描述，尚未落地**），geo-dict 为只读引用 |
+| frontend | 无代码级依赖 | 只经同源 HTTP `/api/*` 消费，不直连库、不引 backend 内部路径；操作码与状态标签为手写契约（`frontend-boundary` 禁止前端引后端），由 integration 层契约测试比对 |
 
-`backend/server` 是 HTTP 启动包，不是第七个业务模块，不占上表的一行。它经公共出口装入全部六个模块，包括监督统计。结构测试 `supervision-sink` 跳过该目录。ADR 0004 只允许这个包里的一个文件直接引用各业务模块的数据库适配器。该文件是 `backend/server/src/persistence.module.ts`；准入的适配器只有两处：`backend/identity/src/persistence/prisma-identity-store.ts`（#52）与 `backend/case/src/persistence/prisma-clue-store.ts`（#211）。名单外的深路径导入照样判红（红探针 `case-adapter-file` 与 `server-adapter-file` 两项负例证据）。
+`backend/server` 是 HTTP 启动包，不是第七个业务模块，不占上表的一行。它经公共出口装入全部六个模块，包括监督统计。结构测试 `supervision-sink` 跳过该目录。ADR 0004 只允许这个包里的一个文件直接引用各业务模块的数据库适配器。该文件是 `backend/server/src/persistence.module.ts`；准入的适配器有三处：`backend/identity/src/persistence/prisma-identity-store.ts`（#52）、`backend/case/src/persistence/prisma-clue-store.ts`（#211）、`backend/case/src/persistence/prisma-case-store.ts`（案件聚合 store，与前两处同批准入）。名单外的深路径导入照样判红（红探针 `case-adapter-file` 与 `server-adapter-file` 两项负例证据）。机器白名单以 `tools/structural-test.sh` 的 `SERVER_ADAPTER_SPECS` 为准，本文是人读副本。
 
 ## 往来形态：只有「只读查询 + 事件」两种，默认禁止直写
 
@@ -84,10 +84,16 @@ BullMQ/RustFS SDK），不引用 backend 内部路径（含 `../../backend/…` 
 | `audit-facility-entry` | ADR 0012 留痕设施唯一入口（`auditTrail` 这个 Prisma 委托只许在 `packages/audit`。包外引用即红。观察留痕行走表名） |
 | `spatial-no-orm-mutation` | 执行纪律 2（`geoDictLandBoundary` / `geoDictSurveyPoint` 两个空间字典模型与 `clueSpatialPart` / `clueSpatialHit` 两个线索空间模型禁用任何 ORM 写，含 upsert/createMany/updateMany/delete(Many) 与换行链式；写一律 `$queryRaw`/ST_ 函数。范围 = `backend/` + `packages/` + `integration/` + `e2e/` 全源码，SCAN_CODE 形态） |
 | `reference-data-no-mutation` | 参照数据只追加的机器兜底（#210，ADR 0016）：五张参照数据表（`GeoDictSourceCode` / `GeoDictViolationType` / `GeoDictDocument` / `GeoDictViolationTypeBasis` / `GeoDictJurisdiction`）的 Prisma 委托只许 insert（create/createMany），不许 update/updateMany/delete/deleteMany/upsert——改参照数据＝追加新版本，不许就地改行或删行。范围 = `backend/` + `packages/` + `integration/` + `e2e/` 全源码，SCAN_CODE 形态，含换行链式 |
+| `case-history-append-only` | 案件历史只追加（#235）：`caseStageInstance`（环节实例）与 `caseTransition`（环节流转）两张表的 Prisma 委托只许 create，不许 upsert/update/updateMany/delete/deleteMany——再次进入写新行，不许就地改行或删行。审批链不在此列：进行中与办结允许以后改状态。范围 = `backend/` + `packages/` + `integration/` + `e2e/` 全源码，SCAN_CODE 形态 |
+| `person-conflict-append-only` | 人员层利害关系只追加（#237）：`personConflictEvent` / `personConflictDecision` / `caseInvestigationEntry` 三张表的 Prisma 委托只许 create，不许 upsert/update/updateMany/delete/deleteMany。库层触发器拒 UPDATE 与 DELETE。范围 = `backend/` + `packages/` + `integration/` + `e2e/` 全源码，SCAN_CODE 形态 |
+| `agency-conflict-append-only` | 机关层利害关系只追加（#263）：`caseAgencyConflict` 表的 Prisma 委托只许 create，不许 upsert/update/updateMany/delete/deleteMany。库层触发器拒 UPDATE 与 DELETE。取消勾选不改行。范围 = `backend/` + `packages/` + `integration/` + `e2e/` 全源码，SCAN_CODE 形态 |
+| `investigation-record-no-delete` | 违法记录与笔录禁物理删除：��caseViolationRecord` / `caseInquiryRecord` 两张表的 Prisma 委托禁 delete/deleteMany，`$queryRaw` 里也禁 `DELETE FROM case_violation_record|case_inquiry_record`。范围 = `backend/` + `packages/` + `integration/` + `e2e/` 全源码，SCAN_CODE 形态 |
 | `runtime-manifest` | 非矩阵行：运行参数清单（ADR 0008、#80、#120）。`infra/docker-compose.yml` 与 `.github/workflows/ci.yml` 里的变量名必须登记在 `infra/runtime.env`；密钥只许引用变量（compose）或 secrets（CI），不许字面量、默认值、回落值，也不许出现清单里密钥的夹具值 |
 | `user-lock-assertions` | 非矩阵行：锁清单断言（#105「锁清单」、#111、#120）。`docs/user-lock.md` 每节带一个断言编号；测试代码里必须有标题以该编号开头的 it/test（含 it.todo「待实现」登记）；测试里出现清单外编号同样判红 |
 | `frontend-router-mode` | 非矩阵行：前端路由模式（#105「前端：路由与应用壳」、#122）。react-router 只用 data 模式（createBrowserRouter + RouterProvider）；前端源码出现声明式 `<BrowserRouter>`/`<HashRouter>`，或任何 package.json、源码、vite 配置引用框架模式开发插件 `@react-router/dev` 即失败 |
 | `screenshot-full-set` | 截图全集文件名集合（#105「截图验收（loop ⑥c）」、#134 收口、#207 换全集、#220 齐套）：`docs/screens/<票>/` 顶层 `*.png` 的并集不得越出状态键全集，也不得缺键。状态键全集 = 原型 v0.4 的 78 键（`frontend/prototype/admin-console/screens/*.png`，除 `overview.png`）∪ #207 协议第 I 节的 62 键（`docs/screens/keys-207.txt`）。v0.4 缺键判红；#207 的 62 键缺键判红；文件名越出全集判红。`compare/`、`extra/` 不计。自动判定只比文件名集合；画面一致由逐图人查（各票 README 与 PR） |
+| `ui-copy-discipline` | 界面文案纪律（#207／#220）：`frontend/src` 生产源码（排除 `*.test.*`／`*.spec.*`）的字符串字面量不得出现「捞回」、Issue 号样式（# 加 2–4 位数字）、`区块 [A-E]`。注释里的「禁用／禁止」说明不计入（只扫引号字面量）。自动判定只看源码集合；渲染结果由前端单测（router／shell／closure）补充 |
+| `no-case-landing-entry` | 不予立案入口约束（#234）：落点服务 `recordNoCaseFromFilingApproval` 在 server 层只许由立案呈批批准路径调用（`backend/server/src/case-filing.service.ts`）；其他服务出现即红——防止重新开出绕过立案呈批的不予立案入口（X19） |
 
 ## 认证记录（#69）
 
@@ -169,7 +175,7 @@ DELETE（复用 `reject_row_mutation`），应用层另由结构测试 `referenc
 
 初值常量在 `backend/geo-dict/src/reference-data/`，由 `tools/generate-clue-reference-data.mjs`
 从 `docs/research/` 下的定稿底稿生成；种子按同一份常量写库。核查图层与街道边界几何不入种子
-（ADR 0021 未立）。
+（ADR 0021 已 accepted：外部空间图层以服务地址接入，是 ADR 0016 的例外范围）。
 
 ## 线索登记（#211）
 

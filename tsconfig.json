@@ -23,7 +23,8 @@
     "backend/*/test"
   ],
   // #52：PrismaIdentityStore 是模块内唯一 import 生成客户端（backend/prisma/generated）
-  // 的文件；生成产物只存在于容器可写层、仓库内无此目录，unit 层类型检查必须排除它，
+  // 的文件；生成产物不入库（.gitignore 已覆盖 backend/prisma/generated/），宿主工作树可能
+  // 残留（有人手工跑过 prisma generate）但不是仓库内容——unit 层类型检查必须排除它，
   // 其编译由 integration 层承载（dev test integration 先 prisma generate 再 tsc -p integration）。
   // #211：PrismaClueStore 同理（case 模块的线索表适配器，同为模块内唯一 import 生成客户端的文件）。
   // 排除仅限 include 展开：任何被 unit 层文件重新 import 都会把它拉回程序——

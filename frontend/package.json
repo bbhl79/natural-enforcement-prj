@@ -2,7 +2,7 @@
   "name": "frontend",
   "version": "0.0.0",
   "private": true,
-  "description": "前端工作台（#47/#56 地基期：脚手架 + health 面板；无业务 UI——G6；只经统一契约与各模块查询接口消费，不直连库）",
+  "description": "前端工作台（#47/#56 起：登录、工作台、线索中心、案件详情、管理台、个人中心共 21 个页面；只经同源 HTTP /api/* 消费，不直连库、不引 backend 内部路径；操作码与状态标签为手写契约，由 integration 层契约测试比对）",
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit && vite build",

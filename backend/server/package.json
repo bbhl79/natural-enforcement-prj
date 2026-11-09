@@ -2,7 +2,7 @@
   "name": "@natural-enforcement/server",
   "version": "0.0.0",
   "private": true,
-  "description": "HTTP 启动包（ADR 0004：不是第七个业务模块；NestJS 默认 Express；登录、会话与退出）",
+  "description": "HTTP 应用层与组合根（ADR 0004：不是第七个业务模块；NestJS 默认 Express；38 个 controller / 39 个 service / 1 个核查 worker / 184 条路由全部在本包——六业务包无 controller；负责认证会话、来源闸、CSRF、持久化装配与队列投递）",
   "type": "module",
   "scripts": {
     "test": "vitest run"
