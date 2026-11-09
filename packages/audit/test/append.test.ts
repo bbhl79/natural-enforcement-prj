@@ -499,3 +499,41 @@ describe('人员编辑与调岗（#129，ADR 0014）', () => {
     expect(written).toHaveLength(0);
   });
 });
+
+describe('单位手工签收确认（#335）', () => {
+  it('签收成功带结构化快照照常写入；幂等确认同样带快照', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    const detail = JSON.stringify({
+      code: 'CL0000000002',
+      assignmentId: '01M6YZQWSFWKGFSEAXY4NF3Y4A',
+      unitReceipt: { receivedAt: '2026-11-09T00:00:00.000Z', receivedBy: 'p-st', mode: 'manual' },
+    });
+    await trail.append({ ...parties, action: 'clue.unit-received', opcode: 'clue.handler.assign', detail });
+    await trail.append({
+      ...parties,
+      action: 'clue.unit-received',
+      detail: JSON.stringify({ code: 'CL0000000002', idempotent: true }),
+    });
+    expect(written.map((row) => [row.action, row.outcome, row.detail])).toEqual([
+      ['clue.unit-received', 'succeeded', detail],
+      ['clue.unit-received', 'succeeded', JSON.stringify({ code: 'CL0000000002', idempotent: true })],
+    ]);
+  });
+
+  it('签收被拒记失败，原因取封闭表；表外原因拒绝且不写库', async () => {
+    const { db, written } = recorder();
+    const trail = new PrismaAuditTrail(db);
+    await trail.append({
+      ...parties,
+      action: 'clue.unit-received',
+      outcome: 'failed',
+      reason: 'invalid-state',
+    });
+    expect(written[0]).toMatchObject({ action: 'clue.unit-received', outcome: 'failed', reason: 'invalid-state' });
+    await expect(
+      trail.append({ ...parties, action: 'clue.unit-received', outcome: 'failed', reason: 'unknown-reason' }),
+    ).rejects.toBeInstanceOf(AuditVocabularyError);
+    expect(written).toHaveLength(1);
+  });
+});

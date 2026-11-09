@@ -13,6 +13,7 @@ import {
   loadDispatchView,
   submitAssignOrg,
   submitAssignPeople,
+  submitConfirmUnitReceipt,
   submitDecide,
   submitTransfer,
   submitOtherDisposition,
@@ -80,6 +81,7 @@ export function dispatchFailureText(body: unknown): string {
     }
   }
   if (value.result === 'concurrent-change') return '线索状态已被他人变更，请刷新后重试。';
+  if (value.result === 'assignment-conflict') return '分派已变更，不能签收旧分派；请刷新后重试。';
   if (value.result === 'invalid-state') {
     if (value.reason === 'designation-pending') return '该线索正在报请指定管辖：报请期间不能分派、重新分派或移送。';
     if (value.reason === 'designated-lock') return '该线索已指定管辖：仅指定者或其上级可再调整。';
@@ -162,6 +164,12 @@ export default function ClueDispatchSection({ clueId }: { readonly clueId: strin
       }
       onDesignateReject={(reason) =>
         void run(() => submitDesignateReject(dispatch, clueId, { reason }))
+      }
+      onConfirmUnitReceipt={() =>
+        void run(() => {
+          if (!view.assignment) return Promise.resolve({ ok: false as const, body: { result: 'invalid-state', reason: 'invalid-state' } });
+          return submitConfirmUnitReceipt(dispatch, clueId, { expectedAssignmentId: view.assignment.assignmentId });
+        })
       }
       onAssignPeople={(input) =>
         void run(() =>

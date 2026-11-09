@@ -67,11 +67,18 @@ export interface DispatchView {
   readonly dupComputedAt: string | null;
   readonly hitGroups: readonly DispatchHitGroup[];
   readonly assignment: {
+    readonly assignmentId: string;
     readonly orgUnitId: string;
     readonly orgName: string;
     readonly kind: string;
     readonly designate: boolean;
   } | null;
+  readonly unitReceipt: {
+    readonly receivedAt: string;
+    readonly receivedBy: string;
+    readonly mode: string;
+  } | null;
+  readonly mayConfirmUnitReceipt: boolean;
   readonly handlers: readonly { readonly personnelId: string; readonly code: string; readonly name: string; readonly role: string }[];
   readonly candidates: readonly { readonly personnelId: string; readonly code: string; readonly name: string }[];
   readonly suggestion: SuggestionView;
@@ -254,6 +261,19 @@ export async function submitDesignateReject(
   return readResult(response);
 }
 
+/** 单位签收确认（#335；与派人分离）。 */
+export async function submitConfirmUnitReceipt(
+  dispatch: ApiDispatch,
+  clueId: string,
+  input: { readonly expectedAssignmentId: string },
+): Promise<DispatchActionResult> {
+  const response = await apiFetch(dispatch, `/api/clues/${clueId}/confirm-unit-receipt`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return readResult(response);
+}
 /** 受理人待办：待处理的指定管辖报请。 */
 export async function loadDesignationTodos(dispatch: ApiDispatch): Promise<DesignationTodoItem[]> {
   const response = await apiFetch(dispatch, '/api/clues/designation-requests');

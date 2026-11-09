@@ -50,6 +50,7 @@ import type {
   ClueListRow,
   ClueOrgAssignWrite,
   CluePeopleAssignWrite,
+  ClueUnitReceiptWrite,
   CluePoolClueRow,
   CluePoolReassignWrite,
   ClueTransferContext,
@@ -788,11 +789,15 @@ export class PrismaClueStore implements ClueStore {
         assignmentRow === null
           ? null
           : {
+              id: assignmentRow.id,
               orgUnitId: assignmentRow.orgUnitId,
               kind: assignmentRow.kind,
               designate: assignmentRow.designate,
               assignedBy: assignmentRow.assignedBy,
               assignedByOrgId: assignmentRow.assignedByOrgId,
+              unitReceivedAt: assignmentRow.unitReceivedAt,
+              unitReceivedBy: assignmentRow.unitReceivedBy,
+              unitReceivedMode: assignmentRow.unitReceivedMode,
             },
       handlers: handlerRows.map((row) => ({ personnelId: row.personnelId, role: row.role })),
       subjectUnknown: clue.subjectUnknown,
@@ -1055,6 +1060,42 @@ export class PrismaClueStore implements ClueStore {
       },
     });
     return result.count;
+  }
+
+  async confirmUnitReceipt(
+    write: ClueUnitReceiptWrite,
+  ): Promise<true | 'idempotent' | 'conflict' | 'missing'> {
+    const current = await this.prisma.clueAssignment.findFirst({
+      where: { clueId: write.clueId, endedAt: null },
+      orderBy: { assignedAt: 'desc' },
+    });
+    if (current === null) return 'missing';
+    if (current.id !== write.expectedAssignmentId) return 'conflict';
+    if (current.unitReceivedAt !== null) return 'idempotent';
+    const updated = await this.prisma.clueAssignment.updateMany({
+      where: {
+        id: write.expectedAssignmentId,
+        clueId: write.clueId,
+        endedAt: null,
+        unitReceivedAt: null,
+      },
+      data: {
+        unitReceivedAt: write.receivedAt,
+        unitReceivedBy: write.receivedBy,
+        unitReceivedMode: write.mode,
+      },
+    });
+    if (updated.count === 0) {
+      const again = await this.prisma.clueAssignment.findFirst({
+        where: { clueId: write.clueId, endedAt: null },
+        orderBy: { assignedAt: 'desc' },
+      });
+      if (again === null) return 'missing';
+      if (again.id !== write.expectedAssignmentId) return 'conflict';
+      if (again.unitReceivedAt !== null) return 'idempotent';
+      return 'conflict';
+    }
+    return true;
   }
 
   async readWithdrawContext(clueId: string): Promise<ClueWithdrawContext | null> {
