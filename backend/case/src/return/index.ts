@@ -44,7 +44,7 @@ export {
   RETURN_EXITS,
   RETURN_EXIT_NAMES,
   findTarget,
-  hearingHasStarted,
+  returnHearingHasStarted,
   noticeValidityCallSite,
   returnTarget,
   returnsToInvestigation,

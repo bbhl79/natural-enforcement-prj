@@ -44,11 +44,11 @@ export const TERMINATION_REASONS = [
 export type TerminationReason = (typeof TERMINATION_REASONS)[number]['code'];
 
 /** 撤案原因只此两项（规程 4.3.3(4)、7.1(6)）。 */
-export const WITHDRAW_REASONS = [
+export const INVESTIGATION_WITHDRAW_REASONS = [
   { code: 'fact-not-established', label: '违法事实不成立' },
   { code: 'limitation-expired', label: '已过追诉时效' },
 ] as const;
-export type WithdrawReason = (typeof WITHDRAW_REASONS)[number]['code'];
+export type WithdrawReason = (typeof INVESTIGATION_WITHDRAW_REASONS)[number]['code'];
 
 /**
  * 待收尾结案原因。不可抗力与不属本部门管辖均开放（#242 开放管辖移送支）。
@@ -113,7 +113,7 @@ function codesOf(rows: readonly { readonly code: string }[]): readonly string[] 
 }
 
 /** 审理从 E04 开始（#27 Q2：调查报告批准后进入审理）。当前环节到达 E04 即已开始。 */
-export function hearingHasStarted(stage: string): boolean {
+export function investigationHearingHasStarted(stage: string): boolean {
   const index = stageIndex(stage);
   return index >= stageIndex('E04');
 }
@@ -156,7 +156,7 @@ export function checkVoidViolation(input: {
   if (!input.isMainHandler) {
     return { ok: false, httpStatus: 409, reason: 'not-main-handler', message: '作废由主办标记', outlet: '请由本案主办标记作废' };
   }
-  if (hearingHasStarted(input.stage)) {
+  if (investigationHearingHasStarted(input.stage)) {
     return {
       ok: false,
       httpStatus: 409,
@@ -194,7 +194,7 @@ export function checkProcedureContent(input: {
     return { ok: true, content: { kind: 'terminate', reason: reason as TerminationReason } };
   }
   if (input.kind === 'withdraw') {
-    if (!codesOf(WITHDRAW_REASONS).includes(reason)) {
+    if (!codesOf(INVESTIGATION_WITHDRAW_REASONS).includes(reason)) {
       return {
         ok: false,
         hit: {
@@ -236,7 +236,7 @@ export function checkProcedureState(input: {
   readonly stage: string;
   readonly suspended: boolean;
 }): { readonly ok: true } | { readonly ok: false; readonly hit: ProcedureStateHit } {
-  if (input.kind === 'withdraw' && hearingHasStarted(input.stage)) {
+  if (input.kind === 'withdraw' && investigationHearingHasStarted(input.stage)) {
     return {
       ok: false,
       hit: { reason: 'invalid-state', message: '撤案只在审理开始前', outlet: '审理开始前经终止调查进入待收尾后再撤案' },
@@ -329,7 +329,7 @@ export function checkLimitationDiscoveryExit(input: {
 }): { readonly ok: true } | { readonly ok: false; readonly hit: LimitationDiscoveryHit } {
   const limited = (input.kind === 'terminate' || input.kind === 'withdraw') && input.reason === 'limitation-expired';
   if (!limited) return { ok: true };
-  if (!hearingHasStarted(input.stage)) {
+  if (!investigationHearingHasStarted(input.stage)) {
     const listed = input.rule.beforeHearing.some((row) => row.kind === input.kind);
     if (listed) return { ok: true };
     return {

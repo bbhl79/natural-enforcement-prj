@@ -11,14 +11,14 @@ import {
   REMINDER_KINDS,
   REMINDER_RESOLUTIONS,
   WITHDRAW_FROM_STATUS,
-  WITHDRAW_REASONS,
+  CLUE_WITHDRAW_REASONS,
   checkDispositionNote,
   checkWithdrawInput,
 } from '../src/clue/closure/index.ts';
 
 describe('撤回不派输入校验', () => {
   it('四项原因逐字采用原型', () => {
-    expect(WITHDRAW_REASONS).toEqual([
+    expect(CLUE_WITHDRAW_REASONS).toEqual([
       '同一地点不同违法',
       '新增情况',
       '原线索核查不属实需重派',

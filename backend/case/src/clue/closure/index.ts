@@ -12,7 +12,7 @@ export {
   REMINDER_KINDS,
   REMINDER_RESOLUTIONS,
   WITHDRAW_FROM_STATUS,
-  WITHDRAW_REASONS,
+  CLUE_WITHDRAW_REASONS,
   checkDispositionNote,
   checkNoCaseReason,
   checkReminderResolve,

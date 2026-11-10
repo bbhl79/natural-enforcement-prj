@@ -77,7 +77,7 @@ export type ReturnTargetResult =
   | { readonly ok: false; readonly reason: 'external-return' | 'missing-return-target' | 'invalid-reason' };
 
 /** 审理开始：当前环节在 E04 及以后。立案呈批链与空环节都算审理开始前。 */
-export function hearingHasStarted(stage: ReturnStage | null): boolean {
+export function returnHearingHasStarted(stage: ReturnStage | null): boolean {
   if (stage === null || stage === FILING_RETURN_STAGE) return false;
   return stageIndex(stage) >= stageIndex('E04');
 }
@@ -137,7 +137,7 @@ function targetsOf(
     case 'R1':
       // 批2 Q5：审理开始后已过追诉时效，与事实不成立同样走不予处罚。出口相同，不另设类型。
       return {
-        targets: [exitTarget(hearingHasStarted(currentStage) ? 'no-penalty' : 'withdraw-after-terminate')],
+        targets: [exitTarget(returnHearingHasStarted(currentStage) ? 'no-penalty' : 'withdraw-after-terminate')],
         noticeValidity: null,
       };
     case 'R2':

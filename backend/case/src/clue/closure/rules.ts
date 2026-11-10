@@ -25,7 +25,7 @@ export const CLUE_CLOSURE_RULE_CODES = [
 ] as const;
 
 /** 撤回不派四项常用原因（逐字采用原型，可多选、至少一项，每个原因单独一行）。 */
-export const WITHDRAW_REASONS = [
+export const CLUE_WITHDRAW_REASONS = [
   '同一地点不同违法',
   '新增情况',
   '原线索核查不属实需重派',
@@ -53,7 +53,7 @@ export function checkWithdrawInput(input: {
 }): WithdrawCheckOutcome {
   const reasons = input.reasonCodes.map((code) => code.trim()).filter((code) => code !== '');
   if (reasons.length === 0) return { ok: false, rule: 'missing-withdraw-reason' };
-  if (reasons.some((code) => !(WITHDRAW_REASONS as readonly string[]).includes(code))) {
+  if (reasons.some((code) => !(CLUE_WITHDRAW_REASONS as readonly string[]).includes(code))) {
     return { ok: false, rule: 'invalid-withdraw-reason' };
   }
   if (input.note.trim() === '') return { ok: false, rule: 'missing-withdraw-note' };

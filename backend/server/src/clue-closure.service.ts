@@ -20,10 +20,10 @@ import {
 import {
   CASE_STORE,
   CLUE_STORE,
+  CLUE_WITHDRAW_REASONS,
   DISPOSITION_RECORD_FROM_STATUS,
   REMINDER_RESOLUTIONS,
   WITHDRAW_FROM_STATUS,
-  WITHDRAW_REASONS,
   checkDispositionNote,
   checkReminderResolve,
   generateClosureReminders,
@@ -393,7 +393,7 @@ export class ClueClosureService {
   async readOptions(): Promise<{ readonly status: 200; readonly body: unknown }> {
     return {
       status: 200,
-      body: { result: 'closure-options', withdrawReasons: [...WITHDRAW_REASONS] },
+      body: { result: 'closure-options', withdrawReasons: [...CLUE_WITHDRAW_REASONS] },
     };
   }
 

@@ -10,7 +10,7 @@ import {
   checkProcedureContent,
   checkProcedureState,
   checkVoidViolation,
-  hearingHasStarted,
+  investigationHearingHasStarted,
   inquiryOfficerBlock,
   suspensionClockEvent,
 } from '../src/investigation/index.ts';
@@ -39,8 +39,8 @@ describe('违法记录作废', () => {
     expect(notMain.ok).toBe(false);
     if (notMain.ok) throw new Error('应拒绝');
     expect(notMain.reason).toBe('not-main-handler');
-    expect(hearingHasStarted('E03')).toBe(false);
-    expect(hearingHasStarted('E04')).toBe(true);
+    expect(investigationHearingHasStarted('E03')).toBe(false);
+    expect(investigationHearingHasStarted('E04')).toBe(true);
     const hearing = checkVoidViolation({ stage: 'E04', reason: '记错了', isMainHandler: true });
     expect(hearing.ok).toBe(false);
     if (hearing.ok) throw new Error('应拒绝');

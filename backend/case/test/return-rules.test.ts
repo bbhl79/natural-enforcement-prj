@@ -8,7 +8,7 @@ import {
   bothHandlersUnavailable,
   checkDocumentEdit,
   checkReceiver,
-  hearingHasStarted,
+  returnHearingHasStarted,
   legalReviewAttributionOrgId,
   planReturn,
   returnTarget,
@@ -77,9 +77,9 @@ describe('退回原因目录', () => {
 
 describe('returnTarget', () => {
   it('R1 审理开始前给终止调查后撤案，审理开始后给不予处罚', () => {
-    expect(hearingHasStarted('E02')).toBe(false);
-    expect(hearingHasStarted('filing')).toBe(false);
-    expect(hearingHasStarted('E04')).toBe(true);
+    expect(returnHearingHasStarted('E02')).toBe(false);
+    expect(returnHearingHasStarted('filing')).toBe(false);
+    expect(returnHearingHasStarted('E04')).toBe(true);
     expect(keys('R1', 'E02')).toEqual(['exit:withdraw-after-terminate']);
     expect(keys('R1', 'E04')).toEqual(['exit:no-penalty']);
     const before = returnTarget('R1', 'E03');
