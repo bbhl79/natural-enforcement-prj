@@ -732,9 +732,10 @@ build_frontend() {
   # 产物先落暂存目录再镜像回宿主：vite 的产物文件名带内容 hash，旧构建的 hash 文件不会
   # 被新构建覆盖，tar 解包只叠加不删除——不清则宿主 dist 逐次累积历史产物（实测已积 22 个
   # 旧 hash 文件）。镜像用 rsync --delete，只删本次构建没有的旧文件，不整目录 rm。
+  # 暂存目录在本函数末尾显式删除，不用 trap RETURN：bash 的 RETURN trap 设下后不会随函数
+  # 返回撤销，后续任一函数返回都会再触发，那时 local stage 已出作用域，set -u 下报未绑定变量。
   local stage
   stage="$(mktemp -d)"
-  trap 'rm -rf "$stage"' RETURN
   echo "build：容器内前端编译（tsc + vite build，产物写回宿主 frontend/dist）…"
   # 灌源与 dist 回写均走 tar 管道，避免 WSL home bind 进机/写回失败。
   # install／build 日志走 stderr，stdout 专留给 dist tar。
@@ -755,6 +756,7 @@ build_frontend() {
     echo "build：未找到 rsync，跳过宿主 dist 的陈旧产物清理。" >&2
     cp -a "$stage/." "$ROOT/frontend/dist/"
   fi
+  rm -rf "$stage"
   echo "build：构建前端本地镜像 $FRONTEND_IMAGE（多阶段：node 编译 → nginx 运行）…"
   # 基础镜像已由 ensure_images 按 digest 拉到本地（工具链与 infra 镜像同批并发拉取）。
   # 不传 --pull：构建只用本地钉定镜像，不在 build 之外再走一次注册表。
