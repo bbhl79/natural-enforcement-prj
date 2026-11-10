@@ -9,12 +9,12 @@ import { prismaAuditTrailFactory, type AuditTrailFactory } from '@natural-enforc
 
 import { createApplication } from '../backend/server/src/persistence.module.ts';
 import { openClonedDatabase, type ClonedDatabase } from './cloned-database.ts';
+import { newUlid } from './ulid-helpers.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const T0 = Date.parse('2026-10-18T02:30:00.000Z');
 const PINNED: HashOptions = { type: 2, memoryCost: 19 * 1024, timeCost: 2, parallelism: 1 };
 const PASSWORD = 'Org-deact-124!';
-const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const SEAM_ERROR = '接缝①：业务写完后抛错（#124）';
 
 const PHONES = {
@@ -24,17 +24,6 @@ const PHONES = {
   clerk: '13800012404',
   supervisor: '13800012405',
 } as const;
-
-function newUlid(): string {
-  let time = BigInt(Date.now());
-  let id = '';
-  for (let i = 0; i < 10; i += 1) {
-    id = CROCKFORD[Number(time % 32n)] + id;
-    time /= 32n;
-  }
-  for (const byte of crypto.getRandomValues(new Uint8Array(16))) id += CROCKFORD[byte % 32];
-  return id;
-}
 
 /** 接缝①：先照常写下留痕，再抛错。 */
 const seam = { armed: false };

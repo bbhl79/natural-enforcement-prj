@@ -10,6 +10,7 @@ import { prismaAuditTrailFactory, type AuditTrailFactory } from '@natural-enforc
 
 import { createApplication } from '../backend/server/src/persistence.module.ts';
 import { openClonedDatabase, type ClonedDatabase } from './cloned-database.ts';
+import { newUlid } from './ulid-helpers.ts';
 
 const MINUTE_MS = 60 * 1000;
 const T0 = Date.parse('2026-10-17T02:00:00.000Z');
@@ -18,8 +19,6 @@ const PASSWORD = 'Export-pass-125!';
 const SEED_PASSWORD = 'Seed-pass-52';
 const OPCODE = 'personnel.profile.export';
 const SEAM_ERROR = '接缝①：业务写完后抛错';
-const ULID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
-const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
 const ADMIN_A_PHONE = '13800012501';
 const CLERK_A_PHONE = '13800012502';
@@ -27,19 +26,6 @@ const SUPER_B_PHONE = '13800012503';
 const MEMBER_PHONE = '13800012511';
 const GONE_PHONE = '13800012512';
 const MEMBER_CERT = 'CERT-125-MEMBER';
-
-function newUlid(): string {
-  let time = BigInt(Date.now());
-  let id = '';
-  for (let i = 0; i < 10; i += 1) {
-    id = CROCKFORD[Number(time % 32n)] + id;
-    time /= 32n;
-  }
-  const random = crypto.getRandomValues(new Uint8Array(16));
-  for (const byte of random) id += CROCKFORD[byte % 32];
-  if (!ULID.test(id)) throw new Error('ULID 生成结果不符合形制');
-  return id;
-}
 
 /** 接缝①：先照常写下留痕，再抛错。armed 为假时与默认工厂相同。 */
 const seam = { armed: false };

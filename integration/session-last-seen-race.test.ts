@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createApplication } from '../backend/server/src/persistence.module.ts';
 import { openClonedDatabase, type ClonedDatabase } from './cloned-database.ts';
+import { newUlid } from './ulid-helpers.ts';
 
 const MINUTE_MS = 60 * 1000;
 const T0 = Date.parse('2026-11-06T00:00:00.000Z');
@@ -18,21 +19,6 @@ const T_LATE = T0 + 2 * MINUTE_MS;
 const PINNED: HashOptions = { type: 2, memoryCost: 19 * 1024, timeCost: 2, parallelism: 1 };
 const PASSWORD = 'Seen-race-69!';
 const PHONE = '13800006901';
-const ULID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
-const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-
-function newUlid(): string {
-  let time = BigInt(Date.now());
-  let id = '';
-  for (let i = 0; i < 10; i += 1) {
-    id = CROCKFORD[Number(time % 32n)] + id;
-    time /= 32n;
-  }
-  const random = crypto.getRandomValues(new Uint8Array(16));
-  for (const byte of random) id += CROCKFORD[byte % 32];
-  if (!ULID.test(id)) throw new Error('ULID 生成结果不符合形制');
-  return id;
-}
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve!: () => void;

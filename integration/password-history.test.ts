@@ -10,12 +10,12 @@ import { prismaAuditTrailFactory, type AuditTrailFactory } from '@natural-enforc
 
 import { createApplication, type ApplicationOverrides } from '../backend/server/src/persistence.module.ts';
 import { openClonedDatabase, type ClonedDatabase } from './cloned-database.ts';
+import { newUlid } from './ulid-helpers.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const T0 = Date.parse('2026-10-19T03:00:00.000Z');
 const PINNED: HashOptions = { type: 2, memoryCost: 19 * 1024, timeCost: 2, parallelism: 1 };
 const PASSWORD = 'Person-132-ok!';
-const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const RESET_OPCODE = 'personnel.password.reset';
 const RESTORE_OPCODE = 'personnel.profile.restore';
 
@@ -40,17 +40,6 @@ const PHONES = {
   shallow: '13800013208',
   firstLogin: '13800013209',
 } as const;
-
-function newUlid(): string {
-  let time = BigInt(Date.now());
-  let id = '';
-  for (let i = 0; i < 10; i += 1) {
-    id = CROCKFORD[Number(time % 32n)] + id;
-    time /= 32n;
-  }
-  for (const byte of crypto.getRandomValues(new Uint8Array(16))) id += CROCKFORD[byte % 32];
-  return id;
-}
 
 /** 接缝②：屏障。指定动作的成功留痕写下后（业务行已写、事务未提交、行锁仍持有）停住，等放行。 */
 function deferred(): { promise: Promise<void>; resolve: () => void } {

@@ -489,6 +489,9 @@ declare -A ASSEMBLY_EXEMPT=(
   ["integration/notice-hearing.test.ts"]="../backend/deadline/src/index.ts"
   # #248：有效性用例只用身份公共出口 index.ts 的 newUlid。与 #238 同口径。
   ["integration/case-validity.test.ts"]="../backend/identity/src/index.ts"
+  # 集成层共用的技术主键生成（#16 §1.1 ULID）：收敛 22 个测试文件各自复制的本地实现，
+  # 生成器本体只在 identity 一处维护，本文件只做再出口。与 #238 同口径。
+  ["integration/ulid-helpers.ts"]="../backend/identity/src/index.ts"
 )
 
 is_assembly_exempt() { # $1 = 相对 ROOT 路径, $2 = specifier

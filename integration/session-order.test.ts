@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApplication } from '../backend/server/src/persistence.module.ts';
 import { SESSION_STORE, type SessionStore } from '../backend/server/src/session-store.ts';
 import { openClonedDatabase, type ClonedDatabase } from './cloned-database.ts';
+import { newUlid } from './ulid-helpers.ts';
 
 const MINUTE_MS = 60 * 1000;
 const T0 = Date.parse('2026-10-20T00:00:00.000Z');
@@ -18,21 +19,6 @@ const PASSWORD = 'Order-pass-116!';
 const PHONE = '13800011601';
 const PHONE_2 = '13800011602';
 const SESSION_CAPACITY = 50;
-const ULID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
-const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-
-function newUlid(): string {
-  let time = BigInt(Date.now());
-  let id = '';
-  for (let i = 0; i < 10; i += 1) {
-    id = CROCKFORD[Number(time % 32n)] + id;
-    time /= 32n;
-  }
-  const random = crypto.getRandomValues(new Uint8Array(16));
-  for (const byte of random) id += CROCKFORD[byte % 32];
-  if (!ULID.test(id)) throw new Error('ULID 生成结果不符合形制');
-  return id;
-}
 
 type AuditRecord = {
   action: string;

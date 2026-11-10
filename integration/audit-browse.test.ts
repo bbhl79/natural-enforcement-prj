@@ -9,6 +9,7 @@ import { PrismaAuditTrail, prismaAuditTrailFactory, type AuditTrailFactory } fro
 
 import { createApplication } from '../backend/server/src/persistence.module.ts';
 import { openClonedDatabase, type ClonedDatabase } from './cloned-database.ts';
+import { newUlid } from './ulid-helpers.ts';
 import { readXlsxSheet } from './xlsx-cells.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -16,7 +17,6 @@ const PINNED: HashOptions = { type: 2, memoryCost: 19 * 1024, timeCost: 2, paral
 const PASSWORD = 'Audit-pass-126!';
 const SEED_PASSWORD = 'Seed-pass-52';
 const SEAM_ERROR = '接缝①：业务写完后抛错';
-const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const HEADER = ['时间', '操作人工号', '操作', '对象', '所属机构', '结果'];
 
 const PHONES = {
@@ -29,17 +29,6 @@ const PHONES = {
   memberB: '13800012612',
 };
 const MEMBER_CERT = 'CERT-126-MEMBER';
-
-function newUlid(): string {
-  let time = BigInt(Date.now());
-  let id = '';
-  for (let i = 0; i < 10; i += 1) {
-    id = CROCKFORD[Number(time % 32n)] + id;
-    time /= 32n;
-  }
-  for (const byte of crypto.getRandomValues(new Uint8Array(16))) id += CROCKFORD[byte % 32];
-  return id;
-}
 
 const seam = { armed: false };
 const failingFactory: AuditTrailFactory = {

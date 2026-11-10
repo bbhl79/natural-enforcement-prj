@@ -7,24 +7,11 @@ import { promisify } from 'node:util';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 import { PrismaClient } from '../backend/prisma/generated/prisma/client.ts';
+import { newUlid } from './ulid-helpers.ts';
 
 const execFileAsync = promisify(execFile);
 
 const ULID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
-const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-
-function newUlid(): string {
-  let time = BigInt(Date.now());
-  let id = '';
-  for (let i = 0; i < 10; i += 1) {
-    id = CROCKFORD[Number(time % 32n)] + id;
-    time /= 32n;
-  }
-  const random = crypto.getRandomValues(new Uint8Array(16));
-  for (const byte of random) id += CROCKFORD[byte % 32];
-  if (!ULID.test(id)) throw new Error('ULID 生成结果不符合形制');
-  return id;
-}
 
 /** #71 决议表。键是角色名。值是该角色的操作码。 */
 const EXPECTED_ALLOWANCES: Record<string, readonly string[]> = {

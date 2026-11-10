@@ -7,6 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createApplication } from '../backend/server/src/persistence.module.ts';
 import { openClonedDatabase, type ClonedDatabase } from './cloned-database.ts';
+import { newUlid } from './ulid-helpers.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const T0 = Date.parse('2026-04-01T00:00:00.000Z');
@@ -16,21 +17,6 @@ const PINNED: HashOptions = { type: 2, memoryCost: 19 * 1024, timeCost: 2, paral
 const OLD_PASSWORD = 'Old-pass-97!';
 const NEW_PASSWORD = 'New-pass-97!';
 const SEED_PASSWORD = 'Seed-pass-52';
-const ULID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
-const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-
-function newUlid(): string {
-  let time = BigInt(Date.now());
-  let id = '';
-  for (let i = 0; i < 10; i += 1) {
-    id = CROCKFORD[Number(time % 32n)] + id;
-    time /= 32n;
-  }
-  const random = crypto.getRandomValues(new Uint8Array(16));
-  for (const byte of random) id += CROCKFORD[byte % 32];
-  if (!ULID.test(id)) throw new Error('ULID 生成结果不符合形制');
-  return id;
-}
 
 type AuditRecord = {
   id: string;
