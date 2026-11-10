@@ -1077,6 +1077,9 @@ cmd_test() {
 # 门禁类检查（兜底闸、红探针、ESLint、漏入库、类型检查、编译门）两层都跑，判红条件相同、
 # 证据形态不同（全量 lint 一次 CI 共 2 遍＝外层 1＋03 内 1）。
 # 单独跑本层仍自证门禁：上述门禁在 e2e 层内仍各自跑，不是只做命令冒烟。
+# E2E_CASES（调试用，CI 不设）：空格分隔的用例文件名前缀，只跑匹配的用例，例如 E2E_CASES="08" 。
+# 与 integration 层的 INTEGRATION_VITEST_ARGS 同属环境变量开关。不设时跑全部用例。
+# 过滤后不含 01 用例时，不会触发从零建库，数据卷保持原样。
 test_e2e() {
   require_compose_file
   require_toolchain_image
@@ -1084,12 +1087,23 @@ test_e2e() {
   [ -n "$RUN_DIR" ] && results_dir="$RUN_DIR"
   mkdir -p "$results_dir"
   echo "test：e2e 层（用例目录 e2e/cases/*.sh；运行产物目录 $results_dir）"
-  echo "test：注意——e2e 从零拉起用例会销毁本项目数据卷（E1 证据），毁数语义等同 dev db reset 级；其余命令只增不改。"
-  local case_script found=0
+  if [ -n "${E2E_CASES:-}" ]; then
+    echo "test：E2E_CASES=${E2E_CASES}，只运行文件名以这些前缀开头的用例。"
+  else
+    echo "test：注意——e2e 从零拉起用例会销毁本项目数据卷（E1 证据），毁数语义等同 dev db reset 级；其余命令只增不改。"
+  fi
+  local case_script found=0 prefix wanted
   for case_script in "$ROOT"/e2e/cases/*.sh; do
     [ -e "$case_script" ] || continue
     # _ 前缀 = 用例辅助文件（非可执行用例），与 integration 层约定一致
     [[ "${case_script##*/}" == _* ]] && continue
+    if [ -n "${E2E_CASES:-}" ]; then
+      wanted=0
+      for prefix in $E2E_CASES; do
+        [[ "${case_script##*/}" == "$prefix"* ]] && wanted=1
+      done
+      [ "$wanted" -eq 1 ] || continue
+    fi
     found=1
     echo "test：运行 e2e 用例 ${case_script##*/} …"
     COMPOSE_PROJECT_NAME="$PROJECT" E2E_RESULTS="$results_dir" RUN_DIR="$RUN_DIR" bash "$case_script" || {

@@ -22,6 +22,7 @@
 | Scenarios | `fixtures/scenarios/{runnable,latent}/` | 可跑剧本与未实现阶段剧本 |
 | Negatives | `fixtures/negatives/` | API 负例（与 scenario 同形） |
 | Identities | `fixtures/identities/` | 种子角色登录引用 |
+| 场景清单 | `harness/suites.ts` | 各执行面消费哪些 scenario；覆盖自检的依据 |
 | 跑次证据 | `e2e/results/verify-*` | 单次跑失败包；不进 git |
 | 发现器报告 | `e2e/results/discover/<runId>/` | 发现器唯一写口；不进 git |
 
@@ -34,8 +35,29 @@
 | 执行面 | 入口 | 覆盖 |
 | ---- | ---- | ---- |
 | integration 层 | `./dev test integration` 的 `integration/verify-*.test.ts` | 驱动自身逻辑；API 环在克隆库上跑 |
-| e2e 层 | `./dev test e2e` 的 `e2e/cases/*.sh` | 整栈上的稳定用例 |
-| 人工与诊断 | `harness/` 下的独立脚本 | 身份准备核对、本机诊断夹具、图层 overlay |
+| e2e 层 | `./dev test e2e` 的 `e2e/cases/08-verify-api.sh` | 整栈上经 nginx 的 API 稳定用例，清单见 `harness/suites.ts` 的 `API_SUITE` |
+| 人工与诊断 | `harness/` 下的独立脚本 | 图层 overlay 的自动核查、下一待办按钮、无回溯样本、UI 驱动、身份准备核对 |
+
+`harness/suites.ts` 是场景清单的唯一出处。
+`integration/verify-suites.test.ts` 做覆盖自检。
+每个 `driver=api` 的场景必须在 `API_SUITE` 或 `LAYER_OVERLAY_SUITE` 里。
+新增场景没人接时，自检判红。
+
+只跑 08 用例：`E2E_CASES=08 ./dev test e2e`。
+该开关不触发 01 用例，数据卷保持原样。
+08 用例每次新建独立库并临时把 server 指向它，结束后恢复。
+独立库让首登改密只发生一次，因此用例可以重复跑，也不依赖前面用例的顺序。
+
+### 已知欠账
+
+`harness/suites.ts` 的 `UNWIRED_SCENARIOS` 登记 8 个旧稿场景。
+它们的状态是 runnable，但没有任何执行面消费。
+原因有两条，同时成立。
+第一条：步骤用了 API 驱动没有实现的动作。
+第二条：oracle 是人读的 assertions 字符串，没有机器可判的 assert 数组。
+把它们直接放进 `API_SUITE` 会得到假绿。
+接入方法：补动作实现，改写 oracle，再从 `UNWIRED_SCENARIOS` 移到某个执行面。
+自检把这份清单当棘轮：只能减少，不能新增。
 
 ## 使用顺序（API 环）
 
