@@ -51,7 +51,11 @@
 独立库让首登改密只发生一次，因此用例可以重复跑，也不依赖前面用例的顺序。
 
 09 用例的前提：
-1. Playwright 镜像已在本地。`dev` 不拉取它。缺失时用例判红，并打印拉取命令。
+1. Playwright 镜像已在本地。镜像 3.4GB，`infra/VERSIONS.md` 定案「不进 `dev build` 的拉取清单，本地拉一次长期复用」。
+   镜像缺失时，用例打印 `SKIP` 行与拉取命令，退出 0，不建库、不动 server。
+   干净的 CI runner 默认走这条路，所以 CI 默认不执行 UI 全链。
+   `SKIP` 表示这一轮没有验证 UI 全链，不表示通过。
+   设 `E2E_REQUIRE_BROWSER=1` 后，缺镜像改判红。
 2. 容器内能访问 npm 源，用于安装 `playwright@1.64.1`。
 3. 浏览器在容器里运行，走宿主网络访问 `https://localhost`。
    资产经 tar 灌入，证据经 tar 取回。
