@@ -90,13 +90,8 @@ const CASE_OPCODES = {
 const ADMIN_OBJECTS = ['template', 'rule', 'calendar', 'metric'] as const;
 const ADMIN_ACTIONS = ['submit', 'approve', 'void', 'withdraw', 'read'] as const;
 
-const ADMIN_OPCODES: Record<string, OpcodeEntry> = {};
-for (const object of ADMIN_OBJECTS) {
-  for (const action of ADMIN_ACTIONS) {
-    ADMIN_OPCODES[`cfg.${object}.${action}`] = entry('none', false, false);
-  }
-}
-for (const code of [
+/** 管理侧操作码名册。字面量数组，字面量联合的来源。 */
+const ADMIN_CODES = [
   // 机构树（#105「机构树」，#123）与机构停用（#124）。
   'org.tree.read',
   'org.unit.register',
@@ -126,7 +121,15 @@ for (const code of [
   'storage.quarantine.mark',
   // #225：保密报告工单（生成、登记已报、录入回执、时限提醒）。只给系统管理；对象级同 #224 收窄到根机构。
   'storage.secrecy-report.manage',
-]) {
+] as const;
+
+const ADMIN_OPCODES: Record<string, OpcodeEntry> = {};
+for (const object of ADMIN_OBJECTS) {
+  for (const action of ADMIN_ACTIONS) {
+    ADMIN_OPCODES[`cfg.${object}.${action}`] = entry('none', false, false);
+  }
+}
+for (const code of ADMIN_CODES) {
   ADMIN_OPCODES[code] = entry('none', false, false);
 }
 
@@ -140,6 +143,17 @@ function lookup(opcode: string): OpcodeEntry | null {
 }
 
 export const OPCODES = Object.freeze(Object.keys(CATALOG)) as readonly string[];
+
+/**
+ * 名册里的操作码名（字面量联合）。
+ *
+ * 前端与后端共用这一份：前端把界面上的操作码按本类型标注，后端改名或废码时前端编译
+ * 即报错，不必等运行到某个页面才发现按钮永远不出现。
+ */
+export type OpcodeName =
+  | keyof typeof CASE_OPCODES
+  | (typeof ADMIN_CODES)[number]
+  | `cfg.${(typeof ADMIN_OBJECTS)[number]}.${(typeof ADMIN_ACTIONS)[number]}`;
 
 export function opcodeRequirements(opcode: string): OpcodeRequirements | null {
   const found = lookup(opcode);

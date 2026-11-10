@@ -2,9 +2,11 @@
 // 各入口的数字来自各自功能的查询：被锁人员（A10）、机构（#123，取机构树节点数）、今日留痕（#126）、
 // 人员（#128，取数据范围内未停用的人数）。「需要留意的执法证」与有执法资格的人数按人员名单的证件情况算（#133）。
 
+import type { OpcodeName } from '@natural-enforcement/shield';
 import { data } from 'react-router';
 
 import { apiFetch, type ApiDispatch } from '../api';
+import { hasOpcode } from '../opcodes';
 import { sessionOpcodes, type SessionStore } from '../session';
 import { ADMIN_HOME_OPCODES, hasAny, ORG_MAINTENANCE_OPCODE } from '../shell/menu';
 import { certAttentionOf, qualifiedPersonnelCount, type CertAttentionKey, type PersonnelRow } from './personnel';
@@ -34,7 +36,7 @@ export const EMPTY_SUMMARY: AdminHomeSummary = {
 };
 
 /** 维护类入口码。只有留痕入口、没有维护入口的是监督视角。 */
-const MAINTENANCE_OPCODES = [ORG_MAINTENANCE_OPCODE, 'personnel.profile.read', 'personnel.locked.read'] as const;
+const MAINTENANCE_OPCODES = [ORG_MAINTENANCE_OPCODE, 'personnel.profile.read', 'personnel.locked.read'] as const satisfies readonly OpcodeName[];
 
 export type AdminHomeView = 'admin' | 'supervise' | 'denied';
 
@@ -58,7 +60,7 @@ export interface AdminTile {
   title: string;
   desc: string;
   path: string;
-  opcode: string;
+  opcode: OpcodeName;
   count: (summary: AdminHomeSummary) => string | null;
 }
 
@@ -79,7 +81,7 @@ export const SUPERVISE_AUDIT_DESC = '谁在什么时候做了哪些维护，结�
 /** 取首页数字。接口 403：重新拉会话后显示无权限页；401 交给会话已结束页处理。 */
 export async function loadAdminHomeSummary(dispatch: ApiDispatch, opcodes: readonly string[]): Promise<AdminHomeSummary> {
   const summary: AdminHomeSummary = { ...EMPTY_SUMMARY };
-  if (opcodes.includes(ORG_MAINTENANCE_OPCODE) && opcodes.includes('org.tree.read')) {
+  if (opcodes.includes(ORG_MAINTENANCE_OPCODE) && hasOpcode(opcodes, 'org.tree.read')) {
     const response = await apiFetch(dispatch, '/api/org-units');
     if (response.status === 401) return summary;
     if (response.status === 403) throw data(null, { status: 403 });
@@ -87,7 +89,7 @@ export async function loadAdminHomeSummary(dispatch: ApiDispatch, opcodes: reado
     const body = (await response.json()) as { orgUnits?: unknown };
     summary.orgUnits = Array.isArray(body.orgUnits) ? body.orgUnits.length : null;
   }
-  if (opcodes.includes('personnel.profile.read')) {
+  if (hasOpcode(opcodes, 'personnel.profile.read')) {
     const response = await apiFetch(dispatch, '/api/admin/personnel');
     if (response.status === 401) return summary;
     if (response.status === 403) throw data(null, { status: 403 });
@@ -99,7 +101,7 @@ export async function loadAdminHomeSummary(dispatch: ApiDispatch, opcodes: reado
     summary.certifiedPersonnel = rows ? qualifiedPersonnelCount(rows) : null;
     summary.certAttention = rows ? certAttentionOf(rows) : null;
   }
-  if (opcodes.includes('personnel.locked.read')) {
+  if (hasOpcode(opcodes, 'personnel.locked.read')) {
     const response = await apiFetch(dispatch, '/api/admin/locked-personnel');
     if (response.status === 401) return summary;
     if (response.status === 403) throw data(null, { status: 403 });
@@ -107,7 +109,7 @@ export async function loadAdminHomeSummary(dispatch: ApiDispatch, opcodes: reado
     const body = (await response.json()) as { personnel?: unknown };
     summary.lockedPersonnel = Array.isArray(body.personnel) ? body.personnel.length : null;
   }
-  if (opcodes.includes('audit.admin.read')) {
+  if (hasOpcode(opcodes, 'audit.admin.read')) {
     // 只给条数、不交出行，服务端不写 audit.viewed（#126）
     const response = await apiFetch(dispatch, '/api/admin/audit/summary');
     if (response.status === 401) return summary;

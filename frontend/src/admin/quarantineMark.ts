@@ -4,11 +4,12 @@
 // 原文件仍保留在存储里，系统不删除。是否有权由服务端决定（只放行目标对象所属根机构的系统管理员），
 // 前端只按会话操作码与当前选中机构是否为本人任职的根机构决定显示什么。
 
+import type { OpcodeName } from '@natural-enforcement/shield';
 import { apiFetch, type ApiDispatch } from '../api';
 import type { OrgTreeData, OrgUnit } from './orgTree';
 
 /** 会话里授予系统管理的操作码。 */
-export const QUARANTINE_MARK = 'storage.quarantine.mark';
+export const QUARANTINE_MARK = 'storage.quarantine.mark' satisfies OpcodeName;
 
 /**
  * 入口可见：会话有标记码，且选中的是本人任职机构，且该机构是根机构（没有上级）。

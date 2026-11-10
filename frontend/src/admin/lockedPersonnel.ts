@@ -4,14 +4,15 @@
 // 列表只靠手动刷新；动作成功后该行从列表移除（#105 故事 43–45）。
 // 文案逐字取自原型 v0.4 P7（35 条定稿与 #84 批准的「重设成功」「重设被拒」两句）。
 
+import type { OpcodeName } from '@natural-enforcement/shield';
 import { data } from 'react-router';
 
 import { apiFetch, type ApiDispatch } from '../api';
 import { sessionOpcodes, type SessionStore } from '../session';
 
-export const LOCKED_READ = 'personnel.locked.read';
-export const LOCKED_RELEASE = 'personnel.locked.release';
-export const PASSWORD_RESET = 'personnel.password.reset';
+export const LOCKED_READ = 'personnel.locked.read' satisfies OpcodeName;
+export const LOCKED_RELEASE = 'personnel.locked.release' satisfies OpcodeName;
+export const PASSWORD_RESET = 'personnel.password.reset' satisfies OpcodeName;
 
 export const LOCKED_LIST_URL = '/api/admin/locked-personnel';
 export const unlockUrl = (id: string) => `/api/admin/personnel/${encodeURIComponent(id)}/unlock`;

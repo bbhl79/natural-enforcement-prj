@@ -21,7 +21,7 @@ export {
   effectiveOpcodeRequirements,
   opcodeRequirements,
 } from './contract/opcode.ts';
-export type { OpcodeRequirements, QualificationDemand } from './contract/opcode.ts';
+export type { OpcodeName, OpcodeRequirements, QualificationDemand } from './contract/opcode.ts';
 // 技术主键生成（#16 §1.1 ULID）。契约包无任何依赖，身份／地理字典／留痕三包都允许
 // 依赖它——技术主键生成器统一收敛到本包，三包与种子通道共用一份实现。
 export { createMonotonicUlidGenerator, newUlid } from './contract/ulid.ts';

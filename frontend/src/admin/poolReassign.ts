@@ -4,10 +4,11 @@
 // 重新指定给未停用机构。理由必填；不构成指定管辖，不加锁。是否有权由服务端决定，
 // 前端只按会话操作码清单决定显示什么。
 
+import type { OpcodeName } from '@natural-enforcement/shield';
 import { apiFetch, type ApiDispatch } from '../api';
 
 /** 会话里授予系统管理的操作码。 */
-export const POOL_REASSIGN = 'clue.pool.reassign';
+export const POOL_REASSIGN = 'clue.pool.reassign' satisfies OpcodeName;
 
 /** 池中一条未派出线索。 */
 export interface PoolClue {

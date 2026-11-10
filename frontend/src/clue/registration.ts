@@ -8,12 +8,13 @@
 // 校验不通过返回 400 与 rules（缺件键）：表单标红并保留已填内容。
 // 类型层缺件先给清单，用户确认后再带 confirm 提交，仍可保存。
 
+import type { OpcodeName } from '@natural-enforcement/shield';
 import { data } from 'react-router';
 
 import { apiFetch, type ApiDispatch } from '../api';
 import type { SessionStore } from '../session';
 
-export const CLUE_REGISTER = 'clue.register';
+export const CLUE_REGISTER = 'clue.register' satisfies OpcodeName;
 
 export type ClueDomain = 'land' | 'mineral' | 'survey' | 'planning';
 

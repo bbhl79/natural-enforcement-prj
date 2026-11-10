@@ -3,6 +3,7 @@
 // 菜单可见性只是便利；真正的授权由服务端每次校验（#207「菜单可见性仍只是便利」）。
 // 操作码原文只在这里和 data- 属性上，不进用户可见文本。
 
+import type { OpcodeName } from '@natural-enforcement/shield';
 import { CLUE_VIEWS, withPreservedQuery } from './clueUrl';
 
 /** 顶栏一级入口键位。键位稳定：文案可改，键位不改。 */
@@ -17,7 +18,7 @@ export interface PrimaryEntry {
    * 会话清单含其中任一码即渲染该一级入口；空数组＝所有登录人员可见。
    * 「系统管理」一级无权限时不渲染，也不在页面上作说明。
    */
-  anyOf: readonly string[];
+  anyOf: readonly OpcodeName[];
 }
 
 export interface SecondaryEntry {
@@ -28,7 +29,7 @@ export interface SecondaryEntry {
   /** 站内地址（含查询串）。 */
   path: string;
   /** 会话清单含其中任一码即渲染该二级入口；缺省＝该一级下人人可见。 */
-  anyOf?: readonly string[];
+  anyOf?: readonly OpcodeName[];
   /** 规划中占位：本期不进入真实业务，点了只在主区提示。 */
   planned?: boolean;
   /** 规划中占位的补充说明（进主区提示里）。 */
@@ -51,7 +52,7 @@ export interface PlannedModule {
   /** 是否进侧栏二级菜单。 */
   inMenu: boolean;
   /** 进侧栏时的操作码门槛；缺省＝人人可见。 */
-  anyOf?: readonly string[];
+  anyOf?: readonly OpcodeName[];
 }
 
 /**
@@ -60,7 +61,7 @@ export interface PlannedModule {
  * 「系统管理」一级，与原型 P1 noadmin 相反，所以「机构」入口和维护视角都按
  * `org.unit.register` 判定。
  */
-export const ORG_MAINTENANCE_OPCODE = 'org.unit.register';
+export const ORG_MAINTENANCE_OPCODE = 'org.unit.register' satisfies OpcodeName;
 
 /**
  * 「系统管理」一级的入口码：持有任一即可看到该一级入口。只收系统管理或监督才有的码，
@@ -71,7 +72,7 @@ export const ADMIN_HOME_OPCODES = [
   'personnel.profile.read',
   'personnel.locked.read',
   'audit.admin.read',
-] as const;
+] as const satisfies readonly OpcodeName[];
 
 /** 顶栏一级五总入口。四个业务一级人人可见；「系统管理」按操作码出现。 */
 export const PRIMARY_ENTRIES: readonly PrimaryEntry[] = [
@@ -169,7 +170,7 @@ export const SECONDARY_ENTRIES: readonly SecondaryEntry[] = [
   })),
 ];
 
-export function hasAny(opcodes: readonly string[], wanted: readonly string[]): boolean {
+export function hasAny(opcodes: readonly string[], wanted: readonly OpcodeName[]): boolean {
   return wanted.some((code) => opcodes.includes(code));
 }
 

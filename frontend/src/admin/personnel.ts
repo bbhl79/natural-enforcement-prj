@@ -5,26 +5,28 @@
 // 执法证登记 POST /api/admin/personnel/:id/cert。
 // 是否有权由服务端决定，前端按会话清单只决定显示什么。
 
+import type { OpcodeName } from '@natural-enforcement/shield';
 import { data } from 'react-router';
 
 import { apiFetch, type ApiDispatch } from '../api';
 import { PASSWORD_RULE_TEXT } from '../login/loginSlice';
+import { hasOpcode } from '../opcodes';
 import { sessionOpcodes, type SessionStore } from '../session';
 import { RESET_RULE_TEXT } from './lockedPersonnel';
 import type { OrgTreeData, OrgUnit } from './orgTree';
 
-export const PERSONNEL_READ = 'personnel.profile.read';
-export const PERSONNEL_REGISTER = 'personnel.profile.register';
+export const PERSONNEL_READ = 'personnel.profile.read' satisfies OpcodeName;
+export const PERSONNEL_REGISTER = 'personnel.profile.register' satisfies OpcodeName;
 /** 执法证登记（#133）：只给系统管理。 */
-export const PERSONNEL_CERT_UPDATE = 'personnel.cert.update';
-export const PERSONNEL_UPDATE = 'personnel.profile.update';
+export const PERSONNEL_CERT_UPDATE = 'personnel.cert.update' satisfies OpcodeName;
+export const PERSONNEL_UPDATE = 'personnel.profile.update' satisfies OpcodeName;
 /** 停用、恢复、结束全部会话（#130）：三个码都只给系统管理。 */
-export const PERSONNEL_DEACTIVATE = 'personnel.profile.deactivate';
-export const PERSONNEL_RESTORE = 'personnel.profile.restore';
-export const PERSONNEL_SESSIONS_END = 'personnel.sessions.end';
+export const PERSONNEL_DEACTIVATE = 'personnel.profile.deactivate' satisfies OpcodeName;
+export const PERSONNEL_RESTORE = 'personnel.profile.restore' satisfies OpcodeName;
+export const PERSONNEL_SESSIONS_END = 'personnel.sessions.end' satisfies OpcodeName;
 /** 重设初始口令（#132，A10 同码）：只给系统管理。 */
-export const PERSONNEL_PASSWORD_RESET = 'personnel.password.reset';
-export const AUDIT_READ = 'audit.admin.read';
+export const PERSONNEL_PASSWORD_RESET = 'personnel.password.reset' satisfies OpcodeName;
+export const AUDIT_READ = 'audit.admin.read' satisfies OpcodeName;
 
 /** 七个角色（ADR 0009），按原型 P6 的顺序。 */
 export const ROLES = ['内勤', '经办', '法制审核', '行政审核', '行政审批', '监督', '系统管理'] as const;
@@ -907,7 +909,7 @@ export function personnelCardLoader(store: SessionStore) {
 export function personnelCreateLoader(store: SessionStore) {
   return () => {
     const orgUnits = sessionOpcodes(store).then((opcodes) =>
-      (opcodes.includes(PERSONNEL_REGISTER) && opcodes.includes('org.tree.read') ? loadRegisterOrgUnits(store.dispatch) : []));
+      (opcodes.includes(PERSONNEL_REGISTER) && hasOpcode(opcodes, 'org.tree.read') ? loadRegisterOrgUnits(store.dispatch) : []));
     // 失败由页面的 Await 接住显示；先挂空处理，免得渲染前落定的拒绝被当成未处理。
     orgUnits.catch(() => undefined);
     return { orgUnits };

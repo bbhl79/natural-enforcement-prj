@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router';
 
 import { useAppDispatch, useAppSelector } from '../hooks';
+import { hasOpcode } from '../opcodes';
 import { loadAgencyConflict, markAgencyConflict } from './agency-conflict';
 import {
   CONFLICT_SOURCES,
@@ -287,12 +288,12 @@ export default function CaseConflictPage() {
     <CaseConflictTab
       records={records}
       decisions={decisions}
-      canDeclare={opcodes.includes('doc.draft')}
-      canDecide={opcodes.includes('doc.approve')}
+      canDeclare={hasOpcode(opcodes, 'doc.draft')}
+      canDecide={hasOpcode(opcodes, 'doc.approve')}
       agencyMarked={agencyMarked}
       agencyWarning={agencyWarning}
       agencyOutlet={agencyOutlet}
-      canMarkAgency={opcodes.includes('doc.draft')}
+      canMarkAgency={hasOpcode(opcodes, 'doc.draft')}
       message={message}
       signResult={signResult}
       onSignCheck={(input) => {
@@ -338,9 +339,9 @@ export default function CaseConflictPage() {
       reassign={reassign
         ? {
             view: reassign,
-            canSubmit: opcodes.includes('case.reassign.submit'),
-            canApprove: opcodes.includes('doc.approve'),
-            canDetermine: opcodes.includes('doc.draft'),
+            canSubmit: hasOpcode(opcodes, 'case.reassign.submit'),
+            canApprove: hasOpcode(opcodes, 'doc.approve'),
+            canDetermine: hasOpcode(opcodes, 'doc.draft'),
             message,
             onSubmit: (input) => {
               void submitReassignment(dispatch, caseId, input)

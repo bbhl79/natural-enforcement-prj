@@ -10,7 +10,10 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+    // 契约包 packages/shield 以源码形态消费（其 exports 指向 src/index.ts，包内相对导入用
+    // .ts 扩展名）。本选项允许程序内的 .ts 扩展名导入；noEmit 已置位，满足其前置条件。
+    "allowImportingTsExtensions": true
   },
   "include": ["src", "vite.config.ts"]
 }

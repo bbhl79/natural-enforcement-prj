@@ -1,13 +1,14 @@
 // 管理台留痕（P8，#126）的数据与文案。查阅与导出都走服务端 POST 接口（服务端每次都写留痕）；
 // 显示文字由服务端生成，页面与导出文件逐格同源。筛选条件放在地址栏查询串里，loader 按查询串取数。
 
+import type { OpcodeName } from '@natural-enforcement/shield';
 import { data, type LoaderFunctionArgs } from 'react-router';
 
 import { apiFetch, type ApiDispatch } from '../api';
 import { sessionOpcodes, type SessionStore } from '../session';
 
-export const AUDIT_READ = 'audit.admin.read';
-export const AUDIT_EXPORT = 'audit.admin.export';
+export const AUDIT_READ = 'audit.admin.read' satisfies OpcodeName;
+export const AUDIT_EXPORT = 'audit.admin.export' satisfies OpcodeName;
 
 /** 与服务端 @natural-enforcement/audit 的 AUDIT_CATEGORIES 同值。 */
 export type AuditCategory =

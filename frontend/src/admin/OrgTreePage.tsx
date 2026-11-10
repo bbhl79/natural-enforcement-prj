@@ -1,7 +1,9 @@
+import type { OpcodeName } from '@natural-enforcement/shield';
 import { Suspense, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Await, useAsyncError, useLoaderData, useRevalidator } from 'react-router';
 
 import { useAppDispatch, useAppSelector } from '../hooks';
+import { hasOpcode } from '../opcodes';
 import { DeniedCard, ErrorCard, errorStatus } from '../shell/StatusPages';
 import {
   buildTree,
@@ -32,9 +34,9 @@ import { POOL_REASSIGN } from './poolReassign';
 import QuarantineMarkPanel from './QuarantineMarkPanel';
 import { canMarkQuarantine } from './quarantineMark';
 
-const REGISTER = 'org.unit.register';
-const RENAME = 'org.unit.rename';
-const DEACTIVATE = 'org.unit.deactivate';
+const REGISTER = 'org.unit.register' satisfies OpcodeName;
+const RENAME = 'org.unit.rename' satisfies OpcodeName;
+const DEACTIVATE = 'org.unit.deactivate' satisfies OpcodeName;
 
 function Crumb() {
   return <div className="crumb">管理台 / <b>机构</b></div>;
@@ -628,7 +630,7 @@ export default function OrgTreePage() {
   const revalidator = useRevalidator();
   const [ui, setUi] = useState<OrgTreeUi>(INITIAL_UI);
   const [dialog, setDialog] = useState<Dialog>(null);
-  if (!opcodes.includes('org.tree.read')) {
+  if (!hasOpcode(opcodes, 'org.tree.read')) {
     return (
       <>
         <Crumb />

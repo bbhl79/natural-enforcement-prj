@@ -27,7 +27,7 @@
 | approval | shield、identity、case | 只读引用（**「订阅事件」为规划描述，尚未落地**：全仓无事件总线、无发布方或订阅方） |
 | supervision | shield、identity、case | 只读，**单向**。业务模块无人依赖它。`backend/server` 启动包除外（ADR 0004） |
 | deadline | shield、case、approval、**geo-dict（#45 补丁 1：只读引用程序节点类型）** | case/approval 为订阅（**规划描述，尚未落地**），geo-dict 为只读引用 |
-| frontend | 无代码级依赖 | 只经同源 HTTP `/api/*` 消费，不直连库、不引 backend 内部路径；操作码与状态标签为手写契约（`frontend-boundary` 禁止前端引后端），由 integration 层契约测试比对 |
+| frontend | shield（契约包；只取操作码字面量联合与名册） | 只经同源 HTTP `/api/*` 消费，不直连库、不引 backend 内部路径；操作码取自 shield 的字面量联合 `OpcodeName`，后端改名或废码时前端编译即报错（`frontend-boundary` 只禁前端引后端内部与设施 SDK，不禁 shield）。留痕动作名（`login.failed` 等）与录入要件键仍为手写——留痕设施包与案件包都不在端依赖面内 |
 
 `backend/server` 是 HTTP 启动包，不是第七个业务模块，不占上表的一行。它经公共出口装入全部六个模块，包括监督统计。结构测试 `supervision-sink` 跳过该目录。ADR 0004 只允许这个包里的一个文件直接引用各业务模块的数据库适配器。该文件是 `backend/server/src/persistence.module.ts`；准入的适配器有三处：`backend/identity/src/persistence/prisma-identity-store.ts`（#52）、`backend/case/src/persistence/prisma-clue-store.ts`（#211）、`backend/case/src/persistence/prisma-case-store.ts`（案件聚合 store，与前两处同批准入）。名单外的深路径导入照样判红（红探针 `case-adapter-file` 与 `server-adapter-file` 两项负例证据）。机器白名单以 `tools/structural-test.sh` 的 `SERVER_ADAPTER_SPECS` 为准，本文是人读副本。
 
