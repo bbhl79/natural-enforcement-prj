@@ -71,16 +71,23 @@ DB_NAME="$POSTGRES_DB"
 # 集成测试复制源（#93）。开发库仍是 DB_NAME，测试不复制它。
 IT_TEMPLATE_DB="it_template"
 # 用户名、密码、库名按 URI 组件编码后再拼进连接串。CI secret 里的 @ : / # 不能当分隔符。
+# hex 字节转数值用自带的 hexval（index + 算术），不用 gawk 扩展 strtonum——mawk 与
+# busybox awk 没有该函数，写法一换实现即报 "function strtonum never defined" 而整条命令失败。
 percent_encode() {
-  printf '%s' "$1" | od -An -tx1 | awk '{
-    for (i = 1; i <= NF; i++) {
-      c = strtonum("0x" $i)
-      if ((c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c == 45 || c == 46 || c == 95 || c == 126)
-        printf "%c", c
-      else
-        printf "%%%s", toupper($i)
+  printf '%s' "$1" | od -An -tx1 | awk '
+    function hexval(c,   p) {
+      p = index("0123456789abcdef", tolower(c))
+      return p - 1
     }
-  }'
+    {
+      for (i = 1; i <= NF; i++) {
+        c = hexval(substr($i, 1, 1)) * 16 + hexval(substr($i, 2, 1))
+        if ((c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c == 45 || c == 46 || c == 95 || c == 126)
+          printf "%c", c
+        else
+          printf "%%%s", toupper($i)
+      }
+    }'
 }
 export DATABASE_URL="postgresql://$(percent_encode "$DB_USER"):$(percent_encode "$DB_PASS")@${POSTGRES_HOST}:5432/$(percent_encode "$DB_NAME")"
 # 队列连接串：compose 网络内经服务名访问（ADR 0008：由 dev 从清单分项算出）

@@ -12,9 +12,17 @@ on:
   pull_request:
   workflow_dispatch:
 
+# 同一 ref 的旧跑次取消：一次 check 要拉三个镜像、跑五项 lint 与三层测试，重跑时先取消
+# 上一轮，免得两轮同时占着 runner 与镜像拉取带宽。
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
+    # 挂死防护：check 是纯编排，正常在几十分钟内跑完；卡住时主动失败，不要一直占 runner。
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
