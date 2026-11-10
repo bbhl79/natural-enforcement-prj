@@ -36,17 +36,31 @@
 | ---- | ---- | ---- |
 | integration 层 | `./dev test integration` 的 `integration/verify-*.test.ts` | 驱动自身逻辑；API 环在克隆库上跑 |
 | e2e 层 | `./dev test e2e` 的 `e2e/cases/08-verify-api.sh` | 整栈上经 nginx 的 API 稳定用例，清单见 `harness/suites.ts` 的 `API_SUITE` |
-| 人工与诊断 | `harness/` 下的独立脚本 | 图层 overlay 的自动核查、下一待办按钮、无回溯样本、UI 驱动、身份准备核对 |
+| e2e 层 | `./dev test e2e` 的 `e2e/cases/09-verify-ui.sh` | 真实浏览器的 UI 全链：两次完整登记、命中待决定、点击派出、点击派机构 |
+| 人工与诊断 | `harness/` 下的独立脚本 | 图层 overlay 的自动核查、下一待办按钮、无回溯样本、单段 UI 驱动、身份准备核对 |
 
 `harness/suites.ts` 是场景清单的唯一出处。
 `integration/verify-suites.test.ts` 做覆盖自检。
 每个 `driver=api` 的场景必须在 `API_SUITE` 或 `LAYER_OVERLAY_SUITE` 里。
 新增场景没人接时，自检判红。
 
-只跑 08 用例：`E2E_CASES=08 ./dev test e2e`。
+只跑 08、09 用例：`E2E_CASES="08 09" ./dev test e2e`。
 该开关不触发 01 用例，数据卷保持原样。
-08 用例每次新建独立库并临时把 server 指向它，结束后恢复。
+08、09 用例每次新建独立库并临时把 server 指向它，结束后恢复。
+建库与恢复的共用逻辑在 `e2e/cases/_lib-isolated-stack.sh`。
 独立库让首登改密只发生一次，因此用例可以重复跑，也不依赖前面用例的顺序。
+
+09 用例的前提：
+1. Playwright 镜像已在本地。`dev` 不拉取它。缺失时用例判红，并打印拉取命令。
+2. 容器内能访问 npm 源，用于安装 `playwright@1.64.1`。
+3. 浏览器在容器里运行，走宿主网络访问 `https://localhost`。
+   资产经 tar 灌入，证据经 tar 取回。
+   不使用 `/mnt/c` 中转，不使用 `host.docker.internal`。
+
+登记段与派出段在同一个容器里顺序执行。
+登记段首登后口令被改成新口令。
+派出段用新口令登录同一个人。
+`harness/ui/run-ui-full-loop.sh` 是本机手工版，没有传新口令，在已改过密的库上会被拒。
 
 ### 已知欠账
 
