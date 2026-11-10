@@ -14,8 +14,7 @@
     "@natural-enforcement/shield": "workspace:*",
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
-    "argon2": "0.45.1",
-    "pg": "8.23.1"
+    "argon2": "0.45.1"
   },
   "devDependencies": {
     "eslint": "10.12.0",
