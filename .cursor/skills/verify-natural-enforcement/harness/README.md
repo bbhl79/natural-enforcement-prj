@@ -26,6 +26,16 @@
 
 分派视图默认用本步身份读取。未派机构时承办机构内勤读不到录入机构视图，步骤可声明 `viewIdentityRef`（如录入人）单独读视图。
 
+单旅程（`VERIFY_PHASE=journey`，本轮新增）。有 docker 时启动栈并跑 `vf-sc-journey-read-union`：派机构前后跨身份 `GET /api/clues/:id/dispatch`。无 docker 时记 blocked，不发产品请求。
+
+```bash
+VERIFY_PHASE=journey .cursor/skills/verify-natural-enforcement/harness/run-auto-verification.sh
+VERIFY_PHASE=journey VERIFY_FAULT=drop-assigned-org-read .cursor/skills/verify-natural-enforcement/harness/run-auto-verification.sh
+VERIFY_PHASE=journey .cursor/skills/verify-natural-enforcement/harness/run-auto-verification.sh
+```
+
+三行分别是基线、注入、恢复。注入让已派机构退出读并集。签收不在这三条里。
+
 开发环境自动核查（空地址失败，以及假图层上的成功、部分命中、疑似重复）：
 
 ```bash

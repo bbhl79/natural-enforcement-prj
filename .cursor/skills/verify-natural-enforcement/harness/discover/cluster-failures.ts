@@ -85,6 +85,24 @@ export function classifyFailure(record: FailureRecord): ClassifiedFailure | null
 
   const expected = recordOf(record.expected);
   const actual = recordOf(record.actual);
+  if (
+    actual?.evaluation === 'unevaluated' ||
+    actual?.evaluation === 'unverified' ||
+    actual?.evaluation === 'product-gap' ||
+    actual?.evaluation === 'not-in-slice'
+  ) {
+    return null;
+  }
+  if (actual?.disposition === 'environment-blocked') {
+    return {
+      scenarioId: record.scenarioId,
+      stepId: record.stepId,
+      failureKind: 'blocked:environment',
+      key: clusterKeyOf(record.scenarioId, record.stepId, 'blocked:environment'),
+      message: typeof actual.error === 'string' ? actual.error : '环境 blocked',
+      assertPaths: [],
+    };
+  }
   let failureKind: string;
   let message: string;
   let assertPaths: readonly string[] = [];

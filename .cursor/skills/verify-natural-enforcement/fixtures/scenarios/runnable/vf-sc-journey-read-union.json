@@ -1,0 +1,86 @@
+{
+  "id": "vf-sc-journey-read-union",
+  "status": "runnable",
+  "driver": "api",
+  "kind": "happy",
+  "strictSteps": true,
+  "title": "读并集：派机构前后跨身份 GET 分派视图，写开关不放宽",
+  "profileRefs": ["vf-case-02-occupy-without-approval"],
+  "identityRefs": ["clerk-a", "intake-a", "intake-st", "clerk-b"],
+  "featureMapRefs": ["nav.workbench.dispatch.buttons"],
+  "steps": [
+    {
+      "id": "register",
+      "action": "register-clue",
+      "fromProfile": "vf-case-02-occupy-without-approval",
+      "path": "stages.register.system",
+      "identityRef": "clerk-a",
+      "mutate": {
+        "isolateSpatial": true,
+        "setValues": { "clue.narrative": "vf-读并集：派机构前后" },
+        "overrideSpatial": {
+          "type": "Feature",
+          "properties": {},
+          "geometry": {
+            "type": "Polygon",
+            "coordinates": [
+              [
+                [114.011, 23.611],
+                [114.019, 23.611],
+                [114.019, 23.619],
+                [114.011, 23.619],
+                [114.011, 23.611]
+              ]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "read-union-before",
+      "action": "read-dispatch-buttons",
+      "matrix": [
+        { "identityRef": "clerk-a", "http": 200, "mayAssignPeople": false },
+        { "identityRef": "intake-st", "http": 403, "reason": "scope-denied" },
+        { "identityRef": "clerk-b", "http": 403, "reason": "scope-denied" }
+      ]
+    },
+    {
+      "id": "assign-org",
+      "action": "assign-org",
+      "identityRef": "intake-a",
+      "orgUnitCode": "ORG-STATION-A",
+      "expectedStatus": "in_pool"
+    },
+    {
+      "id": "read-union-after",
+      "action": "read-dispatch-buttons",
+      "expectAssignmentOrgCode": "ORG-STATION-A",
+      "matrix": [
+        { "identityRef": "clerk-a", "http": 200, "mayAssignPeople": false },
+        { "identityRef": "intake-a", "http": 200, "mayAssignPeople": false },
+        { "identityRef": "intake-st", "http": 200, "mayAssignPeople": true },
+        { "identityRef": "clerk-b", "http": 403, "reason": "scope-denied" }
+      ]
+    }
+  ],
+  "oracle": {
+    "kind": "machine",
+    "assert": [
+      { "path": "body.result", "op": "eq", "value": "button-matrix" },
+      { "path": "body.facts.rows.0.identityRef", "op": "eq", "value": "clerk-a" },
+      { "path": "body.facts.rows.0.http", "op": "eq", "value": 200 },
+      { "path": "body.facts.rows.0.mayAssignPeople", "op": "eq", "value": false },
+      { "path": "body.facts.rows.1.identityRef", "op": "eq", "value": "intake-a" },
+      { "path": "body.facts.rows.1.http", "op": "eq", "value": 200 },
+      { "path": "body.facts.rows.1.mayAssignPeople", "op": "eq", "value": false },
+      { "path": "body.facts.rows.2.identityRef", "op": "eq", "value": "intake-st" },
+      { "path": "body.facts.rows.2.http", "op": "eq", "value": 200 },
+      { "path": "body.facts.rows.2.mayAssignPeople", "op": "eq", "value": true },
+      { "path": "body.facts.rows.3.identityRef", "op": "eq", "value": "clerk-b" },
+      { "path": "body.facts.rows.3.http", "op": "eq", "value": 403 },
+      { "path": "body.facts.rows.3.reason", "op": "eq", "value": "scope-denied" }
+    ]
+  },
+  "notes": "权威只取 USER LOCK rev3 §1 的读并集，以及 §1.2 的 mayAssignPeople 旗标。本场景不发送 assign-people，真实写授权未测。不调用 UI。登记用隔离面。派机构前甲所内勤与乙区经办不在并集。派到 ORG-STATION-A 后，录入机构与承办机构 GET 200，乙区仍 403。不把 harness 字符串 readScope 当并集证明。签收不在本场景。"
+}

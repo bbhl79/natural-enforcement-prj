@@ -92,7 +92,13 @@ export async function loadFailureRecords(
   for (const runDir of runDirs) {
     const runId = await readRunId(runDir);
     const blockedRun = await isBlockedRun(runDir);
-    for (const file of await listStepJsonFiles(path.join(runDir, 'steps'))) {
+    const stepFiles = [
+      ...(await listStepJsonFiles(path.join(runDir, 'steps'))),
+      ...(await listStepJsonFiles(path.join(runDir, 'ui'))).filter((file) =>
+        path.relative(runDir, file).split(path.sep).join('/').includes('/steps/'),
+      ),
+    ];
+    for (const file of stepFiles) {
       let raw: unknown;
       try {
         raw = JSON.parse(await fs.readFile(file, 'utf8'));

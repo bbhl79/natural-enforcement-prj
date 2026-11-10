@@ -617,6 +617,11 @@ async function readDispatchButtons(
     const found =
       listed.http.status === 200 &&
       listOf(listed.body.rows).some((item) => asText(item.id) === clueId);
+    const assignment = viewed.body.assignment;
+    const assignmentOrgUnitId =
+      assignment !== null && typeof assignment === 'object' && !Array.isArray(assignment)
+        ? asText((assignment as { orgUnitId?: unknown }).orgUnitId)
+        : '';
     const row = {
       identityRef: expect.identityRef,
       http: viewed.http.status,
@@ -626,6 +631,7 @@ async function readDispatchButtons(
       mayAssignOrg: viewed.body.mayAssignOrg === true,
       mayAssignPeople: viewed.body.mayAssignPeople === true,
       mayReassignOrg: viewed.body.mayReassignOrg === true,
+      assignmentOrgUnitId,
       listedInAssignView: found,
     };
     rows.push(row);
@@ -644,6 +650,22 @@ async function readDispatchButtons(
   if (clueStatus !== '') run.status = clueStatus;
   if (step.expectClueStatus !== undefined && clueStatus !== step.expectClueStatus) {
     misses.push(`clueStatus=${clueStatus}`);
+  }
+  if (step.expectAssignmentOrgCode !== undefined) {
+    const admin = await loadIdentity('admin-hq');
+    const adminCookie = await ctx.sessions.cookieOf(admin);
+    const expectedId = await resolveOrgUnitId(
+      ctx,
+      { ...step, orgUnitCode: step.expectAssignmentOrgCode },
+      adminCookie,
+      run,
+    );
+    for (const row of rows) {
+      if (row.http !== 200) continue;
+      if (row.assignmentOrgUnitId !== expectedId) {
+        misses.push(`${String(row.identityRef)} assignmentOrgUnitId=${String(row.assignmentOrgUnitId)}`);
+      }
+    }
   }
   const facts = { clueStatus, rows };
   return {
@@ -665,7 +687,7 @@ export async function runApiScenario(
   ctx: HarnessContext,
   scenarioId: string,
   writer: EvidenceWriter,
-): Promise<{ pass: boolean; observation: StepObservation | null }> {
+): Promise<{ pass: boolean; observation: StepObservation | null; disposition?: 'unverified' }> {
   const scenario = await loadScenario(scenarioId);
   // 注册元数据供 finish() 推导 uncovered（featureMapRef、matrix 未核开关）。
   writer.registerScenario(scenarioId, scenario);
@@ -675,10 +697,11 @@ export async function runApiScenario(
       stepId: 'skip',
       pass: false,
       expected: { status: 'runnable' },
-      actual: { status: scenario.status },
+      actual: { status: scenario.status, evaluation: 'unverified' },
       evidence: [],
     });
-    return { pass: false, observation: null };
+    // 不执行 latent 步骤。夹具里的 stepId 即使字面是 blocked，也不记成环境 blocked。
+    return { pass: false, observation: null, disposition: 'unverified' };
   }
   if (scenario.driver !== 'api') {
     await writer.writeStep({
@@ -775,7 +798,7 @@ export async function runApiScenarios(
   try {
     for (const id of scenarioIds) {
       const result = await runApiScenario(ctx, id, writer);
-      if (!result.pass) allPass = false;
+      if (!result.pass && result.disposition !== 'unverified') allPass = false;
     }
     return writer.finish(allPass ? 'passed' : 'failed');
   } catch (error) {

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # 云端或本机开发栈上的自动核查验证入口。
-# 顺序：协议自检 → dev up → 空地址失败路径（含当时的页面）→ 假图层成功／部分命中／疑似重复（含页面）→ 卸掉 overlay。
-# 页面只用 headless。证据在 .run/verify-<日期>-auto-verification-dev-layers/。
+# 缺省顺序：协议自检 → dev up → 空地址失败路径（含当时的页面）→ 假图层成功／部分命中／疑似重复（含页面）→ 卸掉 overlay。
+# VERIFY_PHASE=journey：先跑隔离门禁。未通过则 blocked，不调用 ./dev up。
+# 基础编排保留 NE_SOURCE_GATE_ALLOWED_SOURCES。VERIFY_FAULT 不在基础编排里。
+# 页面只用 headless。证据在 .run/verify-<runId>/。发现器报告在 .run/discover/<runId>/。
 set -euo pipefail
 
 # Podman machine：非登录壳也要接上 DOCKER_HOST（见 ~/.config/podman/docker-env.sh）。
@@ -17,8 +19,33 @@ fi
 
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../../.." && pwd)"
 cd "$ROOT"
-RUN_ID="${VERIFY_RUN_ID:-$(TZ=Asia/Shanghai date +%Y%m%d)-auto-verification-dev-layers}"
+PHASE="${VERIFY_PHASE:-}"
+if [[ "$PHASE" == "journey" ]]; then
+  if [[ -n "${VERIFY_RUN_ID:-}" ]]; then
+    RUN_ID="$VERIFY_RUN_ID"
+  else
+    PASS="baseline"
+    if [[ "${VERIFY_PASS:-}" == "restore" ]]; then
+      PASS="restore"
+    elif [[ -n "${VERIFY_FAULT:-}" ]]; then
+      PASS="inject"
+    elif [[ -n "${VERIFY_PASS:-}" ]]; then
+      PASS="$VERIFY_PASS"
+    fi
+    RAND="$(od -An -N2 -tx1 /dev/urandom | tr -d ' \n')"
+    RUN_ID="journey-${PASS}-$(date -u +%Y%m%dT%H%M%SZ)-${RAND}"
+  fi
+else
+  RUN_ID="${VERIFY_RUN_ID:-$(TZ=Asia/Shanghai date +%Y%m%d)-auto-verification-dev-layers}"
+fi
 RUN_DIR="$ROOT/.run/verify-${RUN_ID}"
+if [[ "$PHASE" == "journey" && -f "$RUN_DIR/summary.json" ]]; then
+  EXISTING_STATUS="$(node -e 'const fs=require("fs"); const s=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(String(s.status??""));' "$RUN_DIR/summary.json")"
+  if [[ "$EXISTING_STATUS" == "passed" || "$EXISTING_STATUS" == "failed" ]]; then
+    echo "[FAIL] 拒绝覆写已完成跑次 $RUN_ID status=$EXISTING_STATUS" >&2
+    exit 1
+  fi
+fi
 mkdir -p "$RUN_DIR"
 HOOK="$ROOT/.cursor/skills/verify-natural-enforcement/harness/ui/run-ui-auto-verification.sh"
 OVERLAY="$ROOT/.cursor/skills/verify-natural-enforcement/harness/layers/apply-layer-overlay.sh"
@@ -28,6 +55,92 @@ echo "[auto-verification] run=$RUN_DIR host=$(uname -a)"
 node --experimental-transform-types --disable-warning=ExperimentalWarning \
   "$ROOT/.cursor/skills/verify-natural-enforcement/harness/layers/protocol-self-check.mjs" \
   >"$RUN_DIR/protocol-self-check.json"
+
+if [[ "$PHASE" == "journey" ]]; then
+  set +e
+  node --experimental-transform-types --disable-warning=ExperimentalWarning \
+    "$ROOT/.cursor/skills/verify-natural-enforcement/harness/journey-isolation-gate.ts" \
+    >"$RUN_DIR/isolation-gate.json"
+  GATE_RC=$?
+  set -e
+  if [[ "$GATE_RC" != "0" ]]; then
+    echo "[FAIL] 旅程隔离门禁未通过，不执行 dev up" | tee "$RUN_DIR/stack-blocked.txt"
+    export VERIFY_STACK=unavailable
+    node --experimental-transform-types --disable-warning=ExperimentalWarning \
+      "$ROOT/.cursor/skills/verify-natural-enforcement/harness/run-auto-verification.ts" \
+      --run-id "$RUN_ID"
+    exit $?
+  fi
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "[FAIL] 本机没有 docker，隔离门禁虽通过也不启动栈" | tee "$RUN_DIR/stack-blocked.txt"
+    export VERIFY_STACK=unavailable
+    node --experimental-transform-types --disable-warning=ExperimentalWarning \
+      "$ROOT/.cursor/skills/verify-natural-enforcement/harness/run-auto-verification.ts" \
+      --run-id "$RUN_ID"
+    exit $?
+  fi
+  export COMPOSE_PROJECT_NAME
+  export NE_DEPLOYMENT=verify
+  export VERIFY_ISOLATION=dedicated
+  if [[ "${COMPOSE_PROJECT_NAME:-}" == "" || "${COMPOSE_PROJECT_NAME:-}" == "natural-enforcement" ]]; then
+    echo "[FAIL] 拒绝默认项目名，不执行 dev up" | tee "$RUN_DIR/stack-blocked.txt"
+    exit 1
+  fi
+  # shellcheck source=../../../../tools/runtime-env-lib.sh
+  . "$ROOT/tools/runtime-env-lib.sh"
+  RUNTIME_ENV_FILE="$ROOT/infra/runtime.env"
+  runtime_env_load
+  percent_encode() {
+    printf '%s' "$1" | od -An -tx1 | awk '{
+      for (i = 1; i <= NF; i++) {
+        c = strtonum("0x" $i)
+        if ((c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c == 45 || c == 46 || c == 95 || c == 126)
+          printf "%c", c
+        else
+          printf "%%%s", toupper($i)
+      }
+    }'
+  }
+  export DATABASE_URL="postgresql://$(percent_encode "$POSTGRES_USER"):$(percent_encode "$POSTGRES_PASSWORD")@${POSTGRES_HOST}:5432/$(percent_encode "$POSTGRES_DB")"
+  export REDIS_URL="redis://${REDIS_HOST}:6379"
+  # dev 把 COMPOSE_FILE 固定为基础编排，故障 overlay 不会被这次 up 带入。
+  ./dev up
+  if [[ -n "${VERIFY_FAULT:-}" ]]; then
+    docker compose -p "$COMPOSE_PROJECT_NAME" \
+      -f "$ROOT/infra/docker-compose.yml" \
+      -f "$ROOT/.cursor/skills/verify-natural-enforcement/harness/layers/docker-compose.verify-fault.yml" \
+      up -d --no-deps --force-recreate server
+  else
+    docker compose -p "$COMPOSE_PROJECT_NAME" \
+      -f "$ROOT/infra/docker-compose.yml" \
+      up -d --no-deps --force-recreate server
+  fi
+  for _ in $(seq 1 40); do
+    cid="$(docker compose -p "$COMPOSE_PROJECT_NAME" -f "$ROOT/infra/docker-compose.yml" ps -q server || true)"
+    health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$cid" 2>/dev/null || true)"
+    if [[ "$health" == "healthy" ]]; then
+      break
+    fi
+    sleep 3
+  done
+  if [[ "${health:-}" != "healthy" ]]; then
+    echo "[FAIL] 隔离 server 未进入 healthy，不发业务请求" | tee "$RUN_DIR/stack-blocked.txt"
+    export VERIFY_STACK=unavailable
+    node --experimental-transform-types --disable-warning=ExperimentalWarning \
+      "$ROOT/.cursor/skills/verify-natural-enforcement/harness/run-auto-verification.ts" \
+      --run-id "$RUN_ID"
+    exit $?
+  fi
+  export NODE_EXTRA_CA_CERTS="$CERT"
+  export VERIFY_BASE_URL="https://localhost:${NGINX_PORT}"
+  # shellcheck source=transport-gate.sh
+  . "$ROOT/.cursor/skills/verify-natural-enforcement/harness/transport-gate.sh"
+  verify_transport_or_block "$VERIFY_BASE_URL" ""
+  node --experimental-transform-types --disable-warning=ExperimentalWarning \
+    "$ROOT/.cursor/skills/verify-natural-enforcement/harness/run-auto-verification.ts" \
+    --run-id "$RUN_ID"
+  exit $?
+fi
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "[FAIL] 本机没有 docker，业务栈未启动" | tee "$RUN_DIR/stack-blocked.txt"

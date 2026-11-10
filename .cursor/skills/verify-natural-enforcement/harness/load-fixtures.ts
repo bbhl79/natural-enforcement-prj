@@ -4,6 +4,7 @@ import path from 'node:path';
 import {
   caseProfilesDir,
   identitiesDir,
+  latentScenariosDir,
   negativesDir,
   runnableScenariosDir,
 } from './paths.ts';
@@ -87,6 +88,8 @@ export interface ScenarioStep {
   readonly matrix?: readonly DispatchButtonExpect[];
   /** read-dispatch-buttons：200 响应里的线索主状态必须是这个值。 */
   readonly expectClueStatus?: string;
+  /** read-dispatch-buttons：200 响应的 assignment.orgUnitId 必须等于该机构编码。 */
+  readonly expectAssignmentOrgCode?: string;
 }
 
 /** 一个身份在分派视图上的按钮开关。403 行只核 http 与 reason。 */
@@ -133,10 +136,17 @@ export async function loadProfile(id: string): Promise<Record<string, unknown>> 
 
 export async function loadScenario(id: string): Promise<ApiScenario> {
   const runnable = path.join(runnableScenariosDir(), `${id}.json`);
+  const latent = path.join(latentScenariosDir(), `${id}.json`);
   const negative = path.join(negativesDir(), `${id}.json`);
   try {
     await fs.access(runnable);
     return readJson(runnable);
+  } catch {
+    // latent 只读加载。调用方不得把 status 改成 runnable。
+  }
+  try {
+    await fs.access(latent);
+    return readJson(latent);
   } catch {
     return readJson(negative);
   }

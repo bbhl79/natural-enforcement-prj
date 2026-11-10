@@ -1,0 +1,9 @@
+# 仅在旅程隔离门禁通过之后，由 run-auto-verification.sh 额外叠上。
+# 不进入默认 ./dev up。不改 NE_SOURCE_GATE_ALLOWED_SOURCES。
+# VERIFY_FAULT 为空时脚本不得使用本文件。
+services:
+  server:
+    environment:
+      VERIFY_FAULT: "${VERIFY_FAULT:-}"
+      VERIFY_ISOLATION: "${VERIFY_ISOLATION:-}"
+      COMPOSE_PROJECT_NAME: "${COMPOSE_PROJECT_NAME:-}"

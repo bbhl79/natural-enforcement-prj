@@ -170,16 +170,10 @@ describe('discoverUncovered（seam①：步骤记录 → uncovered[]）', () => 
     };
 
     const uncovered = discoverUncovered(input);
-    expect(uncovered).toEqual([
-      {
-        kind: 'switch-unchecked',
-        scenarioId: 'vf-sc-buttons',
-        stepId: 'read-buttons',
-        featureMapRef: 'nav.workbench.dispatch.buttons',
-        reason: expect.any(String),
-      },
-    ]);
-    expect(uncovered[0].reason).toContain('mayReassignOrg');
+    expect(uncovered.map((item) => item.identityRef)).toEqual(['intake-a', 'intake-st']);
+    expect(uncovered.every((item) => item.kind === 'switch-unchecked')).toBe(true);
+    expect(uncovered[0].reason).toContain('mayAssignPeople');
+    expect(uncovered[1].reason).toContain('mayReassignOrg');
   });
 
   it('矩阵四个开关全写 → 不报 switch-unchecked', () => {

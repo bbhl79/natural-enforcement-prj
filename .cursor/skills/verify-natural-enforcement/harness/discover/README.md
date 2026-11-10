@@ -17,6 +17,8 @@
 
 只有 `report.ts` 可 import `node:fs` 与写文件。其余模块零 I/O，由
 `integration/verify-discover-boundary.test.ts` 守卫。不得把写盘、开票或网络请求塞进纯函数模块。
+写口拒绝 `runId` 路径穿越，也拒绝 `.run` 内指向外部的符号链接。
+日常收口另写 `discover-report.json`。验证期仍不开票。
 源码读取（含递归读取控制器子目录）在 `../discover-sources.ts`；证据读取在
 `../load-failure-records.ts`；`gh` 动作在 `../apply-failure-clusters.ts`。
 

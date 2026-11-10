@@ -1,0 +1,61 @@
+{
+  "id": "vf-journey-clue-dispatch",
+  "authority": {
+    "clueSegment": "线索段 v0.1.5 revision_id=107",
+    "userLock": "USER LOCK v0.1 revision_id=3",
+    "note": "原文不在本仓库。段号来自 2026-11-08 baseline-online。verified 不因段号自动为真。"
+  },
+  "sequence": [
+    "登记入池",
+    "单位间分派",
+    "目标内勤签收",
+    "建议自动核查",
+    "目标内勤派人",
+    "主办与协办打开现场核查待办"
+  ],
+  "slice": "read-union",
+  "candidates": [
+    {
+      "id": "s5-signoff-todo",
+      "section": "线索段 rev107 §3.3",
+      "text": "单位间分派提交后，目标单位内勤出现待办「待签收」；未签收前原派发方可「撤回重派」。",
+      "status": "product-gap",
+      "reason": "backend/server/src 没有签收或撤回重派路由。这是产品与 §3.3 的差距。不是未定规则，也不是缺一条 harness 动作。"
+    },
+    {
+      "id": "s5-signoff-role",
+      "section": "线索段 rev107 §2.2／§3.4",
+      "text": "签收角色是被派单位内勤或配置签收角色；超时按配置自动签收并留痕。",
+      "status": "product-gap",
+      "reason": "产品没有签收动作，超时自动签收也无法观测。不把单位签收写成个人接办。"
+    },
+    {
+      "id": "s5-assign-people-both",
+      "section": "线索段 rev107 §2.2／§3.3；USER LOCK rev3 §1.2",
+      "text": "派人仅目标或承办单位内勤；主办与协办双方待办可见。",
+      "status": "not-in-slice",
+      "reason": "本切片只核 mayAssignPeople 仍只属于承办机构内勤。主办与协办双方待办不在本切片执行。产品已有 assign-people，不是未知规则。"
+    },
+    {
+      "id": "s5-auto-verify-optional",
+      "section": "线索段 rev107 §2.4／§3.3／§3.6",
+      "text": "土地或矿产在单位到人之前建议自动核查。失败可跳过并标记「自动核查已跳过」。",
+      "status": "not-in-slice",
+      "reason": "§2.4 写明自动核查不是派机构硬前置。本切片不跑核查，也不把缺跳过标记当成规则不明。"
+    },
+    {
+      "id": "s5-read-union",
+      "section": "USER LOCK rev3 §1；§1.2",
+      "text": "GET 分派视图读等于 enteredOrgId 与 assignment.orgUnitId 的并集。mayAssignPeople 仍只属于承办机构内勤。写不放宽。",
+      "status": "executable",
+      "reason": "场景 vf-sc-journey-read-union。派机构前后跨身份 GET /api/clues/:id/dispatch。200 响应核对 assignment.orgUnitId。mayAssignPeople 只对 intake-st 为 true。"
+    },
+    {
+      "id": "s5-historical-matches",
+      "section": "USER LOCK rev3 §2",
+      "text": "关闭线索与发送方 transferred_out 参与 historical matches，无回溯上限。",
+      "status": "not-in-slice",
+      "reason": "另有 harness/run-hist-dup-no-lookback.sh。本切片不执行，不把它算进本跑次。"
+    }
+  ]
+}

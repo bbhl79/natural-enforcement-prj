@@ -32,6 +32,8 @@ import {
   DECIDE_FROM_STATUS,
   ORG_ASSIGN_FROM_STATUSES,
   PEOPLE_ASSIGN_FROM_STATUS,
+  activeVerifyFault,
+  readUnionOrgIds,
   decideDispatch,
   hasCaseByCasePlanningType,
   isOpenHit,
@@ -274,11 +276,11 @@ export class ClueDispatchService {
     context: ClueDispatchContext,
   ): Promise<DenyReason | null> {
     const resource = { resourceType: 'clue', resourceId: context.clueId };
-    const targets = [context.enteredOrgId];
-    const assignedOrgId = context.assignment?.orgUnitId ?? null;
-    if (assignedOrgId !== null && assignedOrgId !== context.enteredOrgId) {
-      targets.push(assignedOrgId);
-    }
+    const targets = readUnionOrgIds(
+      context.enteredOrgId,
+      context.assignment?.orgUnitId ?? null,
+      activeVerifyFault(process.env),
+    );
     let hit: string | null = null;
     for (const orgId of targets) {
       const decision = await this.access.check(actor, READ_OPCODE, orgId, resource);

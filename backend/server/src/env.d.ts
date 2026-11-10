@@ -4,4 +4,8 @@ interface ProcessEnv {
   NODE_ENV?: string | undefined;
   NE_DEPLOYMENT?: string | undefined;
   NE_SOURCE_GATE_ALLOWED_SOURCES?: string | undefined;
+  /** 仅 activeVerifyFault 读取。不是 verify 隔离时忽略，不改变来源地址闸。 */
+  VERIFY_FAULT?: string | undefined;
+  VERIFY_ISOLATION?: string | undefined;
+  COMPOSE_PROJECT_NAME?: string | undefined;
 }

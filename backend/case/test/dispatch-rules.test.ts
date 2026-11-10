@@ -7,6 +7,8 @@ import {
   DECIDE_FROM_STATUS,
   ORG_ASSIGN_FROM_STATUSES,
   PEOPLE_ASSIGN_FROM_STATUS,
+  readUnionOrgIds,
+  activeVerifyFault,
   STREET_UNAVAILABLE_REASONS,
   createStreetBoundaryPort,
   decideDispatch,
@@ -167,5 +169,27 @@ describe('街道镇边界查询端口', () => {
     const port = createStreetBoundaryPort({ serviceUrl: 'https://layers.example', fetchImpl });
     const outcome = await port.query({ clueId: 'c1', kind: 'point', parts: [part] });
     expect(outcome).toEqual({ ok: false, reason: STREET_UNAVAILABLE_REASONS.invalidResponse });
+  });
+});
+
+describe('故障变量 fail-closed', () => {
+  it('production、普通 dev、默认项目名都不启用 drop-assigned-org-read', () => {
+    const fault = 'drop-assigned-org-read';
+    expect(activeVerifyFault({ VERIFY_FAULT: fault, NE_DEPLOYMENT: 'dev', NODE_ENV: 'development', COMPOSE_PROJECT_NAME: 'natural-enforcement', VERIFY_ISOLATION: 'dedicated' })).toBeUndefined();
+    expect(activeVerifyFault({ VERIFY_FAULT: fault, NE_DEPLOYMENT: 'production', NODE_ENV: 'production', COMPOSE_PROJECT_NAME: 'verify-journey-iso', VERIFY_ISOLATION: 'dedicated' })).toBeUndefined();
+    expect(activeVerifyFault({ VERIFY_FAULT: fault, NE_DEPLOYMENT: 'verify', NODE_ENV: 'production', COMPOSE_PROJECT_NAME: 'verify-journey-iso', VERIFY_ISOLATION: 'dedicated' })).toBeUndefined();
+    expect(activeVerifyFault({ VERIFY_FAULT: fault, NE_DEPLOYMENT: 'verify', NODE_ENV: 'development', COMPOSE_PROJECT_NAME: 'natural-enforcement', VERIFY_ISOLATION: 'dedicated' })).toBeUndefined();
+    expect(activeVerifyFault({ VERIFY_FAULT: fault, NE_DEPLOYMENT: 'verify', NODE_ENV: 'development', COMPOSE_PROJECT_NAME: 'verify-journey-iso' })).toBeUndefined();
+    expect(
+      activeVerifyFault({
+        VERIFY_FAULT: fault,
+        NE_DEPLOYMENT: 'verify',
+        NODE_ENV: 'development',
+        COMPOSE_PROJECT_NAME: 'verify-journey-iso',
+        VERIFY_ISOLATION: 'dedicated',
+      }),
+    ).toBe(fault);
+    expect(readUnionOrgIds('entered', 'assigned', undefined)).toEqual(['entered', 'assigned']);
+    expect(readUnionOrgIds('entered', 'assigned', 'drop-assigned-org-read')).toEqual(['entered']);
   });
 });
