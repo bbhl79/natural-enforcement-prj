@@ -9,12 +9,12 @@ import { describe, expect, it } from 'vitest';
 import {
   discoverUncovered,
   type DiscoverInput,
-} from '../.cursor/skills/verify-natural-enforcement/harness/discover/uncovered.ts';
+} from '../e2e/verify/harness/discover/uncovered.ts';
 import {
   EvidenceWriter,
   newRunId,
   type StepRecord,
-} from '../.cursor/skills/verify-natural-enforcement/harness/evidence.ts';
+} from '../e2e/verify/harness/evidence.ts';
 
 function skipStatus(scenarioId: string, status: string): StepRecord {
   return {

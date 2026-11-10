@@ -13,12 +13,12 @@ import {
   failureMarker,
   type FailureCluster,
   type FailureRecord,
-} from '../.cursor/skills/verify-natural-enforcement/harness/discover/cluster-failures.ts';
+} from '../e2e/verify/harness/discover/cluster-failures.ts';
 import {
   applyFailureClusters,
   type GhPort,
-} from '../.cursor/skills/verify-natural-enforcement/harness/apply-failure-clusters.ts';
-import { loadFailureRecords } from '../.cursor/skills/verify-natural-enforcement/harness/load-failure-records.ts';
+} from '../e2e/verify/harness/apply-failure-clusters.ts';
+import { loadFailureRecords } from '../e2e/verify/harness/load-failure-records.ts';
 
 function rec(
   overrides: Partial<FailureRecord> & Pick<FailureRecord, 'scenarioId' | 'stepId'>,

@@ -7,13 +7,10 @@ dist/
 coverage/
 *.tsbuildinfo
 
-# run-id 复现目录（#57：CI run 日志与关键产物，本地重跑对照用）
-.run/
-# e2e 运行产物（E6：显式读写挂载的写出侧；入库存 fixture 见 e2e/testdata/）
+# 运行产物唯一根（不入库）：e2e 用例产物、--run-id 复现目录 e2e/results/<id>/（#57：CI run
+# 日志与关键产物）、验证跑次证据 e2e/results/verify-<runId>/、截图 e2e/results/screens/<票>/。
+# 入库的测试 fixture 见 e2e/testdata/ 与 e2e/verify/fixtures/。
 e2e/results/
-# Agent harness 的验证产物目录（harness/ui/run-ui-assign-people.sh 每次运行写入
-# artifacts/assign-people-<runId>/；同一运行的证据另有 .run/ 副本，见 harness/ui/README.md）
-artifacts/
 
 # Prisma 生成客户端（backend/prisma/schema.prisma 的 generator client output）：
 # 构建产物，容器内由 prisma generate 产出（dev db seed / dev test integration /

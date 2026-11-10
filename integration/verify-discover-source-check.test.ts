@@ -7,7 +7,7 @@ import {
   admittedNodeIds,
   checkNodeSources,
   type AssertedNode,
-} from '../.cursor/skills/verify-natural-enforcement/harness/discover/source-check.ts';
+} from '../e2e/verify/harness/discover/source-check.ts';
 
 const FULL_NODE: AssertedNode = {
   nodeId: 'filing',

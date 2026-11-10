@@ -1,5 +1,5 @@
 // seam③（spec #322 Q16）：写边界门禁。
-// 沙盒夹具仓跑发现器全流程，断言产品/fixtures/latent 零改动、只写 .run/discover/<runId>/、
+// 沙盒夹具仓跑发现器全流程，断言产品/fixtures/latent 零改动、只写 e2e/results/discover/<runId>/、
 // 越界写入必抛错、report.ts 是 discover 唯一写口。
 // 沙盒建在 os.tmpdir()（容器内 /tmp），afterEach 清理；不碰产品文件，不连库。
 // 入口 ./dev test integration 仍会重建 it_template + tsc -p integration。
@@ -10,13 +10,13 @@ import path from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { CoverageAck, RunSnapshot } from '../.cursor/skills/verify-natural-enforcement/harness/discover/diff-runs.ts';
-import { writeDiffReport } from '../.cursor/skills/verify-natural-enforcement/harness/discover/report.ts';
+import type { CoverageAck, RunSnapshot } from '../e2e/verify/harness/discover/diff-runs.ts';
+import { writeDiffReport } from '../e2e/verify/harness/discover/report.ts';
 import {
   discoverUncovered,
   type ScenarioMeta,
-} from '../.cursor/skills/verify-natural-enforcement/harness/discover/uncovered.ts';
-import type { StepRecord } from '../.cursor/skills/verify-natural-enforcement/harness/evidence.ts';
+} from '../e2e/verify/harness/discover/uncovered.ts';
+import type { StepRecord } from '../e2e/verify/harness/evidence.ts';
 
 // ---- 沙盒夹具仓内容（独立已知字面量，非从被测代码重算）----
 
@@ -96,7 +96,7 @@ async function seedSandbox(root: string): Promise<void> {
   await fs.writeFile(path.join(root, LATENT_REL), `${JSON.stringify(LATENT_SCENARIO, null, 2)}\n`, 'utf8');
 }
 
-describe('seam③ 沙盒夹具仓：发现器全流程只写 .run/，产品/fixtures/latent 零改动', () => {
+describe('seam③ 沙盒夹具仓：发现器全流程只写 e2e/results/，产品/fixtures/latent 零改动', () => {
   let root: string;
   beforeEach(async () => {
     root = await fs.mkdtemp(path.join(os.tmpdir(), 'discover-boundary-'));
@@ -105,7 +105,7 @@ describe('seam③ 沙盒夹具仓：发现器全流程只写 .run/，产品/fixt
     await fs.rm(root, { recursive: true, force: true });
   });
 
-  it('读夹具→推导 uncovered→写报告：既有文件 byte 一致，latent 未提拔，唯一新增 .run/discover/<runId>/diff-report.json', async () => {
+  it('读夹具→推导 uncovered→写报告：既有文件 byte 一致，latent 未提拔，唯一新增 e2e/results/discover/<runId>/diff-report.json', async () => {
     await seedSandbox(root);
     const before = await snapshot(root);
 
@@ -157,9 +157,9 @@ describe('seam③ 沙盒夹具仓：发现器全流程只写 .run/，产品/fixt
     }
     expect([...before.keys()].filter((rel) => !after.has(rel))).toEqual([]);
 
-    // 断言 2：唯一新增文件是允许路径 .run/discover/<runId>/diff-report.json。
+    // 断言 2：唯一新增文件是允许路径 e2e/results/discover/<runId>/diff-report.json。
     expect([...after.keys()].filter((rel) => !before.has(rel)).sort()).toEqual([
-      '.run/discover/sandbox-run/diff-report.json',
+      'e2e/results/discover/sandbox-run/diff-report.json',
     ]);
 
     // 断言 3：latent 未被提拔（显式读回 scenario status）。
@@ -178,13 +178,13 @@ describe('seam③ 沙盒夹具仓：发现器全流程只写 .run/，产品/fixt
       },
     ]);
     const onDisk: unknown = JSON.parse(
-      await fs.readFile(path.join(root, '.run/discover/sandbox-run/diff-report.json'), 'utf8'),
+      await fs.readFile(path.join(root, 'e2e/results/discover/sandbox-run/diff-report.json'), 'utf8'),
     );
     expect(onDisk).toEqual(report);
   });
 
   it.each(['../../escape', '../../../outside-sandbox'])(
-    'runId=%s 逃逸 .run/ → 抛错而非静默写出，夹具仓零改动零新增',
+    'runId=%s 逃逸 e2e/results/ → 抛错而非静默写出，夹具仓零改动零新增',
     async (runId) => {
       await seedSandbox(root);
       const before = await snapshot(root);
@@ -209,7 +209,7 @@ describe('seam③ 唯一写口守卫：discover 写文件 API 只在 report.ts',
   it('harness/discover 下只有 report.ts 含写文件 API；uncovered.ts/diff-runs.ts 零 I/O', async () => {
     const discoverDir = path.join(
       process.cwd(),
-      '.cursor/skills/verify-natural-enforcement/harness/discover',
+      'e2e/verify/harness/discover',
     );
     // 写出/破坏性文件 API（镜像 auth-gate.test.cjs walk/scan 门禁风格）。
     const writeApi =

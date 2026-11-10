@@ -5,11 +5,9 @@
 **/dist
 coverage/
 *.tsbuildinfo
-.run/
 e2e/results/
-# 生成产物与 harness 产物（不入库，也不进构建上下文）
+# 生成产物（不入库，也不进构建上下文）
 backend/prisma/generated/
-artifacts/
 # 本地密钥：任何层级的 .env / .local 文件不进上下文（天地图 key 在
 # frontend/prototype/clue-dispatch/tianditu.local.js；backend/server/Dockerfile 是单阶段
 # COPY . /work，不排则 key 进最终镜像）

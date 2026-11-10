@@ -9,7 +9,7 @@
 # 检查结果写入面板快照（frontend 容器命名卷，面板与 dev health 同源）；新增 build（最小形态）。
 # 切片10（#57）十命令完备：新增 logs/exec（compose 薄封装）、check（lint+test all+build，
 # --ci 凭据注入回收）、test e2e 层（e2e/cases 约定：从零拉起+读写通道+命令冒烟）、
-# build 扩为全量（后端编译+全部本地镜像）；全局 --run-id 复现（日志/产物落 .run/<id>/）。
+# build 扩为全量（后端编译+全部本地镜像）；全局 --run-id 复现（日志/产物落 e2e/results/<id>/）。
 # 评审必修（#61 合并前，路线 A）：check 时序改 build 前置——镜像与编译产物是 lint 与
 # 测试层的运行前提（test_e2e 需 infra + frontend 本地镜像，二者皆由 build 产出），build
 # 在末位时冷环境结构性跑不到它，dev check --ci 不可能绿；同时 build 承担工具链镜像拉取
@@ -112,7 +112,6 @@ seed_repo_to_stdin() {
     --exclude='*/node_modules' \
     --exclude='dist' \
     --exclude='*/dist' \
-    --exclude='.run' \
     --exclude='e2e/results' \
     --exclude='coverage' \
     --exclude='*.tsbuildinfo' \
@@ -121,7 +120,6 @@ seed_repo_to_stdin() {
     --exclude='*.local.js' \
     --exclude='*.local' \
     --exclude='backend/prisma/generated' \
-    --exclude='artifacts' \
     --exclude='frontend/prototype/admin-console/screens' \
     --exclude='docs/screens' \
     -cf - .
@@ -172,7 +170,7 @@ usage() {
   exec     docker compose exec 薄封装（不发明自有语义）：dev exec <服务> <命令…>。
 
 全局选项：
-  --run-id <id>  复现某次 CI run：日志与关键产物落到 .run/<id>/（已 gitignore），
+  --run-id <id>  复现某次 CI run：日志与关键产物落到 e2e/results/<id>/（已 gitignore），
                  用同一 run-id 本地重跑即得同路径产物，可对照 CI 失败现场。
 
 裸 dev 即显示本帮助。
@@ -1001,29 +999,37 @@ test_integration() {
   }
   ensure_db
   rebuild_it_template
-  mkdir -p "$ROOT/.run"
+  # 证据卷只装本次跑次：跑前清空，宿主副本已在上次抽回时落盘，不随卷清除丢失。
+  docker volume rm -f "${PROJECT}-verify-run" >/dev/null 2>&1 || true
   docker volume create "${PROJECT}-verify-run" >/dev/null
   echo "test：容器内运行 integration 层 Vitest 需库用例（integration/**/*.test.ts）…"
+  # Vitest 判红时先抽回证据再退出：红的跑次正是最需要证据的跑次。
+  local vitest_rc=0
   seed_repo_to_stdin | docker run --rm --pull=never -i \
     --network "${PROJECT}_default" \
     -e DATABASE_URL="$(it_template_database_url)" \
     -v "${PROJECT}-integration-node-modules:/work/node_modules" \
     -v "${PROJECT}-integration-store:/pnpm/store" \
-    -v "${PROJECT}-verify-run:/work/.run" \
+    -v "${PROJECT}-verify-run:/work/e2e/results" \
     "${CACHE_VOLUMES[@]}" \
     -w /work \
     "$LINT_IMAGE" \
-    sh -c "set -e; mkdir -p /work /work/.run; tar -x -f - -C /work; corepack enable; pnpm install ${INSTALL_FLAGS[*]}; cd backend/prisma; pnpm exec prisma generate; cd /work; if ls integration/*.test.ts >/dev/null 2>&1; then pnpm exec tsc -p integration --noEmit; pnpm exec vitest run --config integration/vitest.config.mts ${INTEGRATION_VITEST_ARGS:-}; else echo 'integration：暂无 Vitest 需库用例'; fi"
-  # Podman machine 看不见 WSL home bind-mount：证据走 named volume，再 tar 抽回宿主 .run
-  docker volume create "${PROJECT}-verify-run" >/dev/null
-  mkdir -p "$ROOT/.run"
+    sh -c "set -e; mkdir -p /work /work/e2e/results; tar -x -f - -C /work; corepack enable; pnpm install ${INSTALL_FLAGS[*]}; cd backend/prisma; pnpm exec prisma generate; cd /work; if ls integration/*.test.ts >/dev/null 2>&1; then pnpm exec tsc -p integration --noEmit; pnpm exec vitest run --config integration/vitest.config.mts ${INTEGRATION_VITEST_ARGS:-}; else echo 'integration：暂无 Vitest 需库用例'; fi" || vitest_rc=$?
+  # Podman machine 看不见 WSL home bind-mount：证据走 named volume，再 tar 抽回宿主。
+  # 带 --run-id 时抽回当次 run 目录：CI 只上传 e2e/results/<id>/，证据须落在其下才进工件。
+  local evidence_dir="${RUN_DIR:-$ROOT/e2e/results}"
+  mkdir -p "$evidence_dir"
   docker run --rm --pull=never \
     -v "${PROJECT}-verify-run:/from:ro" \
     -w /from \
     "$LINT_IMAGE" \
     tar -c -f - . \
-    | tar -x -f - -C "$ROOT/.run"
-  echo "test：已将容器 .run 证据抽回宿主 $ROOT/.run"
+    | tar -x -f - -C "$evidence_dir"
+  echo "test：已将容器验证证据抽回宿主 $evidence_dir"
+  if [ "$vitest_rc" -ne 0 ]; then
+    echo "[FAIL] integration 层 Vitest 用例失败（证据见 $evidence_dir）" >&2
+    exit 1
+  fi
   # 可执行脚本用例：integration/*.sh（非 _ 开头），按文件名排序逐条执行
   # INTEGRATION_SKIP_SCRIPTS=1 跳过 *.sh（verify-skill-loop 快路径；e3 拖红另记债）
   if [ "${INTEGRATION_SKIP_SCRIPTS:-}" = 1 ]; then
@@ -1063,7 +1069,7 @@ cmd_test() {
 # ---------- dev test e2e 层（#57：从零拉起 E1 + 读写通道 E6 后半 + 命令冒烟 E7） ----------
 # 用例目录约定：e2e/cases/*.sh，按文件名排序逐条执行；用例只测外部可观察行为
 #（命令退出码 + 人类可读输出），自行经 compose 访问服务（隔离环境变量同 integration 层）。
-# 产物目录：默认 e2e/results（gitignore）；带 --run-id 时落 .run/<id>/results（复现同路径）。
+# 产物目录：默认 e2e/results（gitignore）；带 --run-id 时落 e2e/results/<id>（复现同路径）。
 # 证据分工（ADR 0017）：命令契约（E7）的 CLI 路径证据唯一出处是本层的 03 冒烟用例，
 # 因为外层 dev check 直调内部函数（cmd_lint/cmd_build/test_integration）、不经 CLI。
 # 门禁类检查（兜底闸、红探针、ESLint、漏入库、类型检查、编译门）两层都跑，判红条件相同、
@@ -1073,7 +1079,7 @@ test_e2e() {
   require_compose_file
   require_toolchain_image
   local results_dir="$ROOT/e2e/results"
-  [ -n "$RUN_DIR" ] && results_dir="$RUN_DIR/results"
+  [ -n "$RUN_DIR" ] && results_dir="$RUN_DIR"
   mkdir -p "$results_dir"
   echo "test：e2e 层（用例目录 e2e/cases/*.sh；运行产物目录 $results_dir）"
   echo "test：注意——e2e 从零拉起用例会销毁本项目数据卷（E1 证据），毁数语义等同 dev db reset 级；其余命令只增不改。"
@@ -1170,10 +1176,10 @@ else
 fi
 unset _args
 
-# run-id 落盘（#57）：带 run-id 的命令把全部输出（日志）落到 .run/<id>/<命令>.log，
+# run-id 落盘（#57）：带 run-id 的命令把全部输出（日志）落到 e2e/results/<id>/<命令>.log，
 # e2e 等关键产物目录由 RUN_DIR 传递（test_e2e 用）。复现 = 同一 run-id 重跑得同路径产物。
 if [ -n "$RUN_ID" ]; then
-  RUN_DIR="$ROOT/.run/$RUN_ID"
+  RUN_DIR="$ROOT/e2e/results/$RUN_ID"
   mkdir -p "$RUN_DIR"
   exec > >(tee -a "$RUN_DIR/${1:-help}.log") 2>&1
   echo "run-id：$RUN_ID（日志与产物目录：$RUN_DIR）"

@@ -1,0 +1,12 @@
+{
+  "id": "intake-a",
+  "role": "内勤",
+  "displayName": "甲区内勤",
+  "mobile": "13900002001",
+  "passwordRef": {
+    "env": "VERIFY_PASSWORD_SEED",
+    "secretsFile": "e2e/results/verify-secrets.local.json",
+    "key": "seed"
+  },
+  "notes": "对应 P-INTAKE-A；任职第一执法支队（ORG-DEPT-A）。种子无此工号，integration 用 admin API 以初始口令种入；手机号与 clue-dispatch.test.ts 一致。"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "both-a",
+  "role": "监督／经办",
+  "displayName": "甲区兼岗",
+  "mobile": "13800001009",
+  "passwordRef": {
+    "env": "VERIFY_PASSWORD_SEED",
+    "secretsFile": "e2e/results/verify-secrets.local.json",
+    "key": "seed"
+  },
+  "notes": "对应开发种子 P-BOTH-A；任职第一执法支队（ORG-DEPT-A）；同时持有监督与经办；执法证有效（CERT-VALID-BOTH）。来源 backend/prisma/seed.mjs。"
+}

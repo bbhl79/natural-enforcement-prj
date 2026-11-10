@@ -1,4 +1,4 @@
-// Verification Skill 第一条 API 环：读 scenario → 克隆库 HTTP → 评 oracle → 写 .run/verify-*。
+// Verification Skill 第一条 API 环：读 scenario → 克隆库 HTTP → 评 oracle → 写 e2e/results/verify-*。
 // 本轮必绿：01/02/03 happy + 各自 punch 负例。
 import type { AddressInfo } from 'node:net';
 
@@ -8,9 +8,9 @@ import { createApplication } from '../backend/server/src/persistence.module.ts';
 import {
   runApiScenario,
   runApiScenarios,
-} from '../.cursor/skills/verify-natural-enforcement/harness/run-api-scenario.ts';
-import { EvidenceWriter, newRunId } from '../.cursor/skills/verify-natural-enforcement/harness/evidence.ts';
-import { SessionCache } from '../.cursor/skills/verify-natural-enforcement/harness/session.ts';
+} from '../e2e/verify/harness/run-api-scenario.ts';
+import { EvidenceWriter, newRunId } from '../e2e/verify/harness/evidence.ts';
+import { SessionCache } from '../e2e/verify/harness/session.ts';
 import { openClonedDatabase, type ClonedDatabase } from './cloned-database.ts';
 
 const T0 = Date.parse('2026-10-17T03:00:00.000Z');
@@ -141,7 +141,7 @@ afterAll(async () => {
   await cloned?.close();
 });
 
-describe('verify-natural-enforcement API 环', () => {
+describe('e2e/verify API 环', () => {
   it('happy 01：vf-sc-verify-loop-survey-register 变绿并写证据包', async () => {
     const runId = newRunId();
     const writer = new EvidenceWriter(runId, ['vf-sc-verify-loop-survey-register']);

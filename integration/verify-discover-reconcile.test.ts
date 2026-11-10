@@ -20,15 +20,15 @@ import {
   type MenuCapabilities,
   type MenuEntry,
   type UiRoute,
-} from '../.cursor/skills/verify-natural-enforcement/harness/discover/enumerate-capabilities.ts';
+} from '../e2e/verify/harness/discover/enumerate-capabilities.ts';
 import {
   ACTION_ENDPOINTS,
   reconcileCapabilities,
   type ReconcileInput,
   type ScenarioUsage,
   type StandardRegister,
-} from '../.cursor/skills/verify-natural-enforcement/harness/discover/reconcile.ts';
-import { loadDiscoverSources } from '../.cursor/skills/verify-natural-enforcement/harness/discover-sources.ts';
+} from '../e2e/verify/harness/discover/reconcile.ts';
+import { loadDiscoverSources } from '../e2e/verify/harness/discover-sources.ts';
 
 const CONTROLLER_X = [
   '// 夹具控制器甲',
@@ -659,7 +659,7 @@ describe('reconcileCapabilities 汇总与 action→端点映射单一来源', ()
   it('ACTION_ENDPOINTS 与 run-api-scenario runStep 分派字面量一致（防静默漂移）', () => {
     const runnerPath = path.join(
       process.cwd(),
-      '.cursor/skills/verify-natural-enforcement/harness/run-api-scenario.ts',
+      'e2e/verify/harness/run-api-scenario.ts',
     );
     const source = readFileSync(runnerPath, 'utf8');
     const dispatched = new Set(

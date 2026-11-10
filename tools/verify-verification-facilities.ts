@@ -6,8 +6,8 @@
 //
 //   tar -C "$PWD" --format=ustar \
 //     --exclude='.git' --exclude='node_modules' --exclude='*/node_modules' \
-//     --exclude='dist' --exclude='*/dist' --exclude='.run' --exclude='e2e/results' \
-//     --exclude='backend/prisma/generated' --exclude='artifacts' \
+//     --exclude='dist' --exclude='*/dist' --exclude='e2e/results' \
+//     --exclude='backend/prisma/generated' \
 //     --exclude='.env' --exclude='.env.local' --exclude='*.local.js' --exclude='*.local' \
 //     -cf - . \
 //   | docker run --rm --pull=never -i --network natural-enforcement_default \

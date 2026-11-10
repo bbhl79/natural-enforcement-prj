@@ -495,6 +495,11 @@ declare -A ASSEMBLY_EXEMPT=(
   # 集成层共用的技术主键生成（#16 §1.1 ULID）：收敛 22 个测试文件各自复制的本地实现，
   # 生成器本体只在 identity 一处维护，本文件只做再出口。与 #238 同口径。
   ["integration/ulid-helpers.ts"]="../backend/identity/src/index.ts"
+  # 验证资产迁入 e2e/verify（2026-11-10）：图层协议自检用产品里的图层适配器直连假图层服务，
+  # 证明假服务与真实服务说同一协议。它由宿主 node 直接运行，不经 esbuild：case 公共出口
+  # 会连带加载 case.module.ts 的装饰器，原生 node 解析失败，故只能直引这两个无装饰器文件。
+  # 与 integration 层同属测试装配，豁免只放行这两个文件本身。
+  ["e2e/verify/harness/layers/protocol-self-check.mjs"]="../../../../backend/case/src/clue/verification/layer-service-port.ts ../../../../backend/case/src/clue/verification/layers.ts"
 )
 
 is_assembly_exempt() { # $1 = 相对 ROOT 路径, $2 = specifier

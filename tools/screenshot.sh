@@ -25,7 +25,7 @@ usage() {
   tools/screenshot.sh https://localhost:8080/workbench e2e/results/screens/220/ws-form-blocked.png 1440 900
 
 输出路径约定：截图落 e2e/results/screens/<票>/（该目录不入库）；带 --run-id 的 e2e 跑次
-产物落 .run/<id>/results/，由 CI 以 artifact 上传。截图本体不入版本控制，在库只留状态键
+产物落 e2e/results/<id>/，由 CI 以 artifact 上传。截图本体不入版本控制，在库只留状态键
 清单 docs/screens/manifest/<票>.txt。
 
 视口宽高缺省 1440×900（与 docs/screens 既有截图同尺寸）。

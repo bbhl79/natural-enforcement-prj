@@ -13,9 +13,9 @@ import {
   selectBaseline,
   type CoverageAck,
   type RunSnapshot,
-} from '../.cursor/skills/verify-natural-enforcement/harness/discover/diff-runs.ts';
-import { writeDiffReport } from '../.cursor/skills/verify-natural-enforcement/harness/discover/report.ts';
-import type { UncoveredItem } from '../.cursor/skills/verify-natural-enforcement/harness/discover/uncovered.ts';
+} from '../e2e/verify/harness/discover/diff-runs.ts';
+import { writeDiffReport } from '../e2e/verify/harness/discover/report.ts';
+import type { UncoveredItem } from '../e2e/verify/harness/discover/uncovered.ts';
 
 describe('diffUncovered（seam②：跨跑次新增/消失）', () => {
   it('current 新缺口入 added，baseline 消失缺口入 removed，共有缺口不报', () => {
@@ -129,7 +129,7 @@ describe('writeDiffReport（seam②④：报告写口 + ack 过滤 + 写边界�
     await fs.rm(root, { recursive: true, force: true });
   });
 
-  it('两跑次产出 diff 报告：新增/消失正确，已 ack 键不入报告，只写 .run/discover/<runId>/', async () => {
+  it('两跑次产出 diff 报告：新增/消失正确，已 ack 键不入报告，只写 e2e/results/discover/<runId>/', async () => {
     const gapA: UncoveredItem = {
       kind: 'latent-skipped',
       scenarioId: 'vf-sc-common',
@@ -180,14 +180,14 @@ describe('writeDiffReport（seam②④：报告写口 + ack 过滤 + 写边界�
       added: [gapD],
       removed: [gapB],
     });
-    const file = path.join(root, '.run', 'discover', 'cur', 'diff-report.json');
+    const file = path.join(root, 'e2e', 'results', 'discover', 'cur', 'diff-report.json');
     const onDisk: unknown = JSON.parse(await fs.readFile(file, 'utf8'));
     expect(onDisk).toEqual(report);
     expect(JSON.stringify(onDisk)).not.toContain('nav.acked');
-    expect(await fs.readdir(root)).toEqual(['.run']);
+    expect(await fs.readdir(root)).toEqual(['e2e']);
   });
 
-  it('runId 逃逸 .run/ → 抛错，sandbox 内不写任何文件', async () => {
+  it('runId 逃逸 e2e/results/ → 抛错，sandbox 内不写任何文件', async () => {
     const current: RunSnapshot = {
       runId: '../../escape',
       status: 'passed',

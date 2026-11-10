@@ -1,0 +1,12 @@
+{
+  "id": "clerk-b",
+  "role": "经办",
+  "displayName": "丙经办",
+  "mobile": "13800001003",
+  "passwordRef": {
+    "env": "VERIFY_PASSWORD_SEED",
+    "secretsFile": "e2e/results/verify-secrets.local.json",
+    "key": "seed"
+  },
+  "notes": "对应开发种子 P-CLERK-B；任职第二执法支队（ORG-DEPT-B）；执法证已过期（CERT-EXPIRED-B）。来源 backend/prisma/seed.mjs。"
+}

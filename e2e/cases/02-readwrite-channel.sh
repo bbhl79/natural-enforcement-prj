@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # E6 后半：e2e 读写通道用例——testdata 显式只读挂载进容器、results 显式读写挂载出容器。
 # 只测外部可观察行为：fixture 可读且内容一致（读通道）；结果产物落宿主产物目录且内容正确（写通道）。
-# 区分纪律：e2e/testdata/ 入库存测试 fixture；e2e/results/（或 --run-id 的 .run/<id>/results）是运行产物，gitignore。
+# 区分纪律：e2e/testdata/ 入库存测试 fixture；e2e/results/（或 --run-id 的 e2e/results/<id>/）是运行产物，gitignore。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

@@ -15,6 +15,6 @@
     "../backend/server/src/persistence.module.ts",
     "../backend/server/src/open-items-counter.ts",
     "../backend/server/src/bootstrap-command.ts",
-    "../.cursor/skills/verify-natural-enforcement/harness/**/*.ts"
+    "../e2e/verify/harness/**/*.ts"
   ]
 }

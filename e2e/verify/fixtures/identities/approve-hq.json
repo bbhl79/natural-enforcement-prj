@@ -1,0 +1,12 @@
+{
+  "id": "approve-hq",
+  "role": "行政审批",
+  "displayName": "市局审批",
+  "mobile": "13800001007",
+  "passwordRef": {
+    "env": "VERIFY_PASSWORD_SEED",
+    "secretsFile": "e2e/results/verify-secrets.local.json",
+    "key": "seed"
+  },
+  "notes": "对应开发种子 P-APPROVE-HQ；任职根机构自然执法总队（ORG-HQ）。立案审批旅程行政审批步用。来源 backend/prisma/seed.mjs。"
+}
