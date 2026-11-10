@@ -9,15 +9,13 @@ import { NestFactory } from '@nestjs/core';
 import { PrismaPg } from '@prisma/adapter-pg';
 
 import {
-  PrismaAuditTrailReader,
-  prismaAuditTrailFactory,
-  type AuditTrailReadClient,
-} from '../../../packages/audit/src/prisma-audit-trail.ts';
-import {
   AUDIT_TRAIL_FACTORY,
   AUDIT_TRAIL_PORT,
+  PrismaAuditTrailReader,
+  prismaAuditTrailFactory,
   runAuditedTransaction,
   type AuditTrailFactory,
+  type AuditTrailReadClient,
   type Rejected,
 } from '@natural-enforcement/audit';
 import { STORAGE_PORT, createDefaultStoragePort, type StoragePort } from '@natural-enforcement/storage';
