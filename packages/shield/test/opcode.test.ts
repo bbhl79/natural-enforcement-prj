@@ -5,7 +5,7 @@ import {
   OPCODES,
   effectiveOpcodeRequirements,
   opcodeRequirements,
-} from '../src/index.js';
+} from '../src/index.ts';
 
 const CASE_OPCODES = [
   'clue.org.assign',

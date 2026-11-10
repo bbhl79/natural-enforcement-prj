@@ -8,7 +8,7 @@ import type { AuditTrailPort } from '@natural-enforcement/audit';
 import { AccessDeniedError, IDENTITY_MAINTENANCE_OPCODE } from '../domain/access.ts';
 import { AlreadyExistsError } from '../domain/already-exists.ts';
 import type { ActorRef } from '../domain/actor.ts';
-import { newUlid } from '../domain/ulid.ts';
+import { newUlid } from '@natural-enforcement/shield';
 import type {
   IdentityTransaction,
   PersonnelRow,

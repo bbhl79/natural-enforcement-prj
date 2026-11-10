@@ -2,7 +2,7 @@
 // geom 列一律 ST_Transform 至 CGCS2000（EPSG:4490）落库；来源坐标（WKT + 来源 SRID）
 // 原样另列保留。含必填空间字段的表禁用 ORM create/update（infra/VERSIONS.md 执行纪律 2），
 // 全部走 $queryRaw/ST_ 函数；法域→几何类型映射由库内 CHECK 约束承载。
-import { newUlid } from '../domain/ulid.ts';
+import { newUlid } from '@natural-enforcement/shield';
 import { CGCS2000_SRID } from './constants.ts';
 import type { SqlClient } from './sql-client.ts';
 

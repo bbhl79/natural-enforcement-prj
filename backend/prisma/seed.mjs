@@ -21,25 +21,13 @@ import {
 } from "../geo-dict/src/reference-data/index.ts";
 
 // ULID 生成（#16 §1.1 主键形制：48bit 毫秒时间 + 80bit 随机，26 位大写 Crockford Base32）。
-// 与 backend/identity/src/domain/ulid.ts 同规则，但种子通道不 import 模块代码：
-// shield 出口内部以 .js 扩展做 NodeNext 风格重导出，node 原生 ESM 不做 .js→.ts 改写，
-// 模块源码只由 vitest/vite 解析。此处维护一份等价实现（同常量、同形制自检）。
-const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
-const ULID_PATTERN = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
-
-function newUlid() {
-  let time = BigInt(Date.now());
-  let id = "";
-  for (let i = 0; i < 10; i += 1) {
-    id = CROCKFORD[Number(time % 32n)] + id;
-    time /= 32n;
-  }
-  // 随机部 16 字符：按字节各映射一字符（256 = 8×32 整除，无偏），16 字节 → 16 字符
-  const random = crypto.getRandomValues(new Uint8Array(16));
-  for (const byte of random) id += CROCKFORD[byte % 32];
-  if (!ULID_PATTERN.test(id)) throw new Error("ULID 生成结果不符合 #16 §1.1 形制");
-  return id;
-}
+// 生成器统一收敛到契约包 packages/shield（原身份模块、地理字典模块、留痕包与本种子通道
+// 各持一份等价实现）。种子通道经 prisma7.config.ts 以 node 原生
+// --experimental-transform-types 运行——原生 ESM 不做 .js→.ts 改写，故契约包内部一律
+// 用 .ts 扩展名，本处可直接引其公共出口。
+// 经包名引其公共出口（结构测试 shield-single-entry：绕过公共出口的深路径引用判红）；
+// 根 package.json 已声明该 workspace 依赖，Node 自本文件向上逐级解析到根 node_modules。
+import { newUlid } from "@natural-enforcement/shield";
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });

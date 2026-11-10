@@ -1,18 +1,32 @@
 // 技术主键生成（#16 §1.1：ULID = 48bit 毫秒时间 + 80bit 随机，26 位大写 Crockford Base32）。
-// 形制守卫复用 shield 的 isTechnicalPrimaryKey（契约唯一事实源，身份组织矩阵允许依赖 shield），
-// 生成结果自检不合格即抛错——格式常量不允许在模块内另起一份。
+//
+// 契约唯一事实源 = docs/global-contract-identity-references.md；本文件只做合成、不改定案。
+// 形制守卫复用同包的 isTechnicalPrimaryKey（契约唯一事实源），生成结果自检不合格即抛错——
+// 格式常量不允许在包外另起一份。
 //
 // 两款生成器：
 // - newUlid：无状态。每次调用重新取随机值，同一毫秒内两枚的大小随机。
 // - createMonotonicUlidGenerator：进程内单调（#116）。同一进程内后生成的编号严格大于
 //   先生成的编号，故同毫秒写入的行按 id 取回即按写入先后。
 //
-// 与留痕包的边界：留痕包 packages/audit/src/ulid.ts 有一份同算法的单调生成器（#114）。
-// 留痕包不依赖身份模块（避免与授权写入形成循环），身份模块已依赖留痕包，故两边不能共用
-// 一份实现——与身份模块、地理字典模块各持一份无状态生成器是同一形态。各模块自持技术主键
-// 生成，契约只在 shield（形制断言）。改动单调规则时两边都要改。
+// 与留痕包的关系：留痕包 packages/audit 的编号生成器（#114）与本文件的单调生成器同算法，
+// 现共用本文件一份实现——留痕包依赖契约包（shield 无任何依赖），不产生循环。
+//
+// 与身份模块的关系：身份模块原自持一份（新的无状态生成器 + 单调生成器），geo-dict 亦然，
+// 种子通道（backend/prisma/seed.mjs）另复制一份——四处算法等价，改动规则时四处都要改。
+// 现统一收敛到本文件：契约包无任何依赖，身份/geo-dict/留痕三包都允许依赖它。
+//
+// 单调规则（两边原本一致）：
+// - 时钟前进：时间部取当前毫秒，随机部重新取 80 位随机值。
+// - 同一毫秒，或时钟回拨：时间部沿用上一枚，随机部加一。回拨期间编号的时间部
+//   会领先墙钟，直到墙钟追上。
+// - 随机部加一溢出（2^80）：时间部进一毫秒，随机部重新取随机值。
+//
+// 边界：单调只在同一生成器实例内成立。多进程、多实例各自起点随机，同一毫秒内
+// 彼此的先后仍是随机的；各机时钟偏差也会让跨实例的先后失真。编号先后是调用
+// append 的先后，不是事务提交的先后。
 
-import { isTechnicalPrimaryKey } from '@natural-enforcement/shield';
+import { isTechnicalPrimaryKey } from './identity.ts';
 
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 const TIME_LIMIT = 1n << 48n;
@@ -20,9 +34,7 @@ const RANDOM_LIMIT = 1n << 80n;
 
 // 仓库不引 @types/node 直接依赖（VERSIONS.md「类型」行钉的 24.19.0 只是 overrides 收敛出的
 // peer 传递依赖），故本文件编译时 crypto 全局类型不在场。仅消费 webcrypto 的一个方法，
-// 经 globalThis 窄化取值——不为一个全局拉入整包类型依赖
-//（本包源码同时被根 unit 层与 integration 层编译，两层程序组成不同——故本文件不加任何
-// 全局声明，只在函数内窄化取值）。
+// 经 globalThis 窄化取值——不为一个全局拉入整包类型依赖。
 interface CryptoLike {
   getRandomValues<T extends ArrayBufferView | null>(array: T): T;
 }
@@ -86,8 +98,8 @@ export type MonotonicUlidGenerator = (now: number) => string;
  * - 随机部加一溢出（2^80）：时间部进一毫秒，随机部重新取随机值。
  * - 时间超出 48 位，或随机源取值越出 80 位：抛错，不写库。
  *
- * 边界（与 #114 留痕编号同）：单调只在同一生成器实例内成立，即同一进程。多进程、多实例
- * 各自起点随机，同一毫秒内彼此的先后仍是随机的；各机时钟偏差也会让跨实例的先后失真。
+ * 边界：单调只在同一生成器实例内成立，即同一进程。多进程、多实例各自起点随机，
+ * 同一毫秒内彼此的先后仍是随机的；各机时钟偏差也会让跨实例的先后失真。
  * 编号先后是调用生成的先后，不是事务提交的先后。
  */
 export function createMonotonicUlidGenerator(

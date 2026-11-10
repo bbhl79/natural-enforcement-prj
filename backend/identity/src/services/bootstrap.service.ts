@@ -15,7 +15,7 @@ import {
   type BootstrapProfile,
 } from '../domain/bootstrap.ts';
 import { ROOT_ORG_UNIT_LEVEL } from '../domain/org-unit.ts';
-import { newUlid } from '../domain/ulid.ts';
+import { newUlid } from '@natural-enforcement/shield';
 import type { IdentityStore } from '../persistence/identity-store.ts';
 
 export interface BootstrapRequest extends BootstrapProfile {

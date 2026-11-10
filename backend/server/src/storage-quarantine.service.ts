@@ -17,22 +17,10 @@ import { STORAGE_PORT, type FileVersionRef, type StoragePort } from '@natural-en
 
 import { CLOCK, type Clock } from './clock.ts';
 import { LOGIN_DIRECTORY, type LoginDirectory } from './login-directory.ts';
+import { newUlid } from '@natural-enforcement/identity';
 import { UNIT_OF_WORK, type UnitOfWork } from './unit-of-work.ts';
 
 const QUARANTINE_OPCODE = 'storage.quarantine.mark';
-
-const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
-
-function newUlid(): string {
-  let time = BigInt(Date.now());
-  let id = '';
-  for (let i = 0; i < 10; i += 1) {
-    id = CROCKFORD[Number(time % 32n)] + id;
-    time /= 32n;
-  }
-  for (const byte of crypto.getRandomValues(new Uint8Array(16))) id += CROCKFORD[byte % 32];
-  return id;
-}
 
 /** 隔离对象错误：业务读路径映射为 403 object-quarantined。 */
 export class QuarantinedObjectError extends Error {

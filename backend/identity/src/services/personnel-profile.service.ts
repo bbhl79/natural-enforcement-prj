@@ -41,7 +41,7 @@ import {
   type UpdateRuleCode,
 } from '../domain/personnel-profile.ts';
 import { ROOT_GUARD_REASON, ROOT_GUARD_ROLE } from '../domain/root-guard.ts';
-import { newUlid } from '../domain/ulid.ts';
+import { newUlid } from '@natural-enforcement/shield';
 import type {
   IdentityStore,
   IdentityTransaction,

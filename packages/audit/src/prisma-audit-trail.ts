@@ -10,6 +10,7 @@ import {
   type AuditTrailRecord,
 } from './query.ts';
 import type { AuditTrailFactory } from './transaction.ts';
+// 留痕编号（#16 §1.1 ULID）：生成器实现统一收敛到契约包 packages/shield，本包只持实例。
 import { newAuditId } from './ulid.ts';
 import {
   AUDIT_ACTIONS,
@@ -314,7 +315,7 @@ export class PrismaAuditTrail implements AuditTrailPort {
     const target = targetOf(entry);
     await this.db.auditTrail.create({
       data: {
-        id: newAuditId(),
+        id: newAuditId(Date.now()),
         action: entry.action,
         outcome,
         actorId: entry.actorId,

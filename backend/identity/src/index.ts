@@ -12,8 +12,10 @@ export type {
 export type { AuthorizationDecision } from './services/access-control.service.ts';
 export type { ActorRef } from './domain/actor.ts';
 export { AlreadyExistsError, isAlreadyExists } from './domain/already-exists.ts';
-export { createMonotonicUlidGenerator, newUlid } from './domain/ulid.ts';
-export type { MonotonicUlidGenerator, MonotonicUlidSources } from './domain/ulid.ts';
+// 技术主键生成（#16 §1.1 ULID）统一收敛到契约包：身份模块不再自持一份实现。
+// 本模块公共出口原样再出口，调用方（server／integration）的导入路径不变。
+export { createMonotonicUlidGenerator, newUlid } from '@natural-enforcement/shield';
+export type { MonotonicUlidGenerator, MonotonicUlidSources } from '@natural-enforcement/shield';
 export {
   PASSWORD_HISTORY_DEPTH,
   PASSWORD_HISTORY_RULES,

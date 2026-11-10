@@ -19,7 +19,7 @@ import {
   orgUnitNameRules,
   type OrgUnitRuleCode,
 } from '../domain/org-unit.ts';
-import { newUlid } from '../domain/ulid.ts';
+import { newUlid } from '@natural-enforcement/shield';
 import type {
   IdentityTransaction,
   OrgUnitNameVersionRow,

@@ -8,7 +8,7 @@ import {
   PRIMARY_KEY_RULE,
   isTechnicalPrimaryKey,
   requireCrossDomainReference,
-} from '../src/index.js';
+} from '../src/index.ts';
 
 // ULID 规范（crockford 本人实现 README）的已知良好样例：26 位大写 Crockford Base32
 const KNOWN_GOOD_ULID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
