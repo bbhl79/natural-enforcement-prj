@@ -1,7 +1,7 @@
 # #132 截图对照（口令历史不重复：P2 改密被拒、P6 重设初始口令、P7 重设确认与被拒）
 
 - 规格：Chrome headless（zenika/alpine-chrome 124），视口宽 1440，整页截图，2026-10-19（UTC+8）。
-- 本目录 `<状态>.png` 是实现截图；`compare/<状态>.png` 是对照图，左边为原型 v0.4（`frontend/prototype/admin-console/screens/`），右边为实现，缩到一半大小。
+- 实现截图与对照图已迁至 `e2e/results/screens/132/`（不入库）：`<状态>.png` 是实现截图，`compare/<状态>.png` 是对照图，左边为原型 v0.4（`frontend/prototype/admin-console/screens/`），右边为实现，缩到一半大小。本目录留清单 `docs/screens/manifest/132.txt`（状态键文件名并集，参与结构测试 `screenshot-full-set` 比对）与逐图人查规程。
 - 做法：与 #127/#130 的「模拟接口驱动构建产物」不同，本票改用仓库自身组件做服务端渲染出整页 HTML，再截图。原因：卡片页与被锁人员页的列表数据经 `<Await>` 延迟到达，静态渲染拿不到已解析的列表，而弹窗是纯渲染组件、状态可由测试直接给定。具体做法：应用壳（`AppShell`）+ 页面主区（`PersonnelCardView`、`LockedPersonnelView` 与各自的面包屑、页头）按会话操作码直接组装，弹窗按状态传入；样式取 `dev build` 产物里的同一份 CSS；会话操作码取「名册 + 参照种子允许行」推出的真实清单（何静：经办 + 系统管理），含 `personnel.password.reset`。人物与行数据沿用原型 P6、P7 的数据（他人卡陈晓宁 TH0315、被锁四行王芳/张敏/周敏/陈立）。渲染脚本与截图驱动是接力期的一次性工具，不入库；五个状态键的可见文本另由前端单测逐字断言。
 - 本票出 5 张 v0.4 状态键：`P2-forcedReused`、`P6-resetpw`、`P6-resetpwReused`、`P7-resetConfirm`、`P7-resetDenied-reused`。其中 `P7-resetDenied-reused` 由 #127 明确留给本票；`P6-resetpw`、`P6-resetpwReused` 由 #130 明确留给本票；`P7-resetConfirm` 重截，补上 #127 记为允许差异的口令要求末句「不能与对方最近 5 次使用过的口令相同」。
 - 逐张差异说明：

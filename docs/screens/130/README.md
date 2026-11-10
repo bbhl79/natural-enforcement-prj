@@ -1,7 +1,7 @@
 # #130 截图对照（管理台 P6 停用、恢复、结束全部会话与危险操作区状态）
 
 - 规格：Chrome headless（zenika/alpine-chrome 124），视口宽 1440，整页截图，2026-10-18（UTC+8）。
-- 本目录 `<状态>.png` 是实现截图；`compare/<状态>.png` 是对照图，左边为原型 v0.4（`frontend/prototype/admin-console/screens/`），右边为实现，缩到一半大小。
+- 实现截图与对照图已迁至 `e2e/results/screens/130/`（不入库）：`<状态>.png` 是实现截图，`compare/<状态>.png` 是对照图，左边为原型 v0.4（`frontend/prototype/admin-console/screens/`），右边为实现，缩到一半大小。本目录留清单 `docs/screens/manifest/130.txt`（状态键文件名并集，参与结构测试 `screenshot-full-set` 比对）与逐图人查规程。
 - 做法：用模拟接口按状态返回会话、人员卡片与机构树，驱动构建后的前端产物截图；停用、结束全部会话、恢复三个弹窗由脚本点危险操作区对应按钮得到；恢复弹窗的机构清单由模拟接口按数据范围返回（五山已停用不列）。人员与机构沿用原型 P5、P6 的数据（他人卡陈晓宁 TH0315、已停用冯晨 TH0290、本人卡何静 TH0102）；操作码由名册和参照种子允许行推出（何静：经办 + 系统管理），含 `personnel.profile.deactivate`、`personnel.profile.restore`、`personnel.sessions.end`、`personnel.cert.update`、`personnel.password.reset`。
 - 本票出 6 张 v0.4 状态键：P6-view（危险操作区变化，重截 #128 旧图）、P6-deactivate、P6-restore、P6-restoreNewOrg、P6-endsessions、P6-self。重设初始口令各状态由 #132 出，执法证各状态由 #133 出。
 - 2026-10-19（UTC+8）按 PR #156 复核阻塞项以终版代码重截 6 张与对照图，重截以 #134 收口为准：危险操作区补入「重设初始口令」一行成四行（#132 终版）；会话操作码补齐 `personnel.cert.update`，执法证一段补出「变更执法证」/「登记执法证」按钮，与原型 v0.4 一致。其余画面不变。

@@ -1,0 +1,18 @@
+# 133 的截图清单。
+# 第一段＝状态键截图：文件名并集参与结构测试 screenshot-full-set 规则比对
+#   （不得越出 v0.4 的 78 键与 #207 的 62 键，也不得缺键）。
+# 第二段（## aux 之后）＝对照图与补充图：逐图人查用，不参与规则比对。
+# 截图本体已迁出版本控制，落在 e2e/results/screens/133/（该目录不入库）。
+P3-admin.png
+P5-district.png
+P6-certEdit.png
+P6-certExpired.png
+P6-certExpiring.png
+P6-certNone.png
+## aux
+compare/P3-admin.png
+compare/P5-district.png
+compare/P6-certEdit.png
+compare/P6-certExpired.png
+compare/P6-certExpiring.png
+compare/P6-certNone.png

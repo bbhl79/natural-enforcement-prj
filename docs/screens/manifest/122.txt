@@ -1,0 +1,37 @@
+# 122 的截图清单。
+# 第一段＝状态键截图：文件名并集参与结构测试 screenshot-full-set 规则比对
+#   （不得越出 v0.4 的 78 键与 #207 的 62 键，也不得缺键）。
+# 第二段（## aux 之后）＝对照图与补充图：逐图人查用，不参与规则比对。
+# 截图本体已迁出版本控制，落在 e2e/results/screens/122/（该目录不入库）。
+P1-error.png
+P1-expired.png
+P1-loading.png
+P1-multi.png
+P1-noadmin.png
+P1-single.png
+P2-forbidden.png
+P2-forced.png
+P2-forcedExpired.png
+P2-notfound.png
+P3-admin.png
+P3-denied.png
+P3-error.png
+P3-loading.png
+P3-supervise.png
+## aux
+compare/P1-error.png
+compare/P1-expired.png
+compare/P1-loading.png
+compare/P1-multi.png
+compare/P1-noadmin.png
+compare/P1-single.png
+compare/P2-forbidden.png
+compare/P2-forced.png
+compare/P2-forcedExpired.png
+compare/P2-notfound.png
+compare/P3-admin.png
+compare/P3-denied.png
+compare/P3-error.png
+compare/P3-loading.png
+compare/P3-supervise.png
+extra/P1-expiry.png

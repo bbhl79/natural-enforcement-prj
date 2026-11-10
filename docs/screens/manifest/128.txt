@@ -1,0 +1,32 @@
+# 128 的截图清单。
+# 第一段＝状态键截图：文件名并集参与结构测试 screenshot-full-set 规则比对
+#   （不得越出 v0.4 的 78 键与 #207 的 62 键，也不得缺键）。
+# 第二段（## aux 之后）＝对照图与补充图：逐图人查用，不参与规则比对。
+# 截图本体已迁出版本控制，落在 e2e/results/screens/128/（该目录不入库）。
+P5-denied.png
+P5-district.png
+P5-empty.png
+P5-error.png
+P5-filtered.png
+P5-loading.png
+P6-create.png
+P6-createInvalid.png
+P6-denied.png
+P6-error.png
+P6-loading.png
+P6-view.png
+## aux
+compare/P5-denied.png
+compare/P5-district.png
+compare/P5-empty.png
+compare/P5-error.png
+compare/P5-filtered.png
+compare/P5-loading.png
+compare/P6-create.png
+compare/P6-createInvalid.png
+compare/P6-denied.png
+compare/P6-error.png
+compare/P6-loading.png
+compare/P6-view.png
+extra/P5-page2.png
+extra/P6-registered.png

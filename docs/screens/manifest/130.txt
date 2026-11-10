@@ -1,0 +1,18 @@
+# 130 的截图清单。
+# 第一段＝状态键截图：文件名并集参与结构测试 screenshot-full-set 规则比对
+#   （不得越出 v0.4 的 78 键与 #207 的 62 键，也不得缺键）。
+# 第二段（## aux 之后）＝对照图与补充图：逐图人查用，不参与规则比对。
+# 截图本体已迁出版本控制，落在 e2e/results/screens/130/（该目录不入库）。
+P6-deactivate.png
+P6-endsessions.png
+P6-restore.png
+P6-restoreNewOrg.png
+P6-self.png
+P6-view.png
+## aux
+compare/P6-deactivate.png
+compare/P6-endsessions.png
+compare/P6-restore.png
+compare/P6-restoreNewOrg.png
+compare/P6-self.png
+compare/P6-view.png

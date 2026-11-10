@@ -410,9 +410,10 @@ write_probe_weak-reference-entry() {
 
 write_probe_screenshot-full-set() {
   # 截图全集多出状态键之外的文件名。规则只比文件名，不校验 PNG 格式与画面。
-  # 落点是 docs/screens 深度 2 的新目录，cleanup 连空目录一并删掉，树回到干净状态。
-  tmp_write "docs/screens/_structural-probe/probe-extra.png" \
-    "// 探针（临时，勿入库）：截图全集外的文件名"
+  # 落点是 docs/screens/manifest 下的新清单文件：截图本体已迁出版本控制，规则改读清单，
+  # 故探针也往清单里塞一个越界名。cleanup 把该文件一并删掉，树回到干净状态。
+  tmp_write "docs/screens/manifest/_structural-probe.txt" \
+    "probe-extra.png"
 }
 
 

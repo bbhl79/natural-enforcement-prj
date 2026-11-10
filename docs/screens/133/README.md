@@ -1,7 +1,7 @@
 # #133 截图对照（管理台 P3 执法证统计、P5 执法证列、P6 执法证一段）
 
 - 规格：Chrome headless，视口宽 1440，整页截图，2026-10-18（UTC+8）。
-- 本目录 `<状态>.png` 是实现截图；`compare/<状态>.png` 是对照图，左边为原型 v0.4（`frontend/prototype/admin-console/screens/`），右边为实现，缩到一半大小。
+- 实现截图与对照图已迁至 `e2e/results/screens/133/`（不入库）：`<状态>.png` 是实现截图，`compare/<状态>.png` 是对照图，左边为原型 v0.4（`frontend/prototype/admin-console/screens/`），右边为实现，缩到一半大小。本目录留清单 `docs/screens/manifest/133.txt`（状态键文件名并集，参与结构测试 `screenshot-full-set` 比对）与逐图人查规程。
 - 做法：用模拟接口按状态返回会话、人员名单、人员卡片和机构树，驱动构建后的前端产物截图；P6-certEdit 由脚本点「变更执法证」打开表单后截。人员与机构沿用原型 P5、P6 的数据；操作码由名册和参照种子允许行推出（何静：经办 + 系统管理），不含未入名册的码。
 - 本票出 6 张：P3-admin（首屏「需要留意的执法证」统计卡）、P5-district（名单执法证列，含赵磊「失效」）、P6-certNone、P6-certExpiring、P6-certExpired、P6-certEdit。票面验收第 6 条要的三处界面状态即这 6 张。
 - 2026-10-19（UTC+8）按 PR #156 复核阻塞项以终版代码重截 P6-certEdit、P6-certNone、P6-certExpiring、P6-certExpired 四张卡片态与对照图，重截以 #134 收口为准：补上此前整块缺失的「需谨慎的操作」（调岗、重设初始口令、结束全部会话、停用人员四行，与原型 v0.4 逐字一致；旧图早于 #129、#130、#132 合入危险操作区的时点）。其余画面不变。

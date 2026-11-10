@@ -1,0 +1,16 @@
+# 132 的截图清单。
+# 第一段＝状态键截图：文件名并集参与结构测试 screenshot-full-set 规则比对
+#   （不得越出 v0.4 的 78 键与 #207 的 62 键，也不得缺键）。
+# 第二段（## aux 之后）＝对照图与补充图：逐图人查用，不参与规则比对。
+# 截图本体已迁出版本控制，落在 e2e/results/screens/132/（该目录不入库）。
+P2-forcedReused.png
+P6-resetpw.png
+P6-resetpwReused.png
+P7-resetConfirm.png
+P7-resetDenied-reused.png
+## aux
+compare/P2-forcedReused.png
+compare/P6-resetpw.png
+compare/P6-resetpwReused.png
+compare/P7-resetConfirm.png
+compare/P7-resetDenied-reused.png

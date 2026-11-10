@@ -1,7 +1,7 @@
 # #123 截图对照（管理台 P4 机构树）
 
 - 规格：Chrome headless，视口宽 1440，整页截图，2026-10-18（UTC+8）。
-- 本目录 `<状态>.png` 是实现截图；`compare/<状态>.png` 是对照图，左边为原型 v0.4（`frontend/prototype/admin-console/screens/`），右边为实现，缩到一半大小。
+- 实现截图与对照图已迁至 `e2e/results/screens/123/`（不入库）：`<状态>.png` 是实现截图，`compare/<状态>.png` 是对照图，左边为原型 v0.4（`frontend/prototype/admin-console/screens/`），右边为实现，缩到一半大小。本目录留清单 `docs/screens/manifest/123.txt`（状态键文件名并集，参与结构测试 `screenshot-full-set` 比对）与逐图人查规程。
 - 做法：用模拟接口按状态返回会话和机构树，驱动构建后的前端产物截图；新建、改名、折叠由脚本点击页面得到。机构与人员沿用原型 P4 的数据；操作码用名册里的真实码。
 - 2026-10-18 02:33（UTC+8）按 PR #142 界面验收（issuecomment-6238407313）重截全部 8 张及对照图：
   - 会话操作码改由「名册 `packages/shield/src/contract/opcode.ts` + 参照种子允许行 `backend/prisma/seed.mjs`」推出，口径同 `listPermittedOpcodes` 和 `docs/screens/122/README.md`，不含未入名册的码。所以左导不再有「人员」（`personnel.profile.read` 由 #128 入名册）；P4-denied 里监督按 #71 允许行持有 `clue.read`，左导多出「线索」（原型滞后，以 #71 为准）。

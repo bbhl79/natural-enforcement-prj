@@ -1,0 +1,43 @@
+# 220 的截图清单。
+# 第一段＝状态键截图：文件名并集参与结构测试 screenshot-full-set 规则比对
+#   （不得越出 v0.4 的 78 键与 #207 的 62 键，也不得缺键）。
+# 第二段（## aux 之后）＝对照图与补充图：逐图人查用，不参与规则比对。
+# 截图本体已迁出版本控制，落在 e2e/results/screens/220/（该目录不入库）。
+admin-org-pool-reassign.png
+clue-assign-people.png
+clue-assign.png
+clue-designate-request.png
+clue-designated-lock.png
+clue-reassign.png
+clue-transfer-out.png
+conflict-409.png
+dialog-compare.png
+drawer-check-done.png
+drawer-check-exempt.png
+drawer-check-failed.png
+drawer-check-unavailable.png
+drawer-dup-clean.png
+drawer-dup-exempt.png
+drawer-dup-hit.png
+drawer-dup-multiface.png
+ws-attach-anon-confirm.png
+ws-attach-error.png
+ws-existing-context.png
+ws-form-blocked.png
+ws-form-gap-confirm.png
+ws-form-land.png
+ws-form-point.png
+ws-geo-cross-district.png
+ws-geo-draw.png
+ws-geo-file-error.png
+ws-geo-file.png
+ws-geo-multiface.png
+ws-geo-redraw.png
+ws-step2-dup.png
+ws-step2-exempt.png
+ws-step2-failed.png
+ws-step2-running.png
+ws-step3-clean.png
+ws-step3-dup-decide.png
+ws-step3-not-owner.png
+ws-step3-report-must.png

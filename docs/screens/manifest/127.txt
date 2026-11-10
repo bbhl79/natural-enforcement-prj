@@ -1,0 +1,32 @@
+# 127 的截图清单。
+# 第一段＝状态键截图：文件名并集参与结构测试 screenshot-full-set 规则比对
+#   （不得越出 v0.4 的 78 键与 #207 的 62 键，也不得缺键）。
+# 第二段（## aux 之后）＝对照图与补充图：逐图人查用，不参与规则比对。
+# 截图本体已迁出版本控制，落在 e2e/results/screens/127/（该目录不入库）。
+P7-data.png
+P7-denied.png
+P7-empty.png
+P7-error.png
+P7-loading.png
+P7-resetConfirm.png
+P7-resetDenied-self.png
+P7-resetDenied.png
+P7-resetSuccess.png
+P7-scopeDenied.png
+P7-selfDenied.png
+P7-success.png
+P7-unlockConfirm.png
+## aux
+compare/P7-data.png
+compare/P7-denied.png
+compare/P7-empty.png
+compare/P7-error.png
+compare/P7-loading.png
+compare/P7-resetConfirm.png
+compare/P7-resetDenied-self.png
+compare/P7-resetDenied.png
+compare/P7-resetSuccess.png
+compare/P7-scopeDenied.png
+compare/P7-selfDenied.png
+compare/P7-success.png
+compare/P7-unlockConfirm.png

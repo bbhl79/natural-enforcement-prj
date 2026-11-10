@@ -1,7 +1,7 @@
 # #220 截图（62 键齐套与差异表）
 
 - 规格：`tools/screenshot.sh`，镜像为 `infra/VERSIONS.md` 钉定的 `mcr.microsoft.com/playwright:v1.64.1-jammy-amd64`，视口 1440×900，整页，等待 6000 毫秒。日期 2026-10-26。
-- 全集定义：`docs/screens/keys-207.txt`（#207 协议第 I 节的 62 键）。实有集合是 `docs/screens/<票>/` 顶层 `*.png` 的并集。`compare/`、`extra/` 不计。
+- 全集定义：`docs/screens/keys-207.txt`（#207 协议第 I 节的 62 键）。实有集合是 `docs/screens/manifest/<票>.txt` 各票状态键段的文件名并集；清单的 `## aux` 段（`compare/`、`extra/` 对照与补充图）不计。截图本体已迁至 `e2e/results/screens/<票>/`（不入库）。
 - 本目录补齐此前没有的 38 键。另外 24 键已在 `docs/screens/209/`（5）、`docs/screens/217/`（6）、`docs/screens/218/`（13）。并集 62 键，缺键清单空，多出键清单空。
 - 驱动进程不入仓。假接口只在截图进程内，不入库，不替代集成测试。十条虚构线索、七个测试身份见下文。
 

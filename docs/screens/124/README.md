@@ -1,7 +1,7 @@
 # #124 截图对照（管理台 P4 机构停用）
 
 - 规格：Chrome headless，视口 1440×900，整页截图，2026-10-18（UTC+8）。
-- 本目录 `<状态>.png` 是实现截图；`compare/<状态>.png` 是对照图，左边为原型 v0.4（`frontend/prototype/admin-console/screens/`），右边为实现，缩到一半大小。
+- 实现截图与对照图已迁至 `e2e/results/screens/124/`（不入库）：`<状态>.png` 是实现截图，`compare/<状态>.png` 是对照图，左边为原型 v0.4（`frontend/prototype/admin-console/screens/`），右边为实现，缩到一半大小。本目录留清单 `docs/screens/manifest/124.txt`（状态键文件名并集，参与结构测试 `screenshot-full-set` 比对）与逐图人查规程。
 - 做法：用模拟接口按状态返回会话和机构树，驱动构建后的前端产物截图；选中机构、点「停用」由脚本点击页面得到。机构与人员沿用原型 P4 的数据。
 - 会话操作码由「名册 `packages/shield/src/contract/opcode.ts` + 参照种子允许行 `backend/prisma/seed.mjs`」推出，口径同 `listPermittedOpcodes` 和 #123 的重截（`docs/screens/123/README.md`），系统管理含 `org.unit.deactivate`，不含未入名册的码，所以左导没有「人员」。
 - 2026-10-18 02:50（UTC+8）合入 #123 的修正（`c3e1fd0`：导航高亮、只有根机构判断、失败定稿句、弹窗焦点）后重截两张；blocked 的在职人员一条按 PR #144 Copilot 意见 1 改为只提示调岗。

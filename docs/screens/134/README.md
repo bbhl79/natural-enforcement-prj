@@ -1,7 +1,7 @@
 # #134 截图对照与全集收口判定（管理台 P3 上线首日三步引导）
 
 - 规格：Chrome headless（zenika/alpine-chrome 124），经远程调试（CDP）驱动，视口宽 1440，整页截图，2026-10-19（UTC+8）。
-- 本目录 `<状态>.png` 是实现截图；`compare/<状态>.png` 是对照图，左边为原型 v0.4（`frontend/prototype/admin-console/screens/`），右边为实现，缩到一半大小。
+- 实现截图与对照图已迁至 `e2e/results/screens/134/`（不入库）：`<状态>.png` 是实现截图，`compare/<状态>.png` 是对照图，左边为原型 v0.4（`frontend/prototype/admin-console/screens/`），右边为实现，缩到一半大小。本目录留清单 `docs/screens/manifest/134.txt`（状态键文件名并集，参与结构测试 `screenshot-full-set` 比对）与逐图人查规程。
 - 做法：模拟接口按状态返回会话（周敏 SJ0001、广州市规划和自然资源局、系统管理；操作码取实现名册写法）、只有一个根机构的机构树、只有一名人员的名单（执法证未登记）、空被锁人员、今日留痕 2 条，驱动 `dev build` 构建后的前端产物截图；驱动脚本是无依赖的 Node CDP 客户端（不入仓，方法以本 README 为准）。
 - 本票出 1 张：P3-firstday（上线首日三步引导）。其余 77 个状态键由 #122–#133 各票出图，全集判定见下节。
 
@@ -16,7 +16,7 @@
 
 ## 全集判定（#105「截图验收（loop ⑥c）」收口）
 
-- 口径：`docs/screens/<票>/` 顶层 `*.png` 的文件名并集，与原型 v0.4 状态键（`frontend/prototype/admin-console/screens/*.png`，除改动总览 `overview.png`）完全相等。自动判定只比文件名集合，由结构测试规则 `screenshot-full-set`（`tools/structural-test.sh`）承载，进 `dev lint` 与 CI。画面是否与 v0.4 一致由前端交互设计工程师逐图自查（各票 README 的逐张差异与 PR 允许差异表），Lei Hu 在 gate② 签收。
+- 口径：`docs/screens/manifest/<票>.txt` 各票状态键段的文件名并集，与原型 v0.4 状态键（`frontend/prototype/admin-console/screens/*.png`，除改动总览 `overview.png`）完全相等。自动判定只比文件名集合，由结构测试规则 `screenshot-full-set`（`tools/structural-test.sh`）承载，进 `dev lint` 与 CI。画面是否与 v0.4 一致由前端交互设计工程师逐图自查（各票 README 的逐张差异与 PR 允许差异表），Lei Hu 在 gate② 签收。
 - 结论：并集 78 个文件名与 78 个状态键完全相等。11 个目录顶层 png 共 82 张，其中 4 个键被后续票重截（P3-admin、P5-district、P6-view、P7-resetConfirm），以较新票的图为准；`compare/`、`extra/` 子目录是对照图与单测验收图（口令到期横幅 P1-expiry、根机构守卫 P6-editRootGuard），不进全集。
 - 画面时点：129 的 P6-edit、P6-transfer、P6-selfEdit，130 的六键，133 的 P6-certEdit、P6-certNone、P6-certExpiring、P6-certExpired 共 13 张卡片态图，2026-10-19 由本票按终版代码在原目录重截（PR #156 复核阻塞项：旧图早于危险操作区终版），文件名与逐目录计数不变，以重截后的图为准；差异登记见各票 README。
 

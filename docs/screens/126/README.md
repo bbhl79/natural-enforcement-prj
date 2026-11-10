@@ -1,7 +1,7 @@
 # #126 管理台留痕（P8）截图
 
 - 对照原型：frontend/prototype/admin-console/P8-admin-audit.html（v0.4），原型截图在 frontend/prototype/admin-console/screens/P8-*.png。
-- 本目录 `P8-<状态>.png` 是实现截图；`compare/P8-<状态>.png` 左边是原型，右边是实现。
+- 实现截图与对照图已迁至 `e2e/results/screens/126/`（不入库）：`P8-<状态>.png` 是实现截图，`compare/P8-<状态>.png` 左边是原型，右边是实现。本目录留清单 `docs/screens/manifest/126.txt`（状态键文件名并集，参与结构测试 `screenshot-full-set` 比对）与逐图人查规程。
 - 11 个状态键与原型一致：admin、login、view、supervise、noanchor、exportConfirm、exportDone、empty、loading、error、denied。
 - 截法：
   - 前端 `vite build` 的产物由 box 上的模拟服务托管（工具不入仓，做法同 docs/screens/122）。

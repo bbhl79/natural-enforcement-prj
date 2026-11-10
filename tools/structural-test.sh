@@ -115,12 +115,13 @@
 #                           声明式 <BrowserRouter>/<HashRouter>，或任何 package.json、源码、
 #                           vite 配置引用框架模式开发插件 @react-router/dev 即失败
 #   screenshot-full-set     截图全集文件名集合（#105「截图验收（loop ⑥c）」、#134 收口、#207 换全集、#220 齐套）：
-#                           docs/screens/<票>/ 顶层 *.png 的并集，不得越出状态键全集，也不得缺键。
+#                           docs/screens/manifest/<票>.txt 各票状态键段的文件名并集，不得越出
+#                           状态键全集，也不得缺键。
 #                           状态键全集 = 原型 v0.4 的 78 键
 #                           （frontend/prototype/admin-console/screens/*.png，除 overview.png）
 #                           ∪ #207 协议第 I 节的 62 键（docs/screens/keys-207.txt）。
 #                           v0.4 时代缺键判红；#207 的 62 键缺键同样判红（#220 收口）。
-#                           文件名越出全集判红。compare/、extra/ 不计入实有集合。
+#                           文件名越出全集判红。清单的 ## aux 段（对照与补充图）不计入实有集合。
 #                           自动判定只比文件名集合；画面一致由逐图人查（各票 README 与 PR）
 set -uo pipefail
 
@@ -1381,15 +1382,17 @@ check_frontend-router-mode() {
 #     的 78 键（除改动总览 overview.png）。这批键一张不少，已出的图也不许撤走。
 #   #207 时代（#207 协议第 I 节定义的 62 键，本全集定义处）：docs/screens/keys-207.txt。
 #     #220 起这 62 键缺一即红。已出的图不许越出两个时代的并集。
-# 实有集合 = docs/screens/<票>/ 顶层 *.png 的并集（compare/、extra/ 等子目录是对照与单测验收图，不计）。
+# 实有集合 = docs/screens/manifest/<票>.txt 各票状态键段（## aux 段之前）的文件名并集。
+#   截图本体已迁出版本控制（落在 e2e/results/screens/<票>/，不入库），清单是「哪一票出了哪些
+#   状态键」的在库记录；## aux 段是对照与补充图，逐图人查用，不计入实有集合。
 # 自动判定只比文件名集合；画面是否与原型一致由前端交互设计工程师逐图自查、Lei Hu gate② 签收。
 SCREENS_WANT_DIR="$ROOT/frontend/prototype/admin-console/screens"
-SCREENS_HAVE_DIR="$ROOT/docs/screens"
+SCREENS_MANIFEST_DIR="$ROOT/docs/screens/manifest"
 SCREENS_KEYS_207="$ROOT/docs/screens/keys-207.txt"
 check_screenshot-full-set() {
   local fails=0 want_v04 want_207 want have missing extra pending
-  if [ ! -d "$SCREENS_WANT_DIR" ] || [ ! -d "$SCREENS_HAVE_DIR" ] || [ ! -f "$SCREENS_KEYS_207" ]; then
-    note_fail "screenshot-full-set：缺少原型截图目录、docs/screens 目录或 #207 状态键清单"
+  if [ ! -d "$SCREENS_WANT_DIR" ] || [ ! -d "$SCREENS_MANIFEST_DIR" ] || [ ! -f "$SCREENS_KEYS_207" ]; then
+    note_fail "screenshot-full-set：缺少原型截图目录、docs/screens/manifest 目录或 #207 状态键清单"
     return
   fi
   # 三份清单一律按 LC_ALL=C 排序，comm 的两边必须同序同序则。
@@ -1398,7 +1401,16 @@ check_screenshot-full-set() {
   want_v04="$(find "$SCREENS_WANT_DIR" -maxdepth 1 -type f -name '*.png' ! -name 'overview.png' -printf '%f\n' | LC_ALL=C sort)"
   want_207="$(grep -v -e '^[[:space:]]*#' -e '^[[:space:]]*$' "$SCREENS_KEYS_207" | sed 's/$/.png/' | LC_ALL=C sort)"
   want="$(printf '%s\n%s\n' "$want_v04" "$want_207" | LC_ALL=C sort -u)"
-  have="$(find "$SCREENS_HAVE_DIR" -mindepth 2 -maxdepth 2 -type f -name '*.png' -printf '%f\n' | LC_ALL=C sort -u)"
+  # 实有集合 = 各票清单的状态键段（## aux 段之前）的文件名并集。awk 逐文件处理，FNR 到 1
+  # 即换文件，aux 标记随之复位。
+  have="$(find "$SCREENS_MANIFEST_DIR" -maxdepth 1 -type f -name '*.txt' -exec awk '
+      FNR == 1 { aux = 0 }
+      /^## aux$/ { aux = 1; next }
+      aux { next }
+      /^#/ { next }
+      /^[[:space:]]*$/ { next }
+      { print }
+    ' {} + | LC_ALL=C sort -u)"
   # 本机 comm 是 uutils 实现，不吃 herestring 参数；比较失败必须显式判红，不许静默放过。
   # comm 的序检查跟当前 locale 走。清单按 C 序排，比较也固定 C 序，避免 UTF-8 下误判未排序。
   if ! extra="$(LC_ALL=C comm -13 <(printf '%s\n' "$want") <(printf '%s\n' "$have"))"; then
@@ -1426,7 +1438,7 @@ check_screenshot-full-set() {
     fails=1
   fi
   if [ "$fails" -eq 0 ]; then
-    note_ok "screenshot-full-set：docs/screens 各票顶层截图并集 $(wc -l <<<"$have" | xargs) 个文件名，全在 v0.4 的 $(wc -l <<<"$want_v04" | xargs) 键与 #207 的 $(wc -l <<<"$want_207" | xargs) 键之内；#207 的 62 键齐套"
+    note_ok "screenshot-full-set：docs/screens/manifest 各票状态键段并集 $(wc -l <<<"$have" | xargs) 个文件名，全在 v0.4 的 $(wc -l <<<"$want_v04" | xargs) 键与 #207 的 $(wc -l <<<"$want_207" | xargs) 键之内；#207 的 62 键齐套"
   fi
 }
 
