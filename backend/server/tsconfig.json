@@ -1,0 +1,23 @@
+{
+  // 服务端包自己的 TypeScript 工程。存在理由不是「就近覆盖」，而是下面这一条：
+  //
+  // 根 tsconfig.json 把 persistence.module.ts、main.ts、bootstrap-command.ts
+  // 排除在 unit 层类型检查之外（#52：这批文件 import 生成的 Prisma Client，unit 层
+  // 无生成产物）。vite/vitest 的 esbuild 变换按「文件所属的 tsconfig 工程」解析
+  // 编译器选项：文件被根工程排除后不再属于任何工程，experimentalDecorators 不生效，
+  // @Module/@Injectable 等装饰器原样进入 node:vm，Node 抛
+  // SyntaxError: Invalid or unexpected token，集成层 68 个用例里 56 个直接失败。
+  //
+  // 本工程为 backend/server/src/** 提供独立的工程身份，使上述文件重新落在某个
+  // 工程内，装饰器选项随之生效。
+  //
+  // 删除本文件前必须在容器内跑 ./dev test integration 验证。
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
+  },
+  // 重置为空，不继承根工程的 exclude（根工程排除的正是本工程要覆盖的三个文件）。
+  "exclude": [],
+  "include": ["src/**/*.ts"]
+}
