@@ -79,9 +79,8 @@ import type {
 
 export const AUDIT_ACTION_AUTHZ_DENIED = 'authz.denied' as const;
 
-export {
-  AUTHZ_DENIED_REASONS as AUTHZ_DENY_REASONS,
-} from './vocabulary.ts';
+// 原因取值只有一个名字：正名 AUTHZ_DENIED_REASONS（在 vocabulary.ts 定义，本文件不再另起别名）。
+// 类型侧保留 AuthzDenyReason 别名——backend/identity 的 access-control.service.ts 在用。
 export type { AuthzDeniedReason as AuthzDenyReason } from './vocabulary.ts';
 
 /** 写入当时能确定的人员与机构。手机号、执法证号、口令不在此列。 */

@@ -13,7 +13,6 @@ export { isRejected, rejected, runAuditedTransaction } from './transaction.ts';
 export type { AuditEntry, AuditTrailFactory, OpenTransaction, Rejected } from './transaction.ts';
 export {
   AUDIT_ACTION_AUTHZ_DENIED,
-  AUTHZ_DENY_REASONS,
 } from './port.ts';
 export type {
   AuditAppend,
