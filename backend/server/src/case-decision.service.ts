@@ -19,6 +19,7 @@ import {
   DECISION_KIND_NAMES,
   DOSSIER_MATERIALS_RULE_ID,
   DOSSIER_MATERIALS_VERSION,
+  HANDLER_ROLES as CASE_HANDLER_ROLES,
   beijingDateOf,
   canTakeFilingStep,
   decideTransition,
@@ -80,7 +81,7 @@ const SUBMIT_OPCODE = 'doc.submit';
 const REVIEW_OPCODE = 'doc.admin.review';
 const APPROVE_OPCODE = 'doc.approve';
 const DECISION_TRANSITION = 'T23';
-const HANDLER_ROLES = new Set(['main', 'assist']);
+const HANDLER_ROLES = new Set<string>(CASE_HANDLER_ROLES);
 const FAIL_REASONS = new Set<string>(CASE_DECISION_FAILED_REASONS);
 
 export type CaseDecisionHttpOutcome =

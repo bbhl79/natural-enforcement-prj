@@ -11,6 +11,7 @@ import {
   AGENCY_CONFLICT_WARNING,
   agencyConflictNotice,
   CASE_STORE,
+  HANDLER_ROLES as CASE_HANDLER_ROLES,
   type AgencyConflictMark,
   type CaseStore,
 } from '@natural-enforcement/case';
@@ -29,7 +30,7 @@ import { UNIT_OF_WORK, type UnitOfWork } from './unit-of-work.ts';
 const MARK_OPCODE = 'doc.draft';
 const READ_OPCODE = 'case.read';
 
-const HANDLER_ROLES = new Set(['main', 'assist']);
+const HANDLER_ROLES = new Set<string>(CASE_HANDLER_ROLES);
 
 export type AgencyConflictHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }

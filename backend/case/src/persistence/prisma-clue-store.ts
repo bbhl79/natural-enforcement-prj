@@ -14,6 +14,7 @@ import { Prisma, type PrismaClient } from '../../../prisma/generated/prisma/clie
 
 import type { VerificationLayerResult } from '../clue/verification/port.ts';
 import { isAnonymousValue } from '../clue/registration/rules.ts';
+import { beijingDateOf } from '../clue/disposition/rules.ts';
 import {
   CLUE_STATUS_LABELS,
   DUPLICATE_OVERLAP_THRESHOLD,
@@ -1317,7 +1318,7 @@ export class PrismaClueStore implements ClueStore {
     }
     return rows.map((row) => {
       const letter = row.letterDate;
-      const letterDate = new Date(letter.getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const letterDate = beijingDateOf(letter);
       const attachments = (byTransfer.get(row.id) ?? []).map((material) => ({
         id: material.id,
         fileName: material.fileName,

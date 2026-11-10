@@ -9,6 +9,7 @@ import {
   type AuditTrailRecord,
 } from '@natural-enforcement/audit';
 import { AccessControlService, type ActorRef, type DenyReason } from '@natural-enforcement/identity';
+import { beijingDateOf } from '@natural-enforcement/case';
 
 import {
   describeAuditRow,
@@ -25,7 +26,6 @@ export const AUDIT_READ = 'audit.admin.read';
 export const AUDIT_EXPORT = 'audit.admin.export';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const SHANGHAI_OFFSET_MS = 8 * 60 * 60 * 1000;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const ACTOR_CODE_MAX = 64;
 
@@ -100,23 +100,18 @@ export type AuditSummaryOutcome =
   | { status: 200; body: { result: 'counted'; today: number } }
   | Denial;
 
-/** Asia/Shanghai 日历日。 */
-function shanghaiDate(at: Date): string {
-  return new Date(at.getTime() + SHANGHAI_OFFSET_MS).toISOString().slice(0, 10);
-}
-
 /** 日历日在 Asia/Shanghai 的零点。不是合法日期时为 null。 */
 function shanghaiMidnight(date: string): Date | null {
   if (!DATE.test(date)) return null;
   const at = new Date(`${date}T00:00:00.000+08:00`);
-  if (Number.isNaN(at.getTime()) || shanghaiDate(at) !== date) return null;
+  if (Number.isNaN(at.getTime()) || beijingDateOf(at) !== date) return null;
   return at;
 }
 
 /** 校验并补齐筛选条件。不合法时为 null。 */
 export function parseAuditFilter(input: AuditFilterInput, now: Date): AuditFilter | null {
-  const today = shanghaiDate(now);
-  const yesterday = shanghaiDate(new Date(now.getTime() - DAY_MS));
+  const today = beijingDateOf(now);
+  const yesterday = beijingDateOf(new Date(now.getTime() - DAY_MS));
   const from = input.from === undefined || input.from === null || input.from === '' ? yesterday : input.from;
   const to = input.to === undefined || input.to === null || input.to === '' ? today : input.to;
   if (typeof from !== 'string' || typeof to !== 'string') return null;
@@ -194,7 +189,7 @@ export class AuditBrowseService {
   /** 管理台首页「今日 N 条」（P3）：同一套授权与范围，库里只数条数，不取行、不写 audit.viewed。 */
   async summary(actor: ActorRef): Promise<AuditSummaryOutcome> {
     return this.uow.run<AuditSummaryOutcome>(async (tx) => {
-      const today = shanghaiDate(this.clock.now());
+      const today = beijingDateOf(this.clock.now());
       const ready = await this.authorize(tx, actor, AUDIT_READ, { from: today, to: today });
       if (!('scope' in ready)) {
         if ('outcome' in ready) return ready;

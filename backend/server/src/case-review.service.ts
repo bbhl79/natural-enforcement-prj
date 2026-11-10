@@ -17,6 +17,7 @@ import {
   CASE_STORE,
   CASE_SUPERVISION_ROLE,
   CLUE_STORE,
+  HANDLER_ROLES as CASE_HANDLER_ROLES,
   REVIEW_RETURN_REASON,
   activeConflicts,
   allowsObjection,
@@ -95,7 +96,7 @@ const APPROVE_OPCODE = 'doc.approve';
 const RECORD_OPCODE = 'case.review.record';
 // 过渡：明示放弃异议复用主办／协办可见的提交码，待 #230 回写 #71 时再定专用码。
 const WAIVE_OPCODE = 'doc.submit';
-const HANDLER_ROLES = new Set(['main', 'assist']);
+const HANDLER_ROLES = new Set<string>(CASE_HANDLER_ROLES);
 const FAIL_REASONS = new Set<string>(CASE_REVIEW_FAILED_REASONS);
 
 export type CaseReviewHttpOutcome =

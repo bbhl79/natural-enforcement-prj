@@ -20,6 +20,7 @@ import {
   DOSSIER_MATERIALS_RULE_ID,
   DOSSIER_MATERIALS_VERSION,
   EXECUTION_RECORD_KIND_NAMES,
+  HANDLER_ROLES as CASE_HANDLER_ROLES,
   canTakeFilingStep,
   closureBranchOf,
   decideTransition,
@@ -69,7 +70,7 @@ const SUBMIT_OPCODE = 'doc.submit';
 const REVIEW_OPCODE = 'doc.admin.review';
 const APPROVE_OPCODE = 'doc.approve';
 const EXECUTION_OPCODE = 'case.execution.record';
-const HANDLER_ROLES = new Set(['main', 'assist']);
+const HANDLER_ROLES = new Set<string>(CASE_HANDLER_ROLES);
 const FAIL_REASONS = new Set<string>(CASE_CLOSEOUT_FAILED_REASONS);
 
 export type CaseCloseoutHttpOutcome =

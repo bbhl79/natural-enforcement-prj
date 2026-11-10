@@ -2,7 +2,11 @@
 // 失败不改业务行。回流不改已有材料，也不改已有环节实例。
 
 import { Inject, Injectable } from '@nestjs/common';
-import { rejected, type CaseReturnedFailedReason } from '@natural-enforcement/audit';
+import {
+  CASE_RETURNED_FAILED_REASONS,
+  rejected,
+  type CaseReturnedFailedReason,
+} from '@natural-enforcement/audit';
 import {
   CASE_STAGE_CODES,
   CASE_STORE,
@@ -36,19 +40,7 @@ const DRAFT_OPCODE = 'doc.draft';
 const REASSIGN_REJECT_REASON = 'R10';
 const REASSIGN_REJECT_INHERITED = 'R9';
 
-const FAIL_REASONS = new Set<string>([
-  'missing-return-reason',
-  'missing-return-note',
-  'missing-return-target',
-  'missing-receiver',
-  'return-target-not-allowed',
-  'transition-disabled',
-  'external-return',
-  'receiver-not-allowed',
-  'signature-invalidated',
-  'invalid-state',
-  'concurrent-change',
-]);
+const FAIL_REASONS = new Set<string>(CASE_RETURNED_FAILED_REASONS);
 
 export interface CaseReturnInput {
   readonly reasonCode: string;

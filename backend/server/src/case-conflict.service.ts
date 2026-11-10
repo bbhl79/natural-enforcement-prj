@@ -16,6 +16,7 @@ import {
   CONFLICT_SOURCE_NAMES,
   CONFLICT_STATUS_NAMES,
   DECISION_CONCLUSION_NAMES,
+  HANDLER_ROLES as CASE_HANDLER_ROLES,
   INVESTIGATION_KIND_NAMES,
   SIGN_REFUSED_MESSAGE,
   SIGN_REFUSED_OUTLET,
@@ -53,7 +54,7 @@ const DECLARE_OPCODE = 'doc.draft';
 const DECIDE_OPCODE = 'doc.approve';
 const READ_OPCODE = 'case.read';
 
-const HANDLER_ROLES = new Set(['main', 'assist']);
+const HANDLER_ROLES = new Set<string>(CASE_HANDLER_ROLES);
 
 export type ConflictHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }

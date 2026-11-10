@@ -15,6 +15,7 @@ import {
 } from '@natural-enforcement/audit';
 import {
   CASE_STORE,
+  HANDLER_ROLES as CASE_HANDLER_ROLES,
   MATERIAL_EFFECTIVENESS_NAMES,
   REASSIGN_REASON_NAMES,
   bothHandlersUnavailable,
@@ -70,7 +71,7 @@ const APPROVE_RESTART_MESSAGE = '请退回或撤回后重新发起';
 /** 回避改派被退回后挂在案件上的提示（#279）。重新发起后消失。 */
 const RECUSAL_REASSIGN_NOTICE = '须重新发起回避改派';
 
-const STRUCTURE_KINDS = new Set(['main', 'assist']);
+const STRUCTURE_KINDS = new Set<string>(CASE_HANDLER_ROLES);
 
 export type CaseReassignHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }

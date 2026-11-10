@@ -2,7 +2,11 @@
 // 未启用的边、起点不符、X12、X13、X17、X18 都不改业务行。警告与提示同样不改业务行。
 
 import { Inject, Injectable } from '@nestjs/common';
-import { rejected, type CaseTransitionedFailedReason } from '@natural-enforcement/audit';
+import {
+  CASE_TRANSITIONED_FAILED_REASONS,
+  rejected,
+  type CaseTransitionedFailedReason,
+} from '@natural-enforcement/audit';
 import {
   CASE_INSTANCE_STATUS_NAMES,
   CASE_MAIN_STATUS_NAMES,
@@ -50,20 +54,7 @@ const PROCEDURE_TRANSITIONS = new Set([
   'T10', 'T10a', 'T10b', 'T11', 'T13', 'T14', 'T15', 'T16', 'T17',
 ]);
 
-const FAIL_REASONS = new Set<string>([
-  'transition-disabled',
-  'invalid-state',
-  'unknown-transition',
-  'X02',
-  'X03',
-  'X12',
-  'X13',
-  'X17',
-  'X18',
-  'advisory',
-  'concurrent-change',
-  'procedure-required',
-]);
+const FAIL_REASONS = new Set<string>(CASE_TRANSITIONED_FAILED_REASONS);
 
 export type CaseStateHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }

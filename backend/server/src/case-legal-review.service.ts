@@ -17,6 +17,7 @@ import {
 import {
   CASE_STORE,
   CASE_SUPERVISION_ROLE,
+  HANDLER_ROLES as CASE_HANDLER_ROLES,
   activeConflicts,
   applyWarningGate,
   assessMandatoryReview,
@@ -79,7 +80,7 @@ const APPROVE_OPCODE = 'doc.approve';
 const REASSIGN_OPCODE = 'case.reassign.submit';
 const MARK_OPCODE = 'doc.draft';
 const DISCUSSION_OPCODE = 'case.discussion.record';
-const HANDLER_ROLES = new Set(['main', 'assist']);
+const HANDLER_ROLES = new Set<string>(CASE_HANDLER_ROLES);
 const FAIL_REASONS = new Set<string>(CASE_LEGAL_REVIEW_FAILED_REASONS);
 
 /** 法审 5＋10 个工作日的规则键（#246 已登记）。 */

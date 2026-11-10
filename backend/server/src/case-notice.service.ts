@@ -14,6 +14,7 @@ import {
 import {
   CASE_STORE,
   CASE_SUPERVISION_ROLE,
+  HANDLER_ROLES as CASE_HANDLER_ROLES,
   activeMarkerKeys,
   applyWarningGate,
   assessHearing,
@@ -76,7 +77,7 @@ const SUBMIT_OPCODE = 'doc.submit';
 const REVIEW_OPCODE = 'doc.admin.review';
 const APPROVE_OPCODE = 'doc.approve';
 const HEARING_OPCODE = 'case.review.record';
-const HANDLER_ROLES = new Set(['main', 'assist']);
+const HANDLER_ROLES = new Set<string>(CASE_HANDLER_ROLES);
 const FAIL_REASONS = new Set<string>(CASE_NOTICE_FAILED_REASONS);
 
 export type CaseNoticeHttpOutcome =

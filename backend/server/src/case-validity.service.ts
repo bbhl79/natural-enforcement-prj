@@ -14,6 +14,7 @@ import {
 import {
   CASE_STORE,
   CASE_SUPERVISION_ROLE,
+  HANDLER_ROLES as CASE_HANDLER_ROLES,
   aggravationSourceValid,
   assertValidityGate,
   assessValidity,
@@ -64,7 +65,7 @@ const CONFIRM_OPCODE = 'doc.submit';
 const REISSUE_OPCODE = 'doc.submit';
 const GATE_OPCODE = 'doc.approve';
 const REVIEW_OPCODES = ['doc.admin.review', 'legal.opinion.submit'] as const;
-const HANDLER_ROLES = new Set(['main', 'assist']);
+const HANDLER_ROLES = new Set<string>(CASE_HANDLER_ROLES);
 const REVIEWER_ROLES = new Set(['行政审核', '法制审核']);
 const FAIL_REASONS = new Set<string>(CASE_VALIDITY_FAILED_REASONS);
 
