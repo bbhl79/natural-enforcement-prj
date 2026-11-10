@@ -28,28 +28,18 @@ export type {
   PasswordRuleCode,
   PublicPasswordRuleCode,
 } from './domain/password-policy.ts';
+// 端口（IdentityStore）留在出口，行与写形态不出——端口的方法签名用得到它们，
+// 但消费方拿到的是数据本身，不是这些形态的名字。与 backend/case 的出口同一口径。
 export {
   IDENTITY_STORE,
-  type AssignmentTransfer,
-  type ExportAuditRow,
   type IdentityStore,
   type IdentityTransaction,
   type IdentityUniqueConflict,
-  type OpcodeGrant,
   type OrgUnitNameVersionRow,
   type OrgUnitRow,
-  type OrgUnitToCreate,
   type PersonnelAssignmentRow,
-  type PersonnelNameVersionRow,
-  type PersonnelDirectoryRow,
-  type PersonnelCertToUpdate,
-  type PersonnelPostToCreate,
   type PersonnelProfileRow,
-  type PersonnelRoleToCreate,
-  type PasswordRotation,
   type PersonnelRow,
-  type PersonnelToCreate,
-  type UniqueWriteResult,
 } from './persistence/identity-store.ts';
 export { AccessControlService } from './services/access-control.service.ts';
 export { CredentialService, PASSWORD_HISTORY_DEPTH_TOKEN } from './services/credential.service.ts';
