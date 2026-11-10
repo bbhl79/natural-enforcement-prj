@@ -19,6 +19,8 @@
     "packages/queue/test",
     "packages/storage/src",
     "packages/storage/test",
+    "packages/audit/src",
+    "packages/audit/test",
     "backend/*/src",
     "backend/*/test"
   ],

@@ -48,6 +48,10 @@ const denial: AuthzDeniedEntry = {
   resourceType: 'personnel',
   resourceId: 'p-2',
   previousValue: null,
+  // 目标机构与来源（#119 修正，ADR 0011）。本夹具里对象机构未解析出来、操作者也没有
+  // 任职机构，故取操作者兜底且机构为空——与 access-control 的 actorFallback(null) 同义。
+  targetOrgUnitId: null,
+  targetOrgUnitBasis: 'actor-fallback',
 };
 
 describe('runAuditedTransaction', () => {
