@@ -282,6 +282,12 @@ module-public-entry	内部路径导入 backend/case/src/_v.ts → @natural-enfor
 
 **建议：`tools/structural-snapshot/`（新建目录）**，文件名 `<场景>.snapshot`。
 
+> 2026-11-10 注：本建议已落地，但该目录已于 2026-11-10 退役删除。其快照基线记 21 条规则，
+> 在位闸已是 28 条，compare.sh 按 21 条比对会对全部 29 个场景误报「不一致」；且红探针
+> `tools/structural-probe.sh`（42 条违例用例、覆盖 28 条目标规则，自清理，已接入
+> `dev lint structural-probe` 与 CI）已把等价性判据自动化并持续执行，取代了静态基线的职能。
+> 本节保留为该次改造的历史设计记录。
+
 理由：
 - 快照是**闸的衍生物**，与 `tools/structural-test.sh` 同处最便于对照，且**不能进 `integration/`**——闸会扫 `integration/`（`module-public-entry` 根含 `integration`，`:369`），快照文件里的违规字面量会被闸自己判红（`structural-probe.sh:7-9` 记的就是这个坑）。
 - 不能进 `docs/`——`docs/` 不是代码目录，闸不扫，但快照是机器产物不是人读文档。
