@@ -205,4 +205,15 @@ describe('e2e/verify API 环', () => {
     expect(summary.status, JSON.stringify(summary)).toBe('passed');
     expect(summary.failed).toEqual([]);
   });
+
+  // 负例目录里此前无人跑的三条：同幂等键异报文 409、土地交 Point 400、监督角色登记 403。
+  it.each([
+    'vf-sc-neg-idempotency-conflict',
+    'vf-sc-neg-land-point-geometry',
+    'vf-sc-neg-supervisor-register',
+  ])('punch：%s 正确拒绝算绿', async (scenarioId) => {
+    const summary = await runApiScenarios({ baseUrl, sessions }, [scenarioId]);
+    expect(summary.status, JSON.stringify(summary)).toBe('passed');
+    expect(summary.failed).toEqual([]);
+  });
 });

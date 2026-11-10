@@ -9,18 +9,14 @@ import path from 'node:path';
 
 import { AuthGateError } from './auth-gate.cjs';
 import { EvidenceWriter } from './evidence.ts';
-import { loadIdentity } from './load-fixtures.ts';
 import { repoRoot } from './paths.ts';
 import { runApiScenario } from './run-api-scenario.ts';
+import { ensurePersonnel, VERIFY_PERSONNEL } from './seed-personnel.ts';
 import { SessionCache } from './session.ts';
+import { LAYER_OVERLAY_SUITE } from './suites.ts';
 
-const EMPTY_SCENARIOS = ['vf-sc-auto-verify-land-empty-failed'] as const;
-const LAYER_SCENARIOS = [
-  'vf-sc-auto-verify-land-success',
-  'vf-sc-auto-verify-land-partial',
-  'vf-sc-auto-verify-land-duplicate',
-  'vf-sc-auto-verify-mineral-success',
-] as const;
+const [EMPTY_SCENARIO, ...LAYER_SCENARIOS] = LAYER_OVERLAY_SUITE;
+const EMPTY_SCENARIOS = [EMPTY_SCENARIO] as const;
 
 function arg(name: string): string {
   const index = process.argv.indexOf(name);
@@ -61,31 +57,6 @@ function overlay(mode: 'on' | 'off'): void {
   if (result.status !== 0) {
     throw new Error(`假图层 overlay ${mode} 退出 ${result.status ?? 'signal'}`);
   }
-}
-
-async function ensureIntake(sessions: SessionCache, baseUrl: string): Promise<void> {
-  const admin = await loadIdentity('admin-hq');
-  const cookie = await sessions.cookieOf(admin);
-  const tree = await fetch(`${baseUrl}/api/org-units`, { headers: { cookie } });
-  if (tree.status !== 200) throw new Error(`读取机构树失败：HTTP ${tree.status}`);
-  const body = (await tree.json()) as { orgUnits?: { id?: string; code?: string }[] };
-  const dept = body.orgUnits?.find((unit) => unit.code === 'ORG-DEPT-A');
-  if (!dept?.id) throw new Error('机构树缺少 ORG-DEPT-A');
-  const created = await fetch(`${baseUrl}/api/admin/personnel`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({
-      code: 'P-INTAKE-A',
-      name: '甲区内勤',
-      orgUnitId: dept.id,
-      mobilePhone: '13900002001',
-      initialPassword: 'Seed-pass-52',
-      roles: ['内勤'],
-    }),
-  });
-  if (created.status === 200 || created.status === 409) return;
-  const text = await created.text();
-  throw new Error(`种入 P-INTAKE-A 失败：HTTP ${created.status} ${text.slice(0, 300)}`);
 }
 
 async function clueOf(
@@ -157,7 +128,11 @@ async function main(): Promise<void> {
       if (summary.status !== 'passed') process.exitCode = 1;
       return;
     }
-    await ensureIntake(sessions, baseUrl);
+    await ensurePersonnel(
+      sessions,
+      baseUrl,
+      VERIFY_PERSONNEL.filter((person) => person.code === 'P-INTAKE-A'),
+    );
     overlay('off');
     for (const id of EMPTY_SCENARIOS) {
       await runApiScenario(ctx, id, writer);

@@ -6,8 +6,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { EvidenceWriter } from './evidence.ts';
-import { loadIdentity } from './load-fixtures.ts';
 import { runApiScenario } from './run-api-scenario.ts';
+import { ensurePersonnel, VERIFY_PERSONNEL } from './seed-personnel.ts';
 import { SessionCache } from './session.ts';
 
 const SCENARIO = 'vf-sc-next-todo-buttons';
@@ -17,40 +17,6 @@ function arg(name: string): string {
   const value = index >= 0 ? process.argv[index + 1] : undefined;
   if (!value) throw new Error(`缺少参数 ${name}`);
   return value;
-}
-
-async function ensurePerson(
-  sessions: SessionCache,
-  baseUrl: string,
-  input: {
-    readonly code: string;
-    readonly name: string;
-    readonly orgCode: string;
-    readonly mobilePhone: string;
-  },
-): Promise<void> {
-  const admin = await loadIdentity('admin-hq');
-  const cookie = await sessions.cookieOf(admin);
-  const tree = await fetch(`${baseUrl}/api/org-units`, { headers: { cookie } });
-  if (tree.status !== 200) throw new Error(`读取机构树失败：HTTP ${tree.status}`);
-  const body = (await tree.json()) as { orgUnits?: { id?: string; code?: string }[] };
-  const org = body.orgUnits?.find((unit) => unit.code === input.orgCode);
-  if (!org?.id) throw new Error(`机构树缺少 ${input.orgCode}`);
-  const created = await fetch(`${baseUrl}/api/admin/personnel`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', cookie },
-    body: JSON.stringify({
-      code: input.code,
-      name: input.name,
-      orgUnitId: org.id,
-      mobilePhone: input.mobilePhone,
-      initialPassword: 'Seed-pass-52',
-      roles: ['内勤'],
-    }),
-  });
-  if (created.status === 200 || created.status === 409) return;
-  const text = await created.text();
-  throw new Error(`种入 ${input.code} 失败：HTTP ${created.status} ${text.slice(0, 300)}`);
 }
 
 function clueOf(actual: unknown): { id: string; code: string } {
@@ -73,18 +39,11 @@ async function main(): Promise<void> {
   const sessions = new SessionCache(baseUrl);
   let blocked = false;
   try {
-    await ensurePerson(sessions, baseUrl, {
-      code: 'P-INTAKE-A',
-      name: '甲区内勤',
-      orgCode: 'ORG-DEPT-A',
-      mobilePhone: '13900002001',
-    });
-    await ensurePerson(sessions, baseUrl, {
-      code: 'P-INTAKE-ST',
-      name: '甲所内勤',
-      orgCode: 'ORG-STATION-A',
-      mobilePhone: '13900002003',
-    });
+    await ensurePersonnel(
+      sessions,
+      baseUrl,
+      VERIFY_PERSONNEL.filter((person) => person.code === 'P-INTAKE-A' || person.code === 'P-INTAKE-ST'),
+    );
     await runApiScenario({ baseUrl, sessions }, SCENARIO, writer);
   } catch (error) {
     blocked = true;
