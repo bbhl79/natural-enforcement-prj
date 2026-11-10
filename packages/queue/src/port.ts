@@ -1,5 +1,5 @@
 // 队列抽象（QueuePort，#55）：业务与设施代码对队列的唯一面向。
-// 可注入：经 QueueModule 的 QUEUE_PORT provider 注入本接口，不面向 BullMQ 编程
+// 可注入：经 QUEUE_PORT 令牌注入本接口（组合根手工装配），不面向 BullMQ 编程
 //（BullMQ/ioredis 只许出现在本设施包内，结构测试 queue-facility-entry 机器兜底）。
 
 /** 已投递任务的引用；消费确认只认 JobRef，不暴露 BullMQ Job 类型 */

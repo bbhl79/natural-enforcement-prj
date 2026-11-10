@@ -1,6 +1,6 @@
 // 默认存储端口（#53 设施包；#211 启动包复用）。
-// 按运行参数建 RustFS 适配的存储端口：参数取值与 StorageModule 的 provider 同一份，
-// 两处不各写一份环境变量默认值。
+// 按运行参数建 RustFS 适配的存储端口：环境变量的默认值只此一份，
+// 组合根装配时与此处取同一份，不各写一份。
 // 刻意不出公共出口的仍是 S3Client 与签名层——本函数只交出 StoragePort。
 
 import { createRustFsStorage } from './rustfs-storage.ts';

@@ -1,5 +1,5 @@
 // 存储接口（StoragePort，#53）：业务与设施代码对文件版本存储的唯一面向。
-// 可注入：经 StorageModule 的 STORAGE_PORT provider 注入本接口，不面向 S3/RustFS 编程。
+// 可注入：经 STORAGE_PORT 令牌注入本接口（组合根手工装配），不面向 S3/RustFS 编程。
 //
 // 追加式（append-only）最保守语义（#47 / #53，衔接 #18）：
 // - 接口只含「写入新版本 / 读指定版本 / 列举版本」三个操作，刻意不存在
