@@ -1,19 +1,29 @@
 // 真实设施验证（#213 验收项「真实设施验证 BullMQ attempts 语义与图层服务不可用判 unavailable」）。
 //
 // 本脚本不入测试层：它要连真实 Redis 并起真实 HTTP 端点，跑法与普通用例不同。
+// 完整调用规程（前置、跑法、判读、何时重跑）见同目录 verify-verification-facilities.md。
 // 跑法（仓库根目录执行，容器内、node 原生 type-stripping）：
 //
-//   docker run --rm --network natural-enforcement_default \
+//   tar -C "$PWD" --format=ustar \
+//     --exclude='.git' --exclude='node_modules' --exclude='*/node_modules' \
+//     --exclude='dist' --exclude='*/dist' --exclude='.run' --exclude='e2e/results' \
+//     --exclude='backend/prisma/generated' --exclude='artifacts' \
+//     --exclude='.env' --exclude='.env.local' --exclude='*.local.js' --exclude='*.local' \
+//     -cf - . \
+//   | docker run --rm --pull=never -i --network natural-enforcement_default \
 //     -e REDIS_URL=redis://redis:6379 \
-//     -v "$PWD:/repo:ro" -v natural-enforcement-integration-node-modules:/work/node_modules \
+//     -v natural-enforcement-integration-node-modules:/work/node_modules \
 //     -v natural-enforcement-test-store:/pnpm/store \
 //     -v natural-enforcement-corepack:/root/.cache/node/corepack \
 //     -v natural-enforcement-pnpm-cache:/root/.cache/pnpm \
 //     -w /work node:24.21.0-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 \
-//     sh -c "cp -a /repo/. /work/; corepack enable; \
+//     sh -c "set -e; mkdir -p /work; tar -x -f - -C /work; corepack enable; \
 //       pnpm install --frozen-lockfile --ignore-scripts --config.strict-dep-builds=false \
 //         --store-dir /pnpm/store --prefer-offline; \
 //       node --experimental-transform-types --experimental-strip-types tools/verify-verification-facilities.ts"
+//
+// 灌源用 tar 经 stdin 进 /work，不用 bind 挂宿主仓库——WSL 宿主到容器的 bind 只暴露
+// 残缺视图（/repo 下 packages/ 与 tools/ 整个不在），bind 形态在 WSL2 上取不到本脚本。
 //
 // 验三件事：
 // 1. BullMQ 的 attempts 含首次执行：投递 attempts=3 的瞬时失败任务，消费端真跑 3 次。
