@@ -1,3 +1,4 @@
+// 用途：把失败步骤记录聚类成去重后的失败簇，并规划建票、评论或重开的动作。
 // 发现器信号源 3（spec #322 二期 T6 / 票 #328）：runnable 转红与 blocked 证据包聚类。
 // 纯函数，无 I/O；本文件零 fs（写边界门禁只允许 report.ts 写文件）。
 // 证据读取由 harness/load-failure-records.ts 负责，GitHub 动作在 harness/apply-failure-clusters.ts。

@@ -1,3 +1,6 @@
+// 用途：dev health 的队列探测进程：投递一条健康检查任务，在同进程起 Worker 消费并等待确认；任一环节失败即置退出码 1。
+// 调用方：dev 脚本的 run_queue_probe（dev health 经 check_queue 调用），在工具链容器内以 node 直接运行本文件。
+// 边界：只做队列连通性探测，不处理业务任务；直接使用 bullmq 与 ioredis，属 queue-facility-entry 规则对本设施包的豁免范围。
 // dev health 队列探测入口（#55）：经队列接口（QueuePort）真实投递健康检查任务，
 // 并经消费确认通道等待该任务被消费完成——不是裸 redis ping。
 // 运行方式：node packages/queue/src/probe.ts（node 24 原生 type-stripping），
@@ -13,6 +16,7 @@ import {
   type HealthCheckResult,
 } from './health-check.ts';
 
+// 探测专用队列名（字符串）；与 packages/queue/src/tokens.ts 导出的 QUEUE_NAME 令牌（Symbol）无关。
 const QUEUE_NAME = 'system.health';
 const PROBE_TIMEOUT_MS = 10_000;
 

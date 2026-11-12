@@ -1,3 +1,5 @@
+// 用途：定义业务唯一冲突错误及类型守卫，供服务层与接口层区分 409。
+// 调用方：本模块人员服务与 backend/server/src/ 下相关人员接口。
 import type { IdentityUniqueConflict } from '../persistence/identity-store.ts';
 
 /**
@@ -11,6 +13,7 @@ export class AlreadyExistsError extends Error {
   }
 }
 
+/** 判断错误是否为业务唯一冲突，供接口层统一映射 409。 */
 export function isAlreadyExists(error: unknown): error is AlreadyExistsError {
   return error instanceof AlreadyExistsError;
 }

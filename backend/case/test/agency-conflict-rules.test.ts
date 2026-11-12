@@ -19,6 +19,7 @@ const mark: AgencyConflictMark = {
   createdAt: new Date('2026-10-27T00:00:00.000Z'),
 };
 
+// #263 机关层利害关系的勾选判定与提示出口，并锁定其不构成任何签出或呈批门禁。
 describe('机关层利害关系提示', () => {
   it('没有记录时未勾选，有一行时已勾选并给出提示', () => {
     expect(agencyConflictMarked([])).toBe(false);

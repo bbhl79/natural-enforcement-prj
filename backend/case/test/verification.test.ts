@@ -55,6 +55,7 @@ function layerOf(overrides: Partial<VerificationLayerResult>): VerificationLayer
   };
 }
 
+// #213 核查图层目录：七类核查图层加街道镇边界，不虚构矿权图层。
 describe('核查图层目录', () => {
   it('初始八类图层：七类核查图层加街道镇边界', () => {
     expect(VERIFICATION_LAYERS).toHaveLength(7);
@@ -69,6 +70,7 @@ describe('核查图层目录', () => {
   });
 });
 
+// #213 核查状态口径：仅土地与矿产需要核查，终态线索不再允许重跑，三态由相交面积判定。
 describe('核查状态口径', () => {
   it('只有土地与矿产跑内业核查', () => {
     expect(requiresVerification('land')).toBe(true);
@@ -90,6 +92,7 @@ describe('核查状态口径', () => {
   });
 });
 
+// #213 核查报告组装：逐层面积与相交比例，不可用层如实标记，相交要素不截断。
 describe('核查报告', () => {
   it('每层给出图斑总面积、相交面积、界外面积与相交比例', () => {
     const report = buildVerificationReport({
@@ -183,6 +186,7 @@ describe('核查报告', () => {
   });
 });
 
+// #213 分析图组装：线索面部件、命中图层要素与相交多边形一并输出为 FeatureCollection。
 describe('分析图', () => {
   it('含全部线索面部件、相交要素与相交多边形', () => {
     const analysis = JSON.parse(
@@ -222,6 +226,7 @@ describe('分析图', () => {
   });
 });
 
+// #213 空间对象版本：几何变化即版本变化，同一几何的版本稳定。
 describe('空间对象版本', () => {
   it('几何一改版本即变', () => {
     const before = spatialVersionOf(REQUEST.parts);
@@ -234,6 +239,7 @@ describe('空间对象版本', () => {
   });
 });
 
+// #213 核查执行端口默认实现：按服务地址远程查询，未配置、服务不可用与响应不合规均判 unavailable。
 describe('核查执行端口的默认实现（按服务地址远程查询）', () => {
   it('未配置服务地址的层判 unavailable，不冒充查过没有', async () => {
     const port = createLayerServiceVerificationPort({ serviceUrls: {} });

@@ -105,6 +105,7 @@ function store(extra: Partial<IdentityStore> = {}): IdentityStore {
 
 const authed = (personnelId: string): ActorRef => ({ personnelId, authenticated: true });
 
+// 验证新建根机构一律按 scope-denied 拒绝，未认证与无权时不写库（#123）。
 describe('根机构登记', () => {
   const tx = (backing: IdentityStore) => ({ store: backing, client: null });
 
@@ -152,6 +153,7 @@ describe('根机构登记', () => {
   });
 });
 
+// 验证调岗三笔写入收成一次、事务绑定与拒绝时携带留痕行（#119）。
 describe('调岗写入', () => {
   it('三次写入收成一次 transferAssignment', async () => {
     const transferAssignment = vi.fn<(transfer: AssignmentTransfer) => Promise<void>>(
@@ -277,6 +279,7 @@ describe('调岗写入', () => {
   });
 });
 
+// 验证工号冲突抛 AlreadyExistsError，且不再写名称版本与任职（#119）。
 describe('业务唯一冲突', () => {
   it('登记时工号已存在，抛 AlreadyExistsError（personnel-code），不再写名称版本与任职', async () => {
     const insertPersonnelNameVersion = vi.fn();

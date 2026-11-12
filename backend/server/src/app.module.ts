@@ -1,3 +1,5 @@
+// 用途：装配 HTTP 进程的控制器、服务提供者、来源门禁与全局会话守卫。
+// 调用方：backend/server/src/persistence.module.ts 的 createApplication。
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 

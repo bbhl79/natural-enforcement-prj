@@ -1,3 +1,4 @@
+// 用途：汇总利害关系与回避纯规则及过渡期决定人席位映射的对外导出。
 export {
   ACTIVE_CONFLICT_STATUSES,
   CONFLICT_SOURCE_NAMES,

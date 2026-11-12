@@ -1,3 +1,7 @@
+// 用途：决定呈批的读取、拟制、提交、审核与批准；批准时落 T23 并写决定与迁移留痕。
+// 调用方：backend/server/src/case-decision.controller.ts。
+// 边界：授权经 authorize（拒绝先写 authz.denied 再抛错）；批准前调用新旧比对、法审与有效性检查；写动作在交互式事务内。
+// 依据：#270、#271、#248。
 // 决定（E09／T23）的读写（#270）。判定在 case 包的纯规则里，这里只喂事实、落库、写留痕。
 // 决定呈批沿用 doc.draft / doc.submit / doc.admin.review / doc.approve。
 // 批准时依次过：新旧比对（#271）、法审与集体讨论闸口（#269）、有效性闸口（#248）、
@@ -84,6 +88,7 @@ const DECISION_TRANSITION = 'T23';
 const HANDLER_ROLES = new Set<string>(CASE_HANDLER_ROLES);
 const FAIL_REASONS = new Set<string>(CASE_DECISION_FAILED_REASONS);
 
+/** 决定接口的结果；状态码区分成功、输入不合规、拒绝、找不到与冲突。 */
 export type CaseDecisionHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }
   | { readonly status: 400; readonly body: Record<string, unknown> }
@@ -139,6 +144,7 @@ interface StoredDecisionContent extends DecisionContent {
   readonly frozenDecisionId: string | null;
 }
 
+/** 决定（E09／T23）服务：把案件事实喂给纯规则引擎，落库并写留痕。 */
 @Injectable()
 export class CaseDecisionService {
   constructor(

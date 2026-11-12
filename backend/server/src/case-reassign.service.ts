@@ -1,3 +1,7 @@
+// 用途：改派呈批的发起、提交、审核、批准、退回与撤回，以及回避后的材料效力认定。
+// 调用方：backend/server/src/case-reassign.controller.ts。
+// 边界：授权经 authorize（拒绝先写 authz.denied 再抛错）；批准前名单不变；写动作在交互式事务内。
+// 依据：#239、#230、ADR 0011。
 // 改派呈批（#239，T33）与回避后材料效力认定。
 // 判定在 case 包的纯函数里，这里只喂事实、落库、写留痕。
 // 发起用 case.reassign.submit，批准用 doc.approve；批准前名单不变。
@@ -73,6 +77,7 @@ const RECUSAL_REASSIGN_NOTICE = '须重新发起回避改派';
 
 const STRUCTURE_KINDS = new Set<string>(CASE_HANDLER_ROLES);
 
+/** 改派接口的结果；状态码区分成功、输入不合规、拒绝、找不到与冲突。 */
 export type CaseReassignHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }
   | { readonly status: 400; readonly body: Record<string, unknown> }
@@ -100,6 +105,7 @@ interface ReassignFailure {
   readonly basis?: string | null;
 }
 
+/** 发起改派呈批的输入：新主办、协办名单、理由码、说明与冲突线索。 */
 export interface ReassignSubmitInput {
   readonly mainId: string;
   readonly assistIds: readonly string[];
@@ -108,6 +114,7 @@ export interface ReassignSubmitInput {
   readonly conflictLineageId: string | null;
 }
 
+/** 改派呈批与材料效力认定服务：把事实喂给纯函数，落库并写留痕。 */
 @Injectable()
 export class CaseReassignService {
   constructor(

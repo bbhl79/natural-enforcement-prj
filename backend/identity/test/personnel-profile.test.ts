@@ -28,6 +28,7 @@ const valid = {
   posts: [] as string[],
 };
 
+// 验证登记必填、长度、手机号、岗位标记与口令规则码（#105 故事 28、29）。
 describe('登记规则（#105 故事 28、29）', () => {
   it('六项齐全、口令合规时没有规则码', () => {
     expect(registrationRules(valid)).toEqual([]);
@@ -77,6 +78,7 @@ describe('登记规则（#105 故事 28、29）', () => {
   });
 });
 
+// 验证未登记、有效、临期、过期与失效的推导及北京时间日界（#133）。
 describe('执法证情况（北京时间日界，30 天内到期）', () => {
   const now = new Date('2026-10-17T15:59:00.000Z'); // 北京时间 2026-10-17 23:59
   const day = (text: string) => new Date(`${text}T00:00:00.000Z`);
@@ -99,13 +101,14 @@ describe('执法证情况（北京时间日界，30 天内到期）', () => {
     expect(certStatusOf('C-1', day('2026-10-17'), 'valid', next)).toBe('expired');
   });
 
-  it('证件状态为「失效」即失效，不再按有效期推导（#133，Lei Hu 7-3）', () => {
+  it('证件状态为「失效」即失效，不再按有效期推导（#133，项目负责人 7-3）', () => {
     expect(certStatusOf('C-1', day('2030-01-01'), 'invalid', now)).toBe('invalid');
     expect(certStatusOf('C-1', day('2026-10-16'), 'invalid', now)).toBe('invalid');
     expect(certStatusOf(null, null, 'invalid', now)).toBe('none');
   });
 });
 
+// 验证执法资格 fail-closed 与到期当天仍有效的日界比较（#133）。
 describe('执法资格判定（#133 fail-closed）', () => {
   const day = (text: string) => new Date(`${text}T00:00:00.000Z`);
   const beforeMidnight = new Date('2026-10-17T15:59:00.000Z'); // 北京时间 2026-10-17 23:59
@@ -125,6 +128,7 @@ describe('执法资格判定（#133 fail-closed）', () => {
   });
 });
 
+// 验证执法证登记的三项必填、日历日解析与留痕前值格式（#133）。
 describe('执法证登记规则（#133）', () => {
   const filled = { certNo: ' GD-0001 ', certExpiresOn: '2031-09-16', certStatus: 'valid' };
 
@@ -160,6 +164,7 @@ describe('执法证登记规则（#133）', () => {
   });
 });
 
+// 验证角色显示顺序与去重（GLOSSARY「角色」、ADR 0009）。
 describe('角色顺序', () => {
   it('按七个角色的固定顺序，去重', () => {
     expect(sortRoleNames(['系统管理', '经办', '内勤', '经办'])).toEqual(['内勤', '经办', '系统管理']);
@@ -173,6 +178,7 @@ const editing = {
   posts: [] as string[],
 };
 
+// 验证编辑规则不收口令，且姓名、手机号、角色、岗位标记各给规则码（#129）。
 describe('编辑规则（#105 故事 33，#129）', () => {
   it('姓名、手机号、角色齐全时没有规则码；岗位标记可多选也可不选', () => {
     expect(updateRules(editing)).toEqual([]);
@@ -205,6 +211,7 @@ describe('编辑规则（#105 故事 33，#129）', () => {
   });
 });
 
+// 验证编辑差异只列变化项，全空即重复授予或摘除（#105:219）。
 describe('编辑差异（#105:219 重复授予或摘除返回 200 不写留痕）', () => {
   const current = {
     name: '陈晓宁',

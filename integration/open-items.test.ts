@@ -328,6 +328,7 @@ afterAll(async () => {
   await cloned?.close();
 });
 
+// #219：默认真实实现下的未办结事项计数，停用机构时按真实计数拒绝。
 describe('#219 真实 OpenItems 计数（默认装配）', () => {
   it('派机构后停用承办机构 → 409 org-has-open-items，clues≥1，失败留痕存在，机构未停用', async () => {
     const station = await addUnit('station', org.deptA);
@@ -482,6 +483,7 @@ describe('#219 真实 OpenItems 计数（默认装配）', () => {
   });
 });
 
+// #219：派机构与停用共用机构行锁，验证并发下的互斥与可见性。
 describe('#219 派机构与停用共用机构行锁', () => {
   it('分派持锁未提交时停用被挡住；提交后停用见未办结 409', async () => {
     const station = await addUnit('station', org.deptA);

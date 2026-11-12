@@ -1,3 +1,7 @@
+// 用途：登录失败次数闸，按来源地址在 15 分钟窗口内计数，达到 10 次后封禁 30 分钟。
+// 调用方：backend/server/src/auth.service.ts；实例由 backend/server/src/app.module.ts 创建。
+// 边界：判定条件为地址非空、不在允许名单、封禁未到期；只在本进程内存计数，重启后清零。名单只在 dev 或 verify 档且非 production 时读取。
+//
 import { Injectable } from '@nestjs/common';
 
 const WINDOW_MS = 15 * 60 * 1000;

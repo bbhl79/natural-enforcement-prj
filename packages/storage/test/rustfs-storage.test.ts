@@ -7,6 +7,7 @@ import type { StoragePort } from '../src/port.ts';
 import { createRustFsStorage } from '../src/rustfs-storage.ts';
 import type { S3Client } from '../src/s3-client.ts';
 
+// 追加式端口契约：接口只含写入新版本与按版本读取，改写与删除在类型层无表达通道（#53）。
 describe('StoragePort 追加式契约（#53，append-only 最保守语义）', () => {
   it('接口只含 putVersion/readVersion：改写/删除成员在类型层即被禁止', () => {
     type PortKeys = keyof StoragePort;
@@ -22,6 +23,7 @@ describe('StoragePort 追加式契约（#53，append-only 最保守语义）', (
   });
 });
 
+// 适配器行为：把 StoragePort 的写入与读取翻译成协议层调用，写入携带对象锁保留头。
 describe('RustFS 适配器（StoragePort 实现）', () => {
   const client = {
     putObject: vi.fn(),

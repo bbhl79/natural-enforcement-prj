@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 /* eslint-disable @typescript-eslint/no-require-imports */
+// 用途：自动核查夹具的 headless 页面取证，按夹具核对工作台与下载结果。
+// 用法：由 run-ui-auto-verification.sh 调用；EVIDENCE_DIR 必填，VERIFY_UI_ONLY 选择夹具。
+// 退出码：0 全绿；1 有失败或认证门禁 blocked；2 缺少 EVIDENCE_DIR。
 // 自动核查四条夹具的 headless 页面取证。
 // 不打开有头窗口。截图、video、trace 写到 EVIDENCE_DIR。
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
 
+// 按同目录或上级目录查找并加载 auth-gate.cjs；都找不到时抛错。
 function loadAuthGate() {
   const candidates = [
     path.join(__dirname, 'auth-gate.cjs'),
@@ -35,6 +39,7 @@ fs.mkdirSync(EVIDENCE_DIR, { recursive: true });
 const manifest = JSON.parse(fs.readFileSync(path.join(EVIDENCE_DIR, 'clue-manifest.json'), 'utf8'));
 const steps = [];
 
+// 追加一条步骤记录，写 steps/<scenarioId>-<stepId>.json 并打印。
 function record(scenarioId, stepId, pass, expected, actual, evidence = []) {
   const row = { scenarioId, stepId, pass, expected, actual, evidence };
   steps.push(row);
@@ -44,6 +49,7 @@ function record(scenarioId, stepId, pass, expected, actual, evidence = []) {
   console.log(JSON.stringify({ scenarioId, stepId, pass }));
 }
 
+// 截整页图到 <scenarioId>/ 下，返回相对证据路径。
 async function shot(page, scenarioId, name) {
   const dir = path.join(EVIDENCE_DIR, scenarioId);
   fs.mkdirSync(dir, { recursive: true });
@@ -52,11 +58,13 @@ async function shot(page, scenarioId, name) {
   return rel;
 }
 
+// 跑一次页面登录；首登或过期时改密。
 async function login(page, mobile) {
   await loginPageOnce(page, BASE_URL, mobile, loginPassword(SEED_PASSWORD));
   await changePasswordOnce(page, NEW_PASSWORD);
 }
 
+// 打开工作台的指定步骤与线索，等待卡片出现。
 async function openWorkbench(page, step, clueId) {
   await page.goto(`${BASE_URL}/workbench?step=${step}&clue=${encodeURIComponent(clueId)}`, {
     waitUntil: 'domcontentloaded',
@@ -66,14 +74,17 @@ async function openWorkbench(page, step, clueId) {
   await page.waitForTimeout(500);
 }
 
+// 取页面正文文本；取不到时返回空串。
 async function bodyText(page) {
   return page.locator('body').innerText().catch(() => '');
 }
 
+// 返回正文中缺失的关键字列表；空列表表示全部命中。
 function includesAll(text, needles) {
   return needles.filter((item) => !text.includes(item));
 }
 
+// 经页面请求下载核查报告或分析图，存到证据目录并返回状态与字节数。
 async function saveDownload(page, clueId, kind, scenarioId) {
   const response = await page.request.get(`${BASE_URL}/api/clues/${clueId}/verification/${kind}`);
   const text = await response.text();
@@ -83,6 +94,7 @@ async function saveDownload(page, clueId, kind, scenarioId) {
   return { status: response.status(), bytes: text.length, rel };
 }
 
+// 为一条夹具开独立上下文，登录后执行 visit，最后写 http 日志与 trace。
 async function runCase(browser, scenarioId, mobile, visit) {
   const context = await browser.newContext({
     ignoreHTTPSErrors: true,
@@ -128,6 +140,7 @@ async function runCase(browser, scenarioId, mobile, visit) {
   return failed;
 }
 
+// 按 VERIFY_UI_ONLY 选择夹具，逐条跑页面取证并写 summary。
 async function main() {
   if (process.env.HEADED === '1' || process.env.PW_HEADED === '1') {
     console.log(JSON.stringify({ headedIgnored: true, reason: '本脚本只跑 headless' }));

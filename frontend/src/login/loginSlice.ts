@@ -1,3 +1,4 @@
+// 用途：登录与会话的前端状态机：登录、改密、退出、会话查询与到期横幅的切片。
 import { createAsyncThunk, createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 import { forgetExpiryDismissed, readExpiryDismissed, rememberExpiryDismissed } from './expiryNotice';
@@ -17,8 +18,10 @@ export type AuthPhase =
   | 'expired'
   | 'error';
 
+/** 强制改密的两种情形：首登与过期。 */
 export type PasswordChangeKind = 'first-login' | 'expired';
 
+/** 口令校验失败规则码对应的用户文案。 */
 export const PASSWORD_RULE_TEXT: Record<string, string> = {
   'too-short': '口令至少 10 位',
   'too-long': '口令最多 64 位',
@@ -28,7 +31,7 @@ export const PASSWORD_RULE_TEXT: Record<string, string> = {
   common: '不能使用常见弱口令',
   'contains-code': '不能包含本人工号',
   'same-as-current': '不能与当前口令相同',
-  // 命中口令历史（ADR 0015，#132；Lei Hu 2026-10-17 18:56 定稿句）。只在本人改密出现。
+  // 命中口令历史（ADR 0015，#132；项目负责人 2026-10-17 定稿句）。只在本人改密出现。
   reused: '新口令不能与你最近 5 次使用过的口令相同，请换一个。',
 };
 
@@ -41,6 +44,7 @@ export const PASSWORD_CONCURRENT_TEXT = '口令刚被另一次操作修改，本
 /** 两次输入的新口令不一致（#292）。 */
 export const PASSWORD_MISMATCH_TEXT = '两次输入的新口令不一致';
 
+/** 会话里的操作者信息，含角色与本人允许的操作码清单。 */
 export interface OperatorSession {
   name: string;
   code: string;
@@ -50,6 +54,7 @@ export interface OperatorSession {
   opcodes: string[];
 }
 
+/** 登录与会话的完整前端状态，含页面态与认证态。 */
 export interface LoginState {
   screen: LoginScreen;
   phone: string;
@@ -104,6 +109,7 @@ const initialState: LoginState = {
   sessionRequest: null,
 };
 
+/** 是否显示口令到期横幅：已登录、剩余 7 天内且本会话未关闭。 */
 export function expiryNoticeVisible(state: LoginState): boolean {
   return state.phase === 'authenticated'
     && state.daysRemaining !== null
@@ -122,6 +128,7 @@ export function passwordChangeKindFromDenial(
   return null;
 }
 
+/** 锁定与停用两种屏幕下登录表单禁用。 */
 export function loginFormDisabled(screen: LoginScreen): boolean {
   return screen === 'locked' || screen === 'deactivated';
 }
@@ -215,6 +222,7 @@ export const loadSession = createAsyncThunk<SessionView, { refresh?: boolean } |
   },
 );
 
+/** 提交登录：成功时写入操作者与会话信息，失败以结果码交回页面。 */
 export const submitLogin = createAsyncThunk<
   OperatorSession & { daysRemaining?: number | null; noticeTag?: string | null },
   void,
@@ -264,6 +272,7 @@ export const submitLogin = createAsyncThunk<
   },
 );
 
+/** 退出登录：清掉到期横幅关闭记录并通知服务端结束会话。 */
 export const logout = createAsyncThunk('login/logout', async () => {
   forgetExpiryDismissed();
   await fetch('/api/auth/logout', { method: 'POST' });
@@ -286,6 +295,7 @@ type PasswordFailure =
   | { result: 'concurrent-change' }
   | { result: 'password-change' };
 
+/** 提交改密：强制改密不带当前口令，自愿改密必须带；失败以结果码交回页面。 */
 export const submitPassword = createAsyncThunk<
   OperatorSession & { daysRemaining?: number | null; noticeTag?: string | null },
   void,
@@ -558,6 +568,7 @@ const loginSlice = createSlice({
   },
 });
 
+/** 同步动作的导出集合；各动作的语义见对应 reducer。 */
 export const {
   setPhone,
   setPassword,

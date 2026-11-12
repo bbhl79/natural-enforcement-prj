@@ -1,8 +1,9 @@
+// 用途：生产引导命令行入口：校验参数与口令文件，注册根机构与首个管理员并输出结果。
 // 生产引导命令入口（#105「生产引导命令（D5）」，#131）。在 server 镜像里执行：
 //   node --import /work/backend/server/register.mjs /work/backend/server/src/bootstrap-command.ts \
 //     --root-code <根机构编码> --root-name <名称> --admin-code <工号> --admin-name <姓名> --admin-mobile <手机号>
 // 环境：DATABASE_URL；BOOTSTRAP_PASSWORD_FILE = 口令文件路径（挂载文件或 secret）。
-// 执行顺序：迁移 → 参照种子 → 引导。只在上线时执行一次，不进部署流水线。没有 HTTP 入口。
+// 前置步骤：迁移与参照种子由外部先执行（e2e/cases/06-bootstrap.sh 的 prepare_database）；本命令只做引导。只在上线时执行一次，不进部署流水线。没有 HTTP 入口。
 // 根类型检查排除本文件（经 persistence.module.ts 引用生成客户端），由 integration 层编译。
 import { readFile } from 'node:fs/promises';
 

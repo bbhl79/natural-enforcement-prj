@@ -1,9 +1,13 @@
+// 用途：判定验证传输地址是否为获准的直连客户端，并探测主机端口可达性。
+// 用法：由 check-identity-prep.cjs 与 shell 脚本调用；也可直接以 node 运行做单次探测。
+// 退出码：0 可达；1 传输偏离或不可达；2 缺少地址。
 /* eslint-disable @typescript-eslint/no-require-imports */
 'use strict';
 
 const { URL } = require('node:url');
 const net = require('node:net');
 
+// 解析地址并分类：nginx 主机名与 compose 别名不算获准客户端。
 function classifyTransport(baseUrl) {
   let parsed;
   try {
@@ -22,6 +26,7 @@ function classifyTransport(baseUrl) {
   return { ok: true, reason: 'declared-client', host, port };
 }
 
+// 3 秒内探测主机端口能否建立 TCP 连接；超时与出错都返回 false。
 function probe(host, port) {
   return new Promise((resolve) => {
     const socket = net.connect({ host, port: Number(port) });
@@ -36,6 +41,7 @@ function probe(host, port) {
   });
 }
 
+// 先分类地址，再按解析出的主机与端口做可达探测；host.docker.internal 需显式给探测 IP。
 async function checkTransport(baseUrl, probeIp) {
   const verdict = classifyTransport(baseUrl);
   if (!verdict.ok) return verdict;
@@ -50,6 +56,7 @@ async function checkTransport(baseUrl, probeIp) {
   return { ok: true, reason: 'reachable', host: target, port: verdict.port };
 }
 
+// 命令行入口：接收 URL 与可选探测 IP，打印判定结果或按失败退出。
 async function main() {
   const url = process.argv[2];
   const probeIp = process.argv[3] || '';

@@ -22,6 +22,7 @@ function view(overrides: Partial<ValidityView> = {}): ValidityView {
   };
 }
 
+// 验证有效性确认入口按服务端可办项渲染（#248）。
 describe('#248 有效性确认最小入口', () => {
   it('展示原告知、闸口状态与差异清单', () => {
     const html = renderToStaticMarkup(

@@ -1,13 +1,20 @@
+// 用途：定义状态机守卫的返回形状、级别与依据层级。
+// 调用方：backend/case/src/state-machine/engine.ts 与各环节规则文件，例如 backend/case/src/decision/rules.ts。
+// 边界：只定义类型与常量，不做判定；阻断级到 HTTP 状态的映射在引擎内完成。
+// 依据：#235、#255。
 // #235 最小校验合同（#30 三级校验未落地，本票只定可迁移的返回形状）。
 // #255：authority 是依据层级。引擎在映射 409 之前按层级决定。
 // userLock 非空时保持阻断，不因 normative 或 internal 降为警告。
 // 阻断级由迁移引擎映射为 409。警告与提示只写失败留痕，不改业务行。
 
+// 守卫级别全集：block 阻断迁移，warn 与 hint 只写失败留痕。
 export const GUARD_LEVELS = ['block', 'warn', 'hint'] as const;
+// 守卫级别，取 GUARD_LEVELS 的元素类型。
 export type GuardLevel = (typeof GUARD_LEVELS)[number];
 
 /** 依据层级（#255）。law、regulation、system 可阻断。normative、internal 降为警告，除非 userLock 非空。 */
 export const GUARD_AUTHORITIES = ['law', 'regulation', 'normative', 'internal', 'system'] as const;
+// 依据层级，取 GUARD_AUTHORITIES 的元素类型。
 export type GuardAuthority = (typeof GUARD_AUTHORITIES)[number];
 
 /** 守卫返回值。citation 可空：系统完整性守卫可以不引法条。authority 必填。 */

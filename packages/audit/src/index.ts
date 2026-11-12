@@ -1,3 +1,7 @@
+// 用途：留痕设施包 @natural-enforcement/audit 的唯一公共出口，只做再导出，汇总注入令牌、只追加写入端口、事务助手、读取端口与动作、原因取值表。
+// 调用方：backend/server/src/persistence.module.ts（装配适配器与令牌）、backend/server/src/unit-of-work.ts、backend/identity/src/services/personnel.service.ts 等业务服务，经包名 @natural-enforcement/audit 导入。
+// 边界：本文件无逻辑。包外代码不得引用 auditTrail 这个 Prisma 委托，结构测试 audit-facility-entry 按文本检查（tools/structural-test.sh）。
+// 依据：docs/adr/0012-留痕写入经独立设施包.md、docs/adr/0011-认证留痕写入共用表.md。
 // 留痕设施包公共出口（ADR 0012）。只追加。动作取值在本包，不在 shield。
 export {
   AuditVocabularyError,

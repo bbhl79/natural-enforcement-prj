@@ -1,3 +1,7 @@
+// 用途：定义授权拒绝原因、拒绝错误、身份上下文与资源标识等授权领域类型。
+// 调用方：AccessControlService，以及 backend/server/src/ 下把拒绝映射为 403 的各业务服务。
+// 边界：只承载类型与错误；判定逻辑在 AccessControlService。
+// 依据：#96、#119
 // 授权拒绝原因（#52，#96 不新增取值）。
 // 「校验拒绝」= 抛 AccessDeniedError 且 reason 精确命中。
 // 「校验缺失」= 放行或裸异常。二者外部可区分。
@@ -6,6 +10,10 @@ import type { AuthzDeniedEntry } from '@natural-enforcement/audit';
 /** 机构与人员维护还没有进入名册的操作码。这些命令先用系统管理已持有的这一条过闸。 */
 export const IDENTITY_MAINTENANCE_OPCODE = 'authz.binding.submit';
 
+/**
+ * 拒绝原因码。identity-unknown 人员不存在、not-authenticated 未认证、
+ * identity-deactivated 已失效、permission-denied 无角色放行、scope-denied 目标超出数据范围。
+ */
 export type DenyReason =
   | 'identity-unknown'
   | 'not-authenticated'
@@ -13,6 +21,10 @@ export type DenyReason =
   | 'permission-denied'
   | 'scope-denied';
 
+/**
+ * 授权拒绝错误。reason 供外部区分拒绝种类，detail 说明具体人员与机构；
+ * denial 是该次拒绝尚未写入的留痕行，已写入时为 null。
+ */
 export class AccessDeniedError extends Error {
   readonly reason: DenyReason;
   /**

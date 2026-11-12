@@ -1,3 +1,6 @@
+// 用途：决定环节的对外出口，只做再导出。
+// 调用方：backend/server/src/case-decision.service.ts 等，经包名 @natural-enforcement/case 汇总导出。
+// 依据：#270。
 export {
   DECISION_CONTENT_RULE_ID,
   DECISION_CONTENT_VERSION,

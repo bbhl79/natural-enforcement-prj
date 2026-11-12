@@ -1,3 +1,7 @@
+// 用途：内业核查领域规则与端口的公共出口，本文件只做再导出。
+// 调用方：backend/server/src/clue-verification.service.ts、backend/server/src/persistence.module.ts，经包名 @natural-enforcement/case 导入。
+// 边界：只做再导出，不写库、不写留痕。
+// 依据：#213。
 // 内业核查的领域规则与端口（#213）。
 //
 // 本目录是纯规则与纯类型：图层目录、状态与失败分类、核查执行端口、报告与分析图组装。

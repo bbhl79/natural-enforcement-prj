@@ -1,3 +1,4 @@
+// 用途：改口令页：首登或到期后的强制改密，与自愿改密共用页面。
 import type { FormEvent } from 'react';
 import { useSearchParams } from 'react-router';
 

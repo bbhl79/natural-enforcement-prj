@@ -1,3 +1,8 @@
+// 用途：撤回不派，把「不派」线索退回待分派池并留痕。
+// 调用方：backend/server/src/clue-withdraw.controller.ts 的 POST :id/withdraw。
+// 边界：撤回行、状态回写与成功留痕同事务；校验失败不改状态，失败留痕在回滚后另起事务。
+// 依据：Issue #217，规格 D，GLOSSARY「撤回不派」。
+//
 // 撤回不派（#217；规格 D 节、GLOSSARY「撤回不派」）。
 //
 // 对象：「不派」线索（held）。有权人＝录入人本人、录入机构内勤、所撞既有线索承办机构内勤；
@@ -58,6 +63,11 @@ interface Rejection {
   readonly reason: string;
 }
 
+/**
+ * 撤回不派服务：先判对象级权限（录入人、录入机构内勤、所撞线索承办机构内勤），
+ * 再按操作码 clue.withdraw.undo 与「据以行事的机构」授权。
+ * 成功时状态回 in_pool；状态不符 409，输入不合规 400。
+ */
 @Injectable()
 export class ClueWithdrawService {
   constructor(

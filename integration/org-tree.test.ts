@@ -237,6 +237,7 @@ afterAll(async () => {
   await cloned?.close();
 });
 
+// #123：机构层级由迁移回填，并由库层约束兜底，根机构为市。
 describe('机构层级（迁移与库层兜底）', () => {
   it('种子机构按深度回填层级，根机构为市', async () => {
     const units = await cloned.prisma.orgUnit.findMany({ where: { id: { in: [org.hq, org.deptA, org.station] } } });
@@ -257,6 +258,7 @@ describe('机构层级（迁移与库层兜底）', () => {
   });
 });
 
+// #123 与 #105：机构树的可见范围、已停用标记与四条必测拒绝。
 describe('GET /api/org-units', () => {
   // 先登录：登录本身写 login.succeeded，各用例的「新增留痕」只看取树这一步。
   beforeAll(async () => {
@@ -381,6 +383,7 @@ describe('GET /api/org-units', () => {
   });
 });
 
+// #123：新建下级机构的成功、越权、层级与停用前提校验。
 describe('POST /api/admin/org-units（新建下级）', () => {
   it('市下建区、区下建所成功，写机构、首个名称版本和 org.unit.registered', async () => {
     const before = await audits();
@@ -510,6 +513,7 @@ describe('POST /api/admin/org-units（新建下级）', () => {
   });
 });
 
+// #123：机构改名的名称版本追加、未变化与长度校验。
 describe('POST /api/admin/org-units/:id/rename（改名）', () => {
   it('改名追加名称版本，previousValue 写旧名；树上能查到历史名称和使用期间', async () => {
     const original = (await cloned.prisma.orgUnit.findUniqueOrThrow({ where: { id: org.deptB } })).name;
@@ -599,6 +603,7 @@ function deniedByRename(): Array<[string, string]> {
   ];
 }
 
+// 接缝①：留痕写入后再抛错，新建与改名的事务整体回滚。
 describe('接缝①：留痕工厂覆写为「业务写完后抛错」', () => {
   it('新建下级：请求失败，机构、名称版本、留痕各表的行不变', async () => {
     await signIn(PHONES.root, seamUrl);

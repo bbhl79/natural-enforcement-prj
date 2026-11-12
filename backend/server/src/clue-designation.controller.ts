@@ -1,3 +1,7 @@
+// 用途：提供报请指定管辖的发起、驳回与受理人待办三个 HTTP 接口，解析请求后委托 ClueDesignationService。
+// 调用方：backend/server/src/app.module.ts 注册为控制器。
+// 依据：backend/server/src/clue-designation.service.ts（#215；规格 D/H 节）。
+//
 // 报请指定管辖接口（#215；规格 D/H 节）。
 //
 // POST /api/clues/:id/designate-request  发起报请（本级机构内勤；理由必填、可选拟归属机构）
@@ -29,11 +33,13 @@ interface DesignateRejectBody {
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
 
+// 报请指定管辖的 HTTP 入口，请求处理全部委托 ClueDesignationService。
 @Controller('api/clues')
 export class ClueDesignationController {
   constructor(private readonly designation: ClueDesignationService) {}
 
   /** 受理人待办：待处理的指定管辖报请。 */
+  // 列出受理机构为本人机构的待处理报请；操作码 clue.designate.request；对象级限本人所属机构。
   @Get('designation-requests')
   @UseGuards(SameOriginReadGuard)
   async todos(@Req() req: AuthenticatedRequest, @Res() res: HttpReply): Promise<void> {
@@ -42,6 +48,7 @@ export class ClueDesignationController {
   }
 
   /** 发起报请指定管辖。 */
+  // 发起报请指定管辖；操作码 clue.designate.request；对象级限线索当前所属机构的内勤。
   @Post(':id/designate-request')
   async request(
     @Req() req: AuthenticatedRequest,
@@ -57,6 +64,7 @@ export class ClueDesignationController {
   }
 
   /** 驳回报请。 */
+  // 驳回报请；操作码 clue.designate.request；对象级限报请受理机构的内勤。
   @Post(':id/designate-reject')
   async reject(
     @Req() req: AuthenticatedRequest,

@@ -1,3 +1,4 @@
+// 用途：对账 API 与 UI 能力、地图节点、场景用量与 ack，产出 issue 提案数据结构。
 // 发现器信号源 2（spec #322 二期 T5）：标准链四环对账。
 // 纯函数，零 I/O：只接收能力清单、标准寄存器、scenario 实际用量与 ack，产出 issue 提案数据结构。
 // 提案只是内存对象：不建 issue、不改地图/fixtures、不写盘。
@@ -129,6 +130,7 @@ export interface ReconcileSummary {
   readonly standardStages: number;
 }
 
+/** 对账结果：issue 提案列表与汇总计数。 */
 export interface ReconcileResult {
   readonly proposals: DiscoverProposal[];
   readonly summary: ReconcileSummary;

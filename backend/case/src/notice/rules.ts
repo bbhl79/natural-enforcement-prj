@@ -1,3 +1,7 @@
+// 用途：告知与听证环节的纯规则，含告知正文校验、听证判定与期限窗口。
+// 调用方：backend/server/src/case-notice.service.ts；听证相关判定也被 backend/server/src/case-decision.service.ts 与 backend/server/src/case-validity.service.ts 使用。
+// 边界：纯函数，不依赖 Nest 与存储；X07 阻断由调用方映射为 409，X26 警告走 #258 警告门。
+// 依据：#272、#111、#258。
 // 告知与听证（E05、E06）纯规则（#272）。
 // X07 命中＝系统自动 ∪ 人工勾选。任一命中即应听证；人工勾选只能加不能减。
 // 命中后勾「不适用听证」或未带听证告知一律 X07 409（law＋userLock #111 L3）。
@@ -7,41 +11,51 @@
 import type { GuardResult } from '../state-machine/guard.ts';
 import { HEARING_AMOUNT_RULE_KEY, X26_MESSAGE, X26_RULE_KEY } from '../state-machine/rule-registry.ts';
 
+// 告知类型全集：拟处罚与拟不予处罚。
 export const NOTICE_KINDS = ['penalty', 'no-penalty'] as const;
+// 告知类型，取 NOTICE_KINDS 的元素类型。
 export type NoticeKind = (typeof NOTICE_KINDS)[number];
 
+// 告知类型对应的中文名称。
 export const NOTICE_KIND_NAMES: Readonly<Record<NoticeKind, string>> = {
   penalty: '拟处罚',
   'no-penalty': '拟不予处罚',
 };
 
+// 判断字符串是否为已登记的告知类型。
 export function isNoticeKind(value: string): value is NoticeKind {
   return (NOTICE_KINDS as readonly string[]).includes(value);
 }
 
 /** 当事人主体类型：公民、法人或其他组织。阈值按此二选一。 */
 export const PARTY_TYPES = ['citizen', 'legal-person'] as const;
+// 当事人主体类型，取 PARTY_TYPES 的元素类型。
 export type PartyType = (typeof PARTY_TYPES)[number];
 
+// 当事人主体类型对应的中文名称。
 export const PARTY_TYPE_NAMES: Readonly<Record<PartyType, string>> = {
   citizen: '公民',
   'legal-person': '法人或其他组织',
 };
 
+// 判断字符串是否为已登记的当事人主体类型。
 export function isPartyType(value: string): value is PartyType {
   return (PARTY_TYPES as readonly string[]).includes(value);
 }
 
 /** 人工勾选应听证的清单项。系统判不了的情形由此补足。 */
 export const HEARING_MANUAL_ITEMS = ['other-heavy', 'law-required', 'cannot-structure'] as const;
+// 人工勾选听证项，取 HEARING_MANUAL_ITEMS 的元素类型。
 export type HearingManualItem = (typeof HEARING_MANUAL_ITEMS)[number];
 
+// 人工勾选听证项对应的中文名称。
 export const HEARING_MANUAL_ITEM_NAMES: Readonly<Record<HearingManualItem, string>> = {
   'other-heavy': '其他较重的行政处罚',
   'law-required': '法律、法规、规章规定的其他听证情形',
   'cannot-structure': '系统无法结构化判断的情形',
 };
 
+// 判断字符串是否为已登记的人工勾选听证项。
 export function isHearingManualItem(value: string): value is HearingManualItem {
   return (HEARING_MANUAL_ITEMS as readonly string[]).includes(value);
 }
@@ -61,6 +75,7 @@ export const HEARING_TRIGGER_PENALTY_CODES = [
 
 const HEARING_TRIGGER_CODES = new Set<string>(HEARING_TRIGGER_PENALTY_CODES);
 
+// 判断罚种代码是否属于可结构化判断的听证触发项。
 export function penaltyTriggersHearing(code: string): boolean {
   return HEARING_TRIGGER_CODES.has(code);
 }
@@ -68,9 +83,12 @@ export function penaltyTriggersHearing(code: string): boolean {
 /** 金额罚种代码。与 #240 处理建议的罚种代码共用。 */
 export const MONEY_PENALTY_CODES = ['fine', 'confiscation'] as const;
 
+// 较大数额的比对口径全集：任一、罚款、没收、二者相加。
 export const HEARING_AMOUNT_COMPARISONS = ['any', 'fine', 'confiscation', 'sum'] as const;
+// 较大数额比对口径，取 HEARING_AMOUNT_COMPARISONS 的元素类型。
 export type HearingAmountComparison = (typeof HEARING_AMOUNT_COMPARISONS)[number];
 
+// 较大数额规则参数，含阈值与比对口径。
 export interface HearingAmountRule {
   /** cfg.rule.hearing-amount.v1 */
   readonly ruleId: string;
@@ -90,9 +108,12 @@ export const HEARING_AMOUNT_RULE_V1: HearingAmountRule = {
   comparison: 'any',
 };
 
+// 较大数额提示的原文。
 export const HEARING_LARGE_AMOUNT_MESSAGE = '罚款额、没收等价值或二者相加达较大数额标准，提示按应听证情形处理';
+// 较大数额提示的出路文案。
 export const HEARING_LARGE_AMOUNT_HINT_OUTLET = '核对是否应发听证告知';
 
+// 听证判定入参：罚种、金额、当事人类型与人工勾选事实。
 export interface HearingFacts {
   readonly penaltyCodes: readonly string[];
   readonly fineAmount: number | null;
@@ -106,8 +127,10 @@ export interface HearingFacts {
   readonly hearingNoticeAttached: boolean;
 }
 
+// 听证阻断的原因码，当前只有 X07。
 export type HearingBlockCode = 'X07';
 
+// 听证判定结果：自动与人工命中、提示项与阻断项。
 export interface HearingAssessment {
   readonly autoHit: boolean;
   /** auto-hit 原因：penalty-kind、amount。 */
@@ -214,6 +237,7 @@ export interface NoticeContent {
   readonly note: string;
 }
 
+// 告知正文校验失败的返回：400 与原因码、文案、出路。
 export interface NoticeContentHit {
   readonly httpStatus: 400;
   readonly reason: string;
@@ -221,6 +245,7 @@ export interface NoticeContentHit {
   readonly outlet: string;
 }
 
+// 告知正文读取结果：通过时交出规整正文，否则交出 400 命中项。
 export type NoticeContentRead =
   | { readonly ok: true; readonly content: NoticeContent }
   | { readonly ok: false; readonly hit: NoticeContentHit };
@@ -233,6 +258,7 @@ function invalid(reason: string, message: string, outlet: string): NoticeContent
   return { ok: false, hit: { httpStatus: 400, reason, message, outlet } };
 }
 
+// 解析告知正文：逐字段校验并去重勾选项；不合格返回 400 原因码。保存与批准共用。
 export function readNoticeContent(raw: unknown): NoticeContentRead {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     return invalid('invalid-content', '告知正文不合规', '按告知正文格式填写');
@@ -302,8 +328,10 @@ export const HEARING_END_KINDS = [
   'terminated',
   'withdrawn-before-acceptance',
 ] as const;
+// 听证结束方式，取 HEARING_END_KINDS 的元素类型。
 export type HearingEndKind = (typeof HEARING_END_KINDS)[number];
 
+// 听证结束方式对应的中文名称。
 export const HEARING_END_KIND_NAMES: Readonly<Record<HearingEndKind, string>> = {
   concluded: '听证终结',
   withdrawn: '受理后书面撤回',
@@ -313,6 +341,7 @@ export const HEARING_END_KIND_NAMES: Readonly<Record<HearingEndKind, string>> = 
   'withdrawn-before-acceptance': '受理前撤回',
 };
 
+// 判断字符串是否为已登记的听证结束方式。
 export function isHearingEndKind(value: string): value is HearingEndKind {
   return (HEARING_END_KINDS as readonly string[]).includes(value);
 }
@@ -361,6 +390,7 @@ export function checkHearingReopen(input: {
 /** 听证申请期的有效性。缺日历（需人工确认）时不静默按日历日算。 */
 export type HearingWindowState = 'open' | 'closed' | 'manual';
 
+// 按到期日与今日比较判定听证申请期；缺日历或到期日为空时交人工确认。
 export function hearingWindowState(input: {
   readonly dueOn: string | null;
   readonly needsManualConfirmation: boolean;

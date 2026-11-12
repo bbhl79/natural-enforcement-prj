@@ -67,6 +67,7 @@ const APP_MODULE_FIXTURE = [
   'export class AppModule {}',
 ].join('\n');
 
+// spec #322 Q16 seam⑤：从控制器装饰器枚举 API 能力清单。
 describe('enumerateApiRoutes（seam⑤：控制器装饰器 → API 能力清单）', () => {
   it('只认 app.module.ts controllers 数组登记的控制器类；未登记类不计能力', () => {
     expect([...registeredControllerClasses(APP_MODULE_FIXTURE)].sort()).toEqual([
@@ -148,6 +149,7 @@ const ROUTER_FIXTURE = [
   '}',
 ].join('\n');
 
+// spec #322 Q16 seam⑤：从静态路由树枚举 UI 页面能力清单。
 describe('enumerateUiRoutes（seam⑤：router.tsx 静态路由树 → UI 能力清单）', () => {
   it('按祖先拼接完整路径，保留 id/父子关系；index 与 * 不产生独立页面路径', () => {
     const routes = enumerateUiRoutes(ROUTER_FIXTURE);
@@ -220,6 +222,7 @@ const CLUE_URL_FIXTURE = [
   '] as const;',
 ].join('\n');
 
+// spec #322 Q16 seam⑤：从静态菜单与线索视图枚举 UI 能力清单。
 describe('enumerateClueViews / enumerateMenu（seam⑤：静态菜单 → UI 能力清单）', () => {
   it('展开 CLUE_VIEWS 与 PLANNED_MODULES 两处 spread：一级 2、二级 4（含 1 个 planned），共 6 条', () => {
     const clueViews = enumerateClueViews(CLUE_URL_FIXTURE);
@@ -267,6 +270,7 @@ const FEATURE_MAP_FIXTURE = [
   '| `nav.case.conflict` | 案件冲突页 | `/case/:caseId` | |',
 ].join('\n');
 
+// spec #322 Q16 seam⑤：从 Feature Map 文本提取 nav 节点清单。
 describe('enumerateFeatureMap（seam⑤：Feature Map 文本 → 节点清单）', () => {
   it('按行首 nav.* 提取节点；路径取行内首个反引号包裹的 / 串，带 query 原样保留', () => {
     expect(enumerateFeatureMap(FEATURE_MAP_FIXTURE)).toEqual([
@@ -317,6 +321,7 @@ function proposalsOfKind(input: ReconcileInput, kind: string) {
   return reconcileCapabilities(input).proposals.filter((proposal) => proposal.kind === kind);
 }
 
+// spec #322 Q16 seam⑤ 第一类错位：产品有能力而地图无节点，产地图漂移提案。
 describe('reconcileCapabilities 第一类错位：产品有地图无 → 地图漂移提案', () => {
   it('router/菜单同一路径只报一条，/、*、index 不计；已 ack 路由与「等权威」路由不报', () => {
     const input: ReconcileInput = {
@@ -367,6 +372,7 @@ describe('reconcileCapabilities 第一类错位：产品有地图无 → 地图�
   });
 });
 
+// spec #322 Q16 seam⑤ 第二类错位：地图有节点而判据无，产 latent stub 提案。
 describe('reconcileCapabilities 第二类错位：地图有判据无 → latent stub 提案', () => {
   it('无人引用的地图节点报 latent stub；被 runnable 引用、已 ack、「等权威」的节点不报', () => {
     const input: ReconcileInput = {
@@ -411,6 +417,7 @@ describe('reconcileCapabilities 第二类错位：地图有判据无 → latent 
   });
 });
 
+// spec #322 Q16 seam⑤ 第三类错位：runnable 能力消失，产转红或降级提案。
 describe('reconcileCapabilities 第三类错位：runnable 能力消失 → 转红/降级提案', () => {
   it('runnable 引用的地图节点不存在报一条；action 映射端点不在 API 清单报一条；latent/未知 action 不报', () => {
     const input: ReconcileInput = {
@@ -523,6 +530,7 @@ describe('reconcileCapabilities 第三类错位：runnable 能力消失 → 转�
   });
 });
 
+// spec #322 Q16 seam⑤：source-check 判为待权威的节点从三类缺口同时排除。
 describe('reconcileCapabilities 等权威过滤：source-check 判定不进对账缺口', () => {
   it('出处齐备节点不排除；缺角色依据节点从三类缺口同时排除', () => {
     const input: ReconcileInput = {
@@ -552,6 +560,7 @@ describe('reconcileCapabilities 等权威过滤：source-check 判定不进对�
   });
 });
 
+// spec #322 Q16 seam⑤ API 双向：标准链登记端点无 scenario 调用时判据缺口提案。
 describe('reconcileCapabilities API 双向：标准链登记端点无 scenario 调用 → 判据缺口提案', () => {
   it('只对 mappedEndpoints 登记端点提案；已调用与未登记端点不入提案', () => {
     const input: ReconcileInput = {
@@ -579,6 +588,7 @@ describe('reconcileCapabilities API 双向：标准链登记端点无 scenario �
   });
 });
 
+// spec #322 Q16 seam⑤ 反向漂移：产品有能力而标准链查无节点，产 needs-triage 提案。
 describe('reconcileCapabilities 反向漂移：产品有能力、标准链查无节点 → needs-triage 提案', () => {
   it('标准链有映射且路由不在映射内 → reverse-drift；未给映射时不硬判，降为地图漂移', () => {
     const base: ReconcileInput = {
@@ -636,6 +646,7 @@ describe('reconcileCapabilities 反向漂移：产品有能力、标准链查无
   });
 });
 
+// spec #322 Q16 seam⑤：对账汇总与 action 到端点映射的单一来源校验。
 describe('reconcileCapabilities 汇总与 action→端点映射单一来源', () => {
   it('ACTION_ENDPOINTS 覆盖 run-api-scenario 的 9 个 action，端点模式可用于回归核对', () => {
     expect(Object.keys(ACTION_ENDPOINTS).sort()).toEqual([
@@ -693,6 +704,7 @@ describe('reconcileCapabilities 汇总与 action→端点映射单一来源', ()
   });
 });
 
+// spec #322 Q16 seam⑤：能力清单与真实源码静态内容一致。
 describe('真实源码一致性（seam⑤：能力清单与静态代码一致）', () => {
   it('38 个控制器 / 184 条方法路由 / 46 GET + 138 POST / 无重复 / 全部 /api/ 开头', async () => {
     const sources = await loadDiscoverSources(process.cwd());

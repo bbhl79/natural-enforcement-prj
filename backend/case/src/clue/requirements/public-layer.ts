@@ -1,3 +1,7 @@
+// 用途：声明公共层录入要件的八项常量，供表单渲染与缺件判定共用同一份声明。
+// 调用方：backend/case/src/clue/registration/gaps.ts、backend/case/src/clue/requirements/index.ts；integration/clue-form-schema.test.ts 经 backend/case/src/index.ts 导入。
+// 边界：声明常量，不写库、不写留痕；表单渲染与缺件判定由消费方负责。
+// 依据：ADR 0018，ADR 0019，GLOSSARY「录入要件」。
 // 公共层录入要件（ADR 0018；#24 决议第五节「公共要件（每条线索都填）」）。
 // 八项，每条线索都填。后果为阻断的项缺失时阻断线索录入。
 // 依据按 ADR 0019 写「文件编号 + 条号」：规程是 doc_002，自然资源行政处罚办法是 doc_061。

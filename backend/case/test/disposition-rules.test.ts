@@ -12,6 +12,7 @@ import {
   parseLetterDate,
 } from '../src/clue/disposition/index.ts';
 
+// #216 移送登记校验：发函日期按北京日历日取值并可补录，移送机关、文书编号与原因必填。
 describe('移送登记规则', () => {
   it('北京当日：按 UTC+8 日历日取值', () => {
     // 2026-10-25T03:00Z ＝ 北京 11:00，当日 2026-10-25。

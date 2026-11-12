@@ -259,6 +259,7 @@ afterAll(async () => {
   await cloned?.close();
 });
 
+// ADR 0015：本人改密比对当前口令与最近 4 条历史，滑出窗口的口令重新可用。
 describe('本人改密：新口令不得与当前口令和最近 4 条历史相同（ADR 0015）', () => {
   it('连改 5 次后，第 1 次的口令重新可用，第 2 到第 5 次和当前口令都被拒', async () => {
     const response = await login(PHONES.changer, PASS[0]);
@@ -317,6 +318,7 @@ async function seedHistory(personnelId: string, plains: readonly string[], oldPa
   }
 }
 
+// ADR 0015：A10 重设初始口令命中历史时只回 unavailable，不出现 reused。
 describe('A10 重设初始口令：命中历史只回 unavailable（ADR 0015）', () => {
   const CURRENT = 'Reset-132-cur!';
   const HISTORY = ['Reset-132-h4!', 'Reset-132-h3!', 'Reset-132-h2!', 'Reset-132-h1!'] as const;
@@ -408,6 +410,7 @@ describe('A10 重设初始口令：命中历史只回 unavailable（ADR 0015）'
   }, 120000);
 });
 
+// #105 D7：恢复流程重设初始口令同样受历史比对约束。
 describe('恢复：初始口令命中历史（ADR 0015，#105 D7）', () => {
   const CURRENT = 'Restore-132-cur!';
 
@@ -462,6 +465,7 @@ describe('恢复：初始口令命中历史（ADR 0015，#105 D7）', () => {
   }, 120000);
 });
 
+// ADR 0015：重设后的首次登录必须改密，新口令仍不得命中历史。
 describe('重设后首登强制改密（ADR 0015「首登强制改密」）', () => {
   it('重设后首登改回初始口令被拒，改回重设前的旧口令也被拒', async () => {
     const OLD = 'First-132-old!';
@@ -493,6 +497,7 @@ describe('重设后首登强制改密（ADR 0015「首登强制改密」）', ()
   }, 180000);
 });
 
+// ADR 0015 并发：两个改密请求并发时只允许一个成功，历史只追加一行。
 describe('并发改口令（ADR 0015「并发」，接缝②）', () => {
   it('两个 A10 重设并发：一个 200，一个 409，历史只多一行，失败方写 account.password-rejected', async () => {
     const targetId = await addPerson({
@@ -568,6 +573,7 @@ describe('并发改口令（ADR 0015「并发」，接缝②）', () => {
   }, 180000);
 });
 
+// #105 Testing：历史深度经构造参数注入，验证比对窗口边界随深度变化。
 describe('历史深度注入（#105 Testing：测试可传 2）', () => {
   it('深度 2 时只比当前加 1 条历史：连改两次后第 1 个口令重新可用，第 2 个仍被拒', async () => {
     const targetId = await addPerson({
@@ -591,6 +597,7 @@ describe('历史深度注入（#105 Testing：测试可传 2）', () => {
   }, 180000);
 });
 
+// ADR 0015：口令历史表只追加，UPDATE 与 DELETE 被数据库触发器拒绝。
 describe('历史表只追加（ADR 0015「只追加」）', () => {
   it('历史表的 UPDATE、DELETE 被触发器拒绝', async () => {
     const rows = await historyRows(people.changer);

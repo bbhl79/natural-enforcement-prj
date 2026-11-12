@@ -1,9 +1,14 @@
+// 用途：立案呈批数据层：取呈批单与待办，存草稿、提交、审核、批准、退回、撤回。
+// 调用方：frontend/src/clue/ClueFilingPanel.tsx。
+// 接口：GET/POST /api/clues/:id/filing-approval（操作码 doc.read、doc.draft）；POST /api/filing-approvals/:id/{submit,review,approve,return,withdraw}；GET /api/filing-approvals/todo。
 // 立案呈批数据层（#234）。
 
 import { apiFetch, type ApiDispatch } from '../api';
 
+/** 立案结论：立案或不予立案。 */
 export type FilingConclusion = 'file' | 'no-case';
 
+/** 呈批单视图：版本、审批步骤与是否待办。 */
 export interface FilingApprovalView {
   readonly id: string;
   readonly status: string;
@@ -23,6 +28,7 @@ export interface FilingApprovalView {
   readonly pending: boolean;
 }
 
+/** 写操作结果；ok 表示 HTTP 成功，body 为响应体。 */
 export type FilingActionResult =
   | { readonly ok: true; readonly status: number; readonly body: Record<string, unknown> }
   | { readonly ok: false; readonly status: number; readonly body: unknown };
@@ -35,6 +41,7 @@ async function readResult(response: Response): Promise<FilingActionResult> {
   return { ok: false, status: response.status, body };
 }
 
+/** 取线索当前的立案呈批单；GET /api/clues/:id/filing-approval，操作码 doc.read。无呈批单时 approval 为 null。 */
 export async function loadFilingApproval(
   dispatch: ApiDispatch,
   clueId: string,
@@ -47,6 +54,7 @@ export async function loadFilingApproval(
   return { approval: body.approval ?? null };
 }
 
+/** 保存呈批草稿；POST /api/clues/:id/filing-approval，操作码 doc.draft。 */
 export async function saveFilingDraft(
   dispatch: ApiDispatch,
   clueId: string,
@@ -60,6 +68,7 @@ export async function saveFilingDraft(
   return readResult(response);
 }
 
+/** 提交呈批；POST /api/filing-approvals/:id/submit，操作码 doc.submit。 */
 export async function submitFilingApproval(
   dispatch: ApiDispatch,
   approvalId: string,
@@ -72,6 +81,7 @@ export async function submitFilingApproval(
   return readResult(response);
 }
 
+/** 行政审核；POST /api/filing-approvals/:id/review，操作码 doc.admin.review。 */
 export async function reviewFilingApproval(
   dispatch: ApiDispatch,
   approvalId: string,
@@ -85,6 +95,7 @@ export async function reviewFilingApproval(
   return readResult(response);
 }
 
+/** 行政审批（批准或不予立案）；POST /api/filing-approvals/:id/approve，操作码 doc.approve。 */
 export async function approveFilingApproval(
   dispatch: ApiDispatch,
   approvalId: string,
@@ -112,6 +123,7 @@ export const FILING_RETURN_REASONS = [
   ['R10', '其他（须写明）'],
 ] as const;
 
+/** 退回草稿的输入：原因码、说明、接收人与沿用编号。 */
 export interface FilingReturnInput {
   readonly reasonCode: string;
   readonly note: string;
@@ -119,6 +131,7 @@ export interface FilingReturnInput {
   readonly inheritedCode: string;
 }
 
+/** 退回草稿；POST /api/filing-approvals/:id/return，操作码按阶段取 doc.admin.review 或 doc.approve。 */
 export async function returnFilingApproval(
   dispatch: ApiDispatch,
   approvalId: string,
@@ -137,6 +150,7 @@ export async function returnFilingApproval(
   return readResult(response);
 }
 
+/** 撤回呈批；POST /api/filing-approvals/:id/withdraw，操作码 doc.submit。服务端另校验起草人与当前经办人。 */
 export async function withdrawFilingApproval(
   dispatch: ApiDispatch,
   approvalId: string,
@@ -150,6 +164,7 @@ export async function withdrawFilingApproval(
   return readResult(response);
 }
 
+/** 取当前用户的立案呈批待办；GET /api/filing-approvals/todo，无操作码（服务按角色筛选）。当前无前端调用方。 */
 export async function loadFilingTodos(dispatch: ApiDispatch): Promise<readonly Record<string, unknown>[]> {
   const response = await apiFetch(dispatch, '/api/filing-approvals/todo');
   if (!response.ok) throw new Error(`立案呈批待办取数失败（${response.status}）`);

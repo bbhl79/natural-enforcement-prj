@@ -1,3 +1,7 @@
+// 用途：案件持久化端口，声明立案呈批、状态机、退回、审批链与各环节数据的读写契约。
+// 调用方：backend/server 下的案件服务，例如 backend/server/src/case-state.service.ts 与 backend/server/src/case-filing.service.ts。
+// 边界：端口是纯类型，不引 Prisma；实现见同目录 prisma-case-store.ts。调用方在交互式事务里调用，业务行与留痕同成同败。
+// 依据：#234、#119。
 // 立案呈批与案件最小模型的持久化端口（#234）。
 //
 // 形态同 clue-store.ts：端口是纯类型（不引 Prisma），可注入（CASE_STORE 令牌）；
@@ -125,6 +129,7 @@ export interface CaseView extends CaseRow {
   readonly returns: readonly CaseReturnRow[];
 }
 
+// 案件材料的一行，body 为材料正文。
 export interface CaseMaterialRow {
   readonly id: string;
   readonly kind: string;
@@ -132,6 +137,7 @@ export interface CaseMaterialRow {
   readonly createdAt: Date;
 }
 
+// 案件审批意见的一行，含退回原因与退回点。
 export interface CaseApprovalOpinionRow {
   readonly id: string;
   readonly reasonCode: string;
@@ -141,6 +147,7 @@ export interface CaseApprovalOpinionRow {
   readonly createdAt: Date;
 }
 
+// 案件退回记录的一行，含回流标记、N5 与进入次序号变化。
 export interface CaseReturnRow {
   readonly id: string;
   readonly opinionId: string;
@@ -157,6 +164,7 @@ export interface CaseReturnRow {
   readonly createdAt: Date;
 }
 
+// 环节签字的一行，绑定案件、实例与签字人。
 export interface CaseStageSignatureRow {
   readonly id: string;
   readonly caseId: string;
@@ -164,6 +172,7 @@ export interface CaseStageSignatureRow {
   readonly actorId: string;
 }
 
+// 追加环节实例的写入参数。
 export interface StageInstanceWrite {
   readonly id: string;
   readonly caseId: string;
@@ -175,6 +184,7 @@ export interface StageInstanceWrite {
   readonly transitionCode: string;
 }
 
+// 追加迁移历史的写入参数；案件与线索至少一边有值。
 export interface TransitionHistoryWrite {
   readonly id: string;
   readonly caseId: string | null;
@@ -197,6 +207,7 @@ export interface CasePointerWrite {
   readonly suspended: boolean;
 }
 
+// 打开案件审批链的写入参数。
 export interface ApprovalChainWrite {
   readonly id: string;
   readonly caseId: string;
@@ -242,6 +253,7 @@ export interface PersonConflictEventRow {
   readonly createdAt: Date;
 }
 
+// 追加人员层利害关系事件的写入参数。
 export interface PersonConflictEventWrite {
   readonly id: string;
   readonly caseId: string;
@@ -267,6 +279,7 @@ export interface PersonConflictDecisionRow {
   readonly createdAt: Date;
 }
 
+// 追加回避决定的写入参数，附带同时写入的下一条状态事件。
 export interface PersonConflictDecisionWrite {
   readonly id: string;
   readonly caseId: string;
@@ -298,6 +311,7 @@ export interface CaseReassignmentRow {
   readonly proposedJson: string;
 }
 
+// 追加改派呈批的写入参数，含原承办人员快照。
 export interface CaseReassignmentWrite {
   readonly id: string;
   readonly caseId: string;
@@ -310,6 +324,7 @@ export interface CaseReassignmentWrite {
   readonly proposedJson: string;
 }
 
+// 批准改派呈批的写入参数。
 export interface CaseReassignmentApprovalWrite {
   readonly id: string;
   readonly caseId: string;
@@ -345,6 +360,7 @@ export interface MaterialEffectivenessRow {
   readonly determinedAt: Date;
 }
 
+// 追加材料效力认定的写入参数。
 export interface MaterialEffectivenessWrite {
   readonly id: string;
   readonly caseId: string;
@@ -375,6 +391,7 @@ export interface InvestigationEntryWrite {
   readonly createdAt: Date;
 }
 
+// 追加案件审批意见的写入参数。
 export interface ApprovalOpinionWrite {
   readonly id: string;
   readonly caseId: string;
@@ -385,6 +402,7 @@ export interface ApprovalOpinionWrite {
   readonly createdAt: Date;
 }
 
+// 追加案件退回记录的写入参数，含是否重审与是否撤销告知。
 export interface CaseReturnWrite {
   readonly id: string;
   readonly caseId: string;
@@ -404,6 +422,7 @@ export interface CaseReturnWrite {
   readonly createdAt: Date;
 }
 
+// 追加环节失效记录的写入参数，指向退回记录。
 export interface StageInvalidationWrite {
   readonly id: string;
   readonly caseId: string;
@@ -425,6 +444,7 @@ export interface ReviewReportRow {
   readonly contentJson: string | null;
 }
 
+// 保存调查报告呈批拟制稿的写入参数。
 export interface ReviewReportDraftWrite {
   readonly approvalId: string;
   readonly caseId: string;
@@ -436,6 +456,7 @@ export interface ReviewReportDraftWrite {
   readonly at: Date;
 }
 
+// 推进调查报告呈批一步的写入参数；approvalChainId 省略时不改。
 export interface ReviewReportStepWrite {
   readonly reportId: string;
   readonly expectedStatus: string;
@@ -464,6 +485,7 @@ export interface ReviewerDesignationRow {
   readonly supersededAt: Date | null;
 }
 
+// 追加审理人指定的写入参数，字段与行同形。
 export type ReviewerDesignationWrite = ReviewerDesignationRow;
 
 /** 审理意见的一行（#240）。只追加。 */
@@ -481,6 +503,7 @@ export interface ReviewOpinionRow {
   readonly createdAt: Date;
 }
 
+// 追加审理意见的写入参数，字段与行同形。
 export type ReviewOpinionWrite = ReviewOpinionRow;
 
 /** 拟决定摘要冻结的一行（#240）。一条意见至多一行。 */
@@ -492,6 +515,7 @@ export interface FrozenDecisionRow {
   readonly createdAt: Date;
 }
 
+// 冻结拟决定摘要的写入参数，字段与行同形。
 export type FrozenDecisionWrite = FrozenDecisionRow;
 
 /** 审理异议呈批的一行（T09a，#240）。 */
@@ -513,6 +537,7 @@ export interface ReviewObjectionRow {
   readonly updatedAt: Date;
 }
 
+// 保存审理异议拟制稿的写入参数。
 export interface ReviewObjectionDraftWrite {
   readonly objectionId: string;
   readonly caseId: string;
@@ -524,6 +549,7 @@ export interface ReviewObjectionDraftWrite {
   readonly at: Date;
 }
 
+// 推进审理异议呈批一步的写入参数；可选项省略时不改对应字段。
 export interface ReviewObjectionStepWrite {
   readonly objectionId: string;
   readonly expectedStatus: string;
@@ -555,6 +581,7 @@ export interface ReviewObjectionWindowRow {
   readonly updatedAt: Date;
 }
 
+// 追加审理异议窗口的写入参数。
 export interface ReviewObjectionWindowWrite {
   readonly id: string;
   readonly caseId: string;
@@ -565,6 +592,7 @@ export interface ReviewObjectionWindowWrite {
   readonly at: Date;
 }
 
+// 关闭审理异议窗口的写入参数。
 export interface ReviewObjectionWindowCloseWrite {
   readonly id: string;
   readonly caseId: string;
@@ -595,6 +623,7 @@ export interface LegalReviewRow {
   readonly updatedAt: Date;
 }
 
+// 追加法审轮次的写入参数，字段与行同形。
 export type LegalReviewWrite = LegalReviewRow;
 
 /** 法审轮次表头的条件推进（#269）。 */
@@ -638,6 +667,7 @@ export interface LegalReviewOpinionRow {
   readonly createdAt: Date;
 }
 
+// 追加法审意见的写入参数；负责人签出字段与创建时间由写入方法补齐。
 export type LegalReviewOpinionWrite = Omit<LegalReviewOpinionRow, 'headId' | 'headSignedAt' | 'headOpinion' | 'createdAt'>;
 
 /** 负责人签出（#269）。未签出时生效。 */
@@ -658,6 +688,7 @@ export interface DiscussionMarkRow {
   readonly createdAt: Date;
 }
 
+// 追加集体讨论触发勾选的写入参数，字段与行同形。
 export type DiscussionMarkWrite = DiscussionMarkRow;
 
 /** 集体讨论记录（#269）。只追加。 */
@@ -672,6 +703,7 @@ export interface DiscussionRecordRow {
   readonly createdAt: Date;
 }
 
+// 追加集体讨论记录的写入参数，字段与行同形。
 export type DiscussionRecordWrite = DiscussionRecordRow;
 
 /** 移送呈批表头，带当前版本正文（#242）。 */
@@ -731,6 +763,7 @@ export interface TransferRow {
   readonly recordedAt: Date;
 }
 
+// 追加移送记载的写入参数，字段与行同形。
 export type TransferWrite = TransferRow;
 
 /** 移送附件与回证（#242）。只追加。 */
@@ -747,6 +780,7 @@ export interface TransferFileRow {
   readonly uploadedAt: Date;
 }
 
+// 追加移送附件的写入参数，在行基础上补文件键、版本与摘要。
 export interface TransferFileWrite extends TransferFileRow {
   readonly fileKey: string;
   readonly versionId: string;
@@ -768,6 +802,7 @@ export interface CriminalDecisionRow {
   readonly recordedAt: Date;
 }
 
+// 追加外部决定记载的写入参数，字段与行同形。
 export type CriminalDecisionWrite = CriminalDecisionRow;
 
 /** 人工出口（#242 T30）。表头随提交、批准推进。 */
@@ -784,6 +819,7 @@ export interface CriminalOutletRow {
   readonly updatedAt: Date;
 }
 
+// 追加人工出口拟制稿的写入参数。
 export interface CriminalOutletWrite {
   readonly id: string;
   readonly caseId: string;
@@ -794,6 +830,7 @@ export interface CriminalOutletWrite {
   readonly at: Date;
 }
 
+// 推进人工出口一步的写入参数。
 export interface CriminalOutletStepWrite {
   readonly outletId: string;
   readonly expectedStatus: string;
@@ -821,6 +858,12 @@ export interface CaseRow {
   readonly openedAt: Date;
 }
 
+/**
+ * 案件存储端口：立案呈批、状态机、退回、审批链与各环节的读写契约。
+ * 实现见 prisma-case-store.ts；CASE_STORE 令牌注入。
+ * 事务语义：调用方在交互式事务内调用，业务行与留痕同成同败。
+ * 返回 false 表示条件写入未命中（状态或版本已变），调用方据此回滚或重读；本端口不自开事务。
+ */
 export interface CaseStore {
   /** 线索上未批准（拟制中或在途）的呈批；没有为 null。 */
   readOpenFilingApproval(clueId: string): Promise<FilingApprovalRow | null>;
@@ -1155,6 +1198,7 @@ export interface ViolationRecordRow {
   readonly voidedAt: Date | null;
 }
 
+// 追加违法记录的写入参数，创建人与创建时间由调用方给出。
 export interface ViolationRecordWrite {
   readonly id: string;
   readonly caseId: string;
@@ -1167,6 +1211,7 @@ export interface ViolationRecordWrite {
   readonly createdAt: Date;
 }
 
+// 作废违法记录的写入参数。
 export interface ViolationVoidWrite {
   readonly id: string;
   readonly caseId: string;
@@ -1192,6 +1237,7 @@ export interface ComparisonJudgmentRow {
   readonly createdAt: Date;
 }
 
+// 追加新旧比对判定的写入参数，字段与行同形。
 export type ComparisonJudgmentWrite = ComparisonJudgmentRow;
 
 /** 调查取证笔录。只追加。 */
@@ -1205,6 +1251,7 @@ export interface InquiryRecordRow {
   readonly createdAt: Date;
 }
 
+// 追加调查取证笔录的写入参数。
 export interface InquiryRecordWrite {
   readonly id: string;
   readonly caseId: string;
@@ -1230,6 +1277,7 @@ export interface ProcedureApprovalRow {
   readonly contentJson: string | null;
 }
 
+// 保存调查收尾呈批拟制稿的写入参数。
 export interface ProcedureDraftWrite {
   readonly approvalId: string;
   readonly caseId: string;
@@ -1242,6 +1290,7 @@ export interface ProcedureDraftWrite {
   readonly at: Date;
 }
 
+// 推进调查收尾呈批一步的写入参数；可选项省略时不改对应字段。
 export interface ProcedureStepWrite {
   readonly approvalId: string;
   readonly expectedStatus: string;
@@ -1257,6 +1306,7 @@ export interface ProcedureStepWrite {
   readonly at: Date;
 }
 
+// 期限触发事件的一行，记录依据与所属环节。
 export interface DeadlineEventRow {
   readonly id: string;
   readonly eventKind: string;
@@ -1268,6 +1318,7 @@ export interface DeadlineEventRow {
   readonly createdAt: Date;
 }
 
+// 追加期限触发事件的写入参数。
 export interface DeadlineEventWrite {
   readonly id: string;
   readonly caseId: string;
@@ -1305,8 +1356,10 @@ export interface DeadlineRow {
   readonly clamped: boolean;
 }
 
+// 写入期限行的参数，字段与行同形。
 export type DeadlineRowWrite = DeadlineRow;
 
+// 期间事件的一行，记录中止、延期等起止与依据。
 export interface PeriodEventRow {
   readonly id: string;
   readonly kind: string;
@@ -1322,6 +1375,7 @@ export interface PeriodEventRow {
   readonly approvalId: string | null;
 }
 
+// 追加期间事件的写入参数。
 export interface PeriodEventWrite {
   readonly id: string;
   readonly caseId: string;
@@ -1340,6 +1394,7 @@ export interface PeriodEventWrite {
   readonly createdAt: Date;
 }
 
+// 期限事项呈批表头，带当前版本正文。
 export interface DeadlineApprovalRow {
   readonly id: string;
   readonly caseId: string;
@@ -1352,6 +1407,7 @@ export interface DeadlineApprovalRow {
   readonly contentJson: string | null;
 }
 
+// 保存期限事项呈批拟制稿的写入参数。
 export interface DeadlineDraftWrite {
   readonly approvalId: string;
   readonly caseId: string;
@@ -1364,6 +1420,7 @@ export interface DeadlineDraftWrite {
   readonly at: Date;
 }
 
+// 推进期限事项呈批一步的写入参数。
 export interface DeadlineStepWrite {
   readonly approvalId: string;
   readonly expectedStatus: string;
@@ -1378,6 +1435,7 @@ export interface DeadlineStepWrite {
   readonly at: Date;
 }
 
+// 日历安装记录的一行：版本、年度与节假日安排。
 export interface CalendarInstallRow {
   readonly version: string;
   readonly year: number;
@@ -1386,12 +1444,14 @@ export interface CalendarInstallRow {
   readonly sourceUrl: string;
 }
 
+// 安装日历的写入参数，在行基础上补主键、安装人与安装时间。
 export interface CalendarInstallWrite extends CalendarInstallRow {
   readonly id: string;
   readonly installedBy: string;
   readonly createdAt: Date;
 }
 
+// 期限当事人告知记载的一行，用于期限扣除或顺延。
 export interface PartyNoticeRow {
   readonly id: string;
   readonly occasion: string;
@@ -1399,6 +1459,7 @@ export interface PartyNoticeRow {
   readonly recordedAt: Date;
 }
 
+// 追加期限当事人告知的写入参数。
 export interface PartyNoticeWrite {
   readonly id: string;
   readonly caseId: string;
@@ -1421,6 +1482,7 @@ export interface CaseMarkerRow {
   readonly createdAt: Date;
 }
 
+// 追加案件标记的写入参数，字段与行同形。
 export type CaseMarkerWrite = {
   readonly id: string;
   readonly caseId: string;
@@ -1450,6 +1512,7 @@ export interface NoticeRow {
   readonly updatedAt: Date;
 }
 
+// 保存告知拟制稿的写入参数。
 export interface NoticeDraftWrite {
   readonly noticeId: string;
   readonly caseId: string;
@@ -1463,6 +1526,7 @@ export interface NoticeDraftWrite {
   readonly at: Date;
 }
 
+// 推进告知呈批一步的写入参数。
 export interface NoticeStepWrite {
   readonly noticeId: string;
   readonly expectedStatus: string;
@@ -1477,6 +1541,7 @@ export interface NoticeStepWrite {
   readonly at: Date;
 }
 
+// 告知送达的写入参数：送达人、时刻与北京日期。
 export interface NoticeServedWrite {
   readonly noticeId: string;
   readonly servedBy: string;
@@ -1495,6 +1560,7 @@ export interface PartySubmissionRow {
   readonly recordedAt: Date;
 }
 
+// 追加当事人提交的写入参数，字段与行同形。
 export type PartySubmissionWrite = PartySubmissionRow;
 
 /** 听证（#272）。 */
@@ -1517,6 +1583,7 @@ export interface HearingRow {
   readonly updatedAt: Date;
 }
 
+// 追加听证的写入参数，状态只允许登记的四态。
 export interface HearingWrite {
   readonly id: string;
   readonly caseId: string;
@@ -1535,6 +1602,7 @@ export interface HearingWrite {
   readonly recordedBy: string;
 }
 
+// 推进听证状态的写入参数；可选项省略时不改对应字段。
 export interface HearingStepWrite {
   readonly hearingId: string;
   readonly expectedStatuses: readonly string[];
@@ -1551,6 +1619,7 @@ export interface HearingStepWrite {
 }
 
 /** 撤销告知（#248）。只允许 served → revoked。 */
+// 撤销告知的写入参数，附带审批步骤与版本号。
 export interface NoticeRevokeWrite {
   readonly noticeId: string;
   readonly stepId: string;
@@ -1577,6 +1646,7 @@ export interface NoticeValidityBaselineRow {
   readonly createdAt: Date;
 }
 
+// 写入告知有效性基线的参数；创建时间由存储补齐。
 export type NoticeValidityBaselineWrite = Omit<NoticeValidityBaselineRow, 'createdAt'>;
 
 /** 有效性确认（#248）。只追加。 */
@@ -1600,6 +1670,7 @@ export interface ValidityConfirmationRow {
   readonly createdAt: Date;
 }
 
+// 追加有效性确认的写入参数；创建时间由存储补齐。
 export type ValidityConfirmationWrite = Omit<ValidityConfirmationRow, 'createdAt'>;
 
 /** 有效性确认复核（#248）。只追加。 */
@@ -1615,6 +1686,7 @@ export interface ValidityReviewRow {
   readonly createdAt: Date;
 }
 
+// 追加有效性复核的写入参数；创建时间由存储补齐。
 export type ValidityReviewWrite = Omit<ValidityReviewRow, 'createdAt'>;
 
 /** 卷宗材料入卷登记的一行（#243）。只追加。 */
@@ -1631,6 +1703,7 @@ export interface DossierMaterialRow {
   readonly recordedAt: Date;
 }
 
+// 追加卷宗材料入卷登记的写入参数，字段与行同形。
 export type DossierMaterialWrite = DossierMaterialRow;
 
 /** 归档呈批表头，带当前版本正文（#243）。 */
@@ -1645,6 +1718,7 @@ export interface FinalizeApprovalRow {
   readonly contentJson: string | null;
 }
 
+// 保存归档呈批拟制稿的写入参数。
 export interface FinalizeApprovalDraftWrite {
   readonly approvalId: string;
   readonly caseId: string;
@@ -1657,6 +1731,7 @@ export interface FinalizeApprovalDraftWrite {
   readonly at: Date;
 }
 
+// 推进归档呈批一步的写入参数。
 export interface FinalizeApprovalStepWrite {
   readonly approvalId: string;
   readonly expectedStatus: string;
@@ -1690,6 +1765,7 @@ export interface FinalizeRecordRow {
   readonly finalizedAt: Date;
 }
 
+// 追加定型记录的写入参数，字段与行同形。
 export type FinalizeRecordWrite = FinalizeRecordRow;
 
 /** 决定呈批表头，带当前版本正文（#270）。 */
@@ -1704,6 +1780,7 @@ export interface DecisionApprovalRow {
   readonly contentJson: string | null;
 }
 
+// 保存决定呈批拟制稿的写入参数。
 export interface DecisionApprovalDraftWrite {
   readonly approvalId: string;
   readonly caseId: string;
@@ -1715,6 +1792,7 @@ export interface DecisionApprovalDraftWrite {
   readonly at: Date;
 }
 
+// 推进决定呈批一步的写入参数。
 export interface DecisionApprovalStepWrite {
   readonly approvalId: string;
   readonly expectedStatus: string;
@@ -1747,6 +1825,7 @@ export interface DeliveryRow {
   readonly recordedAt: Date;
 }
 
+// 追加送达记载的写入参数，字段与行同形。
 export type DeliveryWrite = DeliveryRow;
 
 /** 执行记载（T25， #270）。只追加。 */
@@ -1761,6 +1840,7 @@ export interface ExecutionRecordRow {
   readonly recordedAt: Date;
 }
 
+// 追加执行记载的写入参数，字段与行同形。
 export type ExecutionRecordWrite = ExecutionRecordRow;
 
 /** 结案呈批表头，带当前版本正文（#270）。 */
@@ -1775,6 +1855,7 @@ export interface ClosureApprovalRow {
   readonly contentJson: string | null;
 }
 
+// 保存结案呈批拟制稿的写入参数。
 export interface ClosureApprovalDraftWrite {
   readonly approvalId: string;
   readonly caseId: string;
@@ -1786,6 +1867,7 @@ export interface ClosureApprovalDraftWrite {
   readonly at: Date;
 }
 
+// 推进结案呈批一步的写入参数。
 export interface ClosureApprovalStepWrite {
   readonly approvalId: string;
   readonly expectedStatus: string;
@@ -1814,4 +1896,5 @@ export interface ClosureRecordRow {
   readonly closedAt: Date;
 }
 
+// 追加结案记录的写入参数，字段与行同形。
 export type ClosureRecordWrite = ClosureRecordRow;

@@ -365,6 +365,7 @@ beforeEach(() => {
   storage.writes.length = 0;
 });
 
+// 验证移送登记的终态、处置行、发函日期缺省与留痕（#216）。
 describe('#216 移送登记', () => {
   it('待分派池移送成功：transferred_out 终态＋处置行＋留痕 clue.disposition-recorded，发函日期缺省北京当日', async () => {
     const registered = await register({ polygon: geojsonPolygon(square(50)) });
@@ -566,6 +567,7 @@ describe('#216 移送登记', () => {
   });
 });
 
+// 验证移送附件 0 到多件的选填范围，材料行与存储写入一一对应（#216）。
 describe('#216 移送附件与发函日期', () => {
   it('附件选填：0 件成功；2 件成功且材料行与存储写入一一对应', async () => {
     const bare = await register({ polygon: geojsonPolygon(square(60)) });
@@ -650,6 +652,7 @@ describe('#216 移送附件与发函日期', () => {
   });
 });
 
+// 验证停用机构池重新指定的权限、目标校验与不加锁约束（#216）。
 describe('#216 停用机构池重新指定', () => {
   it('系统管理员重新指定成功：归属变更＋指定事实（不加锁）＋留痕 clue.pool-reassigned；接收机构可正常分派', async () => {
     // 夹具：甲区下级一所，内勤登记线索后该所停用。

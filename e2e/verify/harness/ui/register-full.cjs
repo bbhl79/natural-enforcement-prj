@@ -1,3 +1,5 @@
+// 用途：在页面全量填满登记表单的每个渲染要件并提交，核对落库详情。
+// 用法：由 run-ui-p0.cjs 在 UI_SUBMIT=1 时调用；接收 page、fixture、record、shot 与后缀。
 /* eslint-disable @typescript-eslint/no-require-imports */
 const assert = require('node:assert/strict');
 

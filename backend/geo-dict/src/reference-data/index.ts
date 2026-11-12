@@ -1,3 +1,18 @@
+// 用途：持有五类参照数据的初值常量与规划类分派指导常量（均自 reference-data.generated.ts 再导出），并提供按编码取单行的内存查找函数。
+// 数据来源：初值常量由 tools/generate-clue-reference-data.mjs 从 docs/research 下的定稿底稿生成。
+//   线索来源编码 docs/research/clue-source-codes.md；违法类型编码 docs/research/violation-type-codes.md；
+//   依据文件 docs/research/legal-document-table.md；辖区对应 docs/research/jurisdiction-mapping.md；
+//   规划类分派指导 docs/research/planning-dispatch-guidance.md；类型依据归集自四份类型层草案的依据栏，清单见生成器文件头。
+// 调用方：backend/prisma/seed.mjs 直引本文件，用五类初值按「业务编码 + 版本」只追加写库（不含分派指导）。
+//   其余调用方经公共出口 backend/geo-dict/src/index.ts 引用，清单见该文件头。
+//   findSourceCode：clue-registration、clue-form-schema、clue-closure、clue-dispatch 四个服务。
+//   findSourceGroupCode：clue-registration、clue-duplicate、clue-form-schema、clue-dispatch、case-filing 五个服务。
+//   findViolationType：clue-registration、clue-form-schema 两个服务。findDocument：clue-form-schema 服务。
+//   以上服务文件均在 backend/server/src 下。DISPATCH_GUIDANCE 由 backend/case/src/clue/dispatch/planning-guidance.ts 引用，
+//   它不是库表数据，种子与 backend/prisma/schema.prisma 均无对应表。
+// 边界：查找函数只读内存常量，不读库，不看版本与停用状态。运行期读库的只有同目录的 jurisdiction-lookup.ts。
+//   对应的五张库表只追加：库层触发器拒 UPDATE 与 DELETE，改参照数据等于追加新版本。
+// 依据：ADR 0016（docs/adr/0016-参照数据随种子只追加写入.md）；ADR 0019（docs/adr/0019-依据以文件表引用承载.md）；#210。
 // 参照数据（ADR 0016；#210）。
 // 本目录持有参照数据的初值常量：线索来源编码、违法类型编码、依据文件、类型依据、辖区对应。
 // 初值常量由 tools/generate-clue-reference-data.mjs 从 docs/research/ 下的定稿底稿生成；

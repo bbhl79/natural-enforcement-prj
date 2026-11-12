@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 用途：E1 从零建库冒烟：经唯一毁数入口 dev db reset 重建并迁移种子。
 # E1：一次运行从空环境拉起全套（毁卷重建 → 容器起 → 迁移完 → 种子进 → health 绿）。
 # 毁数入口收敛（代码评审必修）：从零前提只经 dev db reset（全系统唯一毁数入口）达成，
 # e2e 不再直删任何数据卷（此前的 docker volume rm -f 直删已移除）；
@@ -10,6 +11,7 @@ DEV="$ROOT/dev"
 cd "$ROOT"
 PROJECT="${COMPOSE_PROJECT_NAME:-natural-enforcement}"
 COMPOSE=(docker compose -p "$PROJECT" -f infra/docker-compose.yml)
+# 在 db 容器内执行 psql，参数原样透传。
 psql_db() { "${COMPOSE[@]}" exec -T db psql -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-postgres}" "$@" 2>/dev/null; }
 
 echo "[e2e] E1 从零建库：经唯一毁数入口 dev db reset（数据卷销毁重建 → 迁移 → 种子）…"

@@ -1,3 +1,5 @@
+// 用途：疑似重复的纯规则：阈值、比对范围、命中判定、决定步契约与对称脱敏展示口径。
+// 调用方：backend/server/src/clue-duplicate.service.ts 与 backend/server/src/clue-center.service.ts。
 // 疑似重复的领域规则（#212；规格 B「几何与疑似重复」、协议 D 节）。
 //
 // 纯规则：逐面命中判定、比对范围、命中分组、展示口径、决定步契约、对称脱敏口径。

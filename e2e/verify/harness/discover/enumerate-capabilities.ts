@@ -1,3 +1,4 @@
+// 用途：从控制器、前端路由与菜单源码文本静态枚举 API 与 UI 能力。
 // 发现器信号源 2（spec #322 二期 T5）：静态能力枚举。
 // 纯函数，零 I/O：调用方先读源码文本（见 harness/discover-sources.ts），这里只做轻解析。
 // 不 import 前端模块（router.tsx/menu.ts 是 React/TSX，NodeNext 下不可直接 import）。

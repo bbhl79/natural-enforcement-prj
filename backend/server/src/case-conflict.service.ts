@@ -1,3 +1,7 @@
+// 用途：人员层利害关系的声明、回避决定、签出守卫、调查继续登记与法审候选人过滤，并写相应留痕。
+// 调用方：backend/server/src/case-conflict.controller.ts；backend/server/src/case-legal-review.service.ts 调用 assertCanSign。
+// 边界：授权经 authorize（拒绝先写 authz.denied 再抛错）；assertCanSign 由调用方先授权，本方法只查冲突并写失败留痕。
+// 依据：#237、#230、#71。
 // 人员层利害关系与回避（#237）。
 // 过渡：登记声明、调查继续登记复用 doc.draft；回避决定复用 doc.approve。不新增操作码。
 // 正式码（草案 case.conflict.mark）待 #230／#71 回写后迁入。
@@ -56,6 +60,7 @@ const READ_OPCODE = 'case.read';
 
 const HANDLER_ROLES = new Set<string>(CASE_HANDLER_ROLES);
 
+/** 人员冲突接口的结果；状态码区分成功、输入不合规、拒绝、找不到与冲突。 */
 export type ConflictHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }
   | { readonly status: 400; readonly body: { readonly result: 'non-compliant'; readonly reason: string } }
@@ -71,6 +76,7 @@ export type ConflictHttpOutcome =
       };
     };
 
+/** 人员层利害关系与回避服务：声明、决定、签出守卫、继续登记与候选过滤。 */
 @Injectable()
 export class CaseConflictService {
   constructor(

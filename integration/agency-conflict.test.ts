@@ -265,6 +265,7 @@ beforeEach(() => {
   cookies.clear();
 });
 
+// 验证机关层利害关系只提示不阻断，取消勾选返回 409 并留痕，记录只追加（#263）。
 describe('#263 机关层利害关系', () => {
   it('勾选后界面数据带提示，签出、呈批和迁移都不被拒绝', async () => {
     const caseId = await fileCase();

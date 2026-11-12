@@ -1,3 +1,7 @@
+// 用途：送达、执行记载、结案呈批的拟制/提交/审核/批准与结案落库，并追加对应留痕。
+// 调用方：backend/server/src/case-closeout.controller.ts。
+// 边界：授权经 authorize（拒绝时先写 authz.denied 再抛错）；写动作在交互式事务内，业务行与留痕同成同败。
+// 依据：#270、#243、ADR 0011。
 // 送达（T24）、执行记载（T25）与结案（T26）的读写（#270）。
 // 送达、执行记载与结案呈批沿用 doc.*；执行记载另用 case.execution.record（授经办）。
 // 结案批准前调用移送闸口（X11）；移送回证缺失不阻断结案。
@@ -73,6 +77,7 @@ const EXECUTION_OPCODE = 'case.execution.record';
 const HANDLER_ROLES = new Set<string>(CASE_HANDLER_ROLES);
 const FAIL_REASONS = new Set<string>(CASE_CLOSEOUT_FAILED_REASONS);
 
+/** 结案相关接口的结果；成功、输入不合规、拒绝、找不到与冲突以状态码区分。 */
 export type CaseCloseoutHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }
   | { readonly status: 400; readonly body: Record<string, unknown> }
@@ -99,6 +104,7 @@ interface ChecklistFacts {
   readonly requiredItems: readonly number[];
 }
 
+/** 送达、执行记载与结案呈批的服务实现；写动作在各自事务内落库并追加留痕。 */
 @Injectable()
 export class CaseCloseoutService {
   constructor(

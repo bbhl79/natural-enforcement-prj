@@ -1,3 +1,7 @@
+// 用途：事务前置的实现。业务写入与留痕行放在同一事务里同成同败；业务被拒绝时回滚，拒绝类留痕在回滚之后另起事务写入。
+// 调用方：backend/server/src/persistence.module.ts 的 PrismaUnitOfWork.run 调用 runAuditedTransaction；backend/server/src/personnel-profiles.service.ts 等业务服务在 work 里返回 rejected(...)。
+// 边界：work 抛错（含留痕写入失败）时整体回滚，错误原样抛出。另起事务写拒绝类留痕若失败，该事务整体回滚，函数抛出错误，调用方拿不到 outcome。
+// 依据：docs/adr/0012-留痕写入经独立设施包.md、docs/adr/0011-认证留痕写入共用表.md。
 // 事务前置（#105「事务前置」，#119）：业务行与留痕同成同败。
 // 本文件不碰数据库。事务由调用方打开，留痕经工厂按事务客户端取得。
 import type { AuditAppend, AuditTrailPort, AuthzDeniedEntry } from './port.ts';
@@ -27,10 +31,20 @@ export interface Rejected<T> {
   readonly audits: readonly AuditEntry[];
 }
 
+/**
+ * 构造「业务被拒绝」的返回值，由 work 返回给 runAuditedTransaction。本函数不写库、不抛错。
+ * runAuditedTransaction 见到它就回滚业务事务，再另起事务按顺序追加 audits，最后把 outcome 交给调用方。
+ * audits 为空时不另起事务。
+ * 调用方：backend/server/src/personnel-profiles.service.ts、backend/server/src/clue-registration.service.ts 等业务服务。
+ */
 export function rejected<T>(outcome: T, ...audits: AuditEntry[]): Rejected<T> {
   return { [REJECTED]: true, outcome, audits };
 }
 
+/**
+ * 判断 value 是否由 rejected(...) 构造。按模块私有的符号键识别，普通对象不会误判。无副作用。
+ * 调用方：本文件的 runAuditedTransaction。包外当前无调用方。
+ */
 export function isRejected(value: unknown): value is Rejected<unknown> {
   return typeof value === 'object' && value != null && REJECTED in value;
 }

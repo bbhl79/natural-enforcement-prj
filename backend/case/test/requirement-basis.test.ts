@@ -34,6 +34,7 @@ function articles(key: string, document: string): string[] {
     .map((entry) => entry.article);
 }
 
+// #261 要件依据勘误：不引用已废止文书，未施行文书标注施行日，查不到的条目保留原后果并标待法制确认。
 describe('要件依据勘误（#261）', () => {
   it('声明版本升到 requirements-2026-10-28-01', () => {
     expect(CLUE_REQUIREMENT_DECLARATION_VERSION).toBe('requirements-2026-10-28-01');

@@ -1,3 +1,6 @@
+// 用途：经 PostGIS 的 ST_Transform，在来源坐标系与 CGCS2000（EPSG:4490）之间换算 WKT 文本，不写库。
+// 调用方：当前仅 integration/e4-coordinate-roundtrip.test.ts，经公共出口 backend/geo-dict/src/index.ts。
+//   land-boundary.ts 与 survey-point.ts 入库时在各自 SQL 内直接 ST_Transform，不调用本文件。
 // 统一坐标口径载体（#54）：CGCS2000 地理坐标系 EPSG:4490，全系统唯一坐标口径。
 // 来源坐标原样保留（来源坐标系代码 + 坐标值），CGCS2000 坐标一律经 ST_Transform 落库；
 // 往返转换（来源→CGCS2000→来源）同一输入恒定输出（E4 断言）。

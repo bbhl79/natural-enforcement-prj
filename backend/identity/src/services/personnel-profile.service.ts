@@ -1,3 +1,7 @@
+// 用途：提供人员列表、卡片、登记、编辑、调岗、停用、恢复与结束会话前置，按操作码授权。
+// 调用方：backend/server/src/personnel-profiles.service.ts。
+// 边界：写入在调用方事务内与留痕同成同败；口令散列在事务外计算。
+// 依据：#105、#128、#129
 // 人员登记、列表与卡片（#105「人员与登录凭据」，#128）。
 // 授权经 AccessControlService 按操作码判断：列表与卡片 personnel.profile.read，登记 personnel.profile.register，只给系统管理。
 // 登记在调用方的交互式事务里执行：人员、名称版本、任职、人员—角色、岗位标记、留痕同成同败（#119）。
@@ -91,16 +95,19 @@ export interface PersonnelProfile {
   cert: { no: string | null; expiresOn: Date | null; status: CertStatus };
 }
 
+/** 读取人员卡片的结果；对方不存在返回 not-found，不写留痕。 */
 export type ReadProfileResult =
   | { result: 'viewed'; profile: PersonnelProfile }
   | { result: 'not-found' };
 
+/** 登记前置判断的结果；ready 带规整后的输入与角色 id，停用机构附失败留痕行。 */
 export type ScreenRegistrationResult =
   | { result: 'ready'; value: NormalizedRegistration; roleIds: string[] }
   | { result: 'non-compliant'; rules: RegisterRuleCode[] }
   /** 目标机构已停用（409）。failure 是 personnel.registered 的失败留痕行，由调用方回滚后写入。 */
   | { result: 'invalid-state'; failure: AuditAppend };
 
+/** 登记的结果；冲突与拒绝各附对应的失败留痕行，由调用方回滚后写入。 */
 export type RegisterPersonnelProfileResult =
   | { result: 'registered'; personnel: { id: string; code: string; name: string; orgUnitId: string } }
   | { result: 'non-compliant'; rules: RegisterRuleCode[] }
@@ -143,6 +150,7 @@ export interface TransferDestination {
   parentId: string | null;
 }
 
+/** 调岗目的地清单的结果；对方不存在返回 not-found。 */
 export type TransferDestinationsResult =
   | { result: 'listed'; orgUnits: TransferDestination[] }
   | { result: 'not-found' };
@@ -199,6 +207,8 @@ export interface PersonnelMaintenanceTarget {
   actorCode: string | null;
 }
 
+// 人员档案服务：授权后执行列表、卡片、登记、编辑、调岗、停用、恢复与结束会话前置。
+// 由 backend/server/src/personnel-profiles.service.ts 注入调用。
 @Injectable()
 export class PersonnelProfileService {
   constructor(

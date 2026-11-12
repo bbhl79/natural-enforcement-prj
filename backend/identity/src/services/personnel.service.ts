@@ -1,3 +1,7 @@
+// 用途：提供人员登记、改名、调岗、失效、读取与导出，每个动作先按操作码授权。
+// 调用方：backend/server/src/admin.service.ts 与 backend/server/src/unit-of-work.ts。
+// 边界：只失效不删除；导出写 personnel.exported 留痕，不再写已冻结的 ExportAudit。
+// 依据：#52、#125、ADR 0013
 // 人员服务（#52）：登记 / 改名（名称版本化）/ 调岗 / 失效 / 读 / 导出——
 // 每个动作都先经 AccessControlService 重新校验身份、权限、数据范围；
 // 导出写共用留痕表的 personnel.exported，带导出条数（#125，ADR 0013）。ExportAudit 已冻结，不再写入。
@@ -17,6 +21,7 @@ import { IDENTITY_STORE, type IdentityStore } from '../persistence/identity-stor
 import { AccessControlService } from './access-control.service.ts';
 import { CredentialService } from './credential.service.ts';
 
+/** 人员登记的输入。目标机构须在操作者数据范围内；初始口令可空。 */
 export interface RegisterPersonnelInput {
   code: string;
   name: string;
@@ -25,6 +30,7 @@ export interface RegisterPersonnelInput {
   initialPassword?: string | null;
 }
 
+/** 人员当前态与当前任职机构的组合。 */
 export interface PersonnelDetail extends PersonnelRow {
   currentOrgUnitId: string;
 }
@@ -39,6 +45,8 @@ export interface PersonnelExportItem {
   name: string;
 }
 
+// 人员服务：授权后执行登记、改名、调岗、失效、读取与导出。
+// 由 backend/server/src/ 下管理服务与工作单元注入调用。
 @Injectable()
 export class PersonnelService {
   constructor(

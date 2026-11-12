@@ -1,3 +1,6 @@
+// 用途：线索中心抽屉中「系统外移送附加记录」区块：列出记录并支持补挂。
+// 调用方：frontend/src/clue/ClueBasicTab.tsx（处置为 other 时展示）。
+// 接口：GET/POST /api/clues/:id/external-transfers；读操作码 clue.read，写操作码 clue.disposition.record。
 // 系统外移送附加记录（#229）：处置为 other 的线索详情展示列表，并可补挂。
 import { useCallback, useEffect, useState } from 'react';
 
@@ -9,6 +12,7 @@ import {
 } from './dispatch';
 import { dispatchFailureText } from './ClueDispatchSection';
 
+/** 系统外移送附加记录区块；mayAttach 为 false 或监督只读时隐藏补挂入口。 */
 export function ClueExternalTransferSection({
   clueId,
   mayAttach,

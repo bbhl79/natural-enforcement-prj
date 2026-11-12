@@ -305,6 +305,7 @@ beforeEach(() => {
   storage.writes.length = 0;
 });
 
+// 验证撤回不派的权限、原因与补充说明校验、状态回池与留痕（#217）。
 describe('#217 撤回不派', () => {
   it('录入人本人撤回：成功回待分派池，撤回行与留痕齐备（原因逐字、可多选）', async () => {
     const clueId = await heldClue(60);

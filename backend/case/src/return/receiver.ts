@@ -1,3 +1,7 @@
+// 用途：判定退回接收人是否在允许范围内，并处理主办协办都不可用时的内勤例外。
+// 调用方：backend/case/src/return/plan.ts、backend/server/src/case-return.service.ts；backend/server/src/case-legal-review.service.ts 也使用其中的法制审核归属判定。
+// 边界：不自动选接收人；只看人员停用与调离，不读机构停用。
+// 依据：#238、#28、#71。
 // 退回接收人（#238，#28 Q16，N5）。
 // 系统不自动选。N5 只看人员停用与调离（#71/6431326440）。
 // 不读机构停用，不放宽 org-has-open-items。
@@ -20,6 +24,7 @@ export const RETURN_CHAIN_RECEIVER_ROLES = ['法制审核', '行政审核'] as c
 
 /** 法制审核归属用的机构层级。市、区、所。 */
 export const LEGAL_REVIEW_ORG_LEVELS = ['city', 'district', 'station'] as const;
+// 法制审核归属判定用的机构层级，取 LEGAL_REVIEW_ORG_LEVELS 的元素类型。
 export type LegalReviewOrgLevel = (typeof LEGAL_REVIEW_ORG_LEVELS)[number];
 
 /** 承办机构或它的直接上级。只带归属判定要用的字段。 */
@@ -43,6 +48,7 @@ export function legalReviewAttributionOrgId(
   return parent.id;
 }
 
+// 案件承办人的可用性事实，用于 N5 判定。
 export interface HandlerAvailability {
   readonly personnelId: string;
   readonly role: 'main' | 'assist';
@@ -52,6 +58,7 @@ export interface HandlerAvailability {
   readonly transferredAway: boolean;
 }
 
+// 接收人候选事实，由调用方按人员、角色与任职机构拼装。
 export interface ReceiverCandidate {
   readonly personnelId: string;
   readonly roles: readonly string[];
@@ -71,10 +78,12 @@ export interface ReceiverCandidate {
   readonly clerkOfHandlingOrg: boolean;
 }
 
+// 接收人判定结果：允许时标明是否走了 N5，否则给出拒绝原因码。
 export type ReceiverCheck =
   | { readonly ok: true; readonly n5: boolean }
   | { readonly ok: false; readonly reason: 'receiver-not-allowed' };
 
+// 承办人不可用：已停用或已调离承办机构。
 export function handlerUnavailable(handler: HandlerAvailability): boolean {
   return handler.deactivated || handler.transferredAway;
 }
@@ -132,6 +141,7 @@ export function checkReceiver(
   return { ok: false, reason: 'receiver-not-allowed' };
 }
 
+// 文书编辑判定结果：允许，或 403 与拒绝原因码。
 export type DocumentEditCheck =
   | { readonly ok: true }
   | { readonly ok: false; readonly httpStatus: 403; readonly reason: 'clerk-cannot-edit' | 'permission-denied' };

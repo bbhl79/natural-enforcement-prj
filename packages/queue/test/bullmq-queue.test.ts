@@ -24,6 +24,7 @@ vi.mock('bullmq', () => ({
 
 import { createBullMqQueue } from '../src/bullmq-queue.ts';
 
+// #55：验证 BullMQ 适配器兑现 QueuePort 契约（投递、按 JobRef 等待、关闭）；库边界 mock，无需 Redis。
 describe('队列接口（QueuePort）经 BullMQ 适配器', () => {
   beforeEach(() => {
     vi.clearAllMocks();

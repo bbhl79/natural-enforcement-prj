@@ -1,3 +1,7 @@
+// 用途：人员（P5）名单页，按数据范围展示人员、前端筛选与分页，并进入人员卡片或新建页。
+// 路由：/admin/personnel，路由表 id personnel。
+// 调用的接口：GET /api/admin/personnel（操作码 personnel.profile.read）；筛选与分页都在前端完成。
+
 import { Suspense } from 'react';
 import { Await, Link, useAsyncError, useLoaderData, useRevalidator, useSearchParams } from 'react-router';
 
@@ -50,6 +54,7 @@ function PageHead({ scopeName, opcodes }: { scopeName: string | null; opcodes: r
   );
 }
 
+/** 筛选条：关键字、机构、角色、执法证与是否含已停用人员。 */
 export function Filters({
   list,
   filter,

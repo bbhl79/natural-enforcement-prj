@@ -1,3 +1,6 @@
+// 用途：线索中心抽屉 /clue 的「内业核查」页签，展示运行、分层三态、分析图与手动重跑入口。
+// 调用方：frontend/src/pages/ClueCenterPage.tsx。
+// 数据来源：GET /api/clues/:id/verification 操作码 clue.read；重跑 POST /api/clues/:id/verification/retry 操作码 clue.verify.retry。
 // 内业核查页签（#213；规格 C 节「产物」与 USER LOCK L2）。
 //
 // 显示四样东西：当前与历史运行、每层的三态与相交事实、分析图预览、手动重跑入口。

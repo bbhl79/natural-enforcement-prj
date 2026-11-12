@@ -24,6 +24,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+// 验证标记入口只在根机构系统管理员选中本人根机构时可见。
 describe('涉密误传标记入口可见性', () => {
   it('根机构系统管理员在本人根机构详情里可见', () => {
     expect(canMarkQuarantine([QUARANTINE_MARK], ROOT_TREE, CITY)).toBe(true);
@@ -43,6 +44,7 @@ describe('涉密误传标记入口可见性', () => {
   });
 });
 
+// 验证标记面板的渲染、必填门禁与失败文案。
 describe('涉密误传标记面板', () => {
   it('显示材料编号、简述与按钮；未填时按钮禁用；说明原文件保留', () => {
     const html = renderToStaticMarkup(
@@ -75,6 +77,7 @@ describe('涉密误传标记面板', () => {
   });
 });
 
+// 验证提交请求打到隔离接口并带简述，重复标记给出对应文案。
 describe('标记提交调用隔离接口', () => {
   const dispatch = vi.fn(async () => undefined) as unknown as ApiDispatch;
 

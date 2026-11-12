@@ -66,6 +66,7 @@ function view(overrides: Partial<VerificationView> = {}): VerificationView {
   };
 }
 
+// 页签渲染：已完成、没跑成、不设核查、无权重跑四种状态的可见行为（#213；规格 C 节）。
 describe('内业核查页签', () => {
   it('已完成：显示三态、每层相交事实与产物下载入口', () => {
     const html = renderToStaticMarkup(<ClueVerificationTab view={view()} />);
@@ -126,6 +127,7 @@ describe('内业核查页签', () => {
   });
 });
 
+// 纯函数口径：面积与比例文本、三态标签、不能重跑的原因文案（#213）。
 describe('内业核查页签的纯函数', () => {
   it('面积与比例的显示口径', () => {
     expect(areaText(250)).toBe('250.0 平方米');

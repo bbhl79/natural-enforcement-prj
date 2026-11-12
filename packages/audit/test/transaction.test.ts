@@ -54,6 +54,7 @@ const denial: AuthzDeniedEntry = {
   targetOrgUnitBasis: 'actor-fallback',
 };
 
+// 事务语义：正常返回同事务提交；留痕失败业务回滚；返回 rejected 时回滚后另起事务写拒绝留痕。
 describe('runAuditedTransaction', () => {
   it('正常返回时业务行与留痕一起提交', async () => {
     const db = memoryDb();

@@ -1,3 +1,7 @@
+// 用途：定义录入要件声明的类型与固定取值：必填时机、缺件后果、依据层级、法域与分组清单。
+// 调用方：本目录各声明文件、backend/server/src/clue-form-schema.service.ts 与 backend/case/src/filing/rules.ts，经包名 @natural-enforcement/case 导入。
+// 边界：纯类型与纯常量，不写库、不写留痕。
+// 依据：ADR 0018，ADR 0019。
 // 录入要件声明的类型（ADR 0018）。
 // 录入要件是「一条线索按其线索来源与法域，在录入时应当呈现的那些项」。
 // 它是一份代码里的声明式常量：前端渲染表单与服务端判定缺件读同一份声明。
@@ -7,10 +11,12 @@ import type { GuardAuthority } from '../../state-machine/guard.ts';
 
 /** 必填时机三值（#192 决议：统一取「录入时」）。 */
 export const REQUIREMENT_TIMINGS = ['录入时', '核查前补齐', '只提示'] as const;
+/** 必填时机的联合类型。 */
 export type RequirementTiming = (typeof REQUIREMENT_TIMINGS)[number];
 
 /** 缺件后果三值（GLOSSARY「缺件后果」）。 */
 export const REQUIREMENT_CONSEQUENCES = ['阻断', '警告', '提示'] as const;
+/** 缺件后果的联合类型。 */
 export type RequirementConsequence = (typeof REQUIREMENT_CONSEQUENCES)[number];
 
 /** 依据层级（#257；取值与 #255 的 GuardAuthority 同一份）。 */
@@ -58,6 +64,7 @@ export type TypeLayerItem = RequirementItem;
 
 /** 法域（一条线索一个法域；#24 决议第十节）。 */
 export const DOMAINS = ['land', 'mineral', 'survey', 'planning'] as const;
+/** 法域的联合类型。 */
 export type Domain = (typeof DOMAINS)[number];
 
 /** 公共层的封闭分组清单（#199 决议第三节）。 */

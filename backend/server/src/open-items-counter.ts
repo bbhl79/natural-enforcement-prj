@@ -1,3 +1,8 @@
+// 用途：承办中事项计数端口的生产实现，按机构统计未办结线索与非终态案件。
+// 调用方：backend/server/src/persistence.module.ts 装配为令牌 OPEN_ITEMS_COUNTER 的实现。
+// 边界：查询走调用方事务的客户端，与机构行锁同事务可见；不递归下级。
+// 依据：Issue #219，Issue #235。
+//
 // 承办中事项真实计数（#219，#235）：以当前有效分派（clue_assignment.ended_at IS NULL）
 // 的承办机构为准，线索状态不在 closed／transferred_out 的计入（filed 计入）。
 // 案件按 handling_org_id 计，主状态不在 withdrawn／closed／finalized 的计入

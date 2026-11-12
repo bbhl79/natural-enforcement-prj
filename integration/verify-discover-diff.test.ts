@@ -17,6 +17,7 @@ import {
 import { writeDiffReport } from '../e2e/verify/harness/discover/report.ts';
 import type { UncoveredItem } from '../e2e/verify/harness/discover/uncovered.ts';
 
+// spec #322 Q16 seam②：跨跑次比较 uncovered，得到新增与消失的缺口。
 describe('diffUncovered（seam②：跨跑次新增/消失）', () => {
   it('current 新缺口入 added，baseline 消失缺口入 removed，共有缺口不报', () => {
     const common: UncoveredItem = {
@@ -55,6 +56,7 @@ function snap(
   return { runId, status, startedAt, endedAt, uncovered: [] };
 }
 
+// spec #322 Q16 seam②：基线选择跳过 blocked 跑次，全部 blocked 时无基线。
 describe('selectBaseline（seam②：基线取最近非 blocked 跑次）', () => {
   it('blocked 跑次时间最近也不入账，取最近的非 blocked 跑次', () => {
     const older = snap('r1', 'passed', '2026-11-01T00:00:00Z', '2026-11-01T01:00:00Z');
@@ -77,6 +79,7 @@ describe('selectBaseline（seam②：基线取最近非 blocked 跑次）', () =
   });
 });
 
+// spec #322 Q16 seam④：按 featureMapRef 过滤已 ack 的地图节点。
 describe('filterAcked（seam④：已 ack 地图节点不再报）', () => {
   it('featureMapRef 命中地图节点 ack 的缺口被过滤，未命中与无 featureMapRef 的保留', () => {
     const acked: UncoveredItem = {
@@ -120,6 +123,7 @@ describe('filterAcked（seam④：已 ack 地图节点不再报）', () => {
   });
 });
 
+// spec #322 Q16 seam②④：diff 报告写入 e2e/results 沙盒，并拒绝 runId 逃逸。
 describe('writeDiffReport（seam②④：报告写口 + ack 过滤 + 写边界）', () => {
   let root: string;
   beforeEach(async () => {

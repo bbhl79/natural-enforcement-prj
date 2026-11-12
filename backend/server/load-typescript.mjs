@@ -1,3 +1,4 @@
+// 用途：node 模块解析钩子：把相对 .js 后缀解析到磁盘上的 .ts 源码。
 import { createRequire } from 'node:module';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -6,6 +7,7 @@ const require = createRequire(import.meta.url);
 const ts = require('typescript');
 
 // 仓库里一部分源码按 NodeNext 写成 .js 后缀，磁盘上的文件是 .ts。
+/** 解析钩子：相对 .js 说明符改为尝试同名 .ts；找不到时交回默认解析。 */
 export async function resolve(specifier, context, nextResolve) {
   const relativeJs = (specifier.startsWith('./') || specifier.startsWith('../')) && specifier.endsWith('.js');
   if (!relativeJs) return nextResolve(specifier, context);
@@ -17,6 +19,7 @@ export async function resolve(specifier, context, nextResolve) {
   }
 }
 
+/** 加载钩子：对 .ts 源码用 TypeScript 转译后交给默认加载器。 */
 export async function load(url, context, nextLoad) {
   if (!url.startsWith('file:') || !url.split('?')[0].endsWith('.ts')) {
     return nextLoad(url, context);

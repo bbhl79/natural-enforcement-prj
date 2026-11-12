@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 用途：把变量名从 infra/runtime.env 或环境注入 GITHUB_ENV，只写来源不写值。
 # CI 凭据注入（#57 --ci 凭据注入回收；ADR 0008、#80：开发与 CI 用仓库夹具值）。
 # 用法：bash tools/ci-inject-env.sh <名字>…（只在 GitHub Actions 步骤里运行）。
 # 每个名字必须登记在 infra/runtime.env，且不是 derived 项。

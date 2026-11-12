@@ -1,3 +1,7 @@
+// 用途：管理台留痕的 HTTP 接口，提供留痕查阅、导出与管理台首页今日条数。
+// 调用方：前端管理台留痕页面。
+// 边界：只做请求体透传与文件响应头；授权、范围与留痕写入在 AuditBrowseService。
+// 依据：ADR 0012；Issue #126。
 import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
 import type { ActorRef } from '@natural-enforcement/identity';
 
@@ -25,12 +29,14 @@ function filterOf(body: unknown): AuditFilterInput {
 export class AuditController {
   constructor(private readonly audit: AuditBrowseService) {}
 
+  // 按筛选条件查阅留痕并写 audit.viewed；操作码 audit.admin.read；对象级按目标机构及其子树校验。
   @Post('query')
   async query(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Body() body: unknown): Promise<void> {
     const outcome = await this.audit.query(req.actor as ActorRef, filterOf(body), sourceAddress(req));
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 按筛选条件导出留痕为 XLSX 并写 audit.exported；操作码 audit.admin.export；对象级按目标机构及其子树校验。
   @Post('export')
   async export(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Body() body: unknown): Promise<void> {
     const outcome = await this.audit.export(req.actor as ActorRef, filterOf(body), sourceAddress(req));
@@ -48,6 +54,7 @@ export class AuditController {
     res.status(200).send(outcome.file);
   }
 
+  // 读管理台首页今日留痕条数，不写查阅留痕；操作码 audit.admin.read；对象级按目标机构及其子树校验。
   @Get('summary')
   async summary(@Req() req: AuthenticatedRequest, @Res() res: HttpReply): Promise<void> {
     const outcome = await this.audit.summary(req.actor as ActorRef);

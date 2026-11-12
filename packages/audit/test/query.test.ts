@@ -77,6 +77,7 @@ const OPCODES = [
 
 const RANGE = { from: new Date('2026-10-15T16:00:00.000Z'), to: new Date('2026-10-17T16:00:00.000Z') };
 
+// 类别筛选与原型「操作类别」下拉一一对应，不含「全部操作」（P8）。
 describe('#126 留痕类别（P8 筛选）', () => {
   it('七个类别与原型「操作类别」下拉一一对应（不含「全部操作」）', () => {
     expect(AUDIT_CATEGORIES).toEqual([
@@ -107,6 +108,7 @@ describe('#126 留痕类别（P8 筛选）', () => {
   });
 });
 
+// 查阅读取器的范围条件：按给定机构过滤，无机构的行不受机构条件约束（#126）。
 describe('#126 PrismaAuditTrailReader', () => {
   it('范围只取给定机构；不带无机构的行时条件里没有 orgUnitId 为空', async () => {
     const { db, calls } = fake([]);

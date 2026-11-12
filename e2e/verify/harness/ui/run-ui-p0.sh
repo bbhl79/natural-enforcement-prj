@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# 用途：P0 UI 页面外壳，在浏览器镜像内跑登录与登记页取证并回拷证据。
+# 用法：run-ui-p0.sh [--headed]；HEADED、UI_FILL、UI_SUBMIT 等环境变量控制行为。
+# 退出码：0 页面取证通过；1 镜像缺失、传输门禁或页面断言失败。
 # Verification UI P0 runner — Playwright in pinned MCR image (headless default).
 # Docker Desktop 看不见 WSL home bind-mount：证据先落 /mnt/c/... 再拷回仓库 e2e/results/。
 # Usage:

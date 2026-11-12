@@ -1,3 +1,8 @@
+// 用途：管理台人员，提供列表、卡片、登记、编辑、调岗、停用、恢复与结束会话。
+// 调用方：backend/server/src/personnel.controller.ts。
+// 边界：写动作在交互式事务里完成，业务行与留痕同成同败；口令散列与历史比对在事务之外；拒绝留痕在回滚后另起事务写入。
+// 依据：Issue #128，Issue #129，Issue #130。
+//
 import { Inject, Injectable } from '@nestjs/common';
 import {
   rejected,
@@ -50,6 +55,7 @@ export interface PersonnelListView {
   deactivatedAt: string | null;
 }
 
+/** 人员列表结果：200 带根 id、机构与人员行，越权 403。 */
 export type PersonnelListOutcome =
   | {
     status: 200;
@@ -80,11 +86,13 @@ export interface PersonnelCardView {
   cert: { no: string | null; expiresOn: string | null; status: CertStatus };
 }
 
+/** 人员卡片结果：200 带完整卡片，404 人员不存在，越权 403。 */
 export type PersonnelCardOutcome =
   | { status: 200; body: { result: 'viewed'; personnel: PersonnelCardView } }
   | { status: 404; body: { result: 'not-found' } }
   | Denial;
 
+/** 登记结果：200 成功，400 规则不合格，409 状态冲突或编码／手机号已存在，403 越权。 */
 export type RegisterPersonnelOutcome =
   | { status: 200; body: { result: 'registered'; personnel: { id: string; code: string; name: string; orgUnitId: string } } }
   | NonCompliant
@@ -148,6 +156,7 @@ export type EndSessionsOutcome =
   | { status: 404; body: { result: 'not-found' } }
   | Denial;
 
+/** 调岗目的地结果：200 带全树未停用机构，404 人员不存在，越权 403。读取不写留痕。 */
 export type TransferDestinationsOutcome =
   | { status: 200; body: { result: 'listed'; orgUnits: Array<{ id: string; name: string; parentId: string | null }> } }
   | { status: 404; body: { result: 'not-found' } }

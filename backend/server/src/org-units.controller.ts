@@ -1,3 +1,7 @@
+// 用途：提供机构树查询与管理动作（新建、改名、停用）以及停用机构待分派池查询的 HTTP 接口，委托 OrgUnitsService。
+// 调用方：backend/server/src/app.module.ts 注册为控制器。
+// 依据：backend/server/src/org-units.service.ts（#123、#124、#216）。
+//
 import { Body, Controller, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
 import type { ActorRef } from '@natural-enforcement/identity';
 
@@ -36,6 +40,7 @@ export class OrgUnitsController {
     private readonly disposition: ClueDispositionService,
   ) {}
 
+  // 机构树查询，管理台与业务侧共用；操作码 org.tree.read；对象级以操作者现任机构为根返回子树。
   @Get('org-units')
   @UseGuards(SameOriginReadGuard)
   async tree(@Req() req: AuthenticatedRequest, @Res() res: HttpReply): Promise<void> {
@@ -43,6 +48,7 @@ export class OrgUnitsController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 新建机构；操作码 org.unit.register；对象级按父机构数据范围授权，parentId 缺省按数据范围拒绝。
   @Post('admin/org-units')
   async register(
     @Req() req: AuthenticatedRequest,
@@ -59,6 +65,7 @@ export class OrgUnitsController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 机构改名；操作码 org.unit.rename；对象级按目标机构数据范围授权。
   @Post('admin/org-units/:id/rename')
   async rename(
     @Req() req: AuthenticatedRequest,
@@ -71,6 +78,7 @@ export class OrgUnitsController {
   }
 
   /** 停用（#124）。重复停用返回 200 unchanged。 */
+  // 停用机构；操作码 org.unit.deactivate；对象级按目标机构数据范围授权。
   @Post('admin/org-units/:id/deactivate')
   async deactivate(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {
     const outcome = await this.orgUnits.deactivate(req.actor as ActorRef, id, sourceAddress(req));
@@ -78,6 +86,7 @@ export class OrgUnitsController {
   }
 
   /** 已停用机构待分派池的未派出线索清单（#216；只授系统管理，供重新指定接收机构）。 */
+  // 列已停用机构待分派池的未派出线索；操作码 clue.pool.reassign；对象级限系统管理，目标机构须已停用。
   @Get('admin/org-units/:id/pool-clues')
   @UseGuards(SameOriginReadGuard)
   async poolClues(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {

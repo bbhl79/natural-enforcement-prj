@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// 用途：Playwright 驱动办理页的「派出承办人」，把线索从 org_assigned 写到 handler_assigned。
+// 用法：由 run-ui-assign-people.sh 调用；EVIDENCE_DIR 必填，BASE_URL 可覆盖。
+// 退出码：0 全绿；1 有失败或认证门禁 blocked；2 缺少 EVIDENCE_DIR。
 /* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * 承办机构内勤打开办理页，用现有「派出承办人」写到 handler_assigned。
@@ -9,6 +12,7 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
 
+// 按同目录或上级目录查找并加载 auth-gate.cjs；都找不到时抛错。
 function loadAuthGate() {
   const candidates = [
     path.join(__dirname, 'auth-gate.cjs'),
@@ -41,10 +45,12 @@ if (!EVIDENCE_DIR) {
 }
 fs.mkdirSync(path.join(EVIDENCE_DIR, 'evidence'), { recursive: true });
 
+// 把 JSON 写到证据目录 evidence/ 下。
 function writeJson(name, value) {
   fs.writeFileSync(path.join(EVIDENCE_DIR, 'evidence', name), JSON.stringify(value, null, 2));
 }
 
+// 从登录响应提取 __Host-sid Cookie 对；缺失时抛错。
 function sessionCookie(response) {
   const listed = typeof response.headers.getSetCookie === 'function' ? response.headers.getSetCookie() : [];
   const found = listed.find((item) => item.startsWith('__Host-sid='));
@@ -55,6 +61,7 @@ function sessionCookie(response) {
   return match[0];
 }
 
+// 读响应体并尽量解析 JSON；解析失败返回截断原文。
 async function readBody(response) {
   const text = await response.text();
   if (text === '') return {};
@@ -65,6 +72,7 @@ async function readBody(response) {
   }
 }
 
+// 以 JSON 发 POST，返回状态、解析后的响应体与原始响应。
 async function postJson(cookie, apiPath, body) {
   const response = await fetch(`${BASE_URL}${apiPath}`, {
     method: 'POST',
@@ -74,11 +82,13 @@ async function postJson(cookie, apiPath, body) {
   return { status: response.status, body: await readBody(response), cookie: response };
 }
 
+// 带 Cookie 发 GET，返回状态与解析后的响应体。
 async function getJson(cookie, apiPath) {
   const response = await fetch(`${BASE_URL}${apiPath}`, { headers: { cookie } });
   return { status: response.status, body: await readBody(response) };
 }
 
+// 用手机号与口令登录；首登或过期时改密，返回 Cookie 与当前口令。
 async function loginOnce(mobile, password) {
   const headers = { 'content-type': 'application/json' };
   assertNoSourceOverride(headers);
@@ -105,6 +115,7 @@ async function loginOnce(mobile, password) {
   return { cookie, password: current };
 }
 
+// 以偏移量生成约 0.1 度见方的合成多边形环。
 function square(offset) {
   const west = 113 + offset;
   return [
@@ -116,6 +127,7 @@ function square(offset) {
   ];
 }
 
+// 经 API 登记一条土地线索，返回状态与响应体。
 async function registerClue(cookie, offset) {
   const form = new FormData();
   form.set('sourceCode', '16');
@@ -143,6 +155,7 @@ async function registerClue(cookie, offset) {
   return { status: response.status, body: await readBody(response) };
 }
 
+// 建员并造线索，再驱动页面派出承办人，写证据后按结果退出。
 async function main() {
   const notes = [];
   const declared = loginPassword(SEED_PASSWORD);
@@ -155,6 +168,7 @@ async function main() {
   const station = units.find((org) => org.code === 'ORG-STATION-A');
   if (!deptA || !station) throw new Error('缺少甲区或甲区执法所');
 
+  // 建内勤人员；已存在时按声明的单一登录口令登录。
   async function ensureClerk(spec) {
     const created = await postJson(admin, '/api/admin/personnel', {
       code: spec.code,

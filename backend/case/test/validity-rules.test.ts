@@ -53,6 +53,7 @@ function codesOf(assessment: ReturnType<typeof assessValidity>): string[] {
   return assessment.hits.map((item) => item.code);
 }
 
+// #248 A 类系统判失效：当事人、违法记录、依据条款、罚种、罚款金额与听证告知的变化。
 describe('#248 A 类：系统判失效', () => {
   it('A1 当事人变更或增加', () => {
     const result = assessValidity({ baseline: baseline(), current: summary({ parties: ['张三', '李四'] }) });
@@ -115,6 +116,7 @@ describe('#248 A 类：系统判失效', () => {
   });
 });
 
+// #248 B 类差异清单：事实收窄、记录剔除与金额下调只记差异，并逐条按违法记录分组。
 describe('#248 B 类：差异清单按违法记录分组', () => {
   it('B1a 整条违法记录剔除：只产生差异，不产生 A 类命中', () => {
     const result = assessValidity({
@@ -158,6 +160,7 @@ describe('#248 B 类：差异清单按违法记录分组', () => {
   });
 });
 
+// #248 决定摘要读取与指纹：缺省值、非法摘要拒绝，指纹与数组顺序无关。
 describe('#248 摘要与指纹', () => {
   it('读摘要时缺省当事人与没收等价值用调用方默认值', () => {
     const read = readDecisionSummary(
@@ -186,6 +189,7 @@ describe('#248 摘要与指纹', () => {
   });
 });
 
+// #248 Q14 加重来源：回流新证据须晚于最近一次陈述申辩，定性纠正限 R4 及其继承。
 describe('#248 Q14 加重来源', () => {
   const later = new Date('2026-10-29T10:00:00.000Z');
   const earlier = new Date('2026-10-28T10:00:00.000Z');
@@ -247,6 +251,7 @@ function gateFacts(overrides: Partial<ValidityGateFacts> = {}): ValidityGateFact
   };
 }
 
+// #248 决定呈批闸口：基线或摘要缺失、A 类命中、B 类确认与 Q14 来源的阻断口径。
 describe('#248 决定呈批闸口', () => {
   it('未发告知的案件不适用有效性判据', () => {
     expect(assertValidityGate(gateFacts({ noticeExists: false, baselinePresent: false }))).toEqual({ ok: true });

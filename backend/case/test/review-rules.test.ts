@@ -41,6 +41,7 @@ function report(suggestions: unknown[], reviewerId: unknown = null) {
   return { suggestions, reviewerId };
 }
 
+// #240 六种审理意见类型的封闭集合，以及各类型对应的迁移与出口。
 describe('#240 意见类型与去向', () => {
   it('六种意见类型齐全，补充调查与修改纠正都走 T09，修改纠正单独留痕', () => {
     expect(REVIEW_OPINION_KINDS).toEqual([
@@ -97,6 +98,7 @@ describe('#240 意见类型与去向', () => {
   });
 });
 
+// #282 异议窗口：规则键与默认 3 个自然日，到期时刻按签出时刻加窗口天数计算。
 describe('#282 异议窗口', () => {
   it('配置键 cfg.rule.review-objection-window.v1，默认 3 个自然日', () => {
     expect(REVIEW_OBJECTION_WINDOW_V1).toEqual({
@@ -115,6 +117,7 @@ describe('#282 异议窗口', () => {
   });
 });
 
+// #240 T08 守卫：每条有效违法记录须有处理建议，罚款竞合须写比对理由；草稿暂存不查覆盖。
 describe('#240 调查报告处理建议（T08 守卫）', () => {
   it('每条有效违法记录都要有处理建议；缺一条 409 并列出缺项', () => {
     const read = readReviewReportContent(report([penaltySuggestion()]), ACTIVE);
@@ -189,6 +192,7 @@ describe('#240 调查报告处理建议（T08 守卫）', () => {
   });
 });
 
+// #240 审理意见正文的类型合法性要求与正文必填校验。
 describe('#240 审理意见正文', () => {
   it('类型与正文必填', () => {
     const bad = readReviewOpinionContent({ kind: 'other', content: '意见' });
@@ -203,6 +207,7 @@ describe('#240 审理意见正文', () => {
   });
 });
 
+// #240 审理人候选资格、更换理由必填与签出守卫（X23／X32／X22），以及职能分离规则登记。
 describe('#240 审理人候选与签出守卫', () => {
   it('持行政审核、任职覆盖、无回避通过；职能分离只警告', () => {
     expect(
@@ -263,6 +268,7 @@ describe('#240 审理人候选与签出守卫', () => {
   });
 });
 
+// #240 审理异议呈批正文：异议理由必填，证据引用可为空。
 describe('#240 审理异议呈批正文', () => {
   it('异议理由必填，证据引用可为空数组', () => {
     const missing = readReviewObjectionContent({ note: ' ', evidenceRefs: [] });

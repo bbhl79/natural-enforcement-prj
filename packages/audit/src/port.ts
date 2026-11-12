@@ -1,3 +1,8 @@
+// 用途：留痕写入的类型契约：一行留痕的入参（AuditAppend、AuthzDeniedEntry）、人员与机构公共字段（AuditParties）、只追加的写入接口（AuditTrailPort）。
+// 调用方：backend/identity/src/services/access-control.service.ts（authz.denied）、backend/identity/src/services/personnel-profile.service.ts、backend/server/src/auth.service.ts 与 backend/server/src 下其他业务服务。
+// 边界：本文件只有类型与一个常量，不碰数据库。端口只追加，没有更新与删除。表外取值由 packages/audit/src/prisma-audit-trail.ts 在运行时拒绝，类型不是唯一把关。
+// 依据：docs/adr/0012-留痕写入经独立设施包.md、docs/adr/0011-认证留痕写入共用表.md、docs/adr/0013-人员导出写入共用留痕表.md。
+
 import type {
   AccountMaintenanceFailedReason,
   AuditTargetOrgBasis,
@@ -77,6 +82,10 @@ import type {
   SessionEndReason,
 } from './vocabulary.ts';
 
+/**
+ * 授权拒绝行的动作词 authz.denied。AuthzDeniedEntry.action 的类型取自它。
+ * 调用方：backend/identity/src/services/access-control.service.ts 构造拒绝行；packages/audit/src/prisma-audit-trail.ts 的查阅类别预筛。
+ */
 export const AUDIT_ACTION_AUTHZ_DENIED = 'authz.denied' as const;
 
 // 原因取值只有一个名字：正名 AUTHZ_DENIED_REASONS（在 vocabulary.ts 定义，本文件不再另起别名）。
@@ -106,6 +115,13 @@ export interface AuditParties {
   detail?: string | null;
 }
 
+/**
+ * 一行可追加留痕的入参。以 action 为判别式，每个成员限定该动作允许带的 outcome、reason 与专用列。
+ * 不带 outcome 时，适配器按 AUDIT_SUCCEEDED_ACTIONS 判成败：动作在表内记成功，不在表内记失败。
+ * 带 outcome: 'failed' 的成员必须带 reason，取值来自 vocabulary.ts 的封闭原因表。
+ * 类型之外的表外取值，PrismaAuditTrail.append 抛 AuditVocabularyError，不写库。
+ * 调用方：backend/identity/src/services/org-unit.service.ts、backend/server/src/secrecy-report.service.ts 等写入方。
+ */
 export type AuditAppend =
   | (AuditParties & { action: 'login.succeeded' })
   | (AuditParties & { action: 'login.failed'; reason: LoginFailedReason })
@@ -404,5 +420,11 @@ export interface AuthzDeniedEntry {
 
 /** 只追加。没有更新，也没有删除。 */
 export interface AuditTrailPort {
+  /**
+   * 追加一行，写一次库。是否与业务事务同成同败，取决于端口绑定的客户端：
+   * 经 AuditTrailFactory.forClient 绑定事务客户端，与业务写入同一事务（同成同败）；
+   * AUDIT_TRAIL_PORT 绑定根客户端，自成事务，一次 append 一次提交。
+   * 失败语义：表外取值抛 AuditVocabularyError，数据库错误原样抛出，都不写行，也不吞错。
+   */
   append(entry: AuditAppend | AuthzDeniedEntry): Promise<void>;
 }

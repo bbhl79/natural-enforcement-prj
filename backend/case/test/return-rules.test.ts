@@ -64,6 +64,7 @@ const INSTANCES: readonly ReturnInstanceFact[] = [
   { id: 'e09', stage: 'E09', entrySeq: 1 },
 ];
 
+// #238 退回原因目录：R1–R10 十类的名称，以及是否回流、是否累加进入次序号。
 describe('退回原因目录', () => {
   it('R1–R10 十类，名称与是否回流按定案表', () => {
     expect(RETURN_CODES).toEqual(['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10']);
@@ -75,6 +76,7 @@ describe('退回原因目录', () => {
   });
 });
 
+// #238 各退回原因对应的退回点：按当前环节与上下文推导目标，外部退回不在此函数处理。
 describe('returnTarget', () => {
   it('R1 审理开始前给终止调查后撤案，审理开始后给不予处罚', () => {
     expect(returnHearingHasStarted('E02')).toBe(false);
@@ -150,6 +152,7 @@ describe('returnTarget', () => {
   });
 });
 
+// #238 planReturn 不变式：次序号递增、下游实例失效、恰触碰材料范围与目标合法性。
 describe('planReturn 不变式', () => {
   const base = {
     note: '补调查',
@@ -234,6 +237,7 @@ describe('planReturn 不变式', () => {
   });
 });
 
+// #238 退回接收人资格：调查回退限可用承办人，内勤仅在双人不可用时，法制审核按归属而非数据范围。
 describe('接收人', () => {
   const investigate = returnTarget('R2', 'E09');
   const inChain = returnTarget('R9', 'E04');

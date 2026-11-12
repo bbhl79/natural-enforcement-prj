@@ -109,6 +109,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+// 验证机构树纯函数：层级规则、组树、计数、名称期间与未停用过滤。
 describe('机构树纯函数', () => {
   it('层级：市下建区，区下建所，所下不能再建', () => {
     expect(childLevelOf('city')).toBe('district');
@@ -140,6 +141,7 @@ describe('机构树纯函数', () => {
   });
 });
 
+// 验证机构树键盘导航的可见顺序与按键到动作的映射（PR #142 Copilot 意见 3）。
 describe('机构树键盘操作（PR #142 Copilot 意见 3）', () => {
   const root = buildTree(TREE)!;
   const order = visibleOrder(root, new Set());
@@ -183,6 +185,7 @@ describe('机构树键盘操作（PR #142 Copilot 意见 3）', () => {
   });
 });
 
+// 验证机构树界面各状态（展开、折叠、隐藏停用、只有根）与弹窗渲染。
 describe('机构树界面（P4）', () => {
   it('expanded：全部展开，已停用节点标出，详情有在职人员、下级、调整隶属说明，无移动入口', () => {
     const html = view(ADMIN, { selectedId: 'th' });
@@ -276,6 +279,7 @@ describe('机构树界面（P4）', () => {
   });
 });
 
+// 验证机构停用（#124）的入口可见性、前端阻碍、确认弹窗与接口错误映射。
 describe('机构停用（P4 blocked/confirm，#124）', () => {
   const DEACTIVATE_BUTTON = 'data-requires="org.unit.deactivate"';
 
@@ -361,6 +365,7 @@ describe('机构停用（P4 blocked/confirm，#124）', () => {
   });
 });
 
+// 验证机构页路由取树、菜单高亮与写接口的错误处理。
 describe('机构页路由与接口', () => {
   it('没有树读码（监督）：无权限卡片，不取树', async () => {
     const calls = serve(person(['audit.admin.read']));

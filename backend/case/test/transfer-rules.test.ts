@@ -26,6 +26,7 @@ function determination(autoReasons: readonly string[]): string {
   return JSON.stringify({ required: true, excluded: false, autoReasons, manualItems: [] });
 }
 
+// #242 移送呈批正文：三类移送、接收机关与文书编号必填、发函日期取北京当日与附件去重。
 describe('#242 移送呈批正文', () => {
   it('三类移送类型；接收机关、文书编号、原因必填', () => {
     const base = {
@@ -77,6 +78,7 @@ describe('#242 移送呈批正文', () => {
   });
 });
 
+// #242 移送呈批链路：默认两级，层级可配置且非法配置回落默认，决定提交与审核后的状态。
 describe('#242 呈批链路', () => {
   it('默认链路＝承办机构负责人审核→部门负责人批准；规程无明文', () => {
     expect(DEFAULT_TRANSFER_APPROVAL_CHAIN).toMatchObject({
@@ -102,6 +104,7 @@ describe('#242 呈批链路', () => {
   });
 });
 
+// #242 涉刑法审闸口：仅已定稿、结论通过且判定含涉刑移送的轮次算通过，否则阻断移送。
 describe('#242 涉刑法审闸口', () => {
   it('只认已定稿、结论通过且判定含涉刑移送的轮次', () => {
     const rows = [
@@ -122,6 +125,7 @@ describe('#242 涉刑法审闸口', () => {
   });
 });
 
+// #242 X11 结案闸口：已提交的涉刑或党纪政务呈批未形成记载即阻断，草稿与回证不影响判定。
 describe('#242 X11 结案闸口', () => {
   it('已提交的涉刑或党纪政务呈批未形成记载即阻断；草稿不算', () => {
     const blocked = assertCloseoutTransferGate({
@@ -158,6 +162,7 @@ describe('#242 X11 结案闸口', () => {
   });
 });
 
+// #242 T30 外部决定与人工出口：正文校验、出口 A／B 互斥字段，以及 A 的落点。
 describe('#242 T30 外部决定与人工出口', () => {
   const decisionBase = {
     source: 'procuratorate',

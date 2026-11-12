@@ -23,6 +23,7 @@ beforeEach(() => {
   suite.storage.writes.length = 0;
 });
 
+// 验证逐面双向比例与 60% 命中判定，后登线索进待分派决定（#212）。
 describe('#212 逐面计算', () => {
   it('双向比例：占本线索 50.0%／占对方 100.0%，任一方达标即命中，后登的进待分派决定', async () => {
     const first = await register({ spatial: polygon(rect(113.10, 23.40, 113.20, 23.50)) });
@@ -109,6 +110,7 @@ describe('#212 逐面计算', () => {
   });
 });
 
+// 验证比对范围随状态变化：filed 参与，closed 与 transferred_out 退出（#212）。
 describe('#212 比对范围与对方状态', () => {
   it('filed 仍算未结案，参与比对', async () => {
     const filed = await register({ spatial: polygon(rect(114.00, 23.40, 114.10, 23.50)) });

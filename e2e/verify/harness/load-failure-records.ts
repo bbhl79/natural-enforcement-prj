@@ -1,3 +1,4 @@
+// 用途：读取显式传入的跑次证据包，汇总成失败聚类可消费的步骤记录。
 // 证据 loader（spec #322 二期 T6 / 票 #328）：读 e2e/results/verify-<runId>/steps/**/*.json。
 // 放在 discover/ 之外：discover/ 模块零 I/O（写边界门禁只允许 report.ts 写文件）。
 // 只读、不新增/修改证据包；runId 取自 manifest.json，stepId 取自 JSON 正文（文件名会变形）。

@@ -9,6 +9,7 @@ import {
   type HealthCheckPayload,
 } from '../src/health-check.ts';
 
+// #55：验证健康检查是系统设施任务而非业务 worker（G5）：探测结果如实反映连通性，探针失败不被吞掉。
 describe('健康检查任务（#55 系统设施任务）', () => {
   it('任务名落在 system.* 设施命名空间（业务 worker 不得占用）', () => {
     expect(HEALTH_CHECK_JOB).toBe('system.health-check');

@@ -1,3 +1,6 @@
+// 用途：内业核查抽屉页签的数据层：取核查运行视图与手动重跑，及三态与面积的展示纯函数。
+// 调用方：frontend/src/clue/center.ts 与 frontend/src/pages/ClueCenterPage.tsx 取数与重跑；frontend/src/clue/ClueVerificationTab.tsx 渲染。
+// 接口：GET /api/clues/:id/verification 操作码 clue.read；POST /api/clues/:id/verification/retry 操作码 clue.verify.retry。
 // 内业核查抽屉页签的数据层与纯函数（#213；规格 C 节）。
 //
 // 页签显示四样东西：当前与历史运行、每层的三态与相交事实、分析图预览、手动重跑入口。
@@ -64,6 +67,7 @@ export type RetryResult =
   | { readonly ok: true; readonly status: number; readonly body: VerificationView }
   | { readonly ok: false; readonly status: number; readonly reason: string | null };
 
+// 接口：GET /api/clues/:id/verification，操作码 clue.read。
 /** 取核查视图。 */
 export async function loadVerification(dispatch: ApiDispatch, clueId: string): Promise<VerificationView> {
   const response = await apiFetch(dispatch, `/api/clues/${clueId}/verification`);
@@ -71,6 +75,7 @@ export async function loadVerification(dispatch: ApiDispatch, clueId: string): P
   return (await response.json()) as VerificationView;
 }
 
+// 接口：POST /api/clues/:id/verification/retry，操作码 clue.verify.retry。
 /** 手动重跑。 */
 export async function retryVerification(dispatch: ApiDispatch, clueId: string): Promise<RetryResult> {
   const response = await apiFetch(dispatch, `/api/clues/${clueId}/verification/retry`, { method: 'POST' });

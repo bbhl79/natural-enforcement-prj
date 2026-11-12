@@ -1,3 +1,6 @@
+// 用途：把超长期 transferred_out peer 插入开发库并核对，只插入不改写已有行。
+// 用法：由 seed-ancient-historical-peer.sh 调用；--check 只校验夹具与 SQL；VERIFY_RUN_DIR 可指定证据目录。
+// 退出码：0 成功；1 校验或播种失败。
 // 把超长期 transferred_out peer 插入当前开发库。
 // 只插入。不改写已有行的时间戳。
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -278,6 +281,7 @@ function parseCheck(line) {
   };
 }
 
+// 命令行入口：校验夹具、替换 SQL 占位符，按 --check 决定只检查或执行播种。
 function main() {
   const checkOnly = process.argv.includes('--check');
   const fixture = validateFixture(JSON.parse(readFileSync(fixturePath, 'utf8')));

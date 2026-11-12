@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# 用途：在 Playwright 容器内点击「派出承办人」，把线索推到 handler_assigned。
+# 用法：bash e2e/verify/harness/ui/run-ui-assign-people.sh；证据写入 e2e/results/verify-assign-people-*。
+# 退出码：0 页面写成功；1 镜像缺失、传输门禁或页面断言失败。
 # 承办机构内勤点击「派出承办人」直到 handler_assigned。默认 headless。
 # Podman machine / Docker Desktop 看不见 WSL home bind-mount：
 # 证据与脚本先落 /mnt/c/.../ne-verify-ui 再回拷仓库 e2e/results/（对齐 run-ui-p0.sh）。

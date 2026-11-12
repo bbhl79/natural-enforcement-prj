@@ -1,3 +1,5 @@
+// 用途：业务 worker 工厂：按队列名与 Redis 地址起消费端，接上处理器，并把不可重试错误翻译成队列的「不再重试」语义。
+// 调用方：backend/server/src/clue-verification.worker.ts（内业核查 worker）、tools/verify-verification-facilities.ts（设施验证脚本）。
 // 业务 worker 工厂（#213）：消费侧入口，不暴露 BullMQ 类型。
 //
 // 业务 worker 归业务切片自带（G5），任务名不得占用 system.* 命名空间；

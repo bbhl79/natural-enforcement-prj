@@ -1,3 +1,7 @@
+// 用途：案件详情回避页签与人员页签，登记回避声明与机关层利害关系、作出决定、发起与批准改派。
+// 调用方：frontend/src/router.tsx 的 case-conflict 路由，路径 case/:caseId；测试经 CaseConflictTab 挂载。
+// 接口：GET /api/cases/:id/conflicts、GET/POST /api/cases/:id/agency-conflict、POST /api/cases/:id/sign-checks、GET/POST /api/cases/:id/reassignments、POST /api/cases/:id/reassignments/:reassignmentId/approve、POST /api/cases/:id/material-effectivities。
+// 权限：按操作码展示入口，读取 case.read、拟制 doc.draft、决定 doc.approve、改派 case.reassign.submit。
 // 案件详情的回避页签（#237）：登记声明、作出回避决定、查看记录。
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router';
@@ -25,8 +29,10 @@ import {
   type ReassignListView,
 } from './reassign';
 
+/** 案件详情页签标识：回避或人员。 */
 export type CaseDetailTab = 'conflict' | 'personnel';
 
+/** 案件详情页签主体：按页签渲染回避或人员视图；数据与权限由调用方作为 props 传入。 */
 export function CaseConflictTab({
   records,
   decisions,
@@ -251,6 +257,7 @@ export function CaseConflictTab({
   );
 }
 
+/** 回避页路由组件：并行读回避、机关层与人员视图，提交后重新取数。 */
 export default function CaseConflictPage() {
   const { caseId = '' } = useParams();
   const dispatch = useAppDispatch();

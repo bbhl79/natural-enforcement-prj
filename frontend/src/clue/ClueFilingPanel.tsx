@@ -1,3 +1,6 @@
+// 用途：线索详情中的立案呈批区块：拟制草稿、提交、审核、批准、退回与撤回。
+// 调用方：frontend/src/clue/ClueBasicTab.tsx。
+// 接口：GET/POST /api/clues/:id/filing-approval（操作码 doc.read、doc.draft）；POST /api/filing-approvals/:id/{submit,review,approve,return,withdraw}。
 // 立案呈批最小入口（#234）：拟制／提交／撤回；审批待办在详情同区完成审核／批准／退回。
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 

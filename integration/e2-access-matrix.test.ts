@@ -215,6 +215,7 @@ const orgIdByRole: Record<string, () => string> = {
   系统管理: () => deptAId,
 };
 
+// 验证七个角色对决议表的逐条允许与拒绝，拒绝须精确命中原因码（#96）。
 describe('操作码授权', () => {
   it('七个角色的种子人员对决议表逐条允许或拒绝', async () => {
     const allowed = new Set(OPCODES);
@@ -485,6 +486,7 @@ describe('操作码授权', () => {
   });
 });
 
+// 验证未认证登记根机构被拒，且不写库（#96）。
 describe('E2 根机构登记', () => {
   it('未认证登记根机构被拒，且不写库', async () => {
     const before = await prisma.orgUnit.count();
@@ -517,6 +519,7 @@ describe('E2 根机构登记', () => {
   });
 });
 
+// 验证任职记录的库层不变量：只允许关止一次，不能并存两条当前任职（#96）。
 describe('E2 任职记录库层不变量', () => {
   it('只允许关止一次：改其他列被拒，已关止行不可改，不能并存两条当前任职', async () => {
     const mover = await personnel.registerPersonnel(auth(supAId), {
@@ -545,6 +548,7 @@ describe('E2 任职记录库层不变量', () => {
   });
 });
 
+// 验证机构与人员维护的权限边界，以及名称变更时追加版本（#96）。
 describe('E2 机构与人员维护', () => {
   it('系统管理改本机构名时追加名称版本', async () => {
     const before = await prisma.orgUnitNameVersion.findMany({
@@ -689,6 +693,7 @@ describe('E2 机构与人员维护', () => {
   });
 });
 
+// 验证种子人员口令以 argon2 散列存储，查验通过、错口令被拒（#96）。
 describe('E2 口令散列', () => {
   it('种子人员口令经 argon2 散列存储，验真通过、错口令拒绝', async () => {
     const row = await prisma.personnel.findUniqueOrThrow({ where: { id: supAId } });

@@ -30,6 +30,7 @@ const entry: AuthzDeniedEntry = {
   targetOrgUnitBasis: 'object',
 };
 
+// 拒绝留痕先行落库：authz.denied 单独追加，带操作者、操作码、资源与原因。
 describe('授权拒绝追加', () => {
   it('写入一行失败的 authz.denied，带操作者、操作码、资源和原因', async () => {
     const written: Record<string, unknown>[] = [];
@@ -122,6 +123,7 @@ const parties = {
   sourceIp: '203.0.113.9',
 };
 
+// 动作词封闭校验：不在 AUDIT_ACTIONS 里的动作被拒，不写库。
 describe('封闭取值表', () => {
   it('表外动作被拒绝，不写库', async () => {
     const { db, written } = recorder();
@@ -176,6 +178,7 @@ describe('封闭取值表', () => {
   });
 });
 
+// 机构树动作留痕：登记与改名记成功不带原因；被拒记失败且原因取自封闭表（#123）。
 describe('机构树动作（#123）', () => {
   it('新建下级、改名记成功，不带原因；新建下级被拒记失败，原因取 org-unit-deactivated', async () => {
     const { db, written } = recorder();
@@ -216,6 +219,7 @@ describe('机构树动作（#123）', () => {
   });
 });
 
+// 机构停用动作：成功行不带原因，失败行的原因取自封闭取值表（#124）。
 describe('机构停用（#124）', () => {
   it('停用记成功，不带原因；被拒记失败，原因取四个封闭取值之一', async () => {
     const { db, written } = recorder();
@@ -252,6 +256,7 @@ describe('机构停用（#124）', () => {
   });
 });
 
+// itemCount 只对 AUDIT_COUNTED_ACTIONS 必填，条数 0 也照常写入（ADR 0013）。
 describe('导出条数（ADR 0013）', () => {
   it('personnel.exported 带条数写入，记成功；条数 0 同样写入', async () => {
     const { db, written } = recorder();
@@ -316,6 +321,7 @@ describe('导出条数（ADR 0013）', () => {
   });
 });
 
+// 生产引导两条动作：根机构与首个系统管理人员都记成功，不带原因与条数（ADR 0013 第 3 条）。
 describe('引导动作（#131，ADR 0013 第 3 条）', () => {
   it('根机构与首个系统管理人员两行都记成功，不带原因和条数', async () => {
     const { db, written } = recorder();
@@ -353,6 +359,7 @@ describe('引导动作（#131，ADR 0013 第 3 条）', () => {
   });
 });
 
+// 人员动作留痕：成功与失败的原因规则，以及岗位标记只带后值（#128）。
 describe('人员登记、查看与岗位标记（#128）', () => {
   it('登记、查看记成功；登记被拒记失败；加岗位标记带后值，其余动作后值为空', async () => {
     const { db, written } = recorder();
@@ -392,6 +399,7 @@ describe('人员登记、查看与岗位标记（#128）', () => {
   });
 });
 
+// 执法证登记留痕：前值只写旧有效期与旧状态，不含证号（#133）。
 describe('执法证登记（#133）', () => {
   it('cert.updated 记成功，前值写旧有效期和旧状态，不带原因、后值和条数', async () => {
     const { db, written } = recorder();
@@ -432,6 +440,7 @@ describe('执法证登记（#133）', () => {
   });
 });
 
+// 人员编辑与调岗留痕：前值按字段取旧值，未变更的字段留空（#129）。
 describe('人员编辑与调岗（#129，ADR 0014）', () => {
   it('改名、改手机号、加减角色、摘岗位标记、调岗都记成功；改名前值写旧名，改手机号前值留空', async () => {
     const { db, written } = recorder();
@@ -500,6 +509,7 @@ describe('人员编辑与调岗（#129，ADR 0014）', () => {
   });
 });
 
+// 签收确认留痕：成功行带结构化快照，幂等重复确认同样带快照（#335）。
 describe('单位手工签收确认（#335）', () => {
   it('签收成功带结构化快照照常写入；幂等确认同样带快照', async () => {
     const { db, written } = recorder();

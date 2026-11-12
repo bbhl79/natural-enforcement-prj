@@ -1,3 +1,4 @@
+// 用途：管理台人员模块的前端数据层与纯函数，覆盖列表筛选分页、卡片、登记、编辑、调岗、执法证与口令操作。
 // 管理台人员（P5 列表、P6 卡片与新建，#128；编辑与调岗，#129；执法证登记与「需要留意的执法证」统计，#133）的数据与纯函数。
 // 列表放在 GET /api/admin/personnel，不含手机号和执法证号；卡片 GET /api/admin/personnel/:id 每次打开都留痕；
 // 登记 POST /api/admin/personnel；编辑 POST /api/admin/personnel/:id/edit；调岗 POST /api/admin/personnel/:id/transfer；
@@ -15,17 +16,23 @@ import { sessionOpcodes, type SessionStore } from '../session';
 import { RESET_RULE_TEXT } from './lockedPersonnel';
 import type { OrgTreeData, OrgUnit } from './orgTree';
 
+/** 读人员名单与卡片；操作码 personnel.profile.read。 */
 export const PERSONNEL_READ = 'personnel.profile.read' satisfies OpcodeName;
+/** 登记人员；操作码 personnel.profile.register。 */
 export const PERSONNEL_REGISTER = 'personnel.profile.register' satisfies OpcodeName;
 /** 执法证登记（#133）：只给系统管理。 */
 export const PERSONNEL_CERT_UPDATE = 'personnel.cert.update' satisfies OpcodeName;
+/** 编辑人员与调岗；操作码 personnel.profile.update。 */
 export const PERSONNEL_UPDATE = 'personnel.profile.update' satisfies OpcodeName;
 /** 停用、恢复、结束全部会话（#130）：三个码都只给系统管理。 */
 export const PERSONNEL_DEACTIVATE = 'personnel.profile.deactivate' satisfies OpcodeName;
+/** 恢复已停用人员；操作码 personnel.profile.restore。 */
 export const PERSONNEL_RESTORE = 'personnel.profile.restore' satisfies OpcodeName;
+/** 结束对方全部会话；操作码 personnel.sessions.end。 */
 export const PERSONNEL_SESSIONS_END = 'personnel.sessions.end' satisfies OpcodeName;
 /** 重设初始口令（#132，A10 同码）：只给系统管理。 */
 export const PERSONNEL_PASSWORD_RESET = 'personnel.password.reset' satisfies OpcodeName;
+/** 查阅管理留痕；操作码 audit.admin.read。 */
 export const AUDIT_READ = 'audit.admin.read' satisfies OpcodeName;
 
 /** 七个角色（ADR 0009），按原型 P6 的顺序。 */
@@ -33,7 +40,9 @@ export const ROLES = ['内勤', '经办', '法制审核', '行政审核', '行�
 
 /** 岗位标记（#105 A1）：取值固定两项，代码常量。不是角色，不授予任何操作码。 */
 export const POSTS = ['legal-review-lead', 'legal-affairs-leader'] as const;
+/** 岗位标记的取值类型（#105 A1）。 */
 export type PersonnelPost = (typeof POSTS)[number];
+/** 岗位标记的界面文案。 */
 export const POST_LABEL: Record<PersonnelPost, string> = {
   'legal-review-lead': '法制审核负责人',
   'legal-affairs-leader': '分管法制的局领导',
@@ -44,6 +53,7 @@ export const POST_LABEL: Record<PersonnelPost, string> = {
  * 库里只存「有效」「失效」两项，临期与已过期按有效期推导（服务端算好后交下来）。
  */
 export type CertStatus = 'none' | 'valid' | 'expiring' | 'expired' | 'invalid';
+/** 执法证情况到标签文案与色调的映射（#133）。 */
 export const CERT_TAG: Record<CertStatus, { label: string; tone: string }> = {
   valid: { label: '有效', tone: '' },
   none: { label: '未登记', tone: 'gray' },
@@ -58,6 +68,7 @@ export function certRecordLabel(status: CertStatus): string {
   return status === 'invalid' ? '失效' : '有效';
 }
 
+/** 人员名单的一行；不含手机号与执法证号。 */
 export interface PersonnelRow {
   id: string;
   code: string;
@@ -69,6 +80,7 @@ export interface PersonnelRow {
   deactivatedAt: string | null;
 }
 
+/** 数据范围内的机构节点，供列表筛选与机构下拉使用。 */
 export interface ScopeOrgUnit {
   id: string;
   name: string;
@@ -76,6 +88,7 @@ export interface ScopeOrgUnit {
   deactivatedAt: string | null;
 }
 
+/** 名单接口的返回体：操作者所在数据范围的根、范围内机构与人员行。 */
 export interface PersonnelList {
   /** 操作者当前任职机构（数据范围的根） */
   rootId: string;
@@ -83,6 +96,7 @@ export interface PersonnelList {
   personnel: PersonnelRow[];
 }
 
+/** 人员卡片接口的返回体；手机号完整返回，界面默认遮挡。 */
 export interface PersonnelCard {
   id: string;
   code: string;
@@ -103,7 +117,9 @@ export interface PersonnelCard {
 
 // ---------- 列表筛选 ----------
 
+/** 执法证筛选值；attention 表示「需处理」四类。 */
 export type CertFilter = 'all' | 'attention' | CertStatus;
+/** 执法证筛选项的文案。 */
 export const CERT_FILTER_LABEL: Record<CertFilter, string> = {
   all: '执法证：全部',
   attention: '需处理（过期、失效、未登记、临期）',
@@ -113,8 +129,10 @@ export const CERT_FILTER_LABEL: Record<CertFilter, string> = {
   invalid: '失效',
   none: '未登记',
 };
+/** 执法证筛选项的固定顺序，用于校验地址栏参数。 */
 export const CERT_FILTERS: readonly CertFilter[] = ['all', 'attention', 'valid', 'expiring', 'expired', 'invalid', 'none'];
 
+/** 名单筛选条件；空字符串表示不按该维度筛选。 */
 export interface PersonnelFilter {
   keyword: string;
   /** '' = 全部机构（含下级） */
@@ -125,6 +143,7 @@ export interface PersonnelFilter {
   includeDeactivated: boolean;
 }
 
+/** 无筛选的默认条件：包含已停用人员。 */
 export const DEFAULT_FILTER: PersonnelFilter = { keyword: '', orgUnitId: '', role: '', cert: 'all', includeDeactivated: true };
 
 /** 筛选写在地址栏里：q、org、role、cert、off=0。 */
@@ -139,6 +158,7 @@ export function filterFromSearch(search: URLSearchParams): PersonnelFilter {
   };
 }
 
+/** 筛选条件写回地址栏；默认值不写入。 */
 export function searchFromFilter(filter: PersonnelFilter): URLSearchParams {
   const search = new URLSearchParams();
   if (filter.keyword) search.set('q', filter.keyword);
@@ -149,6 +169,7 @@ export function searchFromFilter(filter: PersonnelFilter): URLSearchParams {
   return search;
 }
 
+/** 是否有任一筛选条件生效。 */
 export function isFiltered(filter: PersonnelFilter): boolean {
   return searchFromFilter(filter).toString() !== '';
 }
@@ -164,6 +185,7 @@ export function pageFromSearch(search: URLSearchParams): number {
   return Number.isInteger(page) && page >= 1 ? page : 1;
 }
 
+/** 页码写入地址栏；第 1 页不写。 */
 export function searchWithPage(search: URLSearchParams, page: number): URLSearchParams {
   const next = new URLSearchParams(search);
   if (page <= 1) next.delete('page');
@@ -206,7 +228,9 @@ const NEEDS_ATTENTION: readonly CertStatus[] = ['expired', 'invalid', 'none', 'e
 
 /** 首页「需要留意的执法证」统计（#133，原型 P3:29）：临期、已过期、失效、未登记四行。 */
 export const CERT_ATTENTION_ROWS = ['expiring', 'expired', 'invalid', 'none'] as const;
+/** 「需要留意的执法证」四行的键。 */
 export type CertAttentionKey = (typeof CERT_ATTENTION_ROWS)[number];
+/** 「需要留意的执法证」四行的文案。 */
 export const CERT_ATTENTION_LABEL: Record<CertAttentionKey, string> = {
   expiring: '30 天内到期',
   expired: '已过期',
@@ -229,6 +253,7 @@ export function qualifiedPersonnelCount(rows: readonly PersonnelRow[]): number {
   return rows.filter((row) => !row.deactivatedAt && (row.certStatus === 'valid' || row.certStatus === 'expiring')).length;
 }
 
+/** 按筛选条件过滤名单；机构筛选包含下级，关键字匹配工号与姓名。 */
 export function filterPersonnel(list: PersonnelList, filter: PersonnelFilter): PersonnelRow[] {
   const keyword = filter.keyword.trim().toLowerCase();
   const orgIds = filter.orgUnitId ? subtreeIds(list.orgUnits, filter.orgUnitId) : null;
@@ -297,6 +322,7 @@ export function orgText(card: Pick<PersonnelCard, 'orgName' | 'orgParentName'> &
   return `${card.orgParentName ?? ''}${card.orgName}${card.orgDeactivated ? '（已停用）' : ''}`;
 }
 
+/** 卡片「初始口令」一行：已停用写破折号，未改过写提示。 */
 export function passwordText(card: PersonnelCard): string {
   if (card.deactivatedAt) return '—';
   if (!card.passwordChangedAt) return '尚未改过初始口令';
@@ -329,6 +355,7 @@ export function certNote(cert: PersonnelCard['cert'], now: Date): { tone: string
 
 // ---------- 登记 ----------
 
+/** 登记表单的输入。 */
 export interface RegisterInput {
   code: string;
   name: string;
@@ -342,6 +369,7 @@ export interface RegisterInput {
   certExpiresOn: string;
 }
 
+/** 登记表单可标提示的字段。 */
 export type RegisterField =
   | 'code' | 'name' | 'orgUnitId' | 'mobilePhone' | 'initialPassword' | 'roles' | 'posts' | 'certNo' | 'certExpiresOn';
 
@@ -366,13 +394,16 @@ export const FIELD_RULES: Record<string, { field: RegisterField; text: string }>
 
 /** 右侧「初始口令要求」七条，顺序与文案同改口令页。 */
 export const PASSWORD_RULES = ['too-short', 'too-long', 'insufficient-classes', 'sequential', 'repeated', 'common', 'contains-code'] as const;
+/** 口令策略规则码到提示文案的映射，复用改口令页的文案。 */
 export const PASSWORD_RULE_LABEL: Record<string, string> = PASSWORD_RULE_TEXT;
 
+/** 工号或手机号重复时的字段提示。 */
 export const DUPLICATE_TEXT: Record<'personnel-code' | 'mobile-phone', { field: RegisterField; text: string }> = {
   'mobile-phone': { field: 'mobilePhone', text: '这个手机号已被其他人员使用，请核对' },
   'personnel-code': { field: 'code', text: '这个工号已被其他人员使用，请核对' },
 };
 
+/** 登记结果：成功带新人员 id 与姓名，失败带字段与口令提示。 */
 export type RegisterResult =
   | { ok: true; id: string; name: string }
   | {
@@ -395,6 +426,7 @@ export function problemCount(result: Extract<RegisterResult, { ok: false }>): nu
   return fields.size;
 }
 
+/** 登记人员（POST /api/admin/personnel，操作码 personnel.profile.register）；网络与服务失败统一为定稿句。 */
 export async function registerPersonnel(dispatch: ApiDispatch, input: RegisterInput): Promise<RegisterResult> {
   let response: Response;
   try {
@@ -437,11 +469,14 @@ export async function registerPersonnel(dispatch: ApiDispatch, input: RegisterIn
 
 // ---------- 执法证登记（#133） ----------
 
-/** 证件状态只有两项（Lei Hu 7-3）。临期与已过期不入库，按有效期推导。 */
+/** 证件状态只有两项（项目负责人 7-3）。临期与已过期不入库，按有效期推导。 */
 export const CERT_RECORD_STATUSES = ['valid', 'invalid'] as const;
+/** 入库的证件状态取值：只有有效与失效。 */
 export type CertRecordStatus = (typeof CERT_RECORD_STATUSES)[number];
+/** 入库证件状态的界面文案。 */
 export const CERT_RECORD_STATUS_LABEL: Record<CertRecordStatus, string> = { valid: '有效', invalid: '失效' };
 
+/** 执法证登记表单的输入。 */
 export interface CertUpdateInput {
   certNo: string;
   /** 有效期至（YYYY-MM-DD） */
@@ -449,6 +484,7 @@ export interface CertUpdateInput {
   certStatus: CertRecordStatus;
 }
 
+/** 执法证表单可标提示的字段。 */
 export type CertUpdateField = 'certNo' | 'certExpiresOn' | 'certStatus';
 
 /**
@@ -475,6 +511,7 @@ export const CERT_FIELD_RULES: Record<string, { field: CertUpdateField; text: st
 /** 对方已停用（#158 定稿）：执法证登记与修改一律拒绝，界面不露服务端原句与结果码。 */
 export const CERT_DEACTIVATED_MESSAGE = '这个人员已停用，不能登记或修改执法证。请先恢复，再办理。';
 
+/** 执法证登记结果；deactivated 表示对方已停用（#158）。 */
 export type CertUpdateResult =
   | { ok: true }
   | {
@@ -490,6 +527,7 @@ export function certProblemCount(result: Extract<CertUpdateResult, { ok: false }
   return new Set(Object.keys(result.fields)).size;
 }
 
+// POST /api/admin/personnel/:id/cert，操作码 personnel.cert.update。
 /**
  * 登记执法证（POST /api/admin/personnel/:id/cert）。
  * 返回体不回显证号；保存成功后由调用方重取卡片。401 交给会话已结束页处理，这里只回空提示。
@@ -535,6 +573,7 @@ export async function updateCert(
 
 // ---------- 编辑（#129，P6 edit / selfEdit） ----------
 
+/** 编辑表单的输入；工号与机构不可改。 */
 export interface EditInput {
   name: string;
   mobilePhone: string;
@@ -542,6 +581,7 @@ export interface EditInput {
   posts: PersonnelPost[];
 }
 
+/** 编辑表单可标提示的字段。 */
 export type EditField = 'name' | 'mobilePhone' | 'roles' | 'posts';
 
 /** 编辑表单初值：取卡片当前态。工号与机构不可改，不在表单里。 */
@@ -552,12 +592,14 @@ export function editInputFromCard(card: PersonnelCard): EditInput {
 /** 越权或对象不在范围（编辑与调岗共用一句）。不露原因码。 */
 export const DENIED_TARGET = '你没有权限执行这个操作，或这个人员不在你的范围内。';
 
+/** 编辑结果。 */
 export type EditResult =
   | { ok: true }
   | { ok: false; fields: Partial<Record<EditField, string>>; message: string | null };
 
 const EDIT_FIELDS: readonly string[] = ['name', 'mobilePhone', 'roles', 'posts'];
 
+/** 编辑人员（POST /api/admin/personnel/:id/edit，操作码 personnel.profile.update）。 */
 export async function updatePersonnel(dispatch: ApiDispatch, id: string, input: EditInput): Promise<EditResult> {
   let response: Response;
   try {
@@ -593,16 +635,19 @@ export async function updatePersonnel(dispatch: ApiDispatch, id: string, input: 
 
 // ---------- 调岗（#129，P6 transfer） ----------
 
+/** 调岗目的地机构。 */
 export interface TransferDestination {
   id: string;
   name: string;
   parentId: string | null;
 }
 
+/** 调岗结果。 */
 export type TransferResult =
   | { ok: true }
   | { ok: false; fields: { orgUnitId?: string }; message: string | null };
 
+/** 调岗（POST /api/admin/personnel/:id/transfer，操作码 personnel.profile.update）。 */
 export async function transferPersonnel(dispatch: ApiDispatch, id: string, orgUnitId: string): Promise<TransferResult> {
   let response: Response;
   try {
@@ -628,6 +673,7 @@ export async function transferPersonnel(dispatch: ApiDispatch, id: string, orgUn
   return { ok: false, fields: {}, message: FAILED };
 }
 
+// GET /api/admin/personnel/:id/transfer-destinations，操作码 personnel.profile.update。
 /** 取调岗目的地：全树未停用的机构，按树的先序。失败为 null（弹窗里显示重试提示）。 */
 export async function loadTransferDestinations(dispatch: ApiDispatch, id: string): Promise<TransferDestination[] | null> {
   let response: Response;
@@ -680,22 +726,26 @@ async function dangerPost(dispatch: ApiDispatch, path: string, body: unknown = {
   return dangerFailure(response, json);
 }
 
+// POST /api/admin/personnel/:id/deactivate，操作码 personnel.profile.deactivate。
 /** 停用：对方的全部会话在下一次操作时结束。重复停用同样成功。 */
 export function deactivatePersonnel(dispatch: ApiDispatch, id: string): Promise<DangerResult> {
   return dangerPost(dispatch, `/api/admin/personnel/${encodeURIComponent(id)}/deactivate`);
 }
 
+// POST /api/admin/personnel/:id/end-sessions，操作码 personnel.sessions.end。
 /** 结束全部会话（含「记住我」），不改口令。 */
 export function endPersonnelSessions(dispatch: ApiDispatch, id: string): Promise<DangerResult> {
   return dangerPost(dispatch, `/api/admin/personnel/${encodeURIComponent(id)}/end-sessions`);
 }
 
+/** 恢复表单的输入：新初始口令与可选的新任职机构。 */
 export interface RestoreInput {
   initialPassword: string;
   /** 新任职机构。原任职机构已停用时必填。 */
   orgUnitId: string;
 }
 
+/** 恢复结果；unavailable 表示口令命中口令历史（ADR 0015）。 */
 export type RestoreResult =
   | { ok: true; orgUnitId: string | null }
   | {
@@ -708,6 +758,7 @@ export type RestoreResult =
     message: string | null;
   };
 
+// POST /api/admin/personnel/:id/restore，操作码 personnel.profile.restore。
 /**
  * 恢复：重设初始口令、解除锁定、结束残余会话和「记住我」由服务端在同一事务里做完。
  * 原任职机构已停用时必须同时带一个数据范围内在用的新任职机构，恢复与调岗一并完成。
@@ -756,6 +807,7 @@ export async function restorePersonnel(dispatch: ApiDispatch, id: string, input:
 /** 并发冲突（409 concurrent-change，#132）。工程稿：不露结果码。 */
 export const CONCURRENT_CHANGE_MESSAGE = '对方的口令刚被另一次操作修改。请重试。';
 
+/** 重设初始口令的结果。 */
 export type ResetPasswordResult =
   | { ok: true }
   | {
@@ -768,6 +820,7 @@ export type ResetPasswordResult =
     message: string | null;
   };
 
+// POST /api/admin/personnel/:id/password-reset，操作码 personnel.password.reset。
 /**
  * 重设初始口令：与 A10 同一接口（POST /api/admin/personnel/:id/password-reset）。
  * 同时解锁、结束对方全部会话与「记住我」，对方下次登录必须先改口令。
@@ -810,6 +863,7 @@ export async function resetPersonnelPassword(
   return { ok: false, passwordRules: [], unavailable: false, message: FAILED };
 }
 
+// GET /api/org-units，操作码 org.tree.read。
 /**
  * 恢复时选新任职机构：数据范围内在用的机构，按树的先序（原型 P6-restoreNewOrg）。
  * 与登记同源（/api/org-units 只回数据范围子树）；读取失败回 null，弹窗里提示关闭后重试，
@@ -828,6 +882,7 @@ export const SESSIONS_ENDED_NOTICE = '对方的全部会话和全部「记住我
 
 // ---------- 取数 ----------
 
+// GET /api/admin/personnel，操作码 personnel.profile.read。
 /** 取列表。403：重新拉会话（apiFetch）后显示无权限卡片；401 交给会话已结束页处理。 */
 export async function loadPersonnelList(dispatch: ApiDispatch): Promise<PersonnelList | null> {
   const response = await apiFetch(dispatch, '/api/admin/personnel');
@@ -842,6 +897,7 @@ export async function loadPersonnelList(dispatch: ApiDispatch): Promise<Personne
   };
 }
 
+// GET /api/admin/personnel/:id，操作码 personnel.profile.read。
 /** 取卡片（每次打开服务端都留痕）。404 交给「没有找到这个人员」。 */
 export async function loadPersonnelCard(dispatch: ApiDispatch, id: string): Promise<PersonnelCard | null> {
   const response = await apiFetch(dispatch, `/api/admin/personnel/${encodeURIComponent(id)}`);
@@ -852,6 +908,7 @@ export async function loadPersonnelCard(dispatch: ApiDispatch, id: string): Prom
   return ((await response.json()) as { personnel: PersonnelCard }).personnel;
 }
 
+// GET /api/org-units，操作码 org.tree.read。
 /** 登记页选机构：取机构树里未停用的节点，按树的先序。 */
 export async function loadRegisterOrgUnits(dispatch: ApiDispatch): Promise<OrgUnit[] | null> {
   const response = await apiFetch(dispatch, '/api/org-units');
@@ -885,6 +942,7 @@ export function shouldRevalidatePersonnelList({
   return onlySearchChanged ? false : defaultShouldRevalidate;
 }
 
+/** 名单页 loader：有 personnel.profile.read 才取数，否则页面显示无权限卡片。 */
 export function personnelListLoader(store: SessionStore) {
   return () => {
     const list = sessionOpcodes(store).then((opcodes) =>
@@ -895,6 +953,7 @@ export function personnelListLoader(store: SessionStore) {
   };
 }
 
+/** 卡片页 loader：有 personnel.profile.read 才取卡片，否则页面显示无权限卡片。 */
 export function personnelCardLoader(store: SessionStore) {
   return ({ params }: { params: { id?: string } }) => {
     const id = params.id ?? '';
@@ -906,6 +965,7 @@ export function personnelCardLoader(store: SessionStore) {
   };
 }
 
+/** 新建页 loader：同时有登记与 org.tree.read 才取可选机构，否则机构列表为空。 */
 export function personnelCreateLoader(store: SessionStore) {
   return () => {
     const orgUnits = sessionOpcodes(store).then((opcodes) =>

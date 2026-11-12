@@ -1,3 +1,4 @@
+// 用途：在整栈上跑 API_SUITE 的场景与负例，写证据包并按结果设置退出码。
 // e2e 层 API 稳定用例的驱动（e2e/cases/08-verify-api.sh 调用）。
 // 在整栈上经 nginx 跑一批 API scenario 与负例，写一个证据包，全绿时退出码 0。
 // 本驱动只用 node 内建模块，在工具链容器里以 --experimental-transform-types 直接运行。

@@ -1,11 +1,15 @@
+// 用途：案件有效性确认展示面板，渲染系统差异、闸口状态与确认、复核、重新告知表单。
+// 调用方：frontend/src/case/CaseValidityPage.tsx 与 frontend/src/case/validity.test.tsx。
 // 有效性确认与重新告知的最小入口（#248）。页面只展示服务端给出的差异、闸口与可办项。
 
+/** 系统命中项：规则码、提示文案与关联违法记录。 */
 export interface ValidityHitView {
   code: string;
   message: string;
   violationRecordId: string | null;
 }
 
+/** 差异项：字段、变化类型与前后取值。 */
 export interface ValidityDifferenceView {
   violationRecordId: string | null;
   field: string;
@@ -14,11 +18,13 @@ export interface ValidityDifferenceView {
   after: unknown;
 }
 
+/** 按违法记录分组的差异清单。 */
 export interface ValidityGroupView {
   violationRecordId: string | null;
   items: ValidityDifferenceView[];
 }
 
+/** 有效性确认记录：结论、理由、加重来源与复核结果。 */
 export interface ValidityConfirmationView {
   id: string;
   noticeId: string;
@@ -30,6 +36,7 @@ export interface ValidityConfirmationView {
   review: { conclusion: string; opinion: string | null } | null;
 }
 
+/** 有效性确认整页视图：告知基线、系统命中、差异、闸口与可办入口。 */
 export interface ValidityView {
   caseId: string;
   currentStage: string;
@@ -46,6 +53,7 @@ export interface ValidityView {
   entries: { confirm: boolean; review: boolean; aggravation: boolean; reissue: boolean };
 }
 
+/** 重新告知原因选项，值对应后端登记的规则码。 */
 export const VALIDITY_REISSUE_OPTIONS = [
   { code: 'A1', label: 'A1 当事人变更或增加' },
   { code: 'A2', label: 'A2 违法记录增加' },
@@ -58,11 +66,13 @@ export const VALIDITY_REISSUE_OPTIONS = [
   { code: 'R7', label: 'R7 法律依据变化' },
 ] as const;
 
+/** 加重来源选项，值对应后端登记的来源码。 */
 export const AGRAVATION_OPTIONS = [
   { code: 'reflow-new-evidence', label: '回流取得的新事实、新证据' },
   { code: 'r4-qualification-correction', label: 'R4 定性或法律适用纠正' },
 ] as const;
 
+/** 有效性面板：只读渲染差异与闸口，按服务端入口展示确认、复核与重新告知表单。 */
 export function ValidityPanel({ view }: { view: ValidityView }) {
   const unreviewed = view.confirmations.find((row) => row.review === null) ?? null;
   return (

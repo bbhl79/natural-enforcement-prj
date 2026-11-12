@@ -33,6 +33,7 @@ async function allScenarios(): Promise<ScenarioHead[]> {
   return [...(await scenarioHeads(runnableScenariosDir())), ...(await scenarioHeads(negativesDir()))];
 }
 
+// 验证资产覆盖自检：每个 scenario 必须落在至少一个执行面，棘轮只减不增。
 describe('验证资产覆盖自检', () => {
   it('清单之间没有重复，也没有同一场景挂在两个执行面', () => {
     const all = [...API_SUITE, ...LAYER_OVERLAY_SUITE, ...UNWIRED_SCENARIOS];

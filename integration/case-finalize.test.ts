@@ -366,6 +366,7 @@ beforeEach(() => {
   cookies.clear();
 });
 
+// 验证定型 E13／T27 的材料完整性、缺件与回证批准、送达与归档代次（#243）。
 describe('#243 定型', () => {
   it('已撤案且材料齐全：归档审批通过后已定型，写归档代次 1 与冻结清单', async () => {
     const caseId = await withdrawCase();

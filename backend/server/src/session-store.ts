@@ -1,3 +1,8 @@
+// 用途：会话行的形状、会话存储端口与容量配置令牌。
+// 调用方：backend/server/src/auth.service.ts、backend/server/src/session.guard.ts、backend/server/src/unit-of-work.ts；实现装配在 backend/server/src/persistence.module.ts。
+// 边界：touch 只在库中时间更早时推进；end 是条件更新，并发先提交时返回 false。
+//
+/** 一段会话行：记住我链号为空表示非「记住我」建立的会话。 */
 export interface SessionRow {
   id: string;
   personnelId: string;
@@ -9,6 +14,7 @@ export interface SessionRow {
   endedAt: Date | null;
 }
 
+/** 待插入的会话行：id 已由调用方生成，散列与时间已算好。 */
 export interface NewSession {
   id: string;
   personnelId: string;
@@ -19,6 +25,7 @@ export interface NewSession {
   absoluteEndsAt: Date;
 }
 
+/** 会话存储端口：插入、按散列查找、推进活动时间、结束与列出活动会话。 */
 export interface SessionStore {
   insert(row: NewSession): Promise<void>;
   findBySecretHash(secretHash: string): Promise<SessionRow | null>;
@@ -41,7 +48,10 @@ export interface SessionStore {
   listOpen(): Promise<SessionRow[]>;
 }
 
+/** 注入令牌：系统内同时活动会话的容量上限，登录与换发时按它判断是否还能建会话。 */
 export const SESSION_CAPACITY = Symbol('SESSION_CAPACITY');
+/** 容量上限的默认值。 */
 export const DEFAULT_SESSION_CAPACITY = 7500;
 
+/** 注入令牌：根客户端上的会话存储，事务内用 TxScope 上的 sessions。 */
 export const SESSION_STORE = Symbol('SESSION_STORE');

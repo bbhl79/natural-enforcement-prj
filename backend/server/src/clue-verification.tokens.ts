@@ -1,3 +1,7 @@
+// 用途：内业核查的注入令牌与队列名常量，投递端与消费端取同一份定义。
+// 调用方：backend/server/src/clue-verification.worker.ts 与 backend/server/src/persistence.module.ts。
+// 依据：Issue #213。
+//
 // 内业核查在启动包里的注入令牌与队列名（#213）。
 // 本文件无装饰器（令牌与抽象同层的约定）。
 

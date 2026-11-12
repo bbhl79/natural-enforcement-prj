@@ -1,3 +1,8 @@
+// 用途：管理台机构树，提供查看、新建下级、改名与停用。
+// 调用方：backend/server/src/org-units.controller.ts。
+// 边界：写动作在交互式事务里完成，业务行与留痕同成同败；拒绝留痕在回滚后另起事务写入。
+// 依据：Issue #123，Issue #119，Issue #207。
+//
 import { Inject, Injectable } from '@nestjs/common';
 import { rejected } from '@natural-enforcement/audit';
 import {
@@ -29,21 +34,25 @@ export interface OrgUnitView {
   names: Array<{ name: string; from: string; to: string | null }>;
 }
 
+/** 机构树读取结果：200 带根 id 与节点列表，越权 403。 */
 export type OrgTreeOutcome =
   | { status: 200; body: { result: 'listed'; rootId: string; orgUnits: OrgUnitView[] } }
   | Denial;
 
+/** 新建机构结果：200 成功，400 规则不合格，409 状态冲突，403 越权。 */
 export type RegisterOutcome =
   | { status: 200; body: { result: 'registered'; orgUnit: { id: string; code: string; name: string; level: OrgUnitLevel; parentId: string | null } } }
   | NonCompliant
   | { status: 409; body: { result: 'invalid-state' } }
   | Denial;
 
+/** 机构改名结果：200 改名或名称未变，400 规则不合格，403 越权。 */
 export type RenameOutcome =
   | { status: 200; body: { result: 'renamed' | 'unchanged'; orgUnit: { id: string; name: string } } }
   | NonCompliant
   | Denial;
 
+/** 机构停用结果：200 停用或原本已停用，409 有阻断原因（含未办结计数），403 越权。 */
 export type DeactivateOutcome =
   | { status: 200; body: { result: 'deactivated' | 'unchanged'; orgUnit: { id: string; deactivatedAt: string } } }
   | {

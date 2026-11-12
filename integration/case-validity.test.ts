@@ -414,6 +414,7 @@ const A_CASES = [
   { code: 'B1b', fine: 5000, hearing: true, hits: ['B1b'], summary: (id: string) => frozenSummary([summaryViolation(id, { fineAmount: 3000, factChange: 'narrowed' })]) },
 ] as const;
 
+// 验证 A 类失效命中后决定呈批被 409 拦住，重新告知后才放行（#248）。
 describe('#248 A 类（含 B1b）：决定呈批 409，直到重新告知', () => {
   for (const scenario of A_CASES) {
     it(`${scenario.code} 命中后闸口 409`, async () => {
@@ -430,6 +431,7 @@ describe('#248 A 类（含 B1b）：决定呈批 409，直到重新告知', () =
   }
 });
 
+// 验证 B 类确认、覆盖与复核的闸口组合（#248）。
 describe('#248 B 类：确认、覆盖与复核', () => {
   it('B1a 整条剔除：无确认 409；确认未复核 409；复核通过放行', async () => {
     const { caseId, violationId } = await toE04('penalty', 5000);
@@ -507,6 +509,7 @@ describe('#248 B 类：确认、覆盖与复核', () => {
   });
 });
 
+// 验证理由已变化时系统判定失效，重新告知并送达后放行（#248）。
 describe('#248 理由已变化与重新告知', () => {
   it('勾选理由已变化：系统判失效；重新告知并送达后闸口放行', async () => {
     const { caseId, violationId } = await toE04('penalty', 5000);
@@ -536,6 +539,7 @@ describe('#248 理由已变化与重新告知', () => {
   });
 });
 
+// 验证重新告知 T32：E05 次序号加 1、90 日期限不重置、旧期限行保留（#248 Q18）。
 describe('#248 Q18 重新告知：E05 次序号加 1、期限不重置、旧期限行保留', () => {
   it('C1 旧视为放弃保留绑定旧告知；T32 从 E09 回 E05；新期限行生成，90 日到期日不变', async () => {
     const { caseId } = await toE04('penalty', 5000);
@@ -607,6 +611,7 @@ describe('#248 Q18 重新告知：E05 次序号加 1、期限不重置、旧期�
   });
 });
 
+// 验证申辩后加重须写明加重来源，否则 409（#248 Q14）。
 describe('#248 Q14：申辩后加重须写明加重来源', () => {
   it('回流新证据：未写来源 409；写明来源后放行', async () => {
     const { caseId, violationId } = await toE04('penalty', 5000);
@@ -692,6 +697,7 @@ describe('#248 Q14：申辩后加重须写明加重来源', () => {
   });
 });
 
+// 验证曾任主办或协办的人员不得主持听证（#248 C3）。
 describe('#248 C3 主持守卫复核', () => {
   it('曾任主办、协办的人员不得主持听证', async () => {
     const { caseId } = await toE04('penalty', 5000);

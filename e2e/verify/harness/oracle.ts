@@ -1,18 +1,24 @@
+// 用途：按 RUN-CONTRACT 定义的比较操作符评估场景结构化断言。
+// 调用方：run-api-scenario.ts。
 /** 结构化 oracle 断言（见 fixtures/RUN-CONTRACT.md）。 */
 
+/** 断言比较操作符；evaluateOracle 按此分派。 */
 export type AssertOp = 'eq' | 'in' | 'includes' | 'gt' | 'lt';
 
+/** 单条断言：点分 path、操作符与期望值；由场景夹具的 oracle.assert 提供。 */
 export interface OracleAssert {
   readonly path: string;
   readonly op: AssertOp;
   readonly value: unknown;
 }
 
+/** 一步的观测结果：HTTP 状态与响应体；由 run-api-scenario.ts 构造。 */
 export interface StepObservation {
   readonly http: { readonly status: number };
   readonly body: Record<string, unknown>;
 }
 
+/** 断言失败项：path、op、期望值、实际值与可读说明。 */
 export interface AssertFailure {
   readonly path: string;
   readonly op: AssertOp;

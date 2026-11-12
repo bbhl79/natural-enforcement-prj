@@ -152,6 +152,7 @@ afterAll(async () => {
   await cloned?.close();
 });
 
+// 接缝①：留痕写入后再抛错，A10 解锁、重设与调岗所涉各表整体回滚。
 describe('接缝①：留痕工厂覆写为「业务写完后抛错」', () => {
   it('解锁：请求失败，人员、会话、留痕各表的行不变', async () => {
     const lockedId = await addPerson({
@@ -255,6 +256,7 @@ describe('接缝①：留痕工厂覆写为「业务写完后抛错」', () => {
   });
 });
 
+// #119：业务事务回滚后，拒绝留痕以独立事务写入，保证越权可追溯。
 describe('拒绝留痕在业务回滚后另起事务写入', () => {
   it('调用方事务里调岗被拒：任职不变，回滚后写出 authz.denied', async () => {
     const targetId = await addPerson({ code: 'P-119-FAR', phone: '13800011915', orgUnitId: deptBId });
@@ -353,6 +355,7 @@ describe('拒绝留痕在业务回滚后另起事务写入', () => {
   });
 });
 
+// #105 与 ADR 0011：拒绝留痕的归属机构，对象机构缺失时回落到操作者机构。
 describe('拒绝行归对象机构（#105；ADR 0011 修正）', () => {
   it('对象机构不存在：写入的行归操作者机构，target_org_unit_basis 记 actor-fallback', async () => {
     const store = new PrismaIdentityStore(cloned.prisma);

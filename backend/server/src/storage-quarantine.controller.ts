@@ -1,3 +1,7 @@
+// 用途：提供涉密误传标记与材料内容读取两个 HTTP 接口，委托 StorageQuarantineService。
+// 调用方：backend/server/src/app.module.ts 注册为控制器。
+// 依据：backend/server/src/storage-quarantine.service.ts（#224）。
+//
 // 涉密误传标记与材料读路径（#224）。
 //
 // POST /api/storage/materials/:materialId/quarantine   标记涉密误传（根机构系统管理）
@@ -24,11 +28,13 @@ interface QuarantineBody {
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
 
+// 涉密误传标记与材料读路径的 HTTP 入口，请求处理全部委托 StorageQuarantineService。
 @Controller('api/storage/materials')
 export class StorageQuarantineController {
   constructor(private readonly quarantine: StorageQuarantineService) {}
 
   /** 标记涉密误传：对象标 quarantined＋留痕。 */
+  // 标记涉密误传；操作码 storage.quarantine.mark；对象级限操作者所属机构为目标所属根机构的系统管理。
   @Post(':materialId/quarantine')
   async mark(
     @Req() req: AuthenticatedRequest,
@@ -45,6 +51,7 @@ export class StorageQuarantineController {
   }
 
   /** 业务读材料内容：已隔离返回 403 object-quarantined。 */
+  // 业务读材料内容，已隔离返回 403；操作码 clue.read；对象级按材料所属机构授权。
   @Get(':materialId/content')
   @UseGuards(SameOriginReadGuard)
   async content(

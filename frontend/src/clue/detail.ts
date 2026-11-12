@@ -1,9 +1,12 @@
+// 用途：线索中心抽屉「基本信息与要件」页签的详情取数、缺件补齐与反映人脱敏工具。
+// 调用方：frontend/src/clue/center.ts 取详情；frontend/src/pages/ClueCenterPage.tsx 补齐缺件；frontend/src/clue/ClueBasicTab.tsx 用脱敏函数。
+// 接口：GET /api/clues/:id/detail 操作码 clue.read；POST /api/clues/:id/gaps/fill 操作码 clue.item.supplement。
 // 基本信息与要件取数（#207 线索中心抽屉「基本信息与要件」页签）。
 //
 // 取数模式参考 duplicate.ts：async 函数直接 fetch，不建 thunk。
 // 反映人脱敏在前端：姓名保留首字，联系方式保留前 3 后 4。
 // 查看实名走 POST /api/clues/:id/reporter-read（API 在 duplicate.ts 已有）。
-// 缺件补齐走 POST /api/clues/:id/gap-fill。
+// 缺件补齐走 POST /api/clues/:id/gaps/fill。
 
 import { data } from 'react-router';
 
@@ -66,6 +69,7 @@ export interface ClueDetail {
   readonly reporterContact: string | null;
 }
 
+// 接口：GET /api/clues/:id/detail，操作码 clue.read。
 /** 取线索详情。 */
 export async function loadDetail(dispatch: ApiDispatch, clueId: string): Promise<ClueDetail> {
   const response = await apiFetch(dispatch, `/api/clues/${clueId}/detail`);
@@ -78,6 +82,7 @@ export type GapFillResult =
   | { readonly ok: true; readonly body: ClueDetail }
   | { readonly ok: false; readonly status: number; readonly reason: string | null };
 
+// 接口：POST /api/clues/:id/gaps/fill，操作码 clue.item.supplement。
 /** 补齐缺件。fills 是待补齐的 key-value 列表。 */
 export async function fillGaps(
   dispatch: ApiDispatch,

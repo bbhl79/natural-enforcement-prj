@@ -30,6 +30,7 @@ function record(overrides: Partial<AuditTrailRecord>): AuditTrailRecord {
   };
 }
 
+// 筛选条件的缺省值与查询构造：默认当天范围、全部类别与结果（#126）。
 describe('#126 筛选条件', () => {
   it('缺省为昨天到今天（Asia/Shanghai），全部类别、全部结果', () => {
     expect(parseAuditFilter({}, NOW)).toEqual({
@@ -63,6 +64,7 @@ describe('#126 筛选条件', () => {
   });
 });
 
+// 留痕展示文字：时间按 Asia/Shanghai 到分钟，动作与原因用可读文案（P8）。
 describe('#126 留痕展示文字（P8）', () => {
   it('时间按 Asia/Shanghai 到分钟', () => {
     expect(shanghaiMinute(NOW)).toBe('2026-10-17 09:48');
@@ -169,6 +171,7 @@ describe('#126 留痕展示文字（P8）', () => {
   });
 });
 
+// 可见文字不出现工程码；未知动作与原因也要有可读文案（SCREENS.md:8）。
 describe('#126 可见文字不出现工程码（SCREENS.md:8；P8 动作原文只放 data-action）', () => {
   /** 页面与导出共用的可见文字：表格六格。 */
   const visible = (view: AuditRowView) => auditRowCells(view).join('|');
@@ -197,6 +200,7 @@ describe('#126 可见文字不出现工程码（SCREENS.md:8；P8 动作原文�
   });
 });
 
+// 根机构相关行的所属机构展示为「名称（根机构）」（G34）。
 describe('#126 根机构（G34）', () => {
   it('建立首个系统管理人员一行，所属机构写「名称（根机构）」；其他行不加', () => {
     const boot = describeAuditRow(record({
@@ -211,6 +215,7 @@ describe('#126 根机构（G34）', () => {
   });
 });
 
+// 导出工作簿：ZIP 结构、工作表内容与 XML 转义。
 describe('#126 xlsx 写出', () => {
   it('是 ZIP（PK 开头），含工作簿与工作表，文字经 XML 转义', () => {
     const file = buildXlsx('管理台留痕', [['时间', '对象'], ['2026-10-17 09:48', '人员 <A&B>']]);

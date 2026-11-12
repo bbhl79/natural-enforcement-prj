@@ -1,3 +1,8 @@
+// 用途：管理台首页（P3）页面，展示维护入口、首日引导与「需要留意的执法证」统计。
+// 路由：/admin，路由表 id admin-home，菜单「管理台首页」。
+// 调用的接口：GET /api/org-units、GET /api/admin/personnel、GET /api/admin/locked-personnel、GET /api/admin/audit/summary，取数在 adminHome.ts。
+// 需要的操作码：ADMIN_HOME_OPCODES 任一（org.unit.register、personnel.profile.read、personnel.locked.read、audit.admin.read）。
+
 import { Suspense } from 'react';
 import { Await, Link, useAsyncError, useLoaderData, useRevalidator } from 'react-router';
 
@@ -110,6 +115,7 @@ export function CertAttentionCard({ counts }: { counts: Record<CertAttentionKey,
   );
 }
 
+/** 首页主体：按视角渲染维护入口、首日引导与执法证统计卡片。 */
 export function AdminHomeContent({ opcodes, summary }: { opcodes: readonly string[]; summary: AdminHomeSummary }) {
   const view = adminHomeView(opcodes);
   if (view === 'supervise') {

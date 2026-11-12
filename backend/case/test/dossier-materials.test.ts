@@ -34,6 +34,7 @@ function material(itemCode: number, overrides: Partial<DossierMaterialFact> = {}
   return { itemCode, current: true, evidenceJson: null, ...overrides };
 }
 
+// #243 卷宗材料清单的版本化口径：固定 21 项，并携带规则编号与生效版本。
 describe('#243 版本化材料清单', () => {
   it('清单是规程 13.1 的 21 项，带规则编号与版本', () => {
     expect(DOSSIER_MATERIALS.map((item) => item.code)).toEqual(Array.from({ length: 21 }, (_, index) => index + 1));
@@ -49,6 +50,7 @@ describe('#243 版本化材料清单', () => {
   });
 });
 
+// #243 Q25 必需项由案卷事件与环节实例推导，并允许有依据的豁免项生效。
 describe('#243 Q25 必需项按事件推导', () => {
   it('每案必有 (1)(2)(4)(19)', () => {
     expect(requirement().requiredItems).toEqual([1, 2, 4, 19]);
@@ -103,6 +105,7 @@ describe('#243 Q25 必需项按事件推导', () => {
   });
 });
 
+// #243 Q27 送达事项接受送达回证或公告证据，公告缺原因记录或材料任一要件即不成立。
 describe('#243 Q27 送达事项接受 A 或 B', () => {
   it('A＝送达回证', () => {
     expect(readDeliveryEvidence({ kind: 'receipt' })).toEqual({ kind: 'receipt' });
@@ -129,6 +132,7 @@ describe('#243 Q27 送达事项接受 A 或 B', () => {
   });
 });
 
+// #243 卷宗完整性结论：缺件或回证不全须写理由，否则阻断且不得判为完整。
 describe('#243 完整性结论', () => {
   it('材料齐全且回证齐全：结论完整', () => {
     const result = evaluateDossierCompleteness({

@@ -1,3 +1,4 @@
+// 用途：把 unknown 窄化为对象记录，非对象返回 null，供运行器与发现器共用。
 // unknown → 记录对象窄化。runner 与 discoverer 共用，单一来源消除逐字重复。
 // 零依赖纯函数模块；消费方一律从这里 import。
 

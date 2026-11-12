@@ -94,6 +94,7 @@ afterAll(async () => {
   await cloned?.close();
 });
 
+// 验证参照数据种子只追加，五张表数量与定稿一致（#210；ADR 0016）。
 describe('#210 参照数据种子（ADR 0016 只追加）', () => {
   it('五张表的数量与 #24、#203 定稿一致', async () => {
     const sourceCodes = await cloned.prisma.geoDictSourceCode.count();
@@ -168,6 +169,7 @@ describe('#210 参照数据种子（ADR 0016 只追加）', () => {
   });
 });
 
+// 验证录入要件声明的三层规模与底稿一致（#210；ADR 0018）。
 describe('#210 录入要件声明（ADR 0018）', () => {
   it('三层规模与底稿一致：公共 8 项、来源 5 组 16 项、类型 1018 项', () => {
     expect(PUBLIC_LAYER_ITEMS).toHaveLength(8);
@@ -245,6 +247,7 @@ describe('#210 录入要件声明（ADR 0018）', () => {
   });
 });
 
+// 验证参照清单为前端渲染规范选择控件提供来源编码与可选违法类型（#211）。
 describe('#211 参照清单', () => {
   it('来源编码与可选违法类型各出一份，前端按它渲染规范选择控件', async () => {
     const response = await fetch(`${baseUrl}/api/clue/reference`, {
@@ -262,6 +265,7 @@ describe('#211 参照清单', () => {
   });
 });
 
+// 验证 form-schema 接口的登录要求与按来源、领域叠加的结果（#210）。
 describe('#210 form-schema 接口', () => {
   it('未登录取不到声明', async () => {
     const response = await fetch(`${baseUrl}/api/clue/form-schema?sourceCode=301&domain=land`);
@@ -350,6 +354,7 @@ describe('#210 form-schema 接口', () => {
   });
 });
 
+// 验证操作码名册收录线索相关码，名册外的码不进库（#210）。
 describe('#210 操作码名册与授权', () => {
   it('11 个新码进名册，且名册外的不在库里', () => {
     for (const code of [

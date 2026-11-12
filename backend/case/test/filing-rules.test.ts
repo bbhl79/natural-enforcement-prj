@@ -29,6 +29,7 @@ const minor = {
   noHarm: { confirmed: true, note: '没有造成危害后果' },
 };
 
+// #234 立案呈批结论二选一校验：立案去重当事人，不予立案理由两类互斥，非法结论按 X30 拒绝。
 describe('checkFilingContent（结论二选一＋X30）', () => {
   it('立案：当事人名称去空白去重', () => {
     const out = checkFilingContent({ conclusion: 'file', partyNames: [' 张三 ', '张三', '', 3] });
@@ -65,6 +66,7 @@ describe('checkFilingContent（结论二选一＋X30）', () => {
   });
 });
 
+// #234 立案审批链的固定步骤迁移与各步骤允许的起始状态。
 describe('审批链最小固定形态', () => {
   it('提交按配置进行政审核或直达行政审批', () => {
     expect(filingStatusAfter('submit', 'one-level')).toBe('pending_review');
@@ -86,6 +88,7 @@ describe('审批链最小固定形态', () => {
   });
 });
 
+// #234 X31 在途判定：已提交未批准未退回未撤回为在途，草稿与终态不在途。
 describe('X31 在途判定', () => {
   it('已提交未批准未退回未撤回＝在途', () => {
     expect(isFilingApprovalPending('pending_review')).toBe(true);
@@ -97,6 +100,7 @@ describe('X31 在途判定', () => {
 });
 
 
+// #234 R-8 定案 C：立案当事人须明确，提交与批准都校验；草稿不调用，不予立案不查。
 describe('checkFilingParty（R-8 定案 C：提交与批准）', () => {
   it('立案当事人明确：无命中（提交可过）', () => {
     expect(checkFilingParty({ conclusion: 'file', partyNames: ['张三'], subjectUnknown: false })).toBeNull();
@@ -117,6 +121,7 @@ describe('checkFilingParty（R-8 定案 C：提交与批准）', () => {
   });
 });
 
+// #234 T01／T02 守卫：线索状态、承办人数与执法资格、当事人明确性；不予立案不查人数与当事人。
 describe('checkFilingGuards（T01／T02 守卫）', () => {
   const two: FilingHandlerFact[] = [
     { personnelId: 'a', role: 'main', qualified: true },
@@ -156,6 +161,7 @@ describe('checkFilingGuards（T01／T02 守卫）', () => {
   });
 });
 
+// #257 立案缺件守卫：Q24 阻断项与 Q33 警告项的分类，警告统一挂 FILING-GAP 规则键。
 describe('立案缺件守卫（#257 Q24＋缺口-Q33）', () => {
   const all: RequirementItem[] = [
     ...PUBLIC_LAYER_ITEMS,
@@ -265,6 +271,7 @@ describe('立案缺件守卫（#257 Q24＋缺口-Q33）', () => {
   });
 });
 
+// #234 立案通过后生成案件的最小字段集合与初始状态。
 describe('buildCaseOpening（案件最小字段）', () => {
   it('主状态办理中、当前环节 E02、进入次序号 1、来源线索主键', () => {
     const opened = buildCaseOpening({

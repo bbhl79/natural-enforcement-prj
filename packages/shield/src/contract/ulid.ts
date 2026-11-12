@@ -1,3 +1,4 @@
+// 用途：技术主键（ULID）生成：无状态生成器与进程内单调生成器，生成结果按契约形制自检。
 // 技术主键生成（#16 §1.1：ULID = 48bit 毫秒时间 + 80bit 随机，26 位大写 Crockford Base32）。
 //
 // 契约唯一事实源 = docs/global-contract-identity-references.md；本文件只做合成、不改定案。

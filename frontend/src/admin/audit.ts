@@ -1,3 +1,4 @@
+// 用途：管理台留痕（P8）的数据层与文案，含筛选解析、查阅、导出与 loader。
 // 管理台留痕（P8，#126）的数据与文案。查阅与导出都走服务端 POST 接口（服务端每次都写留痕）；
 // 显示文字由服务端生成，页面与导出文件逐格同源。筛选条件放在地址栏查询串里，loader 按查询串取数。
 
@@ -7,7 +8,9 @@ import { data, type LoaderFunctionArgs } from 'react-router';
 import { apiFetch, type ApiDispatch } from '../api';
 import { sessionOpcodes, type SessionStore } from '../session';
 
+/** 查阅管理台留痕；操作码 audit.admin.read。 */
 export const AUDIT_READ = 'audit.admin.read' satisfies OpcodeName;
+/** 导出管理台留痕；操作码 audit.admin.export。 */
 export const AUDIT_EXPORT = 'audit.admin.export' satisfies OpcodeName;
 
 /** 与服务端 @natural-enforcement/audit 的 AUDIT_CATEGORIES 同值。 */
@@ -19,6 +22,7 @@ export type AuditCategory =
   | 'unlock-reset'
   | 'cert'
   | 'export';
+/** 操作结果筛选值。 */
 export type AuditOutcome = 'succeeded' | 'failed';
 
 /** 操作类别下拉（原型 v0.4 CATS 顺序）。空值即「全部操作」。 */
@@ -39,6 +43,7 @@ export const CATEGORY_HINTS: Partial<Record<AuditCategory, string>> = {
   'personnel-view': '操作类别：人员查阅（打开人员详情）',
 };
 
+/** 结果下拉选项；空值即全部结果。 */
 export const OUTCOME_OPTIONS: ReadonlyArray<{ value: AuditOutcome | ''; label: string }> = [
   { value: '', label: '结果：全部' },
   { value: 'succeeded', label: '结果：成功' },
@@ -51,6 +56,7 @@ export const RULE_MESSAGES: Readonly<Record<string, string>> = {
     '筛选条件填写不对：时间范围请按「2026-10-16 至 2026-10-17」的样子填写，起日不晚于止日；操作人工号不超过 64 个字。',
 };
 
+/** 留痕查询的筛选条件。 */
 export interface AuditFilter {
   from: string;
   to: string;
@@ -82,6 +88,7 @@ export function hasUnanchoredObject(rows: readonly AuditRow[]): boolean {
   return rows.some((row) => !row.anchored && row.action !== 'login.failed');
 }
 
+/** 本次查询的数据范围。 */
 export interface AuditScope {
   orgUnitId: string;
   orgName: string;
@@ -89,6 +96,7 @@ export interface AuditScope {
   includesUnanchored: boolean;
 }
 
+/** 查阅结果：列表、筛选不合规、无权限或会话结束。 */
 export type AuditListResult =
   | { kind: 'listed'; scope: AuditScope; total: number; rows: AuditRow[] }
   | { kind: 'non-compliant'; rules: string[] }
@@ -96,6 +104,7 @@ export type AuditListResult =
   | { kind: 'no-permission' }
   | { kind: 'ended' };
 
+/** 留痕页 loader 的返回：筛选条件与列表的异步承诺。 */
 export interface AuditLoaderData {
   filter: AuditFilter;
   list: Promise<AuditListResult>;
@@ -116,6 +125,7 @@ export function defaultRange(now: number = Date.now()): { from: string; to: stri
   return { from: shanghaiDate(now - 24 * 60 * 60 * 1000), to: shanghaiDate(now) };
 }
 
+/** 时间范围的显示文字；止日未解析时只写起日。 */
 export function rangeText(filter: Pick<AuditFilter, 'from' | 'to'>): string {
   return filter.to === UNPARSED ? filter.from : `${filter.from} 至 ${filter.to}`;
 }
@@ -186,6 +196,7 @@ async function rulesOf(response: Response): Promise<string[]> {
   return Array.isArray(body.rules) ? body.rules.map(String) : [];
 }
 
+// POST /api/admin/audit/query，操作码 audit.admin.read。
 /** 查阅。服务端每查一次写一行 audit.viewed。403 交给壳内无权限页；401 交给会话已结束页。 */
 export async function loadAuditList(dispatch: ApiDispatch, filter: AuditFilter): Promise<AuditListResult> {
   const response = await post(dispatch, '/api/admin/audit/query', requestBody(filter));
@@ -197,6 +208,7 @@ export async function loadAuditList(dispatch: ApiDispatch, filter: AuditFilter):
   return { kind: 'listed', scope: body.scope, total: body.total, rows: body.rows };
 }
 
+/** 导出结果：文件、筛选不合规、无权限、会话结束或失败。 */
 export type AuditExportResult =
   | { kind: 'exported'; count: number; filename: string; file: Blob }
   | { kind: 'non-compliant'; rules: string[] }
@@ -215,6 +227,7 @@ export function filenameFromDisposition(header: string | null, fallback: string)
   }
 }
 
+// POST /api/admin/audit/export，操作码 audit.admin.export。
 /** 导出。服务端写一行 audit.exported（带条数），返回表格文件。 */
 export async function exportAudit(dispatch: ApiDispatch, filter: AuditFilter): Promise<AuditExportResult> {
   let response: Response;

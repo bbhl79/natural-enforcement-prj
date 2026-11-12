@@ -1,3 +1,7 @@
+// 用途：定义生产引导的输入规则、判定纯函数与引导结果类型。
+// 调用方：backend/identity/src/services/bootstrap.service.ts 与 backend/server/src/bootstrap-command.ts。
+// 边界：只做不查库的规则与判定；读写库由 BootstrapService 完成。
+// 依据：#131、#105
 // 生产引导命令（#105「生产引导命令（D5）」，#131）：输入规则、判定结果与差异。
 // 判定只看两个不可变键：根机构编码（且必须是根）、首个系统管理人员的工号。
 // 空库写入；两键都在为「已引导」，不写；两键不全（含库非空而两键都不在）拒绝，说明差在哪里。
@@ -75,6 +79,7 @@ export type BootstrapDifference =
   /** 两键都不在，但库里已有机构或人员：不在残缺状态上叠加数据。 */
   | { kind: 'not-empty'; orgUnits: number; personnel: number };
 
+/** 引导判定结果：已写入、已引导过、或两键不全并列出差异。 */
 export type BootstrapOutcome =
   | { result: 'bootstrapped'; rootOrgUnitId: string; adminPersonnelId: string }
   | { result: 'already-bootstrapped'; rootOrgUnitId: string; adminPersonnelId: string }

@@ -1,3 +1,8 @@
+// 用途：定义事务工作单元的类型、事务内可用存储与注入令牌，保证业务行与留痕同成同败。
+// 调用方：各业务服务经令牌 UNIT_OF_WORK 注入并调用 run；Prisma 实现在 backend/server/src/persistence.module.ts 装配。
+// 边界：run 不可嵌套；口令散列等耗时计算放在 run 之外；rejected 结果回滚后另起事务写拒绝留痕。
+// 依据：Issue #105，Issue #119。
+//
 // 事务前置（#105「事务前置」，#119）：管理动作的业务行与留痕同成同败。
 // 本文件只定类型和令牌。Prisma 实现在 persistence.module.ts 装配。
 import type { AuditTrailPort, AuditTrailReader, Rejected } from '@natural-enforcement/audit';
@@ -26,6 +31,7 @@ export interface TxScope extends IdentityTransaction {
   cases: CaseStore;
 }
 
+/** 事务工作单元端口：在一次交互式事务里执行业务写与留痕，拒绝时另行落留痕。 */
 export interface UnitOfWork {
   /**
    * 在一个交互式事务里执行 work。
@@ -37,4 +43,5 @@ export interface UnitOfWork {
   run<T>(work: (tx: TxScope) => Promise<T | Rejected<T>>): Promise<T>;
 }
 
+/** 注入令牌：事务工作单元的实现，装配在 backend/server/src/persistence.module.ts。 */
 export const UNIT_OF_WORK = Symbol('UNIT_OF_WORK');

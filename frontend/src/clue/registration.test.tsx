@@ -127,6 +127,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+// 从声明要件名读封闭取值：写了「（取值：…）」的按取值，问句按是否，其余按文本。
 describe('要件取值的读法', () => {
   it('声明里写明取值的按取值渲染，问句按是否渲染，其余按文本填', () => {
     expect(optionsOf({ label: '违法主体名称（取值：名称｜无法确定）' })).toEqual(['名称', '无法确定']);
@@ -135,6 +136,7 @@ describe('要件取值的读法', () => {
   });
 });
 
+// 缺件按层分流：公共与来源层的阻断项与类型层缺件分开；必填口径取自后端声明。
 describe('缺件分层', () => {
   it('公共与来源层的阻断项与类型层缺件分开处理', () => {
     const split = splitRules(['clue.finder', 'type.land_demo.subject_name']);
@@ -153,6 +155,7 @@ describe('缺件分层', () => {
   });
 });
 
+// 登记壳地址：步骤参数保留续办语义；新办不预填法域，地址显式带来源法域才回填。
 describe('登记壳地址与新办初值', () => {
   it('旧 /clue/register 归到工作台登记壳，步骤地址保留 clue 续办', () => {
     expect(registerStepPath(1)).toBe('/workbench/register?step=1');
@@ -174,6 +177,7 @@ describe('登记壳地址与新办初值', () => {
   });
 });
 
+// 录入表单 R1 四分区渲染：首屏完整表单、来源与法域置顶且为空、分区按声明显隐。
 describe('录入表单（R1 四分区）', () => {
   it('一进入即完整表单：无门闸与预告砖，四个分区齐全，保存按钮常在', () => {
     const html = render({ input: EMPTY_REGISTER_INPUT });
@@ -278,6 +282,7 @@ describe('录入表单（R1 四分区）', () => {
   });
 });
 
+// 登记提交：表单与文件一次 multipart 提交并带幂等键；校验失败回缺件键；幂等键每次新生成。
 describe('提交', () => {
   it('表单与全部文件一次提交，带幂等键', async () => {
     const calls: { url: string; key: string | null; body: FormData | null }[] = [];

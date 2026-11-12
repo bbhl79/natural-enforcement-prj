@@ -1,3 +1,8 @@
+// 用途：案件期限，负责锚点登记、延长与期间呈批、工作日历安装与期限查询。
+// 调用方：backend/server/src/deadline.controller.ts。
+// 边界：期限计算在 @natural-enforcement/deadline 包，本服务只做呈批、落库与查询；超期只提示，不阻断。
+// 依据：Issue #246，T34。
+//
 // 期限呈批、锚点与工作日历（#246）。
 // 计算在 deadline 包。本服务只做呈批、落库和查询。
 // 呈批沿用 doc.draft / doc.submit / doc.admin.review / doc.approve。
@@ -77,6 +82,7 @@ const EXTENSION_BASIS = '处罚办法第38条第1款';
 const STAGE_NODE = /^E(0[1-9]|1[0-2])$/;
 const FAIL_REASONS = new Set<string>(CASE_DEADLINE_FAILED_REASONS);
 
+/** 期限接口的统一返回：200 业务体，400 输入不合规，403 越权，404 不存在，409 状态或并发冲突。 */
 export type DeadlineHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }
   | { readonly status: 400; readonly body: Record<string, unknown> }
@@ -108,6 +114,11 @@ interface PeriodContent {
   readonly backfill: boolean;
 }
 
+/**
+ * 期限服务：锚点与期间的草稿、提交、审核、批准，以及工作日历安装与期限视图。
+ * 操作码：读取 case.read，草稿 doc.draft，提交 doc.submit，审核 doc.admin.review，批准 doc.approve。
+ * 延长批准在批准事务里落 T34 迁移效果；校验与状态冲突失败写对应动作的失败留痕。
+ */
 @Injectable()
 export class DeadlineService {
   constructor(

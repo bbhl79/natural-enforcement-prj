@@ -1,3 +1,7 @@
+// 用途：提供移送登记、停用机构池重新指定与系统外移送附加记录的 HTTP 接口，解析表单与附件后委托 ClueDispositionService。
+// 调用方：backend/server/src/app.module.ts 注册为控制器。
+// 依据：backend/server/src/clue-disposition.service.ts（#216；规格 D 节）。
+//
 // 移送与停用机构池重新指定接口（#216；规格 D 节、GLOSSARY）。
 //
 // POST /api/clues/:id/transfer        移送登记（multipart：表单字段 + 选填附件 0..n）
@@ -50,11 +54,13 @@ interface PoolReassignBody {
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
 
+// 移送与系统外附加记录的 HTTP 入口，请求处理全部委托 ClueDispositionService。
 @Controller('api/clues')
 export class ClueDispositionController {
   constructor(private readonly disposition: ClueDispositionService) {}
 
   /** 移送登记（自然资源部门以外的机关；登记后进 transferred_out 终态）。 */
+  // 移送登记，接收表单字段与选填附件；操作码 clue.disposition.record；对象级限待分派池所属机构或承办机构的内勤。
   @Post(':id/transfer')
   @UseInterceptors(
     FileFieldsInterceptor([{ name: 'attachment', maxCount: 20 }], {
@@ -80,6 +86,7 @@ export class ClueDispositionController {
   }
 
   /** 停用机构池重新指定（只授系统管理；不构成指定管辖、不加锁）。 */
+  // 停用机构池重新指定；操作码 clue.pool.reassign；对象级限目标机构根机构在数据范围内的系统管理员。
   @Post(':id/pool-reassign')
   async poolReassign(
     @Req() req: AuthenticatedRequest,
@@ -96,6 +103,7 @@ export class ClueDispositionController {
   }
 
   /** 系统外移送附加记录（#229；须线索处置为 other；不改线索状态）。 */
+  // 系统外移送附加记录，接收表单字段与选填附件；操作码 clue.disposition.record；对象级限本案主办／协办本人或承办机构内勤。
   @Post(':id/external-transfers')
   @UseInterceptors(
     FileFieldsInterceptor([{ name: 'attachment', maxCount: 20 }], {
@@ -120,6 +128,7 @@ export class ClueDispositionController {
   }
 
   /** 系统外移送附加记录列表（#229）。 */
+  // 系统外移送附加记录列表；操作码 clue.read；对象级按线索承办机构或录入机构授权。
   @Get(':id/external-transfers')
   @UseGuards(SameOriginReadGuard)
   async listExternalTransfers(

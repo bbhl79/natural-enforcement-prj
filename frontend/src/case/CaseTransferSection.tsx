@@ -1,3 +1,5 @@
+// 用途：案件详情「移送」区块，展示移送链与记载，触发呈批、回证、外部决定、出口与结案检查。
+// 调用方：frontend/src/case/CaseTransferPage.tsx 与 frontend/src/case/transfer.test.tsx。
 // 案件详情「移送」页签（#242）：发起移送呈批、查看记载、上传或补传回证、
 // 登记公安检察决定与选择人工出口。
 import { useState, type FormEvent } from 'react';
@@ -8,6 +10,7 @@ import {
   type TransferView,
 } from './transfer';
 
+/** 出口呈批草稿：出口类型、违法状态说明、处罚依据与理由。 */
 export interface OutletDraftInput {
   readonly outlet: string;
   readonly illegalStateCleared: string;
@@ -16,6 +19,7 @@ export interface OutletDraftInput {
   readonly reason: string;
 }
 
+/** 移送区块属性：视图、拟制能力开关与五个提交回调。 */
 export interface CaseTransferSectionProps {
   readonly view: TransferView;
   readonly message: string | null;
@@ -44,6 +48,7 @@ function filesOf(input: HTMLInputElement | null): File[] {
   return input?.files ? Array.from(input.files) : [];
 }
 
+/** 移送区块：渲染链路、记载与各表单，动作通过 props 回调交给路由组件提交。 */
 export function CaseTransferSection(props: CaseTransferSectionProps) {
   const [outlet, setOutlet] = useState('investigate-again');
   const view = props.view;

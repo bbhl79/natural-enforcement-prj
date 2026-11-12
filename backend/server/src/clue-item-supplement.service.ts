@@ -1,3 +1,8 @@
+// 用途：线索缺件补齐，一次提交补齐一项或多项缺件并留痕。
+// 调用方：backend/server/src/clue-item-supplement.controller.ts 的 POST clues/:id/gaps/fill。
+// 边界：校验在写之前全部完成，任一项不合格则整单不保存；补齐与成功留痕在同一事务，失败留痕在回滚后另起事务。
+// 依据：Issue #211，规格 E。
+//
 // 线索缺件补齐（#211；规格 E「缺件补齐支持单项和一键（多项同一次提交）」）。
 //
 // 一次提交可补一项，也可一次补多项。同一次提交里任一项不合格则全部不保存：
@@ -36,6 +41,7 @@ export interface ClueItemSupplementBody {
   readonly gaps: readonly { readonly key: string; readonly label: string }[];
 }
 
+/** 补齐入口的结果：成功 200，校验不合格 400，越权 403，线索不存在 404。 */
 export type ClueItemSupplementOutcome =
   | { readonly status: 200; readonly body: ClueItemSupplementBody }
   | { readonly status: 400; readonly body: { readonly result: 'non-compliant'; readonly rules: readonly string[] } }
@@ -48,6 +54,10 @@ interface Rejection {
   readonly reason: ClueItemsSupplementFailedReason;
 }
 
+/**
+ * 补齐线索缺件：先读缺件清单校验提交键，再在同一事务里写补齐值与成功留痕。
+ * 越权按操作码 clue.item.supplement 与线索所属机构判定，拒绝时写失败留痕并返回 403。
+ */
 @Injectable()
 export class ClueItemSupplementService {
   constructor(

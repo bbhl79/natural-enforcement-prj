@@ -29,6 +29,7 @@ function facts(partial: Partial<HearingFacts> = {}): HearingFacts {
   };
 }
 
+// #272 X07 听证命中口径：金额阈值与非金额罚种自动命中，人工勾选只能追加，命中后不得勾不适用。
 describe('#272 X07 命中：自动 ∪ 人工', () => {
   it('公民罚款达 5000 自动命中；未带听证告知 409', () => {
     const hit = assessHearing(facts({ fineAmount: 5000 }));
@@ -82,6 +83,7 @@ describe('#272 X07 命中：自动 ∪ 人工', () => {
   });
 });
 
+// #272 较大数额提示：单项或配置口径达阈值时提示，提示本身不替代 X07 判定。
 describe('#272 较大数额提示', () => {
   it('任一单项达阈值即提示；默认比对口径 any；提示键已登记', () => {
     const fine = assessHearing(facts({ fineAmount: 5000 }));
@@ -115,6 +117,7 @@ describe('#272 较大数额提示', () => {
   });
 });
 
+// #272 X26 衔接：命中必审且无告知前法审时给警告，已有通过引用即不告警。
 describe('#272 X26 衔接', () => {
   it('命中必审且无告知前法审 → normative 警告；有通过引用 → 不警告', () => {
     expect(mandatoryReviewHit({ manual: true, hearingEntered: false })).toBe(true);
@@ -128,6 +131,7 @@ describe('#272 X26 衔接', () => {
   });
 });
 
+// #272 听证主持人资格：曾任本案主办或协办的人员不得主持。
 describe('#272 主持人资格', () => {
   it('曾任主办、协办（含已换下）不得主持；其他人可主持', () => {
     const refused = checkHearingHost({ handlerPersonnelIds: ['p1', 'p2'], candidateId: 'p1' });
@@ -138,6 +142,7 @@ describe('#272 主持人资格', () => {
   });
 });
 
+// #272 X28 复开与经过听证口径：仅已终止的听证可复开，受理后各类终结算经过听证。
 describe('#272 X28 与经过听证', () => {
   it('已终止的听证自动复开 → X28；无已终止听证 → invalid-state', () => {
     const x28 = checkHearingReopen({ hasTerminatedHearing: true });
@@ -155,6 +160,7 @@ describe('#272 X28 与经过听证', () => {
   });
 });
 
+// #272 听证期限窗口：届满日当天仍有效，次日关闭，缺日历则转人工确认。
 describe('#272 期限窗口', () => {
   it('届满日当天有效；次日关闭；缺日历转人工确认', () => {
     expect(hearingWindowState({ dueOn: '2026-11-05', needsManualConfirmation: false, today: '2026-11-05' })).toBe('open');
@@ -163,6 +169,7 @@ describe('#272 期限窗口', () => {
   });
 });
 
+// #272 告知正文解析：枚举校验、人工清单去重与空引用归一。
 describe('#272 告知正文校验', () => {
   const valid = {
     kind: 'penalty',

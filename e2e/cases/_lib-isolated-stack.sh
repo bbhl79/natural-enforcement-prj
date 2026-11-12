@@ -1,3 +1,4 @@
+# 用途：08、09 共用：整栈上为单个用例建独立库、切 server、用例后恢复并清库。
 # 用例辅助（`_` 前缀：不是可执行用例，由 08、09 用 source 引入）。
 # 在整栈上为一个用例建独立库：迁移 → 开发种子 → server 临时指向该库 → 用例结束恢复并清库。
 # 手法同 06/07：独立库不动开发库，不依赖用例执行顺序，首登改密只发生一次，所以可重复跑。
@@ -22,6 +23,7 @@ CERT="${HOME}/.local/share/natural-enforcement/dev-certs/localhost.crt"
 # 工具链镜像与 dev 同一钉定（dev 的 LINT_IMAGE）。
 TOOLCHAIN_IMAGE="$(sed -n "s/^LINT_IMAGE='\(.*\)'$/\1/p" "$DEV")"
 
+# 打印失败原因并以 1 退出。
 fail() {
   echo "[FAIL] $1" >&2
   exit 1
@@ -32,6 +34,7 @@ fail() {
 DEV_DATABASE_URL="$DATABASE_URL"
 ISO_URL="${DEV_DATABASE_URL%/*}/${ISO_DB}"
 
+# 在 db 容器内对指定库执行 psql；出错即停。
 psql_db() { # $1 库名，其余为 psql 参数
   local db="$1"
   shift
@@ -42,6 +45,7 @@ work="$(mktemp -d)"
 containers=()
 server_switched=0
 
+# 把 server 恢复指向开发库并重启 nginx；失败返回非 0，由调用方决定是否保留现场。
 restore_server() {
   if [ "$server_switched" = "1" ]; then
     echo "[e2e] ${ISO_LABEL}：server 恢复指向开发库…"
@@ -52,6 +56,7 @@ restore_server() {
   fi
 }
 
+# 用例收尾：恢复 server、删用例容器与独立库、删临时目录；恢复失败保留现场。
 cleanup() {
   local status=$?
   if ! restore_server; then
@@ -67,6 +72,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# 拉起整栈并为本用例建独立库：迁移、开发种子，再让 server 临时指向该库。
 isolated_stack_up() {
   echo "[e2e] ${ISO_LABEL}：拉起入口 ${BASE} …"
   "$DEV" up

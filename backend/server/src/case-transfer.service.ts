@@ -1,3 +1,7 @@
+// 用途：案件阶段三类移送的拟制、提交、审核、批准、记载与回证，以及外部决定与人工出口。
+// 调用方：backend/server/src/case-transfer.controller.ts；backend/server/src/case-closeout.service.ts 调用 closeoutGate。
+// 边界：授权经 authorize（拒绝先写 authz.denied 再抛错）；写动作在交互式事务内；附件经 StoragePort 存取。
+// 依据：#242、#255、ADR 0011。
 // 案件阶段三类移送（#242）：呈批、记载、回证；外部决定与人工出口（T30）。
 // 判定在 case 包的纯函数里，这里只喂事实、落库、写留痕。
 // 管辖移送批准后写记载，不直送对方待分派池（无该代码路径）。
@@ -86,6 +90,7 @@ const FAIL_REASONS = new Set<string>(CASE_TRANSFER_FAILED_REASONS);
 /** 三日期限提示文案。只提醒，不阻断。 */
 const REVIEW_COUNTDOWN_MESSAGE = '自接到不予立案通知之日起三日，只提醒不阻断';
 
+/** 移送附件的上传内容；调用方 backend/server/src/case-transfer.controller.ts 构造后传入。 */
 export interface TransferUploadedFile {
   readonly fileName: string;
   readonly contentType: string;
@@ -93,6 +98,7 @@ export interface TransferUploadedFile {
   readonly content: Uint8Array;
 }
 
+/** 移送接口的结果；状态码区分成功、输入不合规、拒绝、找不到与冲突。 */
 export type CaseTransferHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }
   | { readonly status: 400; readonly body: Record<string, unknown> }
@@ -112,6 +118,7 @@ interface ConfirmationInput {
   readonly confirmReasons?: Readonly<Record<string, string>>;
 }
 
+/** 案件移送服务：把案件事实喂给纯函数，落库并写留痕。 */
 @Injectable()
 export class CaseTransferService {
   constructor(

@@ -152,6 +152,7 @@ async function readContent(materialId: string, code: string): Promise<{ status: 
   return { status: response.status, body: new Uint8Array(await response.arrayBuffer()) };
 }
 
+// #224：涉密误传标记、quarantined 隔离后的读取拒绝与无物理删除通道。
 describe('涉密误传标记与 quarantined 隔离（#224）', () => {
   beforeAll(async () => {
     cloned = await openClonedDatabase();

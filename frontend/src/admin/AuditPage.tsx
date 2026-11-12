@@ -1,3 +1,7 @@
+// 用途：管理台留痕（P8）页面，按筛选条件查阅与导出范围内的管理台留痕。
+// 路由：/admin/audit，路由表 id admin-audit，菜单「管理台留痕」。
+// 调用的接口：POST /api/admin/audit/query（操作码 audit.admin.read）、POST /api/admin/audit/export（操作码 audit.admin.export）。
+
 import { Suspense, useState } from 'react';
 import { Await, Form, useAsyncError, useLoaderData, useLocation, useRevalidator } from 'react-router';
 
@@ -29,6 +33,7 @@ const NO_ANCHOR_BANNER = '标有「无所属机构」的记录，对象不属于
 /** 列表没取到（加载中、加载失败）时点「导出」的提示。原型没有这句，工程稿，随 v0.5 定稿。 */
 export const EXPORT_BLOCKED = '留痕列表还没有取到，暂时不能导出。请等列表出来后再导出；加载失败时先点「重新加载」。';
 
+/** 导出流程的状态：未开始、被拦、确认、进行中、完成或失败。 */
 export type ExportState =
   | { phase: 'idle' }
   /** 列表没取到时点了「导出」：只提示，不取数、不下载 */
@@ -100,6 +105,7 @@ function ResultTag({ row }: { row: AuditRow }) {
   return <span className={`tag ${row.tone}`}>{row.result}</span>;
 }
 
+/** 留痕表格；行内显示服务端排好的文字。 */
 export function AuditTable({ rows }: { rows: readonly AuditRow[] }) {
   return (
     <table className="table">
@@ -130,6 +136,7 @@ function SkeletonRows() {
   );
 }
 
+/** 导出确认弹窗：范围、时间、筛选、文件名与条数。 */
 export function ExportDialog({ scopeName, filter, total, running, onCancel, onConfirm }: {
   scopeName: string;
   filter: AuditFilter;
@@ -182,6 +189,7 @@ function saveFile(file: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
+/** 列表到达后整页内容的属性。 */
 export interface AuditContentProps {
   filter: AuditFilter;
   result: AuditListResult;
@@ -259,6 +267,7 @@ export function AuditContent(props: AuditContentProps) {
   );
 }
 
+/** 列表未到时页头与导出按钮的属性。 */
 export interface PendingHeadProps {
   desc: string;
   canExport: boolean;

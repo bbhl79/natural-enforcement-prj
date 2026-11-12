@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# 用途：打开、关闭或恢复验证专用假图层 overlay，并重建 server 与 nginx。
+# 用法：apply-layer-overlay.sh on|off|restore
+# 退出码：0 成功；1 overlay 后健康检查未通过或镜像缺失；2 模式参数错误。
 # 打开或关闭验证专用假图层 overlay。
 # on：叠上假图层，重建 server 与 nginx。七个核查图层地址指向 compose 网络内的 verify-layers。
 # off：卸掉假图层，按 infra/docker-compose.yml 重建 server。地址回到 runtime.env 的空值。
@@ -25,6 +28,7 @@ RUNTIME_ENV_FILE="$ROOT/infra/runtime.env"
 . "$ROOT/tools/runtime-env-lib.sh"
 runtime_env_load
 
+# 对 URL 用户与口令片段做百分号编码。
 percent_encode() {
   printf '%s' "$1" | od -An -tx1 | awk '{
     for (i = 1; i <= NF; i++) {
@@ -54,6 +58,7 @@ COMPOSE_OVER=(docker compose -p "$PROJECT" -f "$BASE" -f "$RUNTIME" -f "$OVERLAY
 CERT="${HOME}/.local/share/natural-enforcement/dev-certs/localhost.crt"
 FAKE_LAYER_VOL="${PROJECT}_verify-fake-layer"
 
+# 最多 40 秒轮询 /api/health；未就绪返回 1。
 wait_api() {
   local i
   for i in $(seq 1 40); do
@@ -67,6 +72,7 @@ wait_api() {
   return 1
 }
 
+# 强制重建 nginx，使上游重新解析到新 server。
 recreate_nginx() {
   "${COMPOSE_BASE[@]}" up -d --no-deps --force-recreate nginx
 }

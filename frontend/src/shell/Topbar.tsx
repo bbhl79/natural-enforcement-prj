@@ -1,9 +1,11 @@
+// 用途：应用壳顶栏：系统名、一级入口、全局查询与用户菜单，入口按会话操作码裁剪。
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 
 import type { OperatorSession } from '../login/loginSlice';
 import { activePrimaryKey, globalSearchPath, visiblePrimaries } from './menu';
 
+/** 顶栏显示的系统名称。 */
 export const SYSTEM_NAME = '广州市规划和自然资源局监督监管与执法协同系统';
 
 function Logo() {

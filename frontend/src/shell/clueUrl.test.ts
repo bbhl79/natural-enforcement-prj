@@ -14,6 +14,7 @@ import {
   withPreservedQuery,
 } from './clueUrl';
 
+// 地址参数契约：读取、视图文案回落与切换视图时的参数保留规则。
 describe('线索中心的地址参数', () => {
   it('视图、关键词、抽屉与页签分开命名', () => {
     expect(CLUE_VIEW_KEY).toBe('view');

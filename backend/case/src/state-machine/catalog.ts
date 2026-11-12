@@ -1,3 +1,4 @@
+// 用途：案件状态机目录：环节与状态常量、迁移边登记、非法迁移登记与查询函数。
 // 案件状态机常量（#235）。
 // 法定环节、主状态、环节实例状态：#27/6409848362。
 // 迁移表：基线 #27/6409849007，修订 #27/6410091980，批2 追加 T09a（#27/6431079838）。
@@ -34,8 +35,10 @@ export const CASE_STAGE_CODES = [
   'E12',
   'E13',
 ] as const;
+/** 法定环节编码的联合类型。 */
 export type CaseStageCode = (typeof CASE_STAGE_CODES)[number];
 
+/** 环节编码的中文名。 */
 export const CASE_STAGE_NAMES: Readonly<Record<CaseStageCode, string>> = {
   E01: '立案',
   E02: '调查',
@@ -63,8 +66,10 @@ export const CASE_MAIN_STATUSES = [
   'closed',
   'finalized',
 ] as const;
+/** 案件主状态的联合类型。 */
 export type CaseMainStatus = (typeof CASE_MAIN_STATUSES)[number];
 
+/** 主状态的中文名。 */
 export const CASE_MAIN_STATUS_NAMES: Readonly<Record<CaseMainStatus, string>> = {
   in_progress: '办理中',
   terminated_pending: '调查已终止·待收尾',
@@ -75,8 +80,10 @@ export const CASE_MAIN_STATUS_NAMES: Readonly<Record<CaseMainStatus, string>> = 
 
 /** 终态。非终态即未办结（OpenItems，#219）。 */
 export const CASE_TERMINAL_STATUSES = ['withdrawn', 'closed', 'finalized'] as const;
+/** 终态状态的联合类型。 */
 export type CaseTerminalStatus = (typeof CASE_TERMINAL_STATUSES)[number];
 
+/** 判断主状态是否终态；非终态即未办结（#219）。 */
 export function isTerminalCaseStatus(status: string): status is CaseTerminalStatus {
   return (CASE_TERMINAL_STATUSES as readonly string[]).includes(status);
 }
@@ -88,8 +95,10 @@ export const CASE_INSTANCE_STATUSES = [
   'waiting_prerequisite',
   'completed',
 ] as const;
+/** 环节实例状态的联合类型。 */
 export type CaseInstanceStatus = (typeof CASE_INSTANCE_STATUSES)[number];
 
+/** 环节实例状态的中文名。 */
 export const CASE_INSTANCE_STATUS_NAMES: Readonly<Record<CaseInstanceStatus, string>> = {
   drafting: '拟制中',
   pending_approval: '待审批',
@@ -100,6 +109,7 @@ export const CASE_INSTANCE_STATUS_NAMES: Readonly<Record<CaseInstanceStatus, str
 /** 监督角色名，与 shield 的 SUPERVISION_ROLE、GLOSSARY「监督」同一字符串。 */
 export const CASE_SUPERVISION_ROLE = '监督';
 
+/** 迁移起点的判定规格：线索状态、环节、主状态、标记、区间等。 */
 export type FromSpec =
   | { readonly kind: 'clue'; readonly status: 'handler_assigned' }
   | { readonly kind: 'stage'; readonly stage: CaseStageCode }
@@ -111,6 +121,7 @@ export type FromSpec =
   | { readonly kind: 'any-handled' }
   | { readonly kind: 'side'; readonly name: string };
 
+/** 迁移终点的判定规格：开案、关线索、进入某环节或维持原状态。 */
 export type ToSpec =
   | { readonly kind: 'open-case' }
   | { readonly kind: 'close-clue' }
@@ -144,8 +155,10 @@ export const TRANSITION_GUARDS = [
   'closure',
   'none',
 ] as const;
+/** 边专属守卫的联合类型。 */
 export type TransitionGuard = (typeof TRANSITION_GUARDS)[number];
 
+/** 一条迁移边的登记：编号、起止规格、启用状态、守卫与说明。 */
 export interface TransitionEdge {
   readonly id: string;
   readonly from: FromSpec | readonly FromSpec[];
@@ -322,10 +335,12 @@ export const TRANSITIONS: readonly TransitionEdge[] = [
 
 const TRANSITION_BY_ID = new Map(TRANSITIONS.map((item) => [item.id, item]));
 
+/** 按编号取迁移边；未登记返回 null。 */
 export function findTransition(id: string): TransitionEdge | null {
   return TRANSITION_BY_ID.get(id) ?? null;
 }
 
+/** 环节编码在阶段序列中的序号；未登记返回 -1。 */
 export function stageIndex(code: string): number {
   return (CASE_STAGE_CODES as readonly string[]).indexOf(code);
 }
@@ -337,7 +352,7 @@ export const X12_WHITELIST = [
   {
     id: 'T27',
     kind: 'transition',
-    basis: '定型是结案后的独立步骤，T27 属定型本身（Lei Hu 2026-10-27 09:04；#243 启用）',
+    basis: '定型是结案后的独立步骤，T27 属定型本身（项目负责人 2026-10-27；#243 启用）',
   },
   {
     id: 'post-close-receipt',
@@ -346,14 +361,18 @@ export const X12_WHITELIST = [
   },
 ] as const;
 
+/** X12 白名单条目的联合类型。 */
 export type X12WhitelistId = (typeof X12_WHITELIST)[number]['id'];
 
+/** 判断某动作是否在 X12 白名单内。 */
 export function isX12Whitelisted(id: string): boolean {
   return X12_WHITELIST.some((item) => item.id === id);
 }
 
+/** 非法迁移的执行归属：引擎、立案路径或只登记。 */
 export type IllegalEnforcement = 'engine' | 'filing' | 'none';
 
+/** 一条非法迁移的登记：编号、说明、依据、出口、执行归属与依据层级。 */
 export interface IllegalMigration {
   readonly id: string;
   readonly summary: string;
@@ -367,6 +386,7 @@ export interface IllegalMigration {
   readonly userLock?: string;
 }
 
+/** 全部非法迁移的登记表。 */
 export const ILLEGAL_MIGRATIONS: readonly IllegalMigration[] = [
   { id: 'X01', summary: '没有关联线索就立案', citation: '#16', outlet: '先关联来源线索', enforcement: 'none', authority: 'system' },
   { id: 'X02', summary: '中止期间推进到调查终结及以后', citation: '办法第27条（推定）', outlet: '先恢复调查', enforcement: 'engine', authority: 'system' },
@@ -429,6 +449,7 @@ export const ILLEGAL_MIGRATIONS: readonly IllegalMigration[] = [
 
 const ILLEGAL_BY_ID = new Map(ILLEGAL_MIGRATIONS.map((item) => [item.id, item]));
 
+/** 按编号取非法迁移登记；未登记返回 null。 */
 export function findIllegal(id: string): IllegalMigration | null {
   return ILLEGAL_BY_ID.get(id) ?? null;
 }
@@ -441,6 +462,7 @@ export function unannotatedMigrationIds(
   return rows.filter((row) => typeof row.authority !== 'string' || !allowed.has(row.authority)).map((row) => row.id);
 }
 
+/** 构造阻断级守卫结果，带依据层级与可选出处。 */
 export function block(
   code: string,
   message: string,

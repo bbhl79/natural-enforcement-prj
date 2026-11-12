@@ -1,3 +1,4 @@
+// 用途：工作台统一待办清单的表格视图：筛选、图例、空态与错误重试。
 // 工作台统一待办清单（#297 F1；原型 frontend/prototype/clue-dispatch）。
 //
 // 主区＝一条待办 LIST：紧急圆点｜标题｜事项类型｜所处环节｜来源模块｜来自／上一手｜
@@ -16,6 +17,7 @@ import {
   type WorkbenchTodo,
 } from './todos';
 
+/** 待办清单组件的入参：数据、载入与错误状态、已应用的筛选。 */
 export interface TodoListProps {
   /** null＝载入中。 */
   readonly todos: readonly WorkbenchTodo[] | null;

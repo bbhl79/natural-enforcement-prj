@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# 用途：自动核查夹具的页面取证外壳，在浏览器镜像内跑 headless 用例并回拷证据。
+# 用法：由 run-auto-verification.ts 经 VERIFY_UI_HOOK 调用，参数 failure 或 layers；VERIFY_RUN_DIR 必填。
+# 退出码：0 页面取证通过；1 镜像缺失、传输门禁或页面断言失败；2 缺少 clue-manifest.json。
 # 自动核查页面取证。只跑 headless。
 # Podman machine / Docker Desktop 看不见 WSL home bind-mount：
 # 证据与脚本先落 /mnt/c/.../ne-verify-ui 再回拷仓库 e2e/results/（对齐 run-ui-p0.sh）。

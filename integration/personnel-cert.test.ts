@@ -263,6 +263,7 @@ afterAll(async () => {
   await cloned?.close();
 });
 
+// #133：执法证登记的成功、规则码、停用前提与四条必测。
 describe('POST /api/admin/personnel/:id/cert（执法证登记）', () => {
   it('首次登记：写入证号、有效期、证件状态，写一行 cert.updated，前值为空，留痕里没有证号', async () => {
     const before = await audits();
@@ -528,6 +529,7 @@ describe('POST /api/admin/personnel/:id/cert（执法证登记）', () => {
   });
 });
 
+// 接缝①：留痕写入后再抛错，执法证登记的事务整体回滚。
 describe('接缝①：留痕工厂覆写为「业务写完后抛错」', () => {
   it('执法证登记：请求失败，人员行的证号、有效期、证件状态都不变', async () => {
     const rowsBefore = await certRows();
@@ -544,6 +546,7 @@ describe('接缝①：留痕工厂覆写为「业务写完后抛错」', () => {
   });
 });
 
+// #133：执法证状态列的 NOT NULL 与 CHECK 约束，以及存量人员的回填。
 describe('证件状态列（#133：NOT NULL + CHECK，只取有效、失效）', () => {
   it('表外取值被库层拒绝，空值被拒绝', async () => {
     await expect(cloned.prisma.$executeRaw`

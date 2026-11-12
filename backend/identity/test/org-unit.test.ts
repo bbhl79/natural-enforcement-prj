@@ -90,6 +90,7 @@ function fixture() {
 
 const actor: ActorRef = { personnelId: 'admin', authenticated: true };
 
+// 验证新建下级的层级推导与名称长度规则（#123）。
 describe('层级规则', () => {
   it('市下只建区，区下只建所，所下不能再建', () => {
     expect(childLevelOf('city')).toBe('district');
@@ -104,6 +105,7 @@ describe('层级规则', () => {
   });
 });
 
+// 验证新建下级的授权、写入序列、编码生成与留痕（#123）。
 describe('新建下级', () => {
   const allowed: Array<[string, OrgUnitLevel]> = [
     ['hq', 'district'],
@@ -170,6 +172,7 @@ describe('新建下级', () => {
   });
 });
 
+// 验证改名追加版本、同名不变与留痕旧名（#123）。
 describe('改名', () => {
   it('追加名称版本、更新现名，留痕带旧名', async () => {
     const f = fixture();

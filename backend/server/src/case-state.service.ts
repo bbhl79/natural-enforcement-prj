@@ -1,3 +1,7 @@
+// 用途：案件状态机的读取、标记读取与通用迁移执行，落环节实例、迁移历史与留痕。
+// 调用方：backend/server/src/case-state.controller.ts。
+// 边界：授权经 authorize（拒绝先写 authz.denied 再抛错）；程序性迁移由通用入口拒绝；写动作在交互式事务内。
+// 依据：#235、#272、#243。
 // 案件状态机的读写（#235）。判定在 case 包的纯函数里，这里只喂事实、落库、写留痕。
 // 未启用的边、起点不符、X12、X13、X17、X18 都不改业务行。警告与提示同样不改业务行。
 
@@ -56,6 +60,7 @@ const PROCEDURE_TRANSITIONS = new Set([
 
 const FAIL_REASONS = new Set<string>(CASE_TRANSITIONED_FAILED_REASONS);
 
+/** 状态机接口的结果；状态码区分成功、输入不合规、拒绝、找不到与冲突。 */
 export type CaseStateHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }
   | {
@@ -75,6 +80,7 @@ export type CaseStateHttpOutcome =
       };
     };
 
+/** 案件状态机服务：把案件事实喂给纯函数，落库并写留痕。 */
 @Injectable()
 export class CaseStateService {
   constructor(

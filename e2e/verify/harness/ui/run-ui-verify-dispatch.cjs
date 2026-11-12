@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// 用途：Playwright 驱动工作台第 2、3 步，核对内业核查、分派面板，并可选点击写派机构。
+// 用法：由 run-ui-verify-dispatch.sh 调用；EVIDENCE_DIR 必填，CLUE_ID 在点击写时必填。
+// 退出码：0 全绿；1 有失败或认证门禁 blocked；2 缺少 EVIDENCE_DIR。
 /* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * Verification step2／step3 UI 探活（headless default）。
@@ -17,6 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
 
+// 按同目录或上级目录查找并加载 auth-gate.cjs；都找不到时抛错。
 function loadAuthGate() {
   const candidates = [
     path.join(__dirname, 'auth-gate.cjs'),
@@ -49,6 +53,7 @@ fs.mkdirSync(path.join(EVIDENCE_DIR, 'evidence'), { recursive: true });
 fs.mkdirSync(path.join(EVIDENCE_DIR, 'steps'), { recursive: true });
 
 const steps = [];
+// 追加一条步骤记录，写 steps/<stepId>.json 并打印到 stdout。
 function record(stepId, pass, expected, actual, evidence = []) {
   const row = { scenarioId: SCENARIO_ID, stepId, pass, expected, actual, evidence };
   steps.push(row);
@@ -56,6 +61,7 @@ function record(stepId, pass, expected, actual, evidence = []) {
   console.log(JSON.stringify({ stepId, pass, actual }));
 }
 
+// 启动 Chromium，走登录、第 2 步核查、第 3 步分派与可选点击写，写 evidence 后按结果退出。
 async function main() {
   const browser = await chromium.launch({
     headless: !HEADED,
@@ -237,6 +243,7 @@ async function main() {
       // 点击写必须同时完成decide和派机构；缺权限、跳过、HTTP失败均判红。
       if (CLICK_WRITE) {
         const assert = require('node:assert/strict');
+        // 经页面请求读分派视图；非 200 直接断言失败。
         async function readView() {
           const response = await page.request.get(`${BASE_URL}/api/clues/${CLUE_ID}/dispatch`);
           assert.equal(response.status(), 200);
@@ -247,6 +254,7 @@ async function main() {
           { status: 'pending_decision', mayDecide: true }, { mobile: MOBILE, ...view }, [await shot('04-before-decide')]);
         assert.equal(view.status, 'pending_decision');
         assert.equal(view.mayDecide, true);
+        // 点击一个分派按钮并等待对应 POST；记录请求体与响应，状态不符即断言失败。
         async function clickWrite(role, endpoint, expectedStatus) {
           const button = page.locator(`[data-role="${role}"]`);
           await button.waitFor({ state: 'visible' });

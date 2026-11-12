@@ -1,3 +1,7 @@
+// 用途：定型呈批的读取、拟制、提交、审核与批准，批准时落 T27 并写定型与迁移留痕。
+// 调用方：backend/server/src/case-finalize.controller.ts。
+// 边界：授权经 authorize（拒绝先写 authz.denied 再抛错）；归档审批沿用 doc.* 系列操作码；写动作在交互式事务内。
+// 依据：#243、ADR 0011。
 // 定型（E13／T27）的读写（#243）。判定在 case 包的纯规则里，这里只喂事实、落库、写留痕。
 // 归档审批沿用 doc.draft / doc.submit / doc.admin.review / doc.approve，不新增操作码。
 // 完整性检查：必需材料按事件推导（Q25）；缺件或移送回证缺失时须写明理由，经批准后结论记「经批准缺项」。
@@ -78,6 +82,7 @@ const FINALIZE_TRANSITION = 'T27';
 
 const FAIL_REASONS = new Set<string>(CASE_FINALIZE_FAILED_REASONS);
 
+/** 定型接口的结果；状态码区分成功、输入不合规、拒绝、找不到与冲突。 */
 export type CaseFinalizeHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }
   | { readonly status: 400; readonly body: Record<string, unknown> }
@@ -105,6 +110,7 @@ interface Evaluation {
   readonly completeness: DossierCompleteness;
 }
 
+/** 卷宗材料录入项；送达项可带回证或公告替代的说明。 */
 export interface DossierMaterialInput {
   readonly itemCode: unknown;
   readonly title?: unknown;
@@ -113,6 +119,7 @@ export interface DossierMaterialInput {
   readonly delivery?: unknown;
 }
 
+/** 定型（E13／T27）服务：把案件事实喂给纯规则引擎，落库并写留痕。 */
 @Injectable()
 export class CaseFinalizeService {
   constructor(

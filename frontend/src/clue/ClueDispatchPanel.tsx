@@ -1,3 +1,5 @@
+// 用途：线索中心抽屉分派区的纯渲染面板：决定、派机构、派承办人、签收、移送、其他处置与指定管辖报请。
+// 调用方：frontend/src/clue/ClueDispatchSection.tsx（取数与提交在容器组件）；frontend/src/clue/dispatch.test.tsx。
 // 分派决定与两步分派的办理界面（#214；规格 B/D 节、GLOSSARY）。
 //
 // 决定步集中展示「与哪条线索重复／与谁重复」：多面命中按对方线索分组折叠，

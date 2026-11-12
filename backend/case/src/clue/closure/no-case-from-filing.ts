@@ -1,5 +1,7 @@
+// 用途：不予立案落点服务：按立案呈批的不予立案结论写入处置行与结案提醒。
 // 不予立案落点服务（#226）：供案件段在立案呈批 doc.approve（结论为不予立案）时同一事务调用。
 // 非 HTTP、不授角色；调用方注入事务内 ClueStore 与主键生成器。
+// 边界：本服务不写审计留痕，留痕由 backend/server/src/case-filing.service.ts 在同一事务追加；重复调用非幂等，状态已变后返回 concurrent-change 或 invalid-state。
 
 import type { ClueStore } from '../../persistence/clue-store.ts';
 
@@ -26,12 +28,18 @@ export interface NoCaseFromFilingInput {
   readonly note?: string | null;
 }
 
+/**
+ * 落点失败原因码。
+ * missing-filing-approval-ref 呈批引用为空；invalid-no-case-reason 理由快照不合规；
+ * invalid-state 期望状态不是 handler_assigned；concurrent-change 条件更新落空（并发或状态已变）。
+ */
 export type NoCaseFromFilingFailureReason =
   | 'invalid-state'
   | 'concurrent-change'
   | 'invalid-no-case-reason'
   | 'missing-filing-approval-ref';
 
+/** 落点结果：成功携带处置主键、提醒主键、理由快照与呈批引用；失败携带原因码与规则编号，且不写业务行。 */
 export type NoCaseFromFilingOutcome =
   | {
       readonly ok: true;
@@ -51,6 +59,8 @@ export type NoCaseFromFilingOutcome =
  * 成功：ClueDisposition(no-case)＋呈批引用＋理由快照，线索 handler_assigned→closed，
  * 生成 kind=no-case 提醒，与调用方事务同成同败。
  * 非 handler_assigned：返回 invalid-state（不写业务行）。
+ * 其余失败：missing-filing-approval-ref、invalid-no-case-reason、concurrent-change。
+ * 不写审计留痕，留痕由调用方同事务追加；重复调用非幂等，状态已变后返回 concurrent-change 或 invalid-state。
  */
 export async function recordNoCaseFromFilingApproval(
   clues: ClueStore,

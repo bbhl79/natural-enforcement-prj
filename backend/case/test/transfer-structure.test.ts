@@ -10,6 +10,7 @@ function source(relative: string): string {
   return readFileSync(new URL(relative, import.meta.url), 'utf8');
 }
 
+// #242 结构探针：以源码文本断言约束移送落库路径唯一、外部退回不入 #238 退回表、相关记载库层只追加。
 describe('#242 结构探针', () => {
   const service = source('../../server/src/case-transfer.service.ts');
   const controller = source('../../server/src/case-transfer.controller.ts');

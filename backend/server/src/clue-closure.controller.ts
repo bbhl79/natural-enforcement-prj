@@ -1,3 +1,4 @@
+// 用途：其他方式登记、结案提醒处理、不派视图与界面选项的 HTTP 接口。
 // 其他（#229）登记与结案提醒接口（#217／#226／#229；规格 D 节）。
 //
 // POST /api/clues/:id/disposition          其他登记（#229）；disposition=no-case 一律拒绝（#226）
@@ -36,11 +37,13 @@ const text = (value: unknown): string => (typeof value === 'string' ? value : ''
 const texts = (value: unknown): string[] =>
   Array.isArray(value) ? value.map((item) => (typeof item === 'string' ? item : '')) : [];
 
+/** 其他登记与结案提醒接口的 HTTP 适配层。 */
 @Controller('api/clues')
 export class ClueClosureController {
   constructor(private readonly closure: ClueClosureService) {}
 
   /** 其他（#229）登记；disposition=no-case 拒绝（#226）。 */
+  // 操作码 clue.disposition.record；对象级须为主办／协办本人或承办机构内勤。
   @Post(':id/disposition')
   async recordNoCase(
     @Req() req: AuthenticatedRequest,
@@ -57,6 +60,7 @@ export class ClueClosureController {
   }
 
   /** 结案提醒列表。 */
+  // 操作码 clue.read；对象级按操作者所属机构校验。
   @Get('reminders')
   @UseGuards(SameOriginReadGuard)
   async listReminders(@Req() req: AuthenticatedRequest, @Res() res: HttpReply): Promise<void> {
@@ -65,6 +69,7 @@ export class ClueClosureController {
   }
 
   /** 提醒处理：撤回不派再办｜写明原因随旧线索办结。 */
+  // 操作码 clue.reminder.resolve；对象级须为录入人、录入机构内勤或所撞旧线索承办机构内勤。
   @Post('reminders/:id/resolve')
   async resolveReminder(
     @Req() req: AuthenticatedRequest,
@@ -82,6 +87,7 @@ export class ClueClosureController {
   }
 
   /** 撤回不派与结案提醒的界面口径（四项常用原因）。 */
+  // 无操作码（服务只返回静态原因选项，不做授权）。
   @Get('closure-options')
   @UseGuards(SameOriginReadGuard)
   async options(@Req() req: AuthenticatedRequest, @Res() res: HttpReply): Promise<void> {
@@ -90,6 +96,7 @@ export class ClueClosureController {
   }
 
   /** 不派视图。 */
+  // 操作码 clue.read；对象级按操作者所属机构校验。
   @Get('held')
   @UseGuards(SameOriginReadGuard)
   async listHeld(@Req() req: AuthenticatedRequest, @Res() res: HttpReply): Promise<void> {

@@ -1,3 +1,7 @@
+// 用途：定义回避声明链状态、签出暂停与决定人席位的纯规则。
+// 调用方：backend/server/src/case-conflict.service.ts；签出与候选过滤另见 backend/server/src/case-review.service.ts、backend/server/src/case-legal-review.service.ts、backend/server/src/case-reassign.service.ts。
+// 边界：不读库、不留痕；人员到席位的映射由同目录 transitional-decider-seat.ts 完成。
+// 依据：Issue #237；规程 2.7。
 // 人员层利害关系与回避（#237）。纯规则，不依赖 Nest 与存储。
 //
 // 状态只追加：同一声明链的最新一行才是当前状态。
@@ -14,30 +18,37 @@
 
 /** 来源：本人申请 | 当事人申请 | 他人勾选。 */
 export const CONFLICT_SOURCES = ['self', 'party', 'other'] as const;
+// 利害关系来源的类型别名。
 export type ConflictSource = (typeof CONFLICT_SOURCES)[number];
 
 /** 状态：声明 | 生效 | 驳回。 */
 export const CONFLICT_STATUSES = ['declared', 'effective', 'rejected'] as const;
+// 利害关系状态的类型别名。
 export type ConflictStatus = (typeof CONFLICT_STATUSES)[number];
 
 /** activeConflicts 计入的状态。驳回不在此列。 */
 export const ACTIVE_CONFLICT_STATUSES = ['declared', 'effective'] as const;
+// 计入活动记录的状态类型别名。
 export type ActiveConflictStatus = (typeof ACTIVE_CONFLICT_STATUSES)[number];
 
 /** 回避决定结论：回避 | 驳回。 */
 export const DECISION_CONCLUSIONS = ['recuse', 'reject'] as const;
+// 回避决定结论的类型别名。
 export type DecisionConclusion = (typeof DECISION_CONCLUSIONS)[number];
 
 /** 签出类型：审理意见 | 法审意见 | 决定。 */
 export const SIGN_KINDS = ['trial-opinion', 'legal-opinion', 'decision'] as const;
+// 签出类型的类型别名。
 export type SignKind = (typeof SIGN_KINDS)[number];
 
 /** 决定人席位。调用方把人员映射成席位后再交给本函数。 */
 export const DECIDER_SEATS = ['handling-org-head', 'competent-authority-head'] as const;
+// 决定人席位的类型别名。
 export type DeciderSeat = (typeof DECIDER_SEATS)[number];
 
 /** 调查继续登记的种类：笔录 | 违法记录。回避声明不拦截这两类。 */
 export const INVESTIGATION_KINDS = ['transcript', 'violation'] as const;
+// 调查继续登记种类的类型别名。
 export type InvestigationKind = (typeof INVESTIGATION_KINDS)[number];
 
 /** 签出被拒的留痕文案（票面原文）。声明与生效命中共用这一句。 */
@@ -45,29 +56,34 @@ export const SIGN_REFUSED_MESSAGE = '声明期间签出被拒';
 /** 签出被拒的出路（票面原文）。 */
 export const SIGN_REFUSED_OUTLET = '等待回避决定';
 
+// 利害关系来源的中文名称。
 export const CONFLICT_SOURCE_NAMES: Readonly<Record<ConflictSource, string>> = {
   self: '本人申请',
   party: '当事人申请',
   other: '他人勾选',
 };
 
+// 利害关系状态的中文名称。
 export const CONFLICT_STATUS_NAMES: Readonly<Record<ConflictStatus, string>> = {
   declared: '声明',
   effective: '生效',
   rejected: '驳回',
 };
 
+// 回避决定结论的中文名称。
 export const DECISION_CONCLUSION_NAMES: Readonly<Record<DecisionConclusion, string>> = {
   recuse: '回避',
   reject: '驳回',
 };
 
+// 签出类型的中文名称。
 export const SIGN_KIND_NAMES: Readonly<Record<SignKind, string>> = {
   'trial-opinion': '审理意见',
   'legal-opinion': '法审意见',
   decision: '决定',
 };
 
+// 调查继续登记种类的中文名称。
 export const INVESTIGATION_KIND_NAMES: Readonly<Record<InvestigationKind, string>> = {
   transcript: '笔录',
   violation: '违法记录',
@@ -87,26 +103,32 @@ export interface ConflictEventFact {
   readonly createdAt: Date;
 }
 
+// 判断字符串是否为登记的利害关系来源。
 export function isConflictSource(value: string): value is ConflictSource {
   return (CONFLICT_SOURCES as readonly string[]).includes(value);
 }
 
+// 判断字符串是否为登记的利害关系状态。
 export function isConflictStatus(value: string): value is ConflictStatus {
   return (CONFLICT_STATUSES as readonly string[]).includes(value);
 }
 
+// 判断字符串是否为计入活动记录的状态。
 export function isActiveConflictStatus(value: string): value is ActiveConflictStatus {
   return (ACTIVE_CONFLICT_STATUSES as readonly string[]).includes(value);
 }
 
+// 判断字符串是否为登记的回避决定结论。
 export function isDecisionConclusion(value: string): value is DecisionConclusion {
   return (DECISION_CONCLUSIONS as readonly string[]).includes(value);
 }
 
+// 判断字符串是否为登记的签出类型。
 export function isSignKind(value: string): value is SignKind {
   return (SIGN_KINDS as readonly string[]).includes(value);
 }
 
+// 判断字符串是否为登记的调查继续登记种类。
 export function isInvestigationKind(value: string): value is InvestigationKind {
   return (INVESTIGATION_KINDS as readonly string[]).includes(value);
 }

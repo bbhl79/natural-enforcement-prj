@@ -1,3 +1,7 @@
+// 用途：定义登记接口可回的规则码封闭清单，以及布尔类要件取值的合法口径。
+// 调用方：backend/server/src/clue-registration.service.ts（isBooleanValue、isAnonymousValue）、backend/case/src/persistence/prisma-clue-store.ts（isAnonymousValue）；规则码清单当前无外部调用方。
+// 边界：纯常量与纯函数，不写库、不写留痕；规则码由调用方写进 400 响应并触发失败留痕。
+// 依据：#211。
 // 登记接口的规则码（#211）。
 //
 // `rules` 数组是 400 non-compliant 响应体里的校验码（沿用 #91/#105 错误码表）。
@@ -27,6 +31,7 @@ export const CLUE_REGISTRATION_RULE_CODES = [
   'attachment-total-size-exceeded',
 ] as const;
 
+/** 登记接口规则码的联合类型。 */
 export type ClueRegistrationRuleCode = (typeof CLUE_REGISTRATION_RULE_CODES)[number];
 
 /**

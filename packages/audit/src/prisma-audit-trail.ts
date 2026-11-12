@@ -1,3 +1,7 @@
+// 用途：留痕表的 Prisma 适配器：校验封闭取值后向 AuditTrail 表追加一行（PrismaAuditTrail），并按机构范围与筛选条件读取留痕行（PrismaAuditTrailReader）。
+// 调用方：backend/server/src/persistence.module.ts 装配 prismaAuditTrailFactory 与 PrismaAuditTrailReader；backend/server/src/audit-browse.service.ts 经 tx.auditReader 读取。
+// 边界：只追加，没有更新与删除。写入前校验动作、成败、原因、条数、后值、快照与目标机构，表外取值抛 AuditVocabularyError，不写库。本文件不开事务，事务由传入的客户端决定。
+// 依据：docs/adr/0012-留痕写入经独立设施包.md、docs/adr/0011-认证留痕写入共用表.md、docs/adr/0013-人员导出写入共用留痕表.md。
 // 留痕表适配器（ADR 0012）。本文件是包内唯一引用 auditTrail 委托的地方。
 // 追加（PrismaAuditTrail）与查阅（PrismaAuditTrailReader，#126）都在这里。
 // 调用方传入带 auditTrail.create 的客户端。不在这里 import 生成客户端。
@@ -291,12 +295,22 @@ function targetOf(entry: AuditAppend | AuthzDeniedEntry): {
   return { targetOrgUnitId: entry.targetOrgUnitId ?? null, targetOrgUnitBasis: basis };
 }
 
+/**
+ * 写入所需的最小客户端形状：只用 auditTrail.create。Prisma 根客户端与交互式事务客户端都满足，本文件因此不引用生成客户端。
+ * 调用方：本文件的 PrismaAuditTrail 与 prismaAuditTrailFactory；packages/audit/test/append.test.ts。
+ */
 export interface AuditTrailCreateClient {
   auditTrail: {
     create(args: { data: Record<string, unknown> }): Promise<unknown>;
   };
 }
 
+/**
+ * 留痕写入适配器：校验封闭取值后向 AuditTrail 表追加一行。成败列取自入参 outcome，入参没带时按 AUDIT_SUCCEEDED_ACTIONS 判定。
+ * 与业务事务的关系由构造时传入的客户端决定：事务客户端同事务，根客户端自成事务。
+ * 失败语义：表外取值抛 AuditVocabularyError，数据库错误原样抛出，都不写行。
+ * 调用方：本文件的 prismaAuditTrailFactory；integration/e2-access-matrix.test.ts、integration/session-opcodes.test.ts 直接构造。
+ */
 export class PrismaAuditTrail implements AuditTrailPort {
   constructor(private readonly db: AuditTrailCreateClient) {}
 

@@ -1,3 +1,4 @@
+// 用途：业务接口的统一出口，集中处理启动等待、401 结束会话与 403 重新拉会话。
 // 业务接口的统一出口（#91 约定第 4 条、#105「收到 403 时重新拉一次会话」）。
 // - 启动时的会话查询完成前，请求先等待。
 // - 401：会话已结束，进入 P1「会话已结束」，再去登录页并记下当前路径。
@@ -15,8 +16,10 @@ import {
   type LoginState,
 } from './login/loginSlice';
 
+/** 派发会话异步动作所需的 dispatch 类型。 */
 export type ApiDispatch = ThunkDispatch<{ login: LoginState }, unknown, UnknownAction>;
 
+/** 等启动会话后发请求；401 结束会话，403 按结果码进入改密或重新拉会话；始终返回原始 Response。 */
 export async function apiFetch(dispatch: ApiDispatch, input: string, init: RequestInit = {}): Promise<Response> {
   await waitForStartupSession();
   const response = await fetch(input, { cache: 'no-store', ...init });

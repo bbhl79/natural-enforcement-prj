@@ -1,3 +1,8 @@
+// 用途：工作台卡片计数，按操作者所在机构的子树范围汇总线索数字。
+// 调用方：backend/server/src/workbench.controller.ts。
+// 边界：只读，不写留痕；授权用操作码 clue.read。
+// 依据：Issue #207。
+//
 // 工作台卡片计数服务（#207）。
 // 从 ClueStore 取数，按操作者机构子树过滤。
 
@@ -33,6 +38,7 @@ export interface CardCountsDenial {
   readonly body: { readonly reason: DenyReason };
 }
 
+/** 工作台服务：按操作者机构子树取卡片计数；越权返回 403。只读。 */
 @Injectable()
 export class WorkbenchService {
   constructor(

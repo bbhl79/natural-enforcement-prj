@@ -1,3 +1,4 @@
+// 用途：把跨跑次 diff 结果写到 e2e/results/discover/<runId>/diff-report.json。
 // 发现器报告唯一写口（spec #322 首期 T2）：只写 e2e/results/discover/<runId>/diff-report.json。
 // 验证期只写报告，不自动开票（不建 GitHub issue，不写提案出口）。
 import fs from 'node:fs/promises';

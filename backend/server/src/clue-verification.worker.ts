@@ -1,3 +1,8 @@
+// 用途：同进程消费内业核查任务，把队列处理器接到核查编排服务的执行入口。
+// 调用方：backend/server/src/app.module.ts 注册并在模块初始化时启动。
+// 边界：是否起 worker 由令牌 VERIFICATION_WORKER_ENABLED 决定；只消费任务名为 VERIFICATION_JOB 的消息。
+// 依据：Issue #213。
+//
 // 内业核查 worker（#213）：同进程消费核查任务，不另立 worker 服务。
 //
 // 队列设施包给的是不暴露 BullMQ 类型的 worker 工厂；本文件只把处理器接到
@@ -16,6 +21,10 @@ import {
   VERIFICATION_WORKER_ENABLED,
 } from './clue-verification.tokens.ts';
 
+/**
+ * 核查 worker 生命周期：模块初始化时按开关起队列消费，销毁时关闭句柄。
+ * 只处理核查任务名；重试上限由投递参数与编排侧抛出的不可重试错误共同决定。
+ */
 @Injectable()
 export class ClueVerificationWorker implements OnModuleInit, OnModuleDestroy {
   private handle: WorkerHandle | null = null;

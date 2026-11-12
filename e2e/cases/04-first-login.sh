@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 用途：经 nginx 的首登冒烟：强制改密、会话守卫与 Cookie 属性。
 # 经 nginx 的首登冒烟。只用专用夹具人员，不做跨账号试错。
 # 四步：初始口令登录得到强制改密；提交合规新口令；带原会话通过会话守卫（无 Cookie 得 401）；
 # 再用初始口令登录，得到口令错误。同一条用例核对会话 Cookie 经过入口后的属性。
@@ -15,6 +16,7 @@ PHONE="13800001010"
 INITIAL_PASSWORD="Seed-pass-52"
 NEW_PASSWORD="Smoke-pass-99"
 
+# 打印失败原因并以 1 退出。
 fail() {
   echo "[FAIL] $1" >&2
   exit 1
@@ -35,6 +37,7 @@ grep -qi 'certificate\|SSL' "${TMPDIR:-/tmp}/e2e-99-cert-err" \
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
+# 发一次 HTTPS 请求：路径、可选请求体与 Cookie；正文与响应头分别写入文件。
 request() { # $1 输出正文 $2 输出头 $3 路径 $4 请求体文件或空 $5 Cookie 或空
   local body_file="$1" header_file="$2" path="$3" payload="${4:-}" cookie="${5:-}"
   local args=(-sS --max-time 20 --cacert "$CERT" -D "$header_file" -o "$body_file" -w '%{http_code}')
@@ -47,6 +50,7 @@ request() { # $1 输出正文 $2 输出头 $3 路径 $4 请求体文件或空 $5
   curl "${args[@]}" "${BASE}${path}"
 }
 
+# 断言 Set-Cookie 行带 __Host- 前缀与 HttpOnly、Secure、SameSite=Lax 属性。
 assert_session_cookie() {
   local line="$1" name attrs pair
   printf '%s\n' "$line" | grep -q '__Host-' || fail "会话 Cookie 缺少 __Host- 前缀：${line}"

@@ -243,6 +243,7 @@ afterAll(async () => {
   await cloned?.close();
 });
 
+// #124：机构停用的成功路径与重复停用，写停用时间与 org.unit.deactivated 留痕。
 describe('POST /api/admin/org-units/:id/deactivate：成功与重复', () => {
   it('前提都满足：200 deactivated，置停用时间，写一行 org.unit.deactivated；树上标出已停用', async () => {
     const station = await addUnit('station', org.deptA);
@@ -295,6 +296,7 @@ describe('POST /api/admin/org-units/:id/deactivate：成功与重复', () => {
   });
 });
 
+// #124：不满足停用前提时返回 409 invalid-state，失败留痕存在且机构保持启用。
 describe('四种拒绝：409 invalid-state，失败留痕存在，机构仍未停用', () => {
   async function refused(phone: string, id: string, actorId: string, reason: string) {
     await signIn(phone);
@@ -418,6 +420,7 @@ describe('四种拒绝：409 invalid-state，失败留痕存在，机构仍未�
   });
 });
 
+// #105 四条必测：越权停用一律 403 并写 authz.denied，业务行不变。
 describe('四条必测：403 + authz.denied，业务行不变', () => {
   async function denied(phone: string, id: string, actorId: string, reason: string) {
     await signIn(phone);
@@ -482,6 +485,7 @@ describe('四条必测：403 + authz.denied，业务行不变', () => {
   });
 });
 
+// 接缝①：留痕写入后再抛错，事务整体回滚，业务行与留痕都不留。
 describe('接缝①：留痕工厂覆写为「业务写完后抛错」', () => {
   it('停用：请求失败，机构仍未停用，不写留痕', async () => {
     const station = await addUnit('station', org.deptA);
@@ -499,6 +503,7 @@ describe('接缝①：留痕工厂覆写为「业务写完后抛错」', () => {
   });
 });
 
+// 接缝②：停用与新建下级并发争同一机构行锁，后到方按先提交后的状态判定。
 describe('接缝②：停用与在该机构下新建下级并发（两套连接加屏障），只有一方成功', () => {
   it('新建下级先拿到上级行锁：停用等它提交后看到新下级，409 org-has-active-children', async () => {
     const district = await addUnit('district', org.hq);

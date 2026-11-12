@@ -1,3 +1,6 @@
+// 用途：撤回不派与随旧线索办结的纯渲染弹窗，原因列表由容器传入。
+// 调用方：frontend/src/clue/ClueHeldSection.tsx、frontend/src/clue/ClueReminderSection.tsx（取数与提交在容器组件）。
+// 数据依据：原因口径来自 GET /api/clues/closure-options；提交走 POST /api/clues/:id/withdraw 或 POST /api/clues/reminders/:id/resolve。
 // 撤回不派弹窗（#217；规格 D 节、GLOSSARY「撤回不派」）。
 //
 // 四项常用原因逐字取自服务端（/api/clues/closure-options），可多选且至少一项，

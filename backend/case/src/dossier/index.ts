@@ -1,3 +1,6 @@
+// 用途：卷宗与定型模块的对外出口，只做再导出。
+// 调用方：backend/server/src/case-finalize.service.ts 等，经包名 @natural-enforcement/case 汇总导出。
+// 依据：#243、#244。
 // 卷宗与定型规则公共出口（#243）。#244 结案检查点读同一份材料清单与版本。
 export {
   DELIVERY_EVIDENCE_KINDS,

@@ -1,3 +1,4 @@
+// 用途：汇总审理纯规则、常量与类型的对外导出。
 // 审理规则公共出口（#240）。
 export {
   FINE_COMPETITION_MESSAGE,

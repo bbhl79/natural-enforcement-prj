@@ -47,6 +47,7 @@ import { NonRetryableError, isNonRetryableError } from '../src/non-retryable.ts'
 import { createBullMqQueue } from '../src/bullmq-queue.ts';
 import { createQueueWorker } from '../src/worker.ts';
 
+// #213：验证 EnqueueOptions 的 attempts／backoff 经适配器落到 BullMQ 作业参数；不给参数时不传第三参，保持既有调用形态。
 describe('投递参数（attempts／backoff）经 BullMQ 适配器落到作业参数', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -84,6 +85,7 @@ describe('投递参数（attempts／backoff）经 BullMQ 适配器落到作业�
   });
 });
 
+// #213：验证 NonRetryableError 携带失败类别 reason，且 isNonRetryableError 能把它与普通错误区分开。
 describe('不可重试错误类型', () => {
   it('带失败类别，可判别', () => {
     const error = new NonRetryableError('missing-layers', '缺图层');
@@ -94,6 +96,7 @@ describe('不可重试错误类型', () => {
   });
 });
 
+// #213：验证 createQueueWorker 向处理器交付载荷与尝试次数，只把 NonRetryableError 翻译成「不再重试」，关闭时释放 worker 与连接。
 describe('业务 worker 工厂', () => {
   beforeEach(() => {
     vi.clearAllMocks();

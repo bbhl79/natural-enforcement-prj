@@ -1,3 +1,7 @@
+// 用途：处罚决定环节的纯规则，含正文解析、出口推导、签发用章与守卫。
+// 调用方：backend/server/src/case-decision.service.ts 与 backend/server/src/case-closeout.service.ts。
+// 边界：判定在纯函数内，服务层只喂事实与落库；守卫结果由迁移引擎按依据层级映射为 409。
+// 依据：#270、#256。
 // 决定（E09／T23）的纯规则（#270）。判定在这里，服务层只喂事实与落库。
 // X05、X06、X16 产出 GuardResult，由迁移引擎按 #255 层级映射为 409。
 // Q24 罚款基数缺失只返回提示，不进入阻断或确认门。
@@ -8,33 +12,43 @@ import { findIllegal } from '../state-machine/catalog.ts';
 import type { GuardResult } from '../state-machine/guard.ts';
 import type { WarningItem } from '../state-machine/rule-registry.ts';
 
+// 决定出口全集：处罚与不予处罚。
 export const DECISION_KINDS = ['penalty', 'no-penalty'] as const;
+// 决定出口，取 DECISION_KINDS 的元素类型。
 export type DecisionKind = (typeof DECISION_KINDS)[number];
 
+// 决定出口对应的文书简称。
 export const DECISION_KIND_NAMES: Readonly<Record<DecisionKind, string>> = {
   penalty: '行政处罚决定（O1）',
   'no-penalty': '不予行政处罚决定（O2）',
 };
 
+// 决定环节可生成的文书类型全集。
 export const DECISION_DOCUMENT_TYPES = [
   'penalty-decision',
   'no-penalty-decision',
   'order-correction-notice',
 ] as const;
+// 文书类型，取 DECISION_DOCUMENT_TYPES 的元素类型。
 export type DecisionDocumentType = (typeof DECISION_DOCUMENT_TYPES)[number];
 
+// 文书类型对应的正式名称。
 export const DECISION_DOCUMENT_NAMES: Readonly<Record<DecisionDocumentType, string>> = {
   'penalty-decision': '行政处罚决定书',
   'no-penalty-decision': '不予行政处罚决定书',
   'order-correction-notice': '责令改正通知书（决定书）',
 };
 
+// 决定正文规则的登记编号。
 export const DECISION_CONTENT_RULE_ID = 'cfg.rule.decision-content.v1';
+// 决定正文规则的版本号。
 export const DECISION_CONTENT_VERSION = '1';
 
 /** Q24 罚款基数缺失提示。hint 不阻断、不要求确认。 */
 export const DECISION_FINE_BASE_RULE_KEY = 'DECISION-FINE-BASE';
+// 罚款基数缺失提示的原文。
 export const DECISION_FINE_BASE_MESSAGE = '罚款基数缺失，请在决定呈批前补齐罚款基数';
+// 罚款基数缺失提示的出路文案。
 export const DECISION_FINE_BASE_OUTLET = '补齐罚款基数';
 
 /** Q24 的 hint 项。服务层随成功响应返回，不交给确认门。 */
@@ -57,6 +71,7 @@ export interface DecisionContent {
   readonly note: string | null;
 }
 
+// 决定正文校验失败的返回：400 与原因码、文案、出路。
 export interface DecisionContentHit {
   readonly httpStatus: 400;
   readonly reason: string;
@@ -64,6 +79,7 @@ export interface DecisionContentHit {
   readonly outlet: string;
 }
 
+// 决定正文读取结果：通过时交出规整正文，否则交出 400 命中项。
 export type DecisionContentRead =
   | { readonly ok: true; readonly content: DecisionContent }
   | { readonly ok: false; readonly hit: DecisionContentHit };
@@ -76,6 +92,7 @@ function invalid(reason: string, message: string, outlet: string): DecisionConte
   return { ok: false, hit: { httpStatus: 400, reason, message, outlet } };
 }
 
+// 解析决定正文：校验字段类型、去重并去空白证据引用；不合格返回 400 原因码。
 export function readDecisionContent(raw: unknown): DecisionContentRead {
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     return invalid('invalid-content', '决定正文不合规', '按决定正文格式填写');
@@ -152,6 +169,7 @@ export function deriveDecisionKind(facts: readonly FrozenViolationFact[]): Decis
   return facts.some((row) => row.kind === 'penalty') ? 'penalty' : 'no-penalty';
 }
 
+// 任一违法记录含罚款处罚即为真。
 export function hasFine(facts: readonly FrozenViolationFact[]): boolean {
   return facts.some((row) => row.kind === 'penalty' && row.penaltyCodes.includes('fine'));
 }
@@ -179,8 +197,10 @@ export function decisionDocumentTypeOf(input: {
   return 'penalty-decision';
 }
 
+// 决定文书的对外署名机关名称。
 export const DECISION_ISSUER_NAME = '广州市规划和自然资源局';
 
+// 签发信息：署名机关、印章文字、用章是否待定与说明。
 export interface DecisionSignature {
   readonly issuer: string;
   readonly sealText: string | null;
@@ -254,6 +274,7 @@ export function x05Guard(input: {
   return guardOf('X05', '拟处罚，但告知书未送达就作出处罚决定');
 }
 
+// 告知期限窗口：open 未满、closed 已满、manual 人工确认。
 export type DecisionNoticeWindow = 'open' | 'closed' | 'manual';
 
 /**

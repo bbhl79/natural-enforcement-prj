@@ -1,3 +1,4 @@
+// 用途：立案呈批的保存、读取、待办与提交、审核、批准、退回、撤回 HTTP 接口。
 // 立案呈批 HTTP 入口（#234）。
 
 import { Body, Controller, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
@@ -15,10 +16,12 @@ interface HttpReply {
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
 
+/** 立案呈批接口的 HTTP 适配层。 */
 @Controller()
 export class CaseFilingController {
   constructor(private readonly filing: CaseFilingService) {}
 
+  // 保存立案呈批草稿；操作码 doc.draft；对象级按线索承办机构校验。
   @Post('api/clues/:id/filing-approval')
   @UseGuards(SameOriginReadGuard)
   async saveDraft(
@@ -31,6 +34,7 @@ export class CaseFilingController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 按线索读取当前立案呈批；操作码 doc.read；对象级按线索承办机构校验。
   @Get('api/clues/:id/filing-approval')
   @UseGuards(SameOriginReadGuard)
   async readByClue(
@@ -42,6 +46,7 @@ export class CaseFilingController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 列出操作者角色对应的立案呈批待办；无操作码（按登录角色与所属机构直接过滤待办）。
   @Get('api/filing-approvals/todo')
   @UseGuards(SameOriginReadGuard)
   async listTodos(@Req() req: AuthenticatedRequest, @Res() res: HttpReply): Promise<void> {
@@ -49,6 +54,7 @@ export class CaseFilingController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 提交立案呈批；操作码 doc.submit；对象级按线索承办机构校验。
   @Post('api/filing-approvals/:id/submit')
   @UseGuards(SameOriginReadGuard)
   async submit(
@@ -65,6 +71,7 @@ export class CaseFilingController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 行政审核立案呈批；操作码 doc.admin.review；对象级按线索承办机构校验。
   @Post('api/filing-approvals/:id/review')
   @UseGuards(SameOriginReadGuard)
   async review(
@@ -79,6 +86,7 @@ export class CaseFilingController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 行政审批立案呈批；操作码 doc.approve；对象级按线索承办机构校验。
   @Post('api/filing-approvals/:id/approve')
   @UseGuards(SameOriginReadGuard)
   async approve(
@@ -100,6 +108,7 @@ export class CaseFilingController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 退回立案呈批为草稿；操作码 doc.admin.review（审批阶段退回改用 doc.approve）；对象级按线索承办机构校验。
   @Post('api/filing-approvals/:id/return')
   @UseGuards(SameOriginReadGuard)
   async returnToDraft(
@@ -123,6 +132,7 @@ export class CaseFilingController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 撤回已提交的立案呈批；操作码 doc.submit；对象级按线索承办机构校验。
   @Post('api/filing-approvals/:id/withdraw')
   @UseGuards(SameOriginReadGuard)
   async withdraw(

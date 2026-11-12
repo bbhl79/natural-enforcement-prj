@@ -1,3 +1,6 @@
+// 用途：立案呈批模块的对外出口，只做再导出。
+// 调用方：backend/server/src/case-filing.service.ts 等，经包名 @natural-enforcement/case 汇总导出。
+// 依据：#234。
 // 立案呈批与案件最小模型的领域规则出口（#234）。
 export {
   CASE_FIRST_STAGE,

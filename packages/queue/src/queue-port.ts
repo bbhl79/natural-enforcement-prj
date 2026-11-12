@@ -1,3 +1,5 @@
+// 用途：按队列名与 Redis 地址装配可注入的 QueuePort，ioredis 连接在本包内部惰性构造。
+// 调用方：backend/server/src/persistence.module.ts（QUEUE_PORT 的默认提供者）、tools/verify-verification-facilities.ts（设施验证脚本）。
 // 队列接口的进程内装配（#213）：起 QueuePort，连接由本包内部构造。
 //
 // 调用方只给队列名与 Redis 地址；ioredis 只出现在本设施包内。

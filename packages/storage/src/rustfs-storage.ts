@@ -1,3 +1,14 @@
+// 用途：把 StoragePort 落到 RustFS：写入时强制附加 COMPLIANCE 对象锁，读取时按版本 id 取回内容。
+// 调用方：packages/storage/src/default-port.ts（运行时默认装配）、packages/storage/src/e3-driver.ts（E3 驱动）、
+//   packages/storage/test/rustfs-storage.test.ts（单测）。
+//   packages/storage/src/index.ts 把本适配器再导出到包公共出口，但包外当前无直接调用方；
+//   backend/server/src/persistence.module.ts 经 createDefaultStoragePort 间接取得本适配器。
+// 边界：只实现 putVersion 与 readVersion，不实现改写与删除；不重试，不翻译 S3Error。失败语义见 packages/storage/src/port.ts。
+//   不建桶，不启用版本控制，不设桶级默认保留。这些动作由 dev 的 ensure_files_bucket、
+//   e2e/verify/harness/layers/apply-layer-overlay.sh 的 ensure_bucket、
+//   e2e/verify/harness/ui/run-ui-full-loop-local.sh 与 packages/storage/src/e3-driver.ts 各自经 S3 客户端完成。
+// 依据：#53；RustFS 可承载 append-only 的判定见 docs/research/stack-data-compat.md。
+//
 // RustFS 适配器（#53）：StoragePort 的唯一存储实现，只在本设施包内被引用。
 // 写入侧强制对象锁（COMPLIANCE 保留期，默认 now + 100 年）：即使桶级默认保留
 // 未配置，单次写入自身亦带 WORM 保留——append-only 最保守语义的写入侧落实。
@@ -7,6 +18,11 @@
 import type { S3Client } from './s3-client.ts';
 import type { StoragePort } from './port.ts';
 
+/**
+ * 适配器构造参数：client 是 S3 兼容客户端，bucket 是文件桶名。
+ * packages/storage/src/default-port.ts 与 packages/storage/src/e3-driver.ts 只传这两项；
+ * retentionMs 与 now 当前只有 packages/storage/test/rustfs-storage.test.ts 传入。
+ */
 export interface RustFsStorageConfig {
   client: S3Client;
   bucket: string;

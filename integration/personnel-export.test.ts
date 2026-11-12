@@ -241,6 +241,7 @@ afterAll(async () => {
   await cloned?.close();
 });
 
+// #125 与 ADR 0013：人员导出写共用留痕表、停写 ExportAudit，并覆盖四条必测与留痕失败回滚。
 describe('POST /api/admin/personnel/export', () => {
   it('系统管理导出本机构：留痕多一行 personnel.exported，itemCount 等于导出条数，ExportAudit 行数不变', async () => {
     const cookie = await login(ADMIN_A_PHONE);

@@ -1,3 +1,7 @@
+// 用途：计算线索登记请求的幂等摘要与单个文件的内容摘要。
+// 调用方：backend/server/src/clue-registration.service.ts（登记幂等判定）、backend/server/src/clue-disposition.service.ts 与 backend/server/src/case-transfer.service.ts（附件摘要），经包名 @natural-enforcement/case 导入。
+// 边界：纯函数，不写库、不写留痕；幂等键与摘要落库、同 key 异报文的 409 判定由调用方执行。
+// 依据：#211。
 // 幂等摘要（#211；规格 E「上传方式」）。
 //
 // 客户端每次登记生成 Idempotency-Key；服务端把幂等键与请求摘要存在 Clue 的两个列上
@@ -44,6 +48,7 @@ export function contentDigest(content: Uint8Array): string {
 }
 
 /** 计算请求摘要。同 key 同报文得同值；报文有任何差别即不同值。 */
+// 纯函数，不写库；幂等键与摘要落库、同 key 异报文的 409 判定由调用方负责。
 export function requestDigest(input: RequestDigestInput): string {
   const parts: string[] = [];
   parts.push(`source=${input.sourceCode}`);

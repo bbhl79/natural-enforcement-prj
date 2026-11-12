@@ -1,3 +1,8 @@
+// 用途：全局会话守卫，解析会话与「记住我」Cookie 并决定请求放行或拒绝。
+// 调用方：backend/server/src/app.module.ts 以 APP_GUARD 注册为全局守卫；各控制器经 AuthenticatedRequest 读取 req.actor。
+// 边界：@Public 接口跳过登录要求；声明 SameOriginReadGuard 的读接口先做跨站判定；强制改密期间只放行改密、退出与会话查询。
+// 依据：ADR 0002。
+//
 import {
   CanActivate,
   ExecutionContext,
@@ -14,6 +19,7 @@ import { IS_PUBLIC } from './public.decorator.ts';
 import { isCrossSiteRequest, SameOriginReadGuard } from './same-origin-read.guard.ts';
 import { clearRememberCookie, clearSessionCookie, sourceAddress } from './session-cookie.ts';
 
+/** 守卫放行后挂在请求上的身份与解析结果。 */
 export interface AuthenticatedRequest {
   headers: { cookie?: string; 'x-forwarded-for'?: string | string[] };
   socket?: { remoteAddress?: string | null };
@@ -33,6 +39,11 @@ function allowedDuringPasswordChange(req: AuthenticatedRequest): boolean {
   return false;
 }
 
+/**
+ * 全局会话守卫：先做声明式跨站判定，再解析会话与「记住我」并写回 Set-Cookie。
+ * 放行条件：公开接口，或会话有效且不处于强制改密受限路径。
+ * 拒绝结果：跨站 403 cross-site；未登录 401 not-authenticated；强制改密受限 403 带原因词。
+ */
 @Injectable()
 export class SessionGuard implements CanActivate {
   constructor(

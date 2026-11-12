@@ -1,3 +1,7 @@
+// 用途：登记警告与提示的规则键、原文、级别与确认要求，供状态机警告门核对确认键。
+// 调用方：backend/case/src/state-machine/engine.ts 与各环节规则文件，例如 backend/case/src/notice/rules.ts。
+// 边界：只存参数，不写判定；判定留在各环节代码。未登记的键在确认时被拒绝。
+// 依据：#258、#271、#272。
 // #258／Q21：规则键注册表。判定留在代码里。这里只放带版本号的参数。
 // 业务票的具体警告（X10、X22、X26 等）不在本票登记。
 // #271：新旧比对的 Q31 警告登记为 CMP-01。它不是 X 编号，附录 A 未占号。
@@ -11,10 +15,12 @@ export const Q31_WARNING_MESSAGE = '施行日当天批准，适用哪一版请�
 
 /** X22 签出警告的规则键与原文（#240；normative，警告不阻断）。 */
 export const X22_RULE_KEY = 'X22';
+// X22 签出警告的原文，与上一条规则键成对使用。
 export const X22_MESSAGE = '本案承办人员签出审理意见';
 
 /** X26 告知批准路径的规则键与原文（#272；normative，警告不阻断）。 */
 export const X26_RULE_KEY = 'X26';
+// X26 告知批准路径的警告原文，与上一条规则键成对使用。
 export const X26_MESSAGE = '命中必审但未经告知前法审就批准告知书';
 
 /** 较大数额提示的规则键（#272；hint，不阻断、不要求确认）。 */
@@ -22,6 +28,7 @@ export const HEARING_AMOUNT_RULE_KEY = 'NOTICE-LARGE-AMOUNT';
 
 /** 审理人与法审人为同一人的警告（#269；normative，不阻断，Q23 下理由选填）。 */
 export const LEGAL_SAME_PERSON_RULE_KEY = 'LEGAL-SAME-PERSON';
+// 审理人与法审人为同一人的警告原文，与上一条规则键成对使用。
 export const LEGAL_SAME_PERSON_MESSAGE = '审理人与法审人为同一人';
 
 /** 法审人员法律职业资格未登记的提示（#269；hint，不阻断、不要求确认）。 */
@@ -32,6 +39,7 @@ export const LEGAL_QUALIFICATION_RULE_KEY = 'LEGAL-QUALIFICATION';
  * 被指定人为本案主办或协办（含已换下的）时警告，理由必填，确认入审计。
  */
 export const REVIEW_SEPARATION_RULE_KEY = 'REVIEW-SEPARATION';
+// 职能分离警告原文，与上一条规则键成对使用。
 export const REVIEW_SEPARATION_MESSAGE = '被指定人为本案主办或协办';
 
 /** 一期参数。级别、依据、文案、是否必填理由。阈值留空表示这条没有阈值。 */
@@ -141,10 +149,12 @@ export const RULE_PARAMETERS: readonly RuleParameter[] = [
 
 const BY_KEY = new Map(RULE_PARAMETERS.map((item) => [item.ruleKey, item]));
 
+// 按规则键查注册参数，未登记返回 null。
 export function findRuleParameter(ruleKey: string): RuleParameter | null {
   return BY_KEY.get(ruleKey) ?? null;
 }
 
+// 警告门与留痕使用的命中项：级别收窄为 warn 或 hint，规则键取原文代码。
 export interface WarningItem {
   readonly level: 'warn' | 'hint';
   readonly code: string;
@@ -164,16 +174,19 @@ export function toWarning(item: GuardResult): WarningItem {
   };
 }
 
+// 确认留痕中的一条规则引用，版本取注册表登记值。
 export interface ConfirmedRuleRef {
   readonly ruleKey: string;
   readonly version: string;
 }
 
+// 警告确认通过后附在放行结果上的留痕信息。
 export interface RuleConfirmation {
   readonly ruleKeys: readonly ConfirmedRuleRef[];
   readonly warnings: readonly WarningItem[];
 }
 
+// 确认核对结果：未知键、待补齐确认、缺理由或可放行。
 export type ConfirmationGap =
   | { readonly kind: 'unknown'; readonly ruleKey: string }
   | { readonly kind: 'hold' }

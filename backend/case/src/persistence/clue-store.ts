@@ -1,3 +1,7 @@
+// 用途：线索持久化端口，声明线索登记、要件、材料、派办与留痕的读写契约。
+// 调用方：backend/server 下的线索服务经 CLUE_STORE 令牌注入使用。
+// 边界：端口是纯类型，不引 Prisma；实现见同目录 prisma-clue-store.ts。调用方在交互式事务里调用。
+// 依据：#211。
 // 线索持久化端口（#211）。
 //
 // 模块对存储的唯一面向，可注入（CLUE_STORE 令牌）。形态与身份组织模块的 IDENTITY_STORE 相同：
@@ -714,6 +718,7 @@ export interface ClueUnitReceiptWrite {
   readonly mode: 'manual';
 }
 
+// 派主办／协办的写入参数：期望状态、人员名单与派办时刻。
 export interface CluePeopleAssignWrite {
   readonly clueId: string;
   readonly expectedStatus: string;

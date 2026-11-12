@@ -1,3 +1,7 @@
+// 用途：定义线索登记的领域类型：表单取值、要件层、缺件与缺件判定结果。
+// 调用方：本目录各规则文件、backend/server/src/clue-registration.service.ts、backend/server/src/clue-item-supplement.service.ts 及两者的控制器，经包名 @natural-enforcement/case 导入。
+// 边界：纯类型，不写库、不写留痕。
+// 依据：#211，ADR 0018。
 // 线索登记的领域类型（#211；ADR 0018「一份声明，两个用途」）。
 // 本目录是纯规则：要件叠加后的缺件判定、几何解析、附件真实内容校验、幂等摘要。
 // 不碰数据库、不碰存储、不碰 HTTP：形状一律由纯函数给出，装配在启动包（ADR 0004）。

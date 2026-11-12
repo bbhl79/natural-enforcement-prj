@@ -1,3 +1,8 @@
+// 用途：空间字典模块的 Nest 模块声明，是该模块在宿主应用里的装配点。
+// 调用方：backend/server/src/app.module.ts 的 imports 数组（经本模块公共出口 backend/geo-dict/src/index.ts）。
+// 边界：@Module 元数据为空，没有 provider、controller 与 exports。
+//   参照数据常量、查找函数与空间存取函数都经公共出口直接导出，不经 Nest 依赖注入。
+// 依据：ADR 0016（docs/adr/0016-参照数据随种子只追加写入.md）；依赖矩阵 backend/README.md。
 import { Module } from '@nestjs/common';
 
 /**

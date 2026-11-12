@@ -1,3 +1,6 @@
+// 用途：退回模块的对外出口，只做再导出。
+// 调用方：backend/server/src/case-return.service.ts 等，经包名 @natural-enforcement/case 汇总导出。
+// 依据：#238。
 // 退回规则公共出口（#238）。
 export {
   FILING_DRAFT_TARGET,

@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// 用途：提供验证专用假图层服务，按线索首点经度返回 success／partial／duplicate／clear 场景的图层事实。
+// 用法：由 apply-layer-overlay.sh 在容器内启动，或由 protocol-self-check.mjs 以子进程拉起。
+// 端口与监听地址由 VERIFY_LAYER_PORT、VERIFY_LAYER_HOST 指定。
 // 验证专用假图层服务。
 // 协议与 backend/case/src/clue/verification/layer-service-port.ts 的默认适配器一致：
 //   GET /query?layer={图层键}&geometry={线索几何 GeoJSON}&srid=4490
@@ -54,6 +57,7 @@ export function sceneOfGeometry(geometryText) {
   return 'clear';
 }
 
+// 从查询几何取 Polygon 环；形状不符时返回空环，面积事实仍按场景数字回。
 function geometryOf(geometryText) {
   try {
     const parsed = JSON.parse(geometryText);
@@ -66,6 +70,7 @@ function geometryOf(geometryText) {
   return { type: 'Polygon', coordinates: [] };
 }
 
+// 组装一条图层要素：id、几何与相交／总面积属性。
 function feature(layerKey, geometry, overlapArea, featureArea) {
   const featureId = `vf-${layerKey}`;
   return {
@@ -96,6 +101,7 @@ export function collectionFor(layerKey, geometryText) {
   return { type: 'FeatureCollection', features: [] };
 }
 
+// 回写 GeoJSON 响应并带上 content-type 与内容长度。
 function sendJson(res, status, body) {
   const payload = JSON.stringify(body);
   res.writeHead(status, {

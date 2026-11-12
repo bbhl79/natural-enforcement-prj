@@ -43,6 +43,7 @@ async function rejection(promise: Promise<unknown>): Promise<HttpException> {
   throw new Error('应当被拒绝');
 }
 
+// 声明了同源读守卫的读接口：跨站读请求被拒（PR #142 Copilot 意见 1）。
 describe('SessionGuard：声明了 SameOriginReadGuard 的读接口（PR #142 Copilot 意见 1）', () => {
   it.each([
     ['没有凭据', {}],

@@ -16,6 +16,7 @@ import {
   checkWithdrawInput,
 } from '../src/clue/closure/index.ts';
 
+// #217 撤回不派的输入校验：原因限四项且至少一项，补充说明必填，起点固定为已暂存。
 describe('撤回不派输入校验', () => {
   it('四项原因逐字采用原型', () => {
     expect(CLUE_WITHDRAW_REASONS).toEqual([
@@ -61,6 +62,7 @@ describe('撤回不派输入校验', () => {
   });
 });
 
+// #217 不予立案与随旧线索办结的登记约束：仅已派承办人可登记，处置说明必填，提醒类型封闭。
 describe('不予立案登记约束', () => {
   it('仅已派承办人可登记', () => {
     expect(DISPOSITION_RECORD_FROM_STATUS).toBe('handler_assigned');

@@ -1,3 +1,7 @@
+// 用途：定义口令规则码、历史比对深度与不查库的口令校验函数。
+// 调用方：backend/identity/src/domain/personnel-profile.ts 与 backend/server/src/ 下改密、重设、恢复入口。
+// 边界：只做不查库校验；口令历史比对由 CredentialService 负责。
+// 依据：#97、ADR 0015
 // 口令策略（#97）。阈值硬编码。两处入口共用：本人改密、系统管理重设。
 export const PASSWORD_RULES = [
   'too-short',
@@ -16,6 +20,7 @@ export const PASSWORD_RULES = [
  * 重设、恢复只回 unavailable（不向管理员暴露对方用过哪些口令）。
  */
 export const PASSWORD_HISTORY_RULES = ['reused', 'unavailable'] as const;
+/** 命中口令历史的规则码类型。 */
 export type PasswordHistoryRuleCode = (typeof PASSWORD_HISTORY_RULES)[number];
 
 /** 可公开规则码：rejectedPasswordRules 只会返回这些。 */
@@ -30,6 +35,7 @@ export type PasswordRuleCode = PublicPasswordRuleCode | PasswordHistoryRuleCode;
  */
 export const PASSWORD_HISTORY_DEPTH = 5;
 
+/** 口令校验输入：待校验口令、本人工号，改密时另带当前口令。 */
 export interface PasswordCheck {
   password: string;
   personnelCode: string;
@@ -134,6 +140,7 @@ function hasRepeated(password: string): boolean {
   return false;
 }
 
+/** 逐项校验口令，返回全部命中的可公开规则码；空数组表示通过。 */
 export function rejectedPasswordRules(input: PasswordCheck): PublicPasswordRuleCode[] {
   const rules: PublicPasswordRuleCode[] = [];
   if (input.password.length < MIN_LENGTH) rules.push('too-short');

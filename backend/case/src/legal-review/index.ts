@@ -1,3 +1,6 @@
+// 用途：法制审核与集体讨论模块的对外出口，只做再导出。
+// 调用方：backend/server/src/case-legal-review.service.ts 等，经包名 @natural-enforcement/case 汇总导出。
+// 依据：#269。
 // 法制审核与集体讨论（E07、E08）纯规则公共出口（#269）。
 export {
   COLLECTIVE_DISCUSSION_CRITERIA,

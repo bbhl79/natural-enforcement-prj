@@ -1,3 +1,7 @@
+// 用途：定义内业核查执行端口，以及核查入参、逐层事实与结果类型。
+// 调用方：backend/server/src/persistence.module.ts（装配默认实现）、backend/server/src/clue-verification.service.ts（调用 run）、本目录 layer-service-port.ts 与 report.ts。
+// 边界：只定义接口与类型，不写库、不写留痕；远程查询由实现方负责，运行行落库与留痕由编排方负责。
+// 依据：#213，ADR 0021。
 // 内业核查执行端口（#213）：本期唯一新增的业务端口。
 //
 // 外业空间套合／分析与图层服务调用都封装在这个端口之后：

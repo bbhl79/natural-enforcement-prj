@@ -35,6 +35,7 @@ function strictlyIncreasing(ids: string[]): boolean {
   return ids.every((id, i) => i === 0 || ids[i - 1]! < id);
 }
 
+// 无状态生成器：每枚编号独立取时间与随机，结果通过契约形制校验。
 describe('无状态技术主键', () => {
   it('生成结果符合技术主键形制', () => {
     const id = newUlid();
@@ -54,6 +55,7 @@ describe('无状态技术主键', () => {
   });
 });
 
+// 单调生成器：同一实例内后生成的编号严格大于先生成的，回拨与溢出场景不倒退（#116）。
 describe('进程内单调 ULID', () => {
   it('同一毫秒内连续生成的编号严格递增，且都符合技术主键形制', () => {
     const next = createMonotonicUlidGenerator();

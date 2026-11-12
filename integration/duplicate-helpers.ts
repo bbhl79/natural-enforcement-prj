@@ -1,3 +1,4 @@
+// 用途：疑似重复用例共用的登记、留痕与几何断言夹具，在克隆库与真实 PostGIS 上运行。
 // #212 疑似重复用例的共享夹具（真实 PostGIS，克隆库上断言）。
 // 三个用例文件（逐面计算／重绘／比对视图与实名查阅）共用这套登记、留痕与几何工具。
 import type { AddressInfo } from 'node:net';
@@ -7,7 +8,9 @@ import { afterAll, beforeAll, expect } from 'vitest';
 import { createApplication } from '../backend/server/src/persistence.module.ts';
 import { openClonedDatabase, type ClonedDatabase } from './cloned-database.ts';
 
+/** 固定时钟：应用时间钉在 2026-10-17T03:00:00Z，断言可重复。 */
 export const T0 = Date.parse('2026-10-17T03:00:00.000Z');
+/** 种子人员的统一初始密码；登录后立即改密，会话才可用于后续请求。 */
 export const SEED_PASSWORD = 'Seed-pass-52';
 const NEW_PASSWORD = 'Clue-dup-212!';
 
@@ -22,6 +25,7 @@ export function rect(west: number, south: number, east: number, north: number): 
   ];
 }
 
+/** 把一个环序列化成 GeoJSON Feature 文本（Polygon）。 */
 export function polygon(ring: readonly (readonly number[])[]): string {
   return JSON.stringify({ type: 'Feature', geometry: { type: 'Polygon', coordinates: [ring] }, properties: {} });
 }
@@ -35,6 +39,7 @@ export function multipolygon(rings: readonly (readonly (readonly number[])[])[])
   });
 }
 
+/** 把一个坐标序列化成 GeoJSON Feature 文本（Point）。 */
 export function point(longitude: number, latitude: number): string {
   return JSON.stringify({
     type: 'Feature',
@@ -64,6 +69,7 @@ export interface ClueSuiteState {
   baseUrl: string;
 }
 
+/** 套件共享状态，由 setupClueSuite 在 beforeAll 填充；用例直接读 cloned、baseUrl 与 storage。 */
 export const suite: ClueSuiteState = {
   cloned: null as unknown as ClonedDatabase,
   storage: null as unknown as RecordingStorage,
@@ -103,6 +109,7 @@ export async function cookieOf(code: string): Promise<string> {
   return cookie;
 }
 
+/** 登记线索接口的响应体：result 为结果码，gaps 为表单缺项，hits 为空间重复命中。 */
 export interface RegisterResponseBody {
   readonly result: string;
   readonly id?: string;
@@ -121,6 +128,7 @@ export interface RegisterResponseBody {
   readonly rules?: string[];
 }
 
+/** 登记选项：可覆盖来源码、领域、表单值与空间文件内容。 */
 export interface RegisterOptions {
   readonly code?: string;
   readonly sourceCode?: string;
@@ -129,6 +137,7 @@ export interface RegisterOptions {
   readonly spatial?: string;
 }
 
+/** 巡查来源登记的表单值样例。 */
 export const PATROL_VALUES: Record<string, string> = {
   'clue.received_at': '2026-10-25',
   'clue.narrative': '巡查发现一处硬化地面',
@@ -136,6 +145,7 @@ export const PATROL_VALUES: Record<string, string> = {
   'clue.patrol_no': 'XC-2026-001',
 };
 
+/** 群众举报来源登记的表单值样例。 */
 export const COMPLAINT_VALUES: Record<string, string> = {
   'clue.received_at': '2026-10-25',
   'clue.narrative': '群众反映一处违规占地',
@@ -198,6 +208,7 @@ export async function partGeojsons(clueId: string): Promise<string[]> {
   return rows.map((row) => row.geojson);
 }
 
+/** 留痕行的读取视图，对应 audit_trail 表的列。 */
 export interface TrailRow {
   readonly action: string;
   readonly outcome: string;
@@ -224,6 +235,7 @@ export async function trailOf(action: string, resourceId?: string): Promise<Trai
   `;
 }
 
+/** 按资源 ID 读 authz.denied 留痕行，用于断言拒绝已留痕。 */
 export async function deniedTrail(resourceId: string): Promise<TrailRow[]> {
   return suite.cloned.prisma.$queryRaw<TrailRow[]>`
     SELECT action, outcome, reason, detail, resource_id

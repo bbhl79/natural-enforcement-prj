@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// 用途：下一待办按钮的 headless 页面取证，按身份与阶段核对分派视图的按钮开关。
+// 用法：由 run-ui-next-todo-buttons.sh 调用；EVIDENCE_DIR 与 MANIFEST 必填。
+// 退出码：0 全绿；1 有失败或认证门禁 blocked；2 缺少 EVIDENCE_DIR 或 MANIFEST。
 /* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * 下一待办按钮的 headless 页面取证。
@@ -18,6 +21,7 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
 
+// 按同目录或上级目录查找并加载 auth-gate.cjs；都找不到时抛错。
 function loadAuthGate() {
   const candidates = [
     path.join(__dirname, 'auth-gate.cjs'),
@@ -60,6 +64,7 @@ const PHASES = [
   { key: 'orgAssigned', stepId: 'ui-org-assigned', status: 'org_assigned' },
 ];
 
+// 未派机构时甲所内勤的期望：403、原因 scope-denied、无任何分派按钮。
 function deniedUnassigned() {
   return {
     dispatchHttp: 403,
@@ -72,6 +77,7 @@ function deniedUnassigned() {
   };
 }
 
+// 按阶段与身份返回该组合的断言；未知组合直接抛错。
 function expectOf(phaseKey, identityId) {
   if (identityId === 'intake-st' && phaseKey !== 'orgAssigned') return deniedUnassigned();
   if (phaseKey === 'inPool' && identityId === 'clerk-a') {
@@ -148,6 +154,7 @@ function expectOf(phaseKey, identityId) {
 }
 
 const steps = [];
+// 追加一条步骤记录，写 steps/<stepId>.json 并打印。
 function record(stepId, pass, expected, actual, evidence) {
   const row = { scenarioId: SCENARIO_ID, stepId, pass, expected, actual, evidence };
   steps.push(row);
@@ -155,6 +162,7 @@ function record(stepId, pass, expected, actual, evidence) {
   console.log(JSON.stringify({ stepId, pass }));
 }
 
+// 逐个身份开独立上下文，登录后核对工作台与三个阶段的按钮开关。
 async function main() {
   const browser = await chromium.launch({ headless: !HEADED });
   let failed = false;

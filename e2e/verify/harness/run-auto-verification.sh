@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# 用途：开发栈上的自动核查验证入口，串联协议自检、两阶段 API 跑次与页面取证。
+# 用法：bash e2e/verify/harness/run-auto-verification.sh
+# 退出码：0 全绿；1 失败、blocked 或本机没有 docker。
 # 云端或本机开发栈上的自动核查验证入口。
 # 顺序：协议自检 → dev up → 空地址失败路径（含当时的页面）→ 假图层成功／部分命中／疑似重复（含页面）→ 卸掉 overlay。
 # 页面只用 headless。证据在 e2e/results/verify-<日期>-auto-verification-dev-layers/。
@@ -36,6 +39,7 @@ fi
 
 ./dev up
 TOUCHED=1
+# 退出时恢复产品 compose；仅在已执行 dev up 后动作，并沿用原退出码。
 restore() {
   local rc=$?
   if [[ "$TOUCHED" == "1" ]]; then

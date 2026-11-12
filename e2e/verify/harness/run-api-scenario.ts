@@ -1,3 +1,5 @@
+// 用途：逐步执行一个 API 场景的登记、分派、查重等动作，写步骤证据并按 oracle 判定结果。
+// 调用方：run-api-suite.ts、run-auto-verification.ts、run-next-todo-buttons.ts、integration/verify-skill-loop.test.ts。
 import {
   getByPath,
   loadIdentity,
@@ -13,6 +15,7 @@ import { SessionCache } from './session.ts';
 import { recordOf } from './record-of.ts';
 import { BUTTON_FLAGS } from './dispatch-buttons.ts';
 
+/** 执行场景所需的运行环境：基地址与按身份缓存的会话。 */
 export interface HarnessContext {
   readonly baseUrl: string;
   readonly sessions: SessionCache;

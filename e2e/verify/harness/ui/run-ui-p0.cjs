@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// 用途：Playwright 驱动登录与登记页，核对 P0 登录、登记外壳与可选全量登记。
+// 用法：在工具链容器内由 run-ui-p0.sh 调用；EVIDENCE_DIR 必填，UI_FILL/UI_SUBMIT 控制填写深度。
+// 退出码：0 全绿；1 有失败或认证门禁 blocked；2 缺少 EVIDENCE_DIR。
 /* eslint-disable @typescript-eslint/no-require-imports */
 /**
  * Verification UI P0 (headless default): login → workbench/register field-level.
@@ -15,6 +18,7 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
 
+// 按同目录或上级目录查找并加载 auth-gate.cjs；都找不到时抛错。
 function loadAuthGate() {
   const candidates = [
     path.join(__dirname, 'auth-gate.cjs'),
@@ -47,6 +51,7 @@ fs.mkdirSync(path.join(EVIDENCE_DIR, 'evidence'), { recursive: true });
 fs.mkdirSync(path.join(EVIDENCE_DIR, 'steps'), { recursive: true });
 
 const steps = [];
+// 追加一条步骤记录，写 steps/<stepId>.json 并打印到 stdout。
 function record(stepId, pass, expected, actual, evidence = []) {
   const row = { scenarioId: SCENARIO_ID, stepId, pass, expected, actual, evidence };
   steps.push(row);
@@ -54,6 +59,7 @@ function record(stepId, pass, expected, actual, evidence = []) {
   console.log(JSON.stringify({ stepId, pass, actual }));
 }
 
+// 启动 Chromium，跑登录、登记外壳与可选全量登记，写 summary 与 manifest 后按结果退出。
 async function main() {
   const browser = await chromium.launch({
     headless: !HEADED,

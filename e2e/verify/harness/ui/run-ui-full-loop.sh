@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# 用途：串跑 UI 全链：先登记拿到 pending_decision，再点击派出与派机构。
+# 用法：bash e2e/verify/harness/ui/run-ui-full-loop.sh；VERIFY_RUN_ID 可覆盖跑次号。
+# 退出码：0 两段均通过；2 请求 headed 时拒绝；其余为子脚本退出码。
 # B级证据：登录→两次完整登记→正式命中待决定→实点派出→实点派机构。
 set -euo pipefail
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../../.." && pwd)"

@@ -122,6 +122,7 @@ afterAll(async () => {
   await cloned?.close();
 });
 
+// #97：改口令接口的强制改密、首登改密、规则码与会话前提。
 describe('POST /api/auth/password', () => {
   it('强制改密期间登录接口返回该种类，改口令和退出仍可用', async () => {
     clock.millis = T0;
@@ -251,6 +252,7 @@ describe('POST /api/auth/password', () => {
   });
 });
 
+// #97：口令 90 天有效期与到期前 7 天提醒的边界。
 describe('90 天与到期提醒', () => {
   it('90 天整可以进入系统，响应带剩余 0 天，不带改密时间戳', async () => {
     clock.millis = T0;
@@ -342,6 +344,7 @@ describe('90 天与到期提醒', () => {
   });
 });
 
+// #97：定版 argon2 参数在验真成功后重写散列，且不改上次改密时间。
 describe('散列参数', () => {
   it('验真成功后按定版重写，上次改密时间不变，因此 90 天整加 1 毫秒仍算超过', async () => {
     clock.millis = Date.parse('2026-01-02T00:00:00.000Z');

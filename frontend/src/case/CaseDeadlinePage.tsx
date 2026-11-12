@@ -1,3 +1,7 @@
+// 用途：案件期限页，展示服务端算出的到期日，提交期限延长与期间事件。
+// 调用方：frontend/src/router.tsx 的 case-deadline 路由，路径 case/:caseId/deadline。
+// 接口：GET /api/cases/:id/deadlines（经期限页 loader）；POST /api/cases/:id/deadline-extensions；POST /api/cases/:id/period-events。
+// 操作码：读取 case.read；延长与期间事件 doc.draft。
 import { useState } from 'react';
 import { useLoaderData, useRevalidator } from 'react-router';
 
@@ -5,6 +9,7 @@ import { apiFetch } from '../api';
 import { useAppDispatch } from '../hooks';
 import { DeadlinePanel, type DeadlineView, type PeriodDraftInput } from './DeadlinePanel';
 
+/** 期限页：无视图时展示不可查看提示，否则交给期限面板提交延长与期间事件。 */
 export default function CaseDeadlinePage() {
   const data = useLoaderData() as { view: DeadlineView | null };
   const dispatch = useAppDispatch();

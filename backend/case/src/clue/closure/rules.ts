@@ -1,3 +1,5 @@
+// 用途：撤回不派、不予立案理由、结案提醒与处置终态的纯规则校验与编码表。
+// 调用方：backend/server/src/clue-closure.service.ts 与 backend/server/src/clue-withdraw.service.ts；规则码经 backend/case/src/index.ts 再导出。
 // 撤回不派与结案的领域规则（#217／#226／#229；规格 B/D 节、GLOSSARY）。
 //
 // 纯规则、不依赖 Nest 与存储：撤回不派的四项原因与补充说明校验、
@@ -95,8 +97,10 @@ export const NON_FILING_GROUND_CODES = [
   'art16-5-beyond-limitation',
 ] as const;
 
+/** 未满足项编码的联合类型，取值来自 NON_FILING_GROUND_CODES。 */
 export type NonFilingGroundCode = (typeof NON_FILING_GROUND_CODES)[number];
 
+/** 未满足项编码到第十六条原文标签的展示映射；标签逐字取原文。 */
 export const NON_FILING_GROUND_LABELS: Readonly<Record<NonFilingGroundCode, string>> = {
   'art16-1-no-clear-actor': '有明确的行为人',
   'art16-2-no-violation-fact': '有违反自然资源管理法律法规的事实',
@@ -107,8 +111,10 @@ export const NON_FILING_GROUND_LABELS: Readonly<Record<NonFilingGroundCode, stri
 
 /** 第十六条末款三项（违法行为轻微／及时纠正／没有造成危害后果）字段名。 */
 export const MINOR_ELEMENT_KEYS = ['minor', 'timelyCorrection', 'noHarm'] as const;
+/** 末款三项字段名的联合类型，取值来自 MINOR_ELEMENT_KEYS。 */
 export type MinorElementKey = (typeof MINOR_ELEMENT_KEYS)[number];
 
+/** 末款三项字段名到第十六条末款原文标签的展示映射。 */
 export const MINOR_ELEMENT_LABELS: Readonly<Record<MinorElementKey, string>> = {
   minor: '违法行为轻微',
   timelyCorrection: '及时纠正',
@@ -140,6 +146,7 @@ export type NoCaseReason =
       readonly noHarm: MinorElementConfirmation;
     };
 
+/** 不予立案理由校验结果：通过时携带规范化快照；失败只报 invalid-no-case-reason。 */
 export type NoCaseReasonCheckOutcome =
   | { readonly ok: true; readonly reason: NoCaseReason }
   | { readonly ok: false; readonly rule: 'invalid-no-case-reason' };
@@ -229,6 +236,7 @@ export function checkNoCaseReason(input: unknown): NoCaseReasonCheckOutcome {
 
 /** 处置类型对应的终态：不予立案／随旧线索办结／其他进 closed；移送进 transferred_out。 */
 
+/** 只读映射表；当前调用方仅 backend/case/test/clue-closure-rules.test.ts，业务写入的 nextStatus 由调用方传入。 */
 export const DISPOSITION_TERMINAL_STATUS: Readonly<Record<string, string>> = {
   'no-case': 'closed',
   'with-old': 'closed',

@@ -1,14 +1,25 @@
+// 用途：AWS SigV4 签名纯函数。给定凭据、区域、请求要素与时间戳，算出随 S3 请求发出的完整头，含 authorization。
+// 调用方：packages/storage/src/s3-client.ts（signRequest、encodeCanonicalQuery、uriEncode、S3Credentials）；
+//   packages/storage/test/s3-signer.test.ts（对照参照向量）。
+// 边界：无副作用，不读时钟，时间由调用方以 amzDate 传入；不发请求。
+//   只依赖 node:crypto，因为 integration/e3-immutable-storage.sh 只把 packages/storage/src 打包进容器运行 E3 驱动。
+// 依据：#53；签名向量的独立来源见下方原有注释。
+//
 // SigV4 签名纯函数（#53 存储设施包）：S3 兼容 REST 请求签名，只依赖 node:crypto。
 // 独立真值来源 = AWS SigV4 算法规范 + 开发期以 Python hashlib/hmac 另行实现的
 // 参照计算（与本实现零共享代码），固定输入的期望输出以字面量固化于
 // test/s3-signer.test.ts——签名向量不允许由被测代码同款逻辑推导。
 import { createHash, createHmac } from 'node:crypto';
 
+// S3 访问凭据。signRequest 用 secretKey 派生签名密钥，把 accessKey 写进 authorization 头的 Credential 段。
+// packages/storage/src/s3-client.ts 的 S3ClientConfig 继承本类型。
 export interface S3Credentials {
   accessKey: string;
   secretKey: string;
 }
 
+// signRequest 的输入：一次 S3 请求的方法、路径、查询参数、额外签入头、载荷、主机与时间戳。
+// 唯一的生产调用方是 packages/storage/src/s3-client.ts 的 request 函数。
 export interface SignInput {
   method: string;
   /** 请求路径（桶级请求 = 桶名；对象请求 = 桶名/key，原始形态可含非 ASCII；内部按段做 RFC 3986 编码） */
@@ -24,6 +35,8 @@ export interface SignInput {
   amzDate: string;
 }
 
+// signRequest 的输出：headers 是随请求发出的完整头；其余三项是中间产物。
+// packages/storage/src/s3-client.ts 只取 headers，其余三项供 packages/storage/test/s3-signer.test.ts 对照。
 export interface SignedRequest {
   headers: Record<string, string>;
   canonicalRequest: string;
@@ -40,12 +53,16 @@ export function uriEncode(value: string): string {
   return encodeURIComponent(value).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 }
 
+// 计算载荷的 SHA-256 十六进制摘要；字符串按 UTF-8 编码。
+// 只被本文件的 signRequest 使用（载荷哈希与规范请求哈希），packages/storage/test/s3-signer.test.ts 也直接断言它。
 export function sha256Hex(payload: string | Uint8Array): string {
   const hash = createHash('sha256');
   hash.update(typeof payload === 'string' ? Buffer.from(payload, 'utf8') : payload);
   return hash.digest('hex');
 }
 
+// 以 key 为密钥对 data（UTF-8）做 HMAC-SHA256，返回原始字节。
+// 只被本文件的 deriveSigningKey 与 signRequest 使用，包外与测试都没有直接调用方。
 export function hmacSha256(key: Uint8Array, data: string): Uint8Array {
   return new Uint8Array(createHmac('sha256', key).update(data, 'utf8').digest());
 }

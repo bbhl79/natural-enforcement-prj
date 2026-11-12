@@ -34,6 +34,7 @@ const primaryIds = (opcodes: string[]): PrimaryKey[] => visiblePrimaries(opcodes
 const secondaryIds = (primary: PrimaryKey, opcodes: string[]) =>
   visibleSecondaries(primary, opcodes).map((item) => item.id);
 
+// 一级入口键位与可见性：键位稳定，入口按会话操作码裁剪（#207 导航锁）。
 describe('顶栏一级五总入口（#207 导航锁）', () => {
   it('五个一级入口齐全，键位与顺序固定', () => {
     expect(PRIMARY_ENTRIES.map((item) => item.id)).toEqual([
@@ -80,6 +81,7 @@ describe('顶栏一级五总入口（#207 导航锁）', () => {
   });
 });
 
+// 二级入口随一级切换，且同样按会话操作码裁剪（#207 导航锁）。
 describe('侧栏二级随一级切换（#207 导航锁）', () => {
   it('统一工作台无侧栏二级：主区承担统一待办清单与录入线索', () => {
     expect(secondaryIds('workbench', CLERK)).toEqual([]);
@@ -142,6 +144,7 @@ describe('侧栏二级随一级切换（#207 导航锁）', () => {
   });
 });
 
+// 由当前地址推出所在的一级与二级键位。
 describe('当前所在一级与二级', () => {
   it('按地址前缀判定当前一级，最长前缀优先', () => {
     expect(activePrimaryKey('/workbench')).toBe('workbench');
@@ -183,6 +186,7 @@ describe('当前所在一级与二级', () => {
   });
 });
 
+// 顶栏全局查询对人人可见，不占用一级入口键位。
 describe('综合查询（顶栏全局搜，人人可用，不占一级）', () => {
   it('提交后进入线索中心并带关键词', () => {
     expect(globalSearchPath('红线')).toBe('/clue?q=%E7%BA%A2%E7%BA%BF');
@@ -198,6 +202,7 @@ describe('综合查询（顶栏全局搜，人人可用，不占一级）', () =
   });
 });
 
+// 规划中占位项：登记、不进入真实业务，点了只在主区提示。
 describe('规划中占位（案件中心、统筹督导、系统管理）', () => {
   it('规划中的二级按键位取回，附带说明', () => {
     expect(plannedSecondary('case-onsite')?.label).toBe('现场核查与立案呈批');
@@ -236,6 +241,7 @@ describe('规划中占位（案件中心、统筹督导、系统管理）', () =
   });
 });
 
+// 菜单文案纪律：不写操作码原文与工程符号（#207 交互锁）。
 describe('界面文案纪律（#207 交互锁）', () => {
   const labels = [
     ...PRIMARY_ENTRIES.map((item) => item.label),

@@ -1,3 +1,7 @@
+// 用途：提供机构树的查看、新建下级、改名与停用，按操作码授权并写留痕。
+// 调用方：backend/server/src/org-units.service.ts。
+// 边界：只失效不删除；写入在调用方事务内与留痕同成同败。
+// 依据：#123、#124
 // 机构服务（#52、#123）：机构树查看、新建下级、名称版本化改名、失效。
 // 授权经 AccessControlService 按操作码判断。只失效不删除（本服务不存在任何删除路径，库层触发器为第二道兜底）。
 // 新建下级与改名在调用方的交互式事务里执行，业务行与留痕同成同败（#119）。
@@ -28,6 +32,7 @@ import type {
 import { IDENTITY_STORE, type IdentityStore } from '../persistence/identity-store.ts';
 import { AccessControlService, type AuthorizationDecision } from './access-control.service.ts';
 
+/** 新建下级的输入。parentId 为 null 表示新建根机构，一律拒绝。 */
 export interface RegisterOrgUnitInput {
   /** null = 新建根机构，一律拒绝 */
   parentId: string | null;
@@ -36,12 +41,14 @@ export interface RegisterOrgUnitInput {
   level: string;
 }
 
+/** 新建下级的结果；上级已停用时附失败留痕行，由调用方回滚后写入。 */
 export type RegisterOrgUnitResult =
   | { result: 'registered'; orgUnit: OrgUnitRow }
   | { result: 'non-compliant'; rules: OrgUnitRuleCode[] }
   /** 上级已停用（409）。failure 是 org.unit.registered 的失败留痕行，由调用方回滚后写入。 */
   | { result: 'invalid-state'; failure: AuditAppend };
 
+/** 改名的结果；新名称与现名称相同时返回 unchanged，不追加版本、不写留痕。 */
 export type RenameOrgUnitResult =
   | { result: 'renamed'; orgUnit: OrgUnitRow }
   /** 新名称与现名称相同：不追加版本，不写留痕。 */
@@ -55,6 +62,7 @@ export type DeactivationBlocker =
   | { reason: 'org-has-assignments'; assignments: number }
   | { reason: 'org-has-open-items'; openItems: OpenItems };
 
+/** 停用机构的结果；被拒时附第一条阻止原因与失败留痕行。 */
 export type DeactivateOrgUnitResult =
   | { result: 'deactivated'; orgUnit: OrgUnitRow }
   /** 已停用：不写行，不改首次停用时间，不写留痕。 */
@@ -78,6 +86,8 @@ function raiseDenied(decision: Extract<AuthorizationDecision, { allowed: false }
   throw new AccessDeniedError(decision.reason, decision.detail, decision.denial);
 }
 
+// 机构服务：授权后执行查看、新建、改名、停用；事务内写入与留痕同成同败。
+// 由 backend/server/src/org-units.service.ts 注入调用。
 @Injectable()
 export class OrgUnitService {
   constructor(

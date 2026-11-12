@@ -1,3 +1,6 @@
+// 用途：线索中心抽屉「流转与留痕」页签的取数，把后端留痕行映射为展示条目。
+// 调用方：frontend/src/clue/center.ts 的 clueCenterLoader。
+// 接口：GET /api/clues/:id/trail 操作码 clue.read。
 // 流转留痕取数（#207 线索中心抽屉「流转与留痕」页签）。
 //
 // 取数模式参考 duplicate.ts：async 函数直接 fetch。
@@ -37,6 +40,7 @@ interface TrailResponse {
   readonly rows: readonly BackendTrailRow[];
 }
 
+// 接口：GET /api/clues/:id/trail，操作码 clue.read。
 /** 取流转留痕列表。 */
 export async function loadTrail(dispatch: ApiDispatch, clueId: string): Promise<TrailEntry[]> {
   const response = await apiFetch(dispatch, `/api/clues/${clueId}/trail`);

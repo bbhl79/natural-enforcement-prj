@@ -18,6 +18,7 @@ afterAll(async () => {
   await cloned?.close();
 });
 
+// 验证同毫秒并发追加留痕后，按 created_at, id 取回的顺序与发起顺序一致。
 describe('留痕取回顺序', () => {
   it('同一进程同一毫秒内依次发起的追加，按 created_at, id 取回时与发起先后一致', async () => {
     const trail = new PrismaAuditTrail(cloned.prisma);

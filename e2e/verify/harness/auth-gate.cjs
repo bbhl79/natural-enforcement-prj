@@ -1,7 +1,10 @@
+// 用途：认证门禁：分类登录响应、拦截来源改写，并提供页面登录与改密步骤。
+// 用法：API 与 UI 脚本经 CommonJS 导出调用；页面函数接收 Playwright page 对象。
 'use strict';
 
 const SOURCE_MARKERS = ['login.source-limited', 'source-limited', '来源受限'];
 
+/** 认证门禁错误：带 reason、HTTP 状态与截断正文，code 固定 AUTH_GATE_BLOCKED。 */
 class AuthGateError extends Error {
   /**
    * @param {string} reason
@@ -19,6 +22,7 @@ class AuthGateError extends Error {
   }
 }
 
+// 把任意响应体转成文本；对象走 JSON，转换失败返回空串。
 function bodyText(body) {
   if (body == null) return '';
   if (typeof body === 'string') return body;
@@ -29,6 +33,7 @@ function bodyText(body) {
   }
 }
 
+// 响应文本含来源受限标记时返回 true。
 function isSourceLimited(body) {
   const text = bodyText(body);
   return SOURCE_MARKERS.some((marker) => text.includes(marker));
@@ -45,12 +50,14 @@ function classifyLogin(status, body) {
   return { ok: true, blocked: false, reason: 'accepted', status };
 }
 
+// 登录未通过时抛 AuthGateError；通过时返回分类结果。
 function assertLoginAccepted(status, body) {
   const verdict = classifyLogin(status, body);
   if (!verdict.ok) throw new AuthGateError(verdict.reason, status, bodyText(body));
   return verdict;
 }
 
+// 请求头含 x-forwarded-for 时抛 source-switch，禁止验证跑改写来源地址。
 function assertNoSourceOverride(headers) {
   if (headers == null) return;
   for (const key of Object.keys(headers)) {
@@ -60,22 +67,26 @@ function assertNoSourceOverride(headers) {
   }
 }
 
+// 优先用 VERIFY_LOGIN_PASSWORD；未设置时回落到夹具种子口令。
 function loginPassword(seedPassword) {
   const explicit = process.env.VERIFY_LOGIN_PASSWORD;
   if (typeof explicit === 'string' && explicit.trim() !== '') return explicit;
   return seedPassword;
 }
 
+// 按 code 判断错误是否来自认证门禁，不依赖 instanceof。
 function isAuthGateError(error) {
   return Boolean(error) && typeof error === 'object' && error.code === 'AUTH_GATE_BLOCKED';
 }
 
+// 合并请求状态与失败数：blocked 优先，其次 failed，否则沿用请求状态。
 function summaryStatus(requested, failedCount) {
   if (requested === 'blocked') return 'blocked';
   if (failedCount > 0) return 'failed';
   return requested;
 }
 
+// 监听页面登录响应并暂存正文；take() 时分类判定，未见响应即视为拒绝。
 function bindLoginWatch(page) {
   let pending = null;
   const onResponse = (response) => {
@@ -106,6 +117,7 @@ function bindLoginWatch(page) {
   };
 }
 
+// 用手机号与口令走一次页面登录；失败抛 AuthGateError，成功停在内页或改密页。
 async function loginPageOnce(page, baseUrl, mobile, password) {
   const watch = bindLoginWatch(page);
   const root = String(baseUrl).replace(/\/$/, '');
@@ -130,6 +142,7 @@ async function loginPageOnce(page, baseUrl, mobile, password) {
   }
 }
 
+// 当前在改密页时填入新口令并提交；未离开改密页则抛 AuthGateError。
 async function changePasswordOnce(page, newPassword) {
   const current = String(page.url());
   const onPassword = current.includes('/auth/password') || current.includes('/account/password');

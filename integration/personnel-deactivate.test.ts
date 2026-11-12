@@ -423,6 +423,7 @@ afterAll(async () => {
   await cloned?.close();
 });
 
+// #130：人员停用的踢下线、并发与守卫，以及四条必测。
 describe('POST /api/admin/personnel/:id/deactivate（停用）', () => {
   it('停用成功：同一次请求结束对方全部会话，写 personnel.deactivated 与 session.ended（personnel-deactivated）', async () => {
     const before = await audits();
@@ -752,6 +753,7 @@ describe('POST /api/admin/personnel/:id/deactivate（停用）', () => {
   });
 });
 
+// #130：恢复流程的口令重设、会话清理、原机构停用时的调岗前提与四条必测。
 describe('POST /api/admin/personnel/:id/restore（恢复）', () => {
   it('恢复成功：置回未停用、写入新的初始口令、上次改密时间留空，写 personnel.restored 与 account.password-reset', async () => {
     const before = await audits();
@@ -1077,6 +1079,7 @@ describe('POST /api/admin/personnel/:id/restore（恢复）', () => {
   });
 });
 
+// #130：结束全部会话的留痕、无会话时的幂等与权限边界。
 describe('POST /api/admin/personnel/:id/end-sessions（结束全部会话）', () => {
   it('结束全部会话：每段写 session.ended（admin-ended），另写一行 personnel.sessions-ended，口令不变', async () => {
     // beforeAll 已登录一段；这里再登录一段并带上「记住我」。
@@ -1209,6 +1212,7 @@ describe('POST /api/admin/personnel/:id/end-sessions（结束全部会话）', (
   });
 });
 
+// #130 遗留口径①：停用态人员禁止编辑与调岗，没有改动时不产生动作。
 describe('停用态人员禁止编辑与调岗（PR #148 复核遗留①，本票定口径）', () => {
   it('编辑已停用人员 → 409 invalid-state（personnel-deactivated），按要改的项各写一行失败留痕，业务行不变', async () => {
     const rowsBefore = await businessRows();

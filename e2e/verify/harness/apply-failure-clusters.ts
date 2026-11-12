@@ -1,3 +1,4 @@
+// 用途：执行失败聚类动作计划，经 gh CLI 对票做创建、评论或重开。
 // GitHub 动作层（spec #322 二期 T6 / 票 #328）：执行 cluster-failures.ts 产出的动作计划。
 // 本文件在 discover/ 之外：discover/ 模块零 I/O，gh 调用与证据读取都在这里。
 // 真实实现走 gh CLI；测试注入内存 fake（见 integration/verify-discover-cluster.test.ts），不触网。
@@ -32,6 +33,7 @@ export interface AppliedClusterAction {
   readonly url?: string;
 }
 
+/** createGhCliPort 的选项：gh 工作目录。 */
 export interface GhCliPortOptions {
   /** gh 工作目录；缺省沿用当前进程 cwd。 */
   readonly cwd?: string;

@@ -1,3 +1,4 @@
+// 用途：送达、执行记载与结案的 HTTP 接口，含结案审批的提交、审核与批准。
 // 送达（T24）、执行记载（T25）与结案（T26）的 HTTP 入口（#270）。
 // 送达用 doc.submit；执行记载用 case.execution.record；结案拟制用 doc.draft，提交／审核／批准用 doc.*。
 
@@ -14,10 +15,12 @@ interface HttpReply {
   json(body: unknown): void;
 }
 
+/** 送达、执行记载与结案接口的 HTTP 适配层。 */
 @Controller()
 export class CaseCloseoutController {
   constructor(private readonly closeout: CaseCloseoutService) {}
 
+  // 读取案件的送达、执行记载与结案视图；操作码 case.read；对象级按案件承办机构校验。
   @Get('api/cases/:id/closeout')
   @UseGuards(SameOriginReadGuard)
   async read(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {
@@ -25,6 +28,7 @@ export class CaseCloseoutController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 登记送达；操作码 doc.submit；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/delivery')
   async recordDelivery(
     @Req() req: AuthenticatedRequest,
@@ -55,6 +59,7 @@ export class CaseCloseoutController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 登记执行记载；操作码 case.execution.record；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/execution-records')
   async recordExecution(
     @Req() req: AuthenticatedRequest,
@@ -75,6 +80,7 @@ export class CaseCloseoutController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 拟制结案文书；操作码 doc.draft；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/closure')
   async draftClosure(
     @Req() req: AuthenticatedRequest,
@@ -93,6 +99,7 @@ export class CaseCloseoutController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 提交结案审批；操作码 doc.submit；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/closure-approvals/:approvalId/submit')
   async submitClosure(
     @Req() req: AuthenticatedRequest,
@@ -103,6 +110,7 @@ export class CaseCloseoutController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 审核结案审批并写入审核意见；操作码 doc.admin.review；对象级按案件承办机构校验。
   @Post('api/closure-approvals/:approvalId/review')
   async reviewClosure(
     @Req() req: AuthenticatedRequest,
@@ -116,6 +124,7 @@ export class CaseCloseoutController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 批准结案审批；操作码 doc.approve；对象级按案件承办机构校验。
   @Post('api/closure-approvals/:approvalId/approve')
   async approveClosure(
     @Req() req: AuthenticatedRequest,

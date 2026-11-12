@@ -1,3 +1,7 @@
+// 用途：服务端进程入口，校验必需环境变量后装配应用并监听 3000 端口。
+// 调用方：容器或 dev 脚本启动的 Node 进程入口。
+// 边界：缺少必需环境变量时打印错误并以退出码 1 结束；同进程起内业核查 worker。
+//
 import 'reflect-metadata';
 
 import { createApplication } from './persistence.module.ts';

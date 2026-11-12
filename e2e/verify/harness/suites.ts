@@ -1,3 +1,4 @@
+// 用途：单点定义各执行面消费的场景清单，供驱动入口与覆盖自检共用。
 // 各执行面消费的 scenario 清单。清单单点定义在这里，驱动入口与覆盖自检共用。
 // 自检见 integration/verify-suites.test.ts：每个 driver=api 的 scenario 必须被某个执行面消费。
 

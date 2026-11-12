@@ -19,6 +19,7 @@ function view(overrides: Partial<ReviewView> = {}): ReviewView {
   };
 }
 
+// 验证审理最小入口按服务端可办项渲染（#240）。
 describe('#240 审理最小入口', () => {
   it('未指定审理人时给出提示', () => {
     const html = renderToStaticMarkup(<ReviewPanel view={view({ prompts: { reviewer: '尚未指定审理人' } })} />);

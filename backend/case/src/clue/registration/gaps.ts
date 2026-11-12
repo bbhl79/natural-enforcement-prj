@@ -1,3 +1,7 @@
+// 用途：按要件声明判定缺件，分出登记阻断缺件与类型层缺件。
+// 调用方：backend/server/src/clue-registration.service.ts（登记）、backend/server/src/case-filing.service.ts（立案呈批守卫）、backend/server/src/clue-form-schema.service.ts（itemApplies）。
+// 边界：纯函数，不写库、不写留痕；阻断响应、缺件清单落库与失败留痕由调用方负责。
+// 依据：#211，ADR 0018，GLOSSARY「缺件后果」。
 // 缺件判定（#211；ADR 0018）。
 //
 // 判定规则只有一条来源：要件声明（`RequirementItem`）。前端渲染与服务端判定读同一份声明。
@@ -85,6 +89,7 @@ function toGap(item: RequirementItem, layer: ClueLayer): ClueGap {
  * 判定缺件。
  * 阻断集合 = 公共层与来源层后果为阻断的项，未填且条件成立。
  * 类型层缺件集合 = 类型层必填、时机为「录入时」、未填的项。
+ * 纯函数，不写库；阻断缺件的要件键由调用方写进 400 响应的 rules，失败留痕与类型层缺件落库也由调用方负责。
  */
 export function assessGaps(input: GapAssessmentInput): ClueGapAssessment {
   const blocking: ClueGap[] = [];
@@ -107,6 +112,7 @@ export function assessGaps(input: GapAssessmentInput): ClueGapAssessment {
  * 全部未填的必填项，含各时机与各层。
  * 立案呈批守卫用（#257）：文书段要求核查前补齐项与登记期缺件一并读出，
  * 不按登记口径只取「录入时」的缺件。
+ * 纯函数，不写库、不写留痕。
  */
 export function missingRequiredItems(input: GapAssessmentInput): RequirementItem[] {
   const missing: RequirementItem[] = [];

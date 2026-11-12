@@ -130,6 +130,7 @@ afterAll(async () => {
   await cloned?.close();
 });
 
+// #122：会话查询返回的操作码清单与授权判定逐码等价，角色调整即时反映。
 describe('#122 会话查询返回本人允许的操作码清单', () => {
   it('未登录的会话查询不带清单', async () => {
     const response = await fetch(`${baseUrl}/api/auth/session`);

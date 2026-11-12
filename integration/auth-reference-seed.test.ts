@@ -255,6 +255,7 @@ afterAll(async () => {
   }
 });
 
+// 验证参照种子写入后可从库中读到七个角色、操作码名册与允许行，且只有系统管理能改允许行（#92）。
 describe('参照种子可从库中读到', () => {
   it('七个角色、操作码名册与允许行已写入，改允许行只给系统管理', async () => {
     await expectReferenceSeed(prisma);
@@ -276,6 +277,7 @@ describe('参照种子可从库中读到', () => {
   });
 });
 
+// 验证人员手机号有值时全库唯一，空手机号可存在多条（#92）。
 describe('人员手机号有值时全库唯一', () => {
   it('空手机号可以有多条，已有手机号不能再写入', async () => {
     const first = newUlid();
@@ -301,6 +303,7 @@ describe('人员手机号有值时全库唯一', () => {
   });
 });
 
+// 验证角色与权限相关表只允许一次失效，拒绝物理删除（#92）。
 describe('角色与权限记录只失效不删除', () => {
   it('四张表拒绝删除，只允许一次失效', async () => {
     const roleId = newUlid();
@@ -341,6 +344,7 @@ describe('角色与权限记录只失效不删除', () => {
   });
 });
 
+// 验证留痕表拒绝直接 UPDATE 与 DELETE，由触发器兜底。
 describe('留痕表拒绝更新和删除', () => {
   it('直接 UPDATE 或 DELETE 被触发器拒绝', async () => {
     const id = newUlid();
@@ -360,6 +364,7 @@ describe('留痕表拒绝更新和删除', () => {
   });
 });
 
+// 验证生产环境播种只写参照种子，不写夹具人员与机构（#92）。
 describe('生产环境不写入夹具人员', () => {
   it('NODE_ENV=production 时参照种子仍在，人员与机构不在', async () => {
     const databaseUrl = process.env.DATABASE_URL;
@@ -399,6 +404,7 @@ describe('生产环境不写入夹具人员', () => {
   }, 180_000);
 });
 
+// 验证重跑种子不恢复已失效的允许行、操作码或人员角色，也不新建替代行（#92）。
 describe('再次播种不恢复已撤销的授权', () => {
   it('允许行、操作码或人员—角色失效后再跑种子，仍保持失效且不新建替代行', async () => {
     const databaseUrl = process.env.DATABASE_URL;

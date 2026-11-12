@@ -1,5 +1,9 @@
+// 用途：留痕查阅的只读接口与类别口径：筛选类别取值、动作与授权拒绝操作码到类别的归类、查阅条件与结果行的类型。
+// 调用方：backend/server/src/audit-browse.service.ts（管理台留痕查阅与导出）；packages/audit/src/prisma-audit-trail.ts 的 PrismaAuditTrailReader 用类别口径预筛与精确筛。
+// 边界：只读，不写库，不做授权。数据范围由调用方算好，经 orgUnitIds 与 includeUnanchored 传入。
+// 依据：docs/adr/0011-认证留痕写入共用表.md、docs/adr/0013-人员导出写入共用留痕表.md。
 // 管理台留痕的查阅（#126，#105「留痕查阅与导出」）：只读接口与类别口径。
-// 有机构的行按所属机构（对象所属机构）套数据范围；没有机构的行视同根机构（Lei Hu 7-8）。
+// 有机构的行按所属机构（对象所属机构）套数据范围；没有机构的行视同根机构（项目负责人 7-8）。
 // 所属机构：授权拒绝行取目标机构（target_org_unit_id，#105；ADR 0011 修正），其余行取 org_unit_id。
 // 目标机构来源为空的旧拒绝行不补，仍按 org_unit_id 套。
 // 数据库适配器在 prisma-audit-trail.ts。
@@ -14,6 +18,7 @@ export const AUDIT_CATEGORIES = [
   'cert',
   'export',
 ] as const;
+/** 筛选类别的取值类型，即 AUDIT_CATEGORIES 的成员。调用方：backend/server/src/audit-browse.service.ts 的筛选条件与行回显。 */
 export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
 
 /** 按动作归类。包含以后各票会追加的动作词（#105 已定名），未入取值表前不会出现在库里。 */
@@ -77,6 +82,10 @@ const DENIED_OPCODE_PREFILTER: Readonly<Record<AuditCategory, Pick<AuditCategory
   export: { deniedOpcodes: ['personnel.profile.export', 'audit.admin.export'], deniedOpcodePrefixes: [] },
 };
 
+/**
+ * 按类别给出库里预筛的条件：动作清单、被拒操作码清单与被拒操作码前缀清单。结果是 auditCategoryOf 的超集。
+ * 调用方：packages/audit/src/prisma-audit-trail.ts 的 PrismaAuditTrailReader 组装查询条件。
+ */
 export function auditCategoryPrefilter(category: AuditCategory): AuditCategoryPrefilter {
   return {
     actions: Object.keys(CATEGORY_OF_ACTION).filter((action) => CATEGORY_OF_ACTION[action] === category),
@@ -104,6 +113,10 @@ export function auditCategoryOf(action: string, opcode: string | null): AuditCat
   return CATEGORY_OF_ACTION[action] ?? null;
 }
 
+/**
+ * 类型守卫：判断外部传入的值是否为 AUDIT_CATEGORIES 之一。
+ * 调用方：backend/server/src/audit-browse.service.ts 解析筛选条件，类别不在取值内时该函数判筛选条件无效。
+ */
 export function isAuditCategory(value: unknown): value is AuditCategory {
   return typeof value === 'string' && (AUDIT_CATEGORIES as readonly string[]).includes(value);
 }

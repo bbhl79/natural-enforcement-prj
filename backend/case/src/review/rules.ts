@@ -1,3 +1,7 @@
+// 用途：定义审理环节的正文校验、审理人候选与签出守卫、意见类型到去向的纯规则。
+// 调用方：backend/server/src/case-review.service.ts。
+// 边界：不读库、不留痕；事实由服务层收集后传入，时间与规则键由调用方选定。
+// 依据：Issue #240、#282、#238。
 // 审理（E04）纯规则（#240）。不依赖 Nest 与存储。
 // T08、T09 的迁移判定在引擎；本文件管报告处理建议、审理人候选与签出守卫、意见类型到去向的映射。
 // #282 裁 B：补充调查／修改纠正签出只开异议窗口，窗口结束才执行 T09；窗口天数读 cfg.rule.review-objection-window.v1。
@@ -26,8 +30,10 @@ export const REVIEW_OPINION_KINDS = [
   'fact-not-established',
   'limitation-expired',
 ] as const;
+// 审理意见类型的类型别名。
 export type ReviewOpinionKind = (typeof REVIEW_OPINION_KINDS)[number];
 
+// 审理意见类型的中文名称，用于页面与留痕展示。
 export const REVIEW_OPINION_NAMES: Readonly<Record<ReviewOpinionKind, string>> = {
   'supplementary-investigation': '补充调查',
   correction: '修改纠正',
@@ -39,8 +45,10 @@ export const REVIEW_OPINION_NAMES: Readonly<Record<ReviewOpinionKind, string>> =
 
 /** 处理建议三类（#240 范围第 1 条）。 */
 export const HANDLING_SUGGESTION_KINDS = ['penalty', 'no-penalty', 'fact-not-established'] as const;
+// 处理建议类型的类型别名。
 export type HandlingSuggestionKind = (typeof HANDLING_SUGGESTION_KINDS)[number];
 
+// 处理建议类型的中文名称。
 export const HANDLING_SUGGESTION_NAMES: Readonly<Record<HandlingSuggestionKind, string>> = {
   penalty: '拟处罚',
   'no-penalty': '拟不予处罚',
@@ -53,11 +61,16 @@ export const NO_PENALTY_OUTCOME = { outcomeCode: 'O2', outcomeLabel: '不予行�
 /** T09 的退回原因（#238 R2：「事实不清、证据不足，需补充调查」）。 */
 export const REVIEW_RETURN_REASON = 'R2';
 
+// 缺处理建议时的提示文案。
 export const MISSING_HANDLING_SUGGESTION_MESSAGE = '每条有效违法记录都要写处理建议';
+// 缺处理建议时的处理出口。
 export const MISSING_HANDLING_SUGGESTION_OUTLET = '为每条有效违法记录写处理建议';
+// 罚款竞合未写比对理由时的提示文案。
 export const FINE_COMPETITION_MESSAGE = '罚款竞合的比对理由未填';
+// 罚款竞合未写比对理由时的处理出口。
 export const FINE_COMPETITION_OUTLET = '写明罚款竞合的比对理由';
 
+// 审理意见对应的状态机去向与出口编号。
 export interface OpinionDestination {
   readonly transitionId: string;
   readonly outcomeCode: string | null;
@@ -99,10 +112,12 @@ export function opinionDestination(
   }
 }
 
+// 判断字符串是否为登记的审理意见类型；意见正文校验时调用。
 export function isReviewOpinionKind(value: string): value is ReviewOpinionKind {
   return (REVIEW_OPINION_KINDS as readonly string[]).includes(value);
 }
 
+// 判断字符串是否为登记的处理建议类型；报告正文校验时调用。
 export function isHandlingSuggestionKind(value: string): value is HandlingSuggestionKind {
   return (HANDLING_SUGGESTION_KINDS as readonly string[]).includes(value);
 }
@@ -146,6 +161,7 @@ export const OBJECTION_WINDOW_CLOSE_KINDS = [
   'support-review',
   'support-handler',
 ] as const;
+// 异议窗口结束方式的类型别名。
 export type ObjectionWindowCloseKind = (typeof OBJECTION_WINDOW_CLOSE_KINDS)[number];
 
 /** 一条处理建议。罚种代码集合、罚款金额、裁量理由按 #240 范围第 1 条。 */
@@ -168,6 +184,7 @@ export interface ReviewReportContent {
   readonly reviewerId: string | null;
 }
 
+// 正文校验失败的结果：HTTP 400 或 409、原因码、提示与处理出口。
 export interface ReviewContentHit {
   readonly httpStatus: 400 | 409;
   readonly reason: string;
@@ -176,6 +193,7 @@ export interface ReviewContentHit {
   readonly missingViolationIds?: readonly string[];
 }
 
+// 调查报告正文的校验结果；失败时带命中详情。
 export type ReviewReportContentRead =
   | { readonly ok: true; readonly content: ReviewReportContent }
   | { readonly ok: false; readonly hit: ReviewContentHit };
@@ -300,11 +318,13 @@ export function readReviewReportContent(
   return { ok: true, content: { suggestions, reviewerId: reviewerId === '' ? null : reviewerId } };
 }
 
+// 审理意见的校验后结构。
 export interface ReviewOpinionContent {
   readonly kind: ReviewOpinionKind;
   readonly content: string;
 }
 
+// 审理意见正文的校验结果；失败时带命中详情。
 export type ReviewOpinionContentRead =
   | { readonly ok: true; readonly content: ReviewOpinionContent }
   | { readonly ok: false; readonly hit: ReviewContentHit };
@@ -338,6 +358,7 @@ export interface ReviewCandidateFacts {
   readonly isHandlerEver: boolean;
 }
 
+// 被指定人校验结果；通过时说明是否触发职能分离警告。
 export type ReviewCandidateCheck =
   | { readonly ok: true; readonly separationWarning: boolean }
   | { readonly ok: false; readonly hit: ReviewContentHit };
@@ -375,6 +396,7 @@ export function separationWarning(): GuardResult {
   };
 }
 
+// 签出守卫的事实：角色、签出人、当前在任审理人身份与是否曾任承办。
 export interface ReviewSignFacts {
   readonly roles: readonly string[];
   readonly signerId: string;
@@ -383,6 +405,7 @@ export interface ReviewSignFacts {
   readonly isHandlerEver: boolean;
 }
 
+// 签出守卫结果：阻断项与警告项分开返回。
 export interface ReviewSignCheck {
   readonly block: {
     readonly code: string;
@@ -464,10 +487,12 @@ export interface ReviewObjectionContent {
   readonly evidenceRefs: readonly string[];
 }
 
+// 异议呈批正文的校验结果；失败时带命中详情。
 export type ReviewObjectionContentRead =
   | { readonly ok: true; readonly content: ReviewObjectionContent }
   | { readonly ok: false; readonly hit: ReviewContentHit };
 
+// 校验异议呈批正文：理由必填，证据引用可为空但必须是字符串列表。
 export function readReviewObjectionContent(raw: unknown): ReviewObjectionContentRead {
   const body = recordOf(raw);
   const note = text(body?.note);
@@ -488,14 +513,18 @@ export function readReviewObjectionContent(raw: unknown): ReviewObjectionContent
   return { ok: true, content: { note, evidenceRefs } };
 }
 
+// 异议决定结果的取值：支持审理意见或支持承办人员。
 export const OBJECTION_DECISIONS = ['support-review', 'support-handler'] as const;
+// 异议决定结果的类型别名。
 export type ObjectionDecision = (typeof OBJECTION_DECISIONS)[number];
 
+// 异议决定结果的中文名称。
 export const OBJECTION_DECISION_NAMES: Readonly<Record<ObjectionDecision, string>> = {
   'support-review': '支持审理意见',
   'support-handler': '支持承办人员',
 };
 
+// 判断字符串是否为登记的异议决定结果。
 export function isObjectionDecision(value: string): value is ObjectionDecision {
   return (OBJECTION_DECISIONS as readonly string[]).includes(value);
 }
@@ -503,6 +532,7 @@ export function isObjectionDecision(value: string): value is ObjectionDecision {
 /** 负责人支持承办人员时可落入的决定去向。T09 不在其列（T09 是支持审理意见的落点）。 */
 export const OBJECTION_DECISION_TRANSITIONS = ['T10', 'T11', 'T12'] as const;
 
+// 判断字符串是否为支持承办人员可落入的决定迁移编号。
 export function isObjectionDecisionTransition(value: string): boolean {
   return (OBJECTION_DECISION_TRANSITIONS as readonly string[]).includes(value);
 }

@@ -1,3 +1,7 @@
+// 用途：线索登记领域规则的公共出口，本文件只做再导出。
+// 调用方：backend/case/src/index.ts；backend/server/src/clue-registration.service.ts 经包名 @natural-enforcement/case 导入。
+// 边界：只做再导出，不写库、不写留痕。
+// 依据：#211。
 // 线索登记的领域规则（#211；ADR 0018「一份声明，两个用途」）。
 //
 // 本目录是纯规则：要件叠加后的缺件判定、几何解析、附件真实内容校验、幂等摘要。

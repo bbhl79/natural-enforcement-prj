@@ -1,3 +1,5 @@
+// 用途：定义不可重试错误 NonRetryableError 与判断函数，供消费方声明「本次失败不必再重试」。
+// 调用方：backend/server/src/clue-verification.service.ts（抛出）、packages/queue/src/worker.ts（识别并翻译成队列语义）、tools/verify-verification-facilities.ts。
 // 不可重试错误（#213）：队列设施包自己的错误类型，不暴露 BullMQ 的错误类型。
 //
 // 确定性失败（缺图层、图层服务未配置或不可用、超时、返回不合规）属不可重试：

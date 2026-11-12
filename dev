@@ -1,22 +1,12 @@
 #!/usr/bin/env bash
-# 自然执法工程 唯一本地开发入口（#46/#47 定案）。
-# 命令集逐切片落地：切片01 up/down/health/lint；切片02 新增 db（#49 数据语义）；
-# 切片03 新增 test（unit 层）与 lint 结构测试；
-# 切片04 结构测试扩为全量七模块依赖矩阵（#51）；
-# 切片08（#55）health 四依赖补齐：队列连通改经队列接口真实投递健康检查任务并确认消费
-#（packages/queue 探测入口，非裸 redis ping），前端项中性占位；
-# 切片09（#56）前端落地：health 前端项改真实检查（面板可访问=绿）并计入红绿，
-# 检查结果写入面板快照（frontend 容器命名卷，面板与 dev health 同源）；新增 build（最小形态）。
-# 切片10（#57）十命令完备：新增 logs/exec（compose 薄封装）、check（lint+test all+build，
-# --ci 凭据注入回收）、test e2e 层（e2e/cases 约定：从零拉起+读写通道+命令冒烟）、
-# build 扩为全量（后端编译+全部本地镜像）；全局 --run-id 复现（日志/产物落 e2e/results/<id>/）。
-# 评审必修（#61 合并前，路线 A）：check 时序改 build 前置——镜像与编译产物是 lint 与
-# 测试层的运行前提（test_e2e 需 infra + frontend 本地镜像，二者皆由 build 产出），build
-# 在末位时冷环境结构性跑不到它，dev check --ci 不可能绿；同时 build 承担工具链镜像拉取
-#（LINT_IMAGE 不是 compose 服务镜像，compose config --images 遍历覆盖不到，
-# 冷环境会死在 require_toolchain_image，CI 加一步 dev build 也救不活）。
-# 镜像拉取合并为一次并发批次：工具链镜像与 infra 镜像同批拉取（ensure_images，#174）。
-# 退出码只有 0/1，诊断看输出。
+# 用途：自然执法工程的唯一本地开发入口：up/down/health/db/lint/test/build/logs/exec/check。
+# 设计约束（改本文件前先读）：
+# - check 的时序是 build 前置：镜像与编译产物是 lint 与测试层的运行前提
+#   （test_e2e 需 infra 与 frontend 本地镜像，二者皆由 build 产出）。
+# - build 承担工具链镜像拉取：LINT_IMAGE 不是 compose 服务镜像，compose config --images 覆盖不到。
+# - 镜像拉取合并为一次并发批次（ensure_images，#174）。
+# - 依赖只装在容器内；仓库不留 node_modules。
+# 历史与切片编号见 git log 与对应 Issue。
 set -euo pipefail
 
 # 十命令退出码只有 0/1（#47 US20）。set -e 会把 docker/compose 的 2/125/126/127 原样带出，
@@ -125,6 +115,7 @@ seed_repo_to_stdin() {
     -cf - .
 }
 
+# 打印命令用法与十命令清单。
 usage() {
   cat <<'EOF'
 自然执法工程 开发入口（唯一本地入口，十命令：#46/#47 定案，切片10 #57 完备）
@@ -177,6 +168,7 @@ usage() {
 EOF
 }
 
+# 编排文件缺失即报错退出。
 require_compose_file() {
   if [ ! -f "$COMPOSE_FILE" ]; then
     echo "[FAIL] 未找到编排文件：$COMPOSE_FILE" >&2
@@ -268,6 +260,7 @@ refresh_nginx_if_upstreams_newer() {
   fi
 }
 
+# 起全套服务；镜像缺失只报错不隐式拉取。
 cmd_up() {
   require_compose_file
   local missing=0 img
@@ -310,6 +303,7 @@ cmd_up() {
   echo "dev up 完成：迁移与种子就绪，健康检查全绿。"
 }
 
+# 停容器与网络；数据卷保留（毁数入口只有 dev db reset）。
 cmd_down() {
   require_compose_file
   "${COMPOSE[@]}" down
@@ -322,6 +316,7 @@ cmd_logs() {
   "${COMPOSE[@]}" logs "$@"
 }
 
+# docker compose exec 薄封装。
 cmd_exec() {
   require_compose_file
   if [ $# -eq 0 ]; then
@@ -388,6 +383,7 @@ seed_nginx_certs_volume() {
         sh -c 'mkdir -p /certs && tar -x -f - -C /certs'
 }
 
+# 逐个检查 compose 服务容器是否在运行。
 check_services() {
   local svc cid rc=0
   SVC_FAILED=""
@@ -405,6 +401,7 @@ check_services() {
   return "$rc"
 }
 
+# 检查数据库可连通。
 check_db() {
   if "${COMPOSE[@]}" exec -T db pg_isready -U "$DB_USER" -d "$DB_NAME" >/dev/null 2>&1; then
     DB_STATUS=ok
@@ -529,6 +526,7 @@ write_health_snapshot() { # $1 = quiet 时静默重跑检查（丢弃检查输�
   fi
 }
 
+# 健康检查：服务、数据库、队列与前端四项，全部通过才绿。
 cmd_health() {
   require_compose_file
   local rc=0
@@ -679,17 +677,20 @@ run_db_toolchain() {
     sh -c "set -e; mkdir -p /work; tar -x -f - -C /work; corepack enable; pnpm install ${INSTALL_FLAGS[*]}; cd backend/prisma; $1"
 }
 
+# 应用待执行迁移；已应用的自动跳过。
 db_migrate() {
   echo "db migrate：应用待执行迁移（已应用的自动跳过）…"
   run_db_toolchain 'pnpm exec prisma migrate deploy'
 }
 
+# 生成 Prisma Client 并写入种子数据；已存在的自动跳过。
 db_seed() {
   echo "db seed：写入种子数据（已存在的自动跳过）…"
   # 生成的 Prisma Client 在容器可写层，每次现生成（约 1s）
   run_db_toolchain 'pnpm exec prisma generate && pnpm exec prisma db seed'
 }
 
+# 全系统唯一毁数入口：销毁重建数据库卷，再自动迁移与种子。
 db_reset() {
   ensure_db
   echo "db reset：全系统唯一允许删除数据的入口。"
@@ -703,6 +704,7 @@ db_reset() {
   db_seed
 }
 
+# db 子命令分发：无参数＝迁移＋种子；migrate 与 seed 各跑一项。
 cmd_db() {
   case "${1:-}" in
     "")      ensure_db; db_migrate; db_seed ;;
@@ -763,18 +765,21 @@ build_frontend() {
   docker build --tag "$FRONTEND_IMAGE" --file "$ROOT/frontend/Dockerfile" "$ROOT"
 }
 
+# 构建 HTTP 进程本地镜像。
 build_server() {
   require_toolchain_image
   echo "build：构建 HTTP 进程本地镜像 $SERVER_IMAGE（容器内监听 3000）…"
   docker build --tag "$SERVER_IMAGE" --file "$ROOT/backend/server/Dockerfile" "$ROOT"
 }
 
+# 构建宿主 nginx 本地镜像；基础镜像已由 ensure_images 按 digest 拉到本地。
 build_nginx() {
   # 基础镜像已由 ensure_images 按 digest 拉到本地；不传 --pull。
   echo "build：构建宿主 nginx 本地镜像 $NGINX_DEV_IMAGE（钉定 nginx + COPY default.conf）…"
   docker build --tag "$NGINX_DEV_IMAGE" --file "$ROOT/infra/nginx/Dockerfile" "$ROOT/infra/nginx"
 }
 
+# 容器内编译后端全部 TypeScript 工程（编译门）。
 build_backend() {
   require_toolchain_image
   echo "build：容器内后端编译（tsc 全程序编译门：shield/queue/storage + backend 七模块）…"
@@ -880,6 +885,7 @@ pull_images_concurrent() { # $@ = 缺失的镜像引用
   fi
 }
 
+# build 子命令：裸 build 与 --ci 范围一致，产物与镜像都不 push 不部署。
 cmd_build() {
   # 裸 build = 全量；--ci 与裸形态范围严格一致（产物与镜像均不 push 不部署）。
   local ci=0 a
@@ -904,6 +910,7 @@ cmd_build() {
   echo "build：全量构建完成（工具链+infra 镜像就位、前端编译、后端编译、frontend/server/nginx 本地镜像；产物已写回宿主并 gitignore）。"
 }
 
+# 工具链镜像缺失即报错；拉取只在 dev build 语义内。
 require_toolchain_image() {
   if ! docker image inspect "$LINT_IMAGE" >/dev/null 2>&1; then
     echo "[FAIL] 工具链镜像缺失：$LINT_IMAGE" >&2
@@ -913,6 +920,7 @@ require_toolchain_image() {
   fi
 }
 
+# unit 层：容器内跑 Vitest 契约断言与 tsc 类型检查，依赖只进容器与命名卷。
 test_unit() {
   # unit 层（#46 三层映射：unit = 纯单元 + 契约测试，无库）。
   # 容器内安装依赖并运行 Vitest 契约断言 + tsc --noEmit 类型检查；
@@ -934,6 +942,7 @@ psql_dev_db() {
   "${COMPOSE[@]}" exec -T db psql -v ON_ERROR_STOP=1 -U "$DB_USER" -d "$DB_NAME" "$@"
 }
 
+# 拼出复制源 it_template 库的连接串。
 it_template_database_url() {
   printf 'postgresql://%s:%s@%s:5432/%s\n' \
     "$(percent_encode "$DB_USER")" \
@@ -984,6 +993,7 @@ rebuild_it_template() {
   return 1
 }
 
+# integration 层：结构测试 + 需库用例，harness 重建复制源 it_template 后跑 Vitest 与脚本用例。
 test_integration() {
   # integration 层（#46：结构测试 + 需库用例）。harness 负责：db 在场
   # + 重建复制源 it_template（迁移和种子只打在这个库上）+ Prisma Client 生成。
@@ -1033,7 +1043,7 @@ test_integration() {
     exit 1
   fi
   # 可执行脚本用例：integration/*.sh（非 _ 开头），按文件名排序逐条执行
-  # INTEGRATION_SKIP_SCRIPTS=1 跳过 *.sh（verify-skill-loop 快路径；e3 拖红另记债）
+  # INTEGRATION_SKIP_SCRIPTS=1 跳过 *.sh（verify-skill-loop 快路径：e3 脚本要起临时 RustFS，耗时较长）
   if [ "${INTEGRATION_SKIP_SCRIPTS:-}" = 1 ]; then
     echo "test：跳过 integration/*.sh（INTEGRATION_SKIP_SCRIPTS=1）"
     echo "test：integration 层 Vitest 段完成。"
@@ -1055,6 +1065,7 @@ test_integration() {
   echo "test：integration 层全部通过。"
 }
 
+# test 子命令分发：unit、integration、e2e 与 all。
 cmd_test() {
   case "${1:-all}" in
     all)         test_unit; test_integration; test_e2e ;;

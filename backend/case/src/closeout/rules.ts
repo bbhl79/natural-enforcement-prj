@@ -1,3 +1,7 @@
+// 用途：定义送达、执行记载与结案呈批的纯校验规则及 X10 警告。
+// 调用方：backend/server/src/case-closeout.service.ts。
+// 边界：不读库、不留痕；X10 只返回警告，不改业务行。
+// 依据：Issue #270、#267；规程 9.6。
 // 送达（T24）、执行记载（T25）、结案（T26）的纯规则（#270）。
 // 送达接受回证（送达人两人以上），或公告送达的原因和经过记录加公告材料（Q27，规程 9.6）。
 // 执行记载只登记事实和凭证：「已申请法院强制执行」须附申请书；「履行完毕」须附缴款凭证等。
@@ -6,9 +10,12 @@
 import { findIllegal } from '../state-machine/catalog.ts';
 import type { GuardResult } from '../state-machine/guard.ts';
 
+// 送达记载的两种路径：回证、公告送达。
 export const DELIVERY_RECORD_KINDS = ['receipt', 'announcement'] as const;
+// 送达记载路径的类型别名。
 export type DeliveryRecordKind = (typeof DELIVERY_RECORD_KINDS)[number];
 
+// 送达记载路径的中文名称。
 export const DELIVERY_RECORD_KIND_NAMES: Readonly<Record<DeliveryRecordKind, string>> = {
   receipt: '送达回证',
   announcement: '公告送达',
@@ -17,6 +24,7 @@ export const DELIVERY_RECORD_KIND_NAMES: Readonly<Record<DeliveryRecordKind, str
 /** 回证路径的送达人下限（规程第 9 章）。 */
 export const DELIVERY_MIN_DELIVERERS = 2;
 
+// 送达正文的校验后结构。
 export interface DeliveryRecordContent {
   readonly kind: DeliveryRecordKind;
   /** 送达完成日，YYYY-MM-DD。 */
@@ -28,6 +36,7 @@ export interface DeliveryRecordContent {
   readonly note: string | null;
 }
 
+// 送达正文校验失败的结果：HTTP 400、原因码、提示与出口。
 export interface DeliveryRecordHit {
   readonly httpStatus: 400;
   readonly reason: string;
@@ -35,6 +44,7 @@ export interface DeliveryRecordHit {
   readonly outlet: string;
 }
 
+// 送达正文的校验结果；失败时带命中详情。
 export type DeliveryRecordRead =
   | { readonly ok: true; readonly content: DeliveryRecordContent }
   | { readonly ok: false; readonly hit: DeliveryRecordHit };
@@ -125,9 +135,12 @@ export function readDeliveryRecord(raw: unknown): DeliveryRecordRead {
   };
 }
 
+// 执行记载的种类取值。
 export const EXECUTION_RECORD_KINDS = ['court-enforcement', 'fulfilled', 'other'] as const;
+// 执行记载种类的类型别名。
 export type ExecutionRecordKind = (typeof EXECUTION_RECORD_KINDS)[number];
 
+// 执行记载种类的中文名称。
 export const EXECUTION_RECORD_KIND_NAMES: Readonly<Record<ExecutionRecordKind, string>> = {
   'court-enforcement': '已申请法院强制执行',
   fulfilled: '履行完毕',
@@ -140,12 +153,14 @@ export const EXECUTION_ATTACHMENT_REQUIRED_KINDS: readonly ExecutionRecordKind[]
   'fulfilled',
 ];
 
+// 执行记载的校验后结构。
 export interface ExecutionRecordContent {
   readonly kind: ExecutionRecordKind;
   readonly note: string | null;
   readonly attachments: readonly string[];
 }
 
+// 执行记载校验失败的结果：HTTP 400、原因码、提示与出口。
 export interface ExecutionRecordHit {
   readonly httpStatus: 400;
   readonly reason: string;
@@ -153,6 +168,7 @@ export interface ExecutionRecordHit {
   readonly outlet: string;
 }
 
+// 执行记载的校验结果；失败时带命中详情。
 export type ExecutionRecordRead =
   | { readonly ok: true; readonly content: ExecutionRecordContent }
   | { readonly ok: false; readonly hit: ExecutionRecordHit };
@@ -196,9 +212,12 @@ export function readExecutionRecord(raw: unknown): ExecutionRecordRead {
   };
 }
 
+// 结案的两条分支：处罚支与不予处罚支。
 export const CLOSURE_BRANCHES = ['penalty', 'no-penalty'] as const;
+// 结案分支的类型别名。
 export type ClosureBranch = (typeof CLOSURE_BRANCHES)[number];
 
+// 结案分支的中文名称。
 export const CLOSURE_BRANCH_NAMES: Readonly<Record<ClosureBranch, string>> = {
   penalty: '处罚支（经执行记载）',
   'no-penalty': '不予处罚支',
@@ -211,10 +230,12 @@ export function closureBranchOf(stage: string): ClosureBranch | null {
   return null;
 }
 
+// 结案呈批正文的校验后结构。
 export interface ClosureContent {
   readonly note: string | null;
 }
 
+// 结案呈批正文校验失败的结果。
 export interface ClosureContentHit {
   readonly httpStatus: 400;
   readonly reason: string;
@@ -222,10 +243,12 @@ export interface ClosureContentHit {
   readonly outlet: string;
 }
 
+// 结案呈批正文的校验结果；失败时带命中详情。
 export type ClosureContentRead =
   | { readonly ok: true; readonly content: ClosureContent }
   | { readonly ok: false; readonly hit: ClosureContentHit };
 
+// 校验结案呈批正文；空正文合法，说明字段只能是文字。
 export function readClosureContent(raw: unknown): ClosureContentRead {
   if (raw == null) return { ok: true, content: { note: null } };
   if (typeof raw !== 'object' || Array.isArray(raw)) {
@@ -245,6 +268,7 @@ export function readClosureContent(raw: unknown): ClosureContentRead {
   return { ok: true, content: { note: note === '' ? null : note } };
 }
 
+// X10 的规则键，与 x10Guard 返回的警告对应。
 export const X10_RULE_KEY = 'X10';
 
 /** X10：处罚决定未送达就执行记载或结案。normative → 警告，不改业务行，确认后继续。 */

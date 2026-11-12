@@ -1,3 +1,7 @@
+// 用途：A10 管理动作的服务实现：被锁人员列表、解锁、重设初始口令与人员导出。
+// 调用方：backend/server/src/admin.controller.ts。
+// 边界：写动作在交互式事务内完成；拒绝留痕在业务事务回滚后另起事务写入；口令散列与历史比对在事务外。
+// 依据：ADR 0015、ADR 0011、ADR 0013。
 import { Inject, Injectable } from '@nestjs/common';
 import {
   rejected,
@@ -30,6 +34,7 @@ const PASSWORD_RESET = 'personnel.password.reset';
 const DEACTIVATED_UNLOCK_MESSAGE = '这个人员已停用，不能解锁。请先恢复人员，再办理。';
 const DEACTIVATED_RESET_MESSAGE = '这个人员已停用，不能重设初始口令。请先恢复人员，再办理。';
 
+/** 授权拒绝的响应体；reason 取自 AccessControlService 的判定结果。 */
 export type AdminDenial = { status: 403; body: { reason: DenyReason } };
 type NotFound = { status: 404; body: { result: 'not-found' } };
 /** 对方已停用（#158 业主拍板）：A10 解锁与重设初始口令一律拒绝。 */
@@ -40,6 +45,7 @@ type Deactivated = {
 /** 动作的前置判断：通过则交出目标人员，否则是要直接返回的结果。 */
 type Guarded = { target: LoginAccount } | NotFound | AdminDenial | Deactivated | Rejected<AdminDenial | Deactivated>;
 
+/** 重设初始口令的结果联合；该动作经操作码 personnel.password.reset 授权。 */
 export type ResetOutcome =
   | { status: 200; body: { result: 'reset' } }
   | { status: 400; body: { result: 'non-compliant'; rules: PasswordRuleCode[] } }
@@ -52,12 +58,14 @@ export type ResetOutcome =
 /** 重设判断通过后交出的比对口径（ADR 0015）：期望散列、历史散列与拒绝留痕的一方快照。 */
 type ResetReady = { expectedHash: string | null; historyHashes: string[]; parties: AuditParties };
 
+/** 解锁的结果联合；该动作经操作码 personnel.locked.release 授权。 */
 export type UnlockOutcome =
   | { status: 200; body: { result: 'unlocked' } }
   | { status: 404; body: { result: 'not-found' } }
   | AdminDenial
   | Deactivated;
 
+/** 人员导出的结果联合；授权与留痕由 PersonnelService 按操作码 personnel.profile.export 处理。 */
 export type PersonnelExportOutcome =
   | {
       status: 200;
@@ -65,6 +73,7 @@ export type PersonnelExportOutcome =
     }
   | AdminDenial;
 
+/** 被锁人员列表的结果联合；该动作经操作码 personnel.locked.read 授权。 */
 export type LockedListOutcome = {
   status: number;
   body:
@@ -81,6 +90,7 @@ export type LockedListOutcome = {
     | { reason: DenyReason };
 };
 
+// 授权：列表经 authorize 判定 personnel.locked.read；解锁与重设经 check 判定，拒绝留痕随 rejected 在回滚后写入。
 /**
  * A10 管理动作：被锁列表、解锁、重设初始口令（含结束会话与记住我）。
  * 每个写动作在一个交互式事务里完成，业务行与留痕同成同败（#119）。

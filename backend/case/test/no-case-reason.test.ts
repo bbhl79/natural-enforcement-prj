@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { checkNoCaseReason } from '../src/clue/closure/index.ts';
 
+// #226 不予立案理由在「法定情形清单」与「末款三项确认」之间必须二选一，且所选分支内部须完整。
 describe('checkNoCaseReason（#226）', () => {
   it('(a) non-filing-grounds 至少一项成功', () => {
     const out = checkNoCaseReason({

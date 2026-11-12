@@ -1,3 +1,7 @@
+// 用途：卷宗必需材料清单与完整性判定，按案件发生过的事件推导所需材料。
+// 调用方：backend/server/src/case-finalize.service.ts；结案与决定服务读取同一份清单。
+// 边界：清单是带版本的代码常量，不从库读取；结论为完整或经批准缺项。
+// 依据：#243、#32、#244。
 // 卷宗必需材料（#243 G4／Q25）：按案件发生过的事件推导，不逐案勾选。
 // 底稿是规程 13.1 的 21 项。本文件是带版本的代码常量，#244 结案检查点读同一份、同一版本。
 // 每案必有 (1)(2)(4)(19)；走到审理、决定的加 (5)(6)(7)(9)；
@@ -7,6 +11,7 @@
 
 import { stageIndex } from '../state-machine/catalog.ts';
 
+// 一项归档材料：清单编号与名称。
 export interface DossierMaterialDefinition {
   readonly code: number;
   readonly name: string;
@@ -37,8 +42,11 @@ export const DOSSIER_MATERIALS: readonly DossierMaterialDefinition[] = [
   { code: 21, name: '其他需要归档的材料' },
 ];
 
+// 卷宗材料清单的规则登记编号。
 export const DOSSIER_MATERIALS_RULE_ID = 'cfg.rule.dossier-materials.v1';
+// 卷宗材料清单的版本号，结案检查点按同一版本比对。
 export const DOSSIER_MATERIALS_VERSION = '2026-10-30';
+// 卷宗材料清单的依据说明。
 export const DOSSIER_MATERIALS_BASIS = '自然资源违法行为立案查处工作规程（试行）13.1；#32 Q25 定案（2026-10-27 13:18）';
 
 /** 每案必有。 */
@@ -52,21 +60,26 @@ export const DOSSIER_DELIVERY_ITEM = 20;
 
 const MATERIAL_NAMES = new Map(DOSSIER_MATERIALS.map((item) => [item.code, item.name]));
 
+// 按清单编号取材料名称，未登记返回 null。
 export function dossierMaterialName(code: number): string | null {
   return MATERIAL_NAMES.get(code) ?? null;
 }
 
+// 判断编号是否属于已登记的卷宗材料项。
 export function isDossierMaterialCode(value: number): boolean {
   return MATERIAL_NAMES.has(value);
 }
 
+// 一项豁免：材料编号与必填依据。
 export interface DossierExemption {
   readonly itemCode: number;
   /** 必填。写不出依据的项不豁免。 */
   readonly basis: string;
 }
 
+// 豁免规则集的登记编号。
 export const DOSSIER_EXEMPTIONS_RULE_ID = 'cfg.rule.dossier-exemptions.v1';
+// 豁免规则集的版本号。
 export const DOSSIER_EXEMPTIONS_VERSION = '2026-10-30';
 
 /** 移送管辖、终止调查结案可豁免的四项。 */
@@ -96,6 +109,7 @@ export function effectiveExemptions(
   return entries.filter((entry) => entry.basis.trim() !== '');
 }
 
+// 推导必需材料所需的事件事实，由调用方从案件与环节实例读出。
 export interface DossierRequirementInput {
   /** 进入过 E04 或更后的环节。 */
   readonly reachedReview: boolean;
@@ -108,6 +122,7 @@ export interface DossierRequirementInput {
   readonly exemptions?: readonly DossierExemption[];
 }
 
+// 本案的材料要求：必需项、豁免项与送达项是否必需。
 export interface DossierRequirement {
   readonly requiredItems: readonly number[];
   readonly exemptItems: readonly number[];
@@ -159,6 +174,7 @@ export function dossierInstanceKey(stage: string, entrySeq: number): string {
   return `${stage}:${entrySeq}`;
 }
 
+// 送达证据：回证，或公告送达的原因经过记录加公告材料。
 export type DeliveryEvidence =
   | { readonly kind: 'receipt' }
   | {
@@ -167,6 +183,7 @@ export type DeliveryEvidence =
       readonly announcementMaterials: readonly string[];
     };
 
+// 送达证据类型全集：回证与公告。
 export const DELIVERY_EVIDENCE_KINDS = ['receipt', 'announcement'] as const;
 
 function evidenceText(value: unknown): string {
@@ -199,10 +216,12 @@ export function readDeliveryEvidence(raw: unknown): DeliveryEvidence | null {
   return { kind, reasonRecord, announcementMaterials };
 }
 
+// 送达证据是否成立：解析结果非空即为成立。
 export function deliveryEvidenceSatisfied(raw: unknown): boolean {
   return readDeliveryEvidence(raw) !== null;
 }
 
+// 已入卷的一条材料事实：编号、是否登记在当前实例、送达证据原文。
 export interface DossierMaterialFact {
   readonly itemCode: number;
   /** 材料登记在当前环节实例上。 */
@@ -211,6 +230,7 @@ export interface DossierMaterialFact {
   readonly evidenceJson: string | null;
 }
 
+// 卷宗清单的一行：材料名称与必需、豁免、在卷、缺失状态。
 export interface DossierChecklistRow {
   readonly itemCode: number;
   readonly itemName: string;
@@ -221,13 +241,16 @@ export interface DossierChecklistRow {
   readonly missing: boolean;
 }
 
+// 卷宗结论：完整或经批准缺项。
 export type DossierConclusion = 'complete' | 'approved-missing';
 
+// 卷宗结论对应的中文名称。
 export const DOSSIER_CONCLUSION_NAMES: Readonly<Record<DossierConclusion, string>> = {
   complete: '完整',
   'approved-missing': '经批准缺项',
 };
 
+// 完整性比对的输入：材料要求、已入卷事实、回证情况与缺件理由。
 export interface DossierCompletenessInput {
   readonly requirement: DossierRequirement;
   readonly materials: readonly DossierMaterialFact[];
@@ -235,6 +258,7 @@ export interface DossierCompletenessInput {
   readonly missingReason: string | null;
 }
 
+// 完整性结果：清单、缺件、回证状态、是否需理由、是否阻断与结论。
 export interface DossierCompleteness {
   readonly checklist: readonly DossierChecklistRow[];
   readonly missingItems: readonly number[];

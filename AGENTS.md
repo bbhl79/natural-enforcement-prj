@@ -60,6 +60,10 @@ Agent 间指令传递、工具 / 接口定义、错误提示报文、系统状�
 
 创建、切换、合并、推送、删除分支，或添加、删除、移动 Git worktree 之前，先读 `.cursor/rules/branches.mdc` 并按其授权边界执行。PR 合并后删除分支属于长期授权，见该文件「合并后删除分支」一节。
 
+## 代码注释
+
+编写或修改代码注释前，先读 `docs/agents/code-comments.md` 并按其格式执行。
+
 ## Agent skills
 
 ### Main flow

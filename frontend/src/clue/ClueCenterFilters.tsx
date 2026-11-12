@@ -1,3 +1,5 @@
+// 用途：线索中心 /clue 列表上方的筛选栏，渲染六维筛选、关键词与登记日起止。
+// 调用方：frontend/src/pages/ClueCenterPage.tsx。
 // 线索中心筛选栏（#207）。
 // 六维筛选 + 关键词 + 登记日起止。
 
@@ -41,6 +43,7 @@ const GAP_OPTIONS: readonly { readonly value: string; readonly label: string }[]
   { value: 'no_gap', label: '无缺件' },
 ];
 
+/** 筛选栏的当前取值；键与地址查询参数同名。 */
 export interface ClueCenterFiltersValue {
   readonly domain: string;
   readonly source: string;
@@ -53,6 +56,7 @@ export interface ClueCenterFiltersValue {
   readonly to: string;
 }
 
+/** 筛选栏入参：当前取值与单项变更回调。 */
 export interface ClueCenterFiltersProps {
   readonly value: ClueCenterFiltersValue;
   readonly onChange: (key: string, value: string) => void;

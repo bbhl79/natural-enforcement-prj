@@ -57,6 +57,7 @@ afterAll(async () => {
   }
 });
 
+// 验证多几何部件按法域定几何存取：面与点写入后读回一致（#47 E4、#54）。
 describe('E4 多几何部件存取（法域定几何）', () => {
   it('土地/矿产法域几何=面：写入（来源坐标→CGCS2000 落库）后读回', async () => {
     for (const [name, domain, sourceWkt] of [
@@ -98,6 +99,7 @@ describe('E4 多几何部件存取（法域定几何）', () => {
   });
 });
 
+// 验证来源坐标经 CGCS2000 往返后逐字节可复现（#47 E4、#54）。
 describe('E4 坐标往返（来源→CGCS2000→来源）', () => {
   it('同一输入恒定输出：两轮独立往返逐字节一致', async () => {
     for (const sourceWkt of [LAND_SOURCE_WKT, SURVEY_SOURCE_WKT]) {

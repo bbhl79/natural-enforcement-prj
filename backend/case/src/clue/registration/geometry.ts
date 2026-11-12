@@ -1,3 +1,7 @@
+// 用途：解析几何来源文件，把 GeoJSON 拆成线索的面部件或单一点位，并校验输入坐标系。
+// 调用方：backend/server/src/clue-registration.service.ts（登记）、backend/server/src/clue-geometry.service.ts，经包名 @natural-enforcement/case 导入。
+// 边界：纯解析，不写库、不写留痕、不调用空间数据库；入库时的 ST_GeomFromGeoJSON 与 ST_Transform 由调用方执行。
+// 依据：#211。
 // 几何解析（#211；规格 B）。
 //
 // 口径：
@@ -131,6 +135,8 @@ function polygonParts(geometries: readonly GeoJsonGeometry[]): string[] | null {
  * 解析几何来源文件。
  * 面域：一个或多个面部件（Polygon 逐个拆开，MultiPolygon 拆成多个 Polygon）。
  * 点域：恰好一个点（MultiPoint 与点面混合都拒绝）。
+ * 失败返回 rule 码：spatial-srid-rejected、spatial-source-unparsable、
+ * spatial-geometry-empty、spatial-geometry-type-rejected。纯函数，不写库、不写留痕。
  */
 export function parseSpatialSource(input: SpatialParseInput): SpatialParseOutcome {
   if (input.srid !== ALLOWED_INPUT_SRID) {

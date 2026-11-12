@@ -1,3 +1,7 @@
+// 用途：提供线索登记的 multipart HTTP 接口，解析表单字段、附件与几何来源文件后委托 ClueRegistrationService。
+// 调用方：backend/server/src/app.module.ts 注册为控制器。
+// 依据：backend/server/src/clue-registration.service.ts（#211；规格 E）。
+//
 // 线索登记接口（#211；规格 E「上传方式」）。
 //
 // 一次登记 = 一个 multipart/form-data 请求：表单字段与全部文件一次提交。
@@ -33,10 +37,12 @@ interface UploadedFile {
   readonly buffer: Buffer;
 }
 
+// 线索登记的 HTTP 入口，请求处理全部委托 ClueRegistrationService。
 @Controller('api')
 export class ClueRegistrationController {
   constructor(private readonly registration: ClueRegistrationService) {}
 
+  // 线索登记，一次提交表单字段与全部文件；操作码 clue.register；对象级按操作者所属机构授权，请求须带 Idempotency-Key。
   @Post('clues')
   @UseInterceptors(
     FileFieldsInterceptor(

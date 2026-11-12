@@ -1,3 +1,5 @@
+// 用途：街道镇边界远程查询端口：逐部件查询相交街道编码、相交面积与相交多边形。
+// 调用方：backend/server/src/persistence.module.ts 建立端口并注入；backend/server/src/clue-suggestion.service.ts 按 STREET_BOUNDARY_PORT 注入使用。
 // 街道镇边界查询端口（#214；规格 C 节「辖区建议」、ADR 0021）。
 //
 // 辖区建议由分派流程服务端现算：面状逐面、点状按包含点位，向街道镇边界服务远程实时查询，

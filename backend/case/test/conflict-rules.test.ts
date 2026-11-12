@@ -25,6 +25,7 @@ function event(partial: Partial<ConflictEventFact> & Pick<ConflictEventFact, 'id
   };
 }
 
+// #237 活动状态集口径：声明与生效计入、驳回不计入；同一声明链以最新一行为准。
 describe('活动状态集', () => {
   it('声明与生效计入，驳回不计入', () => {
     const rows = [
@@ -77,6 +78,7 @@ describe('活动状态集', () => {
   });
 });
 
+// #237 回避决定人的两级席位：按申请来源确定，被申请人系承办机构负责人时上移一级。
 describe('决定人两级', () => {
   it('本人申请且被申请人不是承办机构负责人，由承办机构负责人决定', () => {
     expect(requiredDeciderSeat({ source: 'self', subjectIsHandlingOrgHead: false })).toBe('handling-org-head');
@@ -123,6 +125,7 @@ describe('决定人两级', () => {
   });
 });
 
+// #237 决定人身份过渡映射：按任职是否为行政审批及任职机构是否在承办机构路径上判定两级负责人。
 describe('决定人身份过渡映射', () => {
   const handling = 'station';
   const path = ['hq', 'dept', handling];

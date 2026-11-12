@@ -1,3 +1,7 @@
+// 用途：线索绘斑重绘，事务内替换空间版本与命中集，重算相关线索并写留痕。
+// 调用方：backend/server/src/clue-geometry.controller.ts。
+// 边界：授权经 authorize 与对象级校验（拒绝都写 authz.denied）；写事务内业务行与留痕同成同败；土地／矿产重绘后自动入队核查。
+// 依据：#212、#119、ADR 0011。
 // 绘斑重绘与疑似重复重算（#212；规格 B「几何与疑似重复」）。
 //
 // 口径：
@@ -76,6 +80,7 @@ export interface ClueGeometryBody {
   readonly hits: readonly ClueGeometryHit[];
 }
 
+/** 重绘结果；含输入不合规、拒绝、找不到与状态冲突。 */
 export type ClueGeometryOutcome =
   | { readonly status: 200; readonly body: ClueGeometryBody }
   | { readonly status: 400; readonly body: { readonly result: 'non-compliant'; readonly rules: readonly string[] } }
@@ -83,6 +88,7 @@ export type ClueGeometryOutcome =
   | { readonly status: 404; readonly body: { readonly result: 'not-found' } }
   | { readonly status: 409; readonly body: { readonly result: 'invalid-state'; readonly reason: string } };
 
+/** 绘斑重绘服务：校验形态与状态、重算命中并更新主状态。 */
 @Injectable()
 export class ClueGeometryService {
   constructor(

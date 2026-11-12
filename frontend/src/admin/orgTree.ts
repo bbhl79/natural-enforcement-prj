@@ -1,3 +1,4 @@
+// 用途：机构树（P4）的数据层与纯函数，含树组装、键盘操作、名称历史与机构维护写操作。
 // 机构树（P4，#123）的数据与纯函数。树查询放在 /api/org-units，业务侧选承办机构复用同一接口，只取未停用节点。
 // 新建下级、改名、停用放在 /api/admin/org-units。是否有权由服务端决定，前端按会话清单只决定显示什么。
 
@@ -7,11 +8,15 @@ import { apiFetch, type ApiDispatch } from '../api';
 import { hasOpcode } from '../opcodes';
 import { sessionOpcodes, type SessionStore } from '../session';
 
+/** 机构层级：市、区、所。 */
 export type OrgUnitLevel = 'city' | 'district' | 'station';
 
+/** 机构层级到单字标签的映射。 */
 export const LEVEL_LABEL: Record<OrgUnitLevel, string> = { city: '市', district: '区', station: '所' };
+/** 机构层级的固定顺序。 */
 export const LEVELS: readonly OrgUnitLevel[] = ['city', 'district', 'station'];
 
+/** 机构的一个历史名称及使用期间。 */
 export interface OrgUnitName {
   name: string;
   /** 开始使用的时刻（ISO） */
@@ -20,6 +25,7 @@ export interface OrgUnitName {
   to: string | null;
 }
 
+/** 机构树节点数据。 */
 export interface OrgUnit {
   id: string;
   code: string;
@@ -31,12 +37,14 @@ export interface OrgUnit {
   names: OrgUnitName[];
 }
 
+/** 机构树接口的返回体。 */
 export interface OrgTreeData {
   /** 操作者的当前任职机构，即树根 */
   rootId: string;
   orgUnits: OrgUnit[];
 }
 
+/** 前端组装后的树节点。 */
 export interface OrgTreeNode {
   unit: OrgUnit;
   children: OrgTreeNode[];
@@ -81,6 +89,7 @@ export function visibleOrder(root: OrgTreeNode, collapsed: ReadonlySet<string>):
   return order;
 }
 
+/** 键盘操作产生的动作：选中节点、展开折叠或不做。 */
 export type TreeKeyAction = { kind: 'select'; id: string } | { kind: 'toggle'; id: string } | null;
 
 /**
@@ -119,6 +128,7 @@ export function treeKeyAction(
   }
 }
 
+/** 直接下级，按接口返回的建立先后排列。 */
 export function childrenOf(tree: OrgTreeData, id: string): OrgUnit[] {
   return tree.orgUnits.filter((unit) => unit.parentId === id);
 }
@@ -179,14 +189,17 @@ export function formerNames(names: readonly OrgUnitName[]): Array<{ name: string
     .map((item) => ({ name: item.name, until: `${dayOf(item.to as string)} 前使用` }));
 }
 
+/** 机构写操作的字段规则码。 */
 export type OrgRuleCode = 'org-level-mismatch' | 'org-name-required' | 'org-name-too-long';
 
+/** 机构写操作规则码到提示文案的映射。 */
 export const RULE_TEXT: Record<OrgRuleCode, string> = {
   'org-name-required': '请填写机构名称。',
   'org-name-too-long': '机构名称不能超过 100 个字。',
   'org-level-mismatch': '层级不符：市下只能建区，区下只能建所，所下不能再建下级机构。',
 };
 
+/** 机构写操作的结果。 */
 export type OrgWriteResult =
   | { ok: true; id: string }
   | { ok: false; rules: OrgRuleCode[]; message: string | null };
@@ -224,6 +237,7 @@ async function write(
   return { ok: false, rules: [], message: FAILED };
 }
 
+/** 新建下级机构（POST /api/admin/org-units，操作码 org.unit.register）。 */
 export function registerOrgUnit(
   dispatch: ApiDispatch,
   input: { parentId: string; name: string; level: OrgUnitLevel },
@@ -231,15 +245,18 @@ export function registerOrgUnit(
   return write(dispatch, '/api/admin/org-units', input, (json) => String((json.orgUnit as { id?: string } | undefined)?.id ?? ''));
 }
 
+/** 改名（POST /api/admin/org-units/:id/rename，操作码 org.unit.rename）。 */
 export function renameOrgUnit(dispatch: ApiDispatch, id: string, name: string): Promise<OrgWriteResult> {
   return write(dispatch, `/api/admin/org-units/${encodeURIComponent(id)}/rename`, { name }, () => id);
 }
 
 /** 停用前在前端能核对的条件（按树数据）：在职人员、未停用的下级。服务端还会核对生效任职与未办结事项。 */
+/** 停用前前端能核对的阻碍项。 */
 export type DeactivationBlocker =
   | { kind: 'personnel'; count: number }
   | { kind: 'children'; names: string[] };
 
+/** 按树数据列出停用阻碍：在职人员与未停用的下级。 */
 export function deactivationBlockers(tree: OrgTreeData, unit: OrgUnit): DeactivationBlocker[] {
   const blockers: DeactivationBlocker[] = [];
   if (unit.activePersonnel > 0) blockers.push({ kind: 'personnel', count: unit.activePersonnel });
@@ -250,6 +267,7 @@ export function deactivationBlockers(tree: OrgTreeData, unit: OrgUnit): Deactiva
 
 const DEACTIVATE_CONFLICT = '这个机构暂时不能停用，请刷新后查看原因。';
 
+// POST /api/admin/org-units/:id/deactivate，操作码 org.unit.deactivate。
 /** 停用。409 显示服务端给的可读原因（根机构、下级、生效任职、未办结的线索或案件）。 */
 export function deactivateOrgUnit(dispatch: ApiDispatch, id: string): Promise<OrgWriteResult> {
   return write(
@@ -261,6 +279,7 @@ export function deactivateOrgUnit(dispatch: ApiDispatch, id: string): Promise<Or
   );
 }
 
+// GET /api/org-units，操作码 org.tree.read。
 /** 取树。403：重新拉会话（apiFetch）后显示无权限卡片；401 交给会话已结束页处理。 */
 export async function loadOrgTree(dispatch: ApiDispatch): Promise<OrgTreeData | null> {
   const response = await apiFetch(dispatch, '/api/org-units');

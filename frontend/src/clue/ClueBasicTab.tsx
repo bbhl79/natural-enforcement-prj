@@ -1,3 +1,6 @@
+// 用途：线索中心抽屉 /clue 的「基本信息与要件」页签，展示详情、反映人脱敏与缺件补齐。
+// 调用方：frontend/src/pages/ClueCenterPage.tsx。
+// 接口：GET /api/clues/:id/detail 操作码 clue.read；POST /api/clues/:id/gaps/fill 操作码 clue.item.supplement；查看实名 POST /api/clues/:id/reporter-read 操作码 clue.reference.read。
 // 基本信息与要件页签（#207 线索中心抽屉）。
 //
 // 展示四块：基本信息区、反映人区（匿名线索不展示）、要件清单区（按层分组）、缺件清单。

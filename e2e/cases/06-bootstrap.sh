@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 用途：生产引导命令的端到端冒烟：空库引导、重复执行、双键校验、首登改密与并发。
 # 生产引导命令（#131；#105「生产引导命令（D5）」，ADR 0013 第 3 条）。
 # 在 server 镜像里按生产顺序执行：迁移 → 参照种子（NODE_ENV=production，不写开发夹具）→ 引导。
 # 引导库是本用例新建的独立库，不动开发库。五个场景：
@@ -34,6 +35,7 @@ NEW_PASSWORD="Fresh-e2e-pass-73!"
 PHONE="13800013131"
 ARGS=(--root-code ORG-E2E-131 --root-name 市局 --admin-code SJ0001 --admin-name 首个管理 --admin-mobile "$PHONE")
 
+# 打印失败原因并以 1 退出。
 fail() {
   echo "[FAIL] $1" >&2
   exit 1
@@ -41,6 +43,7 @@ fail() {
 
 [ -n "${DATABASE_URL:-}" ] || fail "缺少 DATABASE_URL（由 dev 从 infra/runtime.env 算出）"
 DEV_DATABASE_URL="$DATABASE_URL"
+# 由开发库连接串换成指定库的连接串。
 db_url() { # $1 库名：沿用开发库连接串，只换库名
   printf '%s' "${DEV_DATABASE_URL%/*}/$1"
 }
@@ -49,18 +52,21 @@ work="$(mktemp -d)"
 containers=()
 server_switched=0
 
+# 在 db 容器内对指定库执行 psql；出错即停。
 psql_db() { # $1 库名，其余为 psql 参数
   local db="$1"
   shift
   "${COMPOSE[@]}" exec -T db psql -v ON_ERROR_STOP=1 -U "$PG_USER" -d "$db" "$@"
 }
 
+# 删掉本用例的两个独立库；库不存在不报错。
 drop_databases() {
   for db in "$BS_DB" "$BS_DB_C"; do
     psql_db "$PG_DB" -q -c "DROP DATABASE IF EXISTS ${db} WITH (FORCE)" >/dev/null 2>&1 || true
   done
 }
 
+# 把 server 恢复指向开发库并重启 nginx；失败返回非 0，由调用方决定是否保留现场。
 restore_server() {
   if [ "$server_switched" -eq 1 ]; then
     echo "[e2e] 引导：server 恢复指向开发库…"
@@ -71,6 +77,7 @@ restore_server() {
   fi
 }
 
+# 用例收尾：恢复 server、删用例容器与独立库、删临时目录；恢复失败保留现场。
 cleanup() {
   local status=$?
   if ! restore_server; then
@@ -93,6 +100,7 @@ echo "[e2e] 引导：拉起入口 ${BASE} …"
 printf '%s\n' "$PASSWORD" >"$work/bootstrap-password"
 chmod 0644 "$work/bootstrap-password"
 
+# 在 server 镜像里跑一条命令；容器保留到用例结束供 inspect 核对。
 in_image() { # $1 容器名，$2 库连接串，其余为容器内命令。容器保留到用例结束，供 inspect 核对。
   local name="$1" url="$2"
   shift 2
@@ -105,6 +113,7 @@ in_image() { # $1 容器名，$2 库连接串，其余为容器内命令。容�
     "$SERVER_IMAGE" "$@"
 }
 
+# 在容器内执行引导命令。
 bootstrap() { # $1 容器名，$2 库连接串，其余为引导参数
   local name="$1" url="$2"
   shift 2
@@ -112,6 +121,7 @@ bootstrap() { # $1 容器名，$2 库连接串，其余为引导参数
     /work/backend/server/src/bootstrap-command.ts "$@"
 }
 
+# 建空库并跑迁移与参照种子（生产种子不写开发夹具）。
 prepare_database() { # $1 库名：建空库，迁移，参照种子
   local db="$1" url
   url="$(db_url "$db")"
@@ -125,12 +135,14 @@ prepare_database() { # $1 库名：建空库，迁移，参照种子
     || fail "参照种子失败：$(cat "$work/${db}.seed.log")"
 }
 
+# 打印指定库五张表（机构/人员/任职/角色授予/留痕）的行数，比较引导前后差异。
 count_rows() { # $1 库名：机构/人员/任职/角色授予/留痕行数
   psql_db "$1" -tA -c "SELECT (SELECT count(*) FROM org_unit) || '/' || (SELECT count(*) FROM personnel) || '/' ||
     (SELECT count(*) FROM personnel_assignment) || '/' || (SELECT count(*) FROM personnel_role) || '/' ||
     (SELECT count(*) FROM audit_trail)"
 }
 
+# 断言文件里没有出现初始口令或新口令的明文。
 assert_no_password() { # $1 描述，$2 文件
   if grep -qF -- "$PASSWORD" "$2" || grep -qF -- "$NEW_PASSWORD" "$2"; then
     fail "口令出现在${1}里"
@@ -198,6 +210,7 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 
+# 发一次 HTTPS 请求，打印状态码；正文与响应头分别写入文件。
 request() { # $1 正文文件 $2 头文件 $3 路径 $4 请求体文件或空 $5 Cookie 或空
   local body_file="$1" header_file="$2" path="$3" payload="${4:-}" cookie="${5:-}"
   local args=(-sS --max-time 20 --cacert "$CERT" -D "$header_file" -o "$body_file" -w '%{http_code}')

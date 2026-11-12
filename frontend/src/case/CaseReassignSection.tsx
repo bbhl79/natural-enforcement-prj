@@ -1,3 +1,5 @@
+// 用途：案件详情「人员」区块，展示承办人与改派呈批，触发改派发起、批准与材料效力认定。
+// 调用方：frontend/src/case/CaseConflictPage.tsx 与 frontend/src/case/reassign.test.tsx。
 // 案件详情「人员」页签（#239）：发起改派、批准、曾任承办人员、材料效力认定清单。
 import { useState, type FormEvent } from 'react';
 
@@ -8,6 +10,7 @@ import {
   type ReassignListView,
 } from './reassign';
 
+/** 人员区块属性：视图、三个能力开关与发起、批准、认定回调。 */
 export interface CaseReassignSectionProps {
   readonly view: ReassignListView;
   readonly canSubmit: boolean;
@@ -40,6 +43,7 @@ function assistText(value: string): string[] {
     .filter((item) => item !== '');
 }
 
+/** 人员区块：渲染承办人、改派与材料清单，动作通过 props 回调交给路由组件提交。 */
 export function CaseReassignSection(props: CaseReassignSectionProps) {
   const [reasonCode, setReasonCode] = useState('transfer');
   const [note, setNote] = useState('');

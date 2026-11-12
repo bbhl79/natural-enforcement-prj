@@ -158,6 +158,7 @@ afterAll(async () => {
   await cloned?.close();
 });
 
+// #95：口令校验通过后建立会话，库中只存 Cookie 摘要，角色取自人员—角色关联。
 describe('POST /api/auth/login', () => {
   it('口令正确且上次改密时间已有值时建立会话，角色来自人员—角色', async () => {
     const before = await audits();
@@ -299,6 +300,7 @@ describe('POST /api/auth/login', () => {
   });
 });
 
+// #95：会话查询、健康检查与退出的登录态边界：匿名可查会话与健康，退出需要有效会话。
 describe('会话查询与受保护接口', () => {
   it('未登录时会话查询返回未登录，不写授权拒绝', async () => {
     const before = await audits();

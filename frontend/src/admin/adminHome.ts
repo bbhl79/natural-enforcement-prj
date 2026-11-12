@@ -1,3 +1,4 @@
+// 用途：管理台首页（P3）的数字汇总取数与视角判定。
 // 管理台首页（P3）的数据与视图判定。
 // 各入口的数字来自各自功能的查询：被锁人员（A10）、机构（#123，取机构树节点数）、今日留痕（#126）、
 // 人员（#128，取数据范围内未停用的人数）。「需要留意的执法证」与有执法资格的人数按人员名单的证件情况算（#133）。
@@ -11,6 +12,7 @@ import { sessionOpcodes, type SessionStore } from '../session';
 import { ADMIN_HOME_OPCODES, hasAny, ORG_MAINTENANCE_OPCODE } from '../shell/menu';
 import { certAttentionOf, qualifiedPersonnelCount, type CertAttentionKey, type PersonnelRow } from './personnel';
 
+/** 首页各入口的汇总数字；null 表示未取到。 */
 export interface AdminHomeSummary {
   /** 数据范围内的机构数 */
   orgUnits: number | null;
@@ -26,6 +28,7 @@ export interface AdminHomeSummary {
   certAttention: Record<CertAttentionKey, number> | null;
 }
 
+/** 首屏骨架用的空汇总，所有数字为 null。 */
 export const EMPTY_SUMMARY: AdminHomeSummary = {
   orgUnits: null,
   personnel: null,
@@ -38,6 +41,7 @@ export const EMPTY_SUMMARY: AdminHomeSummary = {
 /** 维护类入口码。只有留痕入口、没有维护入口的是监督视角。 */
 const MAINTENANCE_OPCODES = [ORG_MAINTENANCE_OPCODE, 'personnel.profile.read', 'personnel.locked.read'] as const satisfies readonly OpcodeName[];
 
+/** 首页视角：管理台、监督（只有留痕入口）或无权限。 */
 export type AdminHomeView = 'admin' | 'supervise' | 'denied';
 
 /** 按会话清单选首屏视角。只决定显示什么，不代替服务端授权。 */
@@ -55,6 +59,7 @@ export function firstDayPending(summary: AdminHomeSummary): boolean {
   return summary.orgUnits === 1 && summary.personnel === 1 && summary.certifiedPersonnel === 0;
 }
 
+/** 首页入口卡片：标题、说明、跳转路径、所需操作码与数字格式化。 */
 export interface AdminTile {
   id: string;
   title: string;
@@ -68,6 +73,7 @@ function counted(value: number | null, unit: string, prefix = ''): string | null
   return value === null ? null : `${prefix}${value} ${unit}`;
 }
 
+/** 首页四个维护入口，按原型 P3 的顺序。 */
 export const ADMIN_TILES: readonly AdminTile[] = [
   { id: 'org', title: '机构', desc: '建下级机构、改名、停用', path: '/admin/org-units', opcode: ORG_MAINTENANCE_OPCODE, count: (s) => counted(s.orgUnits, '个') },
   { id: 'person', title: '人员', desc: '建人员、分配角色、调岗、停用与恢复', path: '/admin/personnel', opcode: 'personnel.profile.read', count: (s) => counted(s.personnel, '人') },
@@ -78,6 +84,7 @@ export const ADMIN_TILES: readonly AdminTile[] = [
 /** 监督视角的留痕入口说明（P3 supervise）。 */
 export const SUPERVISE_AUDIT_DESC = '谁在什么时候做了哪些维护，结果如何';
 
+// GET /api/org-units（org.tree.read）、GET /api/admin/personnel（personnel.profile.read）、GET /api/admin/locked-personnel（personnel.locked.read）、GET /api/admin/audit/summary（audit.admin.read）。
 /** 取首页数字。接口 403：重新拉会话后显示无权限页；401 交给会话已结束页处理。 */
 export async function loadAdminHomeSummary(dispatch: ApiDispatch, opcodes: readonly string[]): Promise<AdminHomeSummary> {
   const summary: AdminHomeSummary = { ...EMPTY_SUMMARY };

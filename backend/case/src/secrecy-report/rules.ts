@@ -1,3 +1,7 @@
+// 用途：定义保密报告工单的三态迁移、报告时限与提醒计算。
+// 调用方：backend/server/src/secrecy-report.service.ts。
+// 边界：不对外发文、不代审批、不触发销毁；提醒计算的当前时刻由调用方注入。
+// 依据：Issue #225、#222。
 // 保密报告工单的领域规则（#225；#222 草案 §1「报告工单」＋「等待指令」）。
 //
 // 状态机只有三态，只进不退：
@@ -8,6 +12,7 @@
 
 /** 工单状态（库内取值）。 */
 export const SECRECY_REPORT_STATUSES = ['pending_report', 'reported', 'receipted'] as const;
+// 工单状态的类型别名。
 export type SecrecyReportStatus = (typeof SECRECY_REPORT_STATUSES)[number];
 
 /** 状态的界面文案。 */

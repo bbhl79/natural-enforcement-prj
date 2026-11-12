@@ -1,3 +1,7 @@
+// 用途：法制审核与集体讨论环节的纯规则，含必审判定、接收人校验、意见解析与决定闸口。
+// 调用方：backend/server/src/case-legal-review.service.ts、backend/server/src/case-decision.service.ts 与 backend/server/src/case-notice.service.ts。
+// 边界：不依赖 Nest 与存储；法审期限由 #246 的 legal-review.round 规则键计算，本文件不另算。
+// 依据：#269、#90、#31。
 // 法制审核与集体讨论（E07、E08）纯规则（#269）。不依赖 Nest 与存储。
 // 必审清单以广州市局 2022-02-15 清单六项为准（#90/6409846424、#90/6410046818）。
 // 系统自动判：实际举行过听证；已受理／已排期（含其后终止）；拟处罚种类含清单第 5 项列举种类；涉刑移送。
@@ -19,7 +23,9 @@ import {
 
 /** 必审清单标识。市局清单默认适用各区分局；区分局覆盖时换 id 与版本。 */
 export const LEGAL_REVIEW_LIST_ID = 'cfg.rule.legal-review-list.v1';
+// 必审清单的版本号，区分局覆盖时随 id 一并替换。
 export const LEGAL_REVIEW_LIST_VERSION = '2026-10-29';
+// 清单默认适用的机关层级，市局清单默认适用各区分局。
 export const DEFAULT_LEGAL_REVIEW_LIST_LEVEL = 'city';
 
 /** 清单六项与《广州市依法行政条例》第 37 条（三）。 */
@@ -41,8 +47,10 @@ export const MANDATORY_REVIEW_ITEMS = [
   { code: 'criminal-transfer', item: null, name: '涉刑移送决定', judgedBy: 'auto' },
 ] as const;
 
+// 必审清单项的标识，取 MANDATORY_REVIEW_ITEMS 元素的 code。
 export type MandatoryReviewItemCode = (typeof MANDATORY_REVIEW_ITEMS)[number]['code'];
 
+// 需人工勾选的必审清单项代码全集。
 export const MANUAL_REVIEW_ITEM_CODES = [
   'major-public-interest',
   'major-social-impact',
@@ -50,6 +58,7 @@ export const MANUAL_REVIEW_ITEM_CODES = [
   'law-requires',
   'material-rights',
 ] as const;
+// 人工勾选的必审清单项代码，取 MANUAL_REVIEW_ITEM_CODES 的元素类型。
 export type ManualReviewItemCode = (typeof MANUAL_REVIEW_ITEM_CODES)[number];
 
 /** 拟不予处罚只命中第 1–4 项才必审（清单第 1、3、4 项与听证）。 */
@@ -70,6 +79,7 @@ export const NOT_REQUIRED_DECISION_KINDS = [
   'closure',
   'party-discipline-transfer',
 ] as const;
+// 不必审的决定类型，取 NOT_REQUIRED_DECISION_KINDS 的元素类型。
 export type NotRequiredDecisionKind = (typeof NOT_REQUIRED_DECISION_KINDS)[number];
 
 /** 清单第 5 项列举的处罚种类。只认列举出的代码，不扩大解释「等」。 */
@@ -89,18 +99,22 @@ const MANUAL_CODE_SET = new Set<string>(MANUAL_REVIEW_ITEM_CODES);
 const NO_PENALTY_MANUAL_CODE_SET = new Set<string>(NO_PENALTY_MANUAL_ITEM_CODES);
 const NOT_REQUIRED_KIND_SET = new Set<string>(NOT_REQUIRED_DECISION_KINDS);
 
+// 判断罚种代码是否属于清单第 5 项列举的必审处罚种类。
 export function isMandatoryReviewPenaltyCode(code: string): boolean {
   return MANDATORY_PENALTY_CODE_SET.has(code);
 }
 
+// 判断字符串是否为人工勾选的必审清单项代码。
 export function isManualReviewItemCode(value: string): value is ManualReviewItemCode {
   return MANUAL_CODE_SET.has(value);
 }
 
+// 判断字符串是否为不必审的决定类型。
 export function isNotRequiredDecisionKind(value: string): value is NotRequiredDecisionKind {
   return NOT_REQUIRED_KIND_SET.has(value);
 }
 
+// 必审判定入参：决定类型、听证事实、罚种、涉刑移送与人工勾选项。
 export interface MandatoryReviewFacts {
   /** penalty | no-penalty | criminal-transfer | 不必审情形。 */
   readonly decisionKind: string;
@@ -113,12 +127,14 @@ export interface MandatoryReviewFacts {
   readonly manualItems: readonly string[];
 }
 
+// 区分局覆盖清单时可替换的 id、版本与层级。
 export interface LegalReviewListOverride {
   readonly listId?: string;
   readonly listVersion?: string;
   readonly listLevel?: 'city' | 'district';
 }
 
+// 必审判定结果：是否必审、是否属不必审情形、命中原因与所用清单版本。
 export interface MandatoryReviewAssessment {
   readonly required: boolean;
   /** 不必审情形为 true；此时不因人工勾选改判。 */
@@ -178,9 +194,12 @@ export function assessMandatoryReview(
 
 /** 接收人角色、负责人角色与岗位标记。 */
 export const LEGAL_REVIEW_RECEIVER_ROLE = '法制审核';
+// 法制审核负责人须持的角色，与接收人角色并列。
 export const LEGAL_REVIEW_HEAD_ROLE = '行政审核';
+// 法制审核负责人的岗位标记。
 export const LEGAL_REVIEW_HEAD_POST = 'legal-review-lead';
 
+// 法审接收人的判定事实，由调用方从人员与任职机构读出。
 export interface LegalReviewCandidateFacts {
   readonly roles: readonly string[];
   /** 当前任职机构就是该案法制审核归属，人员未停用。 */
@@ -191,6 +210,7 @@ export interface LegalReviewCandidateFacts {
   readonly deactivated: boolean;
 }
 
+// 法审接收人被拒的原因码全集。
 export type LegalReviewReceiverIssue =
   | 'receiver-not-legal-reviewer'
   | 'receiver-deactivated'
@@ -198,6 +218,7 @@ export type LegalReviewReceiverIssue =
   | 'receiver-is-handler'
   | 'receiver-conflict-active';
 
+// 法审接收人判定结果：通过，或拒绝原因码、文案与出路。
 export type LegalReviewReceiverCheck =
   | { readonly ok: true }
   | { readonly ok: false; readonly reason: LegalReviewReceiverIssue; readonly message: string; readonly outlet: string };
@@ -242,6 +263,7 @@ export function checkLegalReviewReceiver(facts: LegalReviewCandidateFacts): Lega
   return { ok: true };
 }
 
+// 法制审核负责人的判定事实。
 export interface LegalReviewHeadFacts {
   readonly roles: readonly string[];
   readonly posts: readonly string[];
@@ -250,12 +272,14 @@ export interface LegalReviewHeadFacts {
   readonly deactivated: boolean;
 }
 
+// 法制审核负责人被拒的原因码全集。
 export type LegalReviewHeadIssue =
   | 'head-deactivated'
   | 'head-not-admin-reviewer'
   | 'head-post-marker-missing'
   | 'head-org-not-attributed';
 
+// 法制审核负责人判定结果：通过，或拒绝原因码、文案与出路。
 export type LegalReviewHeadCheck =
   | { readonly ok: true }
   | { readonly ok: false; readonly reason: LegalReviewHeadIssue; readonly message: string; readonly outlet: string };
@@ -292,21 +316,27 @@ export function checkLegalReviewHead(facts: LegalReviewHeadFacts): LegalReviewHe
   return { ok: true };
 }
 
+// 法审结论全集：通过或不通过。
 export const LEGAL_REVIEW_CONCLUSIONS = ['pass', 'fail'] as const;
+// 法审结论，取 LEGAL_REVIEW_CONCLUSIONS 的元素类型。
 export type LegalReviewConclusion = (typeof LEGAL_REVIEW_CONCLUSIONS)[number];
 
 /** 不通过的两条去向。法审不通过不是退回。 */
 export const LEGAL_REVIEW_FAIL_ROUTES = ['accept-revise', 'collective-discussion'] as const;
+// 不通过去向，取 LEGAL_REVIEW_FAIL_ROUTES 的元素类型。
 export type LegalReviewFailRoute = (typeof LEGAL_REVIEW_FAIL_ROUTES)[number];
 
+// 判断字符串是否为已登记的法审结论。
 export function isLegalReviewConclusion(value: string): value is LegalReviewConclusion {
   return (LEGAL_REVIEW_CONCLUSIONS as readonly string[]).includes(value);
 }
 
+// 判断字符串是否为已登记的不通过去向。
 export function isLegalReviewFailRoute(value: string): value is LegalReviewFailRoute {
   return (LEGAL_REVIEW_FAIL_ROUTES as readonly string[]).includes(value);
 }
 
+// 法审意见正文：结论、不通过去向、意见内容与讨论记录引用。
 export interface LegalReviewOpinionContent {
   readonly conclusion: LegalReviewConclusion;
   /** 结论为不通过时必填；通过时为空。 */
@@ -316,6 +346,7 @@ export interface LegalReviewOpinionContent {
   readonly discussionRecordId: string | null;
 }
 
+// 内容校验失败的返回：400 与原因码、文案、出路。
 export interface LegalReviewContentHit {
   readonly httpStatus: 400;
   readonly reason: string;
@@ -323,6 +354,7 @@ export interface LegalReviewContentHit {
   readonly outlet: string;
 }
 
+// 法审意见读取结果：通过时交出正文，否则交出 400 命中项。
 export type LegalReviewOpinionRead =
   | { readonly ok: true; readonly content: LegalReviewOpinionContent }
   | { readonly ok: false; readonly hit: LegalReviewContentHit };
@@ -369,6 +401,7 @@ export function readLegalReviewOpinionContent(raw: unknown): LegalReviewOpinionR
   };
 }
 
+// 集体讨论记录的事实，供引用校验使用。
 export interface DiscussionRecordFacts {
   readonly id: string;
   readonly caseId: string;
@@ -376,6 +409,7 @@ export interface DiscussionRecordFacts {
   readonly createdAt: Date;
 }
 
+// 讨论记录引用校验结果：通过，或拒绝原因码、文案与出路。
 export type DiscussionReferenceCheck =
   | { readonly ok: true }
   | { readonly ok: false; readonly reason: string; readonly message: string; readonly outlet: string };
@@ -454,6 +488,7 @@ export function assertNoticeGate(input: {
   };
 }
 
+// 决定闸口判定事实：最近结论、覆盖、听证与讨论状态。
 export interface DecisionGateFacts {
   readonly mandatory: boolean;
   /** 最近一次已定稿（负责人已签）的法审结论。 */
@@ -469,6 +504,7 @@ export interface DecisionGateFacts {
   readonly discussionSatisfied: boolean;
 }
 
+// 决定闸口的阻断项：规则码、文案、出路与依据条号。
 export interface DecisionGateBlock {
   readonly code: 'X27' | 'X08' | 'X09';
   readonly message: string;
@@ -476,6 +512,7 @@ export interface DecisionGateBlock {
   readonly citation: string | null;
 }
 
+// 决定闸口结果：通过或带阻断项。
 export type DecisionGateCheck = { readonly ok: true } | { readonly ok: false; readonly block: DecisionGateBlock };
 
 function blockOf(code: 'X27' | 'X08' | 'X09', message: string): DecisionGateBlock {
@@ -531,8 +568,10 @@ export const GUANGZHOU_PROCEDURE_REFERENCE_LIST_V1 = {
 
 /** 集体讨论标准：粤自然资规字〔2022〕2 号第 12 条四种情形，另加情节复杂或重大违法行为的法定触发。 */
 export const COLLECTIVE_DISCUSSION_LIST_ID = 'cfg.rule.collective-discussion.v1';
+// 集体讨论标准清单的版本号。
 export const COLLECTIVE_DISCUSSION_LIST_VERSION = '2026-10-29';
 
+// 集体讨论标准清单：粤自然资规字〔2022〕2 号第 12 条四种情形与法定触发。
 export const COLLECTIVE_DISCUSSION_CRITERIA = [
   {
     code: 'mixed-lenient-severe',
@@ -561,30 +600,38 @@ export const COLLECTIVE_DISCUSSION_CRITERIA = [
   },
 ] as const;
 
+// 集体讨论标准的代码，取 COLLECTIVE_DISCUSSION_CRITERIA 元素的 code。
 export type CollectiveDiscussionCriterionCode = (typeof COLLECTIVE_DISCUSSION_CRITERIA)[number]['code'];
 
 const DISCUSSION_CRITERION_SET = new Set<string>(COLLECTIVE_DISCUSSION_CRITERIA.map((row) => row.code));
 
+// 判断字符串是否为已登记的集体讨论标准代码。
 export function isCollectiveDiscussionCriterion(value: string): value is CollectiveDiscussionCriterionCode {
   return DISCUSSION_CRITERION_SET.has(value);
 }
 
+// 讨论目的全集：处罚决定与统一法制审核意见。
 export const DISCUSSION_PURPOSES = ['penalty-decision', 'unify-legal-opinion'] as const;
+// 讨论目的，取 DISCUSSION_PURPOSES 的元素类型。
 export type DiscussionPurpose = (typeof DISCUSSION_PURPOSES)[number];
 
 const DISCUSSION_PURPOSE_SET = new Set<string>(DISCUSSION_PURPOSES);
 
+// 判断字符串是否为已登记的讨论目的。
 export function isDiscussionPurpose(value: string): value is DiscussionPurpose {
   return DISCUSSION_PURPOSE_SET.has(value);
 }
 
+// 集体讨论勾选内容：命中的标准代码与理由。
 export interface DiscussionMarkContent {
   readonly criteriaCodes: readonly CollectiveDiscussionCriterionCode[];
   readonly reason: string;
 }
 
+// 讨论内容校验失败的返回，与法审内容命中同形。
 export type DiscussionContentHit = LegalReviewContentHit;
 
+// 集体讨论勾选读取结果：通过时交出内容，否则交出 400 命中项。
 export type DiscussionMarkRead =
   | { readonly ok: true; readonly content: DiscussionMarkContent }
   | { readonly ok: false; readonly hit: DiscussionContentHit };
@@ -620,12 +667,14 @@ export function readDiscussionMarkContent(raw: unknown): DiscussionMarkRead {
   return { ok: true, content: { criteriaCodes, reason } };
 }
 
+// 讨论记录内容：目的、标准代码与讨论情况。
 export interface DiscussionRecordContent {
   readonly purposes: readonly DiscussionPurpose[];
   readonly criteriaCodes: readonly CollectiveDiscussionCriterionCode[];
   readonly note: string;
 }
 
+// 讨论记录读取结果：通过时交出内容，否则交出 400 命中项。
 export type DiscussionRecordRead =
   | { readonly ok: true; readonly content: DiscussionRecordContent }
   | { readonly ok: false; readonly hit: DiscussionContentHit };

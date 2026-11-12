@@ -31,6 +31,7 @@ const view: DeadlineView = {
   ],
 };
 
+// 验证期限页展示服务端期限视图与补登表单，并可从调查页进入（#246）。
 describe('期限页', () => {
   it('展示到期日、延长呈批和期间事件补登', () => {
     const html = renderToStaticMarkup(

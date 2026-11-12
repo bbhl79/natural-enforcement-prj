@@ -1,3 +1,4 @@
+// 用途：汇总保密报告工单规则与类型的对外导出。
 // 保密报告工单（#225）公共出口。
 export {
   SECRECY_REPORT_DEADLINE_HOURS,

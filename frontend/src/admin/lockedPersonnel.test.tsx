@@ -88,6 +88,7 @@ const view = (state: LockedState, opcodes = ADMIN_OPCODES) => renderToStaticMark
 /** 去掉标签，只留可见文本，便于与原型逐字比对。 */
 const text = (html: string) => html.replace(/<[^>]+>/g, '').replace(/&quot;/g, '"');
 
+// 验证页面与弹窗文案逐字沿用原型 v0.4 P7 的定稿。
 describe('P7 文案与原型 v0.4 逐字一致（35 条定稿、#84 批准的两句）', () => {
   it('固定文案逐字出现在原型里', () => {
     for (const copy of [PAGE_DESC, EMPTY_TITLE, EMPTY_HINT, NO_ORG_HINT, UNLOCK_NOTE, RESET_PLACEHOLDER, RESET_EFFECT, SELF_DENIED]) {
@@ -122,6 +123,7 @@ describe('P7 文案与原型 v0.4 逐字一致（35 条定稿、#84 批准的两
   });
 });
 
+// 验证自动解锁时间按 Asia/Shanghai 显示到分钟。
 describe('自动解锁时间', () => {
   it('按 Asia/Shanghai 显示到分钟', () => {
     expect(formatUnlockTime('2026-10-17T02:21:00.000Z')).toBe('2026-10-17 10:21');
@@ -130,6 +132,7 @@ describe('自动解锁时间', () => {
   });
 });
 
+// 验证被锁人员页的路由取数、各状态渲染与权限判定。
 describe('被锁人员页（P7）路由', () => {
   it('data：列名照 #91，每行解锁与重设初始口令，无任职者机构名为空，无手机号', async () => {
     serve(CITY_ADMIN, { '/api/admin/locked-personnel': listed(ROWS) });
@@ -189,6 +192,7 @@ describe('被锁人员页（P7）路由', () => {
   });
 });
 
+// 验证解锁与重设初始口令的状态机、弹窗渲染与拒绝提示。
 describe('动作：解锁与重设初始口令', () => {
   const open = (kind: 'unlock' | 'reset', row: LockedRow) =>
     lockedReducer(initialLockedState(ROWS), { type: 'open', kind, row });
@@ -328,6 +332,7 @@ describe('动作：解锁与重设初始口令', () => {
   });
 });
 
+// 验证动作请求的接口、结果判定与各类错误的横幅映射。
 describe('动作请求与结果判定', () => {
   it('解锁 POST 到 A10 解锁接口；重设带 JSON 口令', async () => {
     const store = fresh();

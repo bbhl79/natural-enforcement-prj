@@ -1,3 +1,7 @@
+// 用途：提供疑似重复绘斑的重绘 HTTP 接口，解析 SRID 与 GeoJSON 后委托 ClueGeometryService。
+// 调用方：backend/server/src/app.module.ts 注册为控制器。
+// 依据：backend/server/src/clue-geometry.service.ts（#212；规格 B）。
+//
 // 疑似重复的绘斑重绘接口（#212；规格 B）。
 //
 // POST /api/clues/:id/geometry   重绘（新空间版本，写事务内同步重算疑似重复）
@@ -22,10 +26,12 @@ interface ClueGeometryPayload {
   readonly geojson?: unknown;
 }
 
+// 绘斑重绘的 HTTP 入口，请求处理全部委托 ClueGeometryService。
 @Controller('api')
 export class ClueGeometryController {
   constructor(private readonly geometry: ClueGeometryService) {}
 
+  // 重绘绘斑，写新空间版本并同步重算疑似重复；操作码 clue.geometry.update；对象级限线索录入人本人。
   @Post('clues/:id/geometry')
   async redraw(
     @Req() req: AuthenticatedRequest,

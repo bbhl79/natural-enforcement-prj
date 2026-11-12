@@ -1,3 +1,4 @@
+// 用途：有效性确认、复核、重新告知与有效性闸口的 HTTP 接口。
 // 有效性确认、复核、重新告知与决定闸口的 HTTP 入口（#248）。
 // 确认与重新告知复用 doc.submit；复核复用 doc.admin.review／legal.opinion.submit；
 // 决定闸口复用 doc.approve（#270 在决定审批链调用服务方法）。
@@ -15,10 +16,12 @@ interface HttpReply {
   json(body: unknown): void;
 }
 
+/** 有效性确认接口的 HTTP 适配层。 */
 @Controller()
 export class CaseValidityController {
   constructor(private readonly validity: CaseValidityService) {}
 
+  // 读取案件的有效性确认视图；操作码 case.read；对象级按案件承办机构校验。
   @Get('api/cases/:id/validity')
   @UseGuards(SameOriginReadGuard)
   async read(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {
@@ -26,6 +29,7 @@ export class CaseValidityController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 登记有效性确认；操作码 doc.submit；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/validity-confirmations')
   @UseGuards(SameOriginReadGuard)
   async confirm(
@@ -46,6 +50,7 @@ export class CaseValidityController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 复核有效性确认；操作码 doc.admin.review（另一放行码 legal.opinion.submit）；对象级按案件承办机构校验。
   @Post('api/validity-confirmations/:confirmationId/review')
   @UseGuards(SameOriginReadGuard)
   async review(
@@ -61,6 +66,7 @@ export class CaseValidityController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 重新告知；操作码 doc.submit；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/notice-reissues')
   @UseGuards(SameOriginReadGuard)
   async reissue(
@@ -82,6 +88,7 @@ export class CaseValidityController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 检查有效性是否满足决定审批的前置条件；操作码 doc.approve；对象级按案件承办机构校验。
   @Post('api/cases/:id/validity-gate')
   @UseGuards(SameOriginReadGuard)
   async gate(

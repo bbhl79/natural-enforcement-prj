@@ -1,3 +1,7 @@
+// 用途：在一个交互式事务里建根机构与首个系统管理人员，并写引导留痕。
+// 调用方：backend/server/src/bootstrap-command.ts 的命令行流程。
+// 边界：无 HTTP 入口；空库才写入，两键不全时只返回差异。
+// 依据：#131、ADR 0013
 // 生产引导（#105「生产引导命令（D5）」，#131）：建根机构（层级为市）与首个系统管理人员。
 // 没有 HTTP 入口，由 server 镜像里的命令行进程调用（backend/server/src/bootstrap-command.ts）。
 // 整条引导一个交互式事务，第一条语句取事务级咨询锁：两个进程并发时只有一次写入，
@@ -18,6 +22,7 @@ import { ROOT_ORG_UNIT_LEVEL } from '../domain/org-unit.ts';
 import { newUlid } from '@natural-enforcement/shield';
 import type { IdentityStore } from '../persistence/identity-store.ts';
 
+/** 引导请求：两键资料与初始口令散列（口令已在外层散列）。 */
 export interface BootstrapRequest extends BootstrapProfile {
   /** 初始口令的散列。口令修改时间留空，首登强制改密。 */
   passwordHash: string;
@@ -28,6 +33,8 @@ export interface BootstrapHooks {
   afterLock?: () => Promise<void>;
 }
 
+// 生产引导服务：事务内取咨询锁后判定并写入；失败整体回滚。
+// 由 backend/server/src/bootstrap-command.ts 调用。
 export class BootstrapService {
   constructor(
     private readonly store: IdentityStore,

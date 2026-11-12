@@ -1,3 +1,4 @@
+// 用途：顶栏一级与侧栏二级菜单的登记表与可见性裁剪函数，菜单可见性只是便利，授权以服务端为准。
 // 顶栏一级五总入口与侧栏二级（#207 导航锁、#209 执行票）。
 // 一级键位固定：workbench｜clue｜case｜supervise｜admin；二级键位同样固定，文案可改、键位不改。
 // 菜单可见性只是便利；真正的授权由服务端每次校验（#207「菜单可见性仍只是便利」）。
@@ -9,6 +10,7 @@ import { CLUE_VIEWS, withPreservedQuery } from './clueUrl';
 /** 顶栏一级入口键位。键位稳定：文案可改，键位不改。 */
 export type PrimaryKey = 'workbench' | 'clue' | 'case' | 'supervise' | 'admin';
 
+/** 顶栏一级入口的登记行：键位、文案、地址与可见所需操作码。 */
 export interface PrimaryEntry {
   id: PrimaryKey;
   label: string;
@@ -21,6 +23,7 @@ export interface PrimaryEntry {
   anyOf: readonly OpcodeName[];
 }
 
+/** 侧栏二级入口的登记行：所属一级、地址、可见所需操作码与占位标记。 */
 export interface SecondaryEntry {
   id: string;
   /** 所属一级入口。 */
@@ -170,6 +173,7 @@ export const SECONDARY_ENTRIES: readonly SecondaryEntry[] = [
   })),
 ];
 
+/** 会话清单是否含有任一所需操作码；wanted 为空时返回 false，由调用方另行处理「人人可见」。 */
 export function hasAny(opcodes: readonly string[], wanted: readonly OpcodeName[]): boolean {
   return wanted.some((code) => opcodes.includes(code));
 }

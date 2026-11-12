@@ -89,6 +89,7 @@ const agencyQuiet = {
   onMarkAgency: () => undefined,
 };
 
+// 验证人员页签按操作码展示改派与效力认定入口（#239）。
 describe('人员页签', () => {
   it('显示承办人员、曾任人员、改派入口、批准入口与效力认定清单', () => {
     const html = renderToStaticMarkup(<CaseReassignSection {...props()} />);

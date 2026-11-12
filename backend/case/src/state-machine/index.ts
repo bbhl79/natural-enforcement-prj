@@ -1,3 +1,6 @@
+// 用途：state-machine 模块的对外出口，汇总状态目录、迁移引擎判定与规则注册表。
+// 调用方：backend/case/src 内的各环节模块与 backend/server 下的迁移服务，经包名 @natural-enforcement/case 汇总导出。
+// 边界：只做再导出，不含逻辑。
 export {
   CASE_INSTANCE_STATUSES,
   CASE_INSTANCE_STATUS_NAMES,

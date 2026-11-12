@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# 用途：在 Playwright 容器内跑 UI 全链：两次完整登记、进入待决定、实点派出与派机构。
+# 用法：由 e2e/cases/09-verify-ui.sh 调用；VERIFY_RUN_ID 必填，BASE_URL 与 EVIDENCE_ROOT 可覆盖。
+# 退出码：0 两段均通过；1 登记段未得到 pending_decision 或任一段失败。
 # UI 全链：登录 → 两次完整登记 → 正式命中待决定 → 实点派出 → 实点派机构。
 # 在 Playwright 镜像容器里运行（e2e/cases/09-verify-ui.sh 调用），不依赖宿主 node、
 # /mnt/c 中转、host.docker.internal。容器走宿主网络，BASE_URL 是 https://localhost:<端口>。

@@ -1,3 +1,4 @@
+// 用途：左侧二级侧栏，随顶栏一级入口切换；统一工作台不显示侧栏。
 import { Link, useLocation } from 'react-router';
 
 import {

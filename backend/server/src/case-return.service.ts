@@ -1,3 +1,7 @@
+// 用途：案件退回的办理与留痕，供退回接口与改派不批路径使用。
+// 调用方：backend/server/src/case-return.controller.ts、backend/server/src/case-reassign.controller.ts。
+// 边界：授权经 authorize（拒绝先写 authz.denied 再抛错）；失败不改业务行；回流不改已有材料与环节实例。
+// 依据：#238、#279、ADR 0011。
 // 案件退回（#238）。判定在 case 包的纯函数里，这里只喂事实、落库、写留痕。
 // 失败不改业务行。回流不改已有材料，也不改已有环节实例。
 
@@ -42,6 +46,7 @@ const REASSIGN_REJECT_INHERITED = 'R9';
 
 const FAIL_REASONS = new Set<string>(CASE_RETURNED_FAILED_REASONS);
 
+/** 退回输入：理由码、说明、目标环节、接收人、继承码与缺陷环节。 */
 export interface CaseReturnInput {
   readonly reasonCode: string;
   readonly note: string;
@@ -52,6 +57,7 @@ export interface CaseReturnInput {
   readonly earlierChainLevel: string | null;
 }
 
+/** 退回接口的结果；状态码区分成功、输入不合规、拒绝、找不到与冲突。 */
 export type CaseReturnHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }
   | { readonly status: 400; readonly body: Record<string, unknown> }
@@ -59,6 +65,7 @@ export type CaseReturnHttpOutcome =
   | { readonly status: 404; readonly body: { readonly result: 'not-found' } }
   | { readonly status: 409; readonly body: Record<string, unknown> };
 
+/** 案件退回服务：把案件事实喂给纯函数，落库并写留痕。 */
 @Injectable()
 export class CaseReturnService {
   constructor(

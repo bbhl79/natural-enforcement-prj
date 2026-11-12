@@ -1,3 +1,7 @@
+// 用途：还原 multipart 上传文件名，修复中文附件名被框架按 latin1 解码成乱码的问题。
+// 调用方：backend/server/src/clue-registration.controller.ts、backend/server/src/clue-disposition.controller.ts、backend/server/src/case-transfer.controller.ts、backend/server/src/secrecy-report.controller.ts。
+// 依据：RFC 7578。
+//
 /**
  * multipart 上传文件名解码。
  *

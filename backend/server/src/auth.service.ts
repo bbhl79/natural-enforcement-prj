@@ -1,3 +1,7 @@
+// 用途：登录、会话解析与维护、修改口令、登出，以及管理员动作与人员停用触发的会话结束。
+// 调用方：backend/server/src/auth.controller.ts、session.guard.ts、admin.service.ts、personnel-profiles.service.ts。
+// 边界：无操作码授权，只做会话认证；会话缺失时写 authz.denied（not-authenticated）；登录与改密留痕由本服务追加。
+// 依据：ADR 0002、ADR 0011、ADR 0015。
 import { Inject, Injectable } from '@nestjs/common';
 import { AUDIT_TRAIL_PORT, type AuditTrailPort, type PasswordChangedReason, type SessionEndReason } from '@natural-enforcement/audit';
 import {
@@ -101,6 +105,7 @@ function newSessionSecret(): string {
   return base64url(bytes);
 }
 
+/** 登录入口的输入：手机号、口令、记住我选择、Cookie 头与来源地址。 */
 export interface LoginInput {
   mobilePhone: string;
   password: string;
@@ -109,6 +114,7 @@ export interface LoginInput {
   sourceIp: string | null;
 }
 
+/** 登录结果：HTTP 状态、结果体，以及成功时待下发的会话与记住我 Cookie。 */
 export type LoginOutcome = {
   status: number;
   body:
@@ -121,6 +127,7 @@ export type LoginOutcome = {
   setCookies?: string[];
 };
 
+/** 修改口令结果：成功、凭据无效、锁定、口令规则不合规或并发改密。 */
 export type PasswordChangeOutcome = {
   status: number;
   body:
@@ -132,6 +139,7 @@ export type PasswordChangeOutcome = {
     | { result: 'concurrent-change' };
 };
 
+/** 会话视图：未登录只有 anonymous；已登录含姓名、机构、角色、口令门禁、到期提醒与可用操作码。 */
 export type SessionView =
   | { result: 'anonymous' }
   | {
@@ -151,11 +159,13 @@ export type SessionView =
 
 type ActiveSession = { row: SessionRow; account: LoginAccount };
 
+/** 一次请求的会话解析结果：当前会话，以及需要换发的 Cookie。 */
 export interface AuthResolution {
   active: ActiveSession | null;
   setCookies: string[];
 }
 
+/** 认证与口令服务：登录、会话解析与维护、修改口令、登出与各类会话结束。 */
 @Injectable()
 export class AuthService {
   constructor(

@@ -1,3 +1,8 @@
+// 用途：管理台执法证登记，逐条登记证号、有效期与证件状态。
+// 调用方：backend/server/src/personnel-cert.controller.ts。
+// 边界：业务行与留痕同事务；拒绝动作经 rejected 回滚，拒绝留痕在回滚后另起事务写入；已停用人员拒绝登记与修改。
+// 依据：Issue #133，Issue #119，Issue #158。
+//
 import { Inject, Injectable } from '@nestjs/common';
 import { rejected } from '@natural-enforcement/audit';
 import {

@@ -1,3 +1,8 @@
+// 用途：线索登记，校验表单与全部上传文件后写存储、业务行、材料关联与成功留痕。
+// 调用方：backend/server/src/clue-registration.controller.ts 的 POST clues。
+// 边界：校验在写存储之前完成，不通过时存储零写入；业务行与成功留痕同事务；登记成功后自动入队内业核查，投递失败只记日志。
+// 依据：Issue #211，规格 E，ADR 0018。
+//
 // 线索登记（#211；规格 E「上传方式」与错误码表）。
 //
 // 一次登记 = 一个 multipart/form-data 请求，表单与全部文件一次提交。服务端先完整校验
@@ -113,6 +118,7 @@ export interface ClueRegistrationBody {
   readonly hits: readonly ClueRegistrationHit[];
 }
 
+/** 登记结果：新建 201，类型层缺件确认后 200，其余为 400／413／403／409。 */
 export type ClueRegistrationOutcome =
   | { readonly status: 201; readonly body: ClueRegistrationBody }
   /** 类型层缺件确认后保存：仍是登记成功，但缺件清单随正文回。 */
@@ -140,6 +146,11 @@ interface ClueRegistrationPlan {
   readonly spatialSource: ClueUploadedFile | null;
 }
 
+/**
+ * 线索登记入口：纯校验 → 授权 → 幂等判定 → 写存储 → 单事务写业务行与成功留痕 → 自动入队内业核查。
+ * 操作码 clue.register；同幂等键同请求摘要回首次结果，同键异摘要返回 409。
+ * 失败留痕在业务事务之外另起事务写入。
+ */
 @Injectable()
 export class ClueRegistrationService {
   constructor(

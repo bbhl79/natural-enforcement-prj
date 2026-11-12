@@ -130,6 +130,7 @@ afterAll(async () => {
   await cloned?.close();
 });
 
+// #98：登录失败计数与锁定语义，覆盖账号计数、地址闸、窗口过期与停用、改密的交互。
 describe('POST /api/auth/login 锁定', () => {
   it('连续 5 次口令错误锁定 30 分钟，锁定期内再试不延长，到期后从零计数', async () => {
     clock.millis = T0;

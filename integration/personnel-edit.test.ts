@@ -387,6 +387,7 @@ function editBody(overrides: Partial<EditBody> = {}): EditBody {
   };
 }
 
+// #129：编辑人员的字段、角色与岗位标记变更语义及权限边界。
 describe('POST /api/admin/personnel/:id/edit（编辑）', () => {
   it('改名：追加名称版本、同步当前姓名，写 personnel.renamed，前值是旧名', async () => {
     const before = await audits();
@@ -685,6 +686,7 @@ describe('POST /api/admin/personnel/:id/edit（编辑）', () => {
   });
 });
 
+// #129：调岗的任职切换、目的地校验与权限边界。
 describe('POST /api/admin/personnel/:id/transfer（调岗）', () => {
   it('调岗成功：旧任职置结束时间、插入新任职、同步当前归属，写 personnel.transferred，前值原机构名、后值新机构名', async () => {
     const before = await audits();
@@ -882,6 +884,7 @@ describe('POST /api/admin/personnel/:id/transfer（调岗）', () => {
   });
 });
 
+// #129：调岗目的地清单返回全树未停用机构，读取不写留痕。
 describe('GET /api/admin/personnel/:id/transfer-destinations（调岗目的地清单）', () => {
   it('返回全树未停用的机构（目的地不限数据范围），含区 B，不含已停用所，读取不写留痕', async () => {
     const before = await audits();
@@ -945,6 +948,7 @@ describe('GET /api/admin/personnel/:id/transfer-destinations（调岗目的地�
   });
 });
 
+// ADR 0014：根机构系统管理角色与在根机构任职的守卫，含并发竞争。
 describe('根机构守卫（ADR 0014）：摘除系统管理角色、调岗出根机构', () => {
   /** 让 pair 成为根机构上仅有的两名未停用系统管理：其余的临时停用，测完还原。 */
   const suspended: string[] = [];
@@ -1163,6 +1167,7 @@ describe('根机构守卫（ADR 0014）：摘除系统管理角色、调岗出�
   });
 });
 
+// #129 复核：人员级事务锁让并发编辑与调岗串行，人员角色不被清零。
 describe('接缝②：人员级事务锁（#129 复核，ADR 0014）', () => {
   it('两名操作者并发编辑同一人员各摘不同角色，人员级锁串行，人员角色不被清零', async () => {
     // dual 当前持「经办、法制审核」，在甲区（非根机构，摘角色不进根守卫）。
@@ -1211,6 +1216,7 @@ describe('接缝②：人员级事务锁（#129 复核，ADR 0014）', () => {
   });
 });
 
+// 接缝①：留痕写入后再抛错，编辑与调岗的事务整体回滚。
 describe('接缝①：留痕工厂覆写为「业务写完后抛错」', () => {
   it('编辑：请求失败，业务行与留痕不变', async () => {
     const rowsBefore = await businessRows();

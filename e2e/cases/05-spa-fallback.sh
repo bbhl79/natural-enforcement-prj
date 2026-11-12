@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 用途：经 nginx 的页面路径回落与静态资源 404 冒烟。
 # 经 nginx 的页面路径回落（#91 约定第 5 条，#122）：认证页、管理台页、未知路径都返回入口页，
 # 由前端路由决定显示什么；缺失的静态资源照常 404；接口路径不被回落吞掉。
 set -euo pipefail
@@ -11,6 +12,7 @@ HTTPS_PORT="${NGINX_PORT:-8080}"
 BASE="https://localhost:${HTTPS_PORT}"
 CERT="${HOME}/.local/share/natural-enforcement/dev-certs/localhost.crt"
 
+# 打印失败原因并以 1 退出。
 fail() {
   echo "[FAIL] $1" >&2
   exit 1
@@ -24,6 +26,7 @@ echo "[e2e] 页面路径回落：拉起入口 ${BASE} …"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
+# 请求一个页面路径，正文写入文件并打印状态码。
 fetch() { # $1 路径 $2 正文输出文件；打印状态码
   curl -sS --max-time 20 --cacert "$CERT" -o "$2" -w '%{http_code}' "${BASE}$1"
 }

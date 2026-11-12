@@ -1,3 +1,6 @@
+// 用途：工作台 /workbench/register 的登记步骤 1，按后端声明渲染线索登记表单并一次提交表单与文件。
+// 调用方：frontend/src/pages/WorkbenchPage.tsx（登记壳步骤 1）；旧 /clue/register 由路由并入工作台登记壳。
+// 接口：GET /api/clue/form-schema、GET /api/clue/reference（无操作码）；POST /api/clues 操作码 clue.register。
 // 线索登记页（#211；规格 E；#296 R1）。
 //
 // 登记页一进入即是完整表单：来源* 与法域* 置顶且初始为空，下拉含「请选择…」。

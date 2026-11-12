@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 用途：源码结构规则的机器执行闸：任一规则红即整体非 0 退出。
 # 结构测试设施（#51 全量七模块依赖矩阵；#50 shield 唯一出口规则并入；
 # #55 队列设施唯一入口规则并入；#53 存储设施唯一入口规则并入）。
 # 规则 = #47 Implementation Decisions 依赖矩阵（含 #45 补丁 1）的机器可执行断言；
@@ -39,12 +40,12 @@
 #     该秒数待在 CI 机器上实测复核（规格 #168 开放项：具体值由实施票按 CI 机器实测重定）。
 #   守门方式：CI 侧计数，不改本闸一行、不新增 CI 步骤——数一次全闸起的外部子进程，
 #     总数 ≤ 4200、grep + sed 小计 ≤ 3400。超预算即形态退化，按失败处理。
-#     （历史口径脚本 tools/structural-snapshot/count-subprocs.sh 随该目录一并退役：该目录的
+#     （历史口径脚本 tools/structural-snapshot/count-subprocs.sh（已退役）：该目录的
 #     快照基线记 21 条规则，在位闸 28 条，compare.sh 按 21 条比对会对全部 29 个场景误报
 #     「不一致」。阈值与实测数字保留在本段，按同一口径复核即可。）
-#   等价性判据：tools/structural-probe.sh——42 条注入违例的场景，红探针逐条断言目标规则
+#   等价性判据：tools/structural-probe.sh——50 条注入违例的场景，红探针逐条断言目标规则
 #     确实判红并自清理，已接入 dev lint structural-probe 与 CI。改本闸的取数形态后必须
-#     重跑红探针，42 条违例仍须把各自的目标规则判红。
+#     重跑红探针，50 条违例仍须把各自的目标规则判红。
 #
 # 依赖矩阵（唯一事实源 = #47；人读副本 = backend/README.md，二者同步维护）：
 #   shield      统一契约，不依赖任何业务模块；公共出口仅 src/index.ts
@@ -114,6 +115,13 @@
 #                           data 模式（createBrowserRouter + RouterProvider）。前端源码出现
 #                           声明式 <BrowserRouter>/<HashRouter>，或任何 package.json、源码、
 #                           vite 配置引用框架模式开发插件 @react-router/dev 即失败
+#   source-comment-coverage 源码注释覆盖（约定见 docs/agents/code-comments.md）：COMMENT_SCOPE 内的
+#                           ts/tsx/mts/cts/mjs/cjs 须有文件头「用途：」、导出符号须有紧邻注释、
+#                           测试文件的 describe 须有紧邻注释、控制器路由须有紧邻的「操作码 <码>」
+#                           注释且操作码在 packages/shield/src/contract/opcode.ts 的名册内
+#   shell-comment-coverage  shell 注释覆盖：COMMENT_SCOPE 内的 .sh 与 dev 须有文件头「用途：」、
+#                           每个函数定义须有紧邻的 # 注释
+#   comment-path-refs       注释引用的仓库路径须已入库（git ls-files）：防止注释指向未入库或已删除的文件
 #   screenshot-full-set     截图全集文件名集合（#105「截图验收（loop ⑥c）」、#134 收口、#207 换全集、#220 齐套）：
 #                           docs/screens/manifest/<票>.txt 各票状态键段的文件名并集，不得越出
 #                           状态键全集，也不得缺键。
@@ -202,6 +210,9 @@ RULES=(
   screenshot-full-set
   ui-copy-discipline
   no-case-landing-entry
+  source-comment-coverage
+  shell-comment-coverage
+  comment-path-refs
 )
 # 共用辅助函数（非规则，不进 RULES，#171 显式声明）：check_row 是 6 条 *-deps 规则
 # 共用的矩阵行实现。红探针的接线完整性护栏按「check_ 函数集 == RULES ∪ HELPERS」核对，
@@ -211,7 +222,9 @@ HELPERS=(
 )
 FAIL=0
 
+# 输出一条通过行
 note_ok()   { echo "[OK]   $1"; }
+# 输出一条失败行并置整体失败
 note_fail() { echo "[FAIL] $1"; FAIL=1; }
 
 # 扫描范围：业务源码（tools/、dev、infra、docs 不扫描：规则约束的是代码互引）
@@ -303,6 +316,7 @@ for _scan_name in "${SCAN_CODE_NAMES[@]}"; do
 done
 unset _scan_name
 
+# 文件名扩展名是否在给定掩码内
 mask_allows() { # $1 = 掩码名（ts|code），$2 = 文件绝对路径；扩展名在掩码内返回 0
   local base="${2##*/}" g
   case "$1" in
@@ -322,6 +336,7 @@ import_specs_of() {
   return 0
 }
 
+# 惰性构建共享导入索引与批量路径解析表
 ensure_import_index() {
   [ "$IMPORT_INDEX_READY" -eq 1 ] && return 0
   IMPORT_INDEX_READY=1     # 先置位：构建过程中任何取值都不得递归重建
@@ -502,6 +517,7 @@ declare -A ASSEMBLY_EXEMPT=(
   ["e2e/verify/harness/layers/protocol-self-check.mjs"]="../../../../backend/case/src/clue/verification/layer-service-port.ts ../../../../backend/case/src/clue/verification/layers.ts"
 )
 
+# 判断装配层豁免名单是否放行该 specifier
 is_assembly_exempt() { # $1 = 相对 ROOT 路径, $2 = specifier
   local rel="$1" spec="$2" prefix
   local allowed="${ASSEMBLY_EXEMPT[$rel]:-}"
@@ -598,11 +614,17 @@ check_shield-no-business-dep() {
   fi
 }
 
+# 执行本函数的规则扫描与判定
 check_identity-deps()    { check_row identity; }
+# 依赖矩阵行：geo-dict 不依赖任何业务模块
 check_geo-dict-deps()    { check_row geo-dict; }
+# 依赖矩阵行：case 只许 → shield、identity、geo-dict
 check_case-deps()        { check_row case; }
+# 依赖矩阵行：approval 只许 → shield、identity、case
 check_approval-deps()    { check_row approval; }
+# 依赖矩阵行：supervision 只许 → shield、identity、case
 check_supervision-deps() { check_row supervision; }
+# 依赖矩阵行：deadline 只许 → shield、case、approval、geo-dict
 check_deadline-deps()    { check_row deadline; }
 
 # 规则 i：矩阵行「监督统计（只读，单向，无人依赖它）」的反向断言
@@ -876,6 +898,7 @@ G1_MODELS=(
   CaseClosureApprovalStep
   CaseClosure
 )
+# 执行本函数的规则扫描与判定
 check_g1-model-allowlist() {
   local schema="$BACKEND/prisma/schema.prisma" model in_schema extra missing fails=0
   if [ ! -f "$schema" ]; then
@@ -987,6 +1010,7 @@ check_audit-facility-entry() {
 SPATIAL_MODEL='geoDictLandBoundary|geoDictSurveyPoint|clueSpatialPart|clueSpatialHit'
 SPATIAL_ORM_METHOD='createManyAndReturn|createMany|create|upsert|updateMany|update|deleteMany|delete'
 SPATIAL_ORM_WRITE="(${SPATIAL_MODEL})[[:space:]]*\.[[:space:]]*(${SPATIAL_ORM_METHOD})[[:space:]]*\("
+# 执行本函数的规则扫描与判定
 check_spatial-no-orm-mutation() {
   local hits=0 file lines line
   while IFS= read -r file; do
@@ -1016,6 +1040,7 @@ check_spatial-no-orm-mutation() {
 REFERENCE_MODEL='geoDictSourceCode|geoDictViolationType|geoDictDocument|geoDictViolationTypeBasis|geoDictJurisdiction'
 REFERENCE_ORM_METHOD='upsert|updateMany|update|deleteMany|delete'
 REFERENCE_ORM_WRITE="(${REFERENCE_MODEL})[[:space:]]*\.[[:space:]]*(${REFERENCE_ORM_METHOD})[[:space:]]*\("
+# 执行本函数的规则扫描与判定
 check_reference-data-no-mutation() {
   local hits=0 file lines line
   while IFS= read -r file; do
@@ -1043,6 +1068,7 @@ check_reference-data-no-mutation() {
 CASE_HISTORY_MODEL='caseStageInstance|caseTransition'
 CASE_HISTORY_ORM_METHOD='upsert|updateMany|update|deleteMany|delete'
 CASE_HISTORY_ORM_WRITE="(${CASE_HISTORY_MODEL})[[:space:]]*\.[[:space:]]*(${CASE_HISTORY_ORM_METHOD})[[:space:]]*\("
+# 执行本函数的规则扫描与判定
 check_case-history-append-only() {
   local hits=0 file lines line
   while IFS= read -r file; do
@@ -1069,6 +1095,7 @@ check_case-history-append-only() {
 PERSON_CONFLICT_MODEL='personConflictEvent|personConflictDecision|caseInvestigationEntry'
 PERSON_CONFLICT_ORM_METHOD='upsert|updateMany|update|deleteMany|delete'
 PERSON_CONFLICT_ORM_WRITE="(${PERSON_CONFLICT_MODEL})[[:space:]]*\.[[:space:]]*(${PERSON_CONFLICT_ORM_METHOD})[[:space:]]*\("
+# 执行本函数的规则扫描与判定
 check_person-conflict-append-only() {
   local hits=0 file lines line
   while IFS= read -r file; do
@@ -1095,6 +1122,7 @@ check_person-conflict-append-only() {
 AGENCY_CONFLICT_MODEL='caseAgencyConflict'
 AGENCY_CONFLICT_ORM_METHOD='upsert|updateMany|update|deleteMany|delete'
 AGENCY_CONFLICT_ORM_WRITE="(${AGENCY_CONFLICT_MODEL})[[:space:]]*\.[[:space:]]*(${AGENCY_CONFLICT_ORM_METHOD})[[:space:]]*\("
+# 执行本函数的规则扫描与判定
 check_agency-conflict-append-only() {
   local hits=0 file lines line
   while IFS= read -r file; do
@@ -1121,6 +1149,7 @@ INVESTIGATION_RECORD_MODEL='caseViolationRecord|caseInquiryRecord'
 INVESTIGATION_RECORD_ORM_METHOD='deleteMany|delete'
 INVESTIGATION_RECORD_ORM_WRITE="(${INVESTIGATION_RECORD_MODEL})[[:space:]]*\.[[:space:]]*(${INVESTIGATION_RECORD_ORM_METHOD})[[:space:]]*\("
 INVESTIGATION_RECORD_SQL='DELETE[[:space:]]+FROM[[:space:]]+(case_violation_record|case_inquiry_record)'
+# 执行本函数的规则扫描与判定
 check_investigation-record-no-delete() {
   local hits=0 file lines line sql
   while IFS= read -r file; do
@@ -1165,12 +1194,15 @@ SECRET_NAME_PATTERN='(PASSWORD|SECRET|TOKEN|ACCESS_KEY|PRIVATE_KEY|^DATABASE_URL
 MANIFEST_NAMES=" "
 MANIFEST_SECRETS=" "
 
+# 变量名是否在运行参数清单内
 manifest_has() { case "$MANIFEST_NAMES" in *" $1 "*) return 0 ;; esac; return 1; }
+# 变量名是否属于清单里的密钥项（按清单名单或密钥名样式判定）
 manifest_secret_name() {
   case "$MANIFEST_SECRETS" in *" $1 "*) return 0 ;; esac
   [[ "$1" =~ $SECRET_NAME_PATTERN ]]
 }
 
+# 执行本函数的规则扫描与判定
 check_runtime-manifest() {
   local table fails=0 rel file nr line key value name kind secret_value line_assign
   if ! table="$(runtime_env_table 2>&1)"; then
@@ -1297,6 +1329,7 @@ check_runtime-manifest() {
 # it.todo 登记「待实现」）。测试里出现清单外编号同样判红，防止删条后断言残留。
 USER_LOCK_FILE="$ROOT/docs/user-lock.md"
 USER_LOCK_ID_RE='USER-LOCK-L[0-9]+'
+# 执行本函数的规则扫描与判定
 check_user-lock-assertions() {
   local fails=0 sections declared tested id n count
   if [ ! -f "$USER_LOCK_FILE" ]; then
@@ -1357,6 +1390,7 @@ check_user-lock-assertions() {
 #    HashRouter（createBrowserRouter、createHashRouter 不受影响：按整词匹配，前缀 create 不算）。
 # ② 前端的 package.json、源码与配置不得引用框架模式开发插件 @react-router/dev。
 FRONTEND_DIR="$ROOT/frontend"
+# 执行本函数的规则扫描与判定
 check_frontend-router-mode() {
   local fails=0 file
   while IFS= read -r file; do
@@ -1394,6 +1428,7 @@ check_frontend-router-mode() {
 SCREENS_WANT_DIR="$ROOT/frontend/prototype/admin-console/screens"
 SCREENS_MANIFEST_DIR="$ROOT/docs/screens/manifest"
 SCREENS_KEYS_207="$ROOT/docs/screens/keys-207.txt"
+# 执行本函数的规则扫描与判定
 check_screenshot-full-set() {
   local fails=0 want_v04 want_207 want have missing extra pending
   if [ ! -d "$SCREENS_WANT_DIR" ] || [ ! -d "$SCREENS_MANIFEST_DIR" ] || [ ! -f "$SCREENS_KEYS_207" ]; then
@@ -1474,6 +1509,7 @@ check_ui-copy-discipline() {
 # 立案呈批批准路径调用（backend/server/src/case-filing.service.ts）。
 # 其他服务出现即红：防止重新开出绕过立案呈批的不予立案入口（X19）。
 NO_CASE_LANDING_FILE="backend/server/src/case-filing.service.ts"
+# 执行本函数的规则扫描与判定
 check_no-case-landing-entry() {
   local file rel fails=0
   while IFS= read -r file; do
@@ -1484,6 +1520,273 @@ check_no-case-landing-entry() {
   done < <(find "$ROOT/backend/server/src" "${SCAN_CODE[@]}" -exec grep -lE 'recordNoCaseFromFilingApproval' {} + 2>/dev/null || true)
   if [ "$fails" -eq 0 ]; then
     note_ok "no-case-landing-entry：server 层只有立案呈批批准路径调用不予立案落点服务"
+  fi
+}
+
+# ---------- 注释规范（约定 docs/agents/code-comments.md） ----------
+# COMMENT_SCOPE：已完成注释的目录或文件（相对 ROOT）。范围只升不降：目录纳入后须长期合规。
+# 匹配口径：路径等于条目，或以「条目/」开头。批次完成后在此追加条目。
+COMMENT_SCOPE=(
+  backend/approval/src
+  backend/supervision/src
+  backend/deadline/src
+  backend/deadline/test
+  backend/geo-dict
+  backend/identity
+  backend/case/src
+  backend/case/test
+  backend/prisma
+  packages/audit
+  packages/shield
+  packages/storage
+  packages/queue
+  frontend/src/shell
+  frontend/src/workbench
+  frontend/src/login
+  frontend/src/pages
+  frontend/src/account
+  frontend/src/admin
+  frontend/src/clue
+  frontend/src/case
+  e2e/verify
+  backend/server/src
+  frontend/src/api.ts
+  frontend/src/hooks.ts
+  frontend/src/opcodes.ts
+  frontend/src/router.tsx
+  frontend/src/routing.ts
+  frontend/src/routing.test.ts
+  frontend/src/router.test.tsx
+  frontend/src/session.ts
+  frontend/src/store.ts
+  frontend/src/main.tsx
+  frontend/src/test-utils.tsx
+  frontend/vite.config.ts
+  backend/server/register.mjs
+  backend/server/load-typescript.mjs
+  backend/server/vitest.config.ts
+  e2e/cases
+  integration
+  tools
+  dev
+  eslint.config.mjs
+)
+# 注释检查的排除项（生成物、迁移、原型、构建与运行产物、类型声明）。
+COMMENT_EXCLUDE=(
+  -not -path '*/node_modules/*' -not -path '*/dist/*'
+  -not -path "$BACKEND/prisma/generated/*" -not -path "$BACKEND/prisma/migrations/*"
+  -not -path "$ROOT/frontend/prototype/*" -not -path "$ROOT/e2e/results/*"
+  -not -name '*.generated.ts' -not -name '*.d.ts' -not -name '*.d.cts' -not -name '*.d.mts'
+)
+
+# 列出 COMMENT_SCOPE 内的文件（NUL 分隔）。$1 = 文件名正则；其余 = find 的文件名过滤参数。
+# 目录条目按 find 过滤；文件条目只按 $1 过滤（文件条目可以是 dev 这类无扩展名的）。
+comment_scope_files() {
+  local entry re="$1"; shift
+  for entry in "${COMMENT_SCOPE[@]}"; do
+    if [ -d "$ROOT/$entry" ]; then
+      find "$ROOT/$entry" -type f "${COMMENT_EXCLUDE[@]}" "$@" -print0
+    elif [ -f "$ROOT/$entry" ] && [[ "${entry##*/}" =~ $re ]]; then
+      printf '%s\0' "$ROOT/$entry"
+    fi
+  done
+}
+
+# 取操作码名册：CASE_OPCODES 的键、ADMIN_CODES 的字面量、cfg.<对象>.<动作> 的组合展开。
+# 输出形如「 a.b c.d 」（两端留空格，供 awk 做整词匹配）。
+opcode_registry() {
+  local file="$ROOT/packages/shield/src/contract/opcode.ts" objs acts o a out=""
+  [ -f "$file" ] || return 0
+  out="$(awk '/^const CASE_OPCODES = \{/{f=1;next} f&&/^\} as const/{f=0} f' "$file" \
+    | grep -oE "^  '[a-z][a-z0-9._-]*':" | tr -d " ':")"
+  out="$out $(awk '/^const ADMIN_CODES = \[/{f=1;next} f&&/^\] as const/{f=0} f' "$file" \
+    | grep -oE "^  '[a-z][a-z0-9._-]*'," | tr -d " ',")"
+  objs="$(grep -oE "ADMIN_OBJECTS = \[[^]]*\]" "$file" | grep -oE "'[a-z]+'" | tr -d "'")"
+  acts="$(grep -oE "ADMIN_ACTIONS = \[[^]]*\]" "$file" | grep -oE "'[a-z]+'" | tr -d "'")"
+  for o in $objs; do for a in $acts; do out="$out cfg.$o.$a"; done; done
+  echo " $(echo $out) "
+}
+
+# TS 注释检查程序（awk）。输出：<类别>\t<文件>\t<行号>\t<说明>。
+# 类别：HEADER 文件头缺「用途：」；EXPORT 导出符号缺紧邻注释；DESCRIBE describe 缺紧邻注释；
+# ROUTE 路由缺操作码注释或操作码不在名册。变量 ops = 操作码名册（见 opcode_registry）。
+COMMENT_TS_AWK='
+function route_op(s,   p, rest) {
+  p = index(s, "操作码 ")
+  if (p == 0) return ""
+  rest = substr(s, p + length("操作码 "))
+  if (match(rest, /^[a-z][a-z0-9._-]*/)) return substr(rest, 1, RLENGTH)
+  return ""
+}
+function route_check(   op) {
+  if (index(cblock, "无操作码（") > 0) return
+  op = route_op(cblock)
+  if (op == "") printf "ROUTE\t%s\t%d\t路由缺少紧邻的「操作码 <码>」注释\n", FILENAME, FNR
+  else if (index(ops, " " op " ") == 0) printf "ROUTE\t%s\t%d\t操作码 %s 不在 opcode.ts 名册\n", FILENAME, FNR, op
+}
+FNR == 1 {
+  if (NR > 1 && pk == "src" && !hdr_ok && !hdr_out) printf "HEADER\t%s\t1\t文件头缺少「用途：」行\n", pf
+  pf = FILENAME
+  pk = (FILENAME ~ /\.test\.(ts|tsx)$/) ? "test" : "src"
+  hdr_ok = 0; hdr_out = 0; code = 0; prev = 0; lk = ""; cblock = ""; dec = 0; depth = 0
+}
+FNR == 1 && /^#!/ { next }
+/^[[:space:]]*(\/\/|\/\*|\*)/ && /(from|import|require)[^\047"]{0,40}[\047"](@natural-enforcement\/|\.\.?\/)/ {
+  printf "IMPORTLIKE\t%s\t%d\t注释里含 import 样式文字，依赖矩阵规则会把它当作真实导入；调用方请写成路径，不带引号与 from/import/require\n", FILENAME, FNR
+}
+/^[[:space:]]*$/ { prev = 0; cblock = ""; lk = "gap"; next }
+code == 0 && /^[[:space:]]*(\/\/|\/\*|\*)/ { if ($0 ~ /用途(：|:)/) hdr_ok = 1 }
+code == 0 && !/^[[:space:]]*(\/\/|\/\*|\*)/ {
+  code = 1
+  if (pk == "src" && !hdr_ok) { printf "HEADER\t%s\t%d\t文件头缺少「用途：」行\n", FILENAME, FNR; hdr_out = 1 }
+}
+dec == 1 || /^[[:space:]]*@/ {
+  if (dec == 0 && pk == "src" && $0 ~ /^[[:space:]]*@(Get|Post|Put|Patch|Delete|All)\(/) route_check()
+  t = $0; o = gsub(/\(/, "(", t); t = $0; c = gsub(/\)/, ")", t)
+  depth += o - c
+  dec = (depth > 0) ? 1 : 0
+  if (dec == 0) depth = 0
+  next
+}
+/^[[:space:]]*\/\/[[:space:]]*[-=*~_#]{3,}/ { prev = 0; cblock = ""; lk = "divider"; next }
+/^[[:space:]]*\/\// { cblock = (lk == "line") ? cblock " " $0 : $0; prev = 1; lk = "line"; next }
+/\*\/[[:space:]]*$/ { cblock = ""; prev = 1; lk = "block"; next }
+pk == "src" && /^export (async )?(function|const|class|interface|type|enum|let|var|abstract class)/ && !/^export type[[:space:]]*\{/ {
+  if (!prev) printf "EXPORT\t%s\t%d\t导出符号缺少紧邻的注释\n", FILENAME, FNR
+}
+pk == "test" && /^[[:space:]]*describe(\.[a-z]+)?\(/ {
+  if (!prev) printf "DESCRIBE\t%s\t%d\tdescribe 缺少紧邻的注释\n", FILENAME, FNR
+}
+{ cblock = ""; prev = 0; lk = "code" }
+END {
+  if (pk == "src" && !hdr_ok && !hdr_out) printf "HEADER\t%s\t1\t文件头缺少「用途：」行\n", pf
+}
+'
+
+# shell 注释检查程序（awk）。输出同上。类别：HEADER 文件头缺「用途：」；FUNC 函数缺紧邻 # 注释。
+COMMENT_SH_AWK='
+FNR == 1 {
+  if (NR > 1 && !hdr_ok && !hdr_out) printf "HEADER\t%s\t1\t文件头缺少「用途：」行\n", pf
+  pf = FILENAME; hdr_ok = 0; hdr_out = 0; code = 0; prevc = 0
+}
+/^[[:space:]]*$/ { prevc = 0; next }
+code == 0 && /^[[:space:]]*#/ {
+  if ($0 ~ /用途(：|:)/) hdr_ok = 1
+  prevc = ($0 ~ /^#!/) ? 0 : 1
+  next
+}
+code == 0 {
+  code = 1
+  if (!hdr_ok) { printf "HEADER\t%s\t%d\t文件头缺少「用途：」行\n", FILENAME, FNR; hdr_out = 1 }
+}
+/^[[:space:]]*#/ { prevc = ($0 ~ /^#!/) ? 0 : 1; next }
+/^[[:space:]]*(function[[:space:]]+)?[A-Za-z_][A-Za-z0-9_.-]*[[:space:]]*\(\)[[:space:]]*\{/ {
+  if (!prevc) {
+    name = $0
+    sub(/^[[:space:]]*(function[[:space:]]+)?/, "", name)
+    sub(/\(.*/, "", name)
+    printf "FUNC\t%s\t%d\t函数 %s 缺少紧邻的注释\n", FILENAME, FNR, name
+  }
+}
+{ prevc = 0 }
+END { if (!hdr_ok && !hdr_out && pf != "") printf "HEADER\t%s\t1\t文件头缺少「用途：」行\n", pf }
+'
+
+# 注释路径引用提取程序（awk）：只扫注释行（// * # 开头），输出 <文件>\t<行号>\t<路径>。
+# 取法：按空白切词，词内从仓库顶层目录名起取子串，再在第一个标点处截断。
+# 不按字符类取路径：docs/adr 下的文件名是中文，mawk 按字节处理，字符类会把汉字拆开。
+# 标点按整串匹配（全角与半角），对字节与字符两种语义都成立。
+# 路径前一个字符是路径字符时视为别的单词的一部分，不取（前面多出字母的 mydocs 不算 docs）。
+# 以下情形不是「引用一个具体入库文件」，一律不取：
+#   通配符（含 *）；顶层目录名的斜杠列举（backend/frontend/e2e）；运行产物目录前缀
+#   （e2e/results、frontend/dist、backend/prisma/generated、node_modules、coverage，它们不入库）；
+#   引用之后紧跟「（已退役」「（已删除」「（已移除」，作者已显式说明该文件不在了。
+COMMENT_PATH_AWK='
+function cut_at_punct(s,   i, p, best) {
+  best = length(s) + 1
+  for (i = 1; i <= np; i++) { p = index(s, puncts[i]); if (p > 0 && p < best) best = p }
+  return substr(s, 1, best - 1)
+}
+function is_listing(s,   n, seg, i, hits) {
+  n = split(s, seg, "/"); hits = 0
+  for (i = 2; i <= n; i++) if (seg[i] ~ /^(backend|frontend|packages|integration|e2e|tools|infra|docs)$/) hits++
+  return hits > 0
+}
+BEGIN {
+  np = split("； 。 ， 、 ： （ ） 「 」 《 》 —— — , ; ) ( ] [ > < ` \047 \"", puncts, " ")
+}
+/^[[:space:]]*(\/\/|\/\*|\*|#)/ {
+  n = split($0, words, /[[:space:]]+/)
+  for (w = 1; w <= n; w++) {
+    cand = words[w]
+    if (!match(cand, /(^|[^A-Za-z0-9_.\/-])(backend|frontend|packages|integration|e2e|tools|infra|docs|\.github)\//)) continue
+    s = substr(cand, RSTART)
+    if (substr(s, 1, 1) !~ /[a-z.]/) s = substr(s, 2)
+    tail = s
+    s = cut_at_punct(s)
+    sub(/[.:]+$/, "", s)
+    if (s ~ /\*/) continue
+    if (is_listing(s)) continue
+    if (s ~ /^(e2e\/results|frontend\/dist|backend\/prisma\/generated|node_modules|coverage)(\/|$)/) continue
+    rest = substr(tail, length(s) + 1)
+    if (index(rest, "（已退役") == 1 || index(rest, "（已删除") == 1 || index(rest, "（已移除") == 1) continue
+    printf "%s\t%d\t%s\n", FILENAME, FNR, s
+  }
+}
+'
+
+# 规则：COMMENT_SCOPE 内的 TS 类源码注释覆盖（文件头、导出符号、describe、路由操作码）。
+check_source-comment-coverage() {
+  local ops fails=0 kind file line msg
+  ops="$(opcode_registry)"
+  while IFS=$'\t' read -r kind file line msg; do
+    [ -n "$kind" ] || continue
+    note_fail "source-comment-coverage：${file#"$ROOT"/}:${line} ${msg}（约定 docs/agents/code-comments.md）"
+    fails=$((fails + 1))
+  done < <(comment_scope_files '\.(ts|tsx|mts|cts|mjs|cjs)$' \( -name '*.ts' -o -name '*.tsx' -o -name '*.mts' -o -name '*.cts' -o -name '*.mjs' -o -name '*.cjs' \) \
+    | xargs -0 -r awk -v ops="$ops" "$COMMENT_TS_AWK")
+  if [ "$fails" -eq 0 ]; then
+    note_ok "source-comment-coverage：COMMENT_SCOPE（${#COMMENT_SCOPE[@]} 项）内的源码均有文件头、导出注释、describe 注释与路由操作码"
+  fi
+}
+
+# 规则：COMMENT_SCOPE 内的 shell 注释覆盖（文件头、函数注释）。dev 无扩展名，按文件条目纳入。
+check_shell-comment-coverage() {
+  local fails=0 kind file line msg entry
+  while IFS=$'\t' read -r kind file line msg; do
+    [ -n "$kind" ] || continue
+    note_fail "shell-comment-coverage：${file#"$ROOT"/}:${line} ${msg}（约定 docs/agents/code-comments.md）"
+    fails=$((fails + 1))
+  done < <({ comment_scope_files '\.sh$' -name '*.sh'
+             for entry in "${COMMENT_SCOPE[@]}"; do [ -f "$ROOT/$entry" ] && [ "${entry##*/}" = dev ] && printf '%s\0' "$ROOT/$entry"; done
+           } | xargs -0 -r awk "$COMMENT_SH_AWK")
+  if [ "$fails" -eq 0 ]; then
+    note_ok "shell-comment-coverage：COMMENT_SCOPE 内的 shell 文件均有文件头与函数注释"
+  fi
+}
+
+# 规则：COMMENT_SCOPE 内注释引用的仓库路径须已入库。路径取 git ls-files -z（中文路径不被转义）。
+# 命中口径：引用等于某个已入库文件，或是某个已入库路径的目录前缀。
+check_comment-path-refs() {
+  local fails=0 file line ref dir tracked
+  tracked="$(git -C "$ROOT" ls-files -z 2>/dev/null | tr '\0' '\n')"
+  if [ -z "$tracked" ]; then
+    note_ok "comment-path-refs：非 git 工作树，跳过路径入库核对"
+    return
+  fi
+  while IFS=$'\t' read -r file line ref; do
+    [ -n "$ref" ] || continue
+    # 引用末尾的 / 表示目录：先剥掉，再按「等于某个已入库文件，或有已入库文件位于该目录下」核对。
+    dir="${ref%/}"
+    if awk -v d="$dir" '$0 == d || index($0, d "/") == 1 { found = 1 } END { exit !found }' <<< "$tracked"; then
+      continue
+    fi
+    note_fail "comment-path-refs：${file#"$ROOT"/}:${line} 注释引用的路径未入库：${ref}"
+    fails=$((fails + 1))
+  done < <(comment_scope_files '\.(ts|tsx|mts|cts|mjs|cjs|sh)$' \( -name '*.ts' -o -name '*.tsx' -o -name '*.mts' -o -name '*.cts' -o -name '*.mjs' -o -name '*.cjs' -o -name '*.sh' \) \
+    | xargs -0 -r awk "$COMMENT_PATH_AWK")
+  if [ "$fails" -eq 0 ]; then
+    note_ok "comment-path-refs：COMMENT_SCOPE 内的注释所引用的仓库路径均已入库"
   fi
 }
 

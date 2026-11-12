@@ -1,3 +1,5 @@
+// 用途：QueuePort 的 BullMQ 实现：向 Redis 队列投递任务，并经 QueueEvents 等待任务消费完成。
+// 调用方：packages/queue/src/queue-port.ts（createQueuePort 首次使用时建立）、packages/queue/src/probe.ts（dev health 探测进程）。
 // BullMQ 适配器（#55）：QueuePort 的唯一 BullMQ 实现，只在本设施包内被引用。
 // 本文件不含装饰器——dev health 的探测进程以 node 原生 type-stripping 直接运行
 //（packages/queue/src/probe.ts），其传递闭包内任何文件都不得出现装饰器语法。
@@ -25,6 +27,7 @@ function toJobOptions(options: EnqueueOptions): JobsOptions {
 export function createBullMqQueue(queueName: string, connection: ConnectionOptions): QueuePort {
   const queue = new Queue(queueName, { connection });
   const events = new QueueEvents(queueName, { connection });
+  // 已投递作业的内存句柄表，键为 JobRef.id。只有 waitForCompletion 的 finally 与 close 会清理条目。
   const jobs = new Map<string, Job>();
 
   return {
@@ -37,6 +40,8 @@ export function createBullMqQueue(queueName: string, connection: ConnectionOptio
       jobs.set(ref.id, job);
       return ref;
     },
+    // 同一 JobRef 只能等待一次：无论成功、失败或超时，finally 都会移除句柄；
+    // 不是本实例 enqueue 返回的引用，抛「未知任务引用」。
     async waitForCompletion(ref, timeoutMs) {
       const job = jobs.get(ref.id);
       if (!job) {

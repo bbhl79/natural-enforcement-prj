@@ -1,3 +1,4 @@
+// 用途：按 ZIP 与 SpreadsheetML 格式解析导出响应的 .xlsx，供集成测试断言单元格文字。
 // 集成测试用的 .xlsx 读取（#126）：按 ZIP 中央目录找到第一张工作表，逐行取出单元格文字。
 // 不复用 server 的写出代码，独立按格式解析，避免「自己写、自己读」掩盖错误。
 import { inflateRawSync } from 'node:zlib';
@@ -35,6 +36,7 @@ function unescapeXml(text: string): string {
     .replace(/&amp;/g, '&');
 }
 
+// 调用方：integration/audit-browse.test.ts。
 /** 第一张工作表的全部行（含表头），以及这张表的原始 XML（用于整表扫描）。 */
 export function readXlsxSheet(file: Buffer): { rows: string[][]; xml: string; parts: string[] } {
   const parts = entries(file);

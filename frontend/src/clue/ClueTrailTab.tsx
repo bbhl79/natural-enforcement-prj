@@ -1,3 +1,6 @@
+// 用途：线索中心抽屉 /clue 的「流转与留痕」页签，按时间倒序展示留痕条目。
+// 调用方：frontend/src/pages/ClueCenterPage.tsx。
+// 数据来源：GET /api/clues/:id/trail 操作码 clue.read（取数在 frontend/src/clue/trail.ts）。
 // 流转与留痕页签（#207 线索中心抽屉）。
 //
 // 以时间线样式展示留痕列表，按时间倒序排列。

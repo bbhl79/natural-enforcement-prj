@@ -1,3 +1,4 @@
+// 用途：为集成用例复制一次性数据库，使断言与收尾不影响模板库与开发库。
 // 集成测试选库（#93）：从 it_template 复制出 e2_时间戳。
 // 断言打在复制品上。结束时整库删除。开发库 postgres 不作为复制源。
 import { PrismaPg } from '@prisma/adapter-pg';
@@ -6,6 +7,7 @@ import { PrismaClient } from '../backend/prisma/generated/prisma/client.ts';
 
 const IT_TEMPLATE_DB = 'it_template';
 
+/** 一次克隆的句柄：克隆库名、复制源、连接串，以及连库客户端与销毁方法。 */
 export type ClonedDatabase = {
   prisma: PrismaClient;
   scratchDbName: string;
@@ -21,6 +23,12 @@ function quoteIdent(name: string): string {
   return `"${name}"`;
 }
 
+/**
+ * 以 it_template 为模板建一个 e2_<时间戳> 克隆库并返回其客户端。
+ * 复制源不是 it_template 或 DATABASE_URL 缺失时抛错；建库最多重试 10 次。
+ * close 先断开克隆连接，再用 FORCE 删除克隆库。
+ * 调用方：integration 下多数集成用例的 beforeAll，例如 integration/clue-verification.test.ts。
+ */
 export async function openClonedDatabase(): Promise<ClonedDatabase> {
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) throw new Error('DATABASE_URL 未注入（须由 dev test integration harness 提供）');

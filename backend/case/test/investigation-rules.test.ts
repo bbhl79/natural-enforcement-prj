@@ -15,6 +15,7 @@ import {
   suspensionClockEvent,
 } from '../src/investigation/index.ts';
 
+// #236 X20：笔录在场人员须两名不同的本案承办人员，外人重复均不计数。
 describe('笔录在场人员（X20）', () => {
   const handlers = ['main', 'assist'];
 
@@ -32,6 +33,7 @@ describe('笔录在场人员（X20）', () => {
   });
 });
 
+// #236 违法记录作废：仅调查环节主办可作废，理由必填去空白，审理开始后拒绝。
 describe('违法记录作废', () => {
   it('理由空白拒绝；非主办拒绝；审理开始后拒绝', () => {
     expect(checkVoidViolation({ stage: 'E02', reason: '  ', isMainHandler: true }).ok).toBe(false);
@@ -56,6 +58,7 @@ describe('违法记录作废', () => {
   });
 });
 
+// #236 呈批内容与状态校验：中止、终止、撤案、结案的原因枚举，及待收尾只允许撤案与结案。
 describe('呈批原因', () => {
   it('中止不带「是否同时办延长」也能通过', () => {
     expect(EXTEND_DEADLINE_PROMPT).toBe('是否同时办延长办案期限');
@@ -121,6 +124,7 @@ describe('呈批原因', () => {
   });
 });
 
+// #236 追诉时效发现时点映射：调查阶段按配置放行终止调查与撤案，审理后只记录出口不放行。
 describe('追诉时效发现时点映射', () => {
   it('默认常量同时保留终止调查与撤案，审理后只记录出口', () => {
     expect(LIMITATION_DISCOVERY_EXIT_V1.ruleId).toBe('cfg.rule.limitation-discovery-exit.v1');
@@ -205,6 +209,7 @@ describe('追诉时效发现时点映射', () => {
   });
 });
 
+// #236 停表事件参数取自配置，规则函数不写死事件类别。
 describe('停表参数', () => {
   it('事件类别抄参数，不在函数里写死', () => {
     const drafted = suspensionClockEvent(

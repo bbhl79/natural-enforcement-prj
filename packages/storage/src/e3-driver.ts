@@ -1,3 +1,14 @@
+// 用途：E3 不可变必失败用例的驱动脚本。对真实 RustFS 写入一个版本，再尝试原地改写与删除，检查原版本是否无损。
+// 调用方：integration/e3-immutable-storage.sh。该脚本起临时 RustFS 容器，把 packages/storage/src 打包进工具链容器，
+//   在容器内执行 node packages/storage/src/e3-driver.ts，并把非 0 退出码判为失败。
+// 边界：这是脚本，不是库模块，没有导出；文件加载时顶层语句即调用 main。
+//   传递闭包只能引用 packages/storage/src 内的文件与 node:crypto，因为 E3 脚本只打包该目录。
+//   驱动只连接 RUSTFS_ENDPOINT 指向的实例，不负责清理：写入的对象带 COMPLIANCE 保留期，
+//   清理方式是销毁临时实例及其数据卷（见 integration/e3-immutable-storage.sh）。
+//   环境变量 RUSTFS_ENDPOINT、RUSTFS_REGION、RUSTFS_ACCESS_KEY、RUSTFS_SECRET_KEY、E3_BUCKET、E3_RUN_ID 均有默认值。
+//   退出码：0 表示全部检查通过；1 表示有检查失败或执行异常。
+// 依据：#53；RustFS 的对象锁与版本控制查证见 docs/research/stack-data-compat.md。
+//
 // E3 不可变必失败用例驱动（#53，integration 层 integration/e3-immutable-storage.sh 调用）。
 // 驱动真实 RustFS（容器网络内 http://rustfs:9000，S3 兼容 API + 对象锁 WORM）：
 //   写版本 → 原地改写尝试 / 删除尝试 → 必须「被拒」或「产生新世代而原版本无损」。

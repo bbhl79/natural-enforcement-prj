@@ -1,3 +1,5 @@
+// 用途：案件聚合模块的 Nest 装配入口。
+// 调用方：backend/server/src/app.module.ts 在应用启动时装配。
 import { Module } from '@nestjs/common';
 
 /**

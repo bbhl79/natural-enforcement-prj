@@ -1,3 +1,7 @@
+// 用途：定义案件标记键、置位／清除的当前状态计算与读取入口。
+// 调用方：backend/server/src 下各案件服务，例如 backend/server/src/case-decision.service.ts、backend/server/src/case-notice.service.ts、backend/server/src/case-transfer.service.ts。
+// 边界：只读标记行并计算当前状态；写入由调用方经 CaseStore 完成。
+// 依据：Issue #272、#256。
 // 案件标记（#272 R-02）：统一标记存储与读写 API。
 // 标记是案件上的命名事实，按「置位／清除」追加行；读取当前状态取每个键最后一行。
 // 其他票（#269／#242／#270）复用本出口，不另造第二套机制。
@@ -21,15 +25,18 @@ export const CASE_MARKER_KEYS = [
   'criminal-transfer',
 ] as const;
 
+// 案件标记键的类型别名。
 export type CaseMarkerKey = (typeof CASE_MARKER_KEYS)[number];
 
 /** 一经置位不得清除的标记。调用方清除时由服务层拒绝。 */
 export const STICKY_CASE_MARKERS: readonly CaseMarkerKey[] = ['notice-served', 'hearing-entered'];
 
+// 判断字符串是否为登记的案件标记键；服务层校验入参时调用。
 export function isCaseMarkerKey(value: string): value is CaseMarkerKey {
   return (CASE_MARKER_KEYS as readonly string[]).includes(value);
 }
 
+// 判断标记是否一经置位不得清除；服务层处理清除请求前调用。
 export function isStickyCaseMarker(marker: string): boolean {
   return (STICKY_CASE_MARKERS as readonly string[]).includes(marker);
 }

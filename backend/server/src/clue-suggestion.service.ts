@@ -1,3 +1,8 @@
+// 用途：现算线索的辖区建议，按街道与机构汇总相交面积并给出跨区提示。
+// 调用方：backend/server/src/clue-dispatch.service.ts。
+// 边界：不含授权，调用方负责 clue.read 授权；街道边界服务或辖区对应不可用时返回空建议，不拦手工分派。
+// 依据：Issue #214，规格 C，ADR 0021。
+//
 // 辖区建议（#214；规格 C 节「辖区建议」、ADR 0021、GLOSSARY「辖区对应」）。
 //
 // 建议由服务端现算、不自动派：面状逐面与街道镇边界相交后按街道、机构汇总，
@@ -83,6 +88,10 @@ const NO_SUGGESTION = (clueId: string, code: string, kind: 'face' | 'point', rea
   unavailableReason: reason,
 });
 
+/**
+ * 辖区建议服务：调用街道边界服务取相交街道，经辖区对应映射到机构后汇总。
+ * 只读，不写留痕；不建议派单，派单由调用方决定。
+ */
 @Injectable()
 export class ClueSuggestionService {
   constructor(

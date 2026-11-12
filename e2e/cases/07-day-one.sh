@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 用途：上线首日端到端：空库引导、首登改密、建机构登记人员与执法证，全程经 nginx。
 # 「上线首日」端到端（#134，本期准出条件；#105「Testing Decisions」首日 e2e、故事 1、8、9）。
 # 在独立的首日库上按生产顺序串起整条路线，全程经 nginx：
 #   空库 → 引导（根机构＋首个系统管理人员）→ 首登强制改密 →
@@ -38,6 +39,7 @@ CERT_NO="44010020261340"
 CERT_EXPIRES="2031-12-31"
 ARGS=(--root-code "$ROOT_CODE" --root-name 市局 --admin-code "$ADMIN_CODE" --admin-name 首日管理 --admin-mobile "$ADMIN_PHONE")
 
+# 打印失败原因并以 1 退出。
 fail() {
   echo "[FAIL] $1" >&2
   exit 1
@@ -45,18 +47,21 @@ fail() {
 
 [ -n "${DATABASE_URL:-}" ] || fail "缺少 DATABASE_URL（由 dev 从 infra/runtime.env 算出）"
 DEV_DATABASE_URL="$DATABASE_URL"
+# 首日库的连接串：由开发库连接串只换库名。
 day_url() { printf '%s' "${DEV_DATABASE_URL%/*}/${DAY_DB}"; }
 
 work="$(mktemp -d)"
 containers=()
 server_switched=0
 
+# 在 db 容器内对指定库执行 psql；出错即停。
 psql_db() { # $1 库名，其余为 psql 参数
   local db="$1"
   shift
   "${COMPOSE[@]}" exec -T db psql -v ON_ERROR_STOP=1 -U "$PG_USER" -d "$db" "$@"
 }
 
+# 把 server 恢复指向开发库并重启 nginx；失败返回非 0，由调用方决定是否保留现场。
 restore_server() {
   if [ "$server_switched" -eq 1 ]; then
     echo "[e2e] 首日：server 恢复指向开发库…"
@@ -67,6 +72,7 @@ restore_server() {
   fi
 }
 
+# 用例收尾：恢复 server、删用例容器与首日库、删临时目录；恢复失败保留现场。
 cleanup() {
   local status=$?
   if ! restore_server; then
@@ -89,6 +95,7 @@ echo "[e2e] 首日：拉起入口 ${BASE} …"
 printf '%s\n' "$ADMIN_PASSWORD" >"$work/bootstrap-password"
 chmod 0644 "$work/bootstrap-password"
 
+# 在 server 镜像里跑一条命令；容器保留到用例结束供 inspect 核对。
 in_image() { # $1 容器名，$2 库连接串，其余为容器内命令
   local name="$1" url="$2"
   shift 2
@@ -131,6 +138,7 @@ for _ in $(seq 1 30); do
   sleep 1
 done
 
+# 发一次 HTTPS 请求，打印状态码；正文与响应头分别写入文件。
 request() { # $1 正文文件 $2 头文件 $3 路径 $4 请求体文件或空 $5 Cookie 或空
   local body_file="$1" header_file="$2" path="$3" payload="${4:-}" cookie="${5:-}"
   local args=(-sS --max-time 20 --cacert "$CERT" -D "$header_file" -o "$body_file" -w '%{http_code}')
@@ -139,11 +147,13 @@ request() { # $1 正文文件 $2 头文件 $3 路径 $4 请求体文件或空 $5
   curl "${args[@]}" "${BASE}${path}"
 }
 
+# 从头文件里取首个 __Host- 会话 Cookie 对。
 cookie_of() { # $1 头文件：取首个 __Host- 会话 Cookie 对
   grep -i '^set-cookie:' "$1" | tr -d '\r' | grep '__Host-' | head -1 \
     | sed -E 's/^[Ss]et-[Cc]ookie:[[:space:]]*//; s/;.*$//'
 }
 
+# 数 JSON 文件里某个键出现的次数。
 count_of() { # $1 文件 $2 键：数 JSON 里键出现次数
   grep -o "\"$2\":" "$1" | wc -l | tr -d ' '
 }
@@ -260,6 +270,7 @@ audit="$(psql_db "$DAY_DB" -tA -c "SELECT string_agg(action || ':' || n, ',' ORD
   || fail "首日留痕动作不对：${audit}"
 
 echo "[e2e] 首日：核对口令不出现在命令行、环境变量、输出、日志与留痕里…"
+# 断言文件里没有出现四个口令中任何一个的明文。
 assert_no_password() { # $1 描述，$2 文件
   local secret
   for secret in "$ADMIN_PASSWORD" "$ADMIN_NEW_PASSWORD" "$CLERK_PASSWORD" "$CLERK_NEW_PASSWORD"; do

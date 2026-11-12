@@ -1,3 +1,7 @@
+// 用途：按原因、退回点与接收人组装退回计划，只算落库内容，不写库。
+// 调用方：backend/server/src/case-return.service.ts 与 backend/server/src/case-filing.service.ts。
+// 边界：纯函数；材料不改写，环节实例只追加，失效下游用追加记录表达。
+// 依据：#238。
 // 退回计划（#238 第三节不变式）。纯函数，不写库。
 // 回流不改已有材料：本计划没有材料写入。
 // 环节实例只追加。链内退回不加次序号，拟制中记在退回记录上。
@@ -21,6 +25,7 @@ import {
   type ReturnTarget,
 } from './target.ts';
 
+// 退回拒绝原因码全集；HTTP 状态由 returnFailureStatus 映射。
 export const RETURN_REFUSAL_REASONS = [
   'missing-return-reason',
   'missing-return-note',
@@ -31,18 +36,22 @@ export const RETURN_REFUSAL_REASONS = [
   'external-return',
   'receiver-not-allowed',
 ] as const;
+// 退回拒绝原因码，取 RETURN_REFUSAL_REASONS 的元素类型。
 export type ReturnRefusalReason = (typeof RETURN_REFUSAL_REASONS)[number];
 
+// 拒绝原因对应的 HTTP 状态：缺原因返回 400，其余返回 409。
 export function returnFailureStatus(reason: ReturnRefusalReason): 400 | 409 {
   return reason === 'missing-return-reason' ? 400 : 409;
 }
 
+// 已落库的环节实例事实，用于计算失效名单与下一次进入序号。
 export interface ReturnInstanceFact {
   readonly id: string;
   readonly stage: string;
   readonly entrySeq: number;
 }
 
+// 组装退回计划需要的全部事实，由调用方从库中读出后喂入。
 export interface PlanReturnInput {
   readonly reasonCode: string;
   readonly note: string;
@@ -59,6 +68,7 @@ export interface PlanReturnInput {
   readonly handlers: readonly HandlerAvailability[];
 }
 
+// 退回计划：目标、次序号、失效实例与指针变更，全部由调用方在同一事务落库。
 export interface ReturnPlan {
   readonly reasonCode: ReturnCode;
   readonly inheritedCode: string | null;
@@ -80,6 +90,7 @@ export interface ReturnPlan {
   readonly touchesMaterials: false;
 }
 
+// 计划结果：成功交出计划，失败交出拒绝原因与 400 或 409。
 export type PlanReturnResult =
   | { readonly ok: true; readonly plan: ReturnPlan }
   | {
@@ -193,10 +204,12 @@ export function planReturn(input: PlanReturnInput): PlanReturnResult {
   };
 }
 
+// 环节签名是否仍可用：失效名单中的实例签名不可复用。
 export function signatureReusable(instanceId: string, invalidatedInstanceIds: readonly string[]): boolean {
   return !invalidatedInstanceIds.includes(instanceId);
 }
 
+// N5 是否适用：主办与协办都无法接收时由其他接收人接办。
 export function n5Applies(handlers: readonly HandlerAvailability[]): boolean {
   return bothHandlersUnavailable(handlers);
 }

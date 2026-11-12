@@ -1,3 +1,7 @@
+// 用途：定义内业核查的图层目录：七类核查图层与街道镇边界图层。
+// 调用方：本目录 layer-service-port.ts、backend/server/src/persistence.module.ts、e2e/verify/harness/layers/protocol-self-check.mjs。
+// 边界：纯目录常量，不写库、不写留痕；服务地址取自运行参数。
+// 依据：#213，ADR 0021，GLOSSARY「内业核查」。
 // 核查图层目录（#213；规格 C 节「初始 8 类图层」，ADR 0021「外部空间图层以服务地址接入」）。
 //
 // 八类图层：街道镇边界供辖区建议用（#214），其余七类供土地与矿产线索的内业核查。

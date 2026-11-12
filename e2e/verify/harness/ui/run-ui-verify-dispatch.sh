@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# 用途：第 2、3 步 UI 探活外壳，在浏览器镜像内跑页面取证并回拷证据。
+# 用法：CLUE_ID=<id> [EXPECT_STATUS=<状态>] run-ui-verify-dispatch.sh [--headed]。
+# 退出码：0 页面取证通过；1 镜像缺失、传输门禁或页面断言失败。
 # Verification step2／step3 UI 探活 — Playwright in pinned MCR image (headless default).
 # Docker Desktop 看不见 WSL home bind-mount：证据先落 /mnt/c/... 再拷回仓库 e2e/results/。
 # Usage:

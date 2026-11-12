@@ -1,3 +1,7 @@
+// 用途：定义调查环节的呈批校验、笔录在场人数、作废、时效出口与停表事件纯规则。
+// 调用方：backend/server/src/investigation.service.ts；时效出口常量另由 backend/case/src/review/rules.ts 读取。
+// 边界：不读库、不留痕；依据标签由参数传入，本文件不写死。
+// 依据：Issue #236、#42、#29。
 // 调查环节与收尾的纯规则（#236）。不写库。
 // 终止原因取处罚办法第 28 条四项，并上规程 3.5 增列的不可抗力。
 // 四项原文见 docs/research/suspension-termination.md §2.2。
@@ -12,10 +16,12 @@ export const RECOGNITION_MODES = [
   { code: 'continuous', label: '连续' },
   { code: 'continuing', label: '继续' },
 ] as const;
+// 认定方式的类型别名，取值来自 RECOGNITION_MODES 的 code。
 export type RecognitionMode = (typeof RECOGNITION_MODES)[number]['code'];
 
 /** 违法记录状态。作废后仍保留，不物理删除。 */
 export const VIOLATION_STATUSES = ['active', 'voided'] as const;
+// 违法记录状态的类型别名。
 export type ViolationStatus = (typeof VIOLATION_STATUSES)[number];
 
 /** 处罚办法第 17 条第 2 款。笔录在场承办人员少于两人时，命中记录带这句。 */
@@ -41,6 +47,7 @@ export const TERMINATION_REASONS = [
   { code: 'force-majeure', label: '因不可抗力致使案件无法调查处理的', source: '规程 3.5' },
   { code: 'other', label: '其他应当终止调查的情形', source: '处罚办法第 28 条（四）' },
 ] as const;
+// 终止调查原因的类型别名。
 export type TerminationReason = (typeof TERMINATION_REASONS)[number]['code'];
 
 /** 撤案原因只此两项（规程 4.3.3(4)、7.1(6)）。 */
@@ -48,6 +55,7 @@ export const INVESTIGATION_WITHDRAW_REASONS = [
   { code: 'fact-not-established', label: '违法事实不成立' },
   { code: 'limitation-expired', label: '已过追诉时效' },
 ] as const;
+// 撤案原因的类型别名。
 export type WithdrawReason = (typeof INVESTIGATION_WITHDRAW_REASONS)[number]['code'];
 
 /**
@@ -58,14 +66,18 @@ export const CLOSE_REASONS = [
   { code: 'force-majeure', label: '不可抗力', open: true },
   { code: 'outside-jurisdiction', label: '不属本部门管辖', open: true },
 ] as const;
+// 结案原因的类型别名。
 export type CloseReason = (typeof CLOSE_REASONS)[number]['code'];
 
 /** 结案原因为不属本部门管辖时的提示。 */
 export const MISSING_JURISDICTION_TRANSFER_MESSAGE = '结案原因为不属本部门管辖时，须已有管辖移送记载';
 
+// 调查收尾呈批的种类取值。
 export const PROCEDURE_KINDS = ['suspend', 'resume', 'terminate', 'withdraw', 'close'] as const;
+// 调查收尾呈批种类的类型别名。
 export type ProcedureKind = (typeof PROCEDURE_KINDS)[number];
 
+// 各呈批种类对应的状态机迁移编号。
 export const PROCEDURE_TRANSITION: Readonly<Record<ProcedureKind, string>> = {
   suspend: 'T03',
   resume: 'T04',
@@ -77,6 +89,7 @@ export const PROCEDURE_TRANSITION: Readonly<Record<ProcedureKind, string>> = {
 /** 待收尾只允许这两类呈批（X03）。 */
 export const PENDING_CLOSEOUT_KINDS = ['withdraw', 'close'] as const;
 
+// 呈批正文校验后按种类区分的结构。
 export type ProcedureContent =
   | { readonly kind: 'suspend'; readonly extendTogether: boolean }
   | { readonly kind: 'resume' }
@@ -84,6 +97,7 @@ export type ProcedureContent =
   | { readonly kind: 'withdraw'; readonly reason: WithdrawReason }
   | { readonly kind: 'close'; readonly reason: CloseReason };
 
+// 呈批正文校验失败的结果，区分 400 与 409 两类。
 export type ProcedureContentHit =
   | { readonly httpStatus: 400; readonly reason: 'invalid-kind' | 'invalid-reason'; readonly message: string }
   | {
@@ -104,6 +118,7 @@ export function parseCalendarDay(value: unknown): string | null {
   return value;
 }
 
+// 判断字符串是否为登记的认定方式。
 export function isRecognitionMode(value: string): value is RecognitionMode {
   return RECOGNITION_MODES.some((item) => item.code === value);
 }
@@ -132,6 +147,7 @@ export function checkInquiryOfficers(
   return { ok: true, officerIds: present };
 }
 
+// 笔录在场承办人员不足时返回的阻断文案、依据与出口。
 export function inquiryOfficerBlock(): { readonly citation: string; readonly message: string; readonly outlet: string } {
   const row = findIllegal('X20');
   return {
@@ -168,6 +184,7 @@ export function checkVoidViolation(input: {
   return { ok: true, reason };
 }
 
+// 判断字符串是否为登记的呈批种类。
 export function isProcedureKind(value: string): value is ProcedureKind {
   return (PROCEDURE_KINDS as readonly string[]).includes(value);
 }
@@ -225,6 +242,7 @@ export function checkProcedureContent(input: {
   return { ok: true, content: { kind: 'close', reason: close.code } };
 }
 
+// 呈批状态校验失败的原因码与处理出口。
 export type ProcedureStateHit =
   | { readonly reason: 'X03'; readonly message: string; readonly outlet: string; readonly citation: string | null }
   | { readonly reason: 'invalid-state'; readonly message: string; readonly outlet: string };
@@ -304,6 +322,7 @@ export const LIMITATION_DISCOVERY_EXIT_V1: LimitationDiscoveryExit = {
   },
 };
 
+// 时效届满出口校验的失败结果，审理后分支带出口映射字段。
 export type LimitationDiscoveryHit =
   | { readonly httpStatus: 409; readonly reason: 'invalid-state'; readonly message: string; readonly outlet: string }
   | {
@@ -372,6 +391,7 @@ export const SUSPENSION_CLOCK_PARAMETER: SuspensionClockParameter = {
   basisNote: '依据待法制部门确认',
 };
 
+// 停表或续表事件待写库的结构。
 export interface DeadlineEventDraft {
   readonly eventKind: 'stop' | 'continue';
   readonly basisLabel: string;
@@ -381,6 +401,7 @@ export interface DeadlineEventDraft {
   readonly transitionCode: string;
 }
 
+// 由期间参数与事件输入拼出停表或续表事件；只组装，不写库。
 export function suspensionClockEvent(
   parameter: SuspensionClockParameter,
   input: {

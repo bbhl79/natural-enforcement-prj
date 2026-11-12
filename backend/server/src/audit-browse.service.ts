@@ -1,3 +1,7 @@
+// 用途：管理台留痕的查阅、导出与今日条数统计，含授权、范围裁剪与查阅/导出留痕。
+// 调用方：backend/server/src/audit.controller.ts。
+// 边界：授权经 check 判定，拒绝留痕随 rejected 在事务回滚后写入；读取与留痕同一事务，留痕失败则整体失败。
+// 依据：#126、#105、ADR 0011。
 import { Inject, Injectable } from '@nestjs/common';
 import {
   auditCategoryOf,
@@ -22,7 +26,9 @@ import { CLOCK, type Clock } from './clock.ts';
 import { UNIT_OF_WORK, type TxScope, type UnitOfWork } from './unit-of-work.ts';
 import { buildXlsx } from './xlsx.ts';
 
+/** 管理台留痕查阅与今日条数使用的操作码。 */
 export const AUDIT_READ = 'audit.admin.read';
+/** 管理台留痕导出使用的操作码。 */
 export const AUDIT_EXPORT = 'audit.admin.export';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -39,6 +45,7 @@ export interface AuditFilterInput {
   orgUnitId?: unknown;
 }
 
+/** 校验后的筛选条件：日期为 Asia/Shanghai 日历日，未指定的筛选项为 null。 */
 export interface AuditFilter {
   /** 起止日期（含），Asia/Shanghai 日历日，YYYY-MM-DD。 */
   from: string;
@@ -48,6 +55,7 @@ export interface AuditFilter {
   outcome: 'succeeded' | 'failed' | null;
 }
 
+/** 查阅范围：范围根机构、名称，以及是否包含无所属机构的行。 */
 export interface AuditScope {
   orgUnitId: string;
   orgName: string;
@@ -55,6 +63,7 @@ export interface AuditScope {
   includesUnanchored: boolean;
 }
 
+/** 返回给管理台的留痕行：展示视图加原始动作、结果与类别。 */
 export interface AuditRowBody extends AuditRowView {
   id: string;
   action: string;
@@ -83,6 +92,7 @@ interface Prepared {
 
 const INVALID: Invalid = { status: 400, body: { result: 'non-compliant', rules: ['invalid-filter'] } };
 
+/** 查阅结果：行、范围与筛选条件；或授权拒绝、筛选不合法。 */
 export type AuditQueryOutcome =
   | {
       status: 200;
@@ -91,11 +101,13 @@ export type AuditQueryOutcome =
   | Denial
   | Invalid;
 
+/** 导出结果：xlsx 文件、文件名与条数；或授权拒绝、筛选不合法。 */
 export type AuditExportOutcome =
   | { status: 200; file: Buffer; filename: string; itemCount: number }
   | Denial
   | Invalid;
 
+/** 今日条数结果；或授权拒绝。 */
 export type AuditSummaryOutcome =
   | { status: 200; body: { result: 'counted'; today: number } }
   | Denial;

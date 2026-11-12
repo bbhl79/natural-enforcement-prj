@@ -15,6 +15,7 @@ import {
 const DISCOVERED = new Date('2026-10-26T06:00:00.000Z');
 const HOUR = 60 * 60 * 1000;
 
+// #225 保密报告工单三态只进不退：待报→已报→已回执，跳步、回退与终态再迁移一律拒绝。
 describe('保密报告工单状态机（#225）', () => {
   it('三态为待报／已报／已回执', () => {
     expect([...SECRECY_REPORT_STATUSES]).toEqual(['pending_report', 'reported', 'receipted']);
@@ -35,6 +36,7 @@ describe('保密报告工单状态机（#225）', () => {
   });
 });
 
+// #225 报告时限自发现时刻起算 24 小时；提醒只针对待报工单，且只读注入时刻、只返回数据不触发动作。
 describe('报告时限提醒（#225，默认 24h，假时钟）', () => {
   it('默认时限 24 小时，从发现时刻起算', () => {
     expect(SECRECY_REPORT_DEADLINE_HOURS).toBe(24);

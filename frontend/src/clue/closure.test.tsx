@@ -11,6 +11,7 @@ import { closureFailureText, reminderKindLabel } from './closure';
 /** 服务端给的四项常用原因（逐字）。 */
 const REASONS = ['同一地点不同违法', '新增情况', '原线索核查不属实需重派', '误判重复'];
 
+// 撤回不派弹窗：四项原因逐字、每项单独一行，补充说明必填。
 describe('撤回不派弹窗', () => {
   it('四项原因逐字、每个原因单独一行，说明必填', () => {
     const html = renderToStaticMarkup(
@@ -66,6 +67,7 @@ describe('撤回不派弹窗', () => {
   });
 });
 
+// 随旧线索办结弹窗：写明原因后办结，界面不使用「捞回」。
 describe('随旧线索办结弹窗', () => {
   it('写明原因后随旧线索办结，说明必填', () => {
     const html = renderToStaticMarkup(
@@ -85,6 +87,7 @@ describe('随旧线索办结弹窗', () => {
   });
 });
 
+// 失败提示逐条对应服务端校验码，提醒类型标签使用 GLOSSARY 用词。
 describe('失败与标签口径', () => {
   it('校验失败的提示逐条对应', () => {
     expect(closureFailureText({ result: 'non-compliant', rules: ['missing-withdraw-reason'] })).toBe(

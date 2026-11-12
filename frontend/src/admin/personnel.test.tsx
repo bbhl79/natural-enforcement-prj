@@ -183,6 +183,7 @@ const listHtml = (filter: Partial<PersonnelFilter> = {}, opcodes = ADMIN) => ren
   </MemoryRouter>,
 );
 
+// 验证名单筛选在前端完成：关键字、机构子树、角色与执法证情况。
 describe('人员名单筛选（P5）', () => {
   it('默认含已停用人员；去掉勾选后不含', () => {
     expect(filterPersonnel(LIST, DEFAULT_FILTER)).toHaveLength(7);
@@ -209,6 +210,7 @@ describe('人员名单筛选（P5）', () => {
   });
 });
 
+// 验证只改查询参数时不重取名单，其余导航照常取数。
 describe('名单页重验证', () => {
   const at = (path: string) => new URL(`http://x${path}`);
   it('只改筛选（查询参数）不重取名单；进入页面、提交写操作、显式刷新照常取数', () => {
@@ -236,6 +238,7 @@ describe('名单页重验证', () => {
   });
 });
 
+// 验证名单页各状态的行、提示与按钮可见性。
 describe('人员名单界面（P5）', () => {
   it('district：共 N 人、已停用行置灰、执法证情况标签，没有手机号和证号列', () => {
     const html = listHtml();
@@ -266,6 +269,7 @@ describe('人员名单界面（P5）', () => {
   });
 });
 
+// 验证前端分页、每页人数与页码在地址栏的往返。
 describe('人员名单分页（原型 P5:37「第 1 页」）', () => {
   const many: PersonnelList = {
     ...LIST,
@@ -309,6 +313,7 @@ describe('人员名单分页（原型 P5:37「第 1 页」）', () => {
   });
 });
 
+// 验证人员卡片的只读渲染、按钮可见性与执法证一段。
 describe('人员卡片（P6 view）', () => {
   const card = (
     partial: Partial<PersonnelCard> = {},
@@ -446,6 +451,7 @@ describe('人员卡片（P6 view）', () => {
   });
 });
 
+// 验证执法证情况的推导、「需要留意」统计与有资格人数口径。
 describe('执法证情况与首页统计（#133）', () => {
   const CERT_LIST: PersonnelList = {
     rootId: 'th',
@@ -501,6 +507,7 @@ describe('执法证情况与首页统计（#133）', () => {
   });
 });
 
+// 验证执法证表单的初值、必填校验与失败提示。
 describe('执法证登记表单（P6 certEdit，#133）', () => {
   const FILLED: CertUpdateInput = { certNo: '44010020260917', certExpiresOn: '2031-09-16', certStatus: 'valid' };
   const form = (
@@ -558,6 +565,7 @@ describe('执法证登记表单（P6 certEdit，#133）', () => {
   });
 });
 
+// 验证执法证接口的请求体、字段提示与各类失败映射。
 describe('执法证登记接口（#133）', () => {
   const INPUT: CertUpdateInput = { certNo: 'GD-0001', certExpiresOn: '2031-09-16', certStatus: 'valid' };
   const url = '/api/admin/personnel/3/cert';
@@ -624,6 +632,7 @@ describe('执法证登记接口（#133）', () => {
   });
 });
 
+// 验证执法证保存结果决定表单关闭或保留。
 describe('执法证表单的保存去向（#158）', () => {
   it('成功关表单；对方已停用关闭旧表单并出定稿拒绝句；其余失败留在表单里', () => {
     expect(certSaveTransition({ ok: true })).toEqual({ editing: false, failure: null, denied: null });
@@ -635,6 +644,7 @@ describe('执法证表单的保存去向（#158）', () => {
   });
 });
 
+// 验证新建人员表单的字段、口令要求与错误呈现。
 describe('新建人员（P6 create / createInvalid）', () => {
   const form = (failure: Parameters<typeof PersonnelCreateForm>[0]['failure'] = null) => renderToStaticMarkup(
     <MemoryRouter>
@@ -719,6 +729,7 @@ const transferState = (partial: Partial<TransferState> = {}): TransferState => (
 const visibleText = (html: string) => html.replace(/<[^>]*>/g, ' ');
 const RAW_TEXT = /personnel\.|audit\.|org\.|permission-denied|scope-denied|invalid-state|already-exists|non-compliant|not-found|root-admin-required|-required|too-short|contains-code|legal-review-lead|legal-affairs-leader/;
 
+// 验证编辑表单的只读字段、本人限制与失败提示。
 describe('人员卡片编辑（P6 edit / selfEdit，#129）', () => {
   const form = (self: boolean, partial: Partial<EditState> = {}) => renderToStaticMarkup(
     <MemoryRouter>
@@ -784,6 +795,7 @@ describe('人员卡片编辑（P6 edit / selfEdit，#129）', () => {
   });
 });
 
+// 验证调岗弹窗的机构清单、提示句与失败呈现。
 describe('调岗弹窗（P6 transfer，#129）', () => {
   const dialog = (partial: Partial<TransferState> = {}) => renderToStaticMarkup(
     <MemoryRouter>
@@ -860,6 +872,7 @@ const resetPasswordState = (partial: Partial<ResetPasswordState> = {}): ResetPas
   ...partial,
 });
 
+// 验证危险操作区按操作码、本人与停用态显示入口及结果横幅。
 describe('危险操作区（P6，#130）', () => {
   const view = (
     partial: Partial<PersonnelCard> = {},
@@ -942,6 +955,7 @@ describe('危险操作区（P6，#130）', () => {
   });
 });
 
+// 验证两个确认弹窗的文案、危险按钮与进行中禁用。
 describe('停用与结束全部会话弹窗（P6 deactivate / endsessions，#130）', () => {
   const dialog = (kind: 'deactivate' | 'endsessions', partial: Partial<ConfirmState> = {}) => renderToStaticMarkup(
     <MemoryRouter>
@@ -981,6 +995,7 @@ describe('停用与结束全部会话弹窗（P6 deactivate / endsessions，#130
   });
 });
 
+// 验证恢复弹窗在原机构停用与在用两种情形下的字段与失败提示。
 describe('恢复弹窗（P6 restore / restoreNewOrg，#130）', () => {
   const dialog = (card: PersonnelCard, partial: Partial<RestoreState> = {}) => renderToStaticMarkup(
     <MemoryRouter>
@@ -1065,6 +1080,7 @@ describe('恢复弹窗（P6 restore / restoreNewOrg，#130）', () => {
   });
 });
 
+// 验证重设弹窗的文案、规则码与历史命中的呈现。
 describe('重设初始口令弹窗（P6 resetpw / resetpwReused，#132）', () => {
   const dialog = (partial: Partial<ResetPasswordState> = {}) => renderToStaticMarkup(
     <MemoryRouter>
@@ -1135,6 +1151,7 @@ describe('重设初始口令弹窗（P6 resetpw / resetpwReused，#132）', () =
   });
 });
 
+// 验证各页可见文本不含操作码、规则码与原始结果码。
 describe('用户可见文本不露操作码与原始结果码（SCREENS.md:8）', () => {
   const visible = (html: string) => html.replace(/<[^>]*>/g, ' ');
   const RAW = /personnel\.|audit\.|org\.|permission-denied|scope-denied|invalid-state|already-exists|non-compliant|not-found|-required|too-short|contains-code|legal-review-lead|legal-affairs-leader/;
@@ -1246,6 +1263,7 @@ describe('用户可见文本不露操作码与原始结果码（SCREENS.md:8）'
   });
 });
 
+// 验证登记与读取接口的请求形状与状态码映射。
 describe('登记接口', () => {
   const input = { ...EMPTY_INPUT, code: 'TH0360', name: '邓雅', orgUnitId: 'ld', mobilePhone: '13900007788', initialPassword: 'Gz@Field2026', roles: ['经办'], posts: ['legal-review-lead' as const] };
 
@@ -1317,6 +1335,7 @@ describe('登记接口', () => {
   });
 });
 
+// 验证编辑、调岗与目的地接口的请求与失败映射。
 describe('编辑与调岗接口（#129）', () => {
   const ADMIN_UPDATE = [...ADMIN, PERSONNEL_UPDATE];
 
@@ -1382,6 +1401,7 @@ describe('编辑与调岗接口（#129）', () => {
   });
 });
 
+// 验证危险操作接口与恢复机构清单的请求和错误处理。
 describe('停用、恢复、结束全部会话接口（#130）', () => {
   const ADMIN_DANGER = [...ADMIN, PERSONNEL_DEACTIVATE, PERSONNEL_RESTORE, PERSONNEL_SESSIONS_END];
   const RESTORE_INPUT = { initialPassword: 'Gz@Field2026', orgUnitId: 'ld' };
@@ -1519,6 +1539,7 @@ describe('停用、恢复、结束全部会话接口（#130）', () => {
   });
 });
 
+// 验证人员页各路由的权限判定、取数与菜单高亮。
 describe('人员页路由', () => {
   it('监督打开人员名单：无权限卡片带「去看留痕」，不取名单', async () => {
     const calls = serve(person(SUPERVISE));

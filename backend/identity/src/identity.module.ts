@@ -1,3 +1,7 @@
+// 用途：装配身份组织模块的服务提供者与导出，供宿主模块导入。
+// 调用方：backend/server/src/ 下的应用模块装配。
+// 边界：本模块不绑定 IdentityStore 实现，由宿主经令牌注入。
+// 依据：ADR 0012
 import { Module } from '@nestjs/common';
 
 import { AccessControlService } from './services/access-control.service.ts';

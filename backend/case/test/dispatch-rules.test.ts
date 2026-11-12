@@ -14,6 +14,7 @@ import {
   planOrgAssign,
 } from '../src/clue/dispatch/index.ts';
 
+// #214 分派决定：默认不派、未结案命中须已知晓、举报必派，以及状态门槛与规则码封闭表。
 describe('分派决定规则', () => {
   it('默认不派：非举报选「不派」进 held', () => {
     expect(
@@ -66,6 +67,7 @@ describe('分派决定规则', () => {
   });
 });
 
+// #228 派机构分流：换机构一律经报请指定管辖；仅同机构重派或指定管辖可成功。
 describe('派机构分流（#228：换机构一律经报请指定管辖）', () => {
   const required = { ok: false, reason: 'designation-required', nextAction: 'clue.designate.request' };
 
@@ -125,6 +127,7 @@ describe('派机构分流（#228：换机构一律经报请指定管辖）', () 
   });
 });
 
+// #214 街道镇边界查询端口的契约：未配置与响应不合规时返回原因词，正常时按面归组街道编码。
 describe('街道镇边界查询端口', () => {
   const part = { partId: 'p1', partIndex: 0, geojson: '{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,0]]]}' };
 

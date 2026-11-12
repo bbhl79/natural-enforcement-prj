@@ -235,6 +235,7 @@ beforeEach(() => {
   street.script = () => ({ ok: true, features: [] });
 });
 
+// 验证辖区建议由服务端现算且不自动派，服务或对应未就绪时返回空建议（#214）。
 describe('#214 辖区建议', () => {
   it('面状逐面汇总：全部候选、占比、街道明细按占比降序；同区不提示跨区', async () => {
     const registered = await register({

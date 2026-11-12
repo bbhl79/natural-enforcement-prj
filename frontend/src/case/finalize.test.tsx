@@ -60,6 +60,7 @@ function props(partial: Partial<CaseFinalizeSectionProps> = {}): CaseFinalizeSec
   };
 }
 
+// 验证定型页签的材料清单、发起条件与归档审批状态流转（#243）。
 describe('定型页签', () => {
   it('展示卷宗材料清单与缺件', () => {
     const html = renderToStaticMarkup(<CaseFinalizeSection {...props()} />);

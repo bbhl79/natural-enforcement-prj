@@ -1,3 +1,4 @@
+// 用途：法制审核与集体讨论的 HTTP 接口，含发起、意见签出、负责人签出、接收人改派、决定闸口与讨论记录。
 // 法制审核与集体讨论的 HTTP 入口（#269）。
 // 发起用 legal.review.request；审核人签出用 legal.opinion.submit；负责人签出用 doc.admin.review。
 // 接收人改派复用 case.reassign.submit（G5）；集体讨论记录用 case.discussion.record。
@@ -16,10 +17,12 @@ interface HttpReply {
   json(body: unknown): void;
 }
 
+/** 法制审核与集体讨论接口的 HTTP 适配层。 */
 @Controller()
 export class CaseLegalReviewController {
   constructor(private readonly legalReview: CaseLegalReviewService) {}
 
+  // 读取案件的法制审核视图；操作码 case.read；对象级按案件承办机构校验。
   @Get('api/cases/:id/legal-review')
   @UseGuards(SameOriginReadGuard)
   async read(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {
@@ -27,6 +30,7 @@ export class CaseLegalReviewController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 发起法制审核并指定接收人；操作码 legal.review.request；对象级按案件承办机构校验。
   @Post('api/cases/:id/legal-review')
   @UseGuards(SameOriginReadGuard)
   async start(
@@ -46,6 +50,7 @@ export class CaseLegalReviewController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 法制审核人签出意见；操作码 legal.opinion.submit；对象级按案件承办机构校验。
   @Post('api/legal-reviews/:legalReviewId/opinions')
   @UseGuards(SameOriginReadGuard)
   async signOpinion(
@@ -71,6 +76,7 @@ export class CaseLegalReviewController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 法制审核负责人签出结论；操作码 doc.admin.review；对象级按案件承办机构校验。
   @Post('api/legal-reviews/:legalReviewId/sign')
   @UseGuards(SameOriginReadGuard)
   async signConclusion(
@@ -85,6 +91,7 @@ export class CaseLegalReviewController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 改派法制审核接收人；操作码 case.reassign.submit；对象级按案件承办机构校验。
   @Post('api/legal-reviews/:legalReviewId/reassign')
   @UseGuards(SameOriginReadGuard)
   async reassign(
@@ -97,6 +104,7 @@ export class CaseLegalReviewController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 检查法制审核是否满足决定审批的前置条件；操作码 doc.approve；对象级按案件承办机构校验。
   @Post('api/cases/:id/legal-review-decision-gate')
   @UseGuards(SameOriginReadGuard)
   async decisionGate(
@@ -108,6 +116,7 @@ export class CaseLegalReviewController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 标记案件需要集体讨论；操作码 doc.draft；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/discussion-marks')
   @UseGuards(SameOriginReadGuard)
   async markDiscussion(
@@ -120,6 +129,7 @@ export class CaseLegalReviewController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 录入集体讨论记录；操作码 case.discussion.record；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/discussion-records')
   @UseGuards(SameOriginReadGuard)
   async recordDiscussion(

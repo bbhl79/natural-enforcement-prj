@@ -285,6 +285,7 @@ beforeEach(() => {
   storage.writes.length = 0;
 });
 
+// #207：工作台卡片按身份分类计数，机构子树内计入、范围外不计。
 describe('#207 工作台卡片计数', () => {
   it('身份卡数＋数据范围：一线／领导／监督按子树计入，范围外不计', async () => {
     // 甲区：待分派池 1 + 撞车旧 in_pool 1 + 撞车新 held 1 + 派甲所 org_assigned 1

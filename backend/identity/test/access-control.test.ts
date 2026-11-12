@@ -164,6 +164,7 @@ async function expectDenied(
   throw new Error(`校验缺失形态：越权调用未抛 AccessDeniedError（期望 reason=${reason}）`);
 }
 
+// 验证 authorize 的拒绝原因、留痕行与数据范围判定（#96、#119）。
 describe('按操作码授权', () => {
   it('名册外的操作码按 permission-denied 拒绝，并写下操作码和原因', async () => {
     const recorded = recorder();
@@ -404,6 +405,7 @@ describe('按操作码授权', () => {
   });
 });
 
+// 验证菜单清单与 authorize 等价、名册外码不进清单且查清单不写留痕（#105）。
 describe('本人允许的操作码清单（#105 菜单来源）', () => {
   it('只列本人角色能放行的名册内操作码，顺序同名册', async () => {
     const access = new AccessControlService(store(), recorder().port);

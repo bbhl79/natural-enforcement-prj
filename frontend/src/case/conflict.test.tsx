@@ -25,6 +25,7 @@ const agencyQuiet = {
   onMarkAgency: () => undefined,
 };
 
+// 验证回避页签按权限展示记录与入口，机关层勾选后不可取消（#237）。
 describe('回避页签', () => {
   it('显示回避页签、记录，以及登记与决定入口', () => {
     const html = renderToStaticMarkup(

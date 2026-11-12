@@ -1,3 +1,4 @@
+// 用途：跨跑次比对 uncovered 缺口，选择基线并按 ack 过滤。
 // 发现器信号源 1（spec #322 首期 T2）：跨跑次 diff + 基线选择 + ack 过滤。
 // 纯函数，无 I/O。报告写出由 report.ts 负责。
 import type { UncoveredItem } from './uncovered.ts';
@@ -58,7 +59,7 @@ export function selectBaseline(runs: readonly RunSnapshot[]): RunSnapshot | null
 /** ack 键类型：地图节点或路由（spec #322 Q4）。首期过滤只用地图节点，路由留 T5。 */
 export type CoverageAckKeyType = 'feature-map-node' | 'route';
 
-/** by-design 确认态一条。确认权归 Lei Hu，代理只提案；初始清单为空。 */
+/** by-design 确认态一条。确认权归项目负责人，代理只提案；初始清单为空。 */
 export interface CoverageAck {
   readonly key: string;
   readonly keyType: CoverageAckKeyType;

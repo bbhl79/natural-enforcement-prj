@@ -1,5 +1,8 @@
+// 用途：案件调查环节展示面板，按服务端给出的入口列出各调查动作与中止呈批表单。
+// 调用方：frontend/src/case/CaseInvestigationPage.tsx，测试经 InvestigationPanel 与 SuspendDraftForm 挂载。
 // 调查环节最小入口（#236）。中止呈批的延长勾选不是必填。
 
+/** 调查环节整页视图：当前阶段、中止标记、提示与各动作入口开关。 */
 export interface InvestigationView {
   id: string;
   status: string;
@@ -17,6 +20,7 @@ export interface InvestigationView {
   };
 }
 
+/** 中止呈批表单：勾选是否同时办延长，并提示三个工作日内书面告知当事人。 */
 export function SuspendDraftForm({ extendTogether }: { extendTogether: boolean }) {
   return (
     <form data-role="suspend-draft">
@@ -29,6 +33,7 @@ export function SuspendDraftForm({ extendTogether }: { extendTogether: boolean }
   );
 }
 
+/** 调查面板：只读渲染服务端允许的调查动作入口与期限链接。 */
 export function InvestigationPanel({ view }: { view: InvestigationView }) {
   return (
     <section data-role="investigation">

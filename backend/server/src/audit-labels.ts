@@ -1,3 +1,4 @@
+// 用途：把留痕记录转成管理台表格与导出文件共用的中文展示文字。
 // 管理台留痕的展示文字（#126，原型 v0.4 P8）。页面表格与导出文件用同一份文字，保证「导出内容与页面一致」。
 // 只写工号；不写手机号、执法证号、口令（ADR 0007、ADR 0011）。
 // 用户可见文字不出现操作码、动作原文、原因码（SCREENS.md 通用检查「用户可见文本无工程词」，P8「动作原文只放 data-action」）：
@@ -11,6 +12,7 @@ export const AUDIT_COLUMNS = ['时间', '操作人工号', '操作', '对象', '
 /** 结果的着色：ok 成功、gray 中性（结束会话）、red 失败或被拒。 */
 export type AuditTone = 'ok' | 'gray' | 'red';
 
+/** 管理台留痕一行的展示视图；文本字段均已本地化。调用方：backend/server/src/audit-browse.service.ts。 */
 export interface AuditRowView {
   time: string;
   actorCode: string;
@@ -205,6 +207,7 @@ const SESSION_END_RESULT: Readonly<Record<string, string>> = {
 export const UNKNOWN_OPERATION = '其他操作';
 /** 对照表里没有的失败或拒绝原因：只写「失败」「被拒绝」，不写原因码（工程稿，随 v0.5 定稿）。 */
 export const UNKNOWN_FAILED = '失败';
+/** 对照表里没有的拒绝原因；本文件兜底使用。 */
 export const UNKNOWN_DENIED = '被拒绝';
 /** 根机构的所属机构名后缀（原型 v0.4 G34）。 */
 export const ROOT_SUFFIX = '（根机构）';

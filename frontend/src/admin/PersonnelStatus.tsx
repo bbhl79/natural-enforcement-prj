@@ -1,3 +1,4 @@
+// 用途：人员模块共用的无权限卡片与加载骨架。
 // 人员页共用的状态卡片：监督看到的无权限卡片带「去看留痕」（原型 P5、P6 denied）。
 import { Link } from 'react-router';
 
@@ -20,6 +21,7 @@ export function PersonnelDenied({ what, opcodes, supervise }: { what: string; op
   );
 }
 
+/** 指定行数的加载骨架卡片。 */
 export function SkeletonCard({ rows }: { rows: number }) {
   return (
     <div className="card">

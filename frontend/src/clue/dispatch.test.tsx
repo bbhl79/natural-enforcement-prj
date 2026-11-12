@@ -90,6 +90,7 @@ function view(overrides: Partial<DispatchView> = {}): DispatchView {
   };
 }
 
+// 决定步三类可见行为：命中分组展示、默认不派、举报必派与全部结案可直接派出（#214；规格 B/D）。
 describe('分派决定步（step3）', () => {
   it('命中按对方线索分组：1 位小数、达标一方加粗、可打开对比', () => {
     const html = renderToStaticMarkup(<HitGroups view={view()} />);
@@ -142,6 +143,7 @@ describe('分派决定步（step3）', () => {
   });
 });
 
+// 辖区建议按占比与街道明细展示并提示跨区；建议为空时不拦手工分派（#214）。
 describe('辖区建议（不自动派）', () => {
   it('全部候选按占比降序、街道明细与跨区提示', () => {
     const html = renderToStaticMarkup(
@@ -199,6 +201,7 @@ describe('辖区建议（不自动派）', () => {
   });
 });
 
+// 监督身份无经办与内勤角色时分派写操作全部禁用，只保留只读查阅与说明。
 describe('监督身份分派只读', () => {
   const noop = () => undefined;
   const body = (overrides: Partial<DispatchView> = {}) =>
@@ -298,6 +301,7 @@ describe('监督身份分派只读', () => {
   });
 });
 
+// 两步分派面板：首次派机构与重新分派的理由差异、#228 改机构限制、派主办与协办。
 describe('两步分派面板', () => {
   it('首次派机构不渲染理由输入；重新分派渲染理由必填输入', () => {
     const initial = renderToStaticMarkup(
@@ -396,6 +400,7 @@ describe('两步分派面板', () => {
   });
 });
 
+// 分派办理的纯函数口径：比例与亩换算、状态标签、失败原因文案（#214）。
 describe('分派办理的纯函数', () => {
   it('比例文本保留 1 位小数，达标线 60%', () => {
     expect(hitRatioText(0.7)).toBe('70.0%');
@@ -453,6 +458,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+// 工作台登记分区按 ?step= 挂载续办容器；无线索时提示先打开线索（#214 续办）。
 describe('工作台登记分区（#214 续办）', () => {
   it('ws-existing-context：step3 带线索上下文打开，分派办理容器已挂载', async () => {
     serve({
@@ -500,6 +506,7 @@ describe('工作台登记分区（#214 续办）', () => {
   });
 });
 
+// 移送面板的标签、必填项、选填附件与发函日期缺省提示（#216；规格 D 节）。
 describe('移送（自然资源部门以外机关）', () => {
   it('移送面板：标签用「移送（自然资源部门以外机关）」、必填项与选填附件、发函日期默认北京当日提示', () => {
     const html = renderToStaticMarkup(<TransferPanel busy={false} failure={null} onTransfer={() => undefined} />);
@@ -561,6 +568,7 @@ describe('移送（自然资源部门以外机关）', () => {
   });
 });
 
+// 报请入口、受理人驳回、指定锁提示与相关失败文案（#215；规格 D/H 节）。
 describe('报请指定管辖与指定锁', () => {
   const designation = {
     requestId: 'r1',
@@ -622,6 +630,7 @@ describe('报请指定管辖与指定锁', () => {
   });
 });
 
+// 规划类个案判断项触发主体冲突待定：办理方向与依据必填，举报线索不出现该出口（#207 P7）。
 describe('个案判断规划类主体冲突待定（#207 P7）', () => {
   it('存在个案判断项时显示主体冲突待定横幅与方向选择、依据必填', () => {
     const html = renderToStaticMarkup(
@@ -670,6 +679,7 @@ describe('个案判断规划类主体冲突待定（#207 P7）', () => {
 });
 
 
+// 「其他」处置面板的展示条件、理由必填与可同时登记系统外移送（#229）。
 describe('其他处置（#229）', () => {
   const assignment = {
     assignmentId: 'ASG-TEST',

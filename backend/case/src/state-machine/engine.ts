@@ -1,3 +1,7 @@
+// 用途：状态机迁移的纯判定入口，按迁移目录与守卫结果给出放行、警告或阻断。
+// 调用方：backend/server/src/case-state.service.ts、backend/server/src/investigation.service.ts、backend/server/src/case-review.service.ts、backend/server/src/deadline.service.ts。
+// 边界：只判定，不读库、不写库；效果由调用方落库。阻断不写业务行，警告由调用方另写失败留痕。
+// 依据：#235、#255、#258。
 // 迁移引擎的纯判定（#235）。不写库。
 // 顺序：监督（X17）、承办机构（X13）、终态（X12）、阅读／导出／回证放行、再开审批链（X18）、
 // 未知编号、未启用、起点不符、另一条审批链（X18）、调用方附加的警告或提示。
@@ -33,6 +37,7 @@ import {
 /** 引擎自己写出的 X03 文案。调用方预览同一条时用这一句，避免另写一份。 */
 export const X03_WARN_MESSAGE = '待收尾状态下只能撤案或结案';
 
+// 某环节的一次进入记录，供引擎计算下一次 entrySeq 与组装实例。
 export interface StageInstanceFact {
   readonly stage: string;
   readonly entrySeq: number;
@@ -55,6 +60,7 @@ export interface TransitionSubject {
   readonly instances: readonly StageInstanceFact[];
 }
 
+// 引擎接受的五类操作，决定后续走哪条判定分支。
 export type TransitionOperation =
   | { readonly kind: 'transition'; readonly transitionId: string }
   | { readonly kind: 'open-approval-chain'; readonly chainKind?: string }
@@ -62,6 +68,7 @@ export type TransitionOperation =
   | { readonly kind: 'export' }
   | { readonly kind: 'post-close-receipt' };
 
+// 迁移后要追加的环节实例，entrySeq 与状态由引擎算出。
 export interface PlannedInstance {
   readonly stage: CaseStageCode;
   readonly entrySeq: number;
@@ -69,6 +76,7 @@ export interface PlannedInstance {
   readonly transitionCode: string;
 }
 
+// 迁移成功后调用方需要落库的效果，kind 区分开户、关线索、推进、开链与无操作。
 export interface TransitionEffects {
   readonly kind: 'open-case' | 'close-clue' | 'advance' | 'open-chain' | 'none';
   readonly transitionCode: string | null;
@@ -79,6 +87,7 @@ export interface TransitionEffects {
   readonly instances: readonly PlannedInstance[];
 }
 
+// 判定结果联合：409 阻断、200 警告或提示、400 拒绝、ok 放行。
 export type TransitionDecision =
   | {
       readonly ok: false;
@@ -118,11 +127,13 @@ export type TransitionDecision =
       readonly confirmation?: RuleConfirmation;
     };
 
+// 警告门结果：hold 返回 200 等待确认，reject 返回 400，clear 带确认信息放行。
 export type WarningGate =
   | { readonly kind: 'hold'; readonly decision: Extract<TransitionDecision, { httpStatus: 200 }> }
   | { readonly kind: 'reject'; readonly decision: Extract<TransitionDecision, { httpStatus: 400 }> }
   | { readonly kind: 'clear'; readonly confirmation: RuleConfirmation | null };
 
+// 计算某环节下一次进入的序号：已有记录取最大序号加一，首次进入为一。
 export function nextEntrySeq(instances: readonly StageInstanceFact[], stage: string): number {
   const seqs = instances.filter((row) => row.stage === stage).map((row) => row.entrySeq);
   if (seqs.length === 0) return 1;
@@ -158,6 +169,7 @@ function matchesOne(spec: FromSpec, subject: TransitionSubject, requiresSuspende
   }
 }
 
+// 判断迁移边的起点条件是否命中当前案件事实；多起点任一命中即可。
 export function matchesFrom(edge: TransitionEdge, subject: TransitionSubject): boolean {
   const specs = Array.isArray(edge.from) ? edge.from : [edge.from];
   return specs.some((spec) => matchesOne(spec, subject, edge.requiresSuspended === true));
@@ -325,6 +337,11 @@ function advisoriesOf(results: readonly GuardResult[]): GuardResult[] {
   return results.filter((item) => item.level === 'warn' || item.level === 'hint');
 }
 
+/**
+ * 状态机判定入口：按操作类型与案件事实返回放行效果、警告门结果或阻断原因。
+ * 判定顺序见文件头；纯函数，不读库不写库。
+ * 调用方：backend/server/src/case-state.service.ts、backend/server/src/investigation.service.ts、backend/server/src/case-review.service.ts、backend/server/src/deadline.service.ts。
+ */
 export function decideTransition(input: {
   readonly operation: TransitionOperation;
   readonly subject: TransitionSubject;

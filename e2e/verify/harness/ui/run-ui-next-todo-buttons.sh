@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# 用途：下一待办按钮的 headless 页面外壳，在浏览器镜像内取证并回拷证据。
+# 用法：run-ui-next-todo-buttons.sh <clue-manifest.json>；VERIFY_RUN_DIR 可覆盖证据目录。
+# 退出码：0 通过；1 缺少清单、镜像缺失、传输门禁或页面断言失败。
 # 下一待办按钮的 headless 页面。证据先落阶段目录，再拷回 e2e/results。
 # 没有 rsync 时用 cp。
 set -euo pipefail

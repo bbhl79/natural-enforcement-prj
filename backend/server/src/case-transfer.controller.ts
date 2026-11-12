@@ -1,3 +1,4 @@
+// 用途：案件三类移送、回证上传、外部决定记载与人工出口呈批的 HTTP 接口。
 // 案件阶段三类移送的 HTTP 入口（#242）。
 // 拟制、回证上传用 doc.draft；提交用 doc.submit；审核用 doc.admin.review；批准用 doc.approve。
 // 移送呈批单独发起，不并入立案呈批；批准后写记载，不直送对方待分派池。
@@ -42,10 +43,12 @@ function uploaded(files: Record<string, UploadedFile[]> | undefined, field: stri
   return (files?.[field] ?? []).map(toUploadedFile);
 }
 
+/** 案件移送接口的 HTTP 适配层。 */
 @Controller()
 export class CaseTransferController {
   constructor(private readonly transfers: CaseTransferService) {}
 
+  // 读取案件的移送视图；操作码 case.read；对象级按案件承办机构校验。
   @Get('api/cases/:id/transfers')
   @UseGuards(SameOriginReadGuard)
   async read(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {
@@ -53,6 +56,7 @@ export class CaseTransferController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 拟制移送呈批并上传附件；操作码 doc.draft；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/transfers')
   @UseInterceptors(
     FileFieldsInterceptor([{ name: 'attachment', maxCount: 20 }], {
@@ -79,6 +83,7 @@ export class CaseTransferController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 提交移送呈批；操作码 doc.submit；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/transfers/:approvalId/submit')
   async submit(
     @Req() req: AuthenticatedRequest,
@@ -90,6 +95,7 @@ export class CaseTransferController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 审核移送呈批并写入审核意见；操作码 doc.admin.review；对象级按案件承办机构校验。
   @Post('api/transfers/:approvalId/review')
   async review(
     @Req() req: AuthenticatedRequest,
@@ -103,6 +109,7 @@ export class CaseTransferController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 批准移送呈批并写移送记载；操作码 doc.approve；对象级按案件承办机构校验。
   @Post('api/transfers/:approvalId/approve')
   async approve(
     @Req() req: AuthenticatedRequest,
@@ -117,6 +124,7 @@ export class CaseTransferController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 上传移送回证；操作码 doc.draft；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/transfers/:transferId/receipts')
   @UseInterceptors(
     FileFieldsInterceptor([{ name: 'receipt', maxCount: 20 }], {
@@ -134,6 +142,7 @@ export class CaseTransferController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 记载外部决定；操作码 doc.draft；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/criminal-decisions')
   async recordCriminalDecision(
     @Req() req: AuthenticatedRequest,
@@ -145,6 +154,7 @@ export class CaseTransferController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 拟制人工出口呈批；操作码 doc.draft；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/criminal-decisions/:decisionId/outlets')
   async draftOutlet(
     @Req() req: AuthenticatedRequest,
@@ -157,6 +167,7 @@ export class CaseTransferController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 提交人工出口呈批；操作码 doc.submit；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/criminal-outlets/:outletId/submit')
   async submitOutlet(
     @Req() req: AuthenticatedRequest,
@@ -167,6 +178,7 @@ export class CaseTransferController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 批准人工出口呈批；操作码 doc.approve；对象级按案件承办机构校验。
   @Post('api/criminal-outlets/:outletId/approve')
   async approveOutlet(
     @Req() req: AuthenticatedRequest,
@@ -181,6 +193,7 @@ export class CaseTransferController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 检查案件能否结案；操作码 doc.approve；对象级按案件承办机构校验。
   @Post('api/cases/:id/closeout-gate')
   async closeoutGate(
     @Req() req: AuthenticatedRequest,

@@ -1,3 +1,4 @@
+// 用途：应用壳的状态页与通用卡片：加载、会话失败、会话结束、无权限与未找到。
 // 应用壳的状态页（P1、P2）与通用卡片。文案逐字取自原型 v0.4。
 import { useEffect, type ReactNode } from 'react';
 import { isRouteErrorResponse, Link, useLocation, useRevalidator, useRouteError } from 'react-router';

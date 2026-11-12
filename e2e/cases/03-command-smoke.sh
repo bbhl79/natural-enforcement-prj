@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
+# 用途：dev 命令行为契约冒烟：九命令的退出码与可读输出，只测外部可观察行为。
 # dev 命令行为契约冒烟测试（E7 子集 + E6 前半），#57 切片10 归位为 e2e/cases 用例。
 # 只测外部可观察行为：命令退出码与人类可读输出。不测内部实现。
 # 覆盖九命令（up/down/health/db/lint/test/build/logs/exec；test 命令内跑 unit 与 integration 两层）。
-# 命令面覆盖不因瘦身而变：lint/test integration/build 仍在本用例内经 CLI 各走一遍。
+# 命令面覆盖不因瘦身而变：lint、test integration、build 仍在本用例内经 CLI 各走一遍。
 # lint 只取一次全量：全量 dev lint 在本用例内跑 1 次（CLI 唯一全绿证据；外层 dev check
 # 走内部函数 cmd_lint，不经 CLI）——一次 CI 完整全量 lint 共 2 遍＝外层 1＋本用例 1。
 # 漏入库走子项：dev lint leak 在本用例内跑 2 次（植入 node_modules 判红、清除后转绿）；
@@ -27,8 +28,11 @@ PG_DB="${POSTGRES_DB:-postgres}"
 PASS=0
 FAIL=0
 
+# 记录一条通过并计数。
 ok()   { PASS=$((PASS + 1)); echo "[通过] $1"; }
+# 记录一条失败并计数。
 bad()  { FAIL=$((FAIL + 1)); echo "[失败] $1"; }
+# 断言退出码：$1 描述，$2 实际退出码，$3 期望退出码（缺省 0）。
 check() { # check <描述> <退出码>
   if [ "$2" -eq 0 ]; then ok "$1"; else bad "$1（退出码 $2）"; fi
 }
@@ -121,6 +125,7 @@ rm -rf "$ROOT/node_modules" "$ROOT/frontend/node_modules"
 "$DEV" lint leak >/dev/null 2>&1; check "清除 node_modules 后 lint leak 恢复全绿" "$?"
 
 # ---------- 5. dev db 数据语义（#49：建库/迁移/种子/reset） ----------
+# 在 db 容器内执行 psql，参数原样透传。
 psql_db() { "${COMPOSE[@]}" exec -T db psql -U "$PG_USER" -d "$PG_DB" "$@" 2>/dev/null; }
 
 # 5.1 裸 dev db = 建库（缺则建）+ 迁移 + 种子

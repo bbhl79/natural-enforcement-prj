@@ -1,3 +1,7 @@
+// 用途：疑似重复比对视图与实名明文查阅，含对称脱敏与查阅留痕。
+// 调用方：backend/server/src/clue-duplicate.controller.ts。
+// 边界：两个入口分别经 clue.read 与 clue.reference.read 授权，拒绝先写 authz.denied 再抛错；查阅留痕不记明文。
+// 依据：#212、#214、ADR 0011。
 // 疑似重复比对与实名查阅（#212；规格 B「几何与疑似重复」、规格 G、USER LOCK 七项业务⑦）。
 //
 // 口径：
@@ -128,16 +132,19 @@ export interface ReporterReadBody {
   readonly reporterContact: string | null;
 }
 
+/** 疑似重复视图结果；含授权拒绝与 404。 */
 export type DuplicateOutcome =
   | { readonly status: 200; readonly body: DuplicateView }
   | { readonly status: 403; readonly body: { readonly reason: DenyReason } }
   | { readonly status: 404; readonly body: { readonly result: 'not-found' } };
 
+/** 实名查阅结果；含授权拒绝与 404。 */
 export type ReporterReadOutcome =
   | { readonly status: 200; readonly body: ReporterReadBody }
   | { readonly status: 403; readonly body: { readonly reason: DenyReason } }
   | { readonly status: 404; readonly body: { readonly result: 'not-found' } };
 
+/** 疑似重复与实名查阅服务：比对视图、脱敏与查阅留痕。 */
 @Injectable()
 export class ClueDuplicateService {
   constructor(

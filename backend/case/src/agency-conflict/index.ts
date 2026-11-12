@@ -1,3 +1,4 @@
+// 用途：汇总机关层利害关系提示规则与类型的对外导出。
 export {
   AGENCY_CONFLICT_ALREADY_MARKED_MESSAGE,
   AGENCY_CONFLICT_GATES,

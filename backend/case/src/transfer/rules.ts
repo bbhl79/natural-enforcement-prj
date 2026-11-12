@@ -1,3 +1,7 @@
+// 用途：定义三类移送的正文校验、呈批链路、涉刑法审闸口与结案 X11 闸口判定。
+// 调用方：backend/server/src/case-transfer.service.ts；结案回证判定另见 backend/server/src/case-closeout.service.ts 与 backend/server/src/case-finalize.service.ts。
+// 边界：纯函数，不读库、不留痕；事实由服务层读取后传入。
+// 依据：Issue #242、#269、#246。
 // 案件阶段三类移送（#242）：管辖、涉刑、党纪政务。
 // 最小版＝呈批＋记载＋回证上传。判定留在本文件，服务层只喂事实与落库。
 // 管辖移送批准即办结本机关环节，不直送对方待分派池；涉刑、党纪政务走侧链不改当前环节。
@@ -10,8 +14,10 @@ import type { GuardResult } from '../state-machine/guard.ts';
 
 /** 三类移送。顺序即界面清单顺序。 */
 export const TRANSFER_KINDS = ['jurisdiction', 'criminal', 'party-discipline'] as const;
+// 三类移送的类型别名，取值与 TRANSFER_KINDS 一致。
 export type TransferKind = (typeof TRANSFER_KINDS)[number];
 
+// 移送类型的中文名称，用于呈批列表与详情展示。
 export const TRANSFER_KIND_NAMES: Readonly<Record<TransferKind, string>> = {
   jurisdiction: '管辖移送',
   criminal: '涉刑移送',
@@ -20,19 +26,24 @@ export const TRANSFER_KIND_NAMES: Readonly<Record<TransferKind, string>> = {
 
 const TRANSFER_KIND_SET = new Set<string>(TRANSFER_KINDS);
 
+// 判断字符串是否为登记的移送类型；服务层校验入参时调用。
 export function isTransferKind(value: string): value is TransferKind {
   return TRANSFER_KIND_SET.has(value);
 }
 
 /** 呈批链路配置（规程无明文，可配置）。 */
 export const TRANSFER_APPROVAL_CHAIN_RULE_ID = 'cfg.rule.transfer-approval-chain.v1';
+// 呈批链路配置的版本号，随配置口径变化更新。
 export const TRANSFER_APPROVAL_CHAIN_VERSION = '2026-10-29';
 /** 默认链路：承办机构负责人审核 → 部门负责人批准。规程无明文。 */
 export const TRANSFER_APPROVAL_CHAIN_BASIS = '规程无明文';
 
+// 呈批链路的层级取值：审核、批准。
 export const TRANSFER_APPROVAL_LEVELS = ['review', 'approve'] as const;
+// 呈批链路层级的类型别名。
 export type TransferApprovalLevel = (typeof TRANSFER_APPROVAL_LEVELS)[number];
 
+// 呈批链路的规则标识、版本、依据与层级次序。
 export interface TransferApprovalChain {
   readonly ruleId: string;
   readonly version: string;
@@ -40,6 +51,7 @@ export interface TransferApprovalChain {
   readonly levels: readonly TransferApprovalLevel[];
 }
 
+// 默认呈批链路：一级审核加一级批准。
 export const DEFAULT_TRANSFER_APPROVAL_CHAIN: TransferApprovalChain = {
   ruleId: TRANSFER_APPROVAL_CHAIN_RULE_ID,
   version: TRANSFER_APPROVAL_CHAIN_VERSION,
@@ -71,6 +83,7 @@ export function transferStatusAfter(
   return null;
 }
 
+// 移送呈批的状态取值，与 transferStatusAfter 的推进结果对应。
 export const TRANSFER_APPROVAL_STATUSES = [
   'drafting',
   'pending_review',
@@ -78,6 +91,7 @@ export const TRANSFER_APPROVAL_STATUSES = [
   'approved',
   'withdrawn',
 ] as const;
+// 移送呈批状态的类型别名。
 export type TransferApprovalStatus = (typeof TRANSFER_APPROVAL_STATUSES)[number];
 
 const DAY = /^(\d{4})-(\d{2})-(\d{2})$/;
@@ -112,6 +126,7 @@ function stringList(value: unknown, limit: number): string[] | null {
   return rows.length > limit ? null : rows;
 }
 
+// 移送呈批正文的校验后结构。
 export interface TransferContent {
   readonly kind: TransferKind;
   /** 接收机关。自然资源部门以外的机关。 */
@@ -124,6 +139,7 @@ export interface TransferContent {
   readonly attachments: readonly string[];
 }
 
+// 正文校验失败的结果：HTTP 400、原因码、提示与处理出口。
 export interface TransferContentHit {
   readonly httpStatus: 400;
   readonly reason: string;
@@ -131,6 +147,7 @@ export interface TransferContentHit {
   readonly outlet: string;
 }
 
+// 正文校验结果；失败时带命中详情。
 export type TransferContentRead =
   | { readonly ok: true; readonly content: TransferContent }
   | { readonly ok: false; readonly hit: TransferContentHit };
@@ -179,6 +196,7 @@ export const CRIMINAL_TRANSFER_REVIEW_ITEM = 'criminal-transfer';
 /** 涉刑移送三个工作日的规则键（#246 登记，本票只算提示）。 */
 export const CRIMINAL_TRANSFER_DECISION_RULE_KEY = 'criminal-transfer.decision';
 
+// 法审轮次投射给涉刑闸口的事实：状态、结论与必审判定 JSON。
 export interface TransferLegalReviewFact {
   readonly id: string;
   readonly status: string;
@@ -228,15 +246,18 @@ export function assertCriminalTransferReview(input: {
 /** 结案闸口（X11）：有已提交的涉刑或党纪政务呈批，却未形成移送记载。 */
 export const CLOSEOUT_TRANSFER_KINDS = ['criminal', 'party-discipline'] as const;
 
+// 已形成的移送记载，供 X11 判断是否满足须移送。
 export interface TransferRecordFact {
   readonly kind: string;
 }
 
+// 移送呈批的状态，供 X11 判断是否属于须移送。
 export interface TransferApprovalFact {
   readonly kind: string;
   readonly status: string;
 }
 
+// 结案闸口阻断结果：原因码、提示、处理出口与引用。
 export interface CloseoutGateBlock {
   readonly code: string;
   readonly message: string;
@@ -244,6 +265,7 @@ export interface CloseoutGateBlock {
   readonly citation: string | null;
 }
 
+// 结案闸口判定结果；ok 为 false 时带阻断详情。
 export type CloseoutGateCheck = { readonly ok: true } | { readonly ok: false; readonly block: CloseoutGateBlock };
 
 function blockOf(code: string, message: string, outlet: string): CloseoutGateBlock {
@@ -287,9 +309,12 @@ export const TRANSFER_CLOCK_BASIS = {
 } as const;
 
 /** T30 记载来源。 */
+// T30 外部决定的来源：公安或检察。
 export const CRIMINAL_DECISION_SOURCES = ['police', 'procuratorate'] as const;
+// 外部决定来源的类型别名。
 export type CriminalDecisionSource = (typeof CRIMINAL_DECISION_SOURCES)[number];
 
+// 外部决定来源的中文名称。
 export const CRIMINAL_DECISION_SOURCE_NAMES: Readonly<Record<CriminalDecisionSource, string>> = {
   police: '公安',
   procuratorate: '检察',
@@ -297,6 +322,7 @@ export const CRIMINAL_DECISION_SOURCE_NAMES: Readonly<Record<CriminalDecisionSou
 
 const CRIMINAL_DECISION_SOURCE_SET = new Set<string>(CRIMINAL_DECISION_SOURCES);
 
+// 判断字符串是否为登记的来源；readCriminalDecisionContent 校验入参时调用。
 export function isCriminalDecisionSource(value: string): value is CriminalDecisionSource {
   return CRIMINAL_DECISION_SOURCE_SET.has(value);
 }
@@ -304,6 +330,7 @@ export function isCriminalDecisionSource(value: string): value is CriminalDecisi
 /** 复议或建议检察监督的三日倒计时规则键（310号令第9条，日历日，只警告）。 */
 export const CRIMINAL_DECISION_REVIEW_RULE_KEY = 'criminal-decision.review';
 
+// T30 外部决定记载的校验后结构。
 export interface CriminalDecisionContent {
   readonly source: CriminalDecisionSource;
   readonly notifiedOn: string;
@@ -322,6 +349,7 @@ export interface CriminalDecisionContent {
   readonly partyNoticeNote: string | null;
 }
 
+// 外部决定记载的校验结果；失败时带命中详情。
 export type CriminalDecisionRead =
   | { readonly ok: true; readonly content: CriminalDecisionContent }
   | { readonly ok: false; readonly hit: TransferContentHit };
@@ -397,9 +425,12 @@ export function readCriminalDecisionContent(raw: unknown): CriminalDecisionRead 
 }
 
 /** T30 人工出口。A 回调查继续行政处罚；B 呈批结案或其他处理。 */
+// T30 的人工出口：A 回调查，B 结案或其他处理。
 export const CRIMINAL_OUTLETS = ['investigate-again', 'close-or-other'] as const;
+// 人工出口的类型别名。
 export type CriminalOutlet = (typeof CRIMINAL_OUTLETS)[number];
 
+// 人工出口的中文名称。
 export const CRIMINAL_OUTLET_NAMES: Readonly<Record<CriminalOutlet, string>> = {
   'investigate-again': '回调查继续行政处罚',
   'close-or-other': '呈批结案或其他处理',
@@ -407,10 +438,12 @@ export const CRIMINAL_OUTLET_NAMES: Readonly<Record<CriminalOutlet, string>> = {
 
 const CRIMINAL_OUTLET_SET = new Set<string>(CRIMINAL_OUTLETS);
 
+// 判断字符串是否为登记的人工出口；readCriminalOutletContent 校验入参时调用。
 export function isCriminalOutlet(value: string): value is CriminalOutlet {
   return CRIMINAL_OUTLET_SET.has(value);
 }
 
+// 人工出口的校验后结构；A、B 两类字段互斥。
 export interface CriminalOutletContent {
   readonly outlet: CriminalOutlet;
   /** A：违法状态是否仍未消除。 */
@@ -422,6 +455,7 @@ export interface CriminalOutletContent {
   readonly reason: string | null;
 }
 
+// 人工出口的校验结果；失败时带命中详情。
 export type CriminalOutletRead =
   | { readonly ok: true; readonly content: CriminalOutletContent }
   | { readonly ok: false; readonly hit: TransferContentHit };
@@ -477,6 +511,7 @@ export function readCriminalOutletContent(raw: unknown): CriminalOutletRead {
   };
 }
 
+// T30 分支解析出的单一状态机落点。
 export interface CriminalOutletLanding {
   /** A 回 E02，进入次序号加 1（回流 reenter）。B 不改环节。 */
   readonly kind: 'enter';

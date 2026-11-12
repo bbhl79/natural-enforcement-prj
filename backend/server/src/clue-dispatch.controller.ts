@@ -1,3 +1,7 @@
+// 用途：提供分派视图、分派决定、派机构、派承办人与单位签收确认五个 HTTP 接口，解析请求后委托 ClueDispatchService。
+// 调用方：backend/server/src/app.module.ts 注册为控制器。
+// 依据：backend/server/src/clue-dispatch.service.ts（#214；规格 H 节）。
+//
 // 分派决定与两步分派接口（#214；规格 H 节写接口）。
 //
 // POST /api/clues/:id/decide        分派决定（派／不派，默认不派／已知晓／举报必派）
@@ -51,11 +55,13 @@ const texts = (value: unknown): string[] =>
 /** 布尔入参：JSON 真值或字符串真值都认。 */
 const flag = (value: unknown): boolean => value === true || value === 1 || text(value).toLowerCase() === 'true';
 
+// 分派相关写接口与分派视图的 HTTP 入口，请求处理全部委托 ClueDispatchService。
 @Controller('api/clues')
 export class ClueDispatchController {
   constructor(private readonly dispatch: ClueDispatchService) {}
 
   /** 分派视图：决定步、派机构、派承办人与辖区建议共用一个取数口。 */
+  // 分派视图：读取决定步、派机构、派承办人与辖区建议的合并取数；操作码 clue.read；对象级限录入机构或已有承办机构，任一命中即可读。
   @Get(':id/dispatch')
   @UseGuards(SameOriginReadGuard)
   async view(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {
@@ -64,6 +70,7 @@ export class ClueDispatchController {
   }
 
   /** 分派决定。 */
+  // 分派决定（派／不派）；操作码 clue.dispatch.decide；对象级限线索录入人本人。
   @Post(':id/decide')
   async decide(
     @Req() req: AuthenticatedRequest,
@@ -82,6 +89,7 @@ export class ClueDispatchController {
   }
 
   /** 派机构（首次分派／重新分派／指定管辖）。 */
+  // 派机构（首次分派／重新分派／指定管辖）；操作码 clue.org.assign；对象级限待分派池所属机构内勤，重新分派限原承办机构内勤或上级，指定管辖限目标机构的上级内勤。
   @Post(':id/assign-org')
   async assignOrg(
     @Req() req: AuthenticatedRequest,
@@ -99,6 +107,7 @@ export class ClueDispatchController {
   }
 
   /** 派主办／协办。 */
+  // 派主办／协办；操作码 clue.handler.assign；对象级限承办机构内勤。
   @Post(':id/assign-people')
   async assignPeople(
     @Req() req: AuthenticatedRequest,
@@ -115,6 +124,7 @@ export class ClueDispatchController {
   }
 
   /** 单位签收确认（#335；与派主办／协办分离）。 */
+  // 单位签收确认；操作码 clue.handler.assign；对象级限承办机构内勤，不改主状态。
   @Post(':id/confirm-unit-receipt')
   async confirmUnitReceipt(
     @Req() req: AuthenticatedRequest,

@@ -1,3 +1,7 @@
+// 用途：新旧比对判定的读取与录入，以及决定呈批提交、批准时的比对完整性与时效检查。
+// 调用方：backend/server/src/case-decision.service.ts 调用两个检查方法；read 与 recordJudgment 当前仅 integration/case-comparison.test.ts 调用。
+// 边界：判定只追加；检查函数在调用方业务事务开启前执行，失败留痕自成事务；recordJudgment 经 authorize 授权，拒绝先写 authz.denied。
+// 依据：#271、#258、#42。
 // 新旧比对最小版（#271）。
 // 过渡：判定随决定呈批材料提交，录入复用 doc.draft；提交检查由 #270 在决定呈批提交时调用；
 // 批准检查由 #270 在决定书 doc.approve 时调用。不新增操作码，不接 T23。
@@ -46,6 +50,7 @@ const SUBMIT_OPCODE = 'doc.submit';
 /** 决定书批准。由 #270 授权后调用本服务的检查函数。 */
 const APPROVE_OPCODE = 'doc.approve';
 
+/** 新旧比对接口的结果；状态码区分成功、输入不合规、拒绝、找不到与冲突。 */
 export type ComparisonHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }
   | { readonly status: 400; readonly body: Record<string, unknown> }
@@ -53,6 +58,7 @@ export type ComparisonHttpOutcome =
   | { readonly status: 404; readonly body: Record<string, unknown> }
   | { readonly status: 409; readonly body: Record<string, unknown> };
 
+/** 新旧比对服务：录入判定，并检查决定呈批与批准所需的比对材料。 */
 @Injectable()
 export class CaseComparisonService {
   constructor(

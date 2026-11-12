@@ -1,3 +1,7 @@
+// 用途：调查终结与审理：T08 报告呈批、审理人指定与更换、审理意见、T09 回流与 T09a 异议呈批。
+// 调用方：backend/server/src/case-review.controller.ts；REVIEW_OBJECTION_WINDOW 令牌由 backend/server/src/persistence.module.ts 提供。
+// 边界：授权经 authorize（拒绝先写 authz.denied 再抛错）；失败与警告不改业务行只写留痕；写动作在交互式事务内。
+// 依据：#240、#282、#246。
 // 调查终结与审理（#240）：T08 报告呈批、审理人指定与更换、case.review.record、T09 回流、T09a 异议呈批。
 // 呈批沿用 doc.draft / doc.submit / doc.admin.review / doc.approve；审理意见用新增码 case.review.record。
 // #282 裁 B：补充调查／修改纠正签出只落意见并开异议窗口，不立即执行 T09。
@@ -86,6 +90,7 @@ import { CaseConflictService } from './case-conflict.service.ts';
 import { LOGIN_DIRECTORY, type LoginAccount, type LoginDirectory } from './login-directory.ts';
 import { UNIT_OF_WORK, type TxScope, type UnitOfWork } from './unit-of-work.ts';
 
+/** 异议窗口配置令牌；默认值由 backend/server/src/persistence.module.ts 装配。 */
 export const REVIEW_OBJECTION_WINDOW = Symbol('REVIEW_OBJECTION_WINDOW');
 
 const READ_OPCODE = 'case.read';
@@ -99,6 +104,7 @@ const WAIVE_OPCODE = 'doc.submit';
 const HANDLER_ROLES = new Set<string>(CASE_HANDLER_ROLES);
 const FAIL_REASONS = new Set<string>(CASE_REVIEW_FAILED_REASONS);
 
+/** 审理接口的结果；状态码区分成功、输入不合规、拒绝、找不到与冲突。 */
 export type CaseReviewHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }
   | { readonly status: 400; readonly body: Record<string, unknown> }
@@ -119,6 +125,7 @@ interface ConfirmationInput {
   readonly confirmReasons?: Readonly<Record<string, string>>;
 }
 
+/** 调查终结与审理服务：呈批、审理人管理、意见登记、回流与异议处理。 */
 @Injectable()
 export class CaseReviewService {
   constructor(

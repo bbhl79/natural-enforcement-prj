@@ -74,6 +74,7 @@ function view(overrides: Partial<DuplicateView> = {}): DuplicateView {
   };
 }
 
+// 纯函数口径：比例与亩换算、达标侧判定、图斑对比建模、决定步提示（#212）。
 describe('疑似重复比对纯函数', () => {
   it('比例 1 位小数，交集面积按亩换算（1 亩 = 2000/3 平方米）', () => {
     expect(ratioText(2 / 3)).toBe('66.7%');
@@ -117,6 +118,7 @@ describe('疑似重复比对纯函数', () => {
   });
 });
 
+// 页签渲染：命中面对比例与加粗、决定步提示、图斑对比开关与匿名脱敏（#212；交互锁）。
 describe('疑似重复比对页签', () => {
   it('命中面对：占本线索／占对方 1 位小数，达标一方加粗', () => {
     const html = renderToStaticMarkup(

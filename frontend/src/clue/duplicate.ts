@@ -1,3 +1,6 @@
+// 用途：疑似重复比对抽屉页签的数据层、决定步文案与图斑对比 SVG 建模。
+// 调用方：frontend/src/clue/center.ts 与 frontend/src/clue/ClueDuplicateTab.tsx；frontend/src/pages/ClueCenterPage.tsx 查看实名。
+// 接口：GET /api/clues/:id/duplicates 操作码 clue.read；POST /api/clues/:id/reporter-read 操作码 clue.reference.read。
 // 疑似重复比对抽屉页签的数据层与纯函数（#212；规格 B「几何与疑似重复」）。
 //
 // 页签显示：决定步提示（默认不派／已知晓／举报必派）、按对方线索分组的命中面对
@@ -85,6 +88,7 @@ export interface DuplicateView {
   readonly historicalGroups: readonly DuplicateHistoricalGroupView[];
 }
 
+// 接口：GET /api/clues/:id/duplicates，操作码 clue.read。
 /** 取疑似重复比对视图。 */
 export async function loadDuplicate(dispatch: ApiDispatch, clueId: string): Promise<DuplicateView> {
   const response = await apiFetch(dispatch, `/api/clues/${clueId}/duplicates`);
@@ -101,6 +105,7 @@ export type ReporterReadResult =
     }
   | { readonly ok: false; readonly status: number; readonly reason: string | null };
 
+/** 查看实名明文；POST /api/clues/:id/reporter-read，操作码 clue.reference.read。失败返回状态码与 reason。 */
 export async function readReporter(dispatch: ApiDispatch, clueId: string): Promise<ReporterReadResult> {
   const response = await apiFetch(dispatch, `/api/clues/${clueId}/reporter-read`, { method: 'POST' });
   const body = (await response.json().catch(() => null)) as unknown;
@@ -132,6 +137,7 @@ export function areaMuText(squareMeters: number): string {
 /** 达标方：界面上哪一侧加粗。 */
 export type HitSide = 'self' | 'other' | 'both' | 'none';
 
+/** 任一方重合比达到阈值即该侧命中；两侧都达标返回 both。 */
 export function hitSide(selfRatio: number, otherRatio: number): HitSide {
   const selfHit = selfRatio >= DUPLICATE_HIT_THRESHOLD;
   const otherHit = otherRatio >= DUPLICATE_HIT_THRESHOLD;

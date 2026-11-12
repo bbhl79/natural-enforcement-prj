@@ -1,12 +1,20 @@
+// 用途：会话与「记住我」Cookie 的序列化、清除、读取，以及来源地址选取。
+// 调用方：backend/server/src/auth.service.ts、backend/server/src/session.guard.ts 与各控制器。
+// 边界：Cookie 统一 HttpOnly、Secure、SameSite=Lax、Path=/；记住我 Cookie 的 Expires 取链的绝对终点，换发不后推。
+//
+/** 会话 Cookie 名。 */
 export const SESSION_COOKIE = '__Host-sid';
+/** 记住我 Cookie 名。 */
 export const REMEMBER_COOKIE = '__Host-rm';
 
 const COOKIE_ATTRS = 'HttpOnly; Secure; SameSite=Lax; Path=/';
 
+/** 序列化会话 Cookie；不带 Expires，浏览器关闭即失效。 */
 export function serializeSessionCookie(secret: string): string {
   return `${SESSION_COOKIE}=${secret}; ${COOKIE_ATTRS}`;
 }
 
+/** 清除会话 Cookie：同名空值加 Max-Age=0。 */
 export function clearSessionCookie(): string {
   return `${SESSION_COOKIE}=; ${COOKIE_ATTRS}; Max-Age=0`;
 }
@@ -20,6 +28,7 @@ export function serializeRememberCookie(secret: string, absoluteEndsAt: Date): s
   return `${REMEMBER_COOKIE}=${secret}; ${COOKIE_ATTRS}; Expires=${absoluteEndsAt.toUTCString()}`;
 }
 
+/** 清除记住我 Cookie：同名空值加 Max-Age=0。 */
 export function clearRememberCookie(): string {
   return `${REMEMBER_COOKIE}=; ${COOKIE_ATTRS}; Max-Age=0`;
 }

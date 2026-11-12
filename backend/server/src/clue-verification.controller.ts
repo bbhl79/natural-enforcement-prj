@@ -1,3 +1,7 @@
+// 用途：提供内业核查视图、手动重跑与报告／分析图下载四个 HTTP 接口，委托 ClueVerificationService。
+// 调用方：backend/server/src/app.module.ts 注册为控制器。
+// 依据：backend/server/src/clue-verification.service.ts（#213；规格 C 节）。
+//
 // 内业核查接口（#213；规格 C 节）。
 //
 // GET  /api/clues/:id/verification            当前与历史运行、报告摘要、能否手动重跑
@@ -23,10 +27,12 @@ interface HttpReply {
   send(body: Buffer): void;
 }
 
+// 内业核查的 HTTP 入口，请求处理全部委托 ClueVerificationService。
 @Controller('api')
 export class ClueVerificationController {
   constructor(private readonly verification: ClueVerificationService) {}
 
+  // 读取当前与历史核查运行、报告摘要与能否手动重跑；操作码 clue.read；对象级按线索录入机构授权。
   @Get('clues/:id/verification')
   @UseGuards(SameOriginReadGuard)
   async read(
@@ -38,6 +44,7 @@ export class ClueVerificationController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 手动重跑核查，每次新建一次运行；操作码 clue.verify.retry；对象级限录入人、本单位内勤或当前承办人。
   @Post('clues/:id/verification/retry')
   async retry(
     @Req() req: AuthenticatedRequest,
@@ -48,6 +55,7 @@ export class ClueVerificationController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 下载核查报告 JSON；操作码 clue.read；对象级按线索录入机构授权，响应不回缓存。
   @Get('clues/:id/verification/report')
   @UseGuards(SameOriginReadGuard)
   async report(
@@ -58,6 +66,7 @@ export class ClueVerificationController {
     await this.sendArtifact(req, res, clueId, 'report');
   }
 
+  // 下载分析图 GeoJSON；操作码 clue.read；对象级按线索录入机构授权，响应不回缓存。
   @Get('clues/:id/verification/analysis')
   @UseGuards(SameOriginReadGuard)
   async analysis(

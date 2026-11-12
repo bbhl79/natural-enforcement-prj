@@ -1,8 +1,12 @@
+// 用途：线索中心的列表、详情、缺件补齐与流转留痕查询，并写补齐留痕。
+// 调用方：backend/server/src/clue-center.controller.ts。
+// 边界：详情、补齐与留痕经 authorize（拒绝先写 authz.denied 再抛错）；列表按数据范围裁剪；补齐在交互式事务内写业务行与留痕，拒绝留痕在回滚后另起事务写入。
+// 依据：#207、#119、ADR 0011。
 // 线索中心（#207）。
 //
 // 列表：GET /api/clues?view=all&page=1&size=20&q=&domain=&source=&org=&status=&check=&gap=&from=&to=
 // 详情：GET /api/clues/:id/detail   线索基本信息与要件
-// 补齐：POST /api/clues/:id/gap-fill 补齐缺件（单件或多项）
+// 补齐：fillGap 当前无调用方；补齐路由由 clue-item-supplement 的 POST /api/clues/:id/gaps/fill 承担。
 // 留痕：GET /api/clues/:id/trail    流转与留痕
 //
 // 列表行不含反映人字段。数据范围：entered_org_id 或当前承办机构在操作者机构子树内。
@@ -49,6 +53,7 @@ export interface ClueCenterListBody {
   readonly size: number;
 }
 
+/** 线索中心列表结果；操作者没有数据范围时为 403。 */
 export type ClueCenterListOutcome =
   | { readonly status: 200; readonly body: ClueCenterListBody }
   | { readonly status: 403; readonly body: { readonly reason: string } };
@@ -110,6 +115,7 @@ export interface GapFillManyBody {
   readonly values?: unknown;
 }
 
+/** 补齐请求体：单件 {key, value} 或多项 {keys, values}。 */
 export type GapFillBody = GapFillOneBody | GapFillManyBody;
 
 /** 补齐结果。 */
@@ -140,11 +146,13 @@ export interface ClueTrailView {
 
 // ---- 产出 ----
 
+/** 线索详情结果；含授权拒绝与 404。 */
 export type DetailOutcome =
   | { readonly status: 200; readonly body: ClueDetailView }
   | { readonly status: 403; readonly body: { readonly reason: DenyReason } }
   | { readonly status: 404; readonly body: { readonly result: 'not-found' } };
 
+/** 补齐结果；含输入不合规、授权拒绝与 404。 */
 export type GapFillOutcome =
   | { readonly status: 200; readonly body: ClueGapFillView }
   | {
@@ -154,6 +162,7 @@ export type GapFillOutcome =
   | { readonly status: 403; readonly body: { readonly reason: DenyReason } }
   | { readonly status: 404; readonly body: { readonly result: 'not-found' } };
 
+/** 留痕查询结果；含授权拒绝与 404。 */
 export type TrailOutcome =
   | {
       readonly status: 200;
@@ -170,6 +179,7 @@ interface Rejection {
 
 // ---- 服务 ----
 
+/** 线索中心服务：列表、详情、缺件补齐与流转留痕查询。 */
 @Injectable()
 export class ClueCenterService {
   constructor(

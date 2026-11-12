@@ -1,3 +1,7 @@
+// 用途：线索移送登记、系统外移送附加记录、停用机构待分派池重新指定与清单查询。
+// 调用方：backend/server/src/clue-disposition.controller.ts、backend/server/src/org-units.controller.ts、backend/server/src/org-units.service.ts。
+// 边界：授权经 authorize（拒绝先写 authz.denied 再抛错）；附件先整体校验再写存储，终态与留痕同一事务。
+// 依据：#216、#229、#215。
 // 移送、停用机构池重新指定（#216）与系统外移送附加记录（#229；规格 D 节、GLOSSARY）。
 //
 // 移送（自然资源部门以外的机关）：池所属机构内勤在待分派池、承办机构内勤在
@@ -201,6 +205,7 @@ interface Rejection {
   readonly reason: string;
 }
 
+/** 线索移送与停用机构池重新指定服务。 */
 @Injectable()
 export class ClueDispositionService {
   constructor(

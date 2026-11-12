@@ -1,3 +1,5 @@
+// 用途：集中定义验证资产目录与运行产物目录的路径换算，统一按仓库根解析。
+// 调用方：e2e/verify/harness 下的运行器、发现器与 integration/verify-suites.test.ts。
 import path from 'node:path';
 
 /** 验证资产根目录（含 fixtures/）。相对仓库根，容器内 cwd 为 /work。 */
@@ -17,18 +19,22 @@ export function repoRoot(): string {
  */
 export const RESULTS_DIR = 'e2e/results';
 
+/** 案件档案夹具目录。调用方：load-fixtures.ts。 */
 export function caseProfilesDir(): string {
   return path.join(fixturesRoot, 'case-profiles');
 }
 
+/** 身份夹具目录。调用方：load-fixtures.ts。 */
 export function identitiesDir(): string {
   return path.join(fixturesRoot, 'identities');
 }
 
+/** 可运行场景目录。调用方：load-fixtures.ts、integration/verify-suites.test.ts。 */
 export function runnableScenariosDir(): string {
   return path.join(fixturesRoot, 'scenarios', 'runnable');
 }
 
+/** 负例场景目录。调用方：load-fixtures.ts、integration/verify-suites.test.ts。 */
 export function negativesDir(): string {
   return path.join(fixturesRoot, 'negatives');
 }

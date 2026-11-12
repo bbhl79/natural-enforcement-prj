@@ -65,6 +65,7 @@ type PasswordFailureForTest =
   | { result: 'non-compliant'; rules: string[] }
   | { result: 'concurrent-change' };
 
+// 登录页行为：输入占位、提交条件与各失败分支的页面状态。
 describe('登录页', () => {
   it('输入框占位为手机号和密码', () => {
     const html = loginHtml();

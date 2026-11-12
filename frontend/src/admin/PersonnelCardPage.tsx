@@ -1,3 +1,7 @@
+// 用途：人员卡片（P6）页面，展示人员详情并承载编辑、调岗、执法证、停用、恢复、结束会话与重设口令。
+// 路由：/admin/personnel/:id，路由表 id personnel-card。
+// 调用的接口：GET /api/admin/personnel/:id（personnel.profile.read）；POST .../edit、.../transfer、GET .../transfer-destinations（personnel.profile.update）；POST .../cert（personnel.cert.update）；POST .../deactivate（personnel.profile.deactivate）；POST .../restore（personnel.profile.restore）；POST .../end-sessions（personnel.sessions.end）；POST .../password-reset（personnel.password.reset）。
+
 import { Suspense, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { Await, Link, useAsyncError, useLoaderData, useRevalidator, useSearchParams } from 'react-router';
 
@@ -257,11 +261,13 @@ export function PostsCard({ card }: { card: PersonnelCard }) {
 
 // ---------- 编辑（P6 edit / selfEdit，#129） ----------
 
+/** 编辑表单的失败态：字段提示与整页提示。 */
 export interface EditFailure {
   fields: Partial<Record<'name' | 'mobilePhone' | 'roles' | 'posts', string>>;
   message: string | null;
 }
 
+/** 编辑表单的状态与回调。 */
 export interface EditState {
   input: EditInput;
   failure: EditFailure | null;
@@ -410,11 +416,13 @@ function Modal({ title, children, foot }: { title: string; children: ReactNode; 
   );
 }
 
+/** 调岗失败态。 */
 export interface TransferFailure {
   fields: { orgUnitId?: string };
   message: string | null;
 }
 
+/** 调岗弹窗的状态与回调；destinations 为 null 表示还在读取。 */
 export interface TransferState {
   /** null = 还在读取 */
   destinations: TransferDestination[] | null;
@@ -535,6 +543,7 @@ export function EndSessionsDialog({ card, confirm }: { card: PersonnelCard; conf
 
 // ---------- 恢复弹窗（P6 restore / restoreNewOrg，#130） ----------
 
+/** 恢复失败态：字段提示、口令规则码、命中历史与整页提示。 */
 export interface RestoreFailure {
   fields: Partial<Record<'initialPassword' | 'orgUnitId', string>>;
   /** 没满足的口令策略规则码对应的提示句 */
@@ -544,6 +553,7 @@ export interface RestoreFailure {
   message: string | null;
 }
 
+/** 恢复弹窗的状态与回调。 */
 export interface RestoreState {
   /** 数据范围内在用的机构；只在原任职机构已停用时读取，null = 还在读取 */
   orgUnits: OrgUnit[] | null;
@@ -650,6 +660,7 @@ export interface ResetPasswordFailure {
   message: string | null;
 }
 
+/** 重设初始口令弹窗的状态与回调。 */
 export interface ResetPasswordState {
   password: string;
   failure: ResetPasswordFailure | null;
@@ -661,6 +672,7 @@ export interface ResetPasswordState {
 
 /** 规则句与后果清单逐字取原型 v0.4 P6 resetpw（18:56 定稿，PW-11）。 */
 export const RESET_PASSWORD_HELP = '要求同新建人员，另外不能与对方最近 5 次使用过的口令相同。';
+/** 重设成功的后果清单，逐字取原型 v0.4 P6 resetpw。 */
 export const RESET_PASSWORD_EFFECTS = [
   '如对方正被锁定，会同时解锁；',
   '对方的全部会话都会结束；',

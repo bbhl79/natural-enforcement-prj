@@ -73,6 +73,7 @@ function designation(over: Partial<DesignationTodoItem> = {}): DesignationTodoIt
   };
 }
 
+// 由既有接口的数据派生事项类型与办理入口。
 describe('事项类型派生', () => {
   it('待分派决定 / 待派机构 / 待签收按状态各自成行，进工作台办理全页', () => {
     const rows = buildWorkbenchTodos(
@@ -171,6 +172,7 @@ describe('事项类型派生', () => {
   });
 });
 
+// 无需时限规则时全部蓝点，蓝内按等待时长排序。
 describe('三色点与排序', () => {
   it('无办理时限规则：全部蓝点，提示按等待时长排序，不发明时限', () => {
     const rows = buildWorkbenchTodos(
@@ -218,6 +220,7 @@ describe('三色点与排序', () => {
   });
 });
 
+// 待办标题的拼装与轻量筛选（类型、关键词）。
 describe('标题与轻筛选', () => {
   it('标题＝编号＋事由摘要，事由过长截断', () => {
     expect(todoTitle('CL1', ' 非法占地 ')).toBe('CL1 · 非法占地');

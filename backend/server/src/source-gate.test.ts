@@ -22,6 +22,7 @@ function fill(gate: SourceGate, ip: string): void {
   for (let i = 0; i < 10; i += 1) gate.record(ip, NOW);
 }
 
+// 来源地址闸的允许名单与计数规则（#317）。
 describe('来源地址闸允许名单', () => {
   it('未注入名单时，第十次失败记下拒绝，下一次拒绝', () => {
     const gate = new SourceGate();

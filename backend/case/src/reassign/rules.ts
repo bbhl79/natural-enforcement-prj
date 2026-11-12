@@ -1,3 +1,7 @@
+// 用途：定义改派呈批校验、发起人资格与回避后材料效力认定的纯规则。
+// 调用方：backend/server/src/case-reassign.service.ts。
+// 边界：不读库、不留痕；事实由服务层读齐后传入。
+// 依据：Issue #239、#238、#40。
 // 改派呈批（#239，T33）与回避后材料效力认定。纯规则，不依赖 Nest 与存储。
 //
 // 改派：原因必填；批准才生效；换完不少于两人且都有执法资格（X14）；
@@ -8,8 +12,10 @@
 
 /** 改派原因：调岗 | 离职 | 回避 | 其他（须写说明）。 */
 export const REASSIGN_REASON_CODES = ['transfer', 'leave', 'recusal', 'other'] as const;
+// 改派原因的类型别名。
 export type ReassignReasonCode = (typeof REASSIGN_REASON_CODES)[number];
 
+// 改派原因的中文名称，用于呈批详情展示。
 export const REASSIGN_REASON_NAMES: Readonly<Record<ReassignReasonCode, string>> = {
   transfer: '调岗',
   leave: '离职',
@@ -19,12 +25,15 @@ export const REASSIGN_REASON_NAMES: Readonly<Record<ReassignReasonCode, string>>
 
 /** 承办人员角色：主办 | 协办。 */
 export const HANDLER_ROLES = ['main', 'assist'] as const;
+// 承办人员角色的类型别名。
 export type HandlerRole = (typeof HANDLER_ROLES)[number];
 
 /** 效力认定结论：有效 | 无效 | 需补正。 */
 export const MATERIAL_EFFECTIVENESS_CONCLUSIONS = ['valid', 'invalid', 'needs-correction'] as const;
+// 效力认定结论的类型别名。
 export type MaterialEffectivenessConclusion = (typeof MATERIAL_EFFECTIVENESS_CONCLUSIONS)[number];
 
+// 效力认定结论的中文名称。
 export const MATERIAL_EFFECTIVENESS_NAMES: Readonly<Record<MaterialEffectivenessConclusion, string>> = {
   valid: '有效',
   invalid: '无效',
@@ -33,11 +42,13 @@ export const MATERIAL_EFFECTIVENESS_NAMES: Readonly<Record<MaterialEffectiveness
 
 /** X14 的文案与依据（规程 2.6；行政处罚法第 42 条）。 */
 export const X14_MESSAGE = '改派后承办人员须不少于两人，且都有执法资格';
+// X14 阻断时附带的依据文本。
 export const X14_CITATION = '规程 2.6；行政处罚法第 42 条';
 
 /** 发起人身份：主办或协办 | N5 情形的承办机构内勤。 */
 export type ReassignInitiator = 'handler' | 'n5-clerk';
 
+// 发起人资格判定所需的事实。
 export interface ReassignInitiatorInput {
   readonly actorIsHandler: boolean;
   readonly actorRoles: readonly string[];
@@ -77,6 +88,7 @@ export interface HandlerCandidateFacts {
   readonly qualified: boolean;
 }
 
+// 拟任名单校验的问题码。
 export type ReassignProposalIssueCode =
   | 'missing-main'
   | 'invalid-proposal'
@@ -84,6 +96,7 @@ export type ReassignProposalIssueCode =
   | 'handler-not-eligible'
   | 'handler-out-of-scope';
 
+// 拟任名单校验的问题详情：问题码、HTTP 状态、提示与引用。
 export interface ReassignProposalIssue {
   readonly code: ReassignProposalIssueCode;
   readonly httpStatus: 400 | 409;
@@ -139,6 +152,7 @@ export interface ConflictDecisionFact {
   readonly effective: boolean;
 }
 
+// 回避引用校验的问题码。
 export type ConflictReferenceIssue =
   | 'conflict-decision-required'
   | 'conflict-decision-not-effective'
@@ -201,14 +215,17 @@ export function invalidMaterialIds(rows: readonly MaterialEffectivenessFact[]): 
     .sort();
 }
 
+// 判断字符串是否为登记的改派原因；服务层校验入参时调用。
 export function isReassignReasonCode(value: string): value is ReassignReasonCode {
   return (REASSIGN_REASON_CODES as readonly string[]).includes(value);
 }
 
+// 判断字符串是否为承办人员角色；当前无外部调用方。
 export function isHandlerRole(value: string): value is HandlerRole {
   return (HANDLER_ROLES as readonly string[]).includes(value);
 }
 
+// 判断字符串是否为登记的效力认定结论；服务层校验入参时调用。
 export function isMaterialEffectivenessConclusion(value: string): value is MaterialEffectivenessConclusion {
   return (MATERIAL_EFFECTIVENESS_CONCLUSIONS as readonly string[]).includes(value);
 }

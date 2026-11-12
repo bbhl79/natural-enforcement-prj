@@ -1,3 +1,5 @@
+// 用途：把一个跑次的步骤记录、证据响应与汇总写到 e2e/results 下，并推导 uncovered 缺口。
+// 调用方：run-api-scenario.ts、run-api-suite.ts、run-next-todo-buttons.ts、run-auto-verification.ts、integration/verify-discover.test.ts。
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -5,6 +7,7 @@ import { summaryStatus } from './auth-gate.cjs';
 import { discoverUncovered, type ScenarioMeta, type UncoveredItem } from './discover/uncovered.ts';
 import { repoRoot, RESULTS_DIR } from './paths.ts';
 
+/** 跑次清单：runId、起止时间、环境与场景清单，落 manifest.json。 */
 export interface RunManifest {
   runId: string;
   startedAt: string;
@@ -13,6 +16,7 @@ export interface RunManifest {
   scenarios: string[];
 }
 
+/** 一步的记录：是否通过、期望、实际与证据文件名；落 steps/ 目录。 */
 export interface StepRecord {
   scenarioId: string;
   stepId: string;
@@ -23,6 +27,7 @@ export interface StepRecord {
   failures?: unknown[];
 }
 
+/** 跑次汇总：总状态、失败步骤、产物目录与机械推导的 uncovered 缺口；落 summary.json。 */
 export interface RunSummary {
   status: 'passed' | 'failed' | 'blocked';
   failed: string[];
@@ -31,6 +36,7 @@ export interface RunSummary {
   uncovered: UncoveredItem[];
 }
 
+/** 跑次证据写入器：建目录、逐条写步骤与响应、结束时产出汇总。 */
 export class EvidenceWriter {
   readonly runDir: string;
   private readonly manifest: RunManifest;

@@ -1,7 +1,9 @@
+// 用途：口令强度判定与公开规则清单，前端复刻本机校验口径供输入时提示。
 // 口令强度与公开规则清单（#292）：前端复刻本机校验口径，与后端 password-policy 对齐。
 // 历史比对只在提交后由服务端揭示（ADR 0015），这里不做任何历史判断。
 import { PASSWORD_HISTORY_HINT, PASSWORD_RULE_TEXT } from './loginSlice';
 
+/** 可公开给用户看的规则码清单。 */
 export const PUBLIC_PASSWORD_RULES = [
   'too-short',
   'too-long',
@@ -12,9 +14,12 @@ export const PUBLIC_PASSWORD_RULES = [
   'contains-code',
 ] as const;
 
+/** PUBLIC_PASSWORD_RULES 的字面量联合类型。 */
 export type PublicPasswordRule = (typeof PUBLIC_PASSWORD_RULES)[number];
+/** 口令强度三档。 */
 export type PasswordStrengthLevel = 'weak' | 'medium' | 'strong';
 
+/** 强度判定结果：档位、是否通过全部公开规则、失败规则码与提示文案。 */
 export interface PasswordStrengthResult {
   level: PasswordStrengthLevel;
   passed: boolean;

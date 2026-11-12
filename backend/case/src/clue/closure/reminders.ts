@@ -1,3 +1,5 @@
+// 用途：按被结案线索的当前命中集，为此前不派的线索逐对生成结案提醒行。
+// 调用方：backend/server/src/clue-disposition.service.ts、backend/server/src/case-filing.service.ts、backend/server/src/clue-closure.service.ts，均在业务事务内传入 tx.clues。
 // 结案提醒生成的内部服务（#217／#226；规格 D 节）。
 //
 // 不予立案、移送、立案、其他都按暂存线索的当前命中集逐对生成提醒，与状态写入同事务：
@@ -26,6 +28,7 @@ export interface ClosureReminderGeneration {
 /**
  * 生成结案提醒：返回新建的提醒 id（无「不派」对方时为空数组）。
  * 与状态写入同一事务调用；事务回滚时提醒一并回滚。
+ * 重复调用不去重：每次按当前命中集新写提醒行；本服务不写审计留痕。
  */
 export async function generateClosureReminders(
   clues: ClueStore,

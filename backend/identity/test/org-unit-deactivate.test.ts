@@ -83,6 +83,7 @@ function fixture(setup: Setup = {}) {
 
 const actor: ActorRef = { personnelId: 'admin', authenticated: true };
 
+// 验证停用机构的四类前提、重复停用与留痕（#124）。
 describe('停用机构', () => {
   it('前提都满足：置停用时间，写一行 org.unit.deactivated（记成功、机构和资源都是被停用的机构）', async () => {
     const f = fixture();

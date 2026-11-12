@@ -10,6 +10,7 @@ import { newAuditId } from '../src/ulid.ts';
 
 const ULID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/;
 
+// 留痕编号生成器：同一进程连续生成严格递增，且符合 ULID 形制。
 describe('留痕编号生成', () => {
   it('同一进程连续生成的编号严格递增且合 ULID 形制', () => {
     const ids = Array.from({ length: 10_000 }, () => newAuditId(Date.now()));

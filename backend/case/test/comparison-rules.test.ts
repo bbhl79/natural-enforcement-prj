@@ -95,6 +95,7 @@ function freshness(overrides: Partial<ComparisonFreshnessInput> = {}): ReturnTyp
   });
 }
 
+// #271 判定材料录入校验：依据与裁量基准须合规，判定版本、理由与告知书必填，差异为零也保留人的判定。
 describe('判定材料录入（#271）', () => {
   it('合规材料逐字段收下；差异为零也保留人的判定与理由', () => {
     const read = readComparisonJudgment(raw());
@@ -147,6 +148,7 @@ describe('判定材料录入（#271）', () => {
   });
 });
 
+// #271 决定呈批提交检查：每条有效违法记录须有判定，配对取最新一条，作废记录不要求。
 describe('决定呈批提交检查（#271）', () => {
   it('有效违法记录逐条都要有判定，缺一条即阻断', () => {
     const result = assessDecisionSubmission({
@@ -186,6 +188,7 @@ describe('决定呈批提交检查（#271）', () => {
   });
 });
 
+// #271 批准时的判定新鲜度：按北京日期判定版本有效性，缺判定或版本未施行/已失效即过时。
 describe('批准时新鲜度（#271）', () => {
   it('没有人的判定：比对过时，出路为重新比对', () => {
     const result = freshness({ judgments: [] });
@@ -293,6 +296,7 @@ describe('批准时新鲜度（#271）', () => {
   });
 });
 
+// #271 Q32 裁量基准到期或版本未录入时给出提示，不阻断批准。
 describe('Q32 裁量基准提示（#271）', () => {
   it('基准到期或新版未录入：提示，不阻断', () => {
     const expired = freshness({
@@ -321,6 +325,7 @@ describe('Q32 裁量基准提示（#271）', () => {
   });
 });
 
+// #271 Q31 规则键登记为可确认警告；模块不提供自动判较轻能力，也不接入对外文书生成。
 describe('Q31 规则键登记与不自动判较轻（#271）', () => {
   it('CMP-01 登记为可确认的警告，不要求确认理由', () => {
     expect(findRuleParameter('CMP-01')).toMatchObject({

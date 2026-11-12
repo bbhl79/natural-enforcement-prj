@@ -406,6 +406,7 @@ beforeEach(() => {
   cookies.clear();
 });
 
+// 验证改派呈批批准前后的名单变化：环节与主状态不变，留痕齐备（#239）。
 describe('#239 改派呈批', () => {
   it('批准前名单不变；批准后名单更新，环节与主状态不变，留痕齐备', async () => {
     const caseId = await stationCase('改派甲');
@@ -659,6 +660,7 @@ describe('#239 改派呈批', () => {
   });
 });
 
+// 验证回避后既有材料的效力认定与留痕（#239）。
 describe('#239 回避后材料效力认定', () => {
   async function recusedCase(party: string): Promise<{ caseId: string; lineageId: string }> {
     const caseId = await stationCase(party);
@@ -767,6 +769,7 @@ describe('#239 回避后材料效力认定', () => {
   });
 });
 
+// 验证改派 X18 出口：不批、撤回与批准复校文案，以及留痕失败整体回滚（#279）。
 describe('#279 X18 出口：不批、撤回与复校文案', () => {
   it('不批：R10 须写明；同事务关链、改派置已退回、原名单不变；可重新发起；留痕失败整体回滚', async () => {
     const caseId = await stationCase('不批甲');

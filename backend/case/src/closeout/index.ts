@@ -1,3 +1,4 @@
+// 用途：汇总送达、执行记载与结案纯规则及常量的对外导出。
 export {
   CLOSURE_BRANCHES,
   CLOSURE_BRANCH_NAMES,

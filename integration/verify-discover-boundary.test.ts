@@ -96,6 +96,7 @@ async function seedSandbox(root: string): Promise<void> {
   await fs.writeFile(path.join(root, LATENT_REL), `${JSON.stringify(LATENT_SCENARIO, null, 2)}\n`, 'utf8');
 }
 
+// spec #322 Q16 seam③：发现器全流程只在 e2e/results 下新增报告，产品与夹具零改动。
 describe('seam③ 沙盒夹具仓：发现器全流程只写 e2e/results/，产品/fixtures/latent 零改动', () => {
   let root: string;
   beforeEach(async () => {
@@ -205,6 +206,7 @@ describe('seam③ 沙盒夹具仓：发现器全流程只写 e2e/results/，产�
   );
 });
 
+// spec #322 Q16 seam③：discover 写文件 API 只允许出现在 report.ts。
 describe('seam③ 唯一写口守卫：discover 写文件 API 只在 report.ts', () => {
   it('harness/discover 下只有 report.ts 含写文件 API；uncovered.ts/diff-runs.ts 零 I/O', async () => {
     const discoverDir = path.join(

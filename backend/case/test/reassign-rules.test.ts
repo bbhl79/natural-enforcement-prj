@@ -25,6 +25,7 @@ function candidate(partial: Partial<HandlerCandidateFacts> = {}): HandlerCandida
   };
 }
 
+// #239 改派发起人资格：主办或协办本人可发起；双人不可用时仅限承办机构内勤。
 describe('#239 发起人资格', () => {
   const base = {
     actorRoles: [] as string[],
@@ -69,6 +70,7 @@ describe('#239 发起人资格', () => {
   });
 });
 
+// #239 拟任名单校验：主办与协办配置、重复、执法资格、在职状态与机构范围。
 describe('#239 拟任名单', () => {
   it('主办加协办两人且都合格时通过', () => {
     expect(
@@ -129,6 +131,7 @@ describe('#239 拟任名单', () => {
   });
 });
 
+// #239 回避原因改派必须引用已生效的回避决定，且批准人与决定人一致。
 describe('#239 回避决定引用', () => {
   it('非回避原因不校验', () => {
     expect(
@@ -191,6 +194,7 @@ describe('#239 回避决定引用', () => {
   });
 });
 
+// #239 材料效力认定：每件材料取最新一次结论，仅最新结论为无效者进入无效清单。
 describe('#239 效力认定', () => {
   const at = (iso: string): Date => new Date(iso);
   const rows: MaterialEffectivenessFact[] = [

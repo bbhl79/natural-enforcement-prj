@@ -275,6 +275,7 @@ beforeEach(() => {
   cookies.clear();
 });
 
+// 验证调查笔录两人要求、中止与恢复、终止、撤案与不可抗力结案（#236）。
 describe('#236 调查收尾', () => {
   it('一名在场承办人员保存笔录为 409 X20，两名可以保存', async () => {
     const caseId = await fileCase();

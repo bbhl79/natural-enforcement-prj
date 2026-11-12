@@ -1,3 +1,7 @@
+// 用途：有效性确认、加重来源、重新告知与决定呈批闸口，并写相应留痕。
+// 调用方：backend/server/src/case-validity.controller.ts；backend/server/src/case-decision.service.ts 调用 assertValidityGate。
+// 边界：授权经 authorize（拒绝先写 authz.denied 再抛错）；阻断不设绕过通道；写动作在交互式事务内。
+// 依据：#248、#28、ADR 0011。
 // 有效性确认、加重来源、重新告知与决定呈批闸口（#248；#28 A／B／C、Q13／Q14／Q18）。
 // A 类（含 B1b）系统判失效，阻断决定呈批直到重新告知；B 类须主办确认并经审理／法审复核；
 // Q14 在陈述申辩后加重时须写明来源。重新告知撤销原告知（served → revoked），T32 再进入 E05，
@@ -69,6 +73,7 @@ const HANDLER_ROLES = new Set<string>(CASE_HANDLER_ROLES);
 const REVIEWER_ROLES = new Set(['行政审核', '法制审核']);
 const FAIL_REASONS = new Set<string>(CASE_VALIDITY_FAILED_REASONS);
 
+/** 有效性接口的结果；状态码区分成功、输入不合规、拒绝、找不到与冲突。 */
 export type CaseValidityHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }
   | { readonly status: 400; readonly body: Record<string, unknown> }
@@ -115,6 +120,7 @@ interface Evaluation {
   readonly gate: ValidityGateCheck;
 }
 
+/** 有效性确认与重新告知服务：评估有效性、记录确认与复核、执行闸口检查。 */
 @Injectable()
 export class CaseValidityService {
   constructor(

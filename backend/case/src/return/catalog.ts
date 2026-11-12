@@ -1,25 +1,36 @@
+// 用途：退回原因目录，登记 R1 至 R10 的名称、是否回流与是否递增进入序号。
+// 调用方：backend/case/src/return/plan.ts、backend/case/src/return/target.ts 与 backend/server/src/return-facts.ts。
+// 边界：只提供目录查询；退回判定与目标解析在同目录其他文件。
+// 依据：#238、#28。
 // 退回原因目录（#238，#28/6409849846 第二节）。
 // R3 不经 returnTarget。R1、R6 本票只给出出口类型。
 
 import type { CaseStageCode } from '../state-machine/catalog.ts';
 
+// 退回原因码全集：R1 至 R10。
 export const RETURN_CODES = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9', 'R10'] as const;
+// 退回原因码，取 RETURN_CODES 的元素类型。
 export type ReturnCode = (typeof RETURN_CODES)[number];
 
 /** R10 只能继承 R1–R9 的退回点。 */
 export const RETURN_INHERITABLE_CODES = ['R1', 'R2', 'R3', 'R4', 'R5', 'R6', 'R7', 'R8', 'R9'] as const;
+// R10 可继承的退回原因码，取 RETURN_INHERITABLE_CODES 的元素类型。
 export type ReturnInheritableCode = (typeof RETURN_INHERITABLE_CODES)[number];
 
 /** 告知票、决定／送达票启用前，指向这些环节的执行返回 409 transition-disabled。 */
 export const RETURN_DISABLED_STAGES = ['E05', 'E10'] as const;
+// 暂不开放执行的返回环节，取 RETURN_DISABLED_STAGES 的元素类型。
 export type ReturnDisabledStage = (typeof RETURN_DISABLED_STAGES)[number];
 
+// 立案呈批的退回环节标识，与案件环节码合称 ReturnStage。
 export const FILING_RETURN_STAGE = 'filing' as const;
+// 退回目标环节：案件环节码或立案呈批。
 export type ReturnStage = CaseStageCode | typeof FILING_RETURN_STAGE;
 
 /** 立案呈批不批的链内目标：回到呈批拟制中（#234 去向不变）。 */
 export const FILING_DRAFT_TARGET = 'drafting:filing' as const;
 
+// 一条退回原因的目录项：原因码、名称与回流语义。
 export interface ReturnReasonSpec {
   readonly code: ReturnCode;
   readonly name: string;
@@ -29,6 +40,7 @@ export interface ReturnReasonSpec {
   readonly incrementsEntrySeq: boolean | 'inherit';
 }
 
+// 全部退回原因目录项，顺序与 RETURN_CODES 一致。
 export const RETURN_REASONS: readonly ReturnReasonSpec[] = [
   { code: 'R1', name: '无违法事实（违法事实不成立）', reflow: false, incrementsEntrySeq: false },
   { code: 'R2', name: '事实不清、证据不足，需补充调查', reflow: true, incrementsEntrySeq: true },
@@ -44,18 +56,22 @@ export const RETURN_REASONS: readonly ReturnReasonSpec[] = [
 
 const REASON_BY_CODE = new Map(RETURN_REASONS.map((item) => [item.code, item]));
 
+// 判断字符串是否为已登记的退回原因码。
 export function isReturnCode(value: string): value is ReturnCode {
   return REASON_BY_CODE.has(value as ReturnCode);
 }
 
+// 判断字符串是否为 R10 可继承的原因码（R1 至 R9）。
 export function isInheritableReturnCode(value: string): value is ReturnInheritableCode {
   return (RETURN_INHERITABLE_CODES as readonly string[]).includes(value);
 }
 
+// 按原因码查目录项，未登记返回 null。
 export function findReturnReason(code: string): ReturnReasonSpec | null {
   return REASON_BY_CODE.get(code as ReturnCode) ?? null;
 }
 
+// 判断环节是否属于暂不开放执行的返回目标。
 export function isReturnStageDisabled(stage: string): boolean {
   return (RETURN_DISABLED_STAGES as readonly string[]).includes(stage);
 }

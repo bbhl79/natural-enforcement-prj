@@ -1,3 +1,8 @@
+// 用途：启动装配的组合根，把 Prisma 适配器装配成各端口提供者并创建应用。
+// 调用方：backend/server/src/main.ts、backend/server/src/bootstrap-command.ts，以及集成测试。
+// 边界：本文件是启动包里唯一直接引用身份数据库适配器的文件；根类型检查排除本文件，生成客户端只在容器里存在。
+// 依据：ADR 0004，ADR 0012，Issue #119。
+//
 // 启动包装配（ADR 0004 / ADR 0012）。
 // 本文件是启动包里唯一直接引用身份数据库适配器的文件。
 // 它也装配留痕适配器。根类型检查排除本文件：生成客户端只在容器里存在。
@@ -499,6 +504,11 @@ class DisconnectPrisma implements OnModuleDestroy {
   }
 }
 
+/**
+ * 组合根：装配根客户端上的端口提供者。
+ * 根绑定：三个存储、登录目录、会话、记住我、留痕工厂与读取、存储／队列／核查／街道边界／辖区对应、时钟与配置项、工作单元。
+ * 事务内绑定见 PrismaUnitOfWork.scope：存储、目录、会话、记住我、留痕、线索与案件共用同一事务客户端。
+ */
 @Module({})
 class PersistenceModule {
   static register(
@@ -627,6 +637,10 @@ class BootModule {
   }
 }
 
+/**
+ * 装配并创建 Nest 应用：注册启动模块、启用 CSRF，返回未监听的实例。
+ * 启动失败时把错误抛给调用方，由引导命令说明缺哪一项环境变量。
+ */
 export async function createApplication(
   databaseUrl: string,
   clock: Clock = { now: () => new Date() },
@@ -654,6 +668,7 @@ export interface BootstrapRunner {
   close(): Promise<void>;
 }
 
+/** 生产引导命令的装配：独立 Prisma 根客户端加身份存储，不启 HTTP；调用方负责调用 close。 */
 export function openBootstrapRunner(
   databaseUrl: string,
   overrides: ApplicationOverrides = {},

@@ -1,3 +1,7 @@
+// 用途：CaseStore 端口的 Prisma 适配器，把端口调用翻译为对生成客户端的读写。
+// 调用方：backend/server/src/persistence.module.ts 装配，经 CASE_STORE 令牌注入业务服务。
+// 边界：不自开事务，调用方在交互式事务里调用；条件写入未命中返回 false。
+// 依据：#234、#119。
 // 立案呈批与案件最小模型的 Prisma 适配（#234）。
 // 与 prisma-clue-store.ts 同理：模块内 import 生成客户端的文件，被根 tsconfig 排除在
 // unit 层类型检查之外，由 integration 层承载其编译。调用方在交互式事务里调用本适配器。
@@ -146,6 +150,7 @@ type Db = PrismaClient | Prisma.TransactionClient;
 
 const PENDING = ['pending_review', 'pending_approval'];
 
+// CaseStore 的 Prisma 实现，构造时接收客户端或事务客户端。
 export class PrismaCaseStore implements CaseStore {
   constructor(private readonly prisma: Db) {}
 

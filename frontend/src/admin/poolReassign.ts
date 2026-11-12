@@ -1,3 +1,4 @@
+// 用途：停用机构池重新指定（#216）的前端数据层，含池线索取数与重新指定请求。
 // 停用机构池重新指定的数据层（#216；规格 D 节）。
 //
 // 系统管理员在机构详情里，把已停用机构待分派池中未派出的线索（待分派池、待分派决定、不派）
@@ -34,6 +35,7 @@ export function poolStatusLabel(status: string): string {
   }
 }
 
+// GET /api/admin/org-units/:id/pool-clues，操作码 clue.pool.reassign。
 /** 取已停用机构的池线索清单。失败返回 null（界面显示重试）。 */
 export async function loadPoolClues(dispatch: ApiDispatch, orgUnitId: string): Promise<PoolClue[] | null> {
   const response = await apiFetch(dispatch, `/api/admin/org-units/${encodeURIComponent(orgUnitId)}/pool-clues`);
@@ -63,6 +65,7 @@ export function poolReassignFailureText(status: number, body: unknown): string {
   return '操作未完成，请重试。';
 }
 
+// POST /api/clues/:id/pool-reassign，操作码 clue.pool.reassign。
 /** 重新指定一条线索的接收机构。 */
 export async function reassignPoolClue(
   dispatch: ApiDispatch,

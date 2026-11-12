@@ -1,3 +1,8 @@
+// 用途：内业核查编排，负责起运行、执行核查、收尾落库、回答界面与手动重跑。
+// 调用方：backend/server/src/clue-verification.controller.ts、backend/server/src/clue-verification.worker.ts、backend/server/src/clue-registration.service.ts、backend/server/src/clue-geometry.service.ts。
+// 边界：不碰图层服务，空间套合由核查执行端口负责；自动与手动重跑的口径见下；入队投递失败只记日志，核查状态由运行行承载。
+// 依据：Issue #213，规格 C，USER LOCK L2。
+//
 // 内业核查编排（#213；规格 C 节、USER LOCK L2）。
 //
 // 编排只做四件事：起运行行并入队、执行一次核查、收尾落库、回答界面与手动重跑。
@@ -125,6 +130,7 @@ export interface ClueVerificationView {
   } | null;
 }
 
+/** 核查入口的结果：读取与重跑成功 200，越权 403，线索不存在 404，状态冲突 409。 */
 export type ClueVerificationOutcome =
   | { readonly status: 200; readonly body: ClueVerificationView }
   | { readonly status: 403; readonly body: { readonly reason: DenyReason } }
@@ -140,6 +146,11 @@ interface RetryRejection {
   readonly reason: ClueVerifyRetryFailedReason;
 }
 
+/**
+ * 内业核查服务：自动与手动起运行、worker 执行一次核查、收尾写运行行、读视图与产物。
+ * 手动重跑需操作码 clue.verify.retry 加对象级权限；读取需操作码 clue.read。
+ * 只有土地与矿产设核查；核查状态不关分派入口。
+ */
 @Injectable()
 export class ClueVerificationService {
   constructor(
@@ -157,6 +168,9 @@ export class ClueVerificationService {
    * 登记保存成功后自动入队（不可跳过）。
    * 点状与规划类不跑核查，直接返回。投递失败时把运行置为没跑成（瞬时），
    * 界面挂重跑提示，等有权人手动重跑。
+   * 调用方：backend/server/src/clue-registration.service.ts 在登记成功后调用；
+   * backend/server/src/clue-geometry.service.ts 在土地、矿产重绘成功后调用，同样不可跳过。
+   * 已有活动运行时 startRun 返回 null，本方法直接返回，不重复入队。
    */
   async scheduleAutomatic(clueId: string): Promise<void> {
     const context = await this.clues.readVerificationContext(clueId);

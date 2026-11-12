@@ -1,3 +1,4 @@
+// 用途：从步骤记录机械推导 uncovered 缺口列表。
 // 发现器信号源 1（spec #322 首期 T1）：步骤记录 → uncovered[]。
 // 纯函数，无 I/O。harness 机械推导，禁人手写。
 import type { StepRecord } from '../evidence.ts';

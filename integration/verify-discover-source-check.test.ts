@@ -18,6 +18,7 @@ const FULL_NODE: AssertedNode = {
   roleBasis: ['经办', '行政审核', '行政审批'],
 };
 
+// spec #322 Q16 seam⑥：缺法规出处或角色依据的节点标待权威，只产决策票。
 describe('seam⑥：出处纪律校验（无出处标待权威、只产决策票）', () => {
   it('法规出处与角色依据齐备 → ok，不产决策票', () => {
     const [result] = checkNodeSources([FULL_NODE]);

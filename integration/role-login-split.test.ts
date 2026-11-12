@@ -78,6 +78,7 @@ afterAll(async () => {
   await cloned?.close();
 });
 
+// A6：七个角色的登录会话按职责分域，管理台接口只对系统管理放行。
 describe('A6：七个角色经 HTTP 登录并按职责分域', () => {
   it('每个角色的种子人员登录后，会话只报告本人角色和本人机构', async () => {
     const seen = new Set<string>();

@@ -1,3 +1,7 @@
+// 用途：立案呈批的拟制、提交、审核、批准、退回与撤回，批准时执行立案副作用，并提供台账读取与待办列表。
+// 调用方：backend/server/src/case-filing.controller.ts；FILING_ADMIN_REVIEW 令牌由 backend/server/src/persistence.module.ts 提供。
+// 边界：授权经 authorize（拒绝先写 authz.denied 再抛错）；T01／T02 批准副作用在同一交互式事务完成。
+// 依据：#234、ADR 0011。
 // 立案呈批审批链与批准副作用（#234）。
 // 不往 backend/approval 放业务。T01／T02 批准副作用在同一交互式事务完成。
 // R-8 定案 C：拟制草稿不拦当事人；提交与批准均拦。R-6：只做拟制人撤回呈批。
@@ -71,6 +75,7 @@ const REVIEW_OPCODE = 'doc.admin.review';
 const APPROVE_OPCODE = 'doc.approve';
 const READ_OPCODE = 'doc.read';
 
+/** 立案接口的结果；状态码区分成功、输入不合规、拒绝、找不到与冲突。 */
 export type FilingHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }
   | { readonly status: 400; readonly body: Record<string, unknown> }
@@ -87,6 +92,7 @@ export type FilingHttpOutcome =
     }
   | { readonly status: 404; readonly body: { readonly result: 'not-found' } };
 
+/** 立案呈批服务：拟制、提交、审核、批准、退回、撤回与批准副作用。 */
 @Injectable()
 export class CaseFilingService {
   constructor(

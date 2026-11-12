@@ -80,6 +80,7 @@ function fixture(state: FakeState = {}) {
   return { service: new BootstrapService(store, factory), calls, writes, appended };
 }
 
+// 验证空库、已引导、两键不全与库非空四种判定（#131）。
 describe('判定（只看两个不可变键）', () => {
   const empty = { root: null, admin: null, orgUnits: 0, personnel: 0 };
 
@@ -122,6 +123,7 @@ describe('判定（只看两个不可变键）', () => {
   });
 });
 
+// 验证引导事务的取锁顺序、写入序列、留痕与前置错误（#131）。
 describe('引导服务', () => {
   it('空库：先取咨询锁，再建根机构（市）、首个系统管理人员（任职根机构、持系统管理、口令修改时间留空）和两行留痕', async () => {
     const { service, calls, writes, appended } = fixture();
@@ -217,6 +219,7 @@ describe('引导服务', () => {
   });
 });
 
+// 验证引导输入的必填、长度、手机号与口令规则码（#131）。
 describe('输入规则', () => {
   const password = 'Boot-strap-27x';
 

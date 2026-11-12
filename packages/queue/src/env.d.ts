@@ -1,3 +1,4 @@
+// 用途：声明本包使用的最小 process 全局类型（env.REDIS_URL 与 exitCode），代替 @types/node。
 // #55：队列设施包消费的最小 process 环境类型。仓库不引 @types/node 直接依赖
 //（VERSIONS.md「类型」行钉的 24.19.0 只是 overrides 收敛 vite/vitest 的 peer 传递依赖，
 // 任何 package.json 均未声明），故本包编译时 Node 全局类型面不在场：不为一个 process

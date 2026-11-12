@@ -1,3 +1,4 @@
+// 用途：根布局：认证状态变化时按 #91 规则改写地址，不做授权判断。
 import { useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router';
 

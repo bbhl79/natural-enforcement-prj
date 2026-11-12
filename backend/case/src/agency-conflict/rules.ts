@@ -1,3 +1,7 @@
+// 用途：定义机关层利害关系的登记判定与提示，所有闸口恒不阻断。
+// 调用方：backend/server/src/case-agency-conflict.service.ts；提示文案另见 frontend/src/case/agency-conflict.ts。
+// 边界：只读已有勾选行；不写库，不做第二人确认与取消勾选。
+// 依据：Issue #263。
 // 机关层利害关系提示（#263）。纯规则，不依赖 Nest 与存储。
 //
 // 主干最小版：人工勾选后只提示，不阻断签出、呈批、迁移。
@@ -15,6 +19,7 @@ export const AGENCY_CONFLICT_ALREADY_MARKED_MESSAGE = '机关层利害关系已�
 
 /** 机关层不参与的闸口。返回值固定为不阻断。 */
 export const AGENCY_CONFLICT_GATES = ['sign', 'submission', 'transition'] as const;
+// 机关层不参与的闸口类型别名。
 export type AgencyConflictGate = (typeof AGENCY_CONFLICT_GATES)[number];
 
 /** 一案至多一行的勾选记录。 */

@@ -1,3 +1,7 @@
+// 用途：定义根机构系统管理守卫的角色、失败原因与提示句。
+// 调用方：backend/identity/src/services/personnel-profile.service.ts 与 backend/server/src/personnel-profiles.service.ts。
+// 边界：只定义常量；守卫判定在人员服务与持久化端口的锁内完成。
+// 依据：ADR 0014、#129
 // 根机构守卫（ADR 0014，#105「守卫二」，#129）。
 // 系统始终保留至少一名「当前任职在根机构、未停用、持有未停用系统管理角色」的人员。
 // 本票受约束的动作是摘除系统管理角色与调岗出根机构；停用由 #130 接入同一判断。

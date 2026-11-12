@@ -1,3 +1,7 @@
+// 用途：按来源、法域与类型编码生成线索录入要件表单结构，并提供来源与类型的参照清单。
+// 调用方：backend/server/src/clue-form-schema.controller.ts。
+// 边界：只读，不写业务事实也不写留痕；名册外的取值返回 400；无操作码，仅需登录会话。
+// 依据：#210、ADR 0018、ADR 0019。
 // 录入要件表单结构（#210；#207 协议 E 节「录入、标签与文件」）。
 //
 // 前端经 GET /api/clue/form-schema 按来源、法域、类型获取，响应含声明版本。
@@ -54,6 +58,7 @@ export interface FormSchemaGroup {
   readonly items: readonly FormSchemaItem[];
 }
 
+/** 表单结构响应体：声明版本、来源与法域、类型，以及叠加后的分组与录入项。 */
 export interface FormSchemaBody {
   readonly result: 'listed';
   readonly declarationVersion: string;
@@ -64,6 +69,7 @@ export interface FormSchemaBody {
   readonly items: readonly FormSchemaItem[];
 }
 
+/** 表单结构结果；名册外取值返回 400。 */
 export type FormSchemaOutcome =
   | { readonly status: 200; readonly body: FormSchemaBody }
   | { readonly status: 400; readonly body: { readonly result: 'non-compliant'; readonly rules: readonly string[] } };
@@ -83,6 +89,7 @@ export interface ClueReferenceBody {
   }[];
 }
 
+/** 线索录入表单结构服务：校验参照编码、叠加声明层并组装响应。 */
 @Injectable()
 export class ClueFormSchemaService {
   /** 参照清单（只读）。取值表只此一份，前端按它渲染选择控件。 */

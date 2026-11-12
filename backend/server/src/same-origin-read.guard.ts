@@ -1,3 +1,8 @@
+// 用途：读接口的跨站请求拒绝守卫，判定规则与框架对写请求的 CSRF 判定一致。
+// 调用方：backend/server/src/clue-closure.controller.ts、backend/server/src/case-closeout.controller.ts、backend/server/src/personnel.controller.ts、backend/server/src/org-units.controller.ts 以 @UseGuards 使用；backend/server/src/session.guard.ts 复用判定函数。
+// 边界：有 Sec-Fetch-Site 时只放行 same-origin 与 none；没有时比较 Origin 与 Host；两者都没有视为非浏览器放行。被拒返回 403 cross-site，不写留痕。
+// 依据：Issue #105，Issue #123，Issue #91。
+//
 // 读接口的跨站拒绝（#105 Testing「每个新接口的四条必测」第 4 条，#123）。
 // 框架内建 CSRF（enableCsrfProtection，#91）对 GET/HEAD/OPTIONS 恒放行，只管写请求。
 // 管理台的读接口返回数据范围内的主数据，同样不接受跨站请求。判定照框架的写法：
@@ -32,6 +37,7 @@ function sameHost(origin: string, host: string): boolean {
   }
 }
 
+/** 判定请求是否跨站：有 Sec-Fetch-Site 时看它，否则比较 Origin 与 Host；都缺时返回 false。 */
 export function isCrossSiteRequest(headers: Record<string, string | string[] | undefined>): boolean {
   const site = single(headers['sec-fetch-site'])?.toLowerCase() ?? null;
   if (site !== null) return site !== 'same-origin' && site !== 'none';
@@ -41,6 +47,7 @@ export function isCrossSiteRequest(headers: Record<string, string | string[] | u
   return host === null || !sameHost(origin, host);
 }
 
+/** 读接口守卫：跨站请求抛 403，响应体带 result: 'cross-site'；同站请求放行。 */
 @Injectable()
 export class SameOriginReadGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {

@@ -1,3 +1,7 @@
+// 用途：用 Prisma 实现 IdentityStore 端口，含事务绑定与唯一冲突映射。
+// 调用方：backend/server/src/persistence.module.ts 装配，integration 层测试直接构造。
+// 边界：不提供删除方法；唯一冲突以 UniqueWriteResult 返回，不抛异常。
+// 依据：#52、#119、ADR 0015
 // Prisma 适配（#52）：IdentityStore 端口的 backend/prisma 实现，模块内唯一 import
 // 生成客户端的文件。仓库内不生成 Prisma Client（产物只存在于容器可写层），
 // 故本文件被根 tsconfig 排除在 unit 层类型检查之外，由 integration 层
@@ -135,6 +139,7 @@ function isUniqueViolation(error: unknown): boolean {
   return message.includes('23505') || message.includes('Unique constraint');
 }
 
+// Prisma 实现。构造时区分根客户端与已绑定事务的客户端；唯一写入在事务内用保存点隔离。
 export class PrismaIdentityStore implements IdentityStore {
   private readonly prisma: IdentityDb;
   private readonly root: PrismaClient | null;

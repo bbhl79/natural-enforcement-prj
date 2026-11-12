@@ -1,3 +1,7 @@
+// 用途：线索处置登记（other）、结案提醒生成与处理、不派与提醒列表，并写对应留痕。
+// 调用方：backend/server/src/clue-closure.controller.ts。
+// 边界：授权经 authorize（拒绝先写 authz.denied 再抛错）；HTTP 入口拒绝 disposition=no-case；写动作在交互式事务内。
+// 依据：#229、#226、#217。
 // 其他（#229）登记、不予立案落点（#226）、结案提醒生成与提醒处理（#217／#226／#229）。
 //
 // #226：HTTP POST disposition=no-case 一律拒绝（filing-approval-required）；不予立案只经
@@ -103,6 +107,7 @@ interface Rejection {
   readonly reason: string;
 }
 
+/** 线索结案相关服务：处置登记、提醒生成与处理、不派与提醒列表。 */
 @Injectable()
 export class ClueClosureService {
   constructor(

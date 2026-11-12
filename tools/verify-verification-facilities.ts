@@ -1,4 +1,4 @@
-// 真实设施验证（#213 验收项「真实设施验证 BullMQ attempts 语义与图层服务不可用判 unavailable」）。
+// 用途：真实设施验证（#213）：连真实 Redis 与 HTTP 端点，验证 BullMQ 重试语义与图层不可用判定。
 //
 // 本脚本不入测试层：它要连真实 Redis 并起真实 HTTP 端点，跑法与普通用例不同。
 // 完整调用规程（前置、跑法、判读、何时重跑）见同目录 verify-verification-facilities.md。

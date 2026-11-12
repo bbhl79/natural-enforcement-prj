@@ -27,6 +27,7 @@ function skipStatus(scenarioId: string, status: string): StepRecord {
   };
 }
 
+// spec #322 Q16 seam①：由步骤记录推导 uncovered 缺口，覆盖各类跳过原因。
 describe('discoverUncovered（seam①：步骤记录 → uncovered[]）', () => {
   it('latent scenario 被跳过 → latent-skipped，带 scenarioId 与首个 featureMapRef，不带 stepId', () => {
     const input: DiscoverInput = {
@@ -268,6 +269,7 @@ describe('discoverUncovered（seam①：步骤记录 → uncovered[]）', () => 
   });
 });
 
+// spec #322 T1 验收：summary.json 挂载结构化 uncovered，且不改变原有通过语义。
 describe('EvidenceWriter.finish() 挂载 uncovered[]（T1 验收）', () => {
   it('含 latent/skip 的跑批：summary.json 出现结构化 uncovered，failed 语义不变', async () => {
     const writer = new EvidenceWriter(newRunId(), ['vf-sc-latent-decision']);

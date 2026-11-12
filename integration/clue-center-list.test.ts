@@ -293,6 +293,7 @@ beforeEach(() => {
   storage.writes.length = 0;
 });
 
+// 验证线索中心列表的筛选、关键词、登记日与分页，以及机构子树可见范围（#218）。
 describe('#218 线索中心列表', () => {
   it('默认分页 size=20，size 上限 100，按 registered_at DESC,id DESC', async () => {
     const ids: string[] = [];

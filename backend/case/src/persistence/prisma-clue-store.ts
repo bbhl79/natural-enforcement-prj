@@ -1,3 +1,7 @@
+// 用途：ClueStore 端口的 Prisma 适配器，含线索登记、空间比对与验证的读写实现。
+// 调用方：backend/server/src/persistence.module.ts 装配，经 CLUE_STORE 令牌注入线索服务。
+// 边界：不自开事务，调用方在交互式事务里调用；空间三表走原生 SQL，不经 ORM 写。
+// 依据：#211、#119、#212。
 // 线索持久化的 Prisma 适配（#211）。
 // 本文件是模块内唯一 import 生成客户端的文件（同身份组织模块的 PrismaIdentityStore）。
 // 仓库内不生成 Prisma Client（产物只存在于容器可写层），故本文件被根 tsconfig 排除在
@@ -153,6 +157,7 @@ interface OverlapRow {
   other_geojson: string;
 }
 
+// ClueStore 的 Prisma 实现，构造时接收客户端或事务客户端。
 export class PrismaClueStore implements ClueStore {
   constructor(private readonly prisma: Db) {}
 

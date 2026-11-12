@@ -216,6 +216,7 @@ beforeEach(() => {
   storage.writes.length = 0;
 });
 
+// 验证线索登记成功路径：编号、状态、缺件、正式命中与成功留痕（#211）。
 describe('#211 线索登记', () => {
   it('登记成功：201，编号、状态、缺件与正式命中都回，库里有线索行与成功留痕', async () => {
     const before = await cloned.prisma.clue.count();
@@ -411,6 +412,7 @@ describe('#211 线索登记', () => {
   });
 });
 
+// 验证缺件补齐后清单收敛，并写 clue.items-supplemented 留痕（#211）。
 describe('#211 缺件补齐', () => {
   it('补齐单项：200，缺件清单随之外，留痕 clue.items-supplemented', async () => {
     const registered = await register({

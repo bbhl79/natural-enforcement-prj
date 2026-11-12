@@ -10,6 +10,7 @@ import { HealthController } from './health.controller.ts';
 @Module({ controllers: [HealthController] })
 class HealthTestModule {}
 
+// 健康检查接口的响应形状与依赖探测。
 describe('GET /api/health', () => {
   let baseUrl = '';
   let close: () => Promise<void> = async () => {};

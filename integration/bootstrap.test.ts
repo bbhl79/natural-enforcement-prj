@@ -137,6 +137,7 @@ afterAll(async () => {
   await admin.$disconnect();
 });
 
+// 验证空库按生产顺序完成引导，重复执行被拒，残缺输入被拒且首次登录强制改密（#131）。
 describe('引导命令：空库、重复执行、残缺被拒、首登强制改密', () => {
   let db: EmptyDatabase;
   let closeApp: () => Promise<void> = async () => {};
@@ -261,6 +262,7 @@ describe('引导命令：空库、重复执行、残缺被拒、首登强制改�
   });
 });
 
+// 验证输入与口令文件的取值校验，非法内容不落库（#131）。
 describe('引导命令：输入与口令文件', () => {
   let db: EmptyDatabase;
 
@@ -359,6 +361,7 @@ describe('引导命令：输入与口令文件', () => {
   });
 });
 
+// 验证两个引导进程并发时只有一次写入，另一个被拒（接缝②，#131）。
 describe('引导命令：两个进程并发', () => {
   let db: EmptyDatabase;
 
@@ -381,6 +384,7 @@ describe('引导命令：两个进程并发', () => {
   });
 });
 
+// 验证库非空（开发夹具库）时引导拒绝执行，不覆盖既有数据（#131）。
 describe('引导判定：库非空（开发夹具库）', () => {
   let cloned: ClonedDatabase;
 

@@ -1,3 +1,7 @@
+// 用途：定义身份组织模块对持久化的唯一端口，供服务层按令牌注入。
+// 调用方：本模块服务层，以及 backend/server/src/ 下注入该端口的业务服务；实现见 prisma-identity-store.ts。
+// 边界：端口不含物理删除方法，只增与只失效；事务锁方法须在交互式事务内调用。
+// 依据：#52、ADR 0014、ADR 0015
 // 身份组织持久化端口（#52）：模块对存储的唯一面向，可注入（IDENTITY_STORE 令牌）。
 // 只失效不删除的纪律在本接口成形：全接口不存在任何物理删除方法——人员/机构只有
 // deactivate（失效标记 + 失效时间），留痕/名称版本只有 insert（append-only，库层
@@ -83,6 +87,7 @@ export interface ExportAuditRow {
   createdAt: Date;
 }
 
+/** 机构名称的一条历史版本；只追加，版本号随机构递增，库层拒绝改删。 */
 export interface OrgUnitNameVersionRow {
   id: string;
   orgUnitId: string;
@@ -91,6 +96,7 @@ export interface OrgUnitNameVersionRow {
   createdAt: Date;
 }
 
+/** 人员姓名的一条历史版本；只追加，版本号随人员递增，库层拒绝改删。 */
 export interface PersonnelNameVersionRow {
   id: string;
   personnelId: string;
@@ -108,6 +114,7 @@ export interface OrgUnitToCreate {
   parentId: string | null;
 }
 
+/** 新建人员的输入。主键与工号由调用方生成；手机号与执法证字段可空。 */
 export interface PersonnelToCreate {
   id: string;
   code: string;
@@ -207,6 +214,8 @@ export interface OpcodeGrant {
   roleName: string;
 }
 
+// 身份组织持久化端口：查询当前态与历史版本，写入只增、失效只改标记。
+// 业务唯一冲突以 UniqueWriteResult 返回；并发控制用事务锁方法。
 export interface IdentityStore {
   /**
    * 在一个交互式事务里执行 work（#119）。work 抛错则整体回滚。

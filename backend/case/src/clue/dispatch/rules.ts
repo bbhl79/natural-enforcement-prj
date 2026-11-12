@@ -1,3 +1,4 @@
+// 用途：分派决定与两步分派的纯判定规则：规则码、状态门槛、已知晓要求与理由校验。
 // 分派决定与两步分派的领域规则（#214；规格 A/B/D 节、GLOSSARY）。
 //
 // 纯规则、不依赖 Nest 与存储：决定步的「默认不派／已知晓／举报必派」、
@@ -17,7 +18,7 @@ export const CLUE_DISPATCH_RULE_CODES = [
   'org-unit-deactivated',
   /** 主办承办人必填。 */
   'handler-main-required',
-  /** 承办人已停用或不属于承办机构。 */
+  /** 承办人已停用、不属于承办机构，或无有效执法证。 */
   'assignee-not-qualified',
 ] as const;
 

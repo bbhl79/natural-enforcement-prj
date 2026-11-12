@@ -13,6 +13,7 @@ import {
 // ULID 规范（crockford 本人实现 README）的已知良好样例：26 位大写 Crockford Base32
 const KNOWN_GOOD_ULID = '01ARZ3NDEKTSV4RRFFQ69G5FAV';
 
+// 主键形制契约：所有实体一律全局唯一、不可复用的 ULID 技术主键（#16 §1.1）。
 describe('#16 §1.1 主键规则：全局唯一技术主键', () => {
   it('主键为全局唯一、不可复用、无业务含义的技术主键（ULID）', () => {
     expect(PRIMARY_KEY_RULE).toEqual({
@@ -38,6 +39,7 @@ describe('#16 §1.1 主键规则：全局唯一技术主键', () => {
   });
 });
 
+// 编号与主键分离的契约：编号可换可补，但永不充当引用键（#16 §1.2）。
 describe('#16 §1.2 编号规则：编号 ≠ 主键', () => {
   it('业务编号与主键分离，可换可补，但永不充当引用键', () => {
     expect(BUSINESS_NUMBER_RULE).toEqual({
@@ -48,6 +50,7 @@ describe('#16 §1.2 编号规则：编号 ≠ 主键', () => {
   });
 });
 
+// 跨域引用契约：只认技术主键，业务编号不得当引用键（#16 §1.3）。
 describe('#16 §1.3 引用规则：跨域引用一律用主键', () => {
   it('跨域引用只使用技术主键，业务编号禁用为引用键', () => {
     expect(CROSS_DOMAIN_REFERENCE_RULE).toEqual({

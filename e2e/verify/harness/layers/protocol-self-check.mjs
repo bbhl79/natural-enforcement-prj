@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+// 用途：用产品图层适配器直连假图层服务，自检协议一致与四类场景判定。
+// 用法：在工具链容器内直接运行；服务端口由 VERIFY_SELF_CHECK_PORT 指定。
+// 退出码：0 全部自检通过；1 任一检查失败。
 // 用产品里的图层适配器直连假图层服务。
 // 证明假服务说的是同一协议，适配器把它当真实服务使用。
 // 本脚本不启动业务栈。空地址「查不成」仍走适配器自己的未配置分支。
@@ -16,6 +19,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const serverFile = path.join(here, 'fake-layer-server.mjs');
 const port = Number(process.env.VERIFY_SELF_CHECK_PORT ?? '18099');
 
+// 按给定经纬度生成边长 0.008 度的合成正方形 GeoJSON 文本。
 function square(lon, lat) {
   const d = 0.008;
   return JSON.stringify({
@@ -32,6 +36,7 @@ function square(lon, lat) {
   });
 }
 
+// 造一份单部件核查请求，供适配器调用。
 function requestOf(geojson) {
   return {
     clueId: 'vf-self-check',
@@ -42,11 +47,13 @@ function requestOf(geojson) {
   };
 }
 
+// 打印失败原因并置退出码，不立即终止后续检查。
 function fail(message) {
   console.error(`[FAIL] ${message}`);
   process.exitCode = 1;
 }
 
+// 在 10 秒内轮询健康检查；超时抛错并带上最后一次失败原因。
 async function waitHealth(url) {
   const deadline = Date.now() + 10_000;
   let last = '尚未连接';

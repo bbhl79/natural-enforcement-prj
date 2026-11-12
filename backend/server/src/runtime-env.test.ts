@@ -12,6 +12,7 @@ import {
 
 const manifestPath = fileURLToPath(new URL('../../../infra/runtime.env', import.meta.url));
 
+// 启动包必填环境变量的读取与缺失报错。
 describe('启动包必填环境变量', () => {
   it('缺必填项时抛错，并说明缺哪一项', () => {
     expect(() => readRequiredEnv({}, SERVER_REQUIRED_ENV)).toThrowError(

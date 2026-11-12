@@ -1,4 +1,5 @@
 # shellcheck shell=bash
+# 用途：解析 infra/runtime.env 运行参数清单的函数库，被 dev、结构测试与 CI 注入脚本共用。
 # 运行参数清单 infra/runtime.env 的读取函数（ADR 0008、#80）。
 # dev、tools/structural-test.sh、tools/ci-inject-env.sh 共用本文件，只 source，不直接执行。
 # 本文件只解析清单，不 source 清单：清单里的值不当 shell 代码执行。

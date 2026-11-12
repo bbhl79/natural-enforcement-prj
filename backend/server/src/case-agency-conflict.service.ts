@@ -1,3 +1,7 @@
+// 用途：读取与设置案件的机关层利害关系勾选，并为勾选尝试写 case.conflict-declared 留痕。
+// 调用方：backend/server/src/case-agency-conflict.controller.ts。
+// 边界：只提示，不调用签出守卫、不改迁移与呈批；授权经 authorize，拒绝时先写 authz.denied 再抛错。
+// 依据：#263、ADR 0011。
 // 机关层利害关系提示（#263）。
 // 过渡：勾选与取消尝试都复用 doc.draft。不新增操作码。
 // 留痕复用 case.conflict-declared。detail.layer 为 agency。
@@ -32,6 +36,7 @@ const READ_OPCODE = 'case.read';
 
 const HANDLER_ROLES = new Set<string>(CASE_HANDLER_ROLES);
 
+/** 机关冲突接口的结果；覆盖成功、输入不合规、拒绝、找不到与冲突。 */
 export type AgencyConflictHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }
   | { readonly status: 400; readonly body: { readonly result: 'non-compliant'; readonly reason: string } }
@@ -46,6 +51,7 @@ export type AgencyConflictHttpOutcome =
       };
     };
 
+/** 机关层利害关系提示服务：读取勾选、设置勾选；设置仅限案件承办人。 */
 @Injectable()
 export class CaseAgencyConflictService {
   constructor(

@@ -1,3 +1,7 @@
+// 用途：认证会话的 HTTP 接口，提供登录、会话视图、修改口令与登出。
+// 调用方：前端登录页与前端外壳的会话查询。
+// 边界：只做请求解析与 Cookie 响应头；认证判定、会话与留痕在 AuthService。
+// 依据：ADR 0002；ADR 0010。
 import { Body, Controller, Get, Post, Req, Res } from '@nestjs/common';
 import { AccessControlService } from '@natural-enforcement/identity';
 
@@ -23,6 +27,7 @@ interface PasswordBody {
   newPassword?: unknown;
 }
 
+/** 认证会话接口的 HTTP 适配层。 */
 @Controller('api/auth')
 export class AuthController {
   constructor(
@@ -30,6 +35,7 @@ export class AuthController {
     private readonly access: AccessControlService,
   ) {}
 
+  // 校验手机号与口令并签发会话 Cookie；无操作码（登录前）。
   @Public()
   @Post('login')
   async login(
@@ -50,6 +56,7 @@ export class AuthController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 返回当前会话与可用操作码，未登录时返回空会话；无操作码（登录前）。
   @Public()
   @Get('session')
   async session(@Req() req: AuthenticatedRequest, @Res() res: HttpReply): Promise<void> {
@@ -61,6 +68,7 @@ export class AuthController {
     res.status(200).json(await this.auth.describe(active, opcodes));
   }
 
+  // 校验当前口令后改为新口令并结束其他会话；无操作码（仅需登录会话）。
   @Post('password')
   async password(
     @Req() req: AuthenticatedRequest,
@@ -76,6 +84,7 @@ export class AuthController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 结束当前会话与记住我并清 Cookie；无操作码（仅需登录会话）。
   @Post('logout')
   async logout(@Req() req: AuthenticatedRequest, @Res() res: HttpReply): Promise<void> {
     const outcome = await this.auth.logout(req.resolution?.active ?? null, req.headers.cookie, sourceAddress(req));

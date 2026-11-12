@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 用途：验证资产的 UI 全链：独立库上经 nginx 用真实浏览器跑整条业务链。
 # 验证资产的 UI 全链稳定用例：登录 → 两次完整登记 → 正式命中待决定 → 实点派出 → 实点派机构。
 # 驱动是 e2e/verify/harness/ui 下的 Playwright 脚本，编排在 full-loop-in-container.sh。
 # 浏览器在钉定的 Playwright 镜像里运行（infra/VERSIONS.md 登记），headless。

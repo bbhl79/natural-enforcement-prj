@@ -1,3 +1,6 @@
+// 用途：分派决定与两步分派的数据层：分派视图、派机构、派承办人、签收、移送、指定管辖报请与系统外移送。
+// 调用方：frontend/src/clue/ClueDispatchPanel.tsx、frontend/src/clue/ClueExternalTransferSection.tsx、frontend/src/workbench/todos.ts。
+// 接口：GET /api/clues/:id/dispatch 操作码 clue.read；写接口按动作取 clue.dispatch.decide、clue.org.assign、clue.handler.assign、clue.disposition.record、clue.designate.request。
 // 分派决定与两步分派的数据层（#214；规格 B/D/H 节）。
 //
 // 决定步集中展示「与哪条线索重复／与谁重复」：多面命中按对方线索分组折叠，
@@ -137,6 +140,7 @@ export type DispatchActionResult =
   | { readonly ok: true; readonly status: number }
   | { readonly ok: false; readonly status: number; readonly body: unknown };
 
+// 接口：GET /api/clues/:id/dispatch，操作码 clue.read。
 /** 取分派视图。 */
 export async function loadDispatchView(dispatch: ApiDispatch, clueId: string): Promise<DispatchView> {
   const response = await apiFetch(dispatch, `/api/clues/${clueId}/dispatch`);
@@ -150,6 +154,7 @@ async function readResult(response: Response): Promise<DispatchActionResult> {
   return { ok: false, status: response.status, body };
 }
 
+// 接口：POST /api/clues/:id/decide，操作码 clue.dispatch.decide。
 /** 分派决定：decision = dispatch（派）｜hold（不派）。 */
 export async function submitDecide(
   dispatch: ApiDispatch,
@@ -170,6 +175,7 @@ export async function submitDecide(
   return readResult(response);
 }
 
+// 接口：POST /api/clues/:id/assign-org，操作码 clue.org.assign。
 /** 派机构（首次分派／重新分派／指定管辖）。 */
 export async function submitAssignOrg(
   dispatch: ApiDispatch,
@@ -189,6 +195,7 @@ export async function submitAssignOrg(
   return readResult(response);
 }
 
+// 接口：POST /api/clues/:id/assign-people，操作码 clue.handler.assign。
 /** 派主办／协办。 */
 export async function submitAssignPeople(
   dispatch: ApiDispatch,
@@ -213,6 +220,7 @@ export interface TransferInput {
   readonly attachments: readonly File[];
 }
 
+// 接口：POST /api/clues/:id/transfer，操作码 clue.disposition.record；multipart 带附件。
 /** 移送（自然资源部门以外的机关；登记后进已移送终态）。 */
 export async function submitTransfer(
   dispatch: ApiDispatch,
@@ -233,6 +241,7 @@ export async function submitTransfer(
   return readResult(response);
 }
 
+// 接口：POST /api/clues/:id/designate-request，操作码 clue.designate.request。
 /** 报请指定管辖（本级机构内勤；理由必填、可选拟归属机构）。 */
 export async function submitDesignateRequest(
   dispatch: ApiDispatch,
@@ -247,6 +256,7 @@ export async function submitDesignateRequest(
   return readResult(response);
 }
 
+// 接口：POST /api/clues/:id/designate-reject，操作码 clue.designate.request。
 /** 驳回报请（受理人；理由必填）。 */
 export async function submitDesignateReject(
   dispatch: ApiDispatch,
@@ -261,6 +271,7 @@ export async function submitDesignateReject(
   return readResult(response);
 }
 
+// 接口：POST /api/clues/:id/confirm-unit-receipt，操作码 clue.handler.assign（对象级另判，不改主状态）。
 /** 单位签收确认（#335；与派人分离）。 */
 export async function submitConfirmUnitReceipt(
   dispatch: ApiDispatch,
@@ -274,6 +285,7 @@ export async function submitConfirmUnitReceipt(
   });
   return readResult(response);
 }
+// 接口：GET /api/clues/designation-requests，操作码 clue.designate.request。
 /** 受理人待办：待处理的指定管辖报请。 */
 export async function loadDesignationTodos(dispatch: ApiDispatch): Promise<DesignationTodoItem[]> {
   const response = await apiFetch(dispatch, '/api/clues/designation-requests');
@@ -328,6 +340,7 @@ export function suggestionEmptyText(view: SuggestionView): string | null {
 }
 
 
+// 接口：POST /api/clues/:id/disposition，操作码 clue.disposition.record。
 /** 其他（行政处理事项，系统外办理；#229）。理由必填，进 closed。 */
 export async function submitOtherDisposition(
   dispatch: ApiDispatch,
@@ -342,6 +355,7 @@ export async function submitOtherDisposition(
   return readResult(response);
 }
 
+// 接口：POST /api/clues/:id/external-transfers，操作码 clue.disposition.record；multipart 带附件。
 /** 系统外移送附加记录（#229；须处置为 other）。 */
 export async function submitExternalTransfer(
   dispatch: ApiDispatch,
@@ -367,6 +381,7 @@ export async function submitExternalTransfer(
   return readResult(response);
 }
 
+/** 系统外移送附加记录的一行（含附件元数据）。 */
 export interface ExternalTransferItem {
   readonly id: string;
   readonly transferredOrg: string;
@@ -382,6 +397,7 @@ export interface ExternalTransferItem {
   }[];
 }
 
+// 接口：GET /api/clues/:id/external-transfers，操作码 clue.read。
 /** 系统外移送附加记录列表。 */
 export async function loadExternalTransfers(
   dispatch: ApiDispatch,

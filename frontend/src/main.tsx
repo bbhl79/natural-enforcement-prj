@@ -1,3 +1,4 @@
+// 用途：前端入口：把 Redux 与路由挂到根节点。
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';

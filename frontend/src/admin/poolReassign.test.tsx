@@ -12,6 +12,7 @@ const clues: PoolClue[] = [
   { clueId: 'c3', code: 'CL0000000003', status: 'held', domain: 'mineral', registeredAt: '2026-10-25T03:00:00.000Z' },
 ];
 
+// 验证面板的清单渲染、必填门禁与失败文案。
 describe('停用机构池重新指定', () => {
   it('列出未派出线索与状态；接收机构与理由未填时重新指定按钮禁用', () => {
     const html = renderToStaticMarkup(

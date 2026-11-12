@@ -1,3 +1,7 @@
+// 用途：机构（P4）页面，展示机构树与详情，并提供新建下级、改名、停用等维护操作。
+// 路由：/admin/org-units，路由表 id org-tree，菜单「机构」。
+// 调用的接口：GET /api/org-units（操作码 org.tree.read）、POST /api/admin/org-units（操作码 org.unit.register）、POST /api/admin/org-units/:id/rename（操作码 org.unit.rename）、POST /api/admin/org-units/:id/deactivate（操作码 org.unit.deactivate）。
+
 import type { OpcodeName } from '@natural-enforcement/shield';
 import { Suspense, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Await, useAsyncError, useLoaderData, useRevalidator } from 'react-router';
@@ -89,6 +93,7 @@ type Dialog =
   | { kind: 'deactivate'; unit: OrgUnit }
   | null;
 
+/** 机构树的界面状态：选中节点、折叠集合与是否显示已停用。 */
 export interface OrgTreeUi {
   selectedId: string | null;
   /** 折叠起来的节点 */
@@ -96,6 +101,7 @@ export interface OrgTreeUi {
   showDeactivated: boolean;
 }
 
+/** 初始界面状态：未选中、全部展开、显示已停用。 */
 export const INITIAL_UI: OrgTreeUi = { selectedId: null, collapsed: new Set(), showDeactivated: true };
 
 function TreeNodeView({
@@ -290,6 +296,7 @@ function Modal({ title, children, foot }: { title: string; children: ReactNode; 
   );
 }
 
+/** 新建下级机构弹窗：层级、名称与服务端规则提示。 */
 export function CreateDialog({
   parent,
   onCancel,
@@ -346,6 +353,7 @@ export function CreateDialog({
   );
 }
 
+/** 改名弹窗：新名称、历史名称表与服务端规则提示。 */
 export function RenameDialog({
   unit,
   onCancel,

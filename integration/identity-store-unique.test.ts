@@ -26,6 +26,7 @@ afterAll(async () => {
   await cloned?.close();
 });
 
+// 验证工号、手机号与人员角色冲突统一返回「已存在」，事务仍可继续提交（#119）。
 describe('业务唯一冲突映射为「已存在」', () => {
   it('工号重复：返回 personnel-code，库里只有原来那一行', async () => {
     expect(await store.insertPersonnel(person('P-119-U1', '13800011951'))).toEqual({ result: 'written' });

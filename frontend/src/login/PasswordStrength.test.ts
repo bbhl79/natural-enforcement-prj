@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import PasswordStrength, { evaluatePasswordStrength, PUBLIC_PASSWORD_RULES } from './PasswordStrength';
 
+// 口令强度判定：规则清单、三档划分与反馈文案（#292）。
 describe('口令强度（#292）', () => {
   it('公开规则未全过为弱，且 passed=false', () => {
     const result = evaluatePasswordStrength({ password: 'short' });

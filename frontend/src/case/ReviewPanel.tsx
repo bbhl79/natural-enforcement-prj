@@ -1,6 +1,9 @@
+// 用途：案件审理环节展示面板，按服务端入口渲染呈批、指定审理人、意见签出与异议表单。
+// 调用方：frontend/src/case/CaseReviewPage.tsx 与 frontend/src/case/review.test.tsx。
 // 调查报告呈批、指定审理人、审理意见签出、审理异议呈批的最小入口（#240）。
 // 页面只展示服务端给出的入口与提示，不自行判断权限。
 
+/** 审理环节整页视图：阶段、入口开关、审理人、意见与异议。 */
 export interface ReviewView {
   id: string;
   status: string;
@@ -19,6 +22,7 @@ export interface ReviewView {
   prompts: { reviewer: string | null };
 }
 
+/** 审理意见类型选项，值对应后端登记的意见码。 */
 export const REVIEW_OPINION_OPTIONS = [
   { code: 'supplementary-investigation', label: '补充调查' },
   { code: 'correction', label: '修改纠正' },
@@ -28,6 +32,7 @@ export const REVIEW_OPINION_OPTIONS = [
   { code: 'limitation-expired', label: '已过追诉时效' },
 ] as const;
 
+/** 审理面板：只读渲染服务端允许的审理入口与提示。 */
 export function ReviewPanel({ view }: { view: ReviewView }) {
   return (
     <section data-role="case-review">

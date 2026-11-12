@@ -295,6 +295,7 @@ beforeEach(() => {
   cookies.clear();
 });
 
+// 验证期限的 90 日、T34、补登、四维锚点、工作日历、跨年确认与换表修订（#246）。
 describe('#246 期限', () => {
   it('新案默认 90 个日历日，起算日不计入，届满顺延，在途不计入，回流不重起，只提示不阻断', async () => {
     const caseId = await fileCase();

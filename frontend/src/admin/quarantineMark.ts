@@ -1,3 +1,4 @@
+// 用途：涉密误传标记（管理台机构详情内）的前端数据层，含入口可见判定与标记请求。
 // 涉密误传标记的数据层（管理台机构详情内）。
 //
 // 系统管理员把误传进业务系统的涉密材料标为隔离：材料编号＋简述，提交后业务读取一律拒绝，
@@ -36,6 +37,7 @@ export function quarantineMarkFailureText(status: number, body: unknown): string
   return '操作未完成，请重试。';
 }
 
+// POST /api/storage/materials/:materialId/quarantine，操作码 storage.quarantine.mark。
 /** 标记涉密误传：调用隔离接口。 */
 export async function markQuarantine(
   dispatch: ApiDispatch,

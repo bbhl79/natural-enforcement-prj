@@ -1,3 +1,6 @@
+// 用途：告知与听证模块的对外出口，只做再导出。
+// 调用方：backend/server/src/case-notice.service.ts 等，经包名 @natural-enforcement/case 汇总导出。
+// 依据：#272。
 // 告知与听证规则公共出口（#272）。
 export {
   HEARING_AMOUNT_COMPARISONS,

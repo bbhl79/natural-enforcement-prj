@@ -22,6 +22,7 @@ function frozen(violations: unknown[]): unknown {
   return { violations };
 }
 
+// #270 决定正文解析：默认值、证据引用去重去空，以及形态不合规的 400 拒绝。
 describe('#270 决定正文', () => {
   it('默认不责令改正、不引用证据；证据引用去重去空', () => {
     expect(readDecisionContent({})).toEqual({
@@ -43,6 +44,7 @@ describe('#270 决定正文', () => {
   });
 });
 
+// #270 从冻结的拟决定事实推导决定类型与罚款基数缺失提示；Q24 只提示不阻断。
 describe('#270 冻结拟决定事实', () => {
   it('出口：任一条处罚即处罚决定，否则不予处罚', () => {
     const facts = readFrozenViolations(
@@ -77,6 +79,7 @@ describe('#270 冻结拟决定事实', () => {
   });
 });
 
+// #270 文书类型按是否责令改正与是否罚款推导，署名与用章按机关层级确定。
 describe('#270 文书类型与署名盖章', () => {
   it('责令改正与罚款一起作出的写进处罚决定书；只责令改正的用责令改正通知书', () => {
     expect(decisionDocumentTypeOf({ kind: 'penalty', correctionOrdered: true, hasFine: true })).toBe('penalty-decision');
@@ -107,6 +110,7 @@ describe('#270 文书类型与署名盖章', () => {
   });
 });
 
+// #270 决定前门禁：X05 告知书送达、X06 告知期限与 X16 证据有效性。
 describe('#270 X05／X06／X16', () => {
   it('X05：拟处罚但告知书未送达阻断（law）', () => {
     const hit = x05Guard({ kind: 'penalty', noticeServed: false });

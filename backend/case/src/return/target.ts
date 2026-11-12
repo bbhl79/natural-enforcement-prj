@@ -1,3 +1,7 @@
+// 用途：按退回原因与当前环节计算允许的退回目标集合。
+// 调用方：backend/case/src/return/plan.ts。
+// 边界：R3 不经本函数；R4、R8 的告知有效性只留调用点，判定延后到有效性校验。
+// 依据：#238、#28。
 // 退回点函数（#238）：returnTarget(原因, 当前环节, 案件上下文) → 允许的目标集合。
 // R3 不经本函数。R4、R8 的告知有效性只留调用点，本票不判（#28 第四节，待有效性确认票）。
 
@@ -13,15 +17,19 @@ import {
   type ReturnStage,
 } from './catalog.ts';
 
+// 退回的出口类型全集：终止调查后撤案、不予处罚、移送。
 export const RETURN_EXITS = ['withdraw-after-terminate', 'no-penalty', 'transfer'] as const;
+// 退回出口类型，取 RETURN_EXITS 的元素类型。
 export type ReturnExit = (typeof RETURN_EXITS)[number];
 
+// 退回出口类型对应的中文名称。
 export const RETURN_EXIT_NAMES: Readonly<Record<ReturnExit, string>> = {
   'withdraw-after-terminate': '终止调查后撤案',
   'no-penalty': '不予处罚',
   transfer: '移送',
 };
 
+// 退回目标：出口、环节、拟制中或审批链级别，key 为去重标识。
 export type ReturnTarget =
   | {
       readonly kind: 'exit';
@@ -56,6 +64,7 @@ export type ReturnTarget =
       readonly incrementEntrySeq: false;
     };
 
+// 计算退回目标所需的案件上下文，缺项会导致允许集合为空。
 export interface ReturnCaseContext {
   /** R5 有瑕疵的环节。缺了则允许集合为空。 */
   readonly defectiveStage?: CaseStageCode | null;
@@ -65,6 +74,7 @@ export interface ReturnCaseContext {
   readonly inheritedCode?: string | null;
 }
 
+// 退回目标计算结果：成功时给出原因码与目标集合，失败时给出原因码。
 export type ReturnTargetResult =
   | {
       readonly ok: true;
@@ -190,10 +200,12 @@ export function returnTarget(
   return { ok: true, code: reason, inheritedCode: null, ...inner };
 }
 
+// 取目标集合的去重键列表。
 export function targetKeys(targets: readonly ReturnTarget[]): readonly string[] {
   return targets.map((item) => item.key);
 }
 
+// 按 key 在目标集合中查找，找不到返回 null。
 export function findTarget(targets: readonly ReturnTarget[], key: string): ReturnTarget | null {
   return targets.find((item) => item.key === key) ?? null;
 }

@@ -23,6 +23,7 @@ import {
 
 const calendar = WORK_CALENDAR_V1;
 
+// 验证工作日历初值：2026 年放假与调休来自国务院通知，2027 年不按往年推测。
 describe('工作日历', () => {
   it('装入 2026 年放假与调休，并写明出处；2027 年留空', () => {
     expect(calendar.years).toEqual([2026]);
@@ -42,6 +43,7 @@ describe('工作日历', () => {
   });
 });
 
+// 验证到期日计算：起算日不计入、工作日跳过休息日、届满遇节假日顺延。
 describe('到期日', () => {
   it('立案日加 90 个日历日，起算日不计入，届满日遇节假日顺延', () => {
     const hit = calculateDueDate({
@@ -158,6 +160,7 @@ describe('到期日', () => {
   });
 });
 
+// 验证延长上限：超过 30 日须写明案情特别复杂。
 describe('延长上限', () => {
   it('超过 30 日不写案情特别复杂则拒绝，写了则放行', () => {
     expect(checkExtension(31, '').ok).toBe(false);
@@ -168,6 +171,7 @@ describe('延长上限', () => {
   });
 });
 
+// 验证四维锚点键的稳定性，以及法审再送审的重新起算与规则版本保存。
 describe('四维锚点与规则', () => {
   it('起算文书不进入锚点键；法审再送审重新起算并保存规则版本', () => {
     const first = anchorKey({ caseId: 'c1', ruleKey: 'legal-review.round', entrySeq: 1, procedureNode: 'E07' });
@@ -218,6 +222,7 @@ describe('四维锚点与规则', () => {
   });
 });
 
+// 验证换日历后的修订动作：未届满追加、当事人期限不提前、已届满与视为放弃保持不动。
 describe('换日历修订', () => {
   it('未届满的工作日期限追加修订；当事人期限不提前；已届满和视为放弃不动', () => {
     const next = mergeCalendars(calendar, [
@@ -260,6 +265,7 @@ describe('换日历修订', () => {
   });
 });
 
+// 验证期间事件的登记校验：人工事件须有理由与依据、区间不颠倒；系统事件不要求理由。
 describe('期间事件', () => {
   it('人工登记缺理由、缺依据或区间颠倒时拒绝；系统事件不要求理由', () => {
     expect(checkManualPeriod({

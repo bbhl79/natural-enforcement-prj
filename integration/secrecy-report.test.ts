@@ -182,6 +182,7 @@ async function quarantineRows(fileKey: string, versionId: string): Promise<{ sta
   `;
 }
 
+// #225：保密报告工单的建单前提、状态只进不退、24 小时提醒与无销毁接口。
 describe('保密报告工单（#225）', () => {
   beforeAll(async () => {
     cloned = await openClonedDatabase();

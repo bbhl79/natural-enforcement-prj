@@ -1,3 +1,7 @@
+// 用途：按操作码判定操作者的身份、权限与数据范围，并产出拒绝留痕行。
+// 调用方：backend/server/src/ 下各业务服务，以及同模块机构与人员服务。
+// 边界：authorize 自行写 authz.denied 并抛错；check 只判定，留痕行交调用方写。
+// 依据：ADR 0011、ADR 0012
 // 按操作码授权（#96）：身份 → 权限 → 数据范围。每次调用重新读取当前值。
 // 通用授权不因执法资格拒绝。资格事实放进身份上下文，执法证号不进入上下文。
 // 改变主状态的操作码不采用监督角色贡献的允许行。
@@ -30,6 +34,7 @@ import { hasEnforcementQualification } from '../domain/personnel-profile.ts';
 import type { PersonnelRow } from '../persistence/identity-store.ts';
 import { IDENTITY_STORE, type IdentityStore } from '../persistence/identity-store.ts';
 
+// 授权判定用的时钟。测试可注入固定时间；未注入时取系统当前时间。
 export interface AuthorizationClock {
   now(): Date;
 }
@@ -68,6 +73,8 @@ function actorFallback(actorOrgId: string | null): DenialTarget {
   return { targetOrgUnitId: actorOrgId, targetOrgUnitBasis: 'actor-fallback' };
 }
 
+// 授权判定服务：按操作码重新读取人员、任职与角色，逐项判定并生成拒绝留痕行。
+// 由 backend/server/src/ 下各业务服务注入使用；机构与人员服务内部也调用。
 @Injectable()
 export class AccessControlService {
   private readonly clock: AuthorizationClock;

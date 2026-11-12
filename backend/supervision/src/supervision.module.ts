@@ -1,3 +1,6 @@
+// 用途：监督统计模块的 NestJS 模块声明。当前是空壳，没有提供者与控制器，尚未交付业务能力。
+// 调用方：backend/server/src/app.module.ts 装配本模块。
+// 依据：backend/README.md 依赖矩阵；docs/adr/0004-单一HTTP进程与同域入口.md。
 import { Module } from '@nestjs/common';
 
 /**

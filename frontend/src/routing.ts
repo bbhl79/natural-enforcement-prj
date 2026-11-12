@@ -1,9 +1,12 @@
+// 用途：页面路径常量与跳转规则，根路由 loader 与根布局共用，不做授权判断。
 // 页面路径与跳转规则（#91「页面路径约定」，经 #79 约束评论落到路由）。
 // 纯函数：根路由 loader 与根布局共用同一套判定，不做授权判断。
 
 import type { AuthPhase } from './login/loginSlice';
 
+/** 登录页路径。 */
 export const LOGIN_PATH = '/auth/login';
+/** 改口令页路径。 */
 export const PASSWORD_PATH = '/auth/password';
 /** 落地页：统一工作台（「/」是它的别名，路由表里重定向到本页）。 */
 export const HOME_PATH = '/workbench';
@@ -42,6 +45,7 @@ export function withNext(authPath: string, target: string | null | undefined): s
   return `${authPath}?next=${encodeURIComponent(next)}`;
 }
 
+/** 当前地址的两部分：路径与查询串。 */
 export interface RouteLocation {
   pathname: string;
   search: string;

@@ -1,3 +1,6 @@
+// 用途：线索中心抽屉 /clue 的「疑似重复比对」页签，展示命中分组、比例、图斑对比与查看实名入口。
+// 调用方：frontend/src/pages/ClueCenterPage.tsx；frontend/src/clue/duplicate.test.tsx。
+// 接口：GET /api/clues/:id/duplicates 操作码 clue.read；查看实名 POST /api/clues/:id/reporter-read 操作码 clue.reference.read。
 // 疑似重复比对页签（#212；规格 B「几何与疑似重复」与交互锁）。
 //
 // 显示：决定步提示（默认不派／已知晓／举报必派）、按对方线索分组折叠的命中面对

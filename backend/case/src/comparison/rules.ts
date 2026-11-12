@@ -1,3 +1,7 @@
+// 用途：定义新旧比对判定的录入校验、提交覆盖检查与批准时新鲜度判定。
+// 调用方：backend/server/src/case-comparison.service.ts。
+// 边界：纯函数，不写库；系统不判定哪一版更轻，也不自动重新比对。
+// 依据：Issue #271、#42、#256。
 // 新旧比对最小版（#271）。纯规则，不写库。
 // 人工比对：系统不判「较轻」，不自动解析版本集，不自动重新比对，不自动触发 R7／T32。
 // 决定呈批必备「新旧比对判定」；批准时校验判定所写的决定时版本在批准当日有效。
@@ -11,10 +15,12 @@ import { Q31_RULE_KEY, Q31_WARNING_MESSAGE, type WarningItem } from '../state-ma
 
 /** 批准时发现判定已过时的原因文案与出路。 */
 export const COMPARISON_STALE_MESSAGE = '比对过时';
+// 比对过时时的处理出路。
 export const COMPARISON_STALE_OUTLET = '重新比对';
 
 /** 决定呈批缺少判定的阻断文案与出路。 */
 export const COMPARISON_MISSING_MESSAGE = '决定呈批缺少新旧比对判定';
+// 缺少判定时的处理出路。
 export const COMPARISON_MISSING_OUTLET = '为每条有效违法记录补齐新旧比对判定';
 
 /** Q31 的出路。系统不替人决定当天归属。 */
@@ -22,6 +28,7 @@ export const Q31_OUTLET = '请在比对判定中写明按哪一版并写理由�
 
 /** Q32 提示的规则键与文案。提示不阻断。 */
 export const Q32_RULE_KEY = 'CMP-02';
+// Q32 的提示文案，与规则键配套。
 export const Q32_PROMPT = '裁量基准已到期或新版未录入，请在比对判定中写明适用哪一版';
 
 /**
@@ -34,6 +41,7 @@ export interface EffectiveDayAttribution {
   readonly attribution: 'new' | 'old' | null;
 }
 
+// 施行日当天归属的配置对象；归属未定前 attribution 为 null。
 export const EFFECTIVE_DAY_ATTRIBUTION_V1: EffectiveDayAttribution = {
   ruleId: 'cfg.rule.comparison-effective-day-attribution.v1',
   version: '1',
@@ -77,6 +85,7 @@ export interface ComparisonJudgmentEntry extends ComparisonJudgment {
   readonly createdAt: Date;
 }
 
+// 判定材料录入校验的结果；失败时带原因码与提示。
 export type ComparisonJudgmentRead =
   | { readonly ok: true; readonly judgment: ComparisonJudgment }
   | {
@@ -91,6 +100,7 @@ export type ComparisonJudgmentRead =
       readonly message: string;
     };
 
+// 录入判定材料的原始形态，字段在校验前均不可信。
 export interface RawComparisonJudgment {
   readonly violationRecordId?: unknown;
   readonly behaviorBases?: unknown;
@@ -237,6 +247,7 @@ export function q32Hints(judgment: ComparisonJudgment, day: string): WarningItem
   return hit ? [q32Hint()] : [];
 }
 
+// 判定记录的主键、违法记录与创建时间，用于取最新一条。
 export interface ComparisonJudgmentRef {
   readonly id: string;
   readonly violationRecordId: string;
@@ -261,6 +272,7 @@ export function latestJudgments<T extends ComparisonJudgmentRef>(rows: readonly 
   return latest;
 }
 
+// 决定呈批提交检查的结果；缺判定时带缺失的违法记录标识。
 export type SubmissionAssessment =
   | { readonly ok: true }
   | {
@@ -286,6 +298,7 @@ export function assessDecisionSubmission(input: {
   };
 }
 
+// 批准时新鲜度校验所需的事实。
 export interface ComparisonFreshnessInput {
   readonly activeViolationIds: readonly string[];
   readonly judgments: readonly ComparisonJudgmentEntry[];
@@ -293,6 +306,7 @@ export interface ComparisonFreshnessInput {
   readonly config: EffectiveDayAttribution;
 }
 
+// 批准时新鲜度校验的三种结果：通过、施行日警告、过时。
 export type ComparisonFreshness =
   | {
       readonly kind: 'fresh';

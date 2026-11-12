@@ -508,6 +508,7 @@ beforeEach(() => {
   cookies.clear();
 });
 
+// 验证决定 T23 的批准生效、文书类型与署名推导（#270）。
 describe('#270 决定 T23', () => {
   it('不予处罚决定批准：T23 生效，文书类型与署名由事实推导', async () => {
     const caseId = await decisionCase([{ kind: 'no-penalty' }]);
@@ -589,6 +590,7 @@ describe('#270 决定 T23', () => {
   });
 });
 
+// 验证送达 T24 与结案 T26 的送达人约束、支路走向与 Q25 清单同源（#270）。
 describe('#270 送达 T24 与结案 T26', () => {
   it('回证送达人不足两人 409；两人送达完成；不予处罚支 E10 直接结案，Q25 清单同源', async () => {
     const caseId = await decisionCase([{ kind: 'no-penalty' }]);
@@ -645,6 +647,7 @@ describe('#270 送达 T24 与结案 T26', () => {
   });
 });
 
+// 验证执行记载 T25 对「已申请法院强制执行」的申请书约束与状态流转（#270）。
 describe('#270 执行记载 T25', () => {
   it('「已申请法院强制执行」无申请书 409；有申请书进入 E11', async () => {
     const caseId = await governanceCase('E10', 'T24');
@@ -697,6 +700,7 @@ describe('#270 执行记载 T25', () => {
   });
 });
 
+// 验证结案 T26 与 X11：须移送未移送被拒，已移送且无回证可结案（#270）。
 describe('#270 结案 T26 与 X11', () => {
   it('X11：须移送未移送结案 409；已移送记载存在且无回证 → 结案成功', async () => {
     const caseId = await governanceCase('E11', 'T25');

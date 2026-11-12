@@ -1,7 +1,9 @@
+// 用途：会话就绪保障：页面 loader 取数前先等一次会话查询完成。
 // 会话就绪：根 loader 与页面 loader 并行执行，页面 loader 取数前要先等同一次会话查询。
 import type { ApiDispatch } from './api';
 import { loadSession, type LoginState } from './login/loginSlice';
 
+/** 会话保障所需的最小 store 形状：读登录状态、派发会话动作。 */
 export interface SessionStore {
   getState(): { login: LoginState };
   dispatch: ApiDispatch;

@@ -1,3 +1,8 @@
+// 用途：涉密误传标记与对象隔离，标记后业务读、下载与预览拒绝。
+// 调用方：backend/server/src/storage-quarantine.controller.ts、backend/server/src/clue-verification.service.ts 的产物读取。
+// 边界：标记与成功留痕同事务；隔离不删除原 WORM 对象，无 DeleteObject 与物理删除；读取已隔离对象返回 403 object-quarantined。
+// 依据：Issue #224。
+//
 // 涉密误传标记与 quarantined 隔离（#224）。
 // 有权限角色一期＝目标对象所属根机构系统管理员（与停用机构重派同类收窄；扩角色另报）。
 // 标记后业务读／下载／预览拒绝；原 WORM 对象仍保留；无 DeleteObject／物理删除。
@@ -32,6 +37,7 @@ export class QuarantinedObjectError extends Error {
   }
 }
 
+/** 标记隔离结果：200 成功，400 缺摘要，403 越权，404 材料不存在，409 已隔离。 */
 export type QuarantineMarkOutcome =
   | {
       readonly status: 200;
@@ -51,11 +57,17 @@ export type QuarantineMarkOutcome =
       readonly body: { readonly result: 'invalid-state'; readonly reason: 'already-quarantined' };
     };
 
+/** 材料内容读取结果：200 带内容与文件名，403 越权或已隔离，404 材料不存在。 */
 export type MaterialContentOutcome =
   | { readonly status: 200; readonly body: Uint8Array; readonly contentType: string; readonly fileName: string }
   | { readonly status: 403; readonly body: { readonly reason: string } }
   | { readonly status: 404; readonly body: { readonly result: 'not-found' } };
 
+/**
+ * 隔离服务：标记材料对象为 quarantined 并留痕，业务读路径据标记拒绝。
+ * 标记需操作码 storage.quarantine.mark，再收窄到目标对象所属根机构的系统管理员。
+ * 读取材料内容用操作码 clue.read；隔离对象在存储中仍保留。
+ */
 @Injectable()
 export class StorageQuarantineService {
   constructor(

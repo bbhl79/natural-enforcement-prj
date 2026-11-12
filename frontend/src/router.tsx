@@ -1,3 +1,4 @@
+// 用途：路由表与各 loader：react-router data 模式，根 loader 只按认证状态跳转。
 // 路由（#105「前端：路由与应用壳」、#207 H 节路由契约、#209 执行票）：
 // react-router data 模式，createBrowserRouter + RouterProvider。
 // 根 loader 只取会话并按 #91 规则跳转，不做授权判断；页面 loader 只取数。
@@ -49,6 +50,7 @@ import { ensureSession, type SessionStore } from './session';
 import { LoadingShell, NotFoundPage, SessionErrorPage } from './shell/StatusPages';
 import './shell/console.css';
 
+/** 路由 loader 需要的 store 形状，与 SessionStore 相同。 */
 export type RouterStore = SessionStore;
 
 /** 启动时先等会话查询返回，再按认证状态改写地址。 */
@@ -94,6 +96,7 @@ export function legacyClueRegisterLoader() {
     redirect(`${CLUE_REGISTER_PATH}${new URL(request.url).search}`);
 }
 
+/** 完整路由表：根布局、一级入口、规划中占位与状态页。 */
 export function appRoutes(store: RouterStore): RouteObject[] {
   return [
     {
@@ -211,6 +214,7 @@ export function appRoutes(store: RouterStore): RouteObject[] {
   ];
 }
 
+/** 创建浏览器路由实例。 */
 export function createAppRouter(store: RouterStore) {
   return createBrowserRouter(appRoutes(store));
 }

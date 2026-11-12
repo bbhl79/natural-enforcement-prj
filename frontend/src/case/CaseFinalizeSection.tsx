@@ -1,3 +1,5 @@
+// 用途：案件详情「定型」区块，展示材料清单与缺件，按审批状态渲染发起、提交、审核、批准入口。
+// 调用方：frontend/src/case/CaseFinalizePage.tsx 与 frontend/src/case/finalize.test.tsx。
 // 案件详情「定型」页签（#243）：查看必需材料与缺件、发起归档审批、查看定型状态。
 import {
   FINALIZE_APPROVAL_STATUS_NAMES,
@@ -7,6 +9,7 @@ import {
   type FinalizeView,
 } from './finalize';
 
+/** 定型区块属性：视图、提示文案与拟制、提交、审核、批准四个动作回调。 */
 export interface CaseFinalizeSectionProps {
   readonly view: FinalizeView;
   readonly message: string | null;
@@ -29,6 +32,7 @@ function stateOf(row: FinalizeChecklistRow): string {
   return '未入卷';
 }
 
+/** 定型区块：渲染清单与状态，动作通过 props 回调交给路由组件提交。 */
 export function CaseFinalizeSection(props: CaseFinalizeSectionProps) {
   const view = props.view;
   const approval = view.approval;

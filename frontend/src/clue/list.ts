@@ -1,5 +1,8 @@
+// 用途：线索中心列表的取数：按筛选条件分页请求，供 /clue 页的 loader 使用。
+// 调用方：frontend/src/clue/center.ts 的 clueCenterLoader。
 // 线索列表取数（#207：列表、筛选、分页）。
 // 调用 GET /api/clues?... 返回分页列表。
+// 无操作码（服务按数据范围内的机构过滤，不调用操作码授权）。
 // 参数：view, page, size, q, domain, source, org, status, check, gap, from, to。
 
 import { data } from 'react-router';
@@ -48,6 +51,7 @@ export interface ClueListPage {
   readonly size: number;
 }
 
+// 接口：GET /api/clues，无操作码（服务按数据范围过滤）；查询参数见 ClueListParams。
 /** 取线索分页列表。 */
 export async function listClues(dispatch: ApiDispatch, params: ClueListParams): Promise<ClueListPage> {
   const qs = new URLSearchParams();

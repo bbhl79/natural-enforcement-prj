@@ -1,3 +1,8 @@
+// 用途：保密报告工单编排，对已隔离对象生成工单并推进待报、已报、已回执状态。
+// 调用方：backend/server/src/secrecy-report.controller.ts。
+// 边界：任何状态都不触发销毁，不调用 DeleteObject，不改 WORM 锁与保留期；迁移与成功留痕同事务，校验拒绝另起事务写失败留痕。
+// 依据：Issue #225，Issue #222，Issue #224。
+//
 // 保密报告工单（#225；#222 草案 §1「报告工单」＋「等待指令」）。
 //
 // 对已隔离（#224 quarantined）对象生成工单：待报 → 已报 → 已回执，只进不退。
@@ -80,14 +85,17 @@ type Denied = { readonly status: 403; readonly body: { readonly reason: string }
 type NotFound = { readonly status: 404; readonly body: { readonly result: 'not-found' } };
 type Ticket200 = { readonly status: 200; readonly body: { readonly result: string; readonly ticket: SecrecyReportView } };
 
+/** 生成工单结果：200 成功，403 越权，404 材料不存在，409 对象未隔离或工单已存在。 */
 export type SecrecyReportCreateOutcome =
   | Ticket200
   | Denied
   | NotFound
   | { readonly status: 409; readonly body: { readonly result: 'invalid-state'; readonly reason: 'not-quarantined' | 'already-exists' } };
 
+/** 读取工单结果：200 带视图，403 越权，404 不存在。 */
 export type SecrecyReportReadOutcome = Ticket200 | Denied | NotFound;
 
+/** 状态迁移结果：200 迁移成功，400 输入不合规，403 越权，404 不存在，409 状态或并发冲突。 */
 export type SecrecyReportTransitionOutcome =
   | Ticket200
   | Denied
@@ -95,6 +103,7 @@ export type SecrecyReportTransitionOutcome =
   | { readonly status: 400; readonly body: { readonly result: 'non-compliant'; readonly reason: string } }
   | { readonly status: 409; readonly body: { readonly result: 'invalid-state' | 'concurrent-change'; readonly reason: string } };
 
+/** 时限提醒结果：200 带 24 小时口径与本人待报工单，越权 403。 */
 export type SecrecyReportReminderListOutcome =
   | {
       readonly status: 200;
@@ -107,6 +116,11 @@ interface Scope {
   readonly actorCode: string | null;
 }
 
+/**
+ * 保密报告工单服务：按材料或工单 id 读写，推进状态并写留痕。
+ * 操作码 storage.secrecy-report.manage，对象级收窄到目标对象所属根机构的系统管理员。
+ * 已回执须人工录入指令摘要与回执附件；回执附件追加写入存储，只写不删。
+ */
 @Injectable()
 export class SecrecyReportService {
   constructor(

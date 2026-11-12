@@ -1,3 +1,7 @@
+// 用途：告知、送达、陈述申辩与听证的办理和留痕，覆盖 T10／T11／T13 与听证申请、办结。
+// 调用方：backend/server/src/case-notice.controller.ts。
+// 边界：授权经 authorize（拒绝先写 authz.denied 再抛错）；失败与警告不改业务行只写留痕；写动作在交互式事务内。
+// 依据：#272、#246、ADR 0011。
 // 告知、陈述申辩与听证（E05、E06；#272）。
 // T10／T11 从 E04 进入 E05；告知呈批沿用 doc.*；T13 送达起算陈述申辩期与听证申请期。
 // X07（law＋userLock）在告知批准与送达两处 409；X26（normative）在批准路径走 #258 两段式。
@@ -80,6 +84,7 @@ const HEARING_OPCODE = 'case.review.record';
 const HANDLER_ROLES = new Set<string>(CASE_HANDLER_ROLES);
 const FAIL_REASONS = new Set<string>(CASE_NOTICE_FAILED_REASONS);
 
+/** 告知接口的结果；状态码区分成功、输入不合规、拒绝、找不到与冲突。 */
 export type CaseNoticeHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }
   | { readonly status: 400; readonly body: Record<string, unknown> }
@@ -114,6 +119,7 @@ interface FrozenSummary {
   }[];
 }
 
+/** 告知与听证服务：告知呈批、送达、陈述申辩、听证申请与办结。 */
 @Injectable()
 export class CaseNoticeService {
   constructor(

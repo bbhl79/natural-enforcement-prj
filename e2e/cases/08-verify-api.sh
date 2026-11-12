@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 用途：验证资产的 API 场景与负例：独立库上经 nginx 跑 e2e/verify 的 scenario。
 # 验证资产的 API 稳定用例：在独立库上经 nginx 跑 e2e/verify 的 API scenario 与负例。
 # 场景清单在 e2e/verify/harness/suites.ts 的 API_SUITE，判据是各 scenario 的 oracle。
 # 驱动在工具链容器里运行（不用宿主 node），容器走宿主网络，访问地址仍是 https://localhost。

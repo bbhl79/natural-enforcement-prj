@@ -20,6 +20,7 @@ function mockStore(returnEmpty = false): ClueStore {
   } as unknown as ClueStore;
 }
 
+// #226 结案提醒与结案类型无关：case、no-case、transfer 等类型都按同一口径生成。
 describe('generateClosureReminders（#226 立案提醒恒生成）', () => {
   it('kind=case 必然生成提醒', async () => {
     const store = mockStore();

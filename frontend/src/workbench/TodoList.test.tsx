@@ -56,6 +56,7 @@ function render(over: Partial<TodoListProps> = {}): string {
   );
 }
 
+// 待办清单视图：类型筛选、图例、空态与错误态。
 describe('统一待办清单', () => {
   it('七列齐全：紧急圆点｜标题｜事项类型｜所处环节｜来源模块｜来自／上一手｜等待时长／更新时间', () => {
     const html = render();

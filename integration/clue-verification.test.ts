@@ -361,6 +361,7 @@ beforeEach(() => {
   port.calls = 0;
 });
 
+// 验证内业核查自动入队的投递参数、失败处置与手动重跑权限（#213）。
 describe('#213 内业核查编排', () => {
   it('USER-LOCK-L2 土地类线索登记保存成功后自动入队：总尝试次数 4，重试延迟 30／60／120 秒', async () => {
     const result = await register({});

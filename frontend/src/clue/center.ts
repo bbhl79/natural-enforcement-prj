@@ -1,3 +1,6 @@
+// 用途：线索中心页 /clue 的 loader：取列表，并按地址中的线索编号取抽屉四页签视图。
+// 调用方：frontend/src/router.tsx 的 clue 路由。
+// 接口：GET /api/clues 与 GET /api/clues/:id/{verification,duplicates,detail,trail}。
 // 线索中心的取数（#213/#212/#207）：列表取数、抽屉四页签视图。
 //
 // 取数走路由 loader（data 模式）。列表筛选、分页、抽屉页签与线索编号都在地址里，

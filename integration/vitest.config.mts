@@ -1,3 +1,4 @@
+// 用途：集成层 Vitest 配置，限定用例范围并关闭文件并行以保护复制源库。
 // integration 层 Vitest 配置（需库用例，容器内经 compose 网络连 db）。
 // 与 unit 层隔离：unit 层跑 packages/*/test、backend/*/test（pnpm -r test），无库；
 // 本层只收 integration/ 下的 *.test.ts，DATABASE_URL 由 dev 脚本注入。

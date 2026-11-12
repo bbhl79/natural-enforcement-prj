@@ -1,3 +1,6 @@
+// 用途：线索中心 /clue 的结案提醒区块：列出未处理提醒，并二选一处理（撤回不派再办／随旧线索办结）。
+// 调用方：frontend/src/pages/ClueCenterPage.tsx。
+// 接口：GET /api/clues/reminders（操作码 clue.read）、POST /api/clues/reminders/:id/resolve（clue.reminder.resolve）。
 // 结案提醒列表与处理（#217；规格 D 节、GLOSSARY）。
 //
 // 旧线索不予立案、移送或立案时，按暂存线索的当前命中集逐对生成提醒。

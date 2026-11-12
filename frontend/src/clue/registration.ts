@@ -1,3 +1,6 @@
+// 用途：线索登记页的数据层与纯函数：表单声明取数、登记提交、步骤地址与缺件分流。
+// 调用方：frontend/src/router.tsx 挂 clueRegisterLoader；frontend/src/pages/WorkbenchPage.tsx 与 frontend/src/workbench/todos.ts 用步骤地址。
+// 接口：GET /api/clue/form-schema、GET /api/clue/reference（无操作码，仅同源读守卫）；POST /api/clues 操作码 clue.register。
 // 线索登记（#211；规格 E「录入、标签与文件」）的前端数据层与纯函数。
 //
 // 表单按 GET /api/clue/form-schema 渲染：公共层、来源层、类型层三层叠加的要件由后端声明给出，
@@ -14,10 +17,13 @@ import { data } from 'react-router';
 import { apiFetch, type ApiDispatch } from '../api';
 import type { SessionStore } from '../session';
 
+/** 登记线索的操作码名，与后端登记服务使用的操作码一致。 */
 export const CLUE_REGISTER = 'clue.register' satisfies OpcodeName;
 
+/** 线索法域：土地、矿产、测绘、规划。 */
 export type ClueDomain = 'land' | 'mineral' | 'survey' | 'planning';
 
+/** 法域编码到中文标签的映射，供列表与表单展示。 */
 export const DOMAIN_LABEL: Record<ClueDomain, string> = {
   land: '土地',
   mineral: '矿产',
@@ -108,6 +114,7 @@ export function registerInputFromQuery(
   };
 }
 
+/** 登记结果；失败时 rules 为缺件键，类型层键可经确认后重提。 */
 export type RegisterResult =
   | { readonly ok: true; readonly status: number; readonly body: RegisterBody }
   | { readonly ok: false; readonly status: number; readonly rules: readonly string[] };
@@ -150,6 +157,7 @@ export function requiredKeys(items: readonly FormSchemaItem[]): string[] {
   return items.filter((item) => item.required).map((item) => item.key);
 }
 
+// 接口：GET /api/clue/reference，无操作码（仅同源读守卫）。
 /** 取参照清单。 */
 export async function loadReference(dispatch: ApiDispatch): Promise<ClueReference> {
   const response = await apiFetch(dispatch, '/api/clue/reference');
@@ -157,6 +165,7 @@ export async function loadReference(dispatch: ApiDispatch): Promise<ClueReferenc
   return (await response.json()) as ClueReference;
 }
 
+// 接口：GET /api/clue/form-schema，无操作码（仅同源读守卫）。
 /** 取叠加后的录入表单结构。 */
 export async function loadFormSchema(
   dispatch: ApiDispatch,
@@ -200,6 +209,7 @@ export function clueRegisterLoader(store: SessionStore) {
   };
 }
 
+// 接口：POST /api/clues，操作码 clue.register；multipart 一次提交并带 Idempotency-Key。
 /** 提交登记：表单与全部文件一次提交。 */
 export async function submitRegistration(
   dispatch: ApiDispatch,

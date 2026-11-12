@@ -1,3 +1,4 @@
+// 用途：汇总改派呈批与材料效力认定纯规则的对外导出。
 export {
   HANDLER_ROLES,
   MATERIAL_EFFECTIVENESS_CONCLUSIONS,

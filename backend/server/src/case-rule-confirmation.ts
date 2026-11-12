@@ -1,8 +1,10 @@
+// 用途：解析规则确认请求体，构造确认类响应体，并追加 case.rule-confirmed 留痕。
 // #258：确认留痕只追加。确认人、时间、步骤、规则键与当时的 warnings 快照写在 detail。
 
 import type { AuditParties, AuditTrailPort } from '@natural-enforcement/audit';
 import type { RuleConfirmation } from '@natural-enforcement/case';
 
+/** 规整请求体里的确认规则键与逐键理由；空串与非字符串项丢弃。调用方：各案件控制器的请求解析。 */
 export function readConfirmation(body: {
   readonly confirmedRuleKeys?: unknown;
   readonly confirmReasons?: unknown;
@@ -26,6 +28,7 @@ export function readConfirmation(body: {
   return { confirmedRuleKeys, confirmReasons };
 }
 
+/** 构造规则确认接口的 warnings 响应体；调用方：backend/server/src/case-decision.service.ts 等处理服务。 */
 export function warningBody(warnings: RuleConfirmation['warnings']): {
   readonly result: 'warnings';
   readonly warnings: RuleConfirmation['warnings'];
@@ -33,6 +36,7 @@ export function warningBody(warnings: RuleConfirmation['warnings']): {
   return { result: 'warnings', warnings };
 }
 
+/** 构造规则确认接口的 non-compliant 响应体，附未满足的规则键与原因码。 */
 export function ruleKeyBody(decision: {
   readonly reason: string;
   readonly message: string;
@@ -46,6 +50,11 @@ export function ruleKeyBody(decision: {
   return { result: 'non-compliant', reason: decision.reason, message: decision.message, ruleKey: decision.ruleKey };
 }
 
+/**
+ * 追加一条 case.rule-confirmed 留痕，detail 记录确认人、时间、步骤、规则键、warnings 快照与逐键理由。
+ * 只追加，不修改既有留痕；在调用方事务内执行。
+ * 调用方：backend/server/src/case-state.service.ts、case-filing.service.ts、investigation.service.ts 等。
+ */
 export async function appendRuleConfirmation(
   audit: AuditTrailPort,
   input: {

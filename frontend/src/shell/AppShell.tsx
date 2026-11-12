@@ -1,3 +1,4 @@
+// 用途：登录后主壳布局：顶栏、左导与主区，含口令到期横幅与壳层错误出口。
 import type { ReactNode } from 'react';
 import { Outlet, useRouteError } from 'react-router';
 

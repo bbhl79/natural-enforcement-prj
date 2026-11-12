@@ -1,3 +1,5 @@
+// 用途：按身份夹具登录并缓存会话 Cookie，首登或口令过期时改为固定新口令。
+// 调用方：run-api-scenario.ts、run-api-suite.ts、run-auto-verification.ts、run-next-todo-buttons.ts。
 import type { IdentityFixture } from './load-fixtures.ts';
 import { resolveSeedPassword } from './load-fixtures.ts';
 import {

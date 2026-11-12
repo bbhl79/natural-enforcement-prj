@@ -1,3 +1,5 @@
+// 用途：规划类违法类型的分派指导映射，以及「主体冲突待定」的判定与方向文案。
+// 调用方：backend/server/src/clue-dispatch.service.ts 调用 hasCaseByCasePlanningType 决定主体冲突提示。
 // 规划类违法类型的分派指导（#207 P7）。
 // 附录 D 三分：体系内 9／个案判断 8／纯外 0（本期空清单）。
 // #207 不硬编码清单，本映射由已定稿的归属表生成，配置承载。
@@ -31,6 +33,7 @@ export function hasCaseByCasePlanningType(typeCodes: readonly string[]): boolean
 /** 分派方向：人工选择后的出口。 */
 export type ConflictResolution = 'handle-in-system' | 'transfer-outside';
 
+/** 分派方向编码到界面文案的展示映射；当前无外部调用方，仅经 dispatch 出口再导出。 */
 export const CONFLICT_RESOLUTION_LABELS: Readonly<Record<ConflictResolution, string>> = {
   'handle-in-system': '本系统办理',
   'transfer-outside': '移送系统外',

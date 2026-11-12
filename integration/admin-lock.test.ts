@@ -280,6 +280,7 @@ afterAll(async () => {
   await cloned?.close();
 });
 
+// 验证被锁列表只向区系统管理返回本区未到期人员，且字段不含敏感信息（#102）。
 describe('GET /api/admin/locked-personnel', () => {
   it('区系统管理只看到本区尚未到期的被锁人员，字段不含手机号和执法证号', async () => {
     const login = await postLogin(ADMIN_A_PHONE);
@@ -377,6 +378,7 @@ describe('GET /api/admin/locked-personnel', () => {
   });
 });
 
+// 验证解锁清空失败计数与锁定到期、写 account.unlocked，且不结束已有会话（#102）。
 describe('POST /api/admin/personnel/:id/unlock', () => {
   it('解锁清零失败次数和锁定到期，写下 account.unlocked，不结束已有会话', async () => {
     const holderId = await addPerson({
@@ -586,6 +588,7 @@ describe('POST /api/admin/personnel/:id/unlock', () => {
   });
 });
 
+// 验证重设初始口令同时清空上次改密时间与锁定，并结束该人员的会话与记住我（#102）。
 describe('POST /api/admin/personnel/:id/password-reset', () => {
   it('重设初始口令后上次改密时间为空，锁定解除，会话和记住我都结束', async () => {
     const personId = await addPerson({
@@ -850,6 +853,7 @@ describe('POST /api/admin/personnel/:id/password-reset', () => {
   });
 });
 
+// 验证停用态人员仍可被解锁与重设初始口令，依据 #158 业主拍板。
 describe('停用态人员的 A10 解锁与重设初始口令（#158 业主拍板）', () => {
   const postTo = (
     path: string,
@@ -996,6 +1000,7 @@ describe('停用态人员的 A10 解锁与重设初始口令（#158 业主拍板
   });
 });
 
+// 验证留痕任何列都不出现手机号、执法证号或口令原文。
 describe('留痕不含个人信息与口令', () => {
   it('留痕任何一列都不含手机号、执法证号、口令原文', async () => {
     // 对不上人员的一次登录：手机号只在请求里，不能进入任何列。

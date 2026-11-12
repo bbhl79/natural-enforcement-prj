@@ -69,6 +69,7 @@ function highestAuthority(item: RequirementItem): RequirementAuthority | null {
   return best;
 }
 
+// #257 要件依据五档层级：有依据项取所引文书最高档，无依据项按缺口依据落 internal 或 system。
 describe('要件依据层级（#257）', () => {
   it('1042 项均有五档 authority', () => {
     const items = allItems();
@@ -144,6 +145,7 @@ describe('要件依据层级（#257）', () => {
   });
 });
 
+// #257 缺口-Q33：4 组 137 个 normative 阻断键标 provisional，但仍按阻断处理。
 describe('缺口-Q33：4 组 137 键标 provisional，仍阻断', () => {
   const groupSets = [
     { docSet: 'doc_002', count: 129 },
@@ -170,6 +172,7 @@ describe('缺口-Q33：4 组 137 键标 provisional，仍阻断', () => {
   });
 });
 
+// #257 缺口-Q33：14 个键降为警告，不再阻断立案。
 describe('缺口-Q33：14 键降为警告，不阻断', () => {
   it('3 组 13 键＋clue.location 共 14 键', () => {
     const g020 = [
@@ -204,6 +207,7 @@ describe('缺口-Q33：14 键降为警告，不阻断', () => {
   });
 });
 
+// #257 要件依据四项：G194 与查不到条文的键保持原后果并标 provisional。
 describe('要件依据四项（#257/6435475490）', () => {
   it('G194 保持警告并标 provisional', () => {
     const item = byKey('type.land_approve_without_authority.criminal_referral_check');

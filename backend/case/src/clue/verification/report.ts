@@ -1,3 +1,7 @@
+// 用途：把核查事实组装成结构化报告、EPSG:4490 分析图与空间对象版本号。
+// 调用方：backend/server/src/clue-verification.service.ts（执行成功后写对象存储）、backend/server/src/clue-geometry.service.ts（spatialVersionOf）。
+// 边界：纯函数，不写库、不写留痕；报告与分析图落对象存储、运行收尾由调用方执行。
+// 依据：#213。
 // 核查报告与分析图的组装（#213；规格 C 节「产物」）。
 //
 // 产物两件：结构化 JSON 核查报告、EPSG:4490 GeoJSON 分析图。

@@ -1,3 +1,4 @@
+// 用途：汇总调查环节与收尾纯规则、常量与类型的对外导出。
 export {
   CLOSE_BRANCH_NOT_OPEN_MESSAGE,
   CLOSE_REASONS,

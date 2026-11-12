@@ -1,3 +1,4 @@
+// 用途：规划中占位模块的主区提示，只展示业务范围，不进入真实业务。
 // 规划中占位的提示（案件中心、统筹督导、系统管理下的占位项）。
 // 文案只说业务范围，不写工程符号、不写票号。
 export default function PlannedNotice({ label, hint }: { label: string; hint?: string }) {

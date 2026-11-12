@@ -222,6 +222,7 @@ beforeEach(() => {
   rotationAccepted = true;
 });
 
+// 口令登录的判定顺序：十个分支的先后与各自留痕结果。
 describe('口令登录判定顺序（十个分支）', () => {
   it('1 来源地址闸已生效：口令错误同形，写 login.source-limited，不查人员不验口令，不计账号失败', async () => {
     const account = addAccount();
@@ -350,6 +351,7 @@ function changePassword(
   return service().changePassword({ active, sourceIp: IP, currentPassword, newPassword });
 }
 
+// 本人改密的门禁：首登与到期强制改密、自愿改密须带当前口令（#292）。
 describe('本人改口令的门禁（#292）', () => {
   it('首登强制改密：不带当前口令也能改，散列取自库中当前值', async () => {
     const { active } = await activeSession({ passwordChangedAt: null });
@@ -496,6 +498,7 @@ function enter(cookie: string) {
   return service().openRequest(cookie, IP, false, true);
 }
 
+// 记住我免输口令进入的判定顺序：六个分支的先后与留痕。
 describe('记住我免输口令进入判定顺序（六个分支）', () => {
   it('1 来源地址闸已生效：写 login.source-limited，记住我保留不换发', async () => {
     addAccount();
@@ -578,6 +581,7 @@ describe('记住我免输口令进入判定顺序（六个分支）', () => {
   });
 });
 
+// 会话结束的先后判定：按认证时间与会话 id 排序（#116）。
 describe('会话结束的先后（#116）', () => {
   it('测试替身按 (认证时间, 会话 id) 排序：认证时间相同时按 id 升序', async () => {
     const account = addAccount();
@@ -627,6 +631,7 @@ describe('会话结束的先后（#116）', () => {
   });
 });
 
+// 来源地址闸允许名单：名单内来源不因失败次数被限（#317）。
 describe('来源地址闸允许名单（#317）', () => {
   it('名单内来源记满十次后口令正确仍写 login.succeeded', async () => {
     gate = new SourceGate(new Set([IP]));

@@ -1,3 +1,4 @@
+// 用途：Prisma 7 配置：schema、迁移目录、种子命令与数据源地址。
 // Prisma 7 配置文件（dev db 唯一读取入口；#49 落地）。
 // DATABASE_URL 由 dev 脚本经容器环境变量注入，不在仓库落任何凭据。
 import { defineConfig } from "prisma/config";

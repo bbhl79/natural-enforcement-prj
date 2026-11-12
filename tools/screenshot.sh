@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 用途：用钉定镜像对指定地址截图，参数为目标地址、输出 PNG 路径与可选视口宽高。
 # 截图工具（#220 出图路径；镜像定案见 infra/VERSIONS.md「浏览器」行与执行纪律 4）。
 #
 # 用法：tools/screenshot.sh <目标地址> <输出 PNG 路径> [视口宽] [视口高]
@@ -17,6 +18,7 @@ ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 # 唯一依据：infra/VERSIONS.md「浏览器」行的钉定引用。
 BROWSER_IMAGE='mcr.microsoft.com/playwright:v1.64.1-jammy-amd64@sha256:5eb4ef2b80d9c5af9dccb9155b29be324461c8bbaed41b989db5e86545e7fd38'
 
+# 打印用法。
 usage() {
   cat <<'EOF'
 用法：tools/screenshot.sh <目标地址> <输出 PNG 路径> [视口宽] [视口高]

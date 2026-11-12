@@ -275,6 +275,7 @@ beforeEach(() => {
   cookies.clear();
 });
 
+// #237：人员层利害关系声明后的签出暂停、两级决定、调查不中断与记录只追加。
 describe('#237 人员层利害关系', () => {
   it('声明后 activeConflicts 返回该记录；审理、法审、决定签出各 409，并各写一条失败留痕', async () => {
     const caseId = await fileCase();

@@ -1,3 +1,7 @@
+// 用途：提供疑似重复比对视图与实名查阅两个 HTTP 接口，委托 ClueDuplicateService；实名查阅的明文响应禁止缓存。
+// 调用方：backend/server/src/app.module.ts 注册为控制器。
+// 依据：backend/server/src/clue-duplicate.service.ts（#212；规格 B、规格 G）。
+//
 // 疑似重复比对与实名查阅接口（#212；规格 B、规格 G）。
 //
 // GET  /api/clues/:id/duplicates       疑似重复比对视图（按对方线索分组）
@@ -19,10 +23,12 @@ interface HttpReply {
   setHeader(name: string, value: string): void;
 }
 
+// 疑似重复比对与实名查阅的 HTTP 入口，请求处理全部委托 ClueDuplicateService。
 @Controller('api')
 export class ClueDuplicateController {
   constructor(private readonly duplicates: ClueDuplicateService) {}
 
+  // 疑似重复比对视图：命中按对方线索分组展示；操作码 clue.read；对象级按线索录入机构授权。
   @Get('clues/:id/duplicates')
   @UseGuards(SameOriginReadGuard)
   async read(
@@ -34,6 +40,7 @@ export class ClueDuplicateController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 实名查阅，返回反映人明文并写查阅留痕；操作码 clue.reference.read；对象级按线索录入机构授权。
   @Post('clues/:id/reporter-read')
   async readReporter(
     @Req() req: AuthenticatedRequest,

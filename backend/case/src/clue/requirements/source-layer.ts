@@ -1,3 +1,7 @@
+// 用途：声明来源层的五组录入要件常量，组键取线索来源编码表的大类编码。
+// 调用方：backend/case/src/clue/requirements/index.ts 的 buildFormSchemaItems；integration/clue-form-schema.test.ts 经 backend/case/src/index.ts 导入。
+// 边界：声明常量，不写库、不写留痕；表单渲染与缺件判定由消费方负责。
+// 依据：ADR 0018，GLOSSARY「线索来源」。
 // 来源层录入要件（ADR 0018；#24 决议第六节「来源要件（按来源大类，共 5 组）」）。
 // 五组分别对应线索来源编码表的五个大类：1 主动发现、5 上级交办、22 部门移送、3 群众举报、21 舆情监测。
 // 组的键是大类编码；组名（大类名）同时是这一组的「呈现」栏名（#199 决议第四节）。
@@ -19,6 +23,7 @@ export interface SourceLayerGroup {
   readonly items: readonly RequirementItem[];
 }
 
+/** 来源层五组要件项，顺序即声明顺序。 */
 export const SOURCE_LAYER_GROUPS: readonly SourceLayerGroup[] = [
   {
     sourceGroupCode: '1',

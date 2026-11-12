@@ -32,6 +32,7 @@ const requirement = requiredDossierItems({
   jurisdictionTransfer: false,
 });
 
+// #243 归档审批正文解析：文本字段去空白、空串按未填处理，形态不合规即拒绝。
 describe('#243 归档审批正文', () => {
   it('空正文合法；理由与说明去空白，空串视同未填', () => {
     expect(readFinalizeContent(null)).toEqual({ ok: true, content: { missingReason: null, note: null } });
@@ -51,6 +52,7 @@ describe('#243 归档审批正文', () => {
   });
 });
 
+// #243 卷宗完整性评定的阻断优先级：缺材料优先于缺回证，填写缺件理由可放行。
 describe('#243 缺件阻断出口', () => {
   it('缺件优先报材料；只缺回证报回证；有理由不阻断', () => {
     const missingMaterial = evaluateDossierCompleteness({
@@ -80,6 +82,7 @@ describe('#243 缺件阻断出口', () => {
   });
 });
 
+// #243 T27 定型迁移：起点限已结案或已撤案、终点为已定型，并覆盖状态冲突与审批链占用的拒绝语义。
 describe('#243 T27 定型', () => {
   it('终点是已定型；起点是已结案或已撤案', () => {
     const edge = findTransition('T27');

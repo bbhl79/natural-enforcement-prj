@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# 用途：在已有本机栈上补验证存储配置，再跑 UI 全链，退出时恢复原编排。
+# 用法：bash e2e/verify/harness/ui/run-ui-full-loop-local.sh；只允许默认本机验证项目。
+# 退出码：0 全链通过；1 恢复编排失败或全链失败；2 项目或端点不符合本机验证条件。
 # 在已有本机栈临时补存储配置；退出时用dev up恢复原编排。不部署、不删除数据。
 set -euo pipefail
 ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../../.." && pwd)"
@@ -20,6 +23,7 @@ print('postgresql://'+quote(os.environ['POSTGRES_USER'],safe='')+':'+quote(os.en
 PY
 )"
 export REDIS_URL="redis://${REDIS_HOST}:6379"
+# 退出时导出 server 日志并用 dev up 恢复原编排，然后沿用原退出码。
 restore() {
   local rc=$?
   trap - EXIT

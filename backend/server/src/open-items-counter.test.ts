@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { prismaOpenItemsCounter } from './open-items-counter.ts';
 
+// 待办计数器的查询口径与结果。
 describe('prismaOpenItemsCounter', () => {
   it('按机构 id 查询，线索与非终态案件分别计数', async () => {
     const queryRaw = vi.fn(

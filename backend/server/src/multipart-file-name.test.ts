@@ -7,6 +7,7 @@ function asFrameworkDecodes(name: string): string {
   return Buffer.from(name, 'utf8').toString('latin1');
 }
 
+// 上传文件名解码：RFC 5987/PHP 风格编码与非法输入的回落。
 describe('multipart 上传文件名解码', () => {
   it('中文名：还原框架按 latin1 解出的乱码', () => {
     for (const name of ['现场照片.png', '移送函.pdf', '粤自然移〔2026〕1 号.docx']) {

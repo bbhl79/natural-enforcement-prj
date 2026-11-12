@@ -1,3 +1,4 @@
+// 用途：汇总新旧比对纯规则、常量与类型的对外导出。
 export {
   COMPARISON_MISSING_MESSAGE,
   COMPARISON_MISSING_OUTLET,

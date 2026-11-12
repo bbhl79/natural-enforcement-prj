@@ -354,6 +354,7 @@ beforeEach(() => {
   nowMs = T0;
 });
 
+// #272 X07：听证告知是否命中由自动阈值与人工勾选取并集，未附听证告知的批准被拒绝。
 describe('#272 X07：自动命中 ∪ 人工勾选', () => {
   it('公民罚款 5000 自动命中；未带听证告知批准 409 X07，业务行不动', async () => {
     const caseId = await toE04('penalty', 5000);
@@ -415,6 +416,7 @@ describe('#272 X07：自动命中 ∪ 人工勾选', () => {
   });
 });
 
+// #272 T13：告知送达后进入等待，期限行按 #246 的工作日口径生成。
 describe('#272 T13 送达与期限', () => {
   it('送达后进入告知等待：写标记与两条期限行，期限按 #246 的工作日口径', async () => {
     const { caseId, noticeId } = await approvedNotice('penalty', 5000, { hearingNoticeAttached: true });
@@ -457,6 +459,7 @@ describe('#272 T13 送达与期限', () => {
   });
 });
 
+// #272 T14／T14a：告知等待的提前结束、陈述申辩登记与期满视为放弃。
 describe('#272 T14／T14a', () => {
   it('书面放弃可提前结束告知等待；有效期内再要求听证回到 E06（T14a）', async () => {
     const { caseId, noticeId } = await approvedNotice('penalty', 5000, { hearingNoticeAttached: true });
@@ -520,6 +523,7 @@ describe('#272 T14／T14a', () => {
   });
 });
 
+// #272：进入听证程序标记的认定，以及撤回、放弃、终止后自动复开受 X28 约束。
 describe('#272 进入听证程序标记与 X28', () => {
   it('受理前撤回不算经过听证；标记＝否', async () => {
     const { caseId, noticeId } = await approvedNotice('penalty', 5000, { hearingNoticeAttached: true });
@@ -594,6 +598,7 @@ describe('#272 进入听证程序标记与 X28', () => {
   });
 });
 
+// #272：听证主持人的资格限制，曾承办本案的人员不得主持。
 describe('#272 主持人资格', () => {
   it('曾任主办、协办（含已换下的）不得主持；非承办人可主持', async () => {
     const { caseId, noticeId } = await approvedNotice('penalty', 5000, { hearingNoticeAttached: true });
@@ -615,6 +620,7 @@ describe('#272 主持人资格', () => {
   });
 });
 
+// #272 X26：命中必审但缺少告知前法审时的两段式警告与确认路径。
 describe('#272 X26 告知批准路径', () => {
   it('命中必审但未经告知前法审：警告 200 两段式，确认后批准；非 409', async () => {
     const caseId = await toE04('penalty', 5000);
@@ -662,6 +668,7 @@ describe('#272 X26 告知批准路径', () => {
   });
 });
 
+// #272 T17：办理中出现新事实时回 E02 重办，已发生的听证标记保留。
 describe('#272 T17 新事实回调查', () => {
   it('告知等待中提出新事实：回 E02、次序号加 1、退回 R2，期限锚点续写', async () => {
     const { caseId, noticeId } = await approvedNotice('penalty', 5000, { hearingNoticeAttached: true });

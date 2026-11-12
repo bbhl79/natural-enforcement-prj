@@ -281,6 +281,7 @@ beforeEach(() => {
   cookies.clear();
 });
 
+// 验证 T01／T02 走状态机引擎，未启用边与 X12／X13／X17／X18 不改业务行（#235）。
 describe('#235 案件状态机', () => {
   it('T01 批准写入 E01 完成、E02 拟制中、次序号 1 和迁移历史；读接口能看到', async () => {
     const { clueId, caseId, body } = await fileCase(['张三']);

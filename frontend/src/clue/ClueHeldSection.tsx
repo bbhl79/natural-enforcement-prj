@@ -1,3 +1,6 @@
+// 用途：线索中心 /clue 的不派视图区块：列出「不派」线索，并允许有权账号发起撤回不派。
+// 调用方：frontend/src/pages/ClueCenterPage.tsx。
+// 接口：GET /api/clues/closure-options（无操作码）、GET /api/clues/held（操作码 clue.read）；POST /api/clues/:id/withdraw（clue.withdraw.undo）。
 // 不派视图（#217；规格 D 节、GLOSSARY「撤回不派」）。
 //
 // 列出数据范围内当前「不派」的线索；有权的账号可发起撤回不派：

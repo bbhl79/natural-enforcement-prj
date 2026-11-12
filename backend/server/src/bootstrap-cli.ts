@@ -1,3 +1,4 @@
+// 用途：生产引导命令的命令行层：解析参数、读取口令文件、把引导结果转成输出与退出码。
 // 生产引导命令的命令行层（#131）：读参数、读口令文件、把结果写成人读的输出和退出码。
 // 本文件不连库，unit 层可测。连库与写入在 bootstrap-command.ts（经 persistence.module.ts 装配）。
 // 口令只从挂载文件或 secret 读入：命令行带口令一律拒绝；任何报错都不回显口令。
@@ -12,6 +13,7 @@ import type {
 /** 退出码（工程定）：0 已写入或已引导；1 运行出错；2 参数或输入不合规；3 两键不全，拒绝执行。 */
 export const BOOTSTRAP_EXIT = { ok: 0, error: 1, invalid: 2, incomplete: 3 } as const;
 
+/** 命令行用法与口令读取说明；参数或输入不合规时随错误输出打印。 */
 export const BOOTSTRAP_USAGE = [
   '用法：node --import /work/backend/server/register.mjs /work/backend/server/src/bootstrap-command.ts \\',
   '  --root-code <根机构编码> --root-name <根机构名称> \\',
@@ -34,6 +36,7 @@ function isFlag(name: string): name is Flag {
   return Object.hasOwn(FLAGS, name);
 }
 
+/** 参数解析结果；失败分支携带逐条问题说明，且不回显口令取值。 */
 export type ParsedArgs =
   | { ok: true; profile: BootstrapProfile }
   | { ok: false; problems: string[] };
@@ -83,6 +86,7 @@ export function parseBootstrapArgs(argv: readonly string[]): ParsedArgs {
   return { ok: true, profile: values as BootstrapProfile };
 }
 
+/** 口令文件读取结果；失败分支只含问题说明，不含口令内容。 */
 export type PasswordFileRead =
   | { ok: true; password: string }
   | { ok: false; problem: string };
@@ -127,6 +131,7 @@ const RULE_TEXT: Record<BootstrapInputRule, string> = {
   'password-same-as-current': '口令与当前口令相同',
 };
 
+/** 把输入规则失败项译成人读的拒绝说明；调用方：backend/server/src/bootstrap-command.ts。 */
 export function describeInputRules(rules: readonly BootstrapInputRule[]): string[] {
   return [
     '引导被拒：输入不合规，未写入。',
@@ -147,6 +152,7 @@ function describeDifference(difference: BootstrapDifference): string {
   }
 }
 
+/** 引导结果的输出封装：退出码与待写 stdout、stderr 的行。 */
 export interface BootstrapReport {
   exitCode: number;
   stdout: string[];

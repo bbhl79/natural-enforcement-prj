@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import { rejectedPasswordRules } from '../src/domain/password-policy.ts';
 
+// 验证长度、字符类别、顺序、重复、常见弱口令与含工号等规则码（#97）。
 describe('口令校验器', () => {
   it('9 位拒绝、10 位通过', () => {
     expect(rejectedPasswordRules({

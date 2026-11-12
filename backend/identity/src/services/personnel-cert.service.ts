@@ -1,3 +1,7 @@
+// 用途：在调用方事务里登记人员执法证，并写 cert.updated 留痕。
+// 调用方：backend/server/src/personnel-cert.service.ts。
+// 边界：不建资格版本表；被拒只抛错，失败留痕交调用方回滚后写入。
+// 依据：#133、ADR 0011
 // 执法证登记（#105「执法证（#85）」，#133）。
 // 授权经 AccessControlService 按操作码判断：personnel.cert.update，只给系统管理。
 // 判定顺序照人员登记：先过授权（越权 403），再校验（400，不写留痕），再写库。
@@ -23,6 +27,7 @@ import {
 import type { IdentityTransaction } from '../persistence/identity-store.ts';
 import { AccessControlService, type AuthorizationDecision } from './access-control.service.ts';
 
+/** 执法证登记的四种结果；停用时附失败留痕行，由调用方回滚后写入。 */
 export type UpdateCertResult =
   | { result: 'updated' }
   | { result: 'not-found' }
@@ -34,6 +39,8 @@ function raiseDenied(decision: Extract<AuthorizationDecision, { allowed: false }
   throw new AccessDeniedError(decision.reason, decision.detail, decision.denial);
 }
 
+// 执法证登记服务：授权、规则校验、人员级锁内重读、写库与留痕同事务。
+// 由 backend/server/src/personnel-cert.service.ts 注入调用。
 @Injectable()
 export class PersonnelCertService {
   constructor(private readonly access: AccessControlService) {}

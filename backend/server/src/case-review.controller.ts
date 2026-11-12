@@ -1,3 +1,4 @@
+// 用途：调查终结报告与审理流程的 HTTP 接口，含报告呈批、审理人指定、审理意见与异议处理。
 // 调查终结与审理的 HTTP 入口（#240）。
 // 呈批走 doc.*；审理意见用 case.review.record；审理人指定复用行政审核一级的码（过渡，待 #230 回写 #71）。
 // 明示放弃异议复用 doc.submit（过渡，待 #230 回写 #71）。
@@ -15,10 +16,12 @@ interface HttpReply {
   json(body: unknown): void;
 }
 
+/** 调查终结与审理接口的 HTTP 适配层。 */
 @Controller()
 export class CaseReviewController {
   constructor(private readonly review: CaseReviewService) {}
 
+  // 读取案件的调查终结与审理视图；操作码 case.read；对象级按案件承办机构校验。
   @Get('api/cases/:id/review')
   @UseGuards(SameOriginReadGuard)
   async read(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {
@@ -26,6 +29,7 @@ export class CaseReviewController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 保存调查终结报告草稿；操作码 doc.draft；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/review-reports')
   @UseGuards(SameOriginReadGuard)
   async saveReport(
@@ -38,6 +42,7 @@ export class CaseReviewController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 提交调查终结报告呈批；操作码 doc.submit；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/review-reports/:reportId/submit')
   @UseGuards(SameOriginReadGuard)
   async submitReport(
@@ -49,6 +54,7 @@ export class CaseReviewController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 审核调查终结报告并写入审核意见；操作码 doc.admin.review；对象级按案件承办机构校验。
   @Post('api/review-reports/:reportId/review')
   @UseGuards(SameOriginReadGuard)
   async reviewReport(
@@ -63,6 +69,7 @@ export class CaseReviewController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 批准调查终结报告并指定审理人；操作码 doc.approve；对象级按案件承办机构校验。
   @Post('api/review-reports/:reportId/approve')
   @UseGuards(SameOriginReadGuard)
   async approveReport(
@@ -86,6 +93,7 @@ export class CaseReviewController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 指定审理人；操作码 doc.admin.review（操作者持行政审批角色时改用 doc.approve）；对象级按案件承办机构校验，且操作者须为承办机构负责人。
   @Post('api/cases/:id/reviewer-designations')
   @UseGuards(SameOriginReadGuard)
   async designate(
@@ -107,6 +115,7 @@ export class CaseReviewController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 签出审理意见；操作码 case.review.record；对象级按案件承办机构校验，且操作者须持行政审核角色。
   @Post('api/cases/:id/review-opinions')
   @UseGuards(SameOriginReadGuard)
   async recordOpinion(
@@ -128,6 +137,7 @@ export class CaseReviewController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 保存异议草稿；操作码 doc.draft；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/review-objections')
   @UseGuards(SameOriginReadGuard)
   async saveObjection(
@@ -140,6 +150,7 @@ export class CaseReviewController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 提交异议；操作码 doc.submit；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/review-objections/:objectionId/submit')
   @UseGuards(SameOriginReadGuard)
   async submitObjection(
@@ -151,6 +162,7 @@ export class CaseReviewController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 明示放弃异议；操作码 doc.submit；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/review-objection-waivers')
   @UseGuards(SameOriginReadGuard)
   async waiveObjection(
@@ -163,6 +175,7 @@ export class CaseReviewController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 对异议作出决定；操作码 doc.approve；对象级按案件承办机构校验。
   @Post('api/review-objections/:objectionId/decide')
   @UseGuards(SameOriginReadGuard)
   async decideObjection(

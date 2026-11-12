@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# 用途：无回溯上限样本的端到端跑次：播种超长期 peer、登记重叠面、读 historicalGroups。
+# 用法：bash e2e/verify/harness/run-hist-dup-no-lookback.sh
+# 退出码：0 通过；1 失败、blocked 或本机没有 docker。
 # 无回溯上限样本。
 # 顺序：./dev up → 播种超长期 peer → 登记重叠面 → 读 historicalGroups。
 # 不改产品时间戳。不清 Redis。不改运行中的时钟。

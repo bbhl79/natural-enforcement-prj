@@ -11,6 +11,7 @@ import {
   x10Guard,
 } from '../src/closeout/index.ts';
 
+// #270 送达记载（T24）校验：回证须两名以上送达人，公告须原因与材料齐备，完成日须真实日历日。
 describe('#270 送达', () => {
   it('回证路径要求送达人两人以上', () => {
     expect(DELIVERY_MIN_DELIVERERS).toBe(2);
@@ -71,6 +72,7 @@ describe('#270 送达', () => {
   });
 });
 
+// #270 执行记载（T25）的分支要求：不同执行方式各自附凭证或写明事实，缺件时报出中文原因。
 describe('#270 执行记载', () => {
   it('已申请法院强制执行须附申请书', () => {
     expect(readExecutionRecord({ kind: 'court-enforcement' })).toMatchObject({
@@ -100,6 +102,7 @@ describe('#270 执行记载', () => {
   });
 });
 
+// #270 结案只允许处罚与不予处罚两支，X10 对处罚未送达即执行记载或结案只发警告。
 describe('#270 结案两支与 X10', () => {
   it('E11 是处罚支，E10 是不予处罚支，其他环节不能结案', () => {
     expect(closureBranchOf('E11')).toBe('penalty');

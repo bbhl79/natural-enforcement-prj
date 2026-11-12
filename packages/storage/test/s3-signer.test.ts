@@ -17,6 +17,7 @@ const SECRET = 'wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY';
 const REGION = 'us-east-1';
 const AMZ_DATE = '20261010T120000Z';
 
+// 签名正确性：摘要、规范化请求与签名头对齐 AWS SigV4 规范，参照向量来自独立实现。
 describe('SigV4 签名（AWS 规范，参照向量来自 Python 独立实现）', () => {
   it('sha256Hex 与已知摘要字面量一致', () => {
     expect(sha256Hex('hello immutable world')).toBe(

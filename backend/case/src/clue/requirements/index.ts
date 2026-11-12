@@ -1,3 +1,7 @@
+// 用途：录入要件声明的公共出口：再导出三层声明与常量，并提供叠加函数与阻断项筛选。
+// 调用方：backend/server/src/clue-form-schema.service.ts、backend/server/src/clue-registration.service.ts、backend/server/src/case-filing.service.ts，经包名 @natural-enforcement/case 导入。
+// 边界：纯声明叠加，不写库、不写留痕；表单接口与缺件判定的读写由调用方负责。
+// 依据：ADR 0018，ADR 0019。
 // 录入要件声明（ADR 0018；#207 协议 E 节「case 常量是唯一要件声明源」）。
 //
 // 声明＝三层叠加：公共层 8 项 ＋ 来源层（按线索来源的大类）＋ 类型层（按初步涉嫌违法类型）。
@@ -63,6 +67,7 @@ const SOURCE_LAYER_BY_GROUP = new Map(SOURCE_LAYER_GROUPS.map((group) => [group.
  * 叠加三层，返回录入项。
  * 类型要件取并集（#192 决议第三条：键含类型编码，各类型的键互不相同，没有合并问题）。
  * 「附录外其他」类型没有类型层要件，只带公共层与来源层（GLOSSARY「附录外其他」）。
+ * 纯函数，不写库、不写留痕。
  */
 export function buildFormSchemaItems(input: FormSchemaInput): RequirementItem[] {
   const items: RequirementItem[] = [...PUBLIC_LAYER_ITEMS];

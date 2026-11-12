@@ -1,3 +1,8 @@
+// 用途：案件调查环节与收尾，负责违法记录、询问笔录、告知记录与程序呈批的读写。
+// 调用方：backend/server/src/investigation.controller.ts。
+// 边界：T03–T07 只在本服务的批准事务里落库；呈批沿用 doc.* 操作码；校验与状态冲突失败写对应动作的失败留痕。
+// 依据：Issue #236。
+//
 // 调查环节与收尾（#236）。
 // 呈批沿用 doc.draft / doc.submit / doc.admin.review / doc.approve，不新增操作码。
 // T03–T07 只在本服务的批准事务里落库。通用迁移入口拒绝直接套用。
@@ -78,6 +83,7 @@ const APPROVE_OPCODE = 'doc.approve';
 
 const FAIL_REASONS = new Set<string>(CASE_INVESTIGATION_FAILED_REASONS);
 
+/** 调查接口的统一返回：200 业务体，400 输入不合规，403 越权，404 不存在，409 状态或并发冲突。 */
 export type InvestigationHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }
   | { readonly status: 400; readonly body: Record<string, unknown> }
@@ -92,6 +98,11 @@ interface Prepared {
   readonly view: CaseView;
 }
 
+/**
+ * 调查服务：读调查视图，登记违法记录与询问笔录、作废违法记录、登记告知记录，
+ * 以及程序呈批的草稿、提交、审核、退回与批准。操作码：case.read 与 doc.draft／submit／admin.review／approve。
+ * 批准时在同一事务落迁移效果与停表／续表期限事件；停表参数与时效出口读注入参数。
+ */
 @Injectable()
 export class InvestigationService {
   constructor(

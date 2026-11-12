@@ -88,6 +88,7 @@ const NEW_CLUE_OPCODES = [
   'clue.pool.reassign',
 ] as const;
 
+// 名册完整性：决议表里的办案码与管理台码全部在册，不多不少（#71、#96）。
 describe('操作码名册', () => {
   it('覆盖决议表里的办案操作码和管理台操作码', () => {
     expect([...OPCODES].sort()).toEqual([...CASE_OPCODES, ...ADMIN_OPCODES].sort());
@@ -253,6 +254,7 @@ describe('操作码名册', () => {
   });
 });
 
+// 增码不增册：新增的线索操作码进同一名册，未另造平行名册（#210）。
 describe('#210 新增 11 个线索操作码', () => {
   it('名册里都有条目，且不另造平行名册（复用码仍是那四个）', () => {
     for (const code of NEW_CLUE_OPCODES) {

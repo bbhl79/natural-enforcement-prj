@@ -1,3 +1,5 @@
+// 用途：读取 e2e/verify 下的身份、案件档案与场景夹具，并解析种子口令。
+// 调用方：e2e/verify/harness 下的场景运行器、会话缓存与探针脚本。
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -9,6 +11,7 @@ import {
 } from './paths.ts';
 import type { OracleAssert } from './oracle.ts';
 
+/** 身份夹具：对应 fixtures/identities/<id>.json，口令经环境变量或密钥文件间接给出。 */
 export interface IdentityFixture {
   readonly id: string;
   readonly mobile: string;
@@ -19,6 +22,7 @@ export interface IdentityFixture {
   };
 }
 
+/** register 动作的登记入参：来源、领域与可选类型、确认位、字段值与空间来源原值。 */
 export interface RegisterSystem {
   readonly sourceCode: string;
   readonly domain: string;
@@ -30,6 +34,7 @@ export interface RegisterSystem {
   readonly spatialSource?: unknown;
 }
 
+/** 单步写入前的字段增删与空间替换开关；由 run-api-scenario.ts 的 applyMutate 消费。 */
 export interface StepMutate {
   readonly omitValues?: string[];
   readonly setValues?: Record<string, string>;
@@ -43,6 +48,7 @@ export interface StepMutate {
   readonly isolateSpatial?: boolean;
 }
 
+/** 场景的一步：动作名、夹具来源、身份引用与可选写入变体；由 run-api-scenario.ts 逐步执行。 */
 export interface ScenarioStep {
   readonly id: string;
   readonly action: string;
@@ -100,6 +106,7 @@ export interface DispatchButtonExpect {
   readonly mayReassignOrg?: boolean;
 }
 
+/** 场景定义：步骤列表与结构化 oracle；由 run-api-scenario.ts 加载后执行。 */
 export interface ApiScenario {
   readonly id: string;
   readonly status: string;
@@ -123,14 +130,17 @@ async function readJson<T>(filePath: string): Promise<T> {
   return JSON.parse(raw) as T;
 }
 
+/** 按身份 id 读身份夹具；文件不存在时抛错。调用方：run-api-scenario.ts、seed-personnel.ts、probe-hist-dup-no-lookback.ts。 */
 export async function loadIdentity(id: string): Promise<IdentityFixture> {
   return readJson(path.join(identitiesDir(), `${id}.json`));
 }
 
+/** 按 id 读案件档案夹具；文件不存在时抛错。调用方：run-api-scenario.ts。 */
 export async function loadProfile(id: string): Promise<Record<string, unknown>> {
   return readJson(path.join(caseProfilesDir(), `${id}.json`));
 }
 
+/** 按 id 读场景：先找 runnable 目录，找不到再读 negatives 目录；两侧都不存在时抛错。调用方：run-api-scenario.ts。 */
 export async function loadScenario(id: string): Promise<ApiScenario> {
   const runnable = path.join(runnableScenariosDir(), `${id}.json`);
   const negative = path.join(negativesDir(), `${id}.json`);
@@ -153,6 +163,7 @@ export function getByPath(root: Record<string, unknown>, dotted: string): unknow
   return cur;
 }
 
+/** 解析身份种子口令：优先读 passwordRef.env 指定的环境变量，其次 VERIFY_PASSWORD_SEED，最后用开发种子口令。调用方：session.ts。 */
 export function resolveSeedPassword(identity: IdentityFixture): string {
   const envName = identity.passwordRef?.env ?? 'VERIFY_PASSWORD_SEED';
   const fromEnv = process.env[envName];

@@ -1,3 +1,5 @@
+// 用途：定义队列端口 QueuePort、任务引用 JobRef 与投递参数 EnqueueOptions，业务与设施代码只面向这组类型使用队列。
+// 调用方：backend/server/src/clue-verification.service.ts（经 QUEUE_PORT 注入后投递任务）、backend/server/src/persistence.module.ts（提供 QUEUE_PORT）、packages/queue/src/bullmq-queue.ts（BullMQ 实现）。
 // 队列抽象（QueuePort，#55）：业务与设施代码对队列的唯一面向。
 // 可注入：经 QUEUE_PORT 令牌注入本接口（组合根手工装配），不面向 BullMQ 编程
 //（BullMQ/ioredis 只许出现在本设施包内，结构测试 queue-facility-entry 机器兜底）。
@@ -25,6 +27,11 @@ export interface EnqueueOptions {
   };
 }
 
+/**
+ * 队列端口：投递任务、等待消费确认、关闭通道三个操作。
+ * 实现：packages/queue/src/bullmq-queue.ts（BullMQ）；packages/queue/src/queue-port.ts 的 createQueuePort 返回惰性连接的包装实现。
+ * 集成测试经 backend/server/src/persistence.module.ts 的 queuePort 覆写位换成内存假实现。
+ */
 export interface QueuePort {
   /** 投递任务（系统设施级；业务 worker 归各业务切片自带——G5） */
   enqueue(jobName: string, payload: unknown, options?: EnqueueOptions): Promise<JobRef>;

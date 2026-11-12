@@ -1,3 +1,7 @@
+// 用途：法制审核的发起、意见与结论签署、接收人改派、决定闸口检查与集体讨论留痕。
+// 调用方：backend/server/src/case-legal-review.controller.ts；backend/server/src/case-decision.service.ts 调用 assertDecisionGate。
+// 边界：授权经 authorize（拒绝先写 authz.denied 再抛错）；警告只写留痕不改业务行；写动作在交互式事务内。
+// 依据：#269、#246、ADR 0011。
 // 法制审核与集体讨论（E07、E08；#269）。
 // 两级签字：审核人（持法制审核）签，法制审核负责人（持行政审核、带岗位标记、任职在归属那一级）再签。
 // 告知前法审走 T10a／T10b；决定前法审记录轮次，不改环节（T19–T22 的审批链挂起／恢复归 #270）。
@@ -86,6 +90,7 @@ const FAIL_REASONS = new Set<string>(CASE_LEGAL_REVIEW_FAILED_REASONS);
 /** 法审 5＋10 个工作日的规则键（#246 已登记）。 */
 export const LEGAL_REVIEW_DEADLINE_RULE_KEY = 'legal-review.round';
 
+/** 法审接口的结果；状态码区分成功、输入不合规、拒绝、找不到与冲突。 */
 export type CaseLegalReviewHttpOutcome =
   | { readonly status: 200; readonly body: Record<string, unknown> }
   | { readonly status: 400; readonly body: Record<string, unknown> }
@@ -114,6 +119,7 @@ interface FrozenFact {
   readonly fineAmount: number | null;
 }
 
+/** 法制审核与集体讨论服务：发起审核、签署意见与结论、改派接收人、决定闸口与讨论留痕。 */
 @Injectable()
 export class CaseLegalReviewService {
   constructor(

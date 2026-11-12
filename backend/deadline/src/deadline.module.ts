@@ -1,3 +1,7 @@
+// 用途：期限预警模块的 NestJS 模块声明。@Module({}) 不带提供者与控制器，期限计算以纯函数经 index.ts 导出。
+// 调用方：backend/server/src/app.module.ts 装配本模块。
+// 边界：期限的 HTTP 入口与落库在 backend/server/src/deadline.controller.ts、deadline.service.ts，不在本模块内。
+// 依据：backend/README.md 依赖矩阵；docs/adr/0004-单一HTTP进程与同域入口.md。
 import { Module } from '@nestjs/common';
 
 /**

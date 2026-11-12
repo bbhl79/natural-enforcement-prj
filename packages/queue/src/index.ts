@@ -1,3 +1,6 @@
+// 用途：队列设施包 @natural-enforcement/queue 的唯一公共出口，汇总 QueuePort 抽象、注入令牌、健康检查任务契约、不可重试错误与 worker 工厂。
+// 调用方：backend/server/src/persistence.module.ts、backend/server/src/clue-verification.service.ts、backend/server/src/clue-verification.worker.ts，经包名 @natural-enforcement/queue 使用。
+// 边界：导出的类型不含 bullmq 与 ioredis 的类型；packages/queue/src/bullmq-queue.ts 与 packages/queue/src/probe.ts 不在此导出，只在包内使用。
 // 队列设施包公共出口（#55）：QueuePort 抽象 + 健康检查任务契约 + 注入令牌。
 // BullMQ/ioredis 实现细节不出本包（结构测试 queue-facility-entry 机器兜底，
 // 业务侧经 QUEUE_PORT 注入，禁止裸依赖 bullmq/ioredis）。

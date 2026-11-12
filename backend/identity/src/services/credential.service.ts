@@ -1,3 +1,7 @@
+// 用途：提供口令散列、验真、口令历史比对与换口令写入。
+// 调用方：backend/server/src/auth.service.ts、admin.service.ts、personnel-profiles.service.ts，以及同模块人员服务。
+// 边界：只处理口令凭证；人员是否失效、是否有权限由 AccessControlService 判定。
+// 依据：ADR 0015、#132
 // 口令凭证服务（#52）：argon2 0.45.1 散列（infra/VERSIONS.md 身份行定案，
 // 预编译 linux x64/arm64 容器免编译）。身份校验的「已认证」证据链：
 // authenticate = 取 personnel 口令散列验真；人员未失效判定在 AccessControlService。
@@ -23,6 +27,8 @@ export const ARGON2_OPTIONS: HashOptions = {
 /** 注入令牌：口令历史比对深度（ADR 0015）。宿主绑定值；测试可覆写为 2。数值常量见 password-policy。 */
 export const PASSWORD_HISTORY_DEPTH_TOKEN = Symbol('PASSWORD_HISTORY_DEPTH');
 
+// 口令凭证服务：散列、验真、历史比对，以及以期望散列为条件的换口令。
+// 由 backend/server/src/ 下认证、管理与人员服务注入；散列参数定版，不随调用变化。
 @Injectable()
 export class CredentialService {
   constructor(

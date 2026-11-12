@@ -51,6 +51,7 @@ async function redraw(
   return { status: response.status, body: (await response.json()) as RedrawResponseBody };
 }
 
+// 验证重绘整体替换命中集、related-redraw 双向重算，以及权限与状态限制（#212）。
 describe('#212 重绘与命中集替换', () => {
   it('重绘挪走：命中集整体清空、状态回待分派池、留痕 detail 含前后摘要与 related-redraw', async () => {
     const peer = await register({ spatial: polygon(rect(116.00, 23.40, 116.10, 23.50)) });

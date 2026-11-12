@@ -1,3 +1,7 @@
+// 用途：把人员的角色与任职机构映射成承办机构负责人、自然资源主管部门负责人两个决定人席位。
+// 调用方：backend/server/src/case-conflict.service.ts 与 backend/server/src/case-review.service.ts。
+// 边界：只做席位推断，不做回避决定；两级席位在过渡映射下互斥。
+// 依据：Issue #237；过渡期问题：Issue #105 的岗位模型无法区分两级负责人。
 // 过渡映射，待岗位模型能区分两级负责人后替换。
 // 替换点只有 transitionalDeciderSeats。岗位模型能区分两级负责人之后，只改本函数。
 // 调用方只提供人员事实，不另写席位判断。

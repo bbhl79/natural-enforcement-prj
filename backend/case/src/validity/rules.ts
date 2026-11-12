@@ -1,3 +1,7 @@
+// 用途：定义告知有效性判据与决定呈批闸口的常量、类型与纯判定函数。
+// 调用方：backend/server/src/case-validity.service.ts，读齐库内事实后调用本模块的判定函数。
+// 边界：纯函数，不读库、不写留痕；命中项与差异如何处理由调用方决定。
+// 依据：#248、#28 第四节、批2 Q13／Q14／Q18。
 // 告知有效性判据与决定呈批闸口（#248；#28 第四节 A／B／C、批2 Q13／Q14、Q18）。
 // A 类（含 Q13 的 B1b）：系统判失效，阻断决定呈批，直到重新告知（E05 再进入一次）。
 // B 类：主办「有效性确认」＋审理／法审复核；确认记录只追加，差异清单按违法记录分组。
@@ -10,8 +14,10 @@ import { assessHearing, type PartyType } from '../notice/rules.ts';
 
 /** A 类命中项。B1b（同一违法记录内事实收窄）按 Q13 并入 A 类。 */
 export const VALIDITY_HIT_CODES = ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'B1b', 'reason-changed'] as const;
+// 系统可机读的告知失效命中码，覆盖 A 类、B1b 与「理由已变化」。
 export type ValidityHitCode = (typeof VALIDITY_HIT_CODES)[number];
 
+// 命中码的中文名称，用于生成 ValidityHit.message 与闸口提示文案。
 export const VALIDITY_HIT_NAMES: Readonly<Record<ValidityHitCode, string>> = {
   A1: '当事人变更或增加',
   A2: '违法记录增加',
@@ -25,21 +31,26 @@ export const VALIDITY_HIT_NAMES: Readonly<Record<ValidityHitCode, string>> = {
 
 /** Q14 加重来源。写明来源是重新告知之外的另一项义务。 */
 export const AGRAVATION_SOURCE_KINDS = ['reflow-new-evidence', 'r4-qualification-correction'] as const;
+// Q14 加重来源类别的取值类型。
 export type AggravationSourceKind = (typeof AGRAVATION_SOURCE_KINDS)[number];
 
+// 加重来源类别的中文名称，用于提交校验的提示文案。
 export const AGRAVATION_SOURCE_NAMES: Readonly<Record<AggravationSourceKind, string>> = {
   'reflow-new-evidence': '回流取得的新事实、新证据',
   'r4-qualification-correction': 'R4 定性或法律适用纠正',
 };
 
+// 判断字符串是否为登记的加重来源类别；backend/server/src/case-validity.service.ts 在提交前校验。
 export function isAggravationSourceKind(value: string): value is AggravationSourceKind {
   return (AGRAVATION_SOURCE_KINDS as readonly string[]).includes(value);
 }
 
 /** 重新告知原因。A 类与 B1b 须与系统判定一致；reason-changed 与 R7 由主办手动发起。 */
 export const VALIDITY_REISSUE_REASONS = ['A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'B1b', 'reason-changed', 'R7'] as const;
+// 重新告知原因的取值类型，涵盖系统判定码、理由已变化与手动发起的 R7。
 export type ValidityReissueReason = (typeof VALIDITY_REISSUE_REASONS)[number];
 
+// 判断字符串是否为允许的重新告知原因；backend/server/src/case-validity.service.ts 发起重新告知时校验。
 export function isValidityReissueReason(value: string): value is ValidityReissueReason {
   return (VALIDITY_REISSUE_REASONS as readonly string[]).includes(value);
 }
@@ -49,6 +60,7 @@ export function isSystemValidityReason(value: string): value is Exclude<Validity
   return (VALIDITY_HIT_CODES as readonly string[]).includes(value) && value !== 'reason-changed';
 }
 
+// 决定书摘要中的单条违法记录；factChange 只保留上游声明的 narrowed。
 export interface DecisionViolation {
   readonly violationRecordId: string;
   readonly kind: string;
@@ -82,6 +94,7 @@ export interface ValidityBaseline {
   readonly summary: DecisionSummary;
 }
 
+// 基线与当前拟决定之间的单项差异；violationRecordId 为 null 表示整体项。
 export interface ValidityDifference {
   /** null＝整体项（当事人、是否命中应听证）。 */
   readonly violationRecordId: string | null;
@@ -91,11 +104,13 @@ export interface ValidityDifference {
   readonly after: unknown;
 }
 
+// 差异按违法记录分组后的结果，整体项单独一组排在最前。
 export interface ValidityDifferenceGroup {
   readonly violationRecordId: string | null;
   readonly items: readonly ValidityDifference[];
 }
 
+// 一条告知失效命中：命中码、可归属的违法记录与中文说明。
 export interface ValidityHit {
   readonly code: ValidityHitCode;
   /** 能落到单条违法记录的，带该记录标识；整体项为 null。 */
@@ -103,6 +118,7 @@ export interface ValidityHit {
   readonly message: string;
 }
 
+// 一次有效性比较的结果：命中、差异、分组与是否需要重新告知。
 export interface ValidityAssessment {
   readonly hits: readonly ValidityHit[];
   readonly differences: readonly ValidityDifference[];
@@ -111,6 +127,7 @@ export interface ValidityAssessment {
   readonly renoticeRequired: boolean;
 }
 
+// 读取决定书摘要的结果；失败时带原因码、提示与处理出口。
 export type DecisionSummaryRead =
   | { readonly ok: true; readonly summary: DecisionSummary }
   | { readonly ok: false; readonly reason: string; readonly message: string; readonly outlet: string };
@@ -392,6 +409,8 @@ export interface AggravationReference {
   readonly createdAt: Date;
 }
 
+// 校验加重来源是否成立：来源须晚于 afterAt，且类别与引用记录的特征匹配。
+// backend/server/src/case-validity.service.ts 在提交加重来源与闸口复核时调用。
 export function aggravationSourceValid(input: {
   readonly sourceKind: string;
   readonly reference: AggravationReference | null;
@@ -406,6 +425,7 @@ export function aggravationSourceValid(input: {
   return false;
 }
 
+// 某份告知书下的 Q14 加重来源核对结果：命中的 A4／A5 码与来源是否已满足。
 export interface ValidityAggravationCheck {
   readonly noticeId: string;
   /** 相对该告知书的 A4／A5 命中。 */
@@ -413,6 +433,7 @@ export interface ValidityAggravationCheck {
   readonly satisfied: boolean;
 }
 
+// 有效性确认记录投射给闸口的事实：结论、指纹覆盖与复核结果。
 export interface ValidityConfirmationFact {
   readonly conclusion: 'valid' | 'invalid';
   /** 确认时记录的摘要指纹是否等于当前决定书摘要。 */
@@ -435,6 +456,7 @@ export interface ValidityGateFacts {
   readonly q14: readonly ValidityAggravationCheck[];
 }
 
+// 闸口阻断结果：原因码、提示、处理出口与引用来源。
 export interface ValidityGateBlock {
   readonly code: string;
   readonly message: string;
@@ -442,6 +464,7 @@ export interface ValidityGateBlock {
   readonly citation: string | null;
 }
 
+// 闸口判定结果；ok 为 false 时携带阻断详情。
 export type ValidityGateCheck = { readonly ok: true } | { readonly ok: false; readonly block: ValidityGateBlock };
 
 function gateBlock(code: string, message: string, outlet: string, citation: string | null = null): ValidityGateCheck {

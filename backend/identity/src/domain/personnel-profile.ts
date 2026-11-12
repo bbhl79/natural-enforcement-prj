@@ -1,10 +1,16 @@
+// 用途：定义人员登记、编辑、调岗、执法证登记与资格判定的操作码、规则码与纯函数。
+// 调用方：本模块人员相关服务与 backend/server/src/personnel-profiles.service.ts。
+// 边界：只做不查库的校验与推导；查库校验（角色是否存在等）由服务追加。
+// 依据：#105、#128、#133
 // 人员登记、列表与卡片（#105「人员与登录凭据」，#128）：操作码、岗位标记、登记规则、执法证情况。
 // 执法证登记与执法资格判定（#105「执法证（#85）」，#133）：证件状态、登记规则、留痕前值、资格判定。
 // 人员编辑与调岗（#129）：编辑操作码、编辑规则、编辑差异。
 
 import { rejectedPasswordRules, type PasswordRuleCode } from './password-policy.ts';
 
+/** 读取人员卡片与列表的操作码。 */
 export const PERSONNEL_PROFILE_READ_OPCODE = 'personnel.profile.read';
+/** 登记人员的操作码；只给系统管理。 */
 export const PERSONNEL_PROFILE_REGISTER_OPCODE = 'personnel.profile.register';
 /** 执法证登记（#133）：只给系统管理。留痕动作词 cert.updated。 */
 export const PERSONNEL_CERT_UPDATE_OPCODE = 'personnel.cert.update';
@@ -12,23 +18,28 @@ export const PERSONNEL_CERT_UPDATE_OPCODE = 'personnel.cert.update';
 export const PERSONNEL_PROFILE_UPDATE_OPCODE = 'personnel.profile.update';
 /** 停用、恢复、结束全部会话各自一个操作码（#105:216，#130），都只给系统管理。 */
 export const PERSONNEL_PROFILE_DEACTIVATE_OPCODE = 'personnel.profile.deactivate';
+/** 恢复已停用人员的操作码；只给系统管理。 */
 export const PERSONNEL_PROFILE_RESTORE_OPCODE = 'personnel.profile.restore';
+/** 结束某人员全部会话的操作码；只给系统管理。 */
 export const PERSONNEL_SESSIONS_END_OPCODE = 'personnel.sessions.end';
 
 /**
- * 岗位标记（Lei Hu 2026-10-17 22:14，A1）。取值清单是代码常量，管理台不提供维护入口。
+ * 岗位标记（项目负责人 2026-10-17，A1）。取值清单是代码常量，管理台不提供维护入口。
  * legal-review-lead 法制审核负责人；legal-affairs-leader 分管法制的局领导。
  * 岗位标记不是角色：不进允许行，不授予任何操作码，会话的操作码清单和授权都不读它。
  */
 export const PERSONNEL_POSTS = ['legal-review-lead', 'legal-affairs-leader'] as const;
+/** 岗位标记取值。 */
 export type PersonnelPost = (typeof PERSONNEL_POSTS)[number];
 
+/** 判断取值是否在岗位标记名册内。 */
 export function isPersonnelPost(value: unknown): value is PersonnelPost {
   return typeof value === 'string' && (PERSONNEL_POSTS as readonly string[]).includes(value);
 }
 
 /** 工号、姓名的最长字数（工程定，#128）。 */
 export const PERSONNEL_CODE_MAX_LENGTH = 32;
+/** 姓名最长字数（工程定，#128）。 */
 export const PERSONNEL_NAME_MAX_LENGTH = 100;
 
 /** 执法证号最长字数（工程定，#128；证号格式由 #133 定稿前只限长度）。 */
@@ -58,6 +69,7 @@ export type PersonnelRuleCode =
   | 'cert-expires-on-required'
   | 'cert-expires-on-invalid';
 
+/** 登记校验的规则码全集：人员规则与口令策略规则。 */
 export type RegisterRuleCode = PersonnelRuleCode | PasswordRuleCode;
 
 /** 登记输入（接口层已把非字符串取值换成空串或空数组）。 */
@@ -87,6 +99,7 @@ export interface NormalizedRegistration {
   certExpiresOn: string;
 }
 
+/** 规整登记输入：去首尾空白、去重角色、只留名册内岗位标记。 */
 export function normalizeRegistration(input: RegisterPersonnelProfileInput): NormalizedRegistration {
   return {
     code: input.code.trim(),
@@ -160,6 +173,7 @@ export interface NormalizedUpdate {
   posts: PersonnelPost[];
 }
 
+/** 规整编辑输入：去首尾空白、去重角色、只留名册内岗位标记。 */
 export function normalizeUpdate(input: UpdatePersonnelProfileInput): NormalizedUpdate {
   return {
     name: input.name.trim(),
@@ -188,6 +202,7 @@ export function updateRules(input: UpdatePersonnelProfileInput): UpdateRuleCode[
 /** 调岗目的地的库外规则码（#105:219：目的地不限数据范围，但必须是未停用机构）。 */
 export type TransferRuleCode = 'org-unit-required';
 
+/** 调岗目的地的库外规则：机构为空返回 org-unit-required，否则空数组。 */
 export function transferRules(orgUnitId: string): TransferRuleCode[] {
   return orgUnitId.trim() === '' ? ['org-unit-required'] : [];
 }
@@ -234,6 +249,7 @@ export function restoreRules(input: RestorePersonnelProfileInput, personnelCode:
  */
 export type RestoreInvalidReason = 'not-deactivated' | 'org-unit-required' | 'org-unit-deactivated';
 
+/** 恢复被拒原因对应的可读提示句，供接口层直接返回。 */
 export const RESTORE_INVALID_MESSAGE: Record<RestoreInvalidReason, string> = {
   'not-deactivated': '这个人员没有停用，不需要恢复。',
   'org-unit-required': '原任职机构已停用，恢复时必须同时选一个在用的新任职机构。',
@@ -263,6 +279,7 @@ export interface PersonnelEditDiff {
   postsToRevoke: PersonnelPost[];
 }
 
+/** 算出编辑差异：姓名与手机号相同记空串，角色与岗位标记只列有变化项。 */
 export function updateDiff(input: UpdatePersonnelProfileInput, current: PersonnelCurrentEdit): PersonnelEditDiff {
   const value = normalizeUpdate(input);
   const heldRoles = new Set(current.roles);
@@ -289,7 +306,7 @@ export function isEmptyDiff(diff: PersonnelEditDiff): boolean {
 /**
  * 执法证情况（列表与卡片显示用）。证号不出列表。
  * none 未登记；valid 有效；expiring 30 天内到期；expired 已过期；invalid 证件状态为「失效」（#133）。
- * 证件状态只存「有效」「失效」两项，临期和已过期按有效期推导（Lei Hu 7-3）。
+ * 证件状态只存「有效」「失效」两项，临期和已过期按有效期推导（项目负责人 7-3）。
  * 有效期按北京时间日界，等于今天仍有效。
  */
 export type CertStatus = 'none' | 'valid' | 'expiring' | 'expired' | 'invalid';
@@ -299,12 +316,15 @@ export type CertStatus = 'none' | 'valid' | 'expiring' | 'expired' | 'invalid';
  * 库层 NOT NULL + CHECK 兜底；不认识的取值在适配器里报错，不静默放过。
  */
 export const CERT_RECORD_STATUSES = ['valid', 'invalid'] as const;
+/** 证件状态取值类型：valid 有效、invalid 失效。 */
 export type CertRecordStatus = (typeof CERT_RECORD_STATUSES)[number];
 
+/** 判断取值是否为合法证件状态。 */
 export function isCertRecordStatus(value: unknown): value is CertRecordStatus {
   return typeof value === 'string' && (CERT_RECORD_STATUSES as readonly string[]).includes(value);
 }
 
+/** 临期判定的天数阈值：有效期距今不超过 30 天即为 expiring。 */
 export const CERT_EXPIRING_DAYS = 30;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -329,7 +349,7 @@ export function certStatusOf(
   now: Date,
 ): CertStatus {
   if (!certNo?.trim() || !expiresOn) return 'none';
-  // 证件状态为「失效」时一律失效，不再按有效期推导（#133，Lei Hu 7-3）。
+  // 证件状态为「失效」时一律失效，不再按有效期推导（#133，项目负责人 7-3）。
   if (recordStatus !== 'valid') return 'invalid';
   const expiry = Date.UTC(expiresOn.getUTCFullYear(), expiresOn.getUTCMonth(), expiresOn.getUTCDate());
   const today = shanghaiDay(now);
@@ -396,6 +416,7 @@ export function certUpdateRules(input: UpdateCertInput): CertRuleCode[] {
   return rules;
 }
 
+/** 规整执法证登记输入；任一规则不过时返回 null。 */
 export function normalizeCertUpdate(input: UpdateCertInput): NormalizedCertUpdate | null {
   if (certUpdateRules(input).length > 0) return null;
   const certExpiresOn = parseCalendarDay(input.certExpiresOn.trim());
@@ -416,6 +437,7 @@ export function certPreviousValue(expiresOn: Date | null, recordStatus: CertReco
 /** 七个角色（GLOSSARY「角色」、ADR 0009）的显示顺序。列表和卡片按这个顺序列角色。 */
 export const ROLE_ORDER = ['内勤', '经办', '法制审核', '行政审核', '行政审批', '监督', '系统管理'] as const;
 
+/** 按名册顺序给角色名去重排序；名册外的名字排在末尾并按本地化顺序。 */
 export function sortRoleNames(names: readonly string[]): string[] {
   const rank = (name: string): number => {
     const index = (ROLE_ORDER as readonly string[]).indexOf(name);

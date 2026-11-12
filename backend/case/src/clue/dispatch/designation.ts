@@ -1,3 +1,5 @@
+// 用途：报请指定管辖的纯领域规则：来源状态、规则码、失败原因码与受理机构候选链。
+// 调用方：backend/server/src/clue-designation.service.ts，取候选链、来源状态与失败原因类型。
 // 报请指定管辖的领域规则（#215；规格 D 节、GLOSSARY「指定管辖」）。
 //
 // 纯规则、不依赖 Nest 与存储：受理人（最近共同上级）的候选链在这里由两条
@@ -26,6 +28,7 @@ export const CLUE_DESIGNATE_REQUESTED_FAILED_REASONS = [
   'designation-pending',
   'concurrent-change',
 ] as const;
+/** 报请失败原因码的联合类型，取值来自 CLUE_DESIGNATE_REQUESTED_FAILED_REASONS，写入审计 reason。 */
 export type ClueDesignateRequestedFailedReason =
   (typeof CLUE_DESIGNATE_REQUESTED_FAILED_REASONS)[number];
 
@@ -35,6 +38,7 @@ export const CLUE_DESIGNATE_REJECTED_FAILED_REASONS = [
   'invalid-state',
   'concurrent-change',
 ] as const;
+/** 驳回失败原因码的联合类型，取值来自 CLUE_DESIGNATE_REJECTED_FAILED_REASONS，写入审计 reason。 */
 export type ClueDesignateRejectedFailedReason =
   (typeof CLUE_DESIGNATE_REJECTED_FAILED_REASONS)[number];
 

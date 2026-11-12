@@ -1,3 +1,7 @@
+// 用途：校验线索登记附件的类型、真实内容、件数与字节上限，以及几何来源文件的大小。
+// 调用方：backend/server/src/clue-registration.service.ts（登记校验）、backend/server/src/clue-disposition.service.ts 与 backend/server/src/case-transfer.service.ts（移送附件校验）。
+// 边界：纯函数，不写库、不写留痕；文件存储、失败留痕与 400／413 响应由调用方落地。
+// 依据：#211，ADR 0004。
 // 附件校验（#211；规格 E）。
 //
 // 口径：
@@ -92,6 +96,8 @@ function ooxmlPartOf(content: Uint8Array, extension: string): boolean {
 /**
  * 校验一件附件：扩展名白名单 + 真实内容核对。
  * 大小超限返回 tooLarge，由调用方决定 413 还是 400。
+ * 失败返回 rule 码：attachment-size-exceeded、attachment-empty、attachment-type-not-allowed、
+ * attachment-content-mismatch。纯函数，不写库、不写留痕。
  */
 export function validateAttachment(candidate: AttachmentCandidate): AttachmentValidation {
   if (candidate.byteSize > MAX_ATTACHMENT_BYTES) {
@@ -136,6 +142,7 @@ export function validateAttachment(candidate: AttachmentCandidate): AttachmentVa
 /**
  * 校验一组附件：件数、合计字节、逐件真实内容。
  * 任一不通过即整单不通过（规格 E：先完整校验，任一不通过即 4xx，存储零写入）。
+ * 额外返回 rule 码：attachment-count-exceeded、attachment-total-size-exceeded；逐件失败码同上。
  */
 export function validateAttachmentSet(
   candidates: readonly AttachmentCandidate[],

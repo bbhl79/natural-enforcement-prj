@@ -1,3 +1,7 @@
+// 用途：新建人员（P6 create）页面，填写人员信息、角色、岗位标记与可选执法证后提交登记。
+// 路由：/admin/personnel/new，路由表 id personnel-new。
+// 调用的接口：GET /api/org-units（机构下拉，需 org.tree.read）、POST /api/admin/personnel（操作码 personnel.profile.register）。
+
 import { Suspense, useState, type FormEvent } from 'react';
 import { Await, Link, useAsyncError, useLoaderData, useNavigate, useRevalidator } from 'react-router';
 
@@ -23,6 +27,7 @@ function Crumb() {
   return <div className="crumb">管理台 / <Link to="/admin/personnel">人员</Link> / <b>新建人员</b></div>;
 }
 
+/** 空白的登记表单初值。 */
 export const EMPTY_INPUT: RegisterInput = {
   code: '', name: '', orgUnitId: '', mobilePhone: '', initialPassword: '', roles: [], posts: [], certNo: '', certExpiresOn: '',
 };

@@ -1,3 +1,7 @@
+// 用途：提供调查环节记录与程序呈批的读取、保存、提交、审核、批准、退回 HTTP 接口，委托 InvestigationService。
+// 调用方：backend/server/src/app.module.ts 注册为控制器。
+// 依据：backend/server/src/investigation.service.ts（#236）。
+//
 // 调查环节与收尾的 HTTP 入口（#236）。
 
 import { Body, Controller, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
@@ -13,10 +17,12 @@ interface HttpReply {
   json(body: unknown): void;
 }
 
+// 调查与程序接口的 HTTP 入口，请求处理全部委托 InvestigationService。
 @Controller()
 export class InvestigationController {
   constructor(private readonly investigation: InvestigationService) {}
 
+  // 读取案件调查环节视图；操作码 case.read；对象级按案件承办机构授权。
   @Get('api/cases/:id/investigation')
   @UseGuards(SameOriginReadGuard)
   async read(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {
@@ -24,6 +30,7 @@ export class InvestigationController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 保存违法记录；操作码 doc.draft；对象级须本案主办或协办。
   @Post('api/cases/:id/violations')
   @UseGuards(SameOriginReadGuard)
   async saveViolation(
@@ -53,6 +60,7 @@ export class InvestigationController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 作废违法记录；操作码 doc.draft；名册层按角色授权，作废条件另由规则判定。
   @Post('api/cases/:id/violations/:recordId/void')
   @UseGuards(SameOriginReadGuard)
   async voidViolation(
@@ -68,6 +76,7 @@ export class InvestigationController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 保存询问记录；操作码 doc.draft；对象级须本案主办或协办。
   @Post('api/cases/:id/inquiries')
   @UseGuards(SameOriginReadGuard)
   async saveInquiry(
@@ -97,6 +106,7 @@ export class InvestigationController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 保存当事人告知记录；操作码 doc.draft；对象级须本案主办或协办。
   @Post('api/cases/:id/party-notices')
   @UseGuards(SameOriginReadGuard)
   async saveNotice(
@@ -120,6 +130,7 @@ export class InvestigationController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 保存程序草稿；操作码 doc.draft；对象级须本案主办或协办。
   @Post('api/cases/:id/procedures')
   @UseGuards(SameOriginReadGuard)
   async saveDraft(
@@ -145,6 +156,7 @@ export class InvestigationController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 提交程序呈批；操作码 doc.submit；对象级须本案主办或协办。
   @Post('api/procedures/:id/submit')
   @UseGuards(SameOriginReadGuard)
   async submit(
@@ -158,6 +170,7 @@ export class InvestigationController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 审核程序呈批；操作码 doc.admin.review；名册层按角色授权，不另限本案主办或协办。
   @Post('api/procedures/:id/review')
   @UseGuards(SameOriginReadGuard)
   async review(
@@ -172,6 +185,7 @@ export class InvestigationController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 批准程序呈批；操作码 doc.approve；名册层按角色授权，不另限本案主办或协办。
   @Post('api/procedures/:id/approve')
   @UseGuards(SameOriginReadGuard)
   async approve(
@@ -193,6 +207,7 @@ export class InvestigationController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 退回程序呈批；操作码 doc.admin.review；待审批状态改走 doc.approve，名册层按角色授权。
   @Post('api/procedures/:id/return')
   @UseGuards(SameOriginReadGuard)
   async returnToDraft(

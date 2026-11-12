@@ -35,6 +35,7 @@ function facts(overrides: Record<string, unknown> = {}) {
   } as Parameters<typeof assessMandatoryReview>[0];
 }
 
+// #269 必审清单判定：自动命中情形、人工勾选范围、不必审情形，并记录所用清单与版本。
 describe('#269 必审清单判定', () => {
   it('拟处罚、罚款 5000 元、无听证：不必审', () => {
     const result = assessMandatoryReview(facts());
@@ -119,6 +120,7 @@ describe('#269 必审清单判定', () => {
   });
 });
 
+// #269 法制审核接收人与负责人的资格校验：角色、归属、停用、承办经历与利害关系。
 describe('#269 接收人与负责人', () => {
   const receiver = (overrides: Record<string, unknown> = {}) =>
     checkLegalReviewReceiver({
@@ -158,6 +160,7 @@ describe('#269 接收人与负责人', () => {
   });
 });
 
+// #269 法审意见三去向：通过不填去向、不通过必填，讨论记录引用须属本案且晚于不通过定稿。
 describe('#269 法审意见三去向', () => {
   it('通过时不填去向；不通过时去向必填', () => {
     expect(readLegalReviewOpinionContent({ conclusion: 'pass', content: '同意' })).toEqual({
@@ -205,6 +208,7 @@ describe('#269 法审意见三去向', () => {
   });
 });
 
+// #269 摘要只覆盖同一次冻结决定，以及 X26 告知前与 X27／X08／X09 决定闸口的顺序。
 describe('#269 摘要覆盖与闸口', () => {
   it('摘要覆盖只认同一次冻结', () => {
     expect(summaryCoversDecision({ reviewedFrozenDecisionId: 'F1', currentFrozenDecisionId: 'F1' })).toBe(true);
@@ -290,6 +294,7 @@ describe('#269 摘要覆盖与闸口', () => {
   });
 });
 
+// #269 集体讨论触发标准与记录内容校验，以及参照清单与不阻断的提示口径。
 describe('#269 集体讨论与提示', () => {
   it('四种情形＋情节复杂或重大违法行为在清单内', () => {
     expect(COLLECTIVE_DISCUSSION_CRITERIA.map((row) => row.code)).toEqual([

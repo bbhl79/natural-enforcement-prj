@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# 用途：下一待办按钮的验证入口，先跑 API 矩阵，再按 manifest 跑 headless 页面取证。
+# 用法：bash e2e/verify/harness/run-next-todo-buttons.sh
+# 退出码：0 全绿；1 API 或页面失败、blocked，或本机没有 docker。
 # 下一待办按钮：API 矩阵 + headless 页面。
 # 不改产品权限。不叠假图层。不改产品编排。
 set -euo pipefail

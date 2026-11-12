@@ -1,3 +1,4 @@
+// 用途：被锁人员页（P7，A10）的数据层、动作请求、页面状态机与文案。
 // 被锁人员（P7，A10）：取数、解锁与重设初始口令的请求、页面状态与文案。
 // 接口沿用已有 A10：GET /api/admin/locked-personnel、POST /api/admin/personnel/:id/unlock、
 // POST /api/admin/personnel/:id/password-reset（body { password }）。
@@ -10,12 +11,18 @@ import { data } from 'react-router';
 import { apiFetch, type ApiDispatch } from '../api';
 import { sessionOpcodes, type SessionStore } from '../session';
 
+/** 读取被锁人员列表；操作码 personnel.locked.read。 */
 export const LOCKED_READ = 'personnel.locked.read' satisfies OpcodeName;
+/** 解锁；操作码 personnel.locked.release。 */
 export const LOCKED_RELEASE = 'personnel.locked.release' satisfies OpcodeName;
+/** 重设初始口令；操作码 personnel.password.reset。 */
 export const PASSWORD_RESET = 'personnel.password.reset' satisfies OpcodeName;
 
+/** 被锁人员列表接口：GET /api/admin/locked-personnel。 */
 export const LOCKED_LIST_URL = '/api/admin/locked-personnel';
+/** 解锁接口路径：POST /api/admin/personnel/:id/unlock。 */
 export const unlockUrl = (id: string) => `/api/admin/personnel/${encodeURIComponent(id)}/unlock`;
+/** 重设初始口令接口路径：POST /api/admin/personnel/:id/password-reset。 */
 export const resetUrl = (id: string) => `/api/admin/personnel/${encodeURIComponent(id)}/password-reset`;
 
 /** 列表一行，字段照 #91：人员标识、工号、姓名、当前机构名、自动解锁时间。 */
@@ -29,18 +36,28 @@ export interface LockedRow {
   lockedUntil: string;
 }
 
+/** 被锁人员页的两种动作。 */
 export type LockedActionKind = 'unlock' | 'reset';
 
 // ---- 文案（原型 v0.4 P7） ----
 
+/** 页面标题（原型 v0.4 P7）。 */
 export const PAGE_TITLE = '被锁人员';
+/** 页面说明句（原型 v0.4 P7）。 */
 export const PAGE_DESC = '你任职机构及其下级中，当前处于锁定期的人员。连续输错口令 5 次会锁定 30 分钟，到时自动解锁。';
+/** 表格列名。 */
 export const COLUMNS = ['人员标识', '工号', '姓名', '当前机构名', '自动解锁时间'] as const;
+/** 空列表标题。 */
 export const EMPTY_TITLE = '当前没有被锁的人员';
+/** 空列表提示。 */
 export const EMPTY_HINT = '有人来电说登录不了时，可先刷新本页确认是否被锁。';
+/** 当前机构名为空的人员的说明。 */
 export const NO_ORG_HINT = '当前机构名为空的人员没有任职机构，只有市局的系统管理人员能看到和处理';
+/** 解锁弹窗的说明句。 */
 export const UNLOCK_NOTE = '解锁后对方可以立即用原口令登录。请先核实来电人确是本人。';
+/** 重设弹窗的输入占位。 */
 export const RESET_PLACEHOLDER = '请输入新的初始口令';
+/** 重设弹窗的后果说明句。 */
 export const RESET_EFFECT = '确认后：同时解锁；对方的全部会话都会结束，同时结束全部「记住我」；对方下次登录必须先改口令。';
 
 /**
@@ -56,6 +73,7 @@ export const RESET_RULES: readonly string[] = [
   '不能与对方最近 5 次使用过的口令相同',
 ];
 
+/** 把口令要求各条拼成一句：以「；」相连，句末「。」。 */
 export function resetRulesSentence(rules: readonly string[] = RESET_RULES): string {
   return `${rules.join('；')}。`;
 }
@@ -77,6 +95,7 @@ export const RESET_RULE_TEXT: Readonly<Record<string, string>> = {
   'contains-code': '不能包含对方工号',
 };
 
+/** 对自己解锁或重设的拒绝句。 */
 export const SELF_DENIED = '不能解锁自己，也不能给自己重设口令。请联系本单位其他系统管理人员处理。';
 
 /**
@@ -92,7 +111,9 @@ function actionPhrase(kind: LockedActionKind, row: LockedRow): string {
   return kind === 'unlock' ? `解锁${who(row)}` : `为${who(row)}重设初始口令`;
 }
 
+/** 解锁确认弹窗的标题。 */
 export const unlockDialogTitle = (row: LockedRow) => `解锁「${row.name}」？`;
+/** 重设初始口令弹窗的标题。 */
 export const resetDialogTitle = (row: LockedRow) => `为「${row.name}」重设初始口令`;
 
 /** 动作结果横幅。 */
@@ -106,6 +127,7 @@ export type Notice =
   | { kind: 'deactivated'; action: LockedActionKind; row: LockedRow }
   | { kind: 'failed'; action: LockedActionKind; row: LockedRow };
 
+/** 结果横幅的文案；拒绝句不露原因码。 */
 export function noticeText(notice: Notice): string {
   switch (notice.kind) {
     case 'unlocked':
@@ -147,6 +169,7 @@ export function noticeReason(notice: Notice): string | null {
   }
 }
 
+/** 横幅是否表示一次拒绝；成功横幅为 false。 */
 export const isDenial = (notice: Notice | null) => notice !== null && notice.kind !== 'unlocked' && notice.kind !== 'reset';
 
 // ---- 时间 ----
@@ -186,6 +209,7 @@ function asRows(body: unknown): LockedRow[] {
   });
 }
 
+// GET /api/admin/locked-personnel，操作码 personnel.locked.read。
 /** 取被锁人员。403 交给页面显示无权限卡片；401 由会话已结束页接手。 */
 export async function loadLockedPersonnel(dispatch: ApiDispatch): Promise<LockedRow[]> {
   const response = await apiFetch(dispatch, LOCKED_LIST_URL);
@@ -259,6 +283,7 @@ export async function interpretAction(
   return { type: 'denied', notice: { kind: 'failed', action: kind, row } };
 }
 
+// POST /api/admin/personnel/:id/unlock 或 /api/admin/personnel/:id/password-reset，操作码 personnel.locked.release 与 personnel.password.reset。
 /** 发出解锁或重设请求。网络失败按「没有……：网络或服务暂时不可用」处理。 */
 export async function performAction(
   dispatch: ApiDispatch,
@@ -283,6 +308,7 @@ export async function performAction(
 
 // ---- 页面状态 ----
 
+/** 被锁人员页的状态：列表、弹窗、口令输入、待提交与横幅。 */
 export interface LockedState {
   rows: LockedRow[];
   /** 打开中的确认弹窗 */
@@ -297,6 +323,7 @@ export interface LockedState {
   notice: Notice | null;
 }
 
+/** 页面事件。 */
 export type LockedEvent =
   | { type: 'open'; kind: LockedActionKind; row: LockedRow }
   | { type: 'close' }
@@ -305,10 +332,12 @@ export type LockedEvent =
   /** 结算时带上发请求时的动作与目标，不读当前弹窗，免得结算到别的行上 */
   | { type: 'settled'; kind: LockedActionKind; row: LockedRow; result: ActionResult };
 
+/** 初始状态：没有弹窗与横幅。 */
 export function initialLockedState(rows: LockedRow[]): LockedState {
   return { rows, dialog: null, password: '', ruleCodes: [], pending: false, notice: null };
 }
 
+/** 页面状态机：打开与关闭弹窗、提交、结算；成功后从列表移除该行。 */
 export function lockedReducer(state: LockedState, event: LockedEvent): LockedState {
   switch (event.type) {
     case 'open':

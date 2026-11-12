@@ -1,3 +1,7 @@
+// 用途：立案呈批与立案的领域纯规则，含呈批内容校验、步骤门槛、在途锁与批准守卫。
+// 调用方：backend/server/src/case-filing.service.ts；部分守卫函数也被案件审查与结案服务使用。
+// 边界：不依赖 Nest 与存储；事实由调用方喂入，HTTP 映射在服务层。
+// 依据：#234、#257。
 // 立案呈批（《立案（不予立案）呈批表》）与案件最小模型的领域规则（#234）。
 //
 // 纯规则、不依赖 Nest 与存储（写法同 clue/closure/rules.ts）：
@@ -11,6 +15,7 @@ import type { GuardResult } from '../state-machine/guard.ts';
 
 /** 呈批结论：立案 | 不予立案（#27 批2 Q8：一期只设两项）。 */
 export const FILING_CONCLUSIONS = ['file', 'no-case'] as const;
+// 呈批结论，取 FILING_CONCLUSIONS 的元素类型。
 export type FilingConclusion = (typeof FILING_CONCLUSIONS)[number];
 
 /**
@@ -18,10 +23,12 @@ export type FilingConclusion = (typeof FILING_CONCLUSIONS)[number];
  * 退回、撤回都回到拟制中（已签意见保留在审批步骤里）。
  */
 export const FILING_APPROVAL_STATUSES = ['drafting', 'pending_review', 'pending_approval', 'approved'] as const;
+// 呈批状态，取 FILING_APPROVAL_STATUSES 的元素类型。
 export type FilingApprovalStatus = (typeof FILING_APPROVAL_STATUSES)[number];
 
 /** 审批步骤：提交 | 行政审核 | 行政审批（末级 doc.approve）| 退回 | 撤回。 */
 export const FILING_STEPS = ['submit', 'review', 'approve', 'return', 'withdraw'] as const;
+// 审批步骤，取 FILING_STEPS 的元素类型。
 export type FilingStep = (typeof FILING_STEPS)[number];
 
 /** 行政审核一级可配置为跳过或一级（#234 范围 2）。 */
@@ -82,6 +89,7 @@ export type FilingContent =
       readonly noCaseReason: NoCaseReason;
     };
 
+// 呈批内容校验结果：通过时交出规整后的内容，否则给出失败原因码。
 export type FilingContentCheck =
   | { readonly ok: true; readonly content: FilingContent }
   | { readonly ok: false; readonly rule: 'invalid-conclusion' | 'invalid-no-case-reason' };
@@ -195,7 +203,9 @@ export function checkFilingGuards(input: FilingGuardInput): FilingGuardHit | nul
 
 /** 立案呈批缺件守卫（#257）：规则键、原因码与出口。 */
 export const FILING_GAP_RULE_KEY = 'FILING-GAP';
+// 立案呈批缺件的原因码。
 export const FILING_GAP_REASON = 'missing-required-items';
+// 立案呈批缺件的出路文案。
 export const FILING_GAP_OUTLET = '先补齐线索要件，或改拟不予立案';
 
 /**
@@ -209,6 +219,7 @@ export interface FilingGapClassification {
   readonly warnings: readonly RequirementItem[];
 }
 
+// 把缺件项分为阻断与警告两组；提示级项两组都不进。
 export function classifyFilingGaps(items: readonly RequirementItem[]): FilingGapClassification {
   const blocks: RequirementItem[] = [];
   const warnings: RequirementItem[] = [];

@@ -1,3 +1,7 @@
+// 用途：提供管理台执法证登记与修改的 HTTP 接口，解析证号、有效期与证件状态后委托 PersonnelCertsService。
+// 调用方：backend/server/src/app.module.ts 注册为控制器。
+// 依据：backend/server/src/personnel-cert.service.ts、backend/identity/src/services/personnel-cert.service.ts（#133）。
+//
 import { Body, Controller, Param, Post, Req, Res } from '@nestjs/common';
 import type { ActorRef } from '@natural-enforcement/identity';
 
@@ -26,6 +30,7 @@ const text = (value: unknown): string => (typeof value === 'string' ? value : ''
 export class PersonnelCertController {
   constructor(private readonly certs: PersonnelCertsService) {}
 
+  // 执法证登记与修改；操作码 personnel.cert.update；对象级按对方当前任职机构授权，只给系统管理。
   @Post('personnel/:id/cert')
   async update(
     @Req() req: AuthenticatedRequest,

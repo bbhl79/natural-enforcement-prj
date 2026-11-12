@@ -1,3 +1,8 @@
+// 用途：退回与改派所需的事实读取，包括承办人可用性、接收人候选与失败留痕快照。
+// 调用方：backend/server/src/case-return.service.ts、backend/server/src/case-filing.service.ts、backend/server/src/case-reassign.service.ts。
+// 边界：只读人员停用与当前任职，不读机构停用；不放宽机构层「有未办结案件不让停用」。
+// 依据：Issue #238。
+//
 // 退回事实（#238）。只读人员停用与当前任职。
 // 不读机构停用，不放宽机构层「有未办结案件不让停用」。
 
@@ -15,6 +20,7 @@ import {
   type OrgUnitRow,
 } from '@natural-enforcement/identity';
 
+/** 案件的具名承办人：人员 id 与承办角色（主办或协办）。 */
 export interface NamedHandler {
   readonly personnelId: string;
   readonly role: string;

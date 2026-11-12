@@ -1,3 +1,4 @@
+// 用途：登记与超长期终态 peer 重叠的新线索，经查重接口断言 historicalGroups 含该 peer。
 // 登记一块与超长期 peer 重叠的新线索，读 historicalGroups，断言年龄不少于 4 年。
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';

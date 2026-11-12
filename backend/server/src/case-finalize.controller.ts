@@ -1,3 +1,4 @@
+// 用途：定型的材料入卷与归档审批提交、审核、批准 HTTP 接口。
 // 定型（E13／T27）的 HTTP 入口（#243）。
 // 材料入卷与归档审批拟制用 doc.draft；提交用 doc.submit；审核用 doc.admin.review；批准用 doc.approve。
 
@@ -14,10 +15,12 @@ interface HttpReply {
   json(body: unknown): void;
 }
 
+/** 定型接口的 HTTP 适配层。 */
 @Controller()
 export class CaseFinalizeController {
   constructor(private readonly finalizes: CaseFinalizeService) {}
 
+  // 读取案件的定型视图；操作码 case.read；对象级按案件承办机构校验。
   @Get('api/cases/:id/finalize')
   @UseGuards(SameOriginReadGuard)
   async read(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {
@@ -25,6 +28,7 @@ export class CaseFinalizeController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 登记卷宗材料；操作码 doc.draft；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/dossier-materials')
   async addMaterial(
     @Req() req: AuthenticatedRequest,
@@ -46,6 +50,7 @@ export class CaseFinalizeController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 拟制归档审批；操作码 doc.draft；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/finalize')
   async draft(
     @Req() req: AuthenticatedRequest,
@@ -65,6 +70,7 @@ export class CaseFinalizeController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 提交归档审批；操作码 doc.submit；对象级按案件承办机构校验。
   @Post('api/finalize-approvals/:approvalId/submit')
   async submit(
     @Req() req: AuthenticatedRequest,
@@ -76,6 +82,7 @@ export class CaseFinalizeController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 审核归档审批并写入审核意见；操作码 doc.admin.review；对象级按案件承办机构校验。
   @Post('api/finalize-approvals/:approvalId/review')
   async review(
     @Req() req: AuthenticatedRequest,
@@ -89,6 +96,7 @@ export class CaseFinalizeController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 批准归档审批；操作码 doc.approve；对象级按案件承办机构校验。
   @Post('api/finalize-approvals/:approvalId/approve')
   async approve(
     @Req() req: AuthenticatedRequest,

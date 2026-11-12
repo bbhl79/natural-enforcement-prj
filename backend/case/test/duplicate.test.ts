@@ -31,6 +31,7 @@ import {
   type FacePair,
 } from '../src/clue/duplicate/index.ts';
 
+// #212 逐面相交比例、阈值命中判定与界面展示口径，含亩换算。
 describe('逐面比例与命中判定', () => {
   it('比例＝交集 ÷ 各自单面面积；面积为 0 时记 0', () => {
     expect(facePairRatios({ selfArea: 4, otherArea: 8, intersectionArea: 2 })).toEqual({
@@ -67,6 +68,7 @@ describe('逐面比例与命中判定', () => {
   });
 });
 
+// #212 比对范围与对方状态：结案与已移送退出比对，命中只打标记不改状态。
 describe('比对范围与对方状态', () => {
   it('结案与已移送退出比对；已立案与其余状态参与', () => {
     expect(NOT_COMPARABLE_CLUE_STATUSES).toEqual(['closed', 'transferred_out']);
@@ -137,6 +139,7 @@ function face(overrides: Partial<FacePair> = {}): FacePair {
   };
 }
 
+// #212 命中面按对方线索分组：组间按对方编号、组内按本线索面序号排序。
 describe('按对方线索分组', () => {
   it('组间按对方编号排，组内按本线索面序号排', () => {
     const faces: FacePair[] = [
@@ -162,6 +165,7 @@ describe('按对方线索分组', () => {
   });
 });
 
+// #212 决定步数据契约：举报必派、非举报默认不派，命中含未结案时须先已知晓。
 describe('决定步数据契约（已知晓／举报必派）', () => {
   it('来源大类 3（群众举报）只能派，不能选不派', () => {
     expect(COMPLAINT_SOURCE_GROUP_CODE).toBe('3');
@@ -213,6 +217,7 @@ describe('决定步数据契约（已知晓／举报必派）', () => {
   });
 });
 
+// #212 匿名对称脱敏口径：登记时间、位置、反映人姓名与联系方式的最小披露。
 describe('匿名对称脱敏口径', () => {
   it('登记时间：只到月／完整到日', () => {
     const at = new Date(Date.UTC(2026, 9, 25, 3, 4, 5));

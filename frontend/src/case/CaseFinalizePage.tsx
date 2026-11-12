@@ -1,3 +1,7 @@
+// 用途：案件定型页，发起与保存定型拟制，提交、审核、批准归档审批。
+// 调用方：frontend/src/router.tsx 的 case-finalize 路由，路径 case/:caseId/finalize。
+// 接口：GET /api/cases/:id/finalize（经定型页 loader）；POST /api/cases/:id/finalize、POST /api/finalize-approvals/:approvalId/submit、POST /api/finalize-approvals/:approvalId/review、POST /api/finalize-approvals/:approvalId/approve。
+// 操作码：读取 case.read；拟制 doc.draft；提交 doc.submit；审核 doc.admin.review；批准 doc.approve。
 // 定型页（#243）：查看定型状态与缺件，发起、提交、审核、批准归档审批。
 import { useState } from 'react';
 import { useLoaderData, useRevalidator } from 'react-router';
@@ -7,6 +11,7 @@ import { useAppDispatch } from '../hooks';
 import { CaseFinalizeSection } from './CaseFinalizeSection';
 import type { FinalizeView } from './finalize';
 
+/** 定型页：无视图时展示不可查看提示，否则把拟制与审批动作接到定型面板。 */
 export default function CaseFinalizePage() {
   const data = useLoaderData() as { view: FinalizeView | null };
   const dispatch = useAppDispatch();

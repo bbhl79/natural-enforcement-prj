@@ -20,6 +20,7 @@ const argv = [
 const profile = { rootCode: 'ORG-GZ', rootName: '市局', adminCode: 'SJ0001', adminName: '首个管理', adminMobilePhone: '13900000001' };
 const SECRET = 'Boot-strap-27x';
 
+// 引导命令的参数解析与校验。
 describe('参数', () => {
   it('五项齐全：两种写法都认，值去掉首尾空白', () => {
     expect(parseBootstrapArgs(argv)).toEqual({ ok: true, profile });
@@ -50,6 +51,7 @@ describe('参数', () => {
   });
 });
 
+// 口令文件读取：来源、权限与内容校验。
 describe('口令文件', () => {
   it('只去掉末尾一个换行', async () => {
     expect(await readBootstrapPassword('/run/secrets/p', async () => `${SECRET}\r\n`)).toEqual({ ok: true, password: SECRET });
@@ -68,6 +70,7 @@ describe('口令文件', () => {
   });
 });
 
+// 引导命令的输出文案与退出码。
 describe('输出与退出码', () => {
   it('写入：退出码 0，输出编码和工号，不含手机号', () => {
     const report = reportOutcome(profile, { result: 'bootstrapped', rootOrgUnitId: 'r', adminPersonnelId: 'a' });

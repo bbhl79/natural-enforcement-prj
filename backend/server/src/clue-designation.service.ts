@@ -1,3 +1,7 @@
+// 用途：报请指定管辖的发起、驳回与受理人待办列表，并写报请与驳回留痕。
+// 调用方：backend/server/src/clue-designation.controller.ts。
+// 边界：授权经 authorize（拒绝先写 authz.denied 再抛错）；报请与驳回都走 clue.designate.request。
+// 依据：#215、#207、#216。
 // 报请指定管辖（#215；规格 D 节、GLOSSARY「指定管辖」）。
 //
 // 线索在待分派池（池所属机构内勤）、已派机构、已派承办人（承办机构内勤）时发现
@@ -74,6 +78,7 @@ export interface DesignationRequestView {
   readonly createdAt: string;
 }
 
+/** 报请指定管辖的结果；含输入不合规、拒绝、找不到与冲突。 */
 export type DesignateRequestOutcome =
   | {
       readonly status: 200;
@@ -90,6 +95,7 @@ export type DesignateRequestOutcome =
   | { readonly status: 404; readonly body: { readonly result: 'not-found' } }
   | { readonly status: 409; readonly body: { readonly result: 'invalid-state' | 'concurrent-change'; readonly reason: string } };
 
+/** 驳回指定管辖报请的结果；状态码口径与报请相同。 */
 export type DesignateRejectOutcome =
   | {
       readonly status: 200;
@@ -105,6 +111,7 @@ export type DesignateRejectOutcome =
   | { readonly status: 404; readonly body: { readonly result: 'not-found' } }
   | { readonly status: 409; readonly body: { readonly result: 'invalid-state' | 'concurrent-change'; readonly reason: string } };
 
+/** 受理人待办列表结果；无权限时为 403。 */
 export type DesignationTodoOutcome =
   | { readonly status: 200; readonly body: { readonly result: 'designation-todos'; readonly items: readonly DesignationTodoItem[] } }
   | { readonly status: 403; readonly body: { readonly reason: DenyReason } };
@@ -116,6 +123,7 @@ interface Rejection {
   readonly reason: string;
 }
 
+/** 指定管辖服务：报请、驳回与受理人待办查询。 */
 @Injectable()
 export class ClueDesignationService {
   constructor(

@@ -1,3 +1,4 @@
+// 用途：改派呈批的提交、批准、不批、撤回与材料效力认定 HTTP 接口。
 // 改派呈批与材料效力认定 HTTP 入口（#239）。
 
 import { Body, Controller, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
@@ -19,6 +20,7 @@ const optional = (value: unknown): string | null =>
 const stringList = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 
+/** 改派呈批与材料效力认定接口的 HTTP 适配层。 */
 @Controller()
 export class CaseReassignController {
   constructor(
@@ -26,6 +28,7 @@ export class CaseReassignController {
     private readonly returns: CaseReturnService,
   ) {}
 
+  // 读取案件的改派呈批列表；操作码 case.read；对象级按案件承办机构校验。
   @Get('api/cases/:id/reassignments')
   @UseGuards(SameOriginReadGuard)
   async list(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {
@@ -33,6 +36,7 @@ export class CaseReassignController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 提交改派呈批；操作码 case.reassign.submit；对象级按案件承办机构校验。
   @Post('api/cases/:id/reassignments')
   @UseGuards(SameOriginReadGuard)
   async submit(
@@ -57,6 +61,7 @@ export class CaseReassignController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 批准改派呈批；操作码 doc.approve；对象级按案件承办机构校验。
   @Post('api/cases/:id/reassignments/:reassignmentId/approve')
   @UseGuards(SameOriginReadGuard)
   async approve(
@@ -73,6 +78,7 @@ export class CaseReassignController {
   }
 
   /** 不批（#279）：走 #238 退回，R10 须写明意见。 */
+  // 操作码 doc.admin.review（操作者持行政审批角色时改用 doc.approve）；对象级按案件承办机构校验。
   @Post('api/cases/:id/reassignments/:reassignmentId/reject')
   @UseGuards(SameOriginReadGuard)
   async reject(
@@ -89,6 +95,7 @@ export class CaseReassignController {
   }
 
   /** 发起人批准前撤回（#279）。 */
+  // 操作码 case.reassign.submit；对象级按案件承办机构校验。
   @Post('api/cases/:id/reassignments/:reassignmentId/withdraw')
   @UseGuards(SameOriginReadGuard)
   async withdraw(
@@ -104,6 +111,7 @@ export class CaseReassignController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 认定改派材料的效力；操作码 doc.draft；对象级按案件承办机构校验。
   @Post('api/cases/:id/material-effectivities')
   @UseGuards(SameOriginReadGuard)
   async determine(

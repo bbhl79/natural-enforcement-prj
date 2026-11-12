@@ -1,3 +1,7 @@
+// 用途：内业核查执行端口的默认实现，按图层服务地址远程查询并校验返回的相交事实。
+// 调用方：backend/server/src/persistence.module.ts 装配为 CLUE_VERIFICATION_PORT 的默认实现。
+// 边界：不落图层副本、不做本地空间套合；不写库、不写留痕，事实交给编排方。
+// 依据：#213，ADR 0021，ADR 0008。
 // 核查执行端口的默认实现：按空间服务地址远程实时查询图层（#213，ADR 0021）。
 //
 // 本地不落图层副本，也不在本地做空间套合：套合与面积由图层服务算好后回给本系统，
@@ -140,6 +144,8 @@ async function queryLayer(
 }
 
 /** 按服务地址建立核查执行端口。 */
+// 未配置地址的图层由 run 返回 unavailable，原因词 service-not-configured；
+// 查询失败按 service-unavailable、timeout、invalid-response 分类。不写库、不写留痕。
 export function createLayerServiceVerificationPort(
   options: LayerServiceVerificationOptions,
 ): ClueVerificationPort {

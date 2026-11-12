@@ -1,3 +1,7 @@
+// 用途：定义内业核查的线索状态、运行状态、失败类别、图层三态与自动重试参数。
+// 调用方：backend/server/src/clue-verification.service.ts、本目录 report.ts、backend/case/src/persistence/prisma-clue-store.ts（状态标签）。
+// 边界：纯常量与纯判定，不写库、不写留痕；核查运行行与失败分类落库由编排方负责。
+// 依据：#213，GLOSSARY「内业核查」。
 // 内业核查的状态与失败分类（#213；规格 C 节、USER LOCK L2）。
 //
 // 核查状态是线索的正交属性，不进三级校验、不拦分派：
@@ -6,18 +10,22 @@
 
 /** 线索上的核查状态。 */
 export const VERIFICATION_STATUSES = ['not_required', 'running', 'done', 'failed'] as const;
+/** 线索核查状态的联合类型。 */
 export type VerificationStatus = (typeof VERIFICATION_STATUSES)[number];
 
 /** 一次核查运行的状态。 */
 export const VERIFICATION_RUN_STATUSES = ['running', 'done', 'failed'] as const;
+/** 运行状态的联合类型。 */
 export type VerificationRunStatus = (typeof VERIFICATION_RUN_STATUSES)[number];
 
 /** 失败类别：瞬时（可重试）｜确定性（不重试，当次即判没跑成）。 */
 export const FAILURE_CATEGORIES = ['transient', 'deterministic'] as const;
+/** 失败类别的联合类型。 */
 export type FailureCategory = (typeof FAILURE_CATEGORIES)[number];
 
 /** 报告里每层的三态。 */
 export const LAYER_STATES = ['overlapped', 'no_overlap', 'unavailable'] as const;
+/** 图层三态的联合类型。 */
 export type LayerState = (typeof LAYER_STATES)[number];
 
 /** 需要跑内业核查的法域：土地与矿产。测绘与规划不跑，只显示「不设内业核查」。 */

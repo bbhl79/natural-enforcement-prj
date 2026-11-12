@@ -1,3 +1,7 @@
+// 用途：被锁人员（P7）页面，展示锁定期人员并执行解锁与重设初始口令。
+// 路由：/admin/locked-personnel，路由表 id locked-personnel，菜单「被锁人员」。
+// 调用的接口：GET /api/admin/locked-personnel（操作码 personnel.locked.read）、POST /api/admin/personnel/:id/unlock（操作码 personnel.locked.release）、POST /api/admin/personnel/:id/password-reset（操作码 personnel.password.reset）。
+
 import { Suspense, useEffect, useReducer, useRef, type ReactNode, type RefObject } from 'react';
 import { Await, useAsyncError, useLoaderData, useRevalidator } from 'react-router';
 
@@ -140,6 +144,7 @@ function Dialog({ title, children, foot, onCancel }: { title: string; children: 
   );
 }
 
+/** 列表与动作视图的属性。 */
 export interface LockedViewProps {
   state: LockedState;
   opcodes: readonly string[];

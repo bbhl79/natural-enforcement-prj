@@ -1,3 +1,7 @@
+// 用途：提供保密报告工单的生成、读取、时限提醒、登记已报与录入回执 HTTP 接口，委托 SecrecyReportService。
+// 调用方：backend/server/src/app.module.ts 注册为控制器。
+// 依据：backend/server/src/secrecy-report.service.ts（#225）。
+//
 // 保密报告工单接口（#225）。
 //
 // POST /api/storage/materials/:materialId/secrecy-report   对已隔离对象生成工单（待报）
@@ -34,10 +38,12 @@ interface UploadedFile {
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
 
+// 保密报告工单的 HTTP 入口，请求处理全部委托 SecrecyReportService。
 @Controller('api/storage')
 export class SecrecyReportController {
   constructor(private readonly reports: SecrecyReportService) {}
 
+  // 对已隔离对象生成保密报告工单；操作码 storage.secrecy-report.manage；对象级限操作者所属机构为目标所属根机构。
   @Post('materials/:materialId/secrecy-report')
   async create(
     @Req() req: AuthenticatedRequest,
@@ -48,6 +54,7 @@ export class SecrecyReportController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 按隔离对象读取工单；操作码 storage.secrecy-report.manage；对象级限操作者所属机构为目标所属根机构。
   @Get('materials/:materialId/secrecy-report')
   @UseGuards(SameOriginReadGuard)
   async readByMaterial(
@@ -59,6 +66,7 @@ export class SecrecyReportController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 列出本人名下待报工单的时限提醒；操作码 storage.secrecy-report.manage；对象级限本人所属机构。
   @Get('secrecy-reports/reminders')
   @UseGuards(SameOriginReadGuard)
   async reminders(@Req() req: AuthenticatedRequest, @Res() res: HttpReply): Promise<void> {
@@ -66,6 +74,7 @@ export class SecrecyReportController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 按工单读取隔离对象；操作码 storage.secrecy-report.manage；对象级限操作者所属机构为目标所属根机构。
   @Get('secrecy-reports/:id')
   @UseGuards(SameOriginReadGuard)
   async read(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {
@@ -73,6 +82,7 @@ export class SecrecyReportController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 登记已报，报告说明必填；操作码 storage.secrecy-report.manage；对象级限操作者所属机构为目标所属根机构。
   @Post('secrecy-reports/:id/reported')
   async reported(
     @Req() req: AuthenticatedRequest,
@@ -84,6 +94,7 @@ export class SecrecyReportController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 录入指令摘要与回执附件；操作码 storage.secrecy-report.manage；对象级限操作者所属机构为目标所属根机构。
   @Post('secrecy-reports/:id/receipt')
   @UseInterceptors(
     FileFieldsInterceptor([{ name: 'attachment', maxCount: 1 }], {

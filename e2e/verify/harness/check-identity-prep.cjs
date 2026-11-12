@@ -1,3 +1,6 @@
+// 用途：校验身份准备快照 before.json 与 after.json 的字段、禁用字段与传输地址。
+// 用法：bash e2e/verify/harness/check-identity-prep.sh <快照目录>；也可直接以 node 运行本文件。
+// 退出码：0 通过；1 校验失败；2 用法错误。
 /* eslint-disable @typescript-eslint/no-require-imports */
 'use strict';
 
@@ -16,12 +19,14 @@ const FORBIDDEN_KEYS = new Set([
   'passwordhash',
 ]);
 
+// 构造带 IDENTITY_PREP_INVALID 错误码的异常并抛出。
 function fail(message) {
   const error = new Error(message);
   error.code = 'IDENTITY_PREP_INVALID';
   throw error;
 }
 
+// 递归检查快照对象，命中禁用字段即失败并给出字段路径。
 function walk(value, at) {
   if (Array.isArray(value)) {
     value.forEach((item, index) => walk(item, `${at}[${index}]`));
@@ -34,6 +39,7 @@ function walk(value, at) {
   }
 }
 
+// 读取并逐字段校验一份快照；缺字段或取值非法时抛错。
 function readSnapshot(file) {
   const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
   walk(parsed, path.basename(file));
@@ -73,6 +79,7 @@ function readSnapshot(file) {
   return parsed;
 }
 
+// 校验快照目录：拒绝落在 e2e/results/verify-* 下，并要求前后两份快照时间不同。
 function validateIdentityPrep(dir) {
   const resolved = path.resolve(dir);
   if (resolved.includes(`${path.sep}e2e${path.sep}results${path.sep}verify-`)) {
@@ -84,6 +91,7 @@ function validateIdentityPrep(dir) {
   return { before: before.takenAt, after: after.takenAt };
 }
 
+// 命令行入口：解析快照目录参数，打印校验结果或失败原因。
 function main() {
   const dir = process.argv[2];
   if (!dir || process.argv.length !== 3) {

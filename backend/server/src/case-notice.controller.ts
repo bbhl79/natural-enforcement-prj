@@ -1,3 +1,4 @@
+// 用途：告知呈批、陈述申辩与听证全流程的 HTTP 接口。
 // 告知、陈述申辩与听证的 HTTP 入口（#272）。
 // 告知呈批走 doc.*；听证事务复用行政审核的 case.review.record（过渡，待 #230 回写 #71）。
 
@@ -14,10 +15,12 @@ interface HttpReply {
   json(body: unknown): void;
 }
 
+/** 告知、陈述申辩与听证接口的 HTTP 适配层。 */
 @Controller()
 export class CaseNoticeController {
   constructor(private readonly notices: CaseNoticeService) {}
 
+  // 读取案件的告知与听证视图；操作码 case.read；对象级按案件承办机构校验。
   @Get('api/cases/:id/notice')
   @UseGuards(SameOriginReadGuard)
   async read(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {
@@ -25,6 +28,7 @@ export class CaseNoticeController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 保存告知书草稿；操作码 doc.draft；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/notices')
   @UseGuards(SameOriginReadGuard)
   async save(
@@ -37,6 +41,7 @@ export class CaseNoticeController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 提交告知书呈批；操作码 doc.submit；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/notices/:noticeId/submit')
   @UseGuards(SameOriginReadGuard)
   async submit(
@@ -48,6 +53,7 @@ export class CaseNoticeController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 审核告知书并写入审核意见；操作码 doc.admin.review；对象级按案件承办机构校验。
   @Post('api/notices/:noticeId/review')
   @UseGuards(SameOriginReadGuard)
   async review(
@@ -62,6 +68,7 @@ export class CaseNoticeController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 批准告知书；操作码 doc.approve；对象级按案件承办机构校验。
   @Post('api/notices/:noticeId/approve')
   @UseGuards(SameOriginReadGuard)
   async approve(
@@ -81,6 +88,7 @@ export class CaseNoticeController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 登记告知书送达；操作码 doc.submit；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/notices/:noticeId/serve')
   @UseGuards(SameOriginReadGuard)
   async serve(
@@ -92,6 +100,7 @@ export class CaseNoticeController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 登记陈述申辩；操作码 doc.submit；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/statements')
   @UseGuards(SameOriginReadGuard)
   async statement(
@@ -104,6 +113,7 @@ export class CaseNoticeController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 登记告知完成；操作码 doc.submit；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/notice-completions')
   @UseGuards(SameOriginReadGuard)
   async complete(
@@ -119,6 +129,7 @@ export class CaseNoticeController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 申请听证；操作码 doc.submit；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/hearing-requests')
   @UseGuards(SameOriginReadGuard)
   async requestHearing(
@@ -131,6 +142,7 @@ export class CaseNoticeController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 受理听证申请；操作码 case.review.record；对象级按案件承办机构校验。
   @Post('api/hearings/:hearingId/accept')
   @UseGuards(SameOriginReadGuard)
   async accept(
@@ -142,6 +154,7 @@ export class CaseNoticeController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 安排听证时间；操作码 case.review.record；对象级按案件承办机构校验。
   @Post('api/hearings/:hearingId/schedule')
   @UseGuards(SameOriginReadGuard)
   async schedule(
@@ -156,6 +169,7 @@ export class CaseNoticeController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 指定听证主持人；操作码 case.review.record；对象级按案件承办机构校验。
   @Post('api/hearings/:hearingId/host')
   @UseGuards(SameOriginReadGuard)
   async host(
@@ -170,6 +184,7 @@ export class CaseNoticeController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 结束听证并写听证结果；操作码 case.review.record；对象级按案件承办机构校验。
   @Post('api/hearings/:hearingId/end')
   @UseGuards(SameOriginReadGuard)
   async end(
@@ -185,6 +200,7 @@ export class CaseNoticeController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 检查能否重新听证，一律拒绝并写失败留痕；操作码 case.review.record；对象级按案件承办机构校验。
   @Post('api/cases/:id/hearing-reopens')
   @UseGuards(SameOriginReadGuard)
   async reopen(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {
@@ -192,6 +208,7 @@ export class CaseNoticeController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 因新事实退回调查并递增次序号；操作码 doc.submit；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/new-fact-returns')
   @UseGuards(SameOriginReadGuard)
   async newFact(

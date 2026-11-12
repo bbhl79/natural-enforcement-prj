@@ -92,6 +92,7 @@ async function reporterRead(
   };
 }
 
+// 验证比对视图分组与实名查阅的脱敏、明文出口及失败口径（#212）。
 describe('#212 比对视图与实名查阅', () => {
   it('比对视图：命中按对方线索分组，含双方面 ID、双方比例、交集面积与 dup_computed_at', async () => {
     const peer = await register({ spatial: polygon(rect(119.00, 23.40, 119.10, 23.50)) });

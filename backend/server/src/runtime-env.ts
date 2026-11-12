@@ -1,3 +1,8 @@
+// 用途：启动包与引导命令的必填环境变量清单，以及缺项时的读取与报错。
+// 调用方：backend/server/src/main.ts、backend/server/src/bootstrap-command.ts。
+// 边界：源码不内嵌第二套默认值；空串按缺项处理；缺项时抛 MissingRuntimeEnvError 并列出全部缺项。
+// 依据：ADR 0008，Issue #80，Issue #131。
+//
 // 启动包读入的环境变量（ADR 0008、#80）。
 // 名字登记在 infra/runtime.env。缺必填项时进程启动失败，并说明缺哪一项。
 // 源码不内嵌第二套默认值。
@@ -5,6 +10,7 @@
 /** 启动包启动时必须读到的环境变量。DATABASE_URL 由 dev 从清单分项算出。 */
 export const SERVER_REQUIRED_ENV = ['DATABASE_URL'] as const;
 
+/** 启动包必填环境变量的名字联合。 */
 export type ServerEnvName = (typeof SERVER_REQUIRED_ENV)[number];
 
 /**

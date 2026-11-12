@@ -1,3 +1,6 @@
+// 用途：撤回不派与结案提醒的数据层：取原因口径、不派视图、提醒列表，提交撤回与提醒处理。
+// 调用方：frontend/src/clue/ClueHeldSection.tsx、frontend/src/clue/ClueReminderSection.tsx、frontend/src/workbench/todos.ts。
+// 接口：GET /api/clues/closure-options（无操作码）、GET /api/clues/held 与 /api/clues/reminders（操作码 clue.read）；POST /api/clues/:id/withdraw（clue.withdraw.undo）、POST /api/clues/reminders/:id/resolve（clue.reminder.resolve）。
 // 撤回不派与结案提醒的数据层（#217；规格 D 节、GLOSSARY）。
 //
 // 四项常用原因由服务端给（/api/clues/closure-options），界面不另存一份，
@@ -54,6 +57,7 @@ async function readResult(response: Response): Promise<ClosureActionResult> {
   return { ok: false, status: response.status, body };
 }
 
+// 接口：GET /api/clues/closure-options，无操作码（只读口径，仅同源读守卫）。
 /** 取界面口径（四项常用原因）。 */
 export async function loadClosureOptions(dispatch: ApiDispatch): Promise<ClosureOptions> {
   const response = await apiFetch(dispatch, '/api/clues/closure-options');
@@ -61,6 +65,7 @@ export async function loadClosureOptions(dispatch: ApiDispatch): Promise<Closure
   return (await response.json()) as ClosureOptions;
 }
 
+// 接口：GET /api/clues/held，操作码 clue.read。
 /** 不派视图。 */
 export async function loadHeldClues(dispatch: ApiDispatch): Promise<readonly HeldClue[]> {
   const response = await apiFetch(dispatch, '/api/clues/held');
@@ -69,6 +74,7 @@ export async function loadHeldClues(dispatch: ApiDispatch): Promise<readonly Hel
   return body.clues ?? [];
 }
 
+// 接口：GET /api/clues/reminders，操作码 clue.read。
 /** 结案提醒列表。 */
 export async function loadReminders(dispatch: ApiDispatch): Promise<readonly ReminderItem[]> {
   const response = await apiFetch(dispatch, '/api/clues/reminders');
@@ -77,6 +83,7 @@ export async function loadReminders(dispatch: ApiDispatch): Promise<readonly Rem
   return body.reminders ?? [];
 }
 
+// 接口：POST /api/clues/:id/withdraw，操作码 clue.withdraw.undo。
 /** 撤回不派：四项原因多选（至少一项）＋补充说明必填。 */
 export async function submitWithdraw(
   dispatch: ApiDispatch,
@@ -95,6 +102,7 @@ export async function submitWithdraw(
   return readResult(response);
 }
 
+// 接口：POST /api/clues/reminders/:id/resolve，操作码 clue.reminder.resolve。
 /** 提醒处理：撤回不派再办｜写明原因随旧线索办结。 */
 export async function submitResolveReminder(
   dispatch: ApiDispatch,

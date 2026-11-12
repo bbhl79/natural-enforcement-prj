@@ -15,6 +15,7 @@ function source(relative: string): string {
   return readFileSync(new URL(relative, import.meta.url), 'utf8');
 }
 
+// #243 结构探针：以源码文本与库迁移断言 T27 只经定型服务落库、定型相关记录库层只追加、材料清单单点版本化。
 describe('#243 定型结构探针', () => {
   const service = source('../../server/src/case-finalize.service.ts');
   const stateService = source('../../server/src/case-state.service.ts');

@@ -1,3 +1,4 @@
+// 用途：决定的拟制、提交、审核与批准 HTTP 接口。
 // 决定（E09／T23）的 HTTP 入口（#270）。
 // 拟制用 doc.draft；提交用 doc.submit；审核用 doc.admin.review；批准用 doc.approve。
 
@@ -14,10 +15,12 @@ interface HttpReply {
   json(body: unknown): void;
 }
 
+/** 决定接口的 HTTP 适配层。 */
 @Controller()
 export class CaseDecisionController {
   constructor(private readonly decisions: CaseDecisionService) {}
 
+  // 读取案件的决定视图；操作码 case.read；对象级按案件承办机构校验。
   @Get('api/cases/:id/decision')
   @UseGuards(SameOriginReadGuard)
   async read(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {
@@ -25,6 +28,7 @@ export class CaseDecisionController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 拟制决定文书；操作码 doc.draft；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/cases/:id/decision')
   async draft(
     @Req() req: AuthenticatedRequest,
@@ -49,6 +53,7 @@ export class CaseDecisionController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 提交决定审批；操作码 doc.submit；对象级按案件承办机构校验，且须为本案主办或协办。
   @Post('api/decision-approvals/:approvalId/submit')
   async submit(
     @Req() req: AuthenticatedRequest,
@@ -59,6 +64,7 @@ export class CaseDecisionController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 审核决定审批并写入审核意见；操作码 doc.admin.review；对象级按案件承办机构校验。
   @Post('api/decision-approvals/:approvalId/review')
   async review(
     @Req() req: AuthenticatedRequest,
@@ -72,6 +78,7 @@ export class CaseDecisionController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 批准决定审批；操作码 doc.approve；对象级按案件承办机构校验。
   @Post('api/decision-approvals/:approvalId/approve')
   async approve(
     @Req() req: AuthenticatedRequest,

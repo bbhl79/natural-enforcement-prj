@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { authRedirect, HOME_PATH, LOGIN_PATH, PASSWORD_PATH, safeNext, withNext } from './routing';
 
+// 验证登录后回跳地址的 next 参数只接受站内路径。
 describe('next 参数校验（#91 约定第 3 条）', () => {
   it('只接受以单个 / 开头的站内路径', () => {
     expect(safeNext('/admin')).toBe('/admin');
@@ -40,6 +41,7 @@ describe('next 参数校验（#91 约定第 3 条）', () => {
   });
 });
 
+// 验证按认证状态改写地址：未登录进登录页并保留原路径，已登录离开登录页。
 describe('按认证状态改写地址（#91 约定第 2 条）', () => {
   const at = (pathname: string, search = '') => ({ pathname, search });
 

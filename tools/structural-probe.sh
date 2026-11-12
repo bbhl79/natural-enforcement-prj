@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 用途：红探针：逐条注入违例源码，断言目标规则判红并能自清理。
 # 结构测试红探针（评审必修 C6，补 #51 AC 缺的负例证据）。
 # 为什么需要：兜底闸只出示「全绿」，无法区分「规则通过」与「规则根本没在扫」——
 # 本 PR 的 frontend-boundary 就是这么一条恒绿死规则（case 里的 pg|@prisma/* 永远取不到）。
@@ -26,6 +27,7 @@ MODIFIED=()      # 就地改写的既有文件（绝对路径）
 SAVED=()         # 与 MODIFIED 同序：改写前的逐字节备份
 FAILURES=0
 
+# 写入一个临时探针文件并登记，cleanup 时删除
 tmp_write() { # $1 = 相对 ROOT 的路径，$2.. = 内容行
   local path="$ROOT/$1" dir; shift
   dir="$(dirname "$path")"
@@ -35,6 +37,7 @@ tmp_write() { # $1 = 相对 ROOT 的路径，$2.. = 内容行
   CREATED+=("$path")
 }
 
+# 就地追加内容到既有文件，先备份，cleanup 时逐字节还原
 inplace_append() { # $1 = 绝对路径，$2.. = 追加内容行（先备份，cleanup 时逐字节还原）
   local path="$1" backup; shift
   backup="$(mktemp "${TMPDIR:-/tmp}/structural-probe-backup-XXXXXX")"
@@ -44,6 +47,7 @@ inplace_append() { # $1 = 绝对路径，$2.. = 追加内容行（先备份，cl
   printf '%s\n' "$@" >> "$path"
 }
 
+# 就地删除文件中的一行，先备份，cleanup 时逐字节还原
 inplace_delete() { # $1 = 绝对路径，$2 = 要删掉的行（整行逐字匹配；先备份，cleanup 时逐字节还原）
   local path="$1" line="$2" backup
   backup="$(mktemp "${TMPDIR:-/tmp}/structural-probe-backup-XXXXXX")"
@@ -53,6 +57,7 @@ inplace_delete() { # $1 = 绝对路径，$2 = 要删掉的行（整行逐字匹�
   grep -vxF -- "$line" "$backup" > "$path" || true
 }
 
+# 删临时文件、还原就地改写文件并逐字节校验
 cleanup() { # 幂等：删临时文件 + 还原就地改写文件，还原后逐字节校验
   local i path dir backup
   for path in "${CREATED[@]}"; do rm -f "$path"; done
@@ -73,12 +78,15 @@ cleanup() { # 幂等：删临时文件 + 还原就地改写文件，还原后逐
 }
 trap cleanup EXIT
 
+# 输出一条通过
 report_ok() { echo "[通过] $1"; }
+# 输出一条失败并计数
 report_bad() { echo "[失败] $1" >&2; FAILURES=$((FAILURES + 1)); }
 
 # ---------- 违例探针：每条 = 一个 write_probe_<id> 函数 + 一条 SPECS 记录 ----------
 # SPECS 记录格式：id|期望命中的规则名|人类可读说明
 
+# 注入违例：前端直连库（@prisma/client）
 write_probe_frontend-boundary() {
   tmp_write "frontend/src/_structural-probe.ts" \
     "// 探针（临时，勿入库）：前端直连库" \
@@ -86,8 +94,8 @@ write_probe_frontend-boundary() {
     "export const client = new PrismaClient();"
 }
 
-write_probe_spatial-orm-chain() {
   # 换行链式形态：单行正则取不到，靠折行二次判定兜住（C6 扩口径项 ③）
+write_probe_spatial-orm-chain() {
   tmp_write "backend/geo-dict/src/_structural-probe.mjs" \
     "// 探针（临时，勿入库）：空间模型 ORM 写，拆成多行使单行正则失明" \
     "export function probe(prisma) {" \
@@ -97,14 +105,15 @@ write_probe_spatial-orm-chain() {
     "}"
 }
 
-write_probe_supervision-sink-sh() {
   # C5 扩范围证据：e2e 的 .sh 用例形态同样在 supervision-sink 扫描范围内
+write_probe_supervision-sink-sh() {
   tmp_write "e2e/cases/_structural-probe.sh" \
     "#!/usr/bin/env bash" \
     "# 探针（临时，勿入库）：依赖单向模块 supervision" \
     "node -e \"import('@natural-enforcement/supervision')\""
 }
 
+# 注入违例：跨模块深路径导入
 write_probe_module-public-entry() {
   tmp_write "backend/case/src/_structural-probe.ts" \
     "// 探针（临时，勿入库）：跨模块深路径导入（表内依赖，但绕过公共出口）" \
@@ -112,6 +121,7 @@ write_probe_module-public-entry() {
     "export const thing = new ProbeThing();"
 }
 
+# 注入违例：白名单外业务实体 model
 write_probe_g1-model-allowlist() {
   inplace_append "$ROOT/backend/prisma/schema.prisma" \
     "// 探针（临时，勿入库）：白名单外业务实体" \
@@ -121,8 +131,8 @@ write_probe_g1-model-allowlist() {
     "}"
 }
 
-write_probe_reference-data-no-mutation() {
   # #210：参照数据只追加（ADR 0016）。就地改行即违例；改参照数据只能追加新版本。
+write_probe_reference-data-no-mutation() {
   tmp_write "backend/geo-dict/src/_structural-probe-reference.ts" \
     "// 探针（临时，勿入库）：参照数据表就地改行（ADR 0016 只追加）" \
     "export function probe(prisma: { geoDictSourceCode: { update(input: unknown): unknown } }) {" \
@@ -130,8 +140,8 @@ write_probe_reference-data-no-mutation() {
     "}"
 }
 
-write_probe_person-conflict-append-only() {
   # #237：人员层利害关系只追加。就地改行即违例。
+write_probe_person-conflict-append-only() {
   tmp_write "backend/case/src/_structural-probe-conflict.ts" \
     "// 探针（临时，勿入库）：人员层利害关系就地改行（#237 只追加）" \
     "export function probe(prisma: { personConflictEvent: { update(input: unknown): unknown } }) {" \
@@ -139,8 +149,8 @@ write_probe_person-conflict-append-only() {
     "}"
 }
 
-write_probe_agency-conflict-append-only() {
   # #263：机关层利害关系只追加。就地改行即违例。
+write_probe_agency-conflict-append-only() {
   tmp_write "backend/case/src/_structural-probe-agency-conflict.ts" \
     "// 探针（临时，勿入库）：机关层利害关系就地改行（#263 只追加）" \
     "export function probe(prisma: { caseAgencyConflict: { update(input: unknown): unknown } }) {" \
@@ -148,8 +158,8 @@ write_probe_agency-conflict-append-only() {
     "}"
 }
 
-write_probe_investigation-record-no-delete() {
   # #236：违法记录与笔录不物理删除。ORM delete 即违例。
+write_probe_investigation-record-no-delete() {
   tmp_write "backend/case/src/_structural-probe-investigation.ts" \
     "// 探针（临时，勿入库）：违法记录物理删除" \
     "export function probe(prisma: { caseViolationRecord: { delete(input: unknown): unknown } }) {" \
@@ -157,8 +167,8 @@ write_probe_investigation-record-no-delete() {
     "}"
 }
 
-write_probe_case-history-append-only() {
   # #235：环节实例与迁移历史只追加。就地改行即违例。
+write_probe_case-history-append-only() {
   tmp_write "backend/case/src/_structural-probe-history.ts" \
     "// 探针（临时，勿入库）：环节实例就地改行（#235 只追加）" \
     "export function probe(prisma: { caseStageInstance: { update(input: unknown): unknown } }) {" \
@@ -166,16 +176,16 @@ write_probe_case-history-append-only() {
     "}"
 }
 
-write_probe_queue-in-integration() {
   # C7 扩范围证据：integration 层同样在设施入口规则范围内（装配层不豁免形态类规则）
+write_probe_queue-in-integration() {
   tmp_write "integration/_structural-probe.ts" \
     "// 探针（临时，勿入库）：装配层裸依赖队列 SDK" \
     "import { Queue } from 'bullmq';" \
     "export const q = new Queue('probe');"
 }
 
-write_probe_spatial-in-integration() {
   # 同类洞的最后一处：空间纪律此前只扫 backend/ 与 packages/，装配层用 ORM 写空间模型
+write_probe_spatial-in-integration() {
   # 同样绕过 ST_Transform 口径（执行纪律 2），现在也在范围内
   tmp_write "integration/_structural-probe-spatial.ts" \
     "// 探针（临时，勿入库）：装配层对空间模型调 ORM 写（执行纪律 2 禁止的形态）" \
@@ -184,8 +194,8 @@ write_probe_spatial-in-integration() {
     "}"
 }
 
-write_probe_clue-spatial-orm-write() {
   # #211：线索空间部件归 case 模块（规格 F）。它含 Unsupported 空间字段，ORM 写同样绕过
+write_probe_clue-spatial-orm-write() {
   # ST_Transform 口径（执行纪律 2），故空间纪律的模型集扩到它与命中集表。
   tmp_write "backend/case/src/_structural-probe-clue-spatial.ts" \
     "// 探针（临时，勿入库）：线索空间部件 ORM 写（执行纪律 2 禁止的形态）" \
@@ -194,6 +204,7 @@ write_probe_clue-spatial-orm-write() {
     "}"
 }
 
+# 注入违例：包外引用留痕委托
 write_probe_audit-facility-entry() {
   tmp_write "integration/_structural-probe-audit.ts" \
     "// 探针（临时，勿入库）：包外引用留痕委托" \
@@ -202,6 +213,7 @@ write_probe_audit-facility-entry() {
     "}"
 }
 
+# 注入违例：启动包第二个文件引用身份数据库适配器
 write_probe_server-adapter-file() {
   tmp_write "backend/server/src/_structural-probe-adapter.ts" \
     "// 探针（临时，勿入库）：第二个文件引用身份数据库适配器" \
@@ -209,8 +221,8 @@ write_probe_server-adapter-file() {
     "export const store = PrismaIdentityStore;"
 }
 
-write_probe_case-adapter-file() {
   # #211：案件聚合模块的线索表适配器同样只在启动包的装配根里被引用（豁免名单收紧到
+write_probe_case-adapter-file() {
   # 文件 + specifier 两条）。名单外的第二个文件引用照样判红。
   tmp_write "backend/server/src/_structural-probe-case-adapter.ts" \
     "// 探针（临时，勿入库）：第二个文件引用案件聚合模块的数据库适配器" \
@@ -218,31 +230,31 @@ write_probe_case-adapter-file() {
     "export const store = PrismaClueStore;"
 }
 
-write_probe_exempt-tightness() {
   # 豁免必须tight：名单外的深路径导入仍要判红，否则豁免等于把整层放行
+write_probe_exempt-tightness() {
   inplace_append "$ROOT/integration/e2-access-matrix.test.ts" \
     "// 探针（临时，勿入库）：豁免名单外的跨模块深路径导入" \
     "import { ProbeThing } from '../backend/geo-dict/src/internal.ts';" \
     "export const thing = ProbeThing;"
 }
 
-write_probe_compose-literal-secret() {
   # compose 写字面量密钥（#120）
+write_probe_compose-literal-secret() {
   inplace_append "$ROOT/infra/docker-compose.yml" \
     "  probe:" \
     "    environment:" \
     "      RUSTFS_SECRET_KEY: probe-literal"
 }
 
-write_probe_compose-unlisted-name() {
   # compose 引用清单外变量名（#120）
+write_probe_compose-unlisted-name() {
   inplace_append "$ROOT/infra/docker-compose.yml" \
     "  probe:" \
     "    image: \"\${PROBE_UNLISTED_IMAGE:?probe}\""
 }
 
-write_probe_ci-literal-secret() {
   # CI 给密钥写 || 回落字面量（#120 之前的写法）
+write_probe_ci-literal-secret() {
   inplace_append "$ROOT/.github/workflows/ci.yml" \
     "      - name: probe" \
     "        env:" \
@@ -250,8 +262,8 @@ write_probe_ci-literal-secret() {
     "        run: true"
 }
 
-write_probe_ci-unlisted-name() {
   # CI 的 env 出现清单外变量名（#120）
+write_probe_ci-unlisted-name() {
   inplace_append "$ROOT/.github/workflows/ci.yml" \
     "      - name: probe" \
     "        env:" \
@@ -259,58 +271,58 @@ write_probe_ci-unlisted-name() {
     "        run: true"
 }
 
-write_probe_compose-quoted-list-secret() {
   # compose 环境列表项带引号的字面量密钥（Copilot 评审：- "NAME=value" 形式）
+write_probe_compose-quoted-list-secret() {
   inplace_append "$ROOT/infra/docker-compose.yml" \
     "  probe:" \
     "    environment:" \
     "      - \"POSTGRES_PASSWORD=probe-literal\""
 }
 
-write_probe_compose-database-url-literal() {
   # DATABASE_URL 含口令，按密钥处理，不许写字面量连接串（Copilot 评审）
+write_probe_compose-database-url-literal() {
   inplace_append "$ROOT/infra/docker-compose.yml" \
     "  probe:" \
     "    environment:" \
     "      DATABASE_URL: \"postgresql://probe:probe-literal@db:5432/probe\""
 }
 
-write_probe_ci-run-assignment() {
   # CI run 里的行内 shell 赋值写字面量密钥（Copilot 评审）
+write_probe_ci-run-assignment() {
   inplace_append "$ROOT/.github/workflows/ci.yml" \
     "      - name: probe" \
     "        run: POSTGRES_PASSWORD=probe-literal true"
 }
 
-write_probe_ci-env-context() {
   # CI 经 env 上下文引用清单外变量名（Copilot 评审）
+write_probe_ci-env-context() {
   inplace_append "$ROOT/.github/workflows/ci.yml" \
     "      - name: probe" \
     "        run: echo \"\${{ env.PROBE_UNLISTED }}\""
 }
 
-write_probe_user-lock-assertion-commented() {
   # 把一条「待实现」登记注释掉：Vitest 不再登记，结构测试也不得计入（Copilot 评审）
+write_probe_user-lock-assertion-commented() {
   inplace_delete "$ROOT/backend/server/src/user-lock.test.ts" \
     "  it.todo('USER-LOCK-L4 037：待实现');"
   printf '%s\n' "// it.todo('USER-LOCK-L4 037：待实现');" >> "$ROOT/backend/server/src/user-lock.test.ts"
 }
 
-write_probe_user-lock-assertion-deleted() {
   # 删掉一条「待实现」登记（#120：锁清单断言编号在测试代码里找不到即判红）
+write_probe_user-lock-assertion-deleted() {
   inplace_delete "$ROOT/backend/server/src/user-lock.test.ts" \
     "  it.todo('USER-LOCK-L4 037：待实现');"
 }
 
-write_probe_frontend-browser-router() {
   # 前端改用声明式 <BrowserRouter>（#122：只许 data 模式）
+write_probe_frontend-browser-router() {
   tmp_write "frontend/src/__probe_router.tsx" \
     "import { BrowserRouter } from 'react-router';" \
     "export const probe = BrowserRouter;"
 }
 
-write_probe_frontend-router-dev-plugin() {
   # 前端引入框架模式开发插件 @react-router/dev（#122）
+write_probe_frontend-router-dev-plugin() {
   inplace_append "$ROOT/frontend/package.json" \
     '  "@react-router/dev": "8.4.0"'
 }
@@ -321,8 +333,8 @@ write_probe_frontend-router-dev-plugin() {
 # supervision-sink）；② 不落 packages/storage（该包对存储 SDK 自带豁免，落进去就证不了红）；
 # ③ 不写 bullmq/ioredis（那是 queue-facility-entry 的判据）。全部 tmp_write 新建文件，不改既有文件。
 
-write_probe_approval-deps() {
   # approval 的允许列 = shield identity case，deadline 属表外依赖。
+write_probe_approval-deps() {
   # 用包名根导入（单斜杠）：module-public-entry 只拦 @natural-enforcement/*/*，不会连带命中。
   tmp_write "backend/approval/src/_structural-probe-deps.ts" \
     "// 探针（临时，勿入库）：approval 表外依赖业务模块 deadline" \
@@ -330,40 +342,40 @@ write_probe_approval-deps() {
     "export const thing = probe;"
 }
 
-write_probe_case-deps() {
   # case 的允许列 = shield identity geo-dict，approval 属表外依赖
+write_probe_case-deps() {
   tmp_write "backend/case/src/_structural-probe-deps.ts" \
     "// 探针（临时，勿入库）：case 表外依赖业务模块 approval" \
     "import { probe } from '@natural-enforcement/approval';" \
     "export const thing = probe;"
 }
 
-write_probe_deadline-deps() {
   # deadline 的允许列 = shield case approval geo-dict，identity 属表外依赖
+write_probe_deadline-deps() {
   tmp_write "backend/deadline/src/_structural-probe-deps.ts" \
     "// 探针（临时，勿入库）：deadline 表外依赖业务模块 identity" \
     "import { probe } from '@natural-enforcement/identity';" \
     "export const thing = probe;"
 }
 
-write_probe_geo-dict-deps() {
   # geo-dict 的允许列只有 shield，identity 属表外依赖
+write_probe_geo-dict-deps() {
   tmp_write "backend/geo-dict/src/_structural-probe-deps.ts" \
     "// 探针（临时，勿入库）：geo-dict 表外依赖业务模块 identity" \
     "import { probe } from '@natural-enforcement/identity';" \
     "export const thing = probe;"
 }
 
-write_probe_identity-deps() {
   # identity 的允许列 = shield audit，case 属表外依赖
+write_probe_identity-deps() {
   tmp_write "backend/identity/src/_structural-probe-deps.ts" \
     "// 探针（临时，勿入库）：identity 表外依赖业务模块 case" \
     "import { probe } from '@natural-enforcement/case';" \
     "export const thing = probe;"
 }
 
-write_probe_shield-no-business-dep() {
   # shield 不许依赖任何业务模块。落 packages/shield 内（本规则的唯一扫描根）；
+write_probe_shield-no-business-dep() {
   # packages/ 不在 module-public-entry 的 find 范围里，故不连带。
   tmp_write "packages/shield/src/_structural-probe-business-dep.ts" \
     "// 探针（临时，勿入库）：shield 依赖业务模块" \
@@ -371,8 +383,8 @@ write_probe_shield-no-business-dep() {
     "export const thing = probe;"
 }
 
-write_probe_shield-single-entry() {
   # 绕过 shield 公共出口的深路径引用。落 packages/queue 而非 backend/：本规则扫
+write_probe_shield-single-entry() {
   # backend/frontend/e2e/packages，而 module-public-entry 只扫 backend/frontend/e2e/integration
   # ——同样的深路径导入落在 backend/ 会一次命中两条规则。此处不写 bullmq/ioredis，故不连带
   # queue-facility-entry（该规则对 packages/queue 本就豁免）。
@@ -382,8 +394,8 @@ write_probe_shield-single-entry() {
     "export const thing = probe;"
 }
 
-write_probe_storage-facility-entry() {
   # 业务侧裸依赖存储 SDK。@aws-sdk/* 不是 @natural-enforcement/* 也不是相对路径，
+write_probe_storage-facility-entry() {
   # specifiers_of 取不到，故 check_row 与 module-public-entry 都不连带。
   tmp_write "backend/case/src/_structural-probe-storage.ts" \
     "// 探针（临时，勿入库）：业务侧裸依赖存储 SDK" \
@@ -391,8 +403,8 @@ write_probe_storage-facility-entry() {
     "export const client = S3Client;"
 }
 
-write_probe_supervision-deps() {
   # supervision 的允许列 = shield identity case，approval 属表外依赖。
+write_probe_supervision-deps() {
   # 本文件归属 supervision，supervision-sink 对 home == supervision 直接跳过，故不连带。
   tmp_write "backend/supervision/src/_structural-probe-deps.ts" \
     "// 探针（临时，勿入库）：supervision 表外依赖业务模块 approval" \
@@ -400,16 +412,16 @@ write_probe_supervision-deps() {
     "export const thing = probe;"
 }
 
-write_probe_weak-reference-entry() {
   # 出现跨域弱引用入口名但未从 shield 导入。文件里无任何 specifier，
+write_probe_weak-reference-entry() {
   # 故 check_row 与 module-public-entry 都取不到东西，不连带。
   tmp_write "backend/case/src/_structural-probe-weak-ref.ts" \
     "// 探针（临时，勿入库）：出现跨域弱引用入口名但未从 shield 导入" \
     "export const probe = requireCrossDomainReference;"
 }
 
-write_probe_screenshot-full-set() {
   # 截图全集多出状态键之外的文件名。规则只比文件名，不校验 PNG 格式与画面。
+write_probe_screenshot-full-set() {
   # 落点是 docs/screens/manifest 下的新清单文件：截图本体已迁出版本控制，规则改读清单，
   # 故探针也往清单里塞一个越界名。cleanup 把该文件一并删掉，树回到干净状态。
   tmp_write "docs/screens/manifest/_structural-probe.txt" \
@@ -417,17 +429,104 @@ write_probe_screenshot-full-set() {
 }
 
 
-write_probe_ui-copy-discipline() {
   # #220：界面文案禁「捞回」。生产源码字面量出现即红。
+write_probe_ui-copy-discipline() {
   tmp_write "frontend/src/__probe_ui_copy.tsx" \
     "export const probeLabel = '捞回';"
 }
 
-write_probe_no-case-landing-entry() {
   # #234：立案呈批批准路径之外的 server 文件调用不予立案落点服务即红。
+write_probe_no-case-landing-entry() {
   tmp_write "backend/server/src/_structural-probe-no-case.ts" \
     "// 探针（临时，勿入库）：绕过立案呈批调用不予立案落点服务" \
     "export const probe = 'recordNoCaseFromFilingApproval';"
+}
+
+# ---------- 注释规范（docs/agents/code-comments.md）：注释检查的违例探针 ----------
+# 注入落点位于 COMMENT_SCOPE 之内（backend/approval/src），探针文件带「探针（临时，勿入库）」字样。
+write_probe_source-comment-export() {
+  # 导出符号缺紧邻注释：文件头与代码行齐全，只缺导出符号的注释。
+  tmp_write "backend/approval/src/_structural-probe-export.ts" \
+    "// 用途：探针（临时，勿入库）" \
+    "const probeNote = 'probe';" \
+    "export const probeExport = 1;"
+}
+
+  # 源文件缺文件头「用途：」：首个代码行之前没有该标记。导出符号已有注释，单独触发文件头规则。
+write_probe_source-comment-header() {
+  tmp_write "backend/approval/src/_structural-probe-header.ts" \
+    "const probeNote = 'probe';" \
+    "/** 探针导出：文件头缺用途。 */" \
+    "export const probeHeader = 1;"
+}
+
+  # 测试 describe 缺紧邻注释：测试文件不要求文件头，只检查 describe 的上一行。
+write_probe_source-comment-describe() {
+  tmp_write "backend/approval/src/_structural-probe-describe.test.ts" \
+    "import { describe, expect, it } from 'vitest';" \
+    "describe('探针用例组', () => {" \
+    "  it('占位', () => {" \
+    "    expect(1).toBe(1);" \
+    "  });" \
+    "});"
+}
+
+  # 路由缺操作码注释：控制器路由的紧邻上一行没有「操作码」说明。
+write_probe_source-comment-route() {
+  tmp_write "backend/approval/src/_structural-probe-route.ts" \
+    "// 用途：探针（临时，勿入库）" \
+    "import { Controller, Get } from '@nestjs/common';" \
+    "/** 探针控制器：路由缺少操作码说明。 */" \
+    "@Controller('probe')" \
+    "export class ProbeController {" \
+    "  @Get('x')" \
+    "  list(): string {" \
+    "    return 'x';" \
+    "  }" \
+    "}"
+}
+
+  # 路由操作码不在登记表：注释写了操作码，但它不是 packages/shield/src/contract/opcode.ts 的键。
+write_probe_source-comment-route-opcode() {
+  tmp_write "backend/approval/src/_structural-probe-route-opcode.ts" \
+    "// 用途：探针（临时，勿入库）" \
+    "import { Controller, Get } from '@nestjs/common';" \
+    "/** 探针控制器：操作码不在登记表。 */" \
+    "@Controller('probe')" \
+    "export class ProbeController {" \
+    "  // 探针路由；操作码 no.such.opcode；无例外。" \
+    "  @Get('x')" \
+    "  list(): string {" \
+    "    return 'x';" \
+    "  }" \
+    "}"
+}
+
+  # 注释里写了 import 样式文字：依赖矩阵规则按文本扫 specifier，不区分注释与代码，会把它当成真实导入。
+write_probe_source-comment-importlike() {
+  tmp_write "backend/approval/src/_structural-probe-importlike.ts" \
+    "// 用途：探针（临时，勿入库）" \
+    "// 反例：import { X } from '@natural-enforcement/case/src/internal/x.ts';" \
+    "/** 探针导出：注释含 import 样式文字。 */" \
+    "export const probeImportLike = 1;"
+}
+
+  # shell 函数缺紧邻注释：文件头齐全，只缺函数定义上一行的注释（set -u 隔开头部注释与函数）。
+write_probe_shell-comment-function() {
+  tmp_write "backend/approval/src/_structural-probe-shell.sh" \
+    "#!/usr/bin/env bash" \
+    "# 用途：探针（临时，勿入库）" \
+    "set -u" \
+    "probe_fn() { echo probe; }"
+}
+
+  # 注释引用的仓库路径未入库：路径不在 git ls-files 清单中。
+write_probe_comment-path-refs() {
+  tmp_write "backend/approval/src/_structural-probe-path.ts" \
+    "// 用途：探针（临时，勿入库）" \
+    "const probePathNote = 'probe';" \
+    "/** 探针导出：注释引用不存在的路径。依据 docs/__structural-probe__/missing.md */" \
+    "export const probePath = 1;"
 }
 
 SPECS=(
@@ -480,6 +579,15 @@ SPECS=(
   "clue-spatial-orm-write|spatial-no-orm-mutation|线索空间部件 ORM 写（#211 新空间表禁 ORM 写）"
   # #234：server 层只有立案呈批批准路径能调用不予立案落点服务。
   "no-case-landing-entry|no-case-landing-entry|server 层第二个文件调用 recordNoCaseFromFilingApproval"
+  # 注释规范（docs/agents/code-comments.md）：COMMENT_SCOPE 内的注释机器检查。
+  "source-comment-export|source-comment-coverage|导出符号缺紧邻注释"
+  "source-comment-header|source-comment-coverage|源文件缺文件头「用途：」"
+  "source-comment-describe|source-comment-coverage|测试 describe 缺紧邻注释"
+  "source-comment-route|source-comment-coverage|路由缺操作码注释"
+  "source-comment-route-opcode|source-comment-coverage|路由操作码不在登记表"
+  "source-comment-importlike|source-comment-coverage|注释里含 import 样式文字（会被依赖矩阵规则误判）"
+  "shell-comment-function|shell-comment-coverage|shell 函数缺紧邻注释"
+  "comment-path-refs|comment-path-refs|注释引用的仓库路径未入库"
 )
 
 # ---------- 护栏①（#171）动态层：带违例的整闸全量运行，三族各取一条 ----------
@@ -669,6 +777,7 @@ assert_rule_red() {
   report_ok "$label：$rule 确实把整体判成红"
 }
 
+# 红探针入口：接线检查、基线、逐条探针、整闸变红、自清理与护栏断言
 main() {
   local spec id rule label out rc got covered
   echo "结构测试红探针（负例证据：逐条违例源码必须能把兜底闸判红）"

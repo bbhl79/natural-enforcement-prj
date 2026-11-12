@@ -334,6 +334,7 @@ beforeEach(() => {
   cookies.clear();
 });
 
+// 验证退回接收人的法制审核归属：超出承办范围的市局法审被拒（#238）。
 describe('#238 法制审核归属', () => {
   it('所承办：市局法审 409；同归属的区分局法审通过；行政审核仍看覆盖', async () => {
     const { caseId } = await stationCase('所案甲');
@@ -384,6 +385,7 @@ describe('#238 法制审核归属', () => {
   });
 });
 
+// 验证案件退回 R1–R10 的接收人、追加式留痕，以及链内 R8／R9 不关链（#238）。
 describe('#238 案件退回验收', () => {
   async function addInstance(caseId: string, stage: string, entrySeq: number): Promise<string> {
     const id = newUlid();
@@ -749,6 +751,7 @@ describe('#238 案件退回验收', () => {
   });
 });
 
+// 验证链外退回同事务关链、回写呈批记录并作废已签各级（#279）。
 describe('#279 链外退回关链', () => {
   async function openChain(caseId: string, code: string): Promise<string> {
     const chain = await postJson(`/api/cases/${caseId}/approval-chains`, code, { kind: 'decision-review' });

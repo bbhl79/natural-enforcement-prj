@@ -338,6 +338,7 @@ beforeEach(() => {
   cookies.clear();
 });
 
+// 验证立案结论批准后建案件、线索转 filed 并留痕，失败时整体回滚（#234）。
 describe('#234 立案呈批验收', () => {
   it('立案结论批准：建案件、线索 filed、kind=case 提醒、承办机构、留痕；回滚时一样都不留', async () => {
     const { clueId } = await preparedClue();
@@ -580,6 +581,7 @@ describe('#234 立案呈批验收', () => {
   });
 });
 
+// 验证立案呈批被不批时改走 R 编码退回路径（#238）。
 describe('#238 立案呈批不批改走 R 编码', () => {
   async function pendingApproval(): Promise<{ clueId: string; approvalId: string }> {
     const { clueId } = await preparedClue();
@@ -685,6 +687,7 @@ describe('#238 立案呈批不批改走 R 编码', () => {
   });
 });
 
+// 验证立案缺件的层级守卫与缺口提示，依据 Q24 与缺口-Q33（#257）。
 describe('#257 立案缺件层级守卫（Q24＋缺口-Q33）', () => {
   async function typedClue(typeCode: string, domain: 'land' | 'survey'): Promise<{ id: string; code: string }> {
     const registered = await registerTyped(typeCode, domain);

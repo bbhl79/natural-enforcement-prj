@@ -1,3 +1,7 @@
+// 用途：判定线索移送的必填项与发函日期，并给出移送、停用机构池重新指定的允许来源状态。
+// 调用方：backend/server/src/clue-disposition.service.ts（移送与重新指定）；beijingDateOf 另用于 backend/server/src/case-transfer.service.ts、backend/server/src/case-decision.service.ts、backend/server/src/case-comparison.service.ts、backend/server/src/audit-browse.service.ts 与 backend/case/src/comparison/rules.ts。
+// 边界：纯函数，不写库、不写留痕；状态变更、留痕与 400／409 响应由调用方落地。
+// 依据：#216，GLOSSARY「移送」。
 // 移送与停用机构池重新指定的领域规则（#216；规格 D 节、GLOSSARY）。
 //
 // 纯规则、不依赖 Nest 与存储：移送的必填校验、发函日期缺省与补录、
@@ -54,6 +58,7 @@ export type TransferAssessment =
  * 移送登记校验（规格 D）：移送机关、文书编号、原因必填；发函日期缺省取北京当日，
  * 允许补录（只收真实日历日，回卷即不合规）。不区分管辖、涉刑、党纪政务三类，
  * 系统不按违法类型限制移送。
+ * 失败返回 rule 码：missing-disposition-fields、invalid-letter-date。纯函数，不写库、不写留痕。
  */
 export function assessTransfer(input: {
   /** 必填项可为缺省：缺字段与空串一律算「必填未填」。 */

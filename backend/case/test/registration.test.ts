@@ -37,6 +37,7 @@ function zipWith(partName: string): Uint8Array {
   return out;
 }
 
+// #211／ADR 0018 三层叠加的缺件判定：公共层、来源层与类型层分别阻断或落清单，条件项与时机决定生效。
 describe('缺件判定（ADR 0018 三层叠加）', () => {
   it('公共层与来源层的阻断项缺失进阻断集合', () => {
     const items = buildFormSchemaItems({ sourceGroupCode: '1', typeCodes: [] });
@@ -168,6 +169,7 @@ describe('缺件判定（ADR 0018 三层叠加）', () => {
   });
 });
 
+// #211 几何解析：面域只收面、点域只收单个点，坐标系限 EPSG:4326，不可解析即拒绝。
 describe('几何解析（土地/矿产＝面，测绘/规划＝点）', () => {
   const polygon = {
     type: 'Polygon',
@@ -299,6 +301,7 @@ describe('几何解析（土地/矿产＝面，测绘/规划＝点）', () => {
   });
 });
 
+// #211 附件校验按真实内容判定类型，并限制单件大小、附件件数与合计大小。
 describe('附件校验（真实内容，不只看扩展名）', () => {
   it('PNG 魔数对得上即通过', () => {
     const result = validateAttachment({
@@ -394,6 +397,7 @@ describe('附件校验（真实内容，不只看扩展名）', () => {
   });
 });
 
+// #211 幂等摘要：同一报文键序无关，取值或文件内容变化即改变摘要。
 describe('幂等摘要', () => {
   const base = {
     sourceCode: '1',

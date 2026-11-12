@@ -302,6 +302,7 @@ interface ListRow {
   deactivatedAt: string | null;
 }
 
+// #128：人员列表的可见范围、脱敏与跨站边界。
 describe('GET /api/admin/personnel（人员列表）', () => {
   it('根机构系统管理拿到全市人员，含已停用人员和没有当前任职的人员，不写留痕', async () => {
     const before = await audits();
@@ -383,6 +384,7 @@ describe('GET /api/admin/personnel（人员列表）', () => {
   });
 });
 
+// #128：人员卡片读取留痕、完整联系方式与数据范围校验。
 describe('GET /api/admin/personnel/:id（人员卡片）', () => {
   it('打开卡片返回完整手机号和执法证，写一行 personnel.viewed，留痕里只有工号', async () => {
     const before = await audits();
@@ -497,6 +499,7 @@ describe('GET /api/admin/personnel/:id（人员卡片）', () => {
   });
 });
 
+// #128：人员登记的同事务写入、唯一性冲突与机构前提。
 describe('POST /api/admin/personnel（登记）', () => {
   it('登记成功：人员、名称版本、任职、人员—角色、岗位标记与留痕同事务；口令修改时间与执法证留空', async () => {
     const payload = body({ roles: ['经办', '法制审核', '经办'], posts: ['legal-review-lead', 'legal-affairs-leader'], name: ' 邓雅 ' });
@@ -733,6 +736,7 @@ describe('POST /api/admin/personnel（登记）', () => {
   });
 });
 
+// #126：监督角色不得读取人员名单与卡片，拒绝时写 authz.denied。
 describe('接 #126（PR #143）：监督调用人员名单、人员卡片一律 403', () => {
   it('监督调人员名单 → 403 permission-denied，写 authz.denied 失败留痕，人员各表不变，不写 personnel.viewed', async () => {
     const rowsBefore = await personnelRows();
@@ -768,6 +772,7 @@ describe('接 #126（PR #143）：监督调用人员名单、人员卡片一律 
   });
 });
 
+// 接缝①：留痕写入后再抛错，人员登记与卡片读取不返回数据。
 describe('接缝①：留痕工厂覆写为「业务写完后抛错」', () => {
   it('登记：请求失败，人员各表与留痕不变', async () => {
     const rowsBefore = await personnelRows();
@@ -797,6 +802,7 @@ describe('接缝①：留痕工厂覆写为「业务写完后抛错」', () => {
   });
 });
 
+// #128：岗位标记行只置失效时间，数据库拒绝删除与改写。
 describe('岗位标记表只失效不删除', () => {
   it('同一人员同一标记只能有一行未失效；删除被拒；失效后不能再改', async () => {
     const id = people.memberB;

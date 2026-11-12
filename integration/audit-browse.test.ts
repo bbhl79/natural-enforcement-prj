@@ -259,6 +259,7 @@ afterAll(async () => {
   await cloned?.close();
 });
 
+// 验证留痕查阅的数据范围按机构隔离，区监督看不到跨区与无所属机构的行（#126）。
 describe('POST /api/admin/audit/query：数据范围', () => {
   it('区 A 监督看不到区 B 的行，也看不到无所属机构的行', async () => {
     const body = await query(PHONES.superA);
@@ -313,6 +314,7 @@ describe('POST /api/admin/audit/query：数据范围', () => {
   });
 });
 
+// 验证类别筛选归类正确，且查阅动作本身写入 audit.viewed 留痕（#126）。
 describe('POST /api/admin/audit/query：筛选与本次查阅留痕', () => {
   it('按类别筛选：解锁与重设口令只含解锁与被拒的解锁；认证与会话只含登录与会话', async () => {
     const unlock = await query(PHONES.superHq, { category: 'unlock-reset' });
@@ -367,6 +369,7 @@ describe('POST /api/admin/audit/query：筛选与本次查阅留痕', () => {
   });
 });
 
+// 验证导出与同条件查阅逐行一致，并写 audit.exported 且带条数（#126）。
 describe('POST /api/admin/audit/export', () => {
   it('同一筛选条件下，导出文件的行与查阅结果完全一致；导出写 audit.exported（带条数）', async () => {
     const filter = { category: 'unlock-reset' };
@@ -418,6 +421,7 @@ describe('POST /api/admin/audit/export', () => {
   });
 });
 
+// 验证查阅响应与导出文件都不泄露手机号与执法证号。
 describe('不出现手机号与执法证号', () => {
   it('用库里全部人员的手机号和执法证号扫描查阅响应和导出文件的每个单元格', async () => {
     const literals = await sensitiveLiterals();
@@ -442,6 +446,7 @@ describe('不出现手机号与执法证号', () => {
   });
 });
 
+// 验证四条必测权限场景（无操作码、跨区、越权调人员接口、跨站）均拒绝并留失败痕迹（#105）。
 describe('四条必测', () => {
   async function expectDenied(
     path: string,
@@ -543,6 +548,7 @@ describe('四条必测', () => {
   });
 });
 
+// 验证留痕写入失败时查阅与导出返回 500、不交出数据，且各表不变。
 describe('接缝①：留痕写入失败', () => {
   it('查阅与导出都 500，不交出数据，各表不变', async () => {
     const cookie = await login(PHONES.superHq);
@@ -567,6 +573,7 @@ describe('接缝①：留痕写入失败', () => {
   });
 });
 
+// 验证首页今日条数只返回本范围计数，且不写 audit.viewed。
 describe('GET /api/admin/audit/summary（管理台首页今日条数）', () => {
   it('返回本范围今日条数，不写 audit.viewed', async () => {
     const cookie = await login(PHONES.superB);
@@ -581,6 +588,7 @@ describe('GET /api/admin/audit/summary（管理台首页今日条数）', () => 
   });
 });
 
+// 验证被拒留痕行归属对象所属机构，而非操作者机构（#105；ADR 0011 修正）。
 describe('被拒的行归对象所属机构（#105；ADR 0011 修正）', () => {
   it('甲区系统管理越区操作乙区人员被拒：乙区监督看得到，甲区监督看不到', async () => {
     const admin = await login(PHONES.adminA);
@@ -630,6 +638,7 @@ describe('被拒的行归对象所属机构（#105；ADR 0011 修正）', () => 
   });
 });
 
+// 验证查阅与导出的可见文字不出现操作码与原因码，只显示中文通用说法。
 describe('可见文字不出现操作码与原因码（SCREENS.md:8；P8 动作原文只放 data-action）', () => {
   it('对照表外的拒绝码、动作和原因：查阅的可见字段与导出的每个单元格都只有中文通用说法', async () => {
     const codes = ['clue.read', 'future.thing.done', 'mystery-reason', 'odd-denial'];
@@ -659,6 +668,7 @@ describe('可见文字不出现操作码与原因码（SCREENS.md:8；P8 动作�
 });
 
 // #211 规格 G：detail 是结构化快照，只写不回。库里写进去了，查阅与导出都不得交出这一列。
+// 验证结构化快照 detail 只写不读：查阅与导出都不返回该列（#211 规格 G）。
 describe('结构化快照 detail 只写不回（#211 规格 G）', () => {
   it('线索动作带了 detail 写进库，查阅响应与导出文件都不出现这一列', async () => {
     const marker = 'CLUE-DETAIL-MARKER-211';

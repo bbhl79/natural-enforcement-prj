@@ -1,7 +1,10 @@
+// 用途：案件期限展示面板，列出到期日与期限行，提交延长呈批与期间事件。
+// 调用方：frontend/src/case/CaseDeadlinePage.tsx。
 // 期限最小入口（#246）。延长呈批、期间事件登记或补登、查看到期日。
 
 import type { FormEvent } from 'react';
 
+/** 期限行视图：规则、序号、消耗名称、到期日与确认状态。 */
 export interface DeadlineRowView {
   id: string;
   ruleKey: string;
@@ -19,6 +22,7 @@ export interface DeadlineRowView {
   revisionNo: number;
 }
 
+/** 期限页整页视图：日历来源、承办期限、期限行与提示。 */
 export interface DeadlineView {
   caseId: string;
   sourceUrl: string;
@@ -29,6 +33,7 @@ export interface DeadlineView {
   rows: DeadlineRowView[];
 }
 
+/** 期间事件草稿输入：类别、理由、依据、起止日与是否补登。 */
 export interface PeriodDraftInput {
   eventKind: string;
   reason: string;
@@ -38,6 +43,7 @@ export interface PeriodDraftInput {
   backfill: boolean;
 }
 
+/** 期限面板：展示到期日与期限行，把延长与期间事件提交交给调用方。 */
 export function DeadlinePanel({
   view,
   message,

@@ -105,6 +105,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+// 验证筛选条件从地址栏拆解、默认时间范围与导出文件名的口径。
 describe('筛选条件', () => {
   it('默认昨天至今天（北京时间）；查询串拆成起止日、类别、工号、结果', () => {
     expect(defaultRange(NOW)).toEqual({ from: '2026-10-16', to: '2026-10-17' });
@@ -133,6 +134,7 @@ describe('筛选条件', () => {
   });
 });
 
+// 验证留痕页在各视角下的渲染、查阅请求与失败态。
 describe('管理台留痕页（P8）', () => {
   it('系统管理：按查询串 POST 查阅；表格、无所属机构标记、「第 1 页」、导出按钮；只有未对上人员的行时不出说明条', async () => {
     const calls = serve(person(['系统管理'], ADMIN, '广州市规划和自然资源局'), {
@@ -289,6 +291,7 @@ describe('管理台留痕页（P8）', () => {
   });
 });
 
+// 验证导出确认、完成、失败各状态与导出接口的响应处理。
 describe('导出（P8 exportConfirm / exportDone）', () => {
   const filter: AuditFilter = { from: '2026-10-16', to: '2026-10-17', category: null, actorCode: null, outcome: null };
   const content = (exportState: ExportState, extra: Partial<AuditContentProps> = {}) => {

@@ -49,6 +49,7 @@ function subject(partial: Partial<TransitionSubject> = {}): TransitionSubject {
   };
 }
 
+// #235 迁移表常量：41 条迁移的编号、起止、启用范围与非法迁移登记。
 describe('迁移表常量', () => {
   it('41 条、编号不重复、每条有起点和去向', () => {
     expect(TRANSITIONS).toHaveLength(41);
@@ -134,6 +135,7 @@ describe('迁移表常量', () => {
   });
 });
 
+// #235 起点匹配口径，以及再次进入同一环节时的次序号推导。
 describe('起点匹配与次序号', () => {
   it('T01 只匹配已派承办人的线索', () => {
     const t01 = findTransition('T01');
@@ -174,6 +176,7 @@ describe('起点匹配与次序号', () => {
   });
 });
 
+// #235 引擎 409 分支：未启用边、起点不符、终态写、监督角色、改承办机构与第二条审批链。
 describe('引擎 409 分支', () => {
   const openCase = subject({
     caseId: 'c1',
@@ -382,6 +385,7 @@ function blockingAdvisory(authority: GuardAuthority, userLock?: string): GuardRe
   };
 }
 
+// #255 依据层级与 USER LOCK：law／regulation／system 阻断，normative／internal 降为警告，带锁定项的不可降级。
 describe('依据层级与 USER LOCK（#255）', () => {
   const ready = subject({ clueStatus: 'handler_assigned' });
 
@@ -485,6 +489,7 @@ describe('依据层级与 USER LOCK（#255）', () => {
   });
 });
 
+// #258 两段式确认与规则键：首次命中 warn 只返回 warnings，确认已登记键后才执行。
 describe('两段式确认与规则键（#258）', () => {
   const ready = subject({ clueStatus: 'handler_assigned' });
   const pending = subject({

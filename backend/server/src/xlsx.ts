@@ -1,3 +1,8 @@
+// 用途：最小的 .xlsx 文件写出，供管理台留痕导出使用。
+// 调用方：backend/server/src/audit-browse.service.ts；backend/server/src/audit.controller.ts 使用其 Content-Type 常量。
+// 边界：只写一张工作表、全部单元格为内联文本；ZIP 用存储方式不压缩；产物只由内容决定，不写时间戳。
+// 依据：Issue #126。
+//
 // 最小 .xlsx 写出（#126 管理台留痕导出，原型 v0.4 G32）。
 // 只写一张工作表、全部单元格为内联文本；ZIP 用「存储」方式（不压缩），不引入第三方依赖。
 // 结构：[Content_Types].xml、_rels/.rels、xl/workbook.xml、xl/_rels/workbook.xml.rels、xl/worksheets/sheet1.xml。
@@ -130,4 +135,5 @@ export function buildXlsx(sheetName: string, rows: readonly (readonly string[])[
   return zipStored(workbookParts(sheetName, rows));
 }
 
+/** .xlsx 下载响应的 Content-Type。 */
 export const XLSX_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';

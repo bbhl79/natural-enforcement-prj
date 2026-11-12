@@ -109,6 +109,7 @@ afterAll(async () => {
   await cloned?.close();
 });
 
+// #100：记住我凭据的发放、轮换、失效与停用联动。
 describe('勾选记住我', () => {
   it('登录勾选记住我时发放 __Host-rm，会话终点是这次认证起 168 小时', async () => {
     clock.millis = T0;

@@ -84,6 +84,7 @@ function props(partial: Partial<CaseTransferSectionProps> = {}): CaseTransferSec
   };
 }
 
+// 验证移送页签的链路展示、回证补传与外部决定提示（#242）。
 describe('移送页签', () => {
   it('展示链路依据（规程无明文）与两级名称', () => {
     const html = renderToStaticMarkup(<CaseTransferSection {...props()} />);

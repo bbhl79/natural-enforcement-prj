@@ -38,6 +38,7 @@ function assertFailure(path: string, message = `${path} 失败`) {
   return { path, op: 'eq' as const, expected: 'x', actual: 'y', message };
 }
 
+// spec #322 T6：把失败记录归到去重键，粒度到 step，跳过与通过记录不聚类。
 describe('classifyFailure（T6：失败记录 → 去重键；粒度到 step）', () => {
   it('末步多条 assert 失败合成一个键，路径排序去重，不按单条 assert 拆键', () => {
     const record = rec({
@@ -165,6 +166,7 @@ describe('classifyFailure（T6：失败记录 → 去重键；粒度到 step）'
   });
 });
 
+// spec #322 T6：同键失败归并为一簇，并合并跨跑次证据。
 describe('clusterFailures（T6：同键归并、跨跑次证据合并）', () => {
   it('两份跑次同键失败归一个簇并保留两条证据；不同 stepId 各自成簇', () => {
     const runA = rec({
@@ -277,6 +279,7 @@ function failingSideEffects(runId: string): FailureRecord {
   });
 }
 
+// spec #322 T6：失败簇的 GitHub 动作，首见立票、同键评论、关闭后复发重开。
 describe('applyFailureClusters（T6：GitHub 动作层，fake gh）', () => {
   it('首见失败 → 只立一张 needs-triage 票，正文含机器键 marker 与证据路径', async () => {
     const gh = new FakeGh();
@@ -425,6 +428,7 @@ async function seedRun(
   return runDir;
 }
 
+// spec #322 T6：只读加载各跑次证据记录，runId 取自 manifest。
 describe('loadFailureRecords（T6：证据 loader，discover/ 之外，只读）', () => {
   it('runId 取自 manifest；stepId 取自 JSON 正文（文件名变形不影响）；source 为包内相对路径', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'discover-cluster-loader-'));

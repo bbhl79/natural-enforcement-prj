@@ -1,3 +1,4 @@
+// 用途：案件视图读取、状态迁移与审批链开启的 HTTP 接口。
 // 案件状态机 HTTP 入口（#235）。
 
 import { Body, Controller, Get, Param, Post, Req, Res, UseGuards } from '@nestjs/common';
@@ -13,10 +14,12 @@ interface HttpReply {
   json(body: unknown): void;
 }
 
+/** 案件状态机接口的 HTTP 适配层。 */
 @Controller()
 export class CaseStateController {
   constructor(private readonly states: CaseStateService) {}
 
+  // 读取案件主视图；操作码 case.read；对象级按案件承办机构校验。
   @Get('api/cases/:id')
   @UseGuards(SameOriginReadGuard)
   async read(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {
@@ -24,6 +27,7 @@ export class CaseStateController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 读取案件环节标记；操作码 case.read；对象级按案件承办机构校验。
   @Get('api/cases/:id/markers')
   @UseGuards(SameOriginReadGuard)
   async markers(@Req() req: AuthenticatedRequest, @Res() res: HttpReply, @Param('id') id: string): Promise<void> {
@@ -31,6 +35,7 @@ export class CaseStateController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 推进案件状态迁移；操作码 doc.approve；对象级按案件承办机构校验。
   @Post('api/cases/:id/transitions')
   @UseGuards(SameOriginReadGuard)
   async transition(
@@ -54,6 +59,7 @@ export class CaseStateController {
     res.status(outcome.status).json(outcome.body);
   }
 
+  // 开启审批链；操作码 doc.submit；对象级按案件承办机构校验。
   @Post('api/cases/:id/approval-chains')
   @UseGuards(SameOriginReadGuard)
   async openChain(

@@ -27,6 +27,7 @@ function fetchStub(status: number, opts: { headers?: Record<string, string>; bod
   }) as unknown as typeof fetch;
 }
 
+// 协议层行为：请求签名、对象锁保留头、版本 id 解析与错误映射，均按 S3 兼容语义。
 describe('S3 兼容客户端（RustFS 适配的协议层）', () => {
   it('putObject 携带对象锁保留头并返回存储端版本 id', async () => {
     const fetchImpl = fetchStub(200, { headers: { 'x-amz-version-id': 'v1' } });

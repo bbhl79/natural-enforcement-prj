@@ -292,6 +292,7 @@ beforeEach(() => {
   cookies.clear();
 });
 
+// 验证新旧比对最小版：判定只追加、缺判定阻断呈批、比对过时 409，警告不阻断（#271）。
 describe('#271 新旧比对最小版', () => {
   it('决定呈批缺判定阻断；差异为零也要人的判定；作废记录不要求判定', async () => {
     const caseId = await fileCase();

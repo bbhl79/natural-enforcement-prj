@@ -1,3 +1,4 @@
+// 用途：登录页（原型 S00）：手机号与口令两栏，按屏幕态给出失败提示。
 import type { FormEvent, MouseEvent } from 'react';
 
 import { useAppDispatch, useAppSelector } from '../hooks';

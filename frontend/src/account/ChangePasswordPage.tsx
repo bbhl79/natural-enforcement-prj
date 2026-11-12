@@ -1,3 +1,4 @@
+// 用途：个人中心的自愿改密页，与强制改密分页、字段显隐不共用（#292）。
 // 个人中心·修改口令（#292）：自愿改密与强制改密分页，字段不共用显隐。
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';

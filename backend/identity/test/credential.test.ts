@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { CredentialService } from '../src/services/credential.service.ts';
 import type { IdentityStore } from '../src/persistence/identity-store.ts';
 
+// 验证 argon2id 散列形制、验真与 authenticate 的失败语义（#52、#97）。
 describe('口令散列（argon2 0.45.1，#52）', () => {
   it('散列产出 PHC 形制的 argon2id 串，绝非明文', async () => {
     const service = new CredentialService(noopStore());
@@ -119,6 +120,7 @@ describe('口令散列（argon2 0.45.1，#52）', () => {
   });
 });
 
+// 验证历史比对深度、旧参数散列命中与换口令的条件更新（ADR 0015、#132）。
 describe('口令历史（ADR 0015，#132）', () => {
   it('历史深度经构造参数注入：默认 5，测试可传 2，读取条数 = 深度 - 1', async () => {
     const limits: number[] = [];

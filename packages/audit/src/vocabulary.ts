@@ -1,3 +1,4 @@
+// 用途：留痕动作词、原因表与结构化快照动作的封闭词表，供留痕写入与查询校验使用。
 /**
  * 记成功的动作。其余动作记失败。取值来自 ADR 0011，并追加 login.capacity-reached、personnel.exported（ADR 0013），
  * 以及管理台留痕的查阅 audit.viewed、导出 audit.exported（#126）。
@@ -187,8 +188,10 @@ export const AUDIT_SUCCEEDED_ACTIONS = [
  * concurrent-change 任一入口的并发条件更新失败（409）。本人改密命中历史不写留痕。
  */
 export const PASSWORD_REJECTED_REASONS = ['reused', 'concurrent-change'] as const;
+/** PASSWORD_REJECTED_REASONS 的字面量联合类型。 */
 export type PasswordRejectedReason = (typeof PASSWORD_REJECTED_REASONS)[number];
 
+/** 全部动作的并集，写入时按本表校验动作词；不在表里的动作不许落库。 */
 export const AUDIT_ACTIONS = [
   ...AUDIT_SUCCEEDED_ACTIONS,
   // 新旧比对判定被拒（#271）：只记失败。比对过时、缺判定、材料不合规。
@@ -210,15 +213,20 @@ export const AUDIT_ACTIONS = [
   'authz.denied',
 ] as const;
 
+/** AUDIT_ACTIONS 的字面量联合类型。 */
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 /** 带条数的动作（ADR 0013）：itemCount 必填，记导出条数，非负整数。其余动作的 itemCount 一律为空。 */
 export const AUDIT_COUNTED_ACTIONS = ['personnel.exported', 'audit.exported'] as const;
+/** AUDIT_COUNTED_ACTIONS 的字面量联合类型。 */
 export type AuditCountedAction = (typeof AUDIT_COUNTED_ACTIONS)[number];
 
+/** login.failed 的封闭原因表；该动作落库时必须带表内原因。 */
 export const LOGIN_FAILED_REASONS = ['unknown-identifier', 'bad-credential'] as const;
+/** LOGIN_FAILED_REASONS 的字面量联合类型。 */
 export type LoginFailedReason = (typeof LOGIN_FAILED_REASONS)[number];
 
+/** session.ended 的封闭原因表；该动作落库时必须带表内原因。 */
 export const SESSION_END_REASONS = [
   'logout',
   'idle-timeout',
@@ -228,9 +236,12 @@ export const SESSION_END_REASONS = [
   'personnel-deactivated',
   'remember-me-reuse',
 ] as const;
+/** SESSION_END_REASONS 的字面量联合类型。 */
 export type SessionEndReason = (typeof SESSION_END_REASONS)[number];
 
+/** account.password-changed 的封闭原因表；该动作落库时必须带表内原因。 */
 export const PASSWORD_CHANGED_REASONS = ['first-login', 'expired', 'voluntary'] as const;
+/** PASSWORD_CHANGED_REASONS 的字面量联合类型。 */
 export type PasswordChangedReason = (typeof PASSWORD_CHANGED_REASONS)[number];
 
 /** 与 identity 的 DenyReason 同词。留痕包不依赖 identity，避免以后互相引用。 */
@@ -241,6 +252,7 @@ export const AUTHZ_DENIED_REASONS = [
   'permission-denied',
   'scope-denied',
 ] as const;
+/** AUTHZ_DENIED_REASONS 的字面量联合类型。 */
 export type AuthzDeniedReason = (typeof AUTHZ_DENIED_REASONS)[number];
 
 /**
@@ -248,6 +260,7 @@ export type AuthzDeniedReason = (typeof AUTHZ_DENIED_REASONS)[number];
  * 成功写入不带原因。不在表里的成功动作不能记失败。
  */
 export const ORG_UNIT_REGISTER_FAILED_REASONS = ['org-unit-deactivated'] as const;
+/** ORG_UNIT_REGISTER_FAILED_REASONS 的字面量联合类型。 */
 export type OrgUnitRegisterFailedReason = (typeof ORG_UNIT_REGISTER_FAILED_REASONS)[number];
 
 /**
@@ -262,10 +275,12 @@ export const ORG_UNIT_DEACTIVATE_FAILED_REASONS = [
   'org-has-assignments',
   'org-has-open-items',
 ] as const;
+/** ORG_UNIT_DEACTIVATE_FAILED_REASONS 的字面量联合类型。 */
 export type OrgUnitDeactivateFailedReason = (typeof ORG_UNIT_DEACTIVATE_FAILED_REASONS)[number];
 
 /** 登记人员被拒（outcome=failed）的原因（#128）：目标机构已停用；工号或手机号已被占用。 */
 export const PERSONNEL_REGISTER_FAILED_REASONS = ['org-unit-deactivated', 'already-exists'] as const;
+/** PERSONNEL_REGISTER_FAILED_REASONS 的字面量联合类型。 */
 export type PersonnelRegisterFailedReason = (typeof PERSONNEL_REGISTER_FAILED_REASONS)[number];
 
 /**
@@ -273,6 +288,7 @@ export type PersonnelRegisterFailedReason = (typeof PERSONNEL_REGISTER_FAILED_RE
  * 摘除系统管理角色、调岗出根机构违反时记这个原因，返回 409 invalid-state。
  */
 export const ROOT_GUARD_FAILED_REASON = 'root-admin-required';
+/** ROOT_GUARD_FAILED_REASON 常量的类型。 */
 export type RootGuardFailedReason = typeof ROOT_GUARD_FAILED_REASON;
 
 /**
@@ -281,14 +297,17 @@ export type RootGuardFailedReason = typeof ROOT_GUARD_FAILED_REASON;
  * 同一个词也作为 409 返回体的 reason（#105 错误码表「409 可读原因」：留痕的失败原因取同一个词）。
  */
 export const PERSONNEL_DEACTIVATED_REASON = 'personnel-deactivated';
+/** PERSONNEL_DEACTIVATED_REASON 常量的类型。 */
 export type PersonnelDeactivatedReason = typeof PERSONNEL_DEACTIVATED_REASON;
 
 /** 改手机号被拒（outcome=failed）的原因（#129、#130）：手机号已被他人占用；对方已停用。 */
 export const PERSONNEL_MOBILE_CHANGE_FAILED_REASONS = ['already-exists', PERSONNEL_DEACTIVATED_REASON] as const;
+/** PERSONNEL_MOBILE_CHANGE_FAILED_REASONS 的字面量联合类型。 */
 export type PersonnelMobileChangeFailedReason = (typeof PERSONNEL_MOBILE_CHANGE_FAILED_REASONS)[number];
 
 /** 摘除角色被拒（outcome=failed）的原因（#129、#130）：根机构守卫；对方已停用。 */
 export const PERSONNEL_ROLE_REVOKE_FAILED_REASONS = [ROOT_GUARD_FAILED_REASON, PERSONNEL_DEACTIVATED_REASON] as const;
+/** PERSONNEL_ROLE_REVOKE_FAILED_REASONS 的字面量联合类型。 */
 export type PersonnelRoleRevokeFailedReason = (typeof PERSONNEL_ROLE_REVOKE_FAILED_REASONS)[number];
 
 /** 调岗被拒（outcome=failed）的原因（#129、#130）：调入机构已停用；根机构守卫；对方已停用。 */
@@ -297,6 +316,7 @@ export const PERSONNEL_TRANSFER_FAILED_REASONS = [
   ROOT_GUARD_FAILED_REASON,
   PERSONNEL_DEACTIVATED_REASON,
 ] as const;
+/** PERSONNEL_TRANSFER_FAILED_REASONS 的字面量联合类型。 */
 export type PersonnelTransferFailedReason = (typeof PERSONNEL_TRANSFER_FAILED_REASONS)[number];
 
 /**
@@ -306,30 +326,37 @@ export type PersonnelTransferFailedReason = (typeof PERSONNEL_TRANSFER_FAILED_RE
 
 /** 改名被拒（outcome=failed）的原因（#130）：只有对方已停用一条。 */
 export const PERSONNEL_RENAME_FAILED_REASONS = [PERSONNEL_DEACTIVATED_REASON] as const;
+/** PERSONNEL_RENAME_FAILED_REASONS 的字面量联合类型。 */
 export type PersonnelRenameFailedReason = (typeof PERSONNEL_RENAME_FAILED_REASONS)[number];
 
 /** 授予角色被拒（outcome=failed）的原因（#130）：只有对方已停用一条。 */
 export const PERSONNEL_ROLE_GRANT_FAILED_REASONS = [PERSONNEL_DEACTIVATED_REASON] as const;
+/** PERSONNEL_ROLE_GRANT_FAILED_REASONS 的字面量联合类型。 */
 export type PersonnelRoleGrantFailedReason = (typeof PERSONNEL_ROLE_GRANT_FAILED_REASONS)[number];
 
 /** 加岗位标记被拒（outcome=failed）的原因（#130）：只有对方已停用一条。 */
 export const PERSONNEL_POST_GRANT_FAILED_REASONS = [PERSONNEL_DEACTIVATED_REASON] as const;
+/** PERSONNEL_POST_GRANT_FAILED_REASONS 的字面量联合类型。 */
 export type PersonnelPostGrantFailedReason = (typeof PERSONNEL_POST_GRANT_FAILED_REASONS)[number];
 
 /** 摘岗位标记被拒（outcome=failed）的原因（#130）：只有对方已停用一条。 */
 export const PERSONNEL_POST_REVOKE_FAILED_REASONS = [PERSONNEL_DEACTIVATED_REASON] as const;
+/** PERSONNEL_POST_REVOKE_FAILED_REASONS 的字面量联合类型。 */
 export type PersonnelPostRevokeFailedReason = (typeof PERSONNEL_POST_REVOKE_FAILED_REASONS)[number];
 
 /** 执法证登记被拒（outcome=failed）的原因（#158）：只有对方已停用一条。 */
 export const CERT_UPDATE_FAILED_REASONS = [PERSONNEL_DEACTIVATED_REASON] as const;
+/** CERT_UPDATE_FAILED_REASONS 的字面量联合类型。 */
 export type CertUpdateFailedReason = (typeof CERT_UPDATE_FAILED_REASONS)[number];
 
 /** A10 解锁、重设初始口令被拒（outcome=failed）的原因（#158）：只有对方已停用一条。 */
 export const ACCOUNT_MAINTENANCE_FAILED_REASONS = [PERSONNEL_DEACTIVATED_REASON] as const;
+/** ACCOUNT_MAINTENANCE_FAILED_REASONS 的字面量联合类型。 */
 export type AccountMaintenanceFailedReason = (typeof ACCOUNT_MAINTENANCE_FAILED_REASONS)[number];
 
 /** 停用人员被拒（outcome=failed）的原因（#130，ADR 0014）：只有根机构守卫一条。 */
 export const PERSONNEL_DEACTIVATE_FAILED_REASONS = [ROOT_GUARD_FAILED_REASON] as const;
+/** PERSONNEL_DEACTIVATE_FAILED_REASONS 的字面量联合类型。 */
 export type PersonnelDeactivateFailedReason = (typeof PERSONNEL_DEACTIVATE_FAILED_REASONS)[number];
 
 /**
@@ -342,6 +369,7 @@ export const PERSONNEL_RESTORE_FAILED_REASONS = [
   'org-unit-required',
   'org-unit-deactivated',
 ] as const;
+/** PERSONNEL_RESTORE_FAILED_REASONS 的字面量联合类型。 */
 export type PersonnelRestoreFailedReason = (typeof PERSONNEL_RESTORE_FAILED_REASONS)[number];
 
 /**
@@ -355,6 +383,7 @@ export const AUDIT_NEXT_VALUE_ACTIONS = [
   'personnel.role-revoked',
   'personnel.transferred',
 ] as const;
+/** AUDIT_NEXT_VALUE_ACTIONS 的字面量联合类型。 */
 export type AuditNextValueAction = (typeof AUDIT_NEXT_VALUE_ACTIONS)[number];
 
 /**
@@ -362,6 +391,7 @@ export type AuditNextValueAction = (typeof AUDIT_NEXT_VALUE_ACTIONS)[number];
  * object：对象所属机构；actor-fallback：对象机构解析不出（如对象不存在），取操作者当时任职机构。
  */
 export const AUDIT_TARGET_ORG_BASES = ['object', 'actor-fallback'] as const;
+/** AUDIT_TARGET_ORG_BASES 的字面量联合类型。 */
 export type AuditTargetOrgBasis = (typeof AUDIT_TARGET_ORG_BASES)[number];
 
 /**
@@ -377,6 +407,7 @@ export const CLUE_REGISTER_FAILED_REASONS = [
   'invalid-attachment',
   'invalid-geometry',
 ] as const;
+/** CLUE_REGISTER_FAILED_REASONS 的字面量联合类型。 */
 export type ClueRegisterFailedReason = (typeof CLUE_REGISTER_FAILED_REASONS)[number];
 
 /**
@@ -385,6 +416,7 @@ export type ClueRegisterFailedReason = (typeof CLUE_REGISTER_FAILED_REASONS)[num
  * invalid-form 提交值本身不合规。
  */
 export const CLUE_ITEMS_SUPPLEMENT_FAILED_REASONS = ['missing-required-items', 'invalid-form'] as const;
+/** CLUE_ITEMS_SUPPLEMENT_FAILED_REASONS 的字面量联合类型。 */
 export type ClueItemsSupplementFailedReason = (typeof CLUE_ITEMS_SUPPLEMENT_FAILED_REASONS)[number];
 
 /**
@@ -393,6 +425,7 @@ export type ClueItemsSupplementFailedReason = (typeof CLUE_ITEMS_SUPPLEMENT_FAIL
  * concurrent-change 该线索已有进行中的核查（并发手动重跑）。
  */
 export const CLUE_VERIFY_RETRY_FAILED_REASONS = ['invalid-state', 'concurrent-change'] as const;
+/** CLUE_VERIFY_RETRY_FAILED_REASONS 的字面量联合类型。 */
 export type ClueVerifyRetryFailedReason = (typeof CLUE_VERIFY_RETRY_FAILED_REASONS)[number];
 
 /**
@@ -401,6 +434,7 @@ export type ClueVerifyRetryFailedReason = (typeof CLUE_VERIFY_RETRY_FAILED_REASO
  * invalid-geometry 重绘的几何来源文件不合规。
  */
 export const CLUE_GEOMETRY_UPDATE_FAILED_REASONS = ['invalid-state', 'invalid-geometry'] as const;
+/** CLUE_GEOMETRY_UPDATE_FAILED_REASONS 的字面量联合类型。 */
 export type ClueGeometryUpdateFailedReason = (typeof CLUE_GEOMETRY_UPDATE_FAILED_REASONS)[number];
 
 /**
@@ -417,6 +451,7 @@ export const CLUE_DISPATCH_DECIDE_FAILED_REASONS = [
   'invalid-state',
   'concurrent-change',
 ] as const;
+/** CLUE_DISPATCH_DECIDE_FAILED_REASONS 的字面量联合类型。 */
 export type ClueDispatchDecideFailedReason = (typeof CLUE_DISPATCH_DECIDE_FAILED_REASONS)[number];
 
 /**
@@ -441,6 +476,7 @@ export const CLUE_ORG_ASSIGNED_FAILED_REASONS = [
   'filing-approval-pending',
   'concurrent-change',
 ] as const;
+/** CLUE_ORG_ASSIGNED_FAILED_REASONS 的字面量联合类型。 */
 export type ClueOrgAssignedFailedReason = (typeof CLUE_ORG_ASSIGNED_FAILED_REASONS)[number];
 
 /**
@@ -460,6 +496,7 @@ export const CLUE_HANDLER_ASSIGNED_FAILED_REASONS = [
   'filing-approval-pending',
   'concurrent-change',
 ] as const;
+/** CLUE_HANDLER_ASSIGNED_FAILED_REASONS 的字面量联合类型。 */
 export type ClueHandlerAssignedFailedReason = (typeof CLUE_HANDLER_ASSIGNED_FAILED_REASONS)[number];
 
 /**
@@ -475,6 +512,7 @@ export const CLUE_WITHDRAWN_FAILED_REASONS = [
   'invalid-state',
   'concurrent-change',
 ] as const;
+/** CLUE_WITHDRAWN_FAILED_REASONS 的字面量联合类型。 */
 export type ClueWithdrawnFailedReason = (typeof CLUE_WITHDRAWN_FAILED_REASONS)[number];
 
 /**
@@ -507,6 +545,7 @@ export const CLUE_DISPOSITION_RECORDED_FAILED_REASONS = [
   'filing-approval-pending',
   'missing-filing-approval-ref',
 ] as const;
+/** CLUE_DISPOSITION_RECORDED_FAILED_REASONS 的字面量联合类型。 */
 export type ClueDispositionRecordedFailedReason =
   (typeof CLUE_DISPOSITION_RECORDED_FAILED_REASONS)[number];
 
@@ -523,6 +562,7 @@ export const CLUE_EXTERNAL_TRANSFER_ATTACHED_FAILED_REASONS = [
   'invalid-state',
   'concurrent-change',
 ] as const;
+/** CLUE_EXTERNAL_TRANSFER_ATTACHED_FAILED_REASONS 的字面量联合类型。 */
 export type ClueExternalTransferAttachedFailedReason =
   (typeof CLUE_EXTERNAL_TRANSFER_ATTACHED_FAILED_REASONS)[number];
 
@@ -544,6 +584,7 @@ export const CLUE_REMINDER_RESOLVED_FAILED_REASONS = [
   'invalid-state',
   'concurrent-change',
 ] as const;
+/** CLUE_REMINDER_RESOLVED_FAILED_REASONS 的字面量联合类型。 */
 export type ClueReminderResolvedFailedReason = (typeof CLUE_REMINDER_RESOLVED_FAILED_REASONS)[number];
 
 /**
@@ -563,6 +604,7 @@ export const CLUE_POOL_REASSIGNED_FAILED_REASONS = [
   'invalid-state',
   'concurrent-change',
 ] as const;
+/** CLUE_POOL_REASSIGNED_FAILED_REASONS 的字面量联合类型。 */
 export type CluePoolReassignedFailedReason = (typeof CLUE_POOL_REASSIGNED_FAILED_REASONS)[number];
 
 /**
@@ -574,6 +616,7 @@ export const STORAGE_QUARANTINED_FAILED_REASONS = [
   'missing-summary',
   'already-quarantined',
 ] as const;
+/** STORAGE_QUARANTINED_FAILED_REASONS 的字面量联合类型。 */
 export type StorageQuarantinedFailedReason = (typeof STORAGE_QUARANTINED_FAILED_REASONS)[number];
 
 /**
@@ -581,6 +624,7 @@ export type StorageQuarantinedFailedReason = (typeof STORAGE_QUARANTINED_FAILED_
  * not-quarantined 对象未隔离；already-exists 该隔离对象已有工单。
  */
 export const STORAGE_SECRECY_REPORT_CREATED_FAILED_REASONS = ['not-quarantined', 'already-exists'] as const;
+/** STORAGE_SECRECY_REPORT_CREATED_FAILED_REASONS 的字面量联合类型。 */
 export type StorageSecrecyReportCreatedFailedReason =
   (typeof STORAGE_SECRECY_REPORT_CREATED_FAILED_REASONS)[number];
 
@@ -593,6 +637,7 @@ export const STORAGE_SECRECY_REPORT_REPORTED_FAILED_REASONS = [
   'invalid-state',
   'concurrent-change',
 ] as const;
+/** STORAGE_SECRECY_REPORT_REPORTED_FAILED_REASONS 的字面量联合类型。 */
 export type StorageSecrecyReportReportedFailedReason =
   (typeof STORAGE_SECRECY_REPORT_REPORTED_FAILED_REASONS)[number];
 
@@ -607,6 +652,7 @@ export const STORAGE_SECRECY_REPORT_RECEIPTED_FAILED_REASONS = [
   'invalid-state',
   'concurrent-change',
 ] as const;
+/** STORAGE_SECRECY_REPORT_RECEIPTED_FAILED_REASONS 的字面量联合类型。 */
 export type StorageSecrecyReportReceiptedFailedReason =
   (typeof STORAGE_SECRECY_REPORT_RECEIPTED_FAILED_REASONS)[number];
 
@@ -629,6 +675,7 @@ export const CLUE_DESIGNATE_REQUESTED_FAILED_REASONS = [
   'filing-approval-pending',
   'concurrent-change',
 ] as const;
+/** CLUE_DESIGNATE_REQUESTED_FAILED_REASONS 的字面量联合类型。 */
 export type ClueDesignateRequestedFailedReason =
   (typeof CLUE_DESIGNATE_REQUESTED_FAILED_REASONS)[number];
 
@@ -643,6 +690,7 @@ export const CLUE_DESIGNATE_REJECTED_FAILED_REASONS = [
   'invalid-state',
   'concurrent-change',
 ] as const;
+/** CLUE_DESIGNATE_REJECTED_FAILED_REASONS 的字面量联合类型。 */
 export type ClueDesignateRejectedFailedReason =
   (typeof CLUE_DESIGNATE_REJECTED_FAILED_REASONS)[number];
 
@@ -666,6 +714,7 @@ export const CASE_FILING_DRAFTED_FAILED_REASONS = [
   'invalid-state',
   'concurrent-change',
 ] as const;
+/** CASE_FILING_DRAFTED_FAILED_REASONS 的字面量联合类型。 */
 export type CaseFilingDraftedFailedReason = (typeof CASE_FILING_DRAFTED_FAILED_REASONS)[number];
 
 /**
@@ -682,10 +731,12 @@ export const CASE_FILING_SUBMITTED_FAILED_REASONS = [
   'concurrent-change',
   'advisory',
 ] as const;
+/** CASE_FILING_SUBMITTED_FAILED_REASONS 的字面量联合类型。 */
 export type CaseFilingSubmittedFailedReason = (typeof CASE_FILING_SUBMITTED_FAILED_REASONS)[number];
 
 /** 立案呈批行政审核被拒（#234）。 */
 export const CASE_FILING_REVIEWED_FAILED_REASONS = ['invalid-state', 'concurrent-change'] as const;
+/** CASE_FILING_REVIEWED_FAILED_REASONS 的字面量联合类型。 */
 export type CaseFilingReviewedFailedReason = (typeof CASE_FILING_REVIEWED_FAILED_REASONS)[number];
 
 /**
@@ -702,6 +753,7 @@ export const CASE_FILING_APPROVED_FAILED_REASONS = [
   'invalid-state',
   'concurrent-change',
 ] as const;
+/** CASE_FILING_APPROVED_FAILED_REASONS 的字面量联合类型。 */
 export type CaseFilingApprovedFailedReason = (typeof CASE_FILING_APPROVED_FAILED_REASONS)[number];
 
 /** 立案呈批退回被拒（#234，#238 改为 R 代码）。missing-return-reason 退回原因必填。 */
@@ -716,6 +768,7 @@ export const CASE_FILING_RETURNED_FAILED_REASONS = [
   'invalid-state',
   'concurrent-change',
 ] as const;
+/** CASE_FILING_RETURNED_FAILED_REASONS 的字面量联合类型。 */
 export type CaseFilingReturnedFailedReason = (typeof CASE_FILING_RETURNED_FAILED_REASONS)[number];
 
 /** 立案呈批撤回被拒（#234）。missing-withdraw-reason 撤回理由必填。 */
@@ -724,10 +777,12 @@ export const CASE_FILING_WITHDRAWN_FAILED_REASONS = [
   'invalid-state',
   'concurrent-change',
 ] as const;
+/** CASE_FILING_WITHDRAWN_FAILED_REASONS 的字面量联合类型。 */
 export type CaseFilingWithdrawnFailedReason = (typeof CASE_FILING_WITHDRAWN_FAILED_REASONS)[number];
 
 /** 案件建立被拒（#234；与批准同事务，通常不单独出现）。 */
 export const CASE_OPENED_FAILED_REASONS = ['invalid-state', 'concurrent-change'] as const;
+/** CASE_OPENED_FAILED_REASONS 的字面量联合类型。 */
 export type CaseOpenedFailedReason = (typeof CASE_OPENED_FAILED_REASONS)[number];
 
 /** 案件迁移被拒（#235）。advisory 是警告或提示：不改业务行，只留失败痕。 */
@@ -745,6 +800,7 @@ export const CASE_TRANSITIONED_FAILED_REASONS = [
   'concurrent-change',
   'procedure-required',
 ] as const;
+/** CASE_TRANSITIONED_FAILED_REASONS 的字面量联合类型。 */
 export type CaseTransitionedFailedReason = (typeof CASE_TRANSITIONED_FAILED_REASONS)[number];
 
 /**
@@ -765,6 +821,7 @@ export const CASE_CONFLICT_DECLARED_FAILED_REASONS = [
   'already-marked',
   'uncheck-forbidden',
 ] as const;
+/** CASE_CONFLICT_DECLARED_FAILED_REASONS 的字面量联合类型。 */
 export type CaseConflictDeclaredFailedReason = (typeof CASE_CONFLICT_DECLARED_FAILED_REASONS)[number];
 
 /**
@@ -780,15 +837,18 @@ export const CASE_CONFLICT_DECIDED_FAILED_REASONS = [
   'decider-mismatch',
   'concurrent-change',
 ] as const;
+/** CASE_CONFLICT_DECIDED_FAILED_REASONS 的字面量联合类型。 */
 export type CaseConflictDecidedFailedReason = (typeof CASE_CONFLICT_DECIDED_FAILED_REASONS)[number];
 
 /** 调查继续登记被拒（#237）。missing-summary 摘要为空；invalid-kind 不是笔录或违法记录。 */
 export const CASE_INVESTIGATION_RECORDED_FAILED_REASONS = ['missing-summary', 'invalid-kind'] as const;
+/** CASE_INVESTIGATION_RECORDED_FAILED_REASONS 的字面量联合类型。 */
 export type CaseInvestigationRecordedFailedReason =
   (typeof CASE_INVESTIGATION_RECORDED_FAILED_REASONS)[number];
 
 /** 签出被拒（#237）。conflict-active 该人有声明或生效的人员层利害关系。 */
 export const CASE_SIGN_REFUSED_REASONS = ['conflict-active'] as const;
+/** CASE_SIGN_REFUSED_REASONS 的字面量联合类型。 */
 export type CaseSignRefusedReason = (typeof CASE_SIGN_REFUSED_REASONS)[number];
 /** 案件退回被拒（#238）。 */
 export const CASE_RETURNED_FAILED_REASONS = [
@@ -804,6 +864,7 @@ export const CASE_RETURNED_FAILED_REASONS = [
   'invalid-state',
   'concurrent-change',
 ] as const;
+/** CASE_RETURNED_FAILED_REASONS 的字面量联合类型。 */
 export type CaseReturnedFailedReason = (typeof CASE_RETURNED_FAILED_REASONS)[number];
 
 /** 审理与异议呈批被拒（#240）。审理动作共用这一张原因表。 */
@@ -845,8 +906,10 @@ export const CASE_REVIEW_FAILED_REASONS = [
   'REVIEW-SEPARATION',
   'concurrent-change',
 ] as const;
+/** CASE_REVIEW_FAILED_REASONS 的字面量联合类型。 */
 export type CaseReviewFailedReason = (typeof CASE_REVIEW_FAILED_REASONS)[number];
 
+/** 案件复核环节的动作组；组内动作失败时共用 CASE_REVIEW_FAILED_REASONS 作为原因表。 */
 export const CASE_REVIEW_ACTIONS = [
   'case.review-report-drafted',
   'case.review-report-submitted',
@@ -860,6 +923,7 @@ export const CASE_REVIEW_ACTIONS = [
   'case.review-objection-waived',
   'case.review-objection-expired',
 ] as const;
+/** CASE_REVIEW_ACTIONS 的字面量联合类型。 */
 export type CaseReviewAction = (typeof CASE_REVIEW_ACTIONS)[number];
 
 /** 调查环节与收尾被拒（#236）。九个动作共用这一张原因表。 */
@@ -885,6 +949,7 @@ export const CASE_INVESTIGATION_FAILED_REASONS = [
   'X20',
   'concurrent-change',
 ] as const;
+/** CASE_INVESTIGATION_FAILED_REASONS 的字面量联合类型。 */
 export type CaseInvestigationFailedReason = (typeof CASE_INVESTIGATION_FAILED_REASONS)[number];
 
 /** 期限呈批与锚点被拒（#246）。五个动作共用这一张原因表。 */
@@ -910,8 +975,10 @@ export const CASE_DEADLINE_FAILED_REASONS = [
   'X17',
   'X18',
 ] as const;
+/** CASE_DEADLINE_FAILED_REASONS 的字面量联合类型。 */
 export type CaseDeadlineFailedReason = (typeof CASE_DEADLINE_FAILED_REASONS)[number];
 
+/** 办案期限环节的动作组；组内动作失败时共用 CASE_DEADLINE_FAILED_REASONS 作为原因表。 */
 export const CASE_DEADLINE_ACTIONS = [
   'deadline.drafted',
   'deadline.submitted',
@@ -919,6 +986,7 @@ export const CASE_DEADLINE_ACTIONS = [
   'deadline.approved',
   'deadline.recorded',
 ] as const;
+/** CASE_DEADLINE_ACTIONS 的字面量联合类型。 */
 export type CaseDeadlineAction = (typeof CASE_DEADLINE_ACTIONS)[number];
 
 /** 告知／陈述申辩／听证被拒（#272）。十四个动作共用这一张原因表。 */
@@ -956,8 +1024,10 @@ export const CASE_NOTICE_FAILED_REASONS = [
   'X26',
   'X28',
 ] as const;
+/** CASE_NOTICE_FAILED_REASONS 的字面量联合类型。 */
 export type CaseNoticeFailedReason = (typeof CASE_NOTICE_FAILED_REASONS)[number];
 
+/** 告知环节的动作组；组内动作失败时共用 CASE_NOTICE_FAILED_REASONS 作为原因表。 */
 export const CASE_NOTICE_ACTIONS = [
   'case.notice-drafted',
   'case.notice-submitted',
@@ -975,6 +1045,7 @@ export const CASE_NOTICE_ACTIONS = [
   'case.new-fact-returned',
   'case.marker-changed',
 ] as const;
+/** CASE_NOTICE_ACTIONS 的字面量联合类型。 */
 export type CaseNoticeAction = (typeof CASE_NOTICE_ACTIONS)[number];
 
 /** 法制审核与集体讨论被拒（#269）。七个动作共用这一张原因表。 */
@@ -1029,8 +1100,10 @@ export const CASE_LEGAL_REVIEW_FAILED_REASONS = [
   'transition-disabled',
   'unknown-transition',
 ] as const;
+/** CASE_LEGAL_REVIEW_FAILED_REASONS 的字面量联合类型。 */
 export type CaseLegalReviewFailedReason = (typeof CASE_LEGAL_REVIEW_FAILED_REASONS)[number];
 
+/** 法制审核环节的动作组；组内动作失败时共用 CASE_LEGAL_REVIEW_FAILED_REASONS 作为原因表。 */
 export const CASE_LEGAL_REVIEW_ACTIONS = [
   'case.legal-review-started',
   'case.legal-review-opinion-signed',
@@ -1040,6 +1113,7 @@ export const CASE_LEGAL_REVIEW_ACTIONS = [
   'case.discussion-recorded',
   'case.decision-gate-checked',
 ] as const;
+/** CASE_LEGAL_REVIEW_ACTIONS 的字面量联合类型。 */
 export type CaseLegalReviewAction = (typeof CASE_LEGAL_REVIEW_ACTIONS)[number];
 
 /** 有效性确认、复核、重新告知与决定闸口被拒（#248）。四个动作共用这一张原因表。 */
@@ -1076,14 +1150,17 @@ export const CASE_VALIDITY_FAILED_REASONS = [
   'validity-summary-missing',
   'Q14',
 ] as const;
+/** CASE_VALIDITY_FAILED_REASONS 的字面量联合类型。 */
 export type CaseValidityFailedReason = (typeof CASE_VALIDITY_FAILED_REASONS)[number];
 
+/** 有效性确认环节的动作组；组内动作失败时共用 CASE_VALIDITY_FAILED_REASONS 作为原因表。 */
 export const CASE_VALIDITY_ACTIONS = [
   'case.validity-confirmed',
   'case.validity-reviewed',
   'case.validity-gate-checked',
   'case.notice-reissued',
 ] as const;
+/** CASE_VALIDITY_ACTIONS 的字面量联合类型。 */
 export type CaseValidityAction = (typeof CASE_VALIDITY_ACTIONS)[number];
 /** 案件阶段三类移送被拒（#242）。呈批、记载、回证、外部决定、人工出口与结案闸口共用这一张原因表。 */
 export const CASE_TRANSFER_FAILED_REASONS = [
@@ -1124,8 +1201,10 @@ export const CASE_TRANSFER_FAILED_REASONS = [
   'X18',
   'concurrent-change',
 ] as const;
+/** CASE_TRANSFER_FAILED_REASONS 的字面量联合类型。 */
 export type CaseTransferFailedReason = (typeof CASE_TRANSFER_FAILED_REASONS)[number];
 
+/** 移送环节的动作组；组内动作失败时共用 CASE_TRANSFER_FAILED_REASONS 作为原因表。 */
 export const CASE_TRANSFER_ACTIONS = [
   'case.transfer-drafted',
   'case.transfer-submitted',
@@ -1138,6 +1217,7 @@ export const CASE_TRANSFER_ACTIONS = [
   'case.criminal-outlet-approved',
   'case.closeout-gate-checked',
 ] as const;
+/** CASE_TRANSFER_ACTIONS 的字面量联合类型。 */
 export type CaseTransferAction = (typeof CASE_TRANSFER_ACTIONS)[number];
 
 /** 定型（E13／T27）被拒（#243）：材料入卷、归档审批与批准共用这一张原因表。 */
@@ -1159,8 +1239,10 @@ export const CASE_FINALIZE_FAILED_REASONS = [
   'advisory',
   'concurrent-change',
 ] as const;
+/** CASE_FINALIZE_FAILED_REASONS 的字面量联合类型。 */
 export type CaseFinalizeFailedReason = (typeof CASE_FINALIZE_FAILED_REASONS)[number];
 
+/** 结案卷宗环节的动作组；组内动作失败时共用 CASE_FINALIZE_FAILED_REASONS 作为原因表。 */
 export const CASE_FINALIZE_ACTIONS = [
   'case.dossier-material-recorded',
   'case.finalize-drafted',
@@ -1168,6 +1250,7 @@ export const CASE_FINALIZE_ACTIONS = [
   'case.finalize-reviewed',
   'case.finalize-approved',
 ] as const;
+/** CASE_FINALIZE_ACTIONS 的字面量联合类型。 */
 export type CaseFinalizeAction = (typeof CASE_FINALIZE_ACTIONS)[number];
 
 /** 决定（E09／T23）被拒（#270）。拟制、提交、审核与批准共用这一张原因表。 */
@@ -1202,14 +1285,17 @@ export const CASE_DECISION_FAILED_REASONS = [
   'transition-disabled',
   'unknown-transition',
 ] as const;
+/** CASE_DECISION_FAILED_REASONS 的字面量联合类型。 */
 export type CaseDecisionFailedReason = (typeof CASE_DECISION_FAILED_REASONS)[number];
 
+/** 处罚决定环节的动作组；组内动作失败时共用 CASE_DECISION_FAILED_REASONS 作为原因表。 */
 export const CASE_DECISION_ACTIONS = [
   'case.decision-drafted',
   'case.decision-submitted',
   'case.decision-reviewed',
   'case.decision-approved',
 ] as const;
+/** CASE_DECISION_ACTIONS 的字面量联合类型。 */
 export type CaseDecisionAction = (typeof CASE_DECISION_ACTIONS)[number];
 
 /** 送达、执行记载与结案被拒（#270）。三者共用这一张原因表。 */
@@ -1237,8 +1323,10 @@ export const CASE_CLOSEOUT_FAILED_REASONS = [
   'transition-disabled',
   'unknown-transition',
 ] as const;
+/** CASE_CLOSEOUT_FAILED_REASONS 的字面量联合类型。 */
 export type CaseCloseoutFailedReason = (typeof CASE_CLOSEOUT_FAILED_REASONS)[number];
 
+/** 结案交付环节的动作组；组内动作失败时共用 CASE_CLOSEOUT_FAILED_REASONS 作为原因表。 */
 export const CASE_CLOSEOUT_ACTIONS = [
   'case.delivery-recorded',
   'case.execution-recorded',
@@ -1247,6 +1335,7 @@ export const CASE_CLOSEOUT_ACTIONS = [
   'case.closure-reviewed',
   'case.closure-approved',
 ] as const;
+/** CASE_CLOSEOUT_ACTIONS 的字面量联合类型。 */
 export type CaseCloseoutAction = (typeof CASE_CLOSEOUT_ACTIONS)[number];
 
 /** 新旧比对判定被拒（#271）。提交缺判定、批准比对过时、材料不合规共用这一张原因表。 */
@@ -1255,6 +1344,7 @@ export const CASE_COMPARISON_FAILED_REASONS = [
   'comparison-stale',
   'invalid-input',
 ] as const;
+/** CASE_COMPARISON_FAILED_REASONS 的字面量联合类型。 */
 export type CaseComparisonFailedReason = (typeof CASE_COMPARISON_FAILED_REASONS)[number];
 /**
  * 改派呈批发起被拒（#239）。missing-reason 原因空或不在封闭集；missing-reason-note 其他原因缺说明；
@@ -1282,6 +1372,7 @@ export const CASE_REASSIGNMENT_SUBMITTED_FAILED_REASONS = [
   'invalid-state',
   'concurrent-change',
 ] as const;
+/** CASE_REASSIGNMENT_SUBMITTED_FAILED_REASONS 的字面量联合类型。 */
 export type CaseReassignmentSubmittedFailedReason =
   (typeof CASE_REASSIGNMENT_SUBMITTED_FAILED_REASONS)[number];
 
@@ -1305,6 +1396,7 @@ export const CASE_REASSIGNMENT_APPROVED_FAILED_REASONS = [
   'transition-disabled',
   'concurrent-change',
 ] as const;
+/** CASE_REASSIGNMENT_APPROVED_FAILED_REASONS 的字面量联合类型。 */
 export type CaseReassignmentApprovedFailedReason =
   (typeof CASE_REASSIGNMENT_APPROVED_FAILED_REASONS)[number];
 
@@ -1316,6 +1408,7 @@ export const CASE_REASSIGNMENT_WITHDRAWN_FAILED_REASONS = [
   'invalid-state',
   'concurrent-change',
 ] as const;
+/** CASE_REASSIGNMENT_WITHDRAWN_FAILED_REASONS 的字面量联合类型。 */
 export type CaseReassignmentWithdrawnFailedReason =
   (typeof CASE_REASSIGNMENT_WITHDRAWN_FAILED_REASONS)[number];
 
@@ -1331,9 +1424,11 @@ export const CASE_MATERIAL_EFFECTIVITY_FAILED_REASONS = [
   'invalid-state',
   'concurrent-change',
 ] as const;
+/** CASE_MATERIAL_EFFECTIVITY_FAILED_REASONS 的字面量联合类型。 */
 export type CaseMaterialEffectivityFailedReason =
   (typeof CASE_MATERIAL_EFFECTIVITY_FAILED_REASONS)[number];
 
+/** 调查取证环节的动作组；组内动作失败时共用 CASE_INVESTIGATION_FAILED_REASONS 作为原因表。 */
 export const CASE_INVESTIGATION_ACTIONS = [
   'case.inquiry-recorded',
   'case.violation-recorded',
@@ -1345,8 +1440,10 @@ export const CASE_INVESTIGATION_ACTIONS = [
   'case.procedure-returned',
   'case.party-notice-recorded',
 ] as const;
+/** CASE_INVESTIGATION_ACTIONS 的字面量联合类型。 */
 export type CaseInvestigationAction = (typeof CASE_INVESTIGATION_ACTIONS)[number];
 
+/** 带结构化快照（detail）的动作；只有这些动作的行允许写 detail，其余为空（#211 规格 G）。 */
 export const AUDIT_DETAIL_ACTIONS = [
   'clue.registered',
   'clue.items-supplemented',
@@ -1485,4 +1582,5 @@ export const AUDIT_DETAIL_ACTIONS = [
   'case.closure-reviewed',
   'case.closure-approved',
 ] as const;
+/** AUDIT_DETAIL_ACTIONS 的字面量联合类型。 */
 export type AuditDetailAction = (typeof AUDIT_DETAIL_ACTIONS)[number];
