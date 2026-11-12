@@ -113,6 +113,7 @@ async function seedPerson(
   orgUnitId: string,
   roles: readonly string[],
   mobilePhone: string,
+  cert = false,
 ): Promise<void> {
   const response = await fetch(`${baseUrl}/api/admin/personnel`, {
     method: 'POST',
@@ -124,6 +125,7 @@ async function seedPerson(
       mobilePhone,
       initialPassword: INITIAL_PASSWORD,
       roles: [...roles],
+      ...(cert ? { certNo: `ENF-${code}`, certExpiresOn: '2099-12-31' } : {}),
     }),
   });
   expect(response.status).toBe(200);
@@ -363,8 +365,8 @@ beforeAll(async () => {
   await seedPerson('P-INTAKE-A', '甲区内勤', deptAId, ['内勤'], '13900002001');
   await seedPerson('P-INTAKE-B', '乙区内勤', deptBId, ['内勤'], '13900002002');
   await seedPerson('P-INTAKE-ST', '甲所内勤', stationAId, ['内勤'], '13900002003');
-  await seedPerson('P-HANDLER-ST1', '甲所主办甲', stationAId, ['经办'], '13900002004');
-  await seedPerson('P-HANDLER-ST2', '甲所主办乙', stationAId, ['经办'], '13900002005');
+  await seedPerson('P-HANDLER-ST1', '甲所主办甲', stationAId, ['经办'], '13900002004', true);
+  await seedPerson('P-HANDLER-ST2', '甲所主办乙', stationAId, ['经办'], '13900002005', true);
   const handler1 = await cloned.prisma.personnel.findUnique({ where: { code: 'P-HANDLER-ST1' } });
   const handler2 = await cloned.prisma.personnel.findUnique({ where: { code: 'P-HANDLER-ST2' } });
   const clerkB = await cloned.prisma.personnel.findUnique({ where: { code: 'P-CLERK-B' } });
@@ -386,6 +388,7 @@ beforeEach(() => {
   storage.writes.length = 0;
 });
 
+// 分派决定：默认不派、已知晓与举报必派的判定与留痕。
 describe('#214 分派决定', () => {
   it('默认不派：决定「不派」进 held，留痕 clue.held 含前后状态', async () => {
     const first = await register({ polygon: geojsonPolygon(square(40)) });
@@ -552,6 +555,7 @@ describe('#214 分派决定', () => {
   });
 });
 
+// 两步分派：先派机构再派主办协办，含资格与状态校验。
 describe('#214 两步分派', () => {
   it('派机构：待分派池所属机构的内勤派给数据范围内的机构，状态进已派机构并留痕', async () => {
     const registered = await register({ polygon: geojsonPolygon(square(50)) });
@@ -674,6 +678,36 @@ describe('#214 两步分派', () => {
     expect(clue?.status).toBe('org_assigned');
   });
 
+  it('派主办／协办的执法资格：无证、证件过期、证件失效的承办人均 400，线索状态不变', async () => {
+    await seedPerson('P-HANDLER-NOCERT', '甲所无证甲', stationAId, ['经办'], '13900002006');
+    await seedPerson('P-HANDLER-EXPIRED', '甲所过期甲', stationAId, ['经办'], '13900002007', true);
+    await seedPerson('P-HANDLER-INVALID', '甲所失效甲', stationAId, ['经办'], '13900002008', true);
+    await cloned.prisma.personnel.update({
+      where: { code: 'P-HANDLER-EXPIRED' },
+      data: { enforcementCertExpiresOn: new Date('2020-01-01T00:00:00.000Z') },
+    });
+    await cloned.prisma.personnel.update({
+      where: { code: 'P-HANDLER-INVALID' },
+      data: { enforcementCertStatus: 'invalid' },
+    });
+
+    const registered = await register({ polygon: geojsonPolygon(square(70)) });
+    await assignOrg(registered.body.id ?? '', { orgUnitId: stationAId }, 'P-INTAKE-A');
+    for (const code of ['P-HANDLER-NOCERT', 'P-HANDLER-EXPIRED', 'P-HANDLER-INVALID']) {
+      const person = await cloned.prisma.personnel.findUniqueOrThrow({ where: { code } });
+      const rejected = await assignPeople(registered.body.id ?? '', { mainId: person.id }, 'P-INTAKE-ST');
+      expect(rejected.status).toBe(400);
+      expect(rejected.body.rules).toEqual(['assignee-not-qualified']);
+    }
+    const failed = (await trailOf('clue.handler-assigned', registered.body.id)).filter(
+      (row) => row.outcome === 'failed' && row.reason === 'assignee-not-qualified',
+    );
+    expect(failed).toHaveLength(3);
+
+    const clue = await cloned.prisma.clue.findUnique({ where: { id: registered.body.id } });
+    expect(clue?.status).toBe('org_assigned');
+  });
+
   it('监督尝试两步分派写操作：一律 403＋authz.denied，业务行不变', async () => {
     const registered = await register({ polygon: geojsonPolygon(square(55)) });
     const org = await assignOrg(registered.body.id ?? '', { orgUnitId: stationAId }, 'P-SUPER-B');
@@ -689,6 +723,7 @@ describe('#214 两步分派', () => {
   });
 });
 
+// 重新分派与并发控制：理由必填、指定管辖锁与 expectedStatus 冲突。
 describe('#214 重新分派与并发控制', () => {
   it('重新分派：上级内勤在原承办机构内重新分派须填理由，留痕并关止原承办人', async () => {
     const registered = await register({ polygon: geojsonPolygon(square(60)) });
@@ -934,6 +969,7 @@ async function seedClueAtPendingDecision(types: string, point: { lng: number; la
   return clueId;
 }
 
+// 分派校验：个案判断不得被规划类条文替代。
 describe('P7 个案判断规划类分派校验', () => {
   it('个案判断项派时缺 conflictResolution → 400 missing-conflict-resolution，业务行不变', async () => {
     const clueId = await seedClueAtPendingDecision('planning_build_without_permit', { lng: 113, lat: 23 });
@@ -973,6 +1009,7 @@ describe('P7 个案判断规划类分派校验', () => {
   });
 });
 
+// 分派视图的读范围：录入机构或已有承办机构可见。
 describe('分派视图读范围：录入机构或已有承办机构', () => {
   it('未派机构时承办机构内勤仍 403，且只留一行录入机构拒绝', async () => {
     const pooled = await register({ polygon: geojsonPolygon(square(56)) });

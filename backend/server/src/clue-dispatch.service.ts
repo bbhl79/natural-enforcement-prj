@@ -1,3 +1,5 @@
+// 用途：线索分派的服务实现：分派视图、决定步、派机构、派承办人与单位签收确认。
+// 调用方：backend/server/src/clue-dispatch.controller.ts 的五个路由。
 // 分派决定与两步分派（#214；规格 B/D 节、GLOSSARY）。
 //
 // 决定步：面状线索撞上未结案既有线索后进待分派决定，由录入人完成「派／不派」——
@@ -44,6 +46,7 @@ import { findSourceCode, findSourceGroupCode } from '@natural-enforcement/geo-di
 import {
   AccessControlService,
   IDENTITY_STORE,
+  hasEnforcementQualification,
   isAccessDenied,
   newUlid,
   type ActorRef,
@@ -51,6 +54,7 @@ import {
   type IdentityStore,
 } from '@natural-enforcement/identity';
 
+import { CLOCK, type Clock } from './clock.ts';
 import { LOGIN_DIRECTORY, type LoginDirectory } from './login-directory.ts';
 import { UNIT_OF_WORK, type UnitOfWork } from './unit-of-work.ts';
 import { ClueSuggestionService, type AreaSuggestionView } from './clue-suggestion.service.ts';
@@ -140,12 +144,12 @@ export interface DispatchView {
   readonly hasCaseByCasePlanningType: boolean;
 }
 
+/** 分派视图的返回：200 视图、403 拒绝原因或 404 未找到。 */
 export type DispatchViewOutcome =
   | { readonly status: 200; readonly body: DispatchView }
   | { readonly status: 403; readonly body: { readonly reason: DenyReason } }
   | { readonly status: 404; readonly body: { readonly result: 'not-found' } };
 
-/** 分派决定结果。 */
 /** 单位签收确认结果（#335）。 */
 export type ConfirmUnitReceiptOutcome =
   | {
@@ -169,6 +173,7 @@ export type ConfirmUnitReceiptOutcome =
   | { readonly status: 404; readonly body: { readonly result: 'not-found' } }
   | { readonly status: 409; readonly body: { readonly result: 'assignment-conflict' | 'invalid-state'; readonly reason: string } };
 
+/** 分派决定结果：200 已决定、400 不合规、403 拒绝、404 未找到或 409 状态冲突。 */
 export type DecideOutcome =
   | {
       readonly status: 200;
@@ -237,6 +242,11 @@ interface Rejection {
   readonly outlet?: string;
 }
 
+/**
+ * 分派服务：决定步、派机构、派承办人与单位签收确认。
+ * 各写入口先按操作码授权；派承办人另校验承办人在职、任职机构与执法资格。
+ * 事务内写业务行与留痕；冲突返回 409 并发失败原因，业务行不变。
+ */
 @Injectable()
 export class ClueDispatchService {
   constructor(
@@ -247,6 +257,7 @@ export class ClueDispatchService {
     @Inject(UNIT_OF_WORK) private readonly uow: UnitOfWork,
     private readonly access: AccessControlService,
     private readonly suggestion: ClueSuggestionService,
+    @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
   /** 分派视图：决定步、派机构、派承办人共用一个取数口。 */
@@ -734,11 +745,23 @@ export class ClueDispatchService {
       { personnelId: mainId, role: 'main' as const },
       ...assistIds.map((personnelId) => ({ personnelId, role: 'assist' as const })),
     ];
-    // 对象级校验：承办人须在职且当前任职在承办机构。
+    // 对象级校验：承办人须在职、当前任职在承办机构，且持有有效执法证（GLOSSARY「执法资格」）。
+    const now = this.clock.now();
     for (const handler of wanted) {
       const person = await this.identity.findPersonnelById(handler.personnelId);
       const posting = person ? await this.identity.findCurrentAssignment(handler.personnelId) : null;
-      if (!person || person.deactivatedAt !== null || !posting || posting.orgUnitId !== assignment.orgUnitId) {
+      if (
+        !person ||
+        person.deactivatedAt !== null ||
+        !posting ||
+        posting.orgUnitId !== assignment.orgUnitId ||
+        !hasEnforcementQualification(
+          person.enforcementCertNo,
+          person.enforcementCertExpiresOn,
+          person.enforcementCertStatus,
+          now,
+        )
+      ) {
         return this.rejectPeople(actor, actorCode, actorOrgId, clueId, {
           status: 400,
           result: 'non-compliant',

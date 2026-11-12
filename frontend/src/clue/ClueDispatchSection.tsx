@@ -1,3 +1,4 @@
+// 用途：工作台分派办理容器：取分派视图与机构清单，提交分派决定与两步分派。
 // 分派办理容器（工作台③分派决定；#214）。
 //
 // 取分派视图与机构清单，提交分派决定、派机构、派主办／协办；
@@ -54,7 +55,7 @@ export function dispatchFailureText(body: unknown): string {
       case 'handler-main-required':
         return '请指定主办承办人。';
       case 'assignee-not-qualified':
-        return '承办人已停用或不属于承办机构。';
+        return '承办人已停用、不属于承办机构，或未持有有效执法证。';
       case 'missing-disposition-fields':
         return '必填项未填：其他须填理由；系统外移送须填移送机关、文书编号与原因。';
       case 'invalid-letter-date':

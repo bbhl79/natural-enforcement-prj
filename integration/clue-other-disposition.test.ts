@@ -99,6 +99,7 @@ async function seedPerson(
   orgUnitId: string,
   roles: readonly string[],
   mobilePhone: string,
+  cert = false,
 ): Promise<void> {
   const response = await fetch(`${baseUrl}/api/admin/personnel`, {
     method: 'POST',
@@ -110,6 +111,7 @@ async function seedPerson(
       roles,
       mobilePhone,
       initialPassword: INITIAL_PASSWORD,
+      ...(cert ? { certNo: `ENF-${code}`, certExpiresOn: '2099-12-31' } : {}),
     }),
   });
   if (response.status !== 200) {
@@ -277,7 +279,7 @@ beforeAll(async () => {
   await seedPerson('P-229-IA', '甲区内勤', deptAId, ['内勤'], '13900022901');
   await seedPerson('P-229-IB', '乙区内勤', deptBId, ['内勤'], '13900022902');
   await seedPerson('P-229-ST', '甲所内勤', stationAId, ['内勤'], '13900022903');
-  await seedPerson('P-229-H1', '甲所经办甲', stationAId, ['经办'], '13900022904');
+  await seedPerson('P-229-H1', '甲所经办甲', stationAId, ['经办'], '13900022904', true);
   await seedPerson('P-229-SU', '乙区监督', deptBId, ['监督'], '13900022905');
   for (const code of ['P-229-IA', 'P-229-IB', 'P-229-ST', 'P-229-H1', 'P-229-SU']) {
     await cookieOf(code, INITIAL_PASSWORD);
@@ -296,6 +298,7 @@ beforeEach(() => {
   storage.writes.length = 0;
 });
 
+// 其他处置：理由必填、进 closed、提醒与留痕。
 describe('#229 其他处置', () => {
   it('主办登记 other：进 closed、处置行、留痕、held 提醒 kind=other', async () => {
     const pair = await heldPair(201);
@@ -357,6 +360,7 @@ describe('#229 其他处置', () => {
   });
 });
 
+// 系统外移送：须挂其他处置，不改状态，可事后补挂。
 describe('#229 系统外移送附加记录', () => {
   it('对 other 线索补挂：状态不变、记录新增、留痕一条', async () => {
     const clueId = await assignedAlone(206);

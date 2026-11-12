@@ -94,6 +94,7 @@ async function seedPerson(
   orgUnitId: string,
   roles: readonly string[],
   mobilePhone: string,
+  cert = false,
 ): Promise<void> {
   const response = await fetch(`${baseUrl}/api/admin/personnel`, {
     method: 'POST',
@@ -105,6 +106,7 @@ async function seedPerson(
       mobilePhone,
       initialPassword: SEED_PASSWORD,
       roles: [...roles],
+      ...(cert ? { certNo: `ENF-${code}`, certExpiresOn: '2099-12-31' } : {}),
     }),
   });
   expect(response.status, `${code} 种入失败`).toBe(200);
@@ -133,7 +135,7 @@ beforeAll(async () => {
   const stationAId = await orgOf('ORG-STATION-A');
   await seedPerson('P-INTAKE-A', '甲区内勤', deptAId, ['内勤'], '13900002001');
   await seedPerson('P-INTAKE-ST', '甲所内勤', stationAId, ['内勤'], '13900002003');
-  await seedPerson('P-HANDLER-ST1', '甲所主办甲', stationAId, ['经办'], '13900002004');
+  await seedPerson('P-HANDLER-ST1', '甲所主办甲', stationAId, ['经办'], '13900002004', true);
 }, 60_000);
 
 afterAll(async () => {
@@ -141,6 +143,7 @@ afterAll(async () => {
   await cloned?.close();
 });
 
+// 验证资产 API 环：读 scenario、跑 HTTP、评 oracle、写证据。
 describe('e2e/verify API 环', () => {
   it('happy 01：vf-sc-verify-loop-survey-register 变绿并写证据包', async () => {
     const runId = newRunId();

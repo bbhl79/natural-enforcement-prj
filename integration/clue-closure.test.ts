@@ -116,6 +116,7 @@ async function seedPerson(
   orgUnitId: string,
   roles: readonly string[],
   mobilePhone: string,
+  cert = false,
 ): Promise<void> {
   const response = await fetch(`${baseUrl}/api/admin/personnel`, {
     method: 'POST',
@@ -127,6 +128,7 @@ async function seedPerson(
       mobilePhone,
       initialPassword: INITIAL_PASSWORD,
       roles: [...roles],
+      ...(cert ? { certNo: `ENF-${code}`, certExpiresOn: '2099-12-31' } : {}),
     }),
   });
   expect(response.status).toBe(200);
@@ -458,8 +460,8 @@ beforeAll(async () => {
   await seedPerson('P-INTAKE-A', '甲区内勤', deptAId, ['内勤'], '13900004001');
   await seedPerson('P-INTAKE-B', '乙区内勤', deptBId, ['内勤'], '13900004002');
   await seedPerson('P-INTAKE-ST', '甲所内勤', stationAId, ['内勤'], '13900004003');
-  await seedPerson('P-HANDLER-ST1', '甲所经办甲', stationAId, ['经办'], '13900004004');
-  await seedPerson('P-HANDLER-ST2', '甲所经办乙', stationAId, ['经办'], '13900004005');
+  await seedPerson('P-HANDLER-ST1', '甲所经办甲', stationAId, ['经办'], '13900004004', true);
+  await seedPerson('P-HANDLER-ST2', '甲所经办乙', stationAId, ['经办'], '13900004005', true);
   for (const code of ['P-INTAKE-A', 'P-INTAKE-B', 'P-INTAKE-ST', 'P-HANDLER-ST1', 'P-HANDLER-ST2']) {
     await cookieOf(code, INITIAL_PASSWORD);
   }
@@ -477,6 +479,7 @@ beforeEach(() => {
   storage.writes.length = 0;
 });
 
+// 不予立案只能经立案呈批落点，HTTP 不得直接登记。
 describe('#226 HTTP 拒绝直接登记不予立案', () => {
   it('主办本人 disposition=no-case：400 filing-approval-required，业务行不变＋失败留痕', async () => {
     const pair = await heldPair(80);
@@ -519,6 +522,7 @@ describe('#226 HTTP 拒绝直接登记不予立案', () => {
   });
 });
 
+// 落点服务在批准事务内写不予立案落点并留痕。
 describe('#226 落点服务 recordNoCaseFromFiling', () => {
   it('(a) handler_assigned → closed，处置＋呈批引用＋理由快照＋留痕＋kind=no-case 提醒', async () => {
     const pair = await heldPair(83);
@@ -659,6 +663,7 @@ describe('#226 落点服务 recordNoCaseFromFiling', () => {
   });
 });
 
+// 结案提醒的生成条件与提醒种类。
 describe('#217 结案提醒生成', () => {
   it('仅当前 held 的线索生成提醒：非 held 的撞车线索不生成', async () => {
     const pair = await heldPair(90);
@@ -712,6 +717,7 @@ describe('#217 结案提醒生成', () => {
   });
 });
 
+// 结案提醒的界面文案与可办项口径。
 describe('#217 界面口径', () => {
   it('四项常用原因由服务端给出，界面不另存一份', async () => {
     const response = await fetch(`${baseUrl}/api/clues/closure-options`, {
@@ -729,6 +735,7 @@ describe('#217 界面口径', () => {
   });
 });
 
+// 结案提醒的处理路径与状态变化。
 describe('#217 结案提醒处理', () => {
   it('撤回不派再办：回待分派池、撤回行与提醒处理留痕齐备', async () => {
     const pair = await heldPair(92);

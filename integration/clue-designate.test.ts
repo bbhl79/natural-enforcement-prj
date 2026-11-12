@@ -109,6 +109,7 @@ async function seedPerson(
   orgUnitId: string,
   roles: readonly string[],
   mobilePhone: string,
+  cert = false,
 ): Promise<void> {
   const response = await fetch(`${baseUrl}/api/admin/personnel`, {
     method: 'POST',
@@ -120,6 +121,7 @@ async function seedPerson(
       mobilePhone,
       initialPassword: INITIAL_PASSWORD,
       roles: [...roles],
+      ...(cert ? { certNo: `ENF-${code}`, certExpiresOn: '2099-12-31' } : {}),
     }),
   });
   expect(response.status).toBe(200);
@@ -307,7 +309,7 @@ beforeAll(async () => {
   await seedPerson('P-INTAKE-A', '甲区内勤', deptAId, ['内勤'], '13900003001');
   await seedPerson('P-INTAKE-B', '乙区内勤', deptBId, ['内勤'], '13900003002');
   await seedPerson('P-INTAKE-ST', '甲所内勤', stationAId, ['内勤'], '13900003003');
-  await seedPerson('P-HANDLER-ST1', '甲所主办甲', stationAId, ['经办'], '13900003004');
+  await seedPerson('P-HANDLER-ST1', '甲所主办甲', stationAId, ['经办'], '13900003004', true);
   const handler1 = await cloned.prisma.personnel.findUnique({ where: { code: 'P-HANDLER-ST1' } });
   const hqClerk = await cloned.prisma.personnel.findUnique({ where: { code: 'P-INTAKE-HQ' } });
   handlerSt1 = handler1?.id ?? '';
@@ -326,6 +328,7 @@ beforeEach(() => {
   storage.writes.length = 0;
 });
 
+// 报请指定管辖的发起条件与受理人规则。
 describe('#215 报请发起与受理人规则', () => {
   it('待分派池报请（未选拟归属机构）：受理人为直接上级内勤，进待办并留痕', async () => {
     const registered = await register({ polygon: geojsonPolygon(square(70)) });
@@ -517,6 +520,7 @@ describe('#215 报请发起与受理人规则', () => {
   });
 });
 
+// 报请期间的锁与受理人变更处理。
 describe('#215 报请期间的锁与受理人处理', () => {
   it('报请期间下级分派：409 designation-pending＋失败留痕，业务行不变', async () => {
     const registered = await register({ polygon: geojsonPolygon(square(80)) });
