@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# 用途：E3 不可变存储用例：临时 RustFS 上验证写入后不可原地修改或删除。
 # E3 不可变必失败用例（#53）：写文件版本 → 原地改写/删除尝试 → 必须被拒或产生新世代。
 # 驱动真实 RustFS（临时实例，不写入项目 rustfs-data 卷）；
 # 红绿对照判别轴 = 原版本（versionId 寻址）是否无损，区分「校验缺失」与「校验拒绝」。
@@ -27,8 +28,10 @@ E3_NET="${PROJECT}-e3-$$"
 E3_VOL="${PROJECT}-e3-data-$$"
 E3_RUSTFS="${PROJECT}-e3-rustfs-$$"
 
+# 打印失败原因并以 1 退出。
 fail() { echo "[失败] $1" >&2; exit 1; }
 
+# 销毁临时容器、数据卷与网络；由 EXIT trap 调用。
 cleanup() {
   docker rm -f "$E3_RUSTFS" >/dev/null 2>&1 || true
   docker volume rm -f "$E3_VOL" >/dev/null 2>&1 || true
@@ -65,19 +68,24 @@ done
 [ "$ready" -eq 0 ] || fail "rustfs:9000 就绪等待超时（60s）"
 
 # ---------- 2. 运行 E3 驱动（临时网络内访问 rustfs:9000） ----------
+# 驱动源码经标准输入以 tar 送进容器，不用 -v 绑定宿主目录：Podman machine 看不见 WSL home 下的
+# bind-mount（容器内只剩引擎自建的空目录），与 dev 的 seed_repo_to_stdin 同一做法。
+# 驱动只依赖 packages/storage/src 下的文件与 node:crypto，故只打包该目录。
+# ustar：工具链镜像是 alpine BusyBox tar，吃不下 GNU 默认 pax。
 driver_rc=0
-docker run --rm --pull=never \
-  --network "$E3_NET" \
-  -e RUSTFS_ENDPOINT="$RUSTFS_ENDPOINT" \
-  -e RUSTFS_ACCESS_KEY="$RUSTFS_ACCESS_KEY" \
-  -e RUSTFS_SECRET_KEY="$RUSTFS_SECRET_KEY" \
-  -e RUSTFS_REGION='us-east-1' \
-  -e E3_BUCKET="$E3_BUCKET" \
-  -e E3_RUN_ID="$E3_RUN_ID" \
-  -v "$ROOT:/repo:ro" \
-  -w /repo \
-  "$LINT_IMAGE" \
-  node packages/storage/src/e3-driver.ts || driver_rc=$?
+tar -C "$ROOT" --format=ustar -cf - packages/storage/src \
+  | docker run --rm --pull=never -i \
+    --network "$E3_NET" \
+    -e RUSTFS_ENDPOINT="$RUSTFS_ENDPOINT" \
+    -e RUSTFS_ACCESS_KEY="$RUSTFS_ACCESS_KEY" \
+    -e RUSTFS_SECRET_KEY="$RUSTFS_SECRET_KEY" \
+    -e RUSTFS_REGION='us-east-1' \
+    -e E3_BUCKET="$E3_BUCKET" \
+    -e E3_RUN_ID="$E3_RUN_ID" \
+    -w /repo \
+    "$LINT_IMAGE" \
+    sh -c 'set -e; mkdir -p /repo; tar -x -f - -C /repo; node packages/storage/src/e3-driver.ts' \
+  || driver_rc=$?
 
 # ---------- 3. 自清理：trap 销毁临时容器和网络（项目卷不参与） ----------
 [ "$driver_rc" -eq 0 ] || fail "E3 驱动非 0 退出（rc=$driver_rc），输出见上方"

@@ -51,9 +51,9 @@ P1 无回溯上限样本的 driver 是 `run-hist-dup-no-lookback.sh`。
 本轮必绿：`vf-sc-verify-loop-survey-register`（01）、`vf-sc-verify-loop-land-register`（02）、
 `vf-sc-neg-type-unconfirmed`（01）、`vf-sc-neg-missing-narrative`（02）。
 
-## 只跑 verify-skill-loop（避开 e3 拖红）
+## 只跑 verify-skill-loop（跳过 integration 脚本）
 
-整入口 `./dev test integration` 在 Vitest 之后还会跑 `integration/*.sh`；其中 `e3-immutable-storage.sh` 可能因缺 `/repo/packages/storage/src/e3-driver.ts` 把整层拖红（另记债，本轮不修 e3）。
+整入口 `./dev test integration` 在 Vitest 之后还会跑 `integration/*.sh`；其中 `e3-immutable-storage.sh` 要起临时 RustFS，耗时较长。该脚本把驱动源码经 tar 送进容器，不依赖宿主 bind-mount，Podman 下可以通过。
 
 快路径（只验本环、宿主落盘 `e2e/results/verify-*`）：
 
@@ -64,12 +64,12 @@ INTEGRATION_VITEST_ARGS='integration/verify-skill-loop.test.ts' \
   ./dev test integration
 ```
 
-`./dev` 已把宿主 `e2e/results` bind-mount 到容器 `/work/.run`，EvidenceWriter 写出的 `e2e/results/verify-<runId>/` 在宿主可见。
+EvidenceWriter 写出的 `e2e/results/verify-<runId>/` 先落在容器的命名卷里，`./dev` 跑完再用 tar 抽回宿主（见本文末「证据落盘（Podman）」）。
 
 
-## 只跑 verify（避开 e3 脚本）
+## 只跑 verify（跳过 integration 脚本）
 
-整层 `./dev test integration` 在 Vitest 之后会跑 `integration/*.sh`；当前 `e3-immutable-storage.sh` 可能因缺 `/repo/packages/storage/src/e3-driver.ts` 拖红（另记债，本轮不修）。
+整层 `./dev test integration` 在 Vitest 之后会跑 `integration/*.sh`，其中 e3 脚本耗时较长。
 
 只跑 API 环四条：
 
@@ -80,6 +80,6 @@ INTEGRATION_SKIP_SCRIPTS=1 INTEGRATION_VITEST_ARGS=integration/verify-skill-loop
 
 - `INTEGRATION_VITEST_ARGS`：传给容器内 `vitest run` 的文件／过滤参数。
 - `INTEGRATION_SKIP_SCRIPTS=1`：跳过 `integration/*.sh`。
-- 证据：`./dev` 将宿主 `e2e/results` bind-mount 到容器 `/work/.run`，跑完可在宿主读 `e2e/results/verify-<runId>/summary.json`。
+- 证据：跑完可在宿主读 `e2e/results/verify-<runId>/summary.json`（经命名卷与 tar 抽回，不用 bind-mount）。
 
 证据落盘（Podman）：integration Vitest 把 `e2e/results` 写到 named volume `${COMPOSE_PROJECT_NAME:-natural-enforcement}-verify-run`，`./dev` 再 tar 抽回宿主 `e2e/results/`（WSL home bind-mount 在 Podman machine 下不可见，故不用 `-v "$ROOT/e2e/results:/work/e2e/results"`）。
