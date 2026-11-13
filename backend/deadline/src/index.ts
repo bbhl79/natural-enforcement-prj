@@ -50,3 +50,6 @@ export {
   isExclusionKind,
 } from './period.ts';
 export type { ExclusionKind, PeriodDraft } from './period.ts';
+// L1 合法合规判据的机器形态。integration/case-deadline.test.ts 用它取期望值，不手抄法规数值。
+export { BUSINESS_DECISIONS, LEGAL_CRITERIA } from './criteria.generated.ts';
+export type { BusinessDecision, LegalCriterion } from './criteria.generated.ts';

@@ -236,6 +236,8 @@ export const DOCUMENTS = [
   { code: "doc_078", name: "城乡规划编制单位资质管理办法", hierarchyLevel: "部门规章", validityStatus: "现行有效", note: "自然资源部令第11号，2024-01-24 公布并施行。声明内（键，条号）116 处，原「88 次」作废。https://www.gov.cn/gongbao/2024/issue_11286/202404/content_6945587.html" },
   { code: "doc_079", name: "矿产资源法", hierarchyLevel: "法律", validityStatus: "现行有效", note: "2024-11-08 修订，主席令第三十六号，2025-07-01 施行。https://www.gov.cn/yaowen/liebiao/202411/content_6985756.htm" },
   { code: "doc_080", name: "矿产资源法实施条例", hierarchyLevel: "行政法规", validityStatus: "现行有效", note: null },
+  { code: "doc_081", name: "行政执法机关移送涉嫌犯罪案件的规定", hierarchyLevel: "行政法规", validityStatus: "现行有效", note: "国务院令第310号，2001-07-09 公布，2020-08-07 修订，自公布之日起施行。https://www.samr.gov.cn/zw/zfxxgk/fdzdgknr/bgt/art/2023/art_67dfb2ba7cf041d780338f65a1f3b631.html" },
+  { code: "doc_082", name: "广州市依法行政条例", hierarchyLevel: "设区的市地方性法规", validityStatus: "现行有效", note: "2022-05-26 修订，2022-10-01 施行，广州市第十六届人民代表大会常务委员会公告（第7号）。https://www.rd.gz.cn/zyfb/cwhgg/content/post_233774.html" },
 ] as const;
 
 /** 违法类型的依据引用（ADR 0019）：文件编号 + 条号 + 用途。 */

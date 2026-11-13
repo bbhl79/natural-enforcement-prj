@@ -107,7 +107,8 @@ describe('#210 参照数据种子（ADR 0016 只追加）', () => {
       sourceCodes: 30,
       selectable: 94,
       categories: 19,
-      documents: 80,
+      // 80 条初值 + doc_081（310 号令）、doc_082（广州市依法行政条例），供 L1 判据引用。
+      documents: 82,
       basis: expect.any(Number),
       jurisdiction: 0,
     });

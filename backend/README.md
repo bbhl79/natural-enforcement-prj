@@ -94,6 +94,7 @@ BullMQ/RustFS SDK），不引用 backend 内部路径（含 `../../backend/…` 
 | `screenshot-full-set` | 截图全集文件名集合（#105「截图验收（loop ⑥c）」、#134 收口、#207 换全集、#220 齐套）：`docs/screens/manifest/<票>.txt` 各票状态键段（`## aux` 段之前）的文件名并集不得越出状态键全集，也不得缺键。状态键全集 = 原型 v0.4 的 78 键（`frontend/prototype/admin-console/screens/*.png`，除 `overview.png`）∪ #207 协议第 I 节的 62 键（`docs/screens/keys-207.txt`）。v0.4 缺键判红；#207 的 62 键缺键判红；文件名越出全集判红。清单的 `## aux` 段（对照与补充图）不计。**截图本体不入版本控制**（迁至 `e2e/results/screens/<票>/`），在库只留清单。自动判定只比文件名集合；画面一致由逐图人查（各票 README 与 PR） |
 | `ui-copy-discipline` | 界面文案纪律（#207／#220）：`frontend/src` 生产源码（排除 `*.test.*`／`*.spec.*`）的字符串字面量不得出现「捞回」、Issue 号样式（# 加 2–4 位数字）、`区块 [A-E]`。注释里的「禁用／禁止」说明不计入（只扫引号字面量）。自动判定只看源码集合；渲染结果由前端单测（router／shell／closure）补充 |
 | `no-case-landing-entry` | 不予立案入口约束（#234）：落点服务 `recordNoCaseFromFilingApproval` 在 server 层只许由立案呈批批准路径调用（`backend/server/src/case-filing.service.ts`）；其他服务出现即红——防止重新开出绕过立案呈批的不予立案入口（X19） |
+| `criteria-traceability` | L1 合法合规判据可追溯（E8）：`backend/deadline/src/rules.ts` 每条规则的 `basis` 必须写 `判据:<编号>` 或 `业务决策:<编号>`，编号须在 `backend/deadline/src/criteria.generated.ts` 内。底稿见 `docs/research/criteria/`，生成器见 `tools/generate-review-criteria.mjs` |
 
 ## 认证记录（#69）
 

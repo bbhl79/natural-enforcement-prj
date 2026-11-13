@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { CASE_STORE, nextEntrySeq, type CaseStore, type StageInstanceRow } from '../backend/case/src/index.ts';
+import { findDeadlineRule } from '../backend/deadline/src/index.ts';
 import { newUlid } from '../backend/identity/src/index.ts';
 import { createApplication } from '../backend/server/src/persistence.module.ts';
 import { openClonedDatabase, type ClonedDatabase } from './cloned-database.ts';
@@ -536,14 +537,17 @@ describe('#246 期限', () => {
       startingDocument: '送审稿',
     });
     expect(legal.status, JSON.stringify(legal.body)).toBe(200);
+    // 法审期限是业务决策 DEC-001；期望值取登记表，不手抄数值。
+    const legalRule = findDeadlineRule('legal-review.round');
+    expect(legalRule, 'legal-review.round 未登记').not.toBeNull();
     expect(legal.body).toMatchObject({
       consumption: 'restart',
       consumptionName: '重新起算',
-      ruleVersion: '2026-10-27',
-      dayCount: 5,
-      dayBasis: 'working',
+      ruleVersion: legalRule?.version,
+      dayCount: legalRule?.dayCount,
+      dayBasis: legalRule?.dayBasis,
       partyFacing: false,
-      extensionAllowance: 10,
+      extensionAllowance: legalRule?.extensionAllowance,
       dueOn: '2026-01-12',
     });
     const hearing = await postJson(`/api/cases/${caseId}/deadline-anchors`, 'P-246-H1', {

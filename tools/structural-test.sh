@@ -43,9 +43,9 @@
 #     （历史口径脚本 tools/structural-snapshot/count-subprocs.sh（已退役）：该目录的
 #     快照基线记 21 条规则，在位闸 28 条，compare.sh 按 21 条比对会对全部 29 个场景误报
 #     「不一致」。阈值与实测数字保留在本段，按同一口径复核即可。）
-#   等价性判据：tools/structural-probe.sh——50 条注入违例的场景，红探针逐条断言目标规则
+#   等价性判据：tools/structural-probe.sh——51 条注入违例的场景，红探针逐条断言目标规则
 #     确实判红并自清理，已接入 dev lint structural-probe 与 CI。改本闸的取数形态后必须
-#     重跑红探针，50 条违例仍须把各自的目标规则判红。
+#     重跑红探针，51 条违例仍须把各自的目标规则判红。
 #
 # 依赖矩阵（唯一事实源 = #47；人读副本 = backend/README.md，二者同步维护）：
 #   shield      统一契约，不依赖任何业务模块；公共出口仅 src/index.ts
@@ -210,6 +210,7 @@ RULES=(
   screenshot-full-set
   ui-copy-discipline
   no-case-landing-entry
+  criteria-traceability
   source-comment-coverage
   shell-comment-coverage
   comment-path-refs
@@ -498,7 +499,8 @@ declare -A ASSEMBLY_EXEMPT=(
   # #235：再次进入用状态机公共出口的 nextEntrySeq 与 CaseStore.appendStageInstance。
   ["integration/case-state-machine.test.ts"]="../backend/case/src/ ../backend/identity/src/"
   # #246：期限用例用案件公共出口的 CaseStore、nextEntrySeq 与身份公共出口的 newUlid。与 #235 同口径。
-  ["integration/case-deadline.test.ts"]="../backend/case/src/ ../backend/identity/src/"
+  # L1 判据：法审期限的期望值取期限公共出口的 findDeadlineRule，不手抄数值。
+  ["integration/case-deadline.test.ts"]="../backend/case/src/ ../backend/identity/src/ ../backend/deadline/src/"
   # #238：退回用例只用身份公共出口 index.ts 的 newUlid。与 #235 同口径。
   ["integration/case-return.test.ts"]="../backend/identity/src/index.ts"
   # #239：改派用例只用身份公共出口 index.ts 的 newUlid。与 #238 同口径。
@@ -1735,7 +1737,53 @@ BEGIN {
 }
 '
 
-# 规则：COMMENT_SCOPE 内的 TS 类源码注释覆盖（文件头、导出符号、describe、路由操作码）。
+# 期限规则的登记文件与 L1 判据产物。规则只扫登记表里的 basis 行。
+CRITERIA_TRACE_SOURCE="$ROOT/backend/deadline/src/rules.ts"
+CRITERIA_TRACE_PRODUCT="$ROOT/backend/deadline/src/criteria.generated.ts"
+
+# 规则：期限规则的 basis 必须指向在场判据或业务决策（E8 可追溯性）。
+check_criteria-traceability() {
+  local line token refs fails=0 checked=0
+  if [ ! -f "$CRITERIA_TRACE_SOURCE" ]; then
+    note_ok "criteria-traceability：期限规则文件不在场，跳过"
+    return
+  fi
+  if [ ! -f "$CRITERIA_TRACE_PRODUCT" ]; then
+    note_fail "criteria-traceability：判据产物不在场（${CRITERIA_TRACE_PRODUCT#"$ROOT"/}），先运行 node tools/generate-review-criteria.mjs"
+    return
+  fi
+  while IFS= read -r line; do
+    refs=0
+    for token in $(printf '%s\n' "$line" | grep -oE '判据:CRIT-[A-Z0-9-]+' | sed 's/^判据://'); do
+      refs=$((refs + 1))
+      if ! grep -qF "id: \"$token\"" "$CRITERIA_TRACE_PRODUCT"; then
+        note_fail "criteria-traceability：basis 指向的判据不在产物内：$token"
+        fails=$((fails + 1))
+      fi
+    done
+    for token in $(printf '%s\n' "$line" | grep -oE '业务决策:DEC-[0-9]+' | sed 's/^业务决策://'); do
+      refs=$((refs + 1))
+      if ! grep -qF "id: \"$token\"" "$CRITERIA_TRACE_PRODUCT"; then
+        note_fail "criteria-traceability：basis 指向的业务决策不在产物内：$token"
+        fails=$((fails + 1))
+      fi
+    done
+    checked=$((checked + 1))
+    if [ "$refs" -eq 0 ]; then
+      note_fail "criteria-traceability：basis 未指向判据或业务决策：$line"
+      fails=$((fails + 1))
+    fi
+  done < <(grep -E "^[[:space:]]+basis: '" "$CRITERIA_TRACE_SOURCE" || true)
+  if [ "$checked" -eq 0 ]; then
+    note_fail "criteria-traceability：期限规则文件里没有 basis 行，规则可能扫错文件"
+    return
+  fi
+  if [ "$fails" -eq 0 ]; then
+    note_ok "criteria-traceability：期限规则的 basis 全部指向在场判据或业务决策（$checked 条）"
+  fi
+}
+
+# 规则：COMMENT_SCOPE 内的 TS 注释覆盖（文件头、导出注释、describe 注释、路由操作码）。
 check_source-comment-coverage() {
   local ops fails=0 kind file line msg
   ops="$(opcode_registry)"

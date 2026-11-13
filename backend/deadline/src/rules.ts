@@ -18,7 +18,9 @@ export const COMPLEX_CASE_REASON = '案情特别复杂';
 /**
  * 一条期限规则的登记参数。key 是规则键，version 是规则版本，dayCount 与 dayBasis 决定怎么数（日历日或工作日）。
  * consumption 取 continue 或 restart，中文名见 CONSUMPTION_NAMES，本包不据此分支。
- * partyFacing 随期限行存下，换日历修订时由 planRevision 据此判断是否只许推后。basis 是出处文字，只登记，不参与计算。
+ * partyFacing 随期限行存下，换日历修订时由 planRevision 据此判断是否只许推后。
+ * basis 是出处。格式为「判据:<编号>」或「业务决策:<编号>」，可附括号说明；编号须在
+ * backend/deadline/src/criteria.generated.ts 内。它只登记，不参与计算。
  * 调用方：backend/server/src/case-notice.service.ts 引用该类型。
  */
 export interface DeadlineRule {
@@ -47,7 +49,7 @@ export const DEADLINE_RULES: readonly DeadlineRule[] = [
     consumption: 'continue',
     partyFacing: false,
     extensionAllowance: null,
-    basis: '行政处罚法第60条；处罚办法第38条',
+    basis: '判据:CRIT-DL-001；判据:CRIT-DL-002（行政处罚法第六十条；自然资源行政处罚办法第三十八条）',
   },
   {
     key: 'legal-review.round',
@@ -57,7 +59,7 @@ export const DEADLINE_RULES: readonly DeadlineRule[] = [
     consumption: 'restart',
     partyFacing: false,
     extensionAllowance: 10,
-    basis: '法制审核 5 个工作日，可延长 10 个工作日',
+    basis: '业务决策:DEC-001（法审 5＋10 个工作日，广州市局程序条）',
   },
   {
     key: 'hearing.apply',
@@ -67,7 +69,7 @@ export const DEADLINE_RULES: readonly DeadlineRule[] = [
     consumption: 'restart',
     partyFacing: true,
     extensionAllowance: null,
-    basis: '听证申请期默认五个工作日',
+    basis: '判据:CRIT-DL-004（行政处罚法第六十四条（一）、第八十五条）',
   },
   {
     key: 'notice.statement',
@@ -77,7 +79,7 @@ export const DEADLINE_RULES: readonly DeadlineRule[] = [
     consumption: 'restart',
     partyFacing: true,
     extensionAllowance: null,
-    basis: '陈述申辩期默认五个工作日（#272）',
+    basis: '判据:CRIT-DL-005（自然资源违法行为立案查处工作规程 8.2）',
   },
   {
     key: 'transfer.notice',
@@ -87,7 +89,7 @@ export const DEADLINE_RULES: readonly DeadlineRule[] = [
     consumption: 'restart',
     partyFacing: true,
     extensionAllowance: null,
-    basis: '移送告知 3 个工作日',
+    basis: '业务决策:DEC-002（移送告知 3 个工作日，出处待查证）',
   },
   {
     key: 'criminal-transfer.decision',
@@ -97,7 +99,7 @@ export const DEADLINE_RULES: readonly DeadlineRule[] = [
     consumption: 'restart',
     partyFacing: false,
     extensionAllowance: null,
-    basis: '涉刑移送审批三个工作日（规程11.1.2(2)）',
+    basis: '判据:CRIT-DL-006（自然资源违法行为立案查处工作规程 11.1.2（2））',
   },
   {
     key: 'criminal-decision.review',
@@ -107,7 +109,7 @@ export const DEADLINE_RULES: readonly DeadlineRule[] = [
     consumption: 'restart',
     partyFacing: false,
     extensionAllowance: null,
-    basis: '接到不予立案通知之日起三日只警告（国务院令第310号第9条）',
+    basis: '判据:CRIT-DL-007（国务院令第310号第九条）',
   },
 ];
 

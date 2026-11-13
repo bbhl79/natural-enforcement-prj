@@ -529,6 +529,11 @@ write_probe_comment-path-refs() {
     "export const probePath = 1;"
 }
 
+# 期限规则的 basis 未指向判据或业务决策：追加一条自由文字 basis。
+write_probe_criteria-traceability() {
+  inplace_append "backend/deadline/src/rules.ts" "    basis: '自由文字，没有判据编号',"
+}
+
 SPECS=(
   "frontend-boundary|frontend-boundary|前端直连库（@prisma/client）"
   "spatial-orm-chain|spatial-no-orm-mutation|空间模型 ORM 写（换行链式）"
@@ -588,6 +593,7 @@ SPECS=(
   "source-comment-importlike|source-comment-coverage|注释里含 import 样式文字（会被依赖矩阵规则误判）"
   "shell-comment-function|shell-comment-coverage|shell 函数缺紧邻注释"
   "comment-path-refs|comment-path-refs|注释引用的仓库路径未入库"
+  "criteria-traceability|criteria-traceability|期限规则的 basis 未指向判据或业务决策"
 )
 
 # ---------- 护栏①（#171）动态层：带违例的整闸全量运行，三族各取一条 ----------
