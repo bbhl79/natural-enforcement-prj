@@ -1,0 +1,46 @@
+{
+  "id": "L2-ORACLE-vf-case-15-survey-template-happy-register",
+  "caseId": "L2-CASE-vf-case-15-survey-template-happy-register",
+  "legalExit": "EXIT-REGISTERED",
+  "legalRefs": [
+    {
+      "kind": "PROC",
+      "id": "PROC-REGISTER",
+      "reason": "登记入池为作业规程起点；本切片不断言期限数值"
+    }
+  ],
+  "asserts": [
+    {
+      "id": "http-ok",
+      "kind": "http",
+      "path": "http.status",
+      "op": "in",
+      "expect": [
+        200,
+        201
+      ],
+      "provenance": "derived"
+    },
+    {
+      "id": "result-registered",
+      "kind": "state",
+      "path": "body.result",
+      "op": "eq",
+      "expect": "registered",
+      "provenance": "derived"
+    },
+    {
+      "id": "status-pool",
+      "kind": "state",
+      "path": "body.status",
+      "op": "in",
+      "expect": [
+        "in_pool",
+        "pending_decision"
+      ],
+      "provenance": "derived"
+    }
+  ],
+  "halfRunPolicy": "gap-not-reached",
+  "notes": "登记环机器断言；终局未跑到记 not-reached。"
+}

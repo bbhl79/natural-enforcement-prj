@@ -24,6 +24,8 @@ L2 从约 21 份种子卷宗**生成**用例与 Oracle，目的是发现产品�
 
 机器闸：合法词表、schema、X1–X4 / X2b / X5b 骨架、Mock 占比、纪要准入。产品跑次红记缺口，不挡本 lint。
 
-## 首切片
+## 首切片与 Phase 2
 
-`L2-GAP-0`：`ledger/cases/L2-CASE-vf-case-01-happy-register.json`（种子 `vf-case-01-map-review-missing` × happy 登记环）。
+- Phase 1：`L2-GAP-0` 登记 happy（已合入 `dev`）。
+- Phase 2：21 种子登记 happy 根（`L2-CASE-*-happy-register`）；mineral/planning 为 `unwired` 并记缺口。
+- **不宣称 Min**；不横铺 E2/E3（X5b scaleGate）。

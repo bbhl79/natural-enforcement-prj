@@ -189,9 +189,12 @@ export function validateLegalExit(legalExit, edgeClass, vocab, label, errors) {
   }
 }
 
-/** 能力盘点解析：有 verifyScenarioRef 时只按场景引用匹配，禁止 happy 回退误判。 */
+/** 能力盘点解析：capabilityId > verifyScenarioRef > edgeClass 回退；禁止错误 happy 回退。 */
 export function resolveCapability(c, capability) {
   const caps = capability.capabilities || [];
+  if (c.capabilityId) {
+    return caps.find((x) => x.capabilityId === c.capabilityId) || null;
+  }
   if (c.verifyScenarioRef) {
     return (
       caps.find((x) => (x.scenarioRefs || []).includes(c.verifyScenarioRef)) || null
@@ -451,9 +454,11 @@ export function lintLedger() {
       errors.push(`${c.id}: admit-ok 缺 panelMinutesId`);
     }
 
-    // X5b：场景引用优先，禁止无引用匹配时的错误 happy 回退
+    // X5b：capabilityId / 场景引用优先
     const cap = resolveCapability(c, capability);
-    if (c.verifyScenarioRef && !cap) {
+    if (c.capabilityId && !cap) {
+      errors.push(`${c.id}: X5b capabilityId=${c.capabilityId} 不在能力盘点`);
+    } else if (c.verifyScenarioRef && !c.capabilityId && !cap) {
       errors.push(`${c.id}: X5b 场景 ${c.verifyScenarioRef} 未出现在能力盘点 scenarioRefs`);
     } else if (cap) {
       if (VERDICT_ORDER.indexOf(c.harnessCapability) < VERDICT_ORDER.indexOf(cap.verdict)) {

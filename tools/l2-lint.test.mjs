@@ -67,6 +67,20 @@ test('X5b：显式 scenarioRef 优先，filing 场景不得回退为 register wi
   assert.equal(cap.verdict, 'unwired');
 });
 
+test('X5b：capabilityId 优先于 happy 回退（planning 不得变 wired）', () => {
+  const capability = readJson('capability/harvest-capability.json');
+  const cap = resolveCapability(
+    {
+      capabilityId: 'register-planning',
+      edgeClass: 'happy',
+      harnessCapability: 'unwired',
+    },
+    capability,
+  );
+  assert.equal(cap.capabilityId, 'register-planning');
+  assert.equal(cap.verdict, 'unwired');
+});
+
 test('共用校验：缺 mockBasis.legal 与 E1 处罚出口均拒', () => {
   const vocab = readJson('vocabulary/legal-exits.json');
   const errs1 = [];

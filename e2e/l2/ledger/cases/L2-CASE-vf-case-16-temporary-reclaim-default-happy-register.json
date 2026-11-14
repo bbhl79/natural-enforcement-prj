@@ -1,48 +1,48 @@
 {
-  "id": "L2-CASE-vf-case-01-happy-register",
-  "seedId": "vf-case-01-map-review-missing",
+  "id": "L2-CASE-vf-case-16-temporary-reclaim-default-happy-register",
+  "seedId": "vf-case-16-temporary-reclaim-default",
   "edgeClass": "happy",
-  "matrixCellId": "MC-survey-3-none-happy",
-  "domain": "survey",
-  "sourceCode": "305",
-  "sourceClass": "3",
+  "matrixCellId": "MC-land-1-none-happy",
+  "domain": "land",
+  "sourceCode": "16",
+  "sourceClass": "1",
   "approvalTier": "none",
   "lineage": {
     "fields": [
       {
         "path": "domain",
         "provenance": "derived",
-        "value": "survey",
+        "value": "land",
         "seedPath": "domain"
       },
       {
         "path": "sourceCode",
         "provenance": "derived",
-        "value": "305",
+        "value": "16",
         "seedPath": "sourceCode"
       },
       {
         "path": "party.displayName",
         "provenance": "derived",
-        "value": "vf-广州某信息科技有限公司",
+        "value": "vf-某混凝土有限公司",
         "seedPath": "party.displayName"
       },
       {
         "path": "spatial.kind",
         "provenance": "derived",
-        "value": "point",
+        "value": "face",
         "seedPath": "spatial.kind"
       },
       {
         "path": "stages.register.system.sourceCode",
         "provenance": "derived",
-        "value": "305",
+        "value": "16",
         "seedPath": "stages.register.system.sourceCode"
       },
       {
         "path": "stages.register.system.domain",
         "provenance": "derived",
-        "value": "survey",
+        "value": "land",
         "seedPath": "stages.register.system.domain"
       }
     ]
@@ -51,15 +51,15 @@
     {
       "id": "register",
       "action": "register-clue",
-      "inputsRef": "vf-case-01-map-review-missing#stages.register.system",
+      "inputsRef": "vf-case-16-temporary-reclaim-default#stages.register.system",
       "expectReachable": true
     }
   ],
-  "oracleId": "L2-ORACLE-vf-case-01-happy-register",
+  "oracleId": "L2-ORACLE-vf-case-16-temporary-reclaim-default-happy-register",
   "g6Disposition": "admit-ok",
   "harnessCapability": "wired",
-  "panelMinutesId": "L2-MIN-vf-case-01-happy-register",
+  "capabilityId": "register-clue",
+  "panelMinutesId": "L2-MIN-vf-case-16-temporary-reclaim-default-happy-register",
   "mockRatio": 0,
-  "verifyScenarioRef": "vf-sc-verify-loop-survey-register",
-  "notes": "L2-GAP-0 首切片：收割 verify 测绘登记环；本条不断言整卷终局。"
+  "notes": "Phase2 种子 happy 登记根；capability=register-clue/wired。"
 }

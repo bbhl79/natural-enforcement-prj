@@ -1,0 +1,21 @@
+{
+  "id": "MC-land-1-none-happy",
+  "domain": "land",
+  "sourceClass": "1",
+  "approvalTier": "none",
+  "edgeClass": "happy",
+  "status": "covered",
+  "coveringCaseIds": [
+    "L2-CASE-vf-case-02-occupy-without-approval-happy-register",
+    "L2-CASE-vf-case-03-temporary-land-refuse-happy-register",
+    "L2-CASE-vf-case-05-farmland-permanent-happy-register",
+    "L2-CASE-vf-case-06-reclaim-obligation-happy-register",
+    "L2-CASE-vf-case-07-occupy-heyuan-happy-register",
+    "L2-CASE-vf-case-08-reclaim-meizhou-happy-register",
+    "L2-CASE-vf-case-10-farmland-destroy-happy-register",
+    "L2-CASE-vf-case-12-transfer-collective-happy-register",
+    "L2-CASE-vf-case-16-temporary-reclaim-default-happy-register"
+  ],
+  "mandatoryMin": true,
+  "mandatoryTarget": true
+}

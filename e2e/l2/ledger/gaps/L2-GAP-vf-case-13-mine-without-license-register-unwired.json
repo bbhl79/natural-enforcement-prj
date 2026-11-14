@@ -1,0 +1,9 @@
+{
+  "id": "L2-GAP-vf-case-13-mine-without-license-register-unwired",
+  "caseId": "L2-CASE-vf-case-13-mine-without-license-happy-register",
+  "edgeClass": "happy",
+  "matrixCellId": "MC-mineral-1-none-happy",
+  "gapKind": "capability-unwired",
+  "productHint": "mineral 登记场景仍在 UNWIRED；产品/驱动接入后关闭缺口",
+  "status": "open"
+}

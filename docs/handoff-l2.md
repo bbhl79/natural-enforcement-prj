@@ -1,7 +1,7 @@
 # L2 语料驱动套件 · 交接
 
-> 分支：`cursor/l2-phase0-gap0-d09b`
-> 状态：Phase 0 规矩落地 + Phase 1 首切片 `L2-GAP-0` 准入账。
+> 分支：`cursor/l2-phase2-happy-roots-d09b`
+> 状态：Phase 0/1 已合入 `dev`（#343）；Phase 2 铺开 21 种子登记 happy 根。
 > 定位：能力缺口发现；种子→发散；承接并最终替代 `e2e/verify`。
 
 ## 先读
@@ -22,7 +22,9 @@
 | verify 承接初稿 | `e2e/l2/succession/verify-inventory.md` |
 | 机器闸 | `./dev lint l2` → `tools/l2-lint.mjs` + `tools/l2-lint.test.mjs` |
 | X2b 负例 | `e2e/l2/fixtures/negatives/` |
-| L2-GAP-0 | `ledger/cases/L2-CASE-vf-case-01-happy-register.json` + Oracle + 纪要 + 矩阵格 |
+| L2-GAP-0 及 Phase2 happy 根 | `ledger/cases/L2-CASE-*-happy-register.json`（21 条） |
+| mineral/planning 缺口 | `ledger/gaps/*-register-unwired.json` |
+| 生成器 | `tools/l2-gen-phase2-happy.mjs` |
 
 ## 门禁
 
@@ -32,12 +34,13 @@
 
 ## 刻意未做
 
-- 未宣称 Min；未横铺 E2/E3（能力盘点为 latent/missing）
+- **未宣称 Min**（X5 阈值未跑通）
+- 未横铺 E2/E3（latent/missing）
 - 未改产品业务代码；未把 API_SUITE 整包贴 L2
 - 未引入外部抽检
 
 ## 下一步
 
-1. Phase 2：其余种子 happy（先 land 登记环）
-2. Phase 2b：E1–E3 仅在能力闸允许后横铺
-3. 产品跑次接 harness 出缺口账
+1. Phase 2b：E1 抽样（仍勿横铺 E2/E3）
+2. 产品跑次接 harness 出更多缺口
+3. 达 X5 后再宣称 Min

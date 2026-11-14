@@ -1,0 +1,13 @@
+{
+  "id": "MC-survey-1-none-happy",
+  "domain": "survey",
+  "sourceClass": "1",
+  "approvalTier": "none",
+  "edgeClass": "happy",
+  "status": "covered",
+  "coveringCaseIds": [
+    "L2-CASE-vf-case-19-survey-project-transfer-happy-register"
+  ],
+  "mandatoryMin": true,
+  "mandatoryTarget": true
+}

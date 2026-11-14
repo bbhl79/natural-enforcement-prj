@@ -1,0 +1,9 @@
+{
+  "id": "L2-GAP-vf-case-04-build-without-permit-register-unwired",
+  "caseId": "L2-CASE-vf-case-04-build-without-permit-happy-register",
+  "edgeClass": "happy",
+  "matrixCellId": "MC-planning-1-none-happy",
+  "gapKind": "capability-unwired",
+  "productHint": "planning 登记场景仍在 UNWIRED；产品/驱动接入后关闭缺口",
+  "status": "open"
+}

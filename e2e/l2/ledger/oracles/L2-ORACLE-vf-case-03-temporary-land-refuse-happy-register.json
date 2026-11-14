@@ -1,6 +1,6 @@
 {
-  "id": "L2-ORACLE-vf-case-01-happy-register",
-  "caseId": "L2-CASE-vf-case-01-happy-register",
+  "id": "L2-ORACLE-vf-case-03-temporary-land-refuse-happy-register",
+  "caseId": "L2-CASE-vf-case-03-temporary-land-refuse-happy-register",
   "legalExit": "EXIT-REGISTERED",
   "legalRefs": [
     {
@@ -15,7 +15,10 @@
       "kind": "http",
       "path": "http.status",
       "op": "in",
-      "expect": [200, 201],
+      "expect": [
+        200,
+        201
+      ],
       "provenance": "derived"
     },
     {
@@ -31,10 +34,13 @@
       "kind": "state",
       "path": "body.status",
       "op": "in",
-      "expect": ["in_pool", "pending_decision"],
+      "expect": [
+        "in_pool",
+        "pending_decision"
+      ],
       "provenance": "derived"
     }
   ],
   "halfRunPolicy": "gap-not-reached",
-  "notes": "对齐 vf-sc-verify-loop-survey-register 机器 assert；半程未跑到终局记 not-reached，不记 assert-failed。"
+  "notes": "登记环机器断言；终局未跑到记 not-reached。"
 }

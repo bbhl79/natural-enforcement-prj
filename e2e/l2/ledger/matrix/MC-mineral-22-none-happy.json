@@ -1,0 +1,15 @@
+{
+  "id": "MC-mineral-22-none-happy",
+  "domain": "mineral",
+  "sourceClass": "22",
+  "approvalTier": "none",
+  "edgeClass": "happy",
+  "status": "covered",
+  "coveringCaseIds": [
+    "L2-CASE-vf-case-09-mine-overstep-happy-register",
+    "L2-CASE-vf-case-17-mine-overstep-zq-happy-register",
+    "L2-CASE-vf-case-18-geo-hazard-fraud-happy-register"
+  ],
+  "mandatoryMin": true,
+  "mandatoryTarget": true
+}
