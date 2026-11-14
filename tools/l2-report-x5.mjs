@@ -99,9 +99,11 @@ if (deferredShare > maxDeferred) {
 }
 
 report.structuralMinReady = report.rules.every((r) => r.pass);
-report.claimMin = false;
-report.notes =
-  '本报告不宣称 Min。仅统计 g6Disposition=admit-ok。capability latent/missing/unwired 不计能力覆盖分子。';
+// claimMin：结构规则 + 用例量级 + Mock/deferred 限额均无 blocker 时为 true。
+report.claimMin = report.blockers.length === 0;
+report.notes = report.claimMin
+  ? 'claimMin=true：admit-ok 量级与 M1–M7/限额均通过。capability latent/missing/unwired 仍不计能力覆盖分子。'
+  : 'claimMin=false：见 blockers。仅统计 g6Disposition=admit-ok。capability latent/missing/unwired 不计能力覆盖分子。';
 
 console.log(JSON.stringify(report, null, 2));
 process.exit(report.blockers.length ? 1 : 0);

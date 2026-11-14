@@ -1,7 +1,7 @@
 # L2 语料驱动套件 · 交接
 
-> 分支：`cursor/l2-phase4-succession-d09b`（叠 #346 → #348）
-> 状态：Phase0–2b 抽样已合入 `dev`；scale/Phase3/Phase4 叠链推进。
+> 分支：`cursor/l2-min-e1-wave-d09b`（基于 `origin/dev`）
+> 状态：Phase0–4 已合入 `dev`；本波冲 Min（admit-ok ∈ [40,60]）。
 > 定位：能力缺口发现；种子→发散；承接并最终替代 `e2e/verify`。
 
 ## 先读
@@ -16,10 +16,9 @@
 
 | 项 | 位置 |
 |---|---|
-| Phase0–2 / 2b 抽样 | #343/#344/#345 |
-| Phase2b-scale (#346) | E1 四法域；`terminate-unfounded` / `consult-dissent` 独立能力 |
-| Phase3 (#348) | 缺口 ticketed → #347；X5 报告仅 admit-ok + deferred 占比 |
-| Phase4 (#350) | rebuild-map；X6 禁 rebuilt→unwired/latent/missing |
+| Phase0–4 | #343/#344/#345/#346/#348/#350 |
+| Min-wave E1 | `tools/l2-gen-min-e1-wave.mjs`；+10 E1（无孪生种子）→ admit-ok **42** |
+| X5 claimMin | `tools/l2-report-x5.mjs`：无 blocker 时 `claimMin=true` |
 
 ## 门禁
 
@@ -30,12 +29,12 @@ node tools/l2-report-x5.mjs
 
 ## 刻意未做
 
-- **未宣称 Min**
-- **未横铺 E2/E3**
+- **未横铺 E2/E3**（能力仍 latent/missing）
+- 未冲 Target 120–200
 - 未删 `e2e/verify`；未假接 UNWIRED
 
 ## 下一步
 
-1. 叠链 CI 绿后合并 #346 → #348 → #350
-2. 用例量到 40–60 再评估 Min 宣称
-3. 产品接线后关 #347
+1. 产品接线后关 #347（filing-decline / terminate-unfounded 等 latent）
+2. E2/E3 能力 wired/partial 后再横铺
+3. 再评估 Target 矩阵发散

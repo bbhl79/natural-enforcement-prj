@@ -8,7 +8,12 @@
   "coveringCaseIds": [
     "L2-CASE-vf-case-02-E1-terminate-unfounded",
     "L2-CASE-vf-case-02-E1-no-filing",
-    "L2-CASE-vf-case-05-E1-no-filing"
+    "L2-CASE-vf-case-05-E1-no-filing",
+    "L2-CASE-vf-case-03-E1-no-filing",
+    "L2-CASE-vf-case-06-E1-no-filing",
+    "L2-CASE-vf-case-07-E1-no-filing",
+    "L2-CASE-vf-case-08-E1-no-filing",
+    "L2-CASE-vf-case-10-E1-no-filing"
   ],
   "mandatoryMin": true,
   "mandatoryTarget": true
