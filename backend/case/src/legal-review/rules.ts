@@ -28,23 +28,65 @@ export const LEGAL_REVIEW_LIST_VERSION = '2026-10-29';
 // 清单默认适用的机关层级，市局清单默认适用各区分局。
 export const DEFAULT_LEGAL_REVIEW_LIST_LEVEL = 'city';
 
-/** 清单六项与《广州市依法行政条例》第 37 条（三）。 */
+/** 清单六项与《广州市依法行政条例》第 37 条（三）。basis 登记判据或业务决策编号。 */
 export const MANDATORY_REVIEW_ITEMS = [
-  { code: 'major-public-interest', item: 1, name: '涉及重大公共利益', judgedBy: 'manual' },
-  { code: 'hearing-held', item: 2, name: '拟作出处罚且本案实际举行过听证', judgedBy: 'auto' },
-  { code: 'hearing-entered', item: 2, name: '已受理或已排期（含其后终止）', judgedBy: 'auto' },
-  { code: 'major-social-impact', item: 3, name: '可能造成重大社会影响或引发社会风险', judgedBy: 'manual' },
-  { code: 'complex-multiple-relations', item: 4, name: '案件情况疑难复杂、涉及多个法律关系', judgedBy: 'manual' },
-  { code: 'penalty-item-5', item: 5, name: '拟处罚种类含清单第 5 项列举种类', judgedBy: 'auto' },
-  { code: 'law-requires', item: 6, name: '法律、法规、规章或规范性文件规定应当审核', judgedBy: 'manual' },
+  {
+    code: 'major-public-interest',
+    item: 1,
+    name: '涉及重大公共利益',
+    judgedBy: 'manual',
+    basis: '判据:CRIT-LR-001；判据:CRIT-LR-002',
+  },
+  {
+    code: 'hearing-held',
+    item: 2,
+    name: '拟作出处罚且本案实际举行过听证',
+    judgedBy: 'auto',
+    basis: '判据:CRIT-LR-001；判据:CRIT-LR-002',
+  },
+  {
+    code: 'hearing-entered',
+    item: 2,
+    name: '已受理或已排期（含其后终止）',
+    judgedBy: 'auto',
+    basis: '判据:CRIT-LR-001；判据:CRIT-LR-002',
+  },
+  {
+    code: 'major-social-impact',
+    item: 3,
+    name: '可能造成重大社会影响或引发社会风险',
+    judgedBy: 'manual',
+    basis: '判据:CRIT-LR-002',
+  },
+  {
+    code: 'complex-multiple-relations',
+    item: 4,
+    name: '案件情况疑难复杂、涉及多个法律关系',
+    judgedBy: 'manual',
+    basis: '判据:CRIT-LR-001；判据:CRIT-LR-002',
+  },
+  {
+    code: 'penalty-item-5',
+    item: 5,
+    name: '拟处罚种类含清单第 5 项列举种类',
+    judgedBy: 'auto',
+    basis: '业务决策:DEC-003',
+  },
+  {
+    code: 'law-requires',
+    item: 6,
+    name: '法律、法规、规章或规范性文件规定应当审核',
+    judgedBy: 'manual',
+    basis: '判据:CRIT-LR-001；判据:CRIT-LR-002',
+  },
   {
     code: 'material-rights',
     item: 37,
     name: '直接关系当事人或第三人重大权益',
     judgedBy: 'manual',
-    basis: '《广州市依法行政条例》第 37 条（三）',
+    basis: '判据:CRIT-LR-002（《广州市依法行政条例》第 37 条（三））',
   },
-  { code: 'criminal-transfer', item: null, name: '涉刑移送决定', judgedBy: 'auto' },
+  { code: 'criminal-transfer', item: null, name: '涉刑移送决定', judgedBy: 'auto', basis: '业务决策:DEC-004' },
 ] as const;
 
 // 必审清单项的标识，取 MANDATORY_REVIEW_ITEMS 元素的 code。
@@ -81,6 +123,11 @@ export const NOT_REQUIRED_DECISION_KINDS = [
 ] as const;
 // 不必审的决定类型，取 NOT_REQUIRED_DECISION_KINDS 的元素类型。
 export type NotRequiredDecisionKind = (typeof NOT_REQUIRED_DECISION_KINDS)[number];
+
+/** 清单第 5 项列举的处罚种类。只认列举出的代码，不扩大解释「等」。 */
+export const MANDATORY_REVIEW_PENALTY_CODES_BASIS = {
+  basis: '业务决策:DEC-003（广州市局 2022-02-15 必审清单第 5 项）',
+} as const;
 
 /** 清单第 5 项列举的处罚种类。只认列举出的代码，不扩大解释「等」。 */
 export const MANDATORY_REVIEW_PENALTY_CODES = [
@@ -576,27 +623,27 @@ export const COLLECTIVE_DISCUSSION_CRITERIA = [
   {
     code: 'mixed-lenient-severe',
     name: '违法行为同时具有从轻减轻处罚和从重处罚情形',
-    basis: '粤自然资规字〔2022〕2号第12条（一）',
+    basis: '判据:CRIT-LR-005（粤自然资规字〔2022〕2号第12条（一））',
   },
   {
     code: 'not-in-benchmark',
     name: '对未列入《实施基准》的其他违法行为实施行政处罚，按法律、法规、规章规定需要裁量',
-    basis: '粤自然资规字〔2022〕2号第12条（二）',
+    basis: '判据:CRIT-LR-006（粤自然资规字〔2022〕2号第12条（二））',
   },
   {
     code: 'no-illegal-gains',
     name: '认定无违法所得或者不能计算违法所得的情形进行处罚',
-    basis: '粤自然资规字〔2022〕2号第12条（三）',
+    basis: '判据:CRIT-LR-007（粤自然资规字〔2022〕2号第12条（三））',
   },
   {
     code: 'other-collective',
     name: '其他需交由集体讨论决定的情形',
-    basis: '粤自然资规字〔2022〕2号第12条（四）',
+    basis: '判据:CRIT-LR-008（粤自然资规字〔2022〕2号第12条（四））',
   },
   {
     code: 'complex-or-major',
     name: '情节复杂或者重大违法行为',
-    basis: '行政处罚法第57条第2款；规程7.1末款',
+    basis: '判据:CRIT-LR-003；判据:CRIT-LR-004（行政处罚法第57条第2款；规程7.1末款）',
   },
 ] as const;
 

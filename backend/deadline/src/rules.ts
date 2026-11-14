@@ -49,7 +49,7 @@ export const DEADLINE_RULES: readonly DeadlineRule[] = [
     consumption: 'continue',
     partyFacing: false,
     extensionAllowance: null,
-    basis: '判据:CRIT-DL-001；判据:CRIT-DL-002（行政处罚法第六十条；自然资源行政处罚办法第三十八条）',
+    basis: '判据:CRIT-DL-001；判据:CRIT-DL-002；判据:CRIT-DL-008（行政处罚法第六十条；自然资源行政处罚办法第三十八条）',
   },
   {
     key: 'legal-review.round',

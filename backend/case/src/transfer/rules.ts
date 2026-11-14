@@ -305,6 +305,7 @@ export function receiptsCompleteOf(
 /** 停表、续表事件的依据（办法第38条第2款；不计入期间由 #246 登记）。 */
 export const TRANSFER_CLOCK_BASIS = {
   basisLabel: '业务不计入',
+  basis: '判据:CRIT-DL-003（涉刑移送期间不计入办案期限）',
   basisNote: '涉刑移送期间不计入办案期限（办法第38条第2款）',
 } as const;
 
