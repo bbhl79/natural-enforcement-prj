@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "e2e/l2/schema/matrix-cell.schema.json",
+  "title": "L2MatrixCell",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "domain",
+    "sourceClass",
+    "approvalTier",
+    "edgeClass",
+    "status",
+    "mandatoryMin",
+    "mandatoryTarget"
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^MC-" },
+    "domain": {
+      "type": "string",
+      "enum": ["land", "mineral", "survey", "planning"]
+    },
+    "sourceClass": {
+      "type": "string",
+      "enum": ["1", "3", "5", "21", "22"]
+    },
+    "approvalTier": {
+      "type": "string",
+      "enum": ["none", "approval-only", "approval+consult", "with-rework"]
+    },
+    "edgeClass": {
+      "type": "string",
+      "enum": ["happy", "E1", "E2", "E3", "E4", "E5", "E6"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["covered", "sparse", "deferred"]
+    },
+    "coveringCaseIds": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "deferredReason": {
+      "type": "string",
+      "enum": [
+        "no-seed-source-class",
+        "harness-unwired",
+        "single-seed-domain-limit",
+        "awaiting-L1-DEC"
+      ]
+    },
+    "mandatoryMin": { "type": "boolean" },
+    "mandatoryTarget": { "type": "boolean" }
+  }
+}

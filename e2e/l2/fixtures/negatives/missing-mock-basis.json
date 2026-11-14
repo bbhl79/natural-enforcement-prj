@@ -1,0 +1,11 @@
+{
+  "id": "L2-NEG-missing-mock-basis",
+  "purpose": "X2b：mocked 字段缺 mockBasis.legal",
+  "lineageField": {
+    "path": "fake.field",
+    "provenance": "mocked",
+    "value": "x",
+    "mockBasis": { "product": "invented", "legal": null }
+  },
+  "expectLint": "fail"
+}

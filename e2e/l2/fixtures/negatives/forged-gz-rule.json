@@ -1,0 +1,6 @@
+{
+  "id": "L2-NEG-forged-gz-rule",
+  "purpose": "X2b：臆造广州专规 kind/id",
+  "legalRefs": [{ "kind": "PROC", "id": "PROC-GZ-LOCAL-ONLY-FAKE" }],
+  "expectLint": "fail"
+}

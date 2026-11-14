@@ -1,0 +1,59 @@
+{
+  "constantName": "L2_X5_MIN_CELLS",
+  "caseCountRange": [40, 60],
+  "maxDeferredShareInMandatory": 0.15,
+  "maxLedgerMeanMockRatio": 0.45,
+  "rules": [
+    {
+      "id": "M1",
+      "description": "每法域 × happy × 任意来源各 ≥1",
+      "minCount": 4,
+      "match": { "edgeClass": "happy", "groupBy": "domain" }
+    },
+    {
+      "id": "M2",
+      "description": "E1/E2/E3 每类 ≥1",
+      "minCount": 3,
+      "match": { "edgeClassAny": ["E1", "E2", "E3"], "groupBy": "edgeClass" }
+    },
+    {
+      "id": "M3",
+      "description": "每法域至少一条边界抽样",
+      "minCount": 4,
+      "match": { "edgeClassAny": ["E1", "E2", "E3"], "groupBy": "domain" }
+    },
+    {
+      "id": "M4",
+      "description": "主动发现 × happy ≥1",
+      "minCount": 1,
+      "match": { "sourceClass": "1", "edgeClass": "happy" }
+    },
+    {
+      "id": "M5",
+      "description": "非主动来源大类至少两类 × happy",
+      "minCount": 2,
+      "match": { "sourceClassAny": ["3", "5", "22"], "edgeClass": "happy", "groupBy": "sourceClass" }
+    },
+    {
+      "id": "M6",
+      "description": "呈批档至少覆盖 2 档（非 none）",
+      "minCount": 2,
+      "match": {
+        "approvalTierAny": ["approval-only", "approval+consult", "with-rework"],
+        "groupBy": "approvalTier"
+      }
+    },
+    {
+      "id": "M7",
+      "description": "深档种子 01 与 02 各 ≥1 已准入用例",
+      "minCount": 2,
+      "match": {
+        "seedIdAny": [
+          "vf-case-01-map-review-missing",
+          "vf-case-02-occupy-without-approval"
+        ],
+        "groupBy": "seedId"
+      }
+    }
+  ]
+}

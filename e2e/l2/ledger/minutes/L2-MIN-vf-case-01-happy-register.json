@@ -1,0 +1,62 @@
+{
+  "id": "L2-MIN-vf-case-01-happy-register",
+  "caseId": "L2-CASE-vf-case-01-happy-register",
+  "seedId": "vf-case-01-map-review-missing",
+  "edgeClass": "happy",
+  "iteration": 1,
+  "roles": [
+    {
+      "role": "Generator",
+      "verdict": "pass",
+      "notes": "提交种子 01 登记 happy；谱系全 derived；mockRatio=0。"
+    },
+    {
+      "role": "Legality Challenger",
+      "verdict": "pass",
+      "notes": "legalExit=EXIT-REGISTERED；legalRefs=PROC-REGISTER；无广州专规臆造。"
+    },
+    {
+      "role": "Coverage Challenger",
+      "verdict": "pass",
+      "notes": "单元格 MC-survey-3-none-happy；贡献 Min M1/M4/M5/M7 抽样，不假装填满矩阵。"
+    },
+    {
+      "role": "Process/Edge Challenger",
+      "verdict": "pass",
+      "notes": "单步 register-clue；harnessCapability=wired 与能力盘点一致；非 E*。"
+    },
+    {
+      "role": "Reverse Validator",
+      "verdict": "pass",
+      "notes": "见 reverseSection。"
+    },
+    {
+      "role": "Adversary",
+      "verdict": "pass",
+      "notes": "见 adversarySection。"
+    },
+    {
+      "role": "Synthesizer",
+      "verdict": "pass",
+      "notes": "无未闭合必须改；裁定 admit。"
+    }
+  ],
+  "openMustFix": [],
+  "reverseSection": {
+    "R1": "domain/sourceCode/party/spatial/register 均有 seedPath。",
+    "R2": "无 mocked 字段；去掉 Mock 后断言仍成立。",
+    "R3": "本切片仅登记，呈批链显式不在步骤内；approvalTier=none。",
+    "R4": "halfRunPolicy=gap-not-reached；终局未跑到不与 assert-failed 混账。"
+  },
+  "adversarySection": {
+    "A1": "缺关键输入属生成错误（拒收），见 g6LineCited；本条无 Mock。",
+    "A2": "n/a：非 edge；若误标 E1 且 EXIT-PENALTY 则 X2 应红。",
+    "A3": "domain/sourceCode 与种子不一致则 X1 红。",
+    "A4": "n/a：非 E3。",
+    "A5": "n/a：非 E2。",
+    "A6": "坏 legalRefs / 非法 kind 由 X2b 负例覆盖。"
+  },
+  "g6LineCited": "§1.5 行1：缺必填/非法 legalRefs/缺 mockBasis.legal → 生成错误拒收（本条不适用缺口）",
+  "synthesizer": "admit",
+  "diffOnly": false
+}

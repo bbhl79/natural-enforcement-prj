@@ -1,0 +1,29 @@
+# L2 · 语料驱动用例与 Oracle（能力缺口发现）
+
+L2 从约 21 份种子卷宗**生成**用例与 Oracle，目的是发现产品能力缺口，不是证明 runtime ≡ 卷宗。
+
+权威定位与闭阻补丁见 Project store：`docs/l2-implementation-plan.md`（会话落点）。本目录是仓库内可机检落地。
+
+## 目录
+
+| 路径 | 作用 |
+|---|---|
+| `schema/` | §2.1 字段级 JSON Schema |
+| `vocabulary/legal-exits.json` | §1.4 合法出口 / PROC·STATE 白名单 |
+| `config/x5-*.json` | §8.3 Min/Target 必选单元格 |
+| `capability/harvest-capability.json` | §5.1 harness 能力盘点 |
+| `succession/verify-inventory.md` | verify 承接/退役初稿 |
+| `ledger/` | 已准入用例、Oracle、缺口、矩阵格、面板纪要 |
+| `fixtures/negatives/` | X2b 故意非法夹具 |
+
+## 门禁
+
+```bash
+./dev lint l2
+```
+
+机器闸：合法词表、schema、X1–X4 / X2b / X5b 骨架、Mock 占比、纪要准入。产品跑次红记缺口，不挡本 lint。
+
+## 首切片
+
+`L2-GAP-0`：`ledger/cases/L2-CASE-vf-case-01-happy-register.json`（种子 `vf-case-01-map-review-missing` × happy 登记环）。
