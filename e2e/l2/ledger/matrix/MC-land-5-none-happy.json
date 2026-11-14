@@ -1,0 +1,14 @@
+{
+  "id": "MC-land-5-none-happy",
+  "domain": "land",
+  "sourceClass": "5",
+  "approvalTier": "none",
+  "edgeClass": "happy",
+  "status": "covered",
+  "coveringCaseIds": [
+    "L2-CASE-vf-case-11-transfer-illegal-happy-register",
+    "L2-CASE-vf-case-14-occupy-highway-happy-register"
+  ],
+  "mandatoryMin": true,
+  "mandatoryTarget": true
+}

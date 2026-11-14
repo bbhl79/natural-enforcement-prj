@@ -5,7 +5,11 @@
   "approvalTier": "none",
   "edgeClass": "happy",
   "status": "covered",
-  "coveringCaseIds": ["L2-CASE-vf-case-01-happy-register"],
+  "coveringCaseIds": [
+    "L2-CASE-vf-case-01-map-review-missing-happy-register",
+    "L2-CASE-vf-case-15-survey-template-happy-register",
+    "L2-CASE-vf-case-20-survey-qual-fraud-happy-register"
+  ],
   "mandatoryMin": true,
   "mandatoryTarget": true
 }

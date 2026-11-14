@@ -189,9 +189,12 @@ export function validateLegalExit(legalExit, edgeClass, vocab, label, errors) {
   }
 }
 
-/** 能力盘点解析：有 verifyScenarioRef 时只按场景引用匹配，禁止 happy 回退误判。 */
+/** 能力盘点解析：capabilityId > verifyScenarioRef > edgeClass 回退；禁止错误 happy 回退。 */
 export function resolveCapability(c, capability) {
   const caps = capability.capabilities || [];
+  if (c.capabilityId) {
+    return caps.find((x) => x.capabilityId === c.capabilityId) || null;
+  }
   if (c.verifyScenarioRef) {
     return (
       caps.find((x) => (x.scenarioRefs || []).includes(c.verifyScenarioRef)) || null
@@ -202,6 +205,34 @@ export function resolveCapability(c, capability) {
   if (c.edgeClass === 'E1') return caps.find((x) => x.capabilityId === 'filing-decline') || null;
   if (c.edgeClass === 'happy') return caps.find((x) => x.capabilityId === 'register-clue') || null;
   return null;
+}
+
+/** 能力绑定不得与 domain / edgeClass / scenarioRef 矛盾（账与负例共用）。 */
+export function validateCapabilityBinding(c, cap, label, errors) {
+  if (!cap) {
+    if (c.capabilityId) errors.push(`${label}: capabilityId=${c.capabilityId} 不在盘点`);
+    return;
+  }
+  if (Array.isArray(cap.domains) && cap.domains.length > 0 && c.domain && !cap.domains.includes(c.domain)) {
+    errors.push(
+      `${label}: capability ${cap.capabilityId} 不允许 domain ${c.domain}（允许 ${cap.domains.join(',')}）`,
+    );
+  }
+  if (Array.isArray(cap.edgeClasses) && cap.edgeClasses.length > 0 && c.edgeClass && !cap.edgeClasses.includes(c.edgeClass)) {
+    errors.push(
+      `${label}: capability ${cap.capabilityId} 不允许 edgeClass ${c.edgeClass}`,
+    );
+  }
+  if (
+    c.verifyScenarioRef &&
+    Array.isArray(cap.scenarioRefs) &&
+    cap.scenarioRefs.length > 0 &&
+    !cap.scenarioRefs.includes(c.verifyScenarioRef)
+  ) {
+    errors.push(
+      `${label}: capability ${cap.capabilityId} 与场景 ${c.verifyScenarioRef} 矛盾`,
+    );
+  }
 }
 
 const VERDICT_ORDER = ['wired', 'partial', 'unwired', 'latent', 'missing'];
@@ -226,7 +257,7 @@ function enforceScaleGate(cases, capability, errors) {
 }
 
 /** 负例探针：走与账相同的 formal 校验；按「被拒收负例条数」计数。 */
-export function runNegativeProbes(vocab, critIds, decIds) {
+export function runNegativeProbes(vocab, critIds, decIds, capability) {
   const negs = listJson(join(L2, 'fixtures/negatives')).map(readJson);
   const rejected = [];
   const missed = [];
@@ -253,6 +284,11 @@ export function runNegativeProbes(vocab, critIds, decIds) {
     }
     if (neg.legalExit !== undefined || neg.edgeClass === 'E1') {
       validateLegalExit(neg.legalExit, neg.edgeClass, vocab, neg.id, probeErrors);
+    }
+    if (neg.caseFragment && capability) {
+      const frag = neg.caseFragment;
+      const cap = resolveCapability(frag, capability);
+      validateCapabilityBinding(frag, cap, neg.id, probeErrors);
     }
     const expectFail = neg.expectLint === 'fail';
     if (expectFail && probeErrors.length > 0) {
@@ -451,11 +487,14 @@ export function lintLedger() {
       errors.push(`${c.id}: admit-ok 缺 panelMinutesId`);
     }
 
-    // X5b：场景引用优先，禁止无引用匹配时的错误 happy 回退
+    // X5b：capabilityId / 场景引用优先，且绑定不得与 domain/edge/scenario 矛盾
     const cap = resolveCapability(c, capability);
-    if (c.verifyScenarioRef && !cap) {
+    if (c.capabilityId && !cap) {
+      errors.push(`${c.id}: X5b capabilityId=${c.capabilityId} 不在能力盘点`);
+    } else if (c.verifyScenarioRef && !c.capabilityId && !cap) {
       errors.push(`${c.id}: X5b 场景 ${c.verifyScenarioRef} 未出现在能力盘点 scenarioRefs`);
     } else if (cap) {
+      validateCapabilityBinding(c, cap, c.id, errors);
       if (VERDICT_ORDER.indexOf(c.harnessCapability) < VERDICT_ORDER.indexOf(cap.verdict)) {
         errors.push(
           `${c.id}: X5b harnessCapability=${c.harnessCapability} 优于盘点 ${cap.capabilityId}=${cap.verdict}`,
@@ -473,7 +512,7 @@ export function lintLedger() {
     }
   }
 
-  const neg = runNegativeProbes(vocab, critIds, decIds);
+  const neg = runNegativeProbes(vocab, critIds, decIds, capability);
   if (neg.rejectedCount === 0) {
     errors.push('X2b: 负例探针无一拒收，闸可能死绿');
   }

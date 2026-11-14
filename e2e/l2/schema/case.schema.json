@@ -79,6 +79,7 @@
     },
     "panelMinutesId": { "type": "string" },
     "mockRatio": { "type": "number", "minimum": 0, "maximum": 1 },
+    "capabilityId": { "type": "string", "minLength": 1 },
     "verifyScenarioRef": { "type": "string" },
     "notes": { "type": "string" }
   },

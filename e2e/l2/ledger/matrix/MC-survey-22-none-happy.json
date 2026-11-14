@@ -1,0 +1,13 @@
+{
+  "id": "MC-survey-22-none-happy",
+  "domain": "survey",
+  "sourceClass": "22",
+  "approvalTier": "none",
+  "edgeClass": "happy",
+  "status": "covered",
+  "coveringCaseIds": [
+    "L2-CASE-vf-case-21-survey-quality-happy-register"
+  ],
+  "mandatoryMin": true,
+  "mandatoryTarget": true
+}

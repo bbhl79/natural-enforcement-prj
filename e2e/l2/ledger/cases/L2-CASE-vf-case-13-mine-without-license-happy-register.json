@@ -1,0 +1,65 @@
+{
+  "id": "L2-CASE-vf-case-13-mine-without-license-happy-register",
+  "seedId": "vf-case-13-mine-without-license",
+  "edgeClass": "happy",
+  "matrixCellId": "MC-mineral-1-none-happy",
+  "domain": "mineral",
+  "sourceCode": "16",
+  "sourceClass": "1",
+  "approvalTier": "none",
+  "lineage": {
+    "fields": [
+      {
+        "path": "domain",
+        "provenance": "derived",
+        "value": "mineral",
+        "seedPath": "domain"
+      },
+      {
+        "path": "sourceCode",
+        "provenance": "derived",
+        "value": "16",
+        "seedPath": "sourceCode"
+      },
+      {
+        "path": "party.displayName",
+        "provenance": "derived",
+        "value": "vf-某建材有限公司",
+        "seedPath": "party.displayName"
+      },
+      {
+        "path": "spatial.kind",
+        "provenance": "derived",
+        "value": "face",
+        "seedPath": "spatial.kind"
+      },
+      {
+        "path": "stages.register.system.sourceCode",
+        "provenance": "derived",
+        "value": "16",
+        "seedPath": "stages.register.system.sourceCode"
+      },
+      {
+        "path": "stages.register.system.domain",
+        "provenance": "derived",
+        "value": "mineral",
+        "seedPath": "stages.register.system.domain"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "register",
+      "action": "register-clue",
+      "inputsRef": "vf-case-13-mine-without-license#stages.register.system",
+      "expectReachable": false
+    }
+  ],
+  "oracleId": "L2-ORACLE-vf-case-13-mine-without-license-happy-register",
+  "g6Disposition": "admit-ok",
+  "harnessCapability": "unwired",
+  "capabilityId": "register-mineral",
+  "panelMinutesId": "L2-MIN-vf-case-13-mine-without-license-happy-register",
+  "mockRatio": 0,
+  "notes": "Phase2 种子 happy 登记根；capability=register-mineral/unwired。"
+}

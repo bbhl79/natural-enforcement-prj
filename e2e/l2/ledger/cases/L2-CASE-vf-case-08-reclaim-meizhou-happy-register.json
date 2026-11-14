@@ -1,0 +1,65 @@
+{
+  "id": "L2-CASE-vf-case-08-reclaim-meizhou-happy-register",
+  "seedId": "vf-case-08-reclaim-meizhou",
+  "edgeClass": "happy",
+  "matrixCellId": "MC-land-1-none-happy",
+  "domain": "land",
+  "sourceCode": "16",
+  "sourceClass": "1",
+  "approvalTier": "none",
+  "lineage": {
+    "fields": [
+      {
+        "path": "domain",
+        "provenance": "derived",
+        "value": "land",
+        "seedPath": "domain"
+      },
+      {
+        "path": "sourceCode",
+        "provenance": "derived",
+        "value": "16",
+        "seedPath": "sourceCode"
+      },
+      {
+        "path": "party.displayName",
+        "provenance": "derived",
+        "value": "vf-张某",
+        "seedPath": "party.displayName"
+      },
+      {
+        "path": "spatial.kind",
+        "provenance": "derived",
+        "value": "face",
+        "seedPath": "spatial.kind"
+      },
+      {
+        "path": "stages.register.system.sourceCode",
+        "provenance": "derived",
+        "value": "16",
+        "seedPath": "stages.register.system.sourceCode"
+      },
+      {
+        "path": "stages.register.system.domain",
+        "provenance": "derived",
+        "value": "land",
+        "seedPath": "stages.register.system.domain"
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "register",
+      "action": "register-clue",
+      "inputsRef": "vf-case-08-reclaim-meizhou#stages.register.system",
+      "expectReachable": true
+    }
+  ],
+  "oracleId": "L2-ORACLE-vf-case-08-reclaim-meizhou-happy-register",
+  "g6Disposition": "admit-ok",
+  "harnessCapability": "wired",
+  "capabilityId": "register-clue",
+  "panelMinutesId": "L2-MIN-vf-case-08-reclaim-meizhou-happy-register",
+  "mockRatio": 0,
+  "notes": "Phase2 种子 happy 登记根；capability=register-clue/wired。"
+}

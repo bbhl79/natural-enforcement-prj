@@ -10,6 +10,7 @@ import {
   lintLedger,
   resolveCapability,
   validateAgainstSchema,
+  validateCapabilityBinding,
   validateMockedLineageField,
   validateLegalExit,
 } from './l2-lint.mjs';
@@ -27,7 +28,7 @@ function readJson(rel) {
 test('L2 账与 X2b：lintLedger 通过且按条拒收全部 expectLint=fail 负例', () => {
   const result = lintLedger();
   assert.equal(result.ok, true, result.errors.join('\n'));
-  assert.equal(result.negativeProbeKills, 4);
+  assert.equal(result.negativeProbeKills, 6);
 });
 
 test('Schema：空 steps 的 case 应失败', () => {
@@ -65,6 +66,59 @@ test('X5b：显式 scenarioRef 优先，filing 场景不得回退为 register wi
   assert.ok(cap);
   assert.equal(cap.capabilityId, 'filing-after-dispatch');
   assert.equal(cap.verdict, 'unwired');
+});
+
+test('X5b：capabilityId 优先于 happy 回退（planning 不得变 wired）', () => {
+  const capability = readJson('capability/harvest-capability.json');
+  const cap = resolveCapability(
+    {
+      capabilityId: 'register-planning',
+      edgeClass: 'happy',
+      harnessCapability: 'unwired',
+    },
+    capability,
+  );
+  assert.equal(cap.capabilityId, 'register-planning');
+  assert.equal(cap.verdict, 'unwired');
+});
+
+test('X5b：跨法域/跨场景 capability 绑定必须拒', () => {
+  const capability = readJson('capability/harvest-capability.json');
+  const cap = resolveCapability(
+    { capabilityId: 'register-clue', domain: 'planning', edgeClass: 'happy' },
+    capability,
+  );
+  const errs = [];
+  validateCapabilityBinding(
+    { capabilityId: 'register-clue', domain: 'planning', edgeClass: 'happy' },
+    cap,
+    'neg',
+    errs,
+  );
+  assert.ok(errs.some((e) => e.includes('不允许 domain')));
+
+  const errs2 = [];
+  const cap2 = resolveCapability(
+    {
+      capabilityId: 'register-clue',
+      domain: 'land',
+      edgeClass: 'happy',
+      verifyScenarioRef: 'vf-sc-filing-after-dispatch',
+    },
+    capability,
+  );
+  validateCapabilityBinding(
+    {
+      capabilityId: 'register-clue',
+      domain: 'land',
+      edgeClass: 'happy',
+      verifyScenarioRef: 'vf-sc-filing-after-dispatch',
+    },
+    cap2,
+    'neg2',
+    errs2,
+  );
+  assert.ok(errs2.some((e) => e.includes('场景')));
 });
 
 test('共用校验：缺 mockBasis.legal 与 E1 处罚出口均拒', () => {

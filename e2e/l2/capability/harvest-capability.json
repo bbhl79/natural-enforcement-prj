@@ -1,6 +1,6 @@
 {
   "id": "L2-HARVEST-CAPABILITY",
-  "scannedAt": "2026-11-14T09:30:00Z",
+  "scannedAt": "2026-11-14T10:25:00Z",
   "sourceRefs": [
     "e2e/verify/harness/suites.ts",
     "e2e/verify/fixtures/scenarios/",
@@ -10,7 +10,7 @@
     {
       "capabilityId": "register-clue",
       "edgeClasses": ["happy"],
-      "profileEvidence": "canonical seeds via stages.register",
+      "profileEvidence": "land/survey canonical seeds via stages.register",
       "scenarioRefs": [
         "vf-sc-verify-loop-survey-register",
         "vf-sc-verify-loop-land-register"
@@ -18,7 +18,30 @@
       "suiteStatus": "API_SUITE",
       "driverActions": ["register-clue"],
       "oracleMachine": true,
-      "verdict": "wired"
+      "verdict": "wired",
+      "domains": ["land", "survey"]
+    },
+    {
+      "capabilityId": "register-mineral",
+      "edgeClasses": ["happy"],
+      "profileEvidence": "mineral seeds have stages.register",
+      "scenarioRefs": ["vf-sc-register-mineral-transfer"],
+      "suiteStatus": "UNWIRED_SCENARIOS",
+      "driverActions": ["register-clue"],
+      "oracleMachine": false,
+      "verdict": "unwired",
+      "domains": ["mineral"]
+    },
+    {
+      "capabilityId": "register-planning",
+      "edgeClasses": ["happy"],
+      "profileEvidence": "planning seed has stages.register",
+      "scenarioRefs": ["vf-sc-register-planning"],
+      "suiteStatus": "UNWIRED_SCENARIOS",
+      "driverActions": ["register-clue"],
+      "oracleMachine": false,
+      "verdict": "unwired",
+      "domains": ["planning"]
     },
     {
       "capabilityId": "dispatch-verify",

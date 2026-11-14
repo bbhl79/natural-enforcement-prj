@@ -1,0 +1,63 @@
+{
+  "id": "L2-MIN-vf-case-04-build-without-permit-happy-register",
+  "caseId": "L2-CASE-vf-case-04-build-without-permit-happy-register",
+  "seedId": "vf-case-04-build-without-permit",
+  "edgeClass": "happy",
+  "iteration": 1,
+  "roles": [
+    {
+      "role": "Generator",
+      "verdict": "pass",
+      "notes": "Phase2 happy 登记根；矩阵 MC-planning-1-none-happy；harness=unwired。"
+    },
+    {
+      "role": "Legality Challenger",
+      "verdict": "pass",
+      "notes": "EXIT-REGISTERED + PROC-REGISTER；无广州专规。"
+    },
+    {
+      "role": "Coverage Challenger",
+      "verdict": "pass",
+      "notes": "覆盖 planning/sourceClass=1/happy；不宣称 Min。"
+    },
+    {
+      "role": "Process/Edge Challenger",
+      "verdict": "pass",
+      "notes": "单步 register-clue；非 E* 横铺。"
+    },
+    {
+      "role": "Reverse Validator",
+      "verdict": "pass",
+      "notes": "见 reverseSection。"
+    },
+    {
+      "role": "Adversary",
+      "verdict": "pass",
+      "notes": "见 adversarySection。"
+    },
+    {
+      "role": "Synthesizer",
+      "verdict": "pass",
+      "notes": "共识 admit。"
+    }
+  ],
+  "openMustFix": [],
+  "reverseSection": {
+    "R1": "domain/sourceCode/party/spatial/register 叶子均有 seedPath。",
+    "R2": "无 mocked 字段。",
+    "R3": "approvalTier=none；呈批不在本切片步骤。",
+    "R4": "halfRunPolicy=gap-not-reached。"
+  },
+  "adversarySection": {
+    "A1": "缺关键输入→生成拒收（§1.5）；本条无 Mock。",
+    "A2": "n/a 非 edge。",
+    "A3": "domain/source 漂移由 X1 捕获。",
+    "A4": "n/a 非 E3。",
+    "A5": "n/a 非 E2。",
+    "A6": "坏 legalRefs 由 X2b 覆盖。"
+  },
+  "g6LineCited": "§1.5 行1：缺必填/非法 legalRefs → 生成错误拒收",
+  "synthesizer": "admit",
+  "diffOnly": false,
+  "inputFingerprint": "543544d57925b066"
+}

@@ -1,0 +1,13 @@
+{
+  "id": "MC-mineral-1-none-happy",
+  "domain": "mineral",
+  "sourceClass": "1",
+  "approvalTier": "none",
+  "edgeClass": "happy",
+  "status": "covered",
+  "coveringCaseIds": [
+    "L2-CASE-vf-case-13-mine-without-license-happy-register"
+  ],
+  "mandatoryMin": true,
+  "mandatoryTarget": true
+}

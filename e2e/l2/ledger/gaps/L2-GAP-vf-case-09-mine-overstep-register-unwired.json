@@ -1,0 +1,9 @@
+{
+  "id": "L2-GAP-vf-case-09-mine-overstep-register-unwired",
+  "caseId": "L2-CASE-vf-case-09-mine-overstep-happy-register",
+  "edgeClass": "happy",
+  "matrixCellId": "MC-mineral-22-none-happy",
+  "gapKind": "capability-unwired",
+  "productHint": "mineral 登记场景仍在 UNWIRED；产品/驱动接入后关闭缺口",
+  "status": "open"
+}
