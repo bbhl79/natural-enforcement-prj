@@ -5,12 +5,13 @@
 // 依据：e2e/l2/README.md；L2 计划 §4 Min / X5b；NELC-15 后续。
 
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const L2 = join(ROOT, 'e2e/l2');
+const SEEDS = join(ROOT, 'e2e/verify/fixtures/case-profiles');
 const limits = JSON.parse(readFileSync(join(L2, 'config/limits.json'), 'utf8'));
 
 function writeJson(path, obj) {
@@ -25,6 +26,14 @@ function readJsonIfExists(path) {
 
 function fingerprintInputs(parts) {
   return createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 16);
+}
+
+/** 种子正文摘要：种子文件变更必须使指纹失效并触发 panel-blocked。 */
+function seedContentDigest(seedId) {
+  const path = join(SEEDS, `${seedId}.json`);
+  if (!existsSync(path)) throw new Error(`missing seed profile ${path}`);
+  const raw = readFileSync(path, 'utf8');
+  return createHash('sha256').update(raw).digest('hex').slice(0, 16);
 }
 
 function writeIfAbsent(path, obj) {
@@ -56,20 +65,40 @@ function writeMinutesPreserving(path, draft, fingerprint) {
   return 're-review-required';
 }
 
-function upsertMatrixCell(cell) {
-  const path = join(L2, 'ledger/matrix', `${cell.id}.json`);
-  const existing = readJsonIfExists(path);
-  if (!existing) {
-    writeJson(path, cell);
-    return;
+/**
+ * 按账内当前 admit-ok 用例重算矩阵覆盖。
+ * 降级为 not-reached 的用例不得继续撑起 covered。
+ */
+function syncMatrixCell(meta, waveCaseIds) {
+  const path = join(L2, 'ledger/matrix', `${meta.id}.json`);
+  const existing = readJsonIfExists(path) || {};
+  const casesDir = join(L2, 'ledger/cases');
+  const byId = new Map();
+  if (existsSync(casesDir)) {
+    for (const name of readdirSync(casesDir).filter((n) => n.endsWith('.json'))) {
+      const c = JSON.parse(readFileSync(join(casesDir, name), 'utf8'));
+      byId.set(c.id, c);
+    }
   }
-  const ids = new Set([...(existing.coveringCaseIds || []), ...cell.coveringCaseIds]);
+  const candidate = new Set([...(existing.coveringCaseIds || []), ...waveCaseIds]);
+  const coveringCaseIds = [...candidate].filter((id) => {
+    const c = byId.get(id);
+    return Boolean(
+      c &&
+        c.g6Disposition === 'admit-ok' &&
+        c.matrixCellId === meta.id,
+    );
+  });
   writeJson(path, {
-    ...existing,
-    status: 'covered',
-    coveringCaseIds: [...ids],
-    mandatoryMin: existing.mandatoryMin || cell.mandatoryMin,
-    mandatoryTarget: existing.mandatoryTarget || cell.mandatoryTarget,
+    id: meta.id,
+    domain: meta.domain ?? existing.domain,
+    sourceClass: meta.sourceClass ?? existing.sourceClass,
+    approvalTier: meta.approvalTier ?? existing.approvalTier,
+    edgeClass: meta.edgeClass ?? existing.edgeClass,
+    status: coveringCaseIds.length > 0 ? 'covered' : 'sparse',
+    coveringCaseIds,
+    mandatoryMin: existing.mandatoryMin || meta.mandatoryMin || false,
+    mandatoryTarget: existing.mandatoryTarget || meta.mandatoryTarget || false,
   });
 }
 
@@ -280,6 +309,7 @@ const samples = [
 ];
 
 const stats = { minutes: {} };
+const cellWaveIds = new Map(); // matrixCellId → caseIds touched this run
 
 for (const s of samples) {
   const lineageFields = [
@@ -297,9 +327,11 @@ for (const s of samples) {
     })),
   ];
   const mockRatio = s.mocked.length / lineageFields.length;
+  const seedDigest = seedContentDigest(s.seedId);
   const fingerprint = fingerprintInputs({
     caseId: s.caseId,
     seedId: s.seedId,
+    seedContentDigest: seedDigest,
     edgeClass: s.edgeClass,
     domain: s.domain,
     sourceCode: s.sourceCode,
@@ -384,17 +416,25 @@ for (const s of samples) {
     ticketRef: '#347',
   });
 
-  upsertMatrixCell({
-    id: s.matrixCellId,
-    domain: s.domain,
-    sourceClass: s.sourceClass,
-    approvalTier: s.approvalTier,
-    edgeClass: s.edgeClass,
-    status: 'covered',
-    coveringCaseIds: [s.caseId],
-    mandatoryMin: true,
-    mandatoryTarget: true,
-  });
+  if (!cellWaveIds.has(s.matrixCellId)) cellWaveIds.set(s.matrixCellId, []);
+  cellWaveIds.get(s.matrixCellId).push(s.caseId);
+}
+
+// 用例写盘后再按 admit-ok 重算矩阵，避免降级用例仍撑 covered。
+for (const [cellId, waveIds] of cellWaveIds) {
+  const sample = samples.find((x) => x.matrixCellId === cellId);
+  syncMatrixCell(
+    {
+      id: cellId,
+      domain: sample.domain,
+      sourceClass: sample.sourceClass,
+      approvalTier: sample.approvalTier,
+      edgeClass: sample.edgeClass,
+      mandatoryMin: true,
+      mandatoryTarget: true,
+    },
+    waveIds,
+  );
 }
 
 console.log(`min e1-wave: ${samples.length}; minutes=${JSON.stringify(stats.minutes)}`);
