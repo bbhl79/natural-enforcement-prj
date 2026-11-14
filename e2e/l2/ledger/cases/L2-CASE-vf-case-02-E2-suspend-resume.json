@@ -1,0 +1,68 @@
+{
+  "id": "L2-CASE-vf-case-02-E2-suspend-resume",
+  "seedId": "vf-case-02-occupy-without-approval",
+  "edgeClass": "E2",
+  "matrixCellId": "MC-land-1-approval-only-E2",
+  "domain": "land",
+  "sourceCode": "16",
+  "sourceClass": "1",
+  "approvalTier": "approval-only",
+  "lineage": {
+    "fields": [
+      {
+        "path": "domain",
+        "provenance": "derived",
+        "value": "land",
+        "seedPath": "domain"
+      },
+      {
+        "path": "sourceCode",
+        "provenance": "derived",
+        "value": "16",
+        "seedPath": "sourceCode"
+      },
+      {
+        "path": "party.displayName",
+        "provenance": "derived",
+        "value": "vf-当事人甲",
+        "seedPath": "party.displayName"
+      },
+      {
+        "path": "investigation.statusSequence",
+        "provenance": "mocked",
+        "value": [
+          "active",
+          "suspended",
+          "active"
+        ],
+        "mockBasis": {
+          "product": "variant vf-case-02-occupy-without-approval.suspend-resume",
+          "legal": {
+            "kind": "PROC",
+            "id": "PROC-RESUME"
+          }
+        }
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "suspend",
+      "action": "suspend-investigation",
+      "expectReachable": false
+    },
+    {
+      "id": "resume",
+      "action": "resume-investigation",
+      "expectReachable": false
+    }
+  ],
+  "oracleId": "L2-ORACLE-vf-case-02-E2-suspend-resume",
+  "g6Disposition": "admit-ok",
+  "harnessCapability": "latent",
+  "capabilityId": "suspend-resume",
+  "panelMinutesId": "L2-MIN-vf-case-02-E2-suspend-resume",
+  "mockRatio": 0.25,
+  "notes": "Phase2b E2 抽样；capability=suspend-resume/latent；不横铺。",
+  "verifyScenarioRef": "vf-sc-latent-suspend-resume-land"
+}

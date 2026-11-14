@@ -1,0 +1,9 @@
+{
+  "id": "L2-GAP-vf-case-02-E3-reassign-missing",
+  "caseId": "L2-CASE-vf-case-02-E3-reassign-handler",
+  "edgeClass": "E3",
+  "matrixCellId": "MC-land-1-none-E3",
+  "gapKind": "capability-missing",
+  "productHint": "reassign-handler 仍为 missing；接入前不计能力覆盖分子",
+  "status": "open"
+}

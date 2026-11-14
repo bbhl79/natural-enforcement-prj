@@ -1,0 +1,32 @@
+{
+  "id": "L2-ORACLE-vf-case-02-E3-reassign-handler",
+  "caseId": "L2-CASE-vf-case-02-E3-reassign-handler",
+  "legalExit": "EXIT-HANDLER-REASSIGNED",
+  "legalRefs": [
+    {
+      "kind": "PROC",
+      "id": "PROC-REASSIGN",
+      "reason": "中途更换承办人；权限切换可追溯"
+    }
+  ],
+  "asserts": [
+    {
+      "id": "handler-switched",
+      "kind": "field",
+      "path": "body.handler.current",
+      "op": "eq",
+      "expect": "clerk-b",
+      "provenance": "mocked"
+    },
+    {
+      "id": "old-cannot-write",
+      "kind": "permission",
+      "path": "body.handler.previousCanWrite",
+      "op": "eq",
+      "expect": false,
+      "provenance": "mocked"
+    }
+  ],
+  "halfRunPolicy": "gap-not-reached",
+  "notes": "E3 边界 Oracle；产品未具备记缺口。"
+}
