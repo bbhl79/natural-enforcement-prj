@@ -6,7 +6,8 @@
   "edgeClass": "E1",
   "status": "covered",
   "coveringCaseIds": [
-    "L2-CASE-vf-case-09-E1-terminate-unfounded"
+    "L2-CASE-vf-case-09-E1-terminate-unfounded",
+    "L2-CASE-vf-case-17-E1-no-filing"
   ],
   "mandatoryMin": true,
   "mandatoryTarget": true

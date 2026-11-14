@@ -1,0 +1,32 @@
+{
+  "id": "L2-ORACLE-vf-case-11-E1-no-filing",
+  "caseId": "L2-CASE-vf-case-11-E1-no-filing",
+  "legalExit": "EXIT-NO-FILING",
+  "legalRefs": [
+    {
+      "kind": "PROC",
+      "id": "PROC-FILING-DECLINE",
+      "reason": "E1 合法出口 EXIT-NO-FILING"
+    }
+  ],
+  "asserts": [
+    {
+      "id": "e1-exit",
+      "kind": "state",
+      "path": "body.filing.system.conclusion",
+      "op": "eq",
+      "expect": "no-case",
+      "provenance": "mocked"
+    },
+    {
+      "id": "no-penalty",
+      "kind": "negative",
+      "path": "body.penalty.success",
+      "op": "eq",
+      "expect": false,
+      "provenance": "mocked"
+    }
+  ],
+  "halfRunPolicy": "gap-not-reached",
+  "notes": "E1；产品未具备记缺口。"
+}

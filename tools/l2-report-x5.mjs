@@ -1,16 +1,35 @@
 #!/usr/bin/env node
-// 用途：报告 X5 Min 必选格就绪情况；不宣称 Min，只出机读摘要。
+// 用途：报告 X5 Min 必选格就绪情况；无 blocker 时 claimMin=true。
 // 调用方：本机 / 文档；不进 lint 硬闸（宣称时再硬闸）。
-// 边界：只计 admit-ok；不计 latent/missing 为「能力覆盖」。
+// 边界：先 lintLedger；只计 admit-ok；不计 latent/missing 为「能力覆盖」。
 // 依据：e2e/l2/config/x5-min-cells.json；L2 计划 §8.3。
 
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { lintLedger } from './l2-lint.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const L2 = join(ROOT, 'e2e/l2');
 const minCfg = JSON.parse(readFileSync(join(L2, 'config/x5-min-cells.json'), 'utf8'));
+
+const report = {
+  caseCountAll: 0,
+  caseCount: 0,
+  rules: [],
+  claimMin: false,
+  blockers: [],
+};
+
+const lint = lintLedger();
+if (!lint.ok) {
+  for (const e of lint.errors.slice(0, 20)) {
+    report.blockers.push(`lintLedger: ${e}`);
+  }
+  if (lint.errors.length > 20) {
+    report.blockers.push(`lintLedger: …另有 ${lint.errors.length - 20} 条`);
+  }
+}
 
 const allCases = existsSync(join(L2, 'ledger/cases'))
   ? readdirSync(join(L2, 'ledger/cases'))
@@ -37,13 +56,8 @@ function groupCount(list, keyFn) {
   return m;
 }
 
-const report = {
-  caseCountAll: allCases.length,
-  caseCount: cases.length,
-  rules: [],
-  claimMin: false,
-  blockers: [],
-};
+report.caseCountAll = allCases.length;
+report.caseCount = cases.length;
 
 for (const rule of minCfg.rules) {
   const m = rule.match;
@@ -99,9 +113,13 @@ if (deferredShare > maxDeferred) {
 }
 
 report.structuralMinReady = report.rules.every((r) => r.pass);
-report.claimMin = false;
-report.notes =
-  '本报告不宣称 Min。仅统计 g6Disposition=admit-ok。capability latent/missing/unwired 不计能力覆盖分子。';
+// claimMin：lintLedger + 结构规则 + 用例量级 + Mock/deferred 限额均无 blocker。
+report.claimMin = report.blockers.length === 0;
+report.notes = report.claimMin
+  ? 'claimMin=true：lintLedger 绿且 admit-ok 量级与 M1–M7/限额均通过。capability latent/missing/unwired 仍不计能力覆盖分子。'
+  : 'claimMin=false：见 blockers。仅统计 g6Disposition=admit-ok。capability latent/missing/unwired 不计能力覆盖分子。';
+report.lintOk = lint.ok;
+report.lintErrorCount = lint.errors.length;
 
 console.log(JSON.stringify(report, null, 2));
 process.exit(report.blockers.length ? 1 : 0);

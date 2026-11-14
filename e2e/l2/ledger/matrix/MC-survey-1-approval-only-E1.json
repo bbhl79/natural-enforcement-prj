@@ -1,0 +1,13 @@
+{
+  "id": "MC-survey-1-approval-only-E1",
+  "domain": "survey",
+  "sourceClass": "1",
+  "approvalTier": "approval-only",
+  "edgeClass": "E1",
+  "status": "covered",
+  "coveringCaseIds": [
+    "L2-CASE-vf-case-19-E1-no-filing"
+  ],
+  "mandatoryMin": true,
+  "mandatoryTarget": true
+}
