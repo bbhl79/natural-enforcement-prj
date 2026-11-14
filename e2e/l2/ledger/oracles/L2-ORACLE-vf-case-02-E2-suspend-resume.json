@@ -1,0 +1,37 @@
+{
+  "id": "L2-ORACLE-vf-case-02-E2-suspend-resume",
+  "caseId": "L2-CASE-vf-case-02-E2-suspend-resume",
+  "legalExit": "EXIT-RESUMED-CONTINUE",
+  "legalRefs": [
+    {
+      "kind": "PROC",
+      "id": "PROC-SUSPEND",
+      "reason": "调查中止呈批"
+    },
+    {
+      "kind": "PROC",
+      "id": "PROC-RESUME",
+      "reason": "中止后恢复"
+    }
+  ],
+  "asserts": [
+    {
+      "id": "resumed",
+      "kind": "state",
+      "path": "body.investigation.status",
+      "op": "eq",
+      "expect": "active",
+      "provenance": "mocked"
+    },
+    {
+      "id": "had-suspend",
+      "kind": "timeline",
+      "path": "body.timeline.kinds",
+      "op": "includes",
+      "expect": "suspend-approval",
+      "provenance": "mocked"
+    }
+  ],
+  "halfRunPolicy": "gap-not-reached",
+  "notes": "E2 边界 Oracle；产品未具备记缺口。"
+}

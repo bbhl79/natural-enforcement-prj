@@ -1,0 +1,63 @@
+{
+  "id": "L2-MIN-vf-case-01-E1-no-filing",
+  "caseId": "L2-CASE-vf-case-01-E1-no-filing",
+  "seedId": "vf-case-01-map-review-missing",
+  "edgeClass": "E1",
+  "iteration": 1,
+  "roles": [
+    {
+      "role": "Generator",
+      "verdict": "pass",
+      "notes": "Phase2b E1 抽样；MC-survey-3-approval-only-E1；harness=latent。"
+    },
+    {
+      "role": "Legality Challenger",
+      "verdict": "pass",
+      "notes": "合法出口与 PROC 白名单对齐；非处罚成功。"
+    },
+    {
+      "role": "Coverage Challenger",
+      "verdict": "pass",
+      "notes": "单条抽样；不宣称 Min；不计横铺。"
+    },
+    {
+      "role": "Process/Edge Challenger",
+      "verdict": "pass",
+      "notes": "相对同种子 happy 仅 edge 差分；能力闸合规。"
+    },
+    {
+      "role": "Reverse Validator",
+      "verdict": "pass",
+      "notes": "见 reverseSection。"
+    },
+    {
+      "role": "Adversary",
+      "verdict": "pass",
+      "notes": "见 adversarySection。"
+    },
+    {
+      "role": "Synthesizer",
+      "verdict": "pass",
+      "notes": "共识 admit。"
+    }
+  ],
+  "openMustFix": [],
+  "reverseSection": {
+    "R1": "domain/sourceCode/party 指回 canonical 种子。",
+    "R2": "去掉 mocked 不立案结论后断言不得假装成立。",
+    "R3": "不予立案呈批在 approvalTier=approval-only 显式档。",
+    "R4": "latent → gapKind=capability-latent，与 assert-failed 分列。"
+  },
+  "adversarySection": {
+    "A1": "缺 Mock 结论→生成拒收；本条有 mockBasis。",
+    "A2": "若 EXIT-PENALTY → X2 应红。",
+    "A3": "错法域由 X1 红。",
+    "A4": "n/a 非 E3。",
+    "A5": "n/a 非 E2。",
+    "A6": "坏 legalRefs 由 X2b 覆盖。"
+  },
+  "g6LineCited": "§1.5：能力 latent/missing → 缺口账，非生成拒收",
+  "synthesizer": "admit",
+  "diffOnly": true,
+  "inputFingerprint": "bb76991989ebda7a"
+}

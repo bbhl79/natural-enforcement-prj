@@ -1,0 +1,13 @@
+{
+  "id": "MC-land-1-none-E3",
+  "domain": "land",
+  "sourceClass": "1",
+  "approvalTier": "none",
+  "edgeClass": "E3",
+  "status": "covered",
+  "coveringCaseIds": [
+    "L2-CASE-vf-case-02-E3-reassign-handler"
+  ],
+  "mandatoryMin": true,
+  "mandatoryTarget": true
+}

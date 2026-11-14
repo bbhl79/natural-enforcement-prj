@@ -1,0 +1,82 @@
+{
+  "id": "L2-CASE-vf-case-02-E3-reassign-handler",
+  "seedId": "vf-case-02-occupy-without-approval",
+  "edgeClass": "E3",
+  "matrixCellId": "MC-land-1-none-E3",
+  "domain": "land",
+  "sourceCode": "16",
+  "sourceClass": "1",
+  "approvalTier": "none",
+  "lineage": {
+    "fields": [
+      {
+        "path": "domain",
+        "provenance": "derived",
+        "value": "land",
+        "seedPath": "domain"
+      },
+      {
+        "path": "sourceCode",
+        "provenance": "derived",
+        "value": "16",
+        "seedPath": "sourceCode"
+      },
+      {
+        "path": "party.displayName",
+        "provenance": "derived",
+        "value": "vf-当事人甲",
+        "seedPath": "party.displayName"
+      },
+      {
+        "path": "handler.from",
+        "provenance": "mocked",
+        "value": "clerk-a",
+        "mockBasis": {
+          "product": "E3 新建 diverge；种子无 variant",
+          "legal": {
+            "kind": "PROC",
+            "id": "PROC-REASSIGN"
+          }
+        }
+      },
+      {
+        "path": "handler.to",
+        "provenance": "mocked",
+        "value": "clerk-b",
+        "mockBasis": {
+          "product": "E3 新建 diverge；种子无 variant",
+          "legal": {
+            "kind": "PROC",
+            "id": "PROC-REASSIGN"
+          }
+        }
+      },
+      {
+        "path": "handler.previousCanWrite",
+        "provenance": "mocked",
+        "value": false,
+        "mockBasis": {
+          "product": "换承办人后旧人不可写",
+          "legal": {
+            "kind": "PROC",
+            "id": "PROC-REASSIGN"
+          }
+        }
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "reassign",
+      "action": "reassign-handler",
+      "expectReachable": false
+    }
+  ],
+  "oracleId": "L2-ORACLE-vf-case-02-E3-reassign-handler",
+  "g6Disposition": "admit-ok",
+  "harnessCapability": "missing",
+  "capabilityId": "reassign-handler",
+  "panelMinutesId": "L2-MIN-vf-case-02-E3-reassign-handler",
+  "mockRatio": 0.5,
+  "notes": "Phase2b E3 抽样；capability=reassign-handler/missing；不横铺。"
+}

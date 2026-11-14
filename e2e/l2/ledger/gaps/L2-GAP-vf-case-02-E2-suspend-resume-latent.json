@@ -1,0 +1,9 @@
+{
+  "id": "L2-GAP-vf-case-02-E2-suspend-resume-latent",
+  "caseId": "L2-CASE-vf-case-02-E2-suspend-resume",
+  "edgeClass": "E2",
+  "matrixCellId": "MC-land-1-approval-only-E2",
+  "gapKind": "capability-latent",
+  "productHint": "suspend-resume 仍为 latent；接入前不计能力覆盖分子",
+  "status": "open"
+}
