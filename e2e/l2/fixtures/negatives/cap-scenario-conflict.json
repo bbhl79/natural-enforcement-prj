@@ -1,0 +1,12 @@
+{
+  "id": "L2-NEG-cap-scenario-conflict",
+  "purpose": "X5b：register-clue 绑立案 UNWIRED 场景必须败闸",
+  "caseFragment": {
+    "domain": "land",
+    "edgeClass": "happy",
+    "capabilityId": "register-clue",
+    "verifyScenarioRef": "vf-sc-filing-after-dispatch",
+    "harnessCapability": "wired"
+  },
+  "expectLint": "fail"
+}

@@ -58,5 +58,6 @@
   },
   "g6LineCited": "§1.5 行1：缺必填/非法 legalRefs → 生成错误拒收",
   "synthesizer": "admit",
-  "diffOnly": false
+  "diffOnly": false,
+  "inputFingerprint": "eaec6c8fb6ca35cb"
 }

@@ -1,0 +1,11 @@
+{
+  "id": "L2-NEG-cap-domain-conflict",
+  "purpose": "X5b：planning 绑定 register-clue（仅 land/survey）必须败闸",
+  "caseFragment": {
+    "domain": "planning",
+    "edgeClass": "happy",
+    "capabilityId": "register-clue",
+    "harnessCapability": "wired"
+  },
+  "expectLint": "fail"
+}

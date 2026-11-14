@@ -2,8 +2,10 @@
 // 用途：按 21 种子生成 Phase 2 登记 happy 账（用例/Oracle/矩阵格/纪要/缺口）。
 // 调用方：本机一次性生成或刷新 e2e/l2/ledger；不进 CI。
 // 边界：不横铺 E2/E3；不宣称 Min；mineral/planning 记 unwired 缺口。
+//       既有纪要裁决与缺口工单状态不得被刷新抹掉。
 // 依据：e2e/l2/README.md；L2 计划 Phase 2。
 
+import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,7 +31,16 @@ function writeJson(path, obj) {
   writeFileSync(path, `${JSON.stringify(obj, null, 2)}\n`);
 }
 
-function minutesTemplate({ caseId, seedId, matrixCellId, domain, sourceClass, harnessCapability }) {
+function readJsonIfExists(path) {
+  if (!existsSync(path)) return null;
+  return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+function fingerprintInputs(parts) {
+  return createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 16);
+}
+
+function minutesTemplate({ caseId, seedId, matrixCellId, domain, sourceClass, harnessCapability, fingerprint }) {
   return {
     id: `L2-MIN-${seedId}-happy-register`.replace(/[^A-Za-z0-9-]/g, '-'),
     caseId,
@@ -91,12 +102,53 @@ function minutesTemplate({ caseId, seedId, matrixCellId, domain, sourceClass, ha
     g6LineCited: '§1.5 行1：缺必填/非法 legalRefs → 生成错误拒收',
     synthesizer: 'admit',
     diffOnly: false,
+    inputFingerprint: fingerprint,
   };
+}
+
+/** 既有纪要：指纹相同则保留；缺指纹只补戳；指纹变化则要求重审，不清空历史裁决细节。 */
+function writeMinutesPreserving(path, draft, fingerprint) {
+  const existing = readJsonIfExists(path);
+  if (!existing) {
+    writeJson(path, draft);
+    return 'created';
+  }
+  if (existing.inputFingerprint === fingerprint) {
+    return 'skipped-unchanged';
+  }
+  if (!existing.inputFingerprint) {
+    existing.inputFingerprint = fingerprint;
+    writeJson(path, existing);
+    return 'stamped-fingerprint';
+  }
+  const blocked = {
+    ...existing,
+    inputFingerprint: fingerprint,
+    iteration: (existing.iteration || 1) + 1,
+    synthesizer: 'panel-blocked',
+    openMustFix: Array.from(
+      new Set([...(existing.openMustFix || []), 'inputs-changed-require-re-review']),
+    ),
+    roles: existing.roles,
+    g6LineCited: existing.g6LineCited || draft.g6LineCited,
+    reverseSection: existing.reverseSection || draft.reverseSection,
+    adversarySection: existing.adversarySection || draft.adversarySection,
+  };
+  writeJson(path, blocked);
+  return 're-review-required';
+}
+
+/** 缺口只创建不存在的文件；已有 ticketed/closed/ticketRef 一律不覆盖。 */
+function writeGapIfMissing(path, gap) {
+  if (existsSync(path)) return 'skipped-existing';
+  writeJson(path, gap);
+  return 'created';
 }
 
 const index = JSON.parse(readFileSync(join(PROFILES, 'index.json'), 'utf8'));
 const canons = index.profiles.filter((p) => p.role === 'canonical');
 const cellCover = new Map();
+const stats = { minutes: {}, gaps: { created: 0, skipped: 0 } };
 
 for (const meta of canons) {
   const seed = JSON.parse(readFileSync(join(PROFILES, `${meta.id}.json`), 'utf8'));
@@ -170,6 +222,18 @@ for (const meta of canons) {
   };
   if (verifyScenarioRef) caseObj.verifyScenarioRef = verifyScenarioRef;
 
+  const fingerprint = fingerprintInputs({
+    seedId: meta.id,
+    domain,
+    sourceCode,
+    sourceClass,
+    capabilityId,
+    harnessCapability,
+    verifyScenarioRef: verifyScenarioRef || null,
+    matrixCellId,
+    lineageFields,
+  });
+
   const oracleObj = {
     id: oracleId,
     caseId,
@@ -213,8 +277,10 @@ for (const meta of canons) {
 
   writeJson(join(L2, 'ledger/cases', `${caseId}.json`), caseObj);
   writeJson(join(L2, 'ledger/oracles', `${oracleId}.json`), oracleObj);
-  writeJson(
-    join(L2, 'ledger/minutes', `${minutesId}.json`),
+
+  const minutesPath = join(L2, 'ledger/minutes', `${minutesId}.json`);
+  const minutesOutcome = writeMinutesPreserving(
+    minutesPath,
     minutesTemplate({
       caseId,
       seedId: meta.id,
@@ -222,8 +288,19 @@ for (const meta of canons) {
       domain,
       sourceClass,
       harnessCapability,
+      fingerprint,
     }),
+    fingerprint,
   );
+  stats.minutes[minutesOutcome] = (stats.minutes[minutesOutcome] || 0) + 1;
+
+  // 若纪要因输入变化被 panel-blocked，用例不得继续 admit-ok
+  const minutesNow = JSON.parse(readFileSync(minutesPath, 'utf8'));
+  if (minutesNow.synthesizer !== 'admit') {
+    caseObj.g6Disposition = 'not-reached';
+    caseObj.notes = `${caseObj.notes} 纪要待重审（${minutesNow.synthesizer}）。`;
+    writeJson(join(L2, 'ledger/cases', `${caseId}.json`), caseObj);
+  }
 
   if (!cellCover.has(matrixCellId)) {
     cellCover.set(matrixCellId, {
@@ -241,7 +318,8 @@ for (const meta of canons) {
   cellCover.get(matrixCellId).coveringCaseIds.push(caseId);
 
   if (harnessCapability === 'unwired') {
-    writeJson(join(L2, 'ledger/gaps', `L2-GAP-${meta.id}-register-unwired.json`), {
+    const gapPath = join(L2, 'ledger/gaps', `L2-GAP-${meta.id}-register-unwired.json`);
+    const gapOutcome = writeGapIfMissing(gapPath, {
       id: `L2-GAP-${meta.id}-register-unwired`,
       caseId,
       edgeClass,
@@ -250,6 +328,8 @@ for (const meta of canons) {
       productHint: `${domain} 登记场景仍在 UNWIRED；产品/驱动接入后关闭缺口`,
       status: 'open',
     });
+    if (gapOutcome === 'created') stats.gaps.created += 1;
+    else stats.gaps.skipped += 1;
   }
 }
 
@@ -258,5 +338,5 @@ for (const cell of cellCover.values()) {
 }
 
 console.log(
-  `generated happy roots: ${canons.length} cases, ${cellCover.size} matrix cells`,
+  `generated happy roots: ${canons.length} cases, ${cellCover.size} matrix cells; minutes=${JSON.stringify(stats.minutes)}; gaps=${JSON.stringify(stats.gaps)}`,
 );
