@@ -1,0 +1,9 @@
+{
+  "id": "L2-GAP-vf-case-09-E1-terminate-unfounded-filing-decline-latent",
+  "caseId": "L2-CASE-vf-case-09-E1-terminate-unfounded",
+  "edgeClass": "E1",
+  "matrixCellId": "MC-mineral-22-approval-only-E1",
+  "gapKind": "capability-latent",
+  "productHint": "filing-decline 仍为 latent；接入前不计能力覆盖分子",
+  "status": "open"
+}

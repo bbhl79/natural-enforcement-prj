@@ -1,0 +1,9 @@
+{
+  "id": "L2-GAP-vf-case-02-E1-no-filing-filing-decline-latent",
+  "caseId": "L2-CASE-vf-case-02-E1-no-filing",
+  "edgeClass": "E1",
+  "matrixCellId": "MC-land-1-approval-only-E1",
+  "gapKind": "capability-latent",
+  "productHint": "filing-decline 仍为 latent；接入前不计能力覆盖分子",
+  "status": "open"
+}
