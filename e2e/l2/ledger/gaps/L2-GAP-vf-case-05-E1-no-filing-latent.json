@@ -5,5 +5,6 @@
   "matrixCellId": "MC-land-1-approval-only-E1",
   "gapKind": "capability-latent",
   "productHint": "filing-decline 仍为 latent；接入前不计能力覆盖分子",
-  "status": "open"
+  "status": "ticketed",
+  "ticketRef": "https://github.com/bbhl79/natural-enforcement-prj/issues/347"
 }
