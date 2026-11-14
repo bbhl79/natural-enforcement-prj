@@ -1,7 +1,9 @@
 // 用途：按法规出处纪律校验应然模型节点，输出 ok 与待权威两类结果。
 // 发现器出处纪律校验（spec #322 Q13 / 二期 T7，seam⑥）：应然节点 → ok | 待权威。
-// 纯函数，无 I/O：不读写文件、不建 issue。待权威节点只产决策票草案数据，
-// 由人/上层流程按 docs/agents/issue-tracker.md 开票；未批准前不进实现方向与对账缺口。
+// 纯函数，无 I/O：不读写文件、不建 issue。文件表由调用方传入。
+// 待权威节点只产决策票草案数据，由人/上层流程按 docs/agents/issue-tracker.md 开票；
+// 未批准前不进实现方向与对账缺口。
+// 依据：ADR 0019；docs/handoff-l1.md W8。
 
 /**
  * 一条法规出处：法规标识 + 条款号（spec #322 Q13「法规名 + 条款号」）。
@@ -15,6 +17,12 @@ export interface LegalCitation {
   readonly documentName?: string;
   /** 条款号（如 2.5、第 6 条、3.2.3.1(11)）。 */
   readonly articleNo: string;
+}
+
+/** 调用方传入的文件表行；出处校验只读编号与效力状态。 */
+export interface DocumentAuthorityRow {
+  readonly code: string;
+  readonly validityStatus: string;
 }
 
 /** 应然模型草案的一个节点。字段可缺省：缺省即待权威，由本校验拦下。 */
@@ -47,18 +55,37 @@ function isBlank(value: string | undefined): boolean {
   return value === undefined || value.trim() === '';
 }
 
-/** 法规出处缺失项：整体缺，或某条缺法规标识/条款号。 */
-function citationGaps(citations: readonly LegalCitation[] | undefined): string[] {
+/**
+ * 法规出处缺失项与文件表权威项。
+ * 填了文件编号时：须落在传入文件表，且效力状态不得为已废止。
+ * 只填法规名时：不做文件表查表（对齐反馈模板「法规名 + 条款号」）。
+ */
+function citationGaps(
+  citations: readonly LegalCitation[] | undefined,
+  documentsByCode: ReadonlyMap<string, DocumentAuthorityRow>,
+): string[] {
   if (citations === undefined || citations.length === 0) return ['法规出处'];
   const gaps: string[] = [];
   citations.forEach((citation, index) => {
+    const ordinal = index + 1;
     const missing: string[] = [];
     if (isBlank(citation.documentCode) && isBlank(citation.documentName)) {
       missing.push('法规标识（文件编号或法规名）');
     }
     if (isBlank(citation.articleNo)) missing.push('条款号');
     if (missing.length > 0) {
-      gaps.push(`法规出处第 ${index + 1} 条缺${missing.join('、')}`);
+      gaps.push(`法规出处第 ${ordinal} 条缺${missing.join('、')}`);
+      return;
+    }
+    if (isBlank(citation.documentCode)) return;
+    const code = citation.documentCode!.trim();
+    const row = documentsByCode.get(code);
+    if (row === undefined) {
+      gaps.push(`法规出处第 ${ordinal} 条文件编号不在文件表`);
+      return;
+    }
+    if (row.validityStatus === '已废止') {
+      gaps.push(`法规出处第 ${ordinal} 条文件已废止`);
     }
   });
   return gaps;
@@ -89,10 +116,17 @@ function decisionTicketOf(nodeId: string, gaps: readonly string[]): DecisionTick
   };
 }
 
-/** 逐节点校验出处纪律：一个节点一条结果，顺序与输入一致。 */
-export function checkNodeSources(nodes: readonly AssertedNode[]): SourceCheckResult[] {
+/**
+ * 逐节点校验出处纪律：一个节点一条结果，顺序与输入一致。
+ * documents 由调用方传入；本函数不读盘、不导入 geo-dict。
+ */
+export function checkNodeSources(
+  nodes: readonly AssertedNode[],
+  documents: readonly DocumentAuthorityRow[],
+): SourceCheckResult[] {
+  const documentsByCode = new Map(documents.map((row) => [row.code, row]));
   return nodes.map((node): SourceCheckResult => {
-    const gaps = [...citationGaps(node.legalBasis), ...roleGaps(node.roleBasis)];
+    const gaps = [...citationGaps(node.legalBasis, documentsByCode), ...roleGaps(node.roleBasis)];
     if (gaps.length === 0) {
       return {
         nodeId: node.nodeId,

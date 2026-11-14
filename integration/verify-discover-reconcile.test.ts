@@ -316,6 +316,9 @@ function register(overrides: Partial<StandardRegister> = {}): StandardRegister {
   return { stages: ['register', 'verify', 'dispatch', 'decide'], ...overrides };
 }
 
+/** 对账夹具用现行文件表行；出处带 documentCode 时须传入，否则 source-check 标待权威。 */
+const ACTIVE_DOCUMENTS = [{ code: 'doc_002', validityStatus: '现行有效' }] as const;
+
 /** 只取指定类别的提案，避免无关缺口干扰断言。 */
 function proposalsOfKind(input: ReconcileInput, kind: string) {
   return reconcileCapabilities(input).proposals.filter((proposal) => proposal.kind === kind);
@@ -402,6 +405,7 @@ describe('reconcileCapabilities 第二类错位：地图有判据无 → latent 
           roleBasis: ['经办'],
         },
       ],
+      documents: ACTIVE_DOCUMENTS,
       acks: [{ key: 'nav.case.phantom', keyType: 'feature-map-node' }],
     };
 
@@ -551,6 +555,7 @@ describe('reconcileCapabilities 等权威过滤：source-check 判定不进对�
         },
         { nodeId: 'nav.case.pending', legalBasis: [], roleBasis: ['经办'] },
       ],
+      documents: ACTIVE_DOCUMENTS,
     };
 
     expect(proposalsOfKind(input, 'latent-stub').map((proposal) => proposal.featureMapRef)).toEqual([

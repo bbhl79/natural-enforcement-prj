@@ -18,7 +18,10 @@ import {
   admittedNodeIds,
   checkNodeSources,
   type AssertedNode,
+  type DocumentAuthorityRow,
 } from './source-check.ts';
+
+export type { DocumentAuthorityRow };
 
 /** `run-api-scenario.ts` runStep 分支里的 HTTP 调用模式（scenario 实际调用的单一来源）。 */
 export interface EndpointPattern {
@@ -96,6 +99,11 @@ export interface ReconcileInput {
   readonly register: StandardRegister;
   /** 应然模型草案节点；经 source-check 判为待权威的节点不计对账缺口。 */
   readonly assertedNodes?: readonly AssertedNode[];
+  /**
+   * 文件表行（编号 + 效力状态）。有 documentCode 的出处须命中本表且非已废止。
+   * 由调用方传入；缺省空表。本函数不读盘。
+   */
+  readonly documents?: readonly DocumentAuthorityRow[];
   readonly acks?: readonly CoverageAck[];
   readonly reverseDriftScope?: ReverseDriftScope;
 }
@@ -220,7 +228,7 @@ export function reconcileCapabilities(input: ReconcileInput): ReconcileResult {
   );
 
   // 「等权威」只由 source-check 判定：待权威节点不进实现方向，也不计对账缺口。
-  const sourceChecks = checkNodeSources(input.assertedNodes ?? []);
+  const sourceChecks = checkNodeSources(input.assertedNodes ?? [], input.documents ?? []);
   const admitted = new Set(admittedNodeIds(sourceChecks));
   const pending = new Set(
     (input.assertedNodes ?? [])
