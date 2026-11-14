@@ -30,3 +30,4 @@ L2 从约 21 份种子卷宗**生成**用例与 Oracle，目的是发现产品�
 - Phase 2：21 种子登记 happy 根（`L2-CASE-*-happy-register`）；mineral/planning 为 `unwired` 并记缺口。
 - Phase 2b（NELC-14）：E1/E2/E3 **各 1 条**抽样；E2/E3 能力仍 latent/missing，**不横铺**。
 - Phase 2b-scale：E1 扩至四法域；补 `approval+consult` 会办档；仍 **不横铺 E2/E3**、**不宣称 Min**。
+- Phase 3：缺口 `ticketed` → [#347](https://github.com/bbhl79/natural-enforcement-prj/issues/347)；`node tools/l2-report-x5.mjs`（仅 admit-ok）。
