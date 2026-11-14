@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // 用途：生成 Phase 2b 边界抽样（E1/E2/E3 各 1 条），遵守 X5b 不横铺。
 // 调用方：本机生成 e2e/l2/ledger；不进 CI。
-// 边界：E2/E3 仅单条；缺口只创建不覆盖；纪要新建，已有则跳过。
+// 边界：E2/E3 仅单条；缺口只创建不覆盖；纪要按完整指纹保留/重审。
 // 依据：e2e/l2/README.md；NELC-14；L2 计划 Phase 2b。
 
 import { createHash } from 'node:crypto';
@@ -17,7 +17,12 @@ function writeJson(path, obj) {
   writeFileSync(path, `${JSON.stringify(obj, null, 2)}\n`);
 }
 
-function fingerprint(parts) {
+function readJsonIfExists(path) {
+  if (!existsSync(path)) return null;
+  return JSON.parse(readFileSync(path, 'utf8'));
+}
+
+function fingerprintInputs(parts) {
   return createHash('sha256').update(JSON.stringify(parts)).digest('hex').slice(0, 16);
 }
 
@@ -25,6 +30,38 @@ function writeIfAbsent(path, obj) {
   if (existsSync(path)) return false;
   writeJson(path, obj);
   return true;
+}
+
+/** 既有纪要：指纹相同则保留；缺指纹只补戳；指纹变化则要求重审，不清空历史裁决细节。 */
+function writeMinutesPreserving(path, draft, fingerprint) {
+  const existing = readJsonIfExists(path);
+  if (!existing) {
+    writeJson(path, draft);
+    return 'created';
+  }
+  if (existing.inputFingerprint === fingerprint) {
+    return 'skipped-unchanged';
+  }
+  if (!existing.inputFingerprint) {
+    existing.inputFingerprint = fingerprint;
+    writeJson(path, existing);
+    return 'stamped-fingerprint';
+  }
+  const blocked = {
+    ...existing,
+    inputFingerprint: fingerprint,
+    iteration: (existing.iteration || 1) + 1,
+    synthesizer: 'panel-blocked',
+    openMustFix: Array.from(
+      new Set([...(existing.openMustFix || []), 'inputs-changed-require-re-review']),
+    ),
+    roles: existing.roles,
+    g6LineCited: existing.g6LineCited || draft.g6LineCited,
+    reverseSection: existing.reverseSection || draft.reverseSection,
+    adversarySection: existing.adversarySection || draft.adversarySection,
+  };
+  writeJson(path, blocked);
+  return 're-review-required';
 }
 
 function upsertMatrixCell(cell) {
@@ -305,6 +342,8 @@ const samples = [
   },
 ];
 
+const stats = { minutes: {} };
+
 for (const s of samples) {
   const lineageFields = [
     ...s.derived.map((d) => ({
@@ -321,13 +360,25 @@ for (const s of samples) {
     })),
   ];
   const mockRatio = s.mocked.length / lineageFields.length;
-  const fp = fingerprint({
+
+  // 写盘前完整指纹：含 steps / asserts / legalRefs，避免改 Oracle 仍沿用旧纪要准入。
+  const fingerprint = fingerprintInputs({
     caseId: s.caseId,
     seedId: s.seedId,
     edgeClass: s.edgeClass,
+    domain: s.domain,
+    sourceCode: s.sourceCode,
+    sourceClass: s.sourceClass,
+    approvalTier: s.approvalTier,
+    matrixCellId: s.matrixCellId,
     capabilityId: s.capabilityId,
+    harnessCapability: s.harnessCapability,
+    verifyScenarioRef: s.verifyScenarioRef || null,
     legalExit: s.legalExit,
+    legalRefs: s.legalRefs,
     lineageFields,
+    steps: s.steps,
+    asserts: s.asserts,
   });
 
   const caseObj = {
@@ -351,8 +402,7 @@ for (const s of samples) {
   };
   if (s.verifyScenarioRef) caseObj.verifyScenarioRef = s.verifyScenarioRef;
 
-  writeJson(join(L2, 'ledger/cases', `${s.caseId}.json`), caseObj);
-  writeJson(join(L2, 'ledger/oracles', `${s.oracleId}.json`), {
+  const oracleObj = {
     id: s.oracleId,
     caseId: s.caseId,
     legalExit: s.legalExit,
@@ -360,10 +410,11 @@ for (const s of samples) {
     asserts: s.asserts,
     halfRunPolicy: 'gap-not-reached',
     notes: `${s.edgeClass} 边界 Oracle；产品未具备记缺口。`,
-  });
+  };
 
-  writeIfAbsent(
-    join(L2, 'ledger/minutes', `${s.minutesId}.json`),
+  const minutesPath = join(L2, 'ledger/minutes', `${s.minutesId}.json`);
+  const minutesOutcome = writeMinutesPreserving(
+    minutesPath,
     edgeMinutes({
       id: s.minutesId,
       caseId: s.caseId,
@@ -371,11 +422,23 @@ for (const s of samples) {
       edgeClass: s.edgeClass,
       matrixCellId: s.matrixCellId,
       harnessCapability: s.harnessCapability,
-      fp,
+      fp: fingerprint,
       reverse: s.reverse,
       adversary: s.adversary,
     }),
+    fingerprint,
   );
+  stats.minutes[minutesOutcome] = (stats.minutes[minutesOutcome] || 0) + 1;
+
+  // 若纪要因输入变化被 panel-blocked，用例不得继续 admit-ok
+  const minutesNow = JSON.parse(readFileSync(minutesPath, 'utf8'));
+  if (minutesNow.synthesizer !== 'admit') {
+    caseObj.g6Disposition = 'not-reached';
+    caseObj.notes = `${caseObj.notes} 纪要待重审（${minutesNow.synthesizer}）。`;
+  }
+
+  writeJson(join(L2, 'ledger/cases', `${s.caseId}.json`), caseObj);
+  writeJson(join(L2, 'ledger/oracles', `${s.oracleId}.json`), oracleObj);
 
   writeIfAbsent(join(L2, 'ledger/gaps', `${s.gapId}.json`), {
     id: s.gapId,
@@ -400,4 +463,4 @@ for (const s of samples) {
   });
 }
 
-console.log(`phase2b edge samples: ${samples.length} (E1/E2/E3 ×1)`);
+console.log(`phase2b edge samples: ${samples.length} (E1/E2/E3 ×1); minutes=${JSON.stringify(stats.minutes)}`);
