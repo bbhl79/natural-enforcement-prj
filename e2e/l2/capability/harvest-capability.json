@@ -1,6 +1,6 @@
 {
   "id": "L2-HARVEST-CAPABILITY",
-  "scannedAt": "2026-11-14T10:25:00Z",
+  "scannedAt": "2026-11-14T12:42:00Z",
   "sourceRefs": [
     "e2e/verify/harness/suites.ts",
     "e2e/verify/fixtures/scenarios/",
@@ -66,8 +66,18 @@
     {
       "capabilityId": "filing-decline",
       "edgeClasses": ["E1"],
-      "profileEvidence": "no-filing variants",
+      "profileEvidence": "no-filing variants；legalExit=EXIT-NO-FILING",
       "scenarioRefs": ["vf-sc-latent-no-filing-survey"],
+      "suiteStatus": "latent",
+      "driverActions": [],
+      "oracleMachine": false,
+      "verdict": "latent"
+    },
+    {
+      "capabilityId": "terminate-unfounded",
+      "edgeClasses": ["E1"],
+      "profileEvidence": "terminate-unfounded variants；legalExit=EXIT-TERMINATE-UNFOUNDED",
+      "scenarioRefs": [],
       "suiteStatus": "latent",
       "driverActions": [],
       "oracleMachine": false,
@@ -96,12 +106,22 @@
     {
       "capabilityId": "collaborate-handoff",
       "edgeClasses": ["happy"],
-      "profileEvidence": "consultations on deep seeds",
+      "profileEvidence": "跨组织线索交接（非呈批会办异议）",
       "scenarioRefs": ["vf-sc-collaborate-handoff"],
       "suiteStatus": "UNWIRED_SCENARIOS",
       "driverActions": ["collaborate-handoff"],
       "oracleMachine": false,
       "verdict": "unwired"
+    },
+    {
+      "capabilityId": "consult-dissent",
+      "edgeClasses": ["happy"],
+      "profileEvidence": "variant consult-dissent-then-pass；PROC-CONSULT",
+      "scenarioRefs": [],
+      "suiteStatus": "latent",
+      "driverActions": [],
+      "oracleMachine": false,
+      "verdict": "latent"
     }
   ],
   "scaleGate": {

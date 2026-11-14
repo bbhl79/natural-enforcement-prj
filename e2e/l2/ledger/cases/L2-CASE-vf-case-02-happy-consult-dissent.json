@@ -49,16 +49,15 @@
     },
     {
       "id": "consult",
-      "action": "collaborate-handoff",
+      "action": "consult-dissent",
       "expectReachable": false
     }
   ],
   "oracleId": "L2-ORACLE-vf-case-02-happy-consult-dissent",
   "g6Disposition": "admit-ok",
-  "harnessCapability": "unwired",
-  "capabilityId": "collaborate-handoff",
+  "harnessCapability": "latent",
+  "capabilityId": "consult-dissent",
   "panelMinutesId": "L2-MIN-vf-case-02-happy-consult-dissent",
   "mockRatio": 0.25,
-  "notes": "Phase2b-scale happy；capability=collaborate-handoff/unwired；不横铺 E2/E3；不宣称 Min。",
-  "verifyScenarioRef": "vf-sc-collaborate-handoff"
+  "notes": "Phase2b-scale happy；capability=consult-dissent/latent；不横铺 E2/E3；不宣称 Min。"
 }

@@ -40,11 +40,7 @@ function writeMinutesPreserving(path, draft, fingerprint) {
     return 'created';
   }
   if (existing.inputFingerprint === fingerprint) return 'skipped-unchanged';
-  if (!existing.inputFingerprint) {
-    existing.inputFingerprint = fingerprint;
-    writeJson(path, existing);
-    return 'stamped-fingerprint';
-  }
+  // 缺指纹或指纹变化：一律 panel-blocked，禁止补签后沿用旧 admit。
   writeJson(path, {
     ...existing,
     inputFingerprint: fingerprint,
@@ -126,11 +122,13 @@ function e1Sample({
   const sourceClass = sourceClassOf(sourceCode);
   const caseId = `L2-CASE-${short}`;
   const edgeClass = 'E1';
+  const isTerminate = legalExit === 'EXIT-TERMINATE-UNFOUNDED';
+  const capabilityId = isTerminate ? 'terminate-unfounded' : 'filing-decline';
   return {
     caseId,
     oracleId: `L2-ORACLE-${short}`,
     minutesId: `L2-MIN-${short}`,
-    gapId: `L2-GAP-${short}-filing-decline-latent`,
+    gapId: `L2-GAP-${short}-latent`,
     seedId,
     edgeClass,
     domain,
@@ -138,9 +136,10 @@ function e1Sample({
     sourceClass,
     approvalTier: matrixApproval,
     matrixCellId: `MC-${domain}-${sourceClass}-${matrixApproval}-E1`,
-    capabilityId: 'filing-decline',
+    capabilityId,
     harnessCapability: 'latent',
-    verifyScenarioRef: domain === 'survey' ? 'vf-sc-latent-no-filing-survey' : undefined,
+    verifyScenarioRef:
+      !isTerminate && domain === 'survey' ? 'vf-sc-latent-no-filing-survey' : undefined,
     legalExit,
     legalRefs: [{ kind: 'PROC', id: procId, reason: `E1 合法出口 ${legalExit}` }],
     derived: [
@@ -280,12 +279,12 @@ const samples = [
     conclusionValue: 'no-case',
     mockProduct: 'E1 薄种子发散 Mock；survey 第二点',
   }),
-  // M6：approval+consult 档（会办能力仍 unwired → 记缺口）
+  // M6：approval+consult 档（独立会办能力 consult-dissent，非跨组织交接）
   {
     caseId: 'L2-CASE-vf-case-02-happy-consult-dissent',
     oracleId: 'L2-ORACLE-vf-case-02-happy-consult-dissent',
     minutesId: 'L2-MIN-vf-case-02-happy-consult-dissent',
-    gapId: 'L2-GAP-vf-case-02-consult-unwired',
+    gapId: 'L2-GAP-vf-case-02-consult-dissent-latent',
     seedId: 'vf-case-02-occupy-without-approval',
     edgeClass: 'happy',
     domain: 'land',
@@ -293,9 +292,8 @@ const samples = [
     sourceClass: '1',
     approvalTier: 'approval+consult',
     matrixCellId: 'MC-land-1-approval+consult-happy',
-    capabilityId: 'collaborate-handoff',
-    harnessCapability: 'unwired',
-    verifyScenarioRef: 'vf-sc-collaborate-handoff',
+    capabilityId: 'consult-dissent',
+    harnessCapability: 'latent',
     legalExit: 'EXIT-REGISTERED',
     legalRefs: [
       { kind: 'PROC', id: 'PROC-REGISTER', reason: '登记仍为起点' },
@@ -318,7 +316,7 @@ const samples = [
     ],
     steps: [
       { id: 'register', action: 'register-clue', expectReachable: true },
-      { id: 'consult', action: 'collaborate-handoff', expectReachable: false },
+      { id: 'consult', action: 'consult-dissent', expectReachable: false },
     ],
     asserts: [
       {
@@ -330,12 +328,12 @@ const samples = [
         provenance: 'mocked',
       },
     ],
-    gapKind: 'capability-unwired',
+    gapKind: 'capability-latent',
     reverse: {
       R1: 'domain/source/party 指回种子 02。',
       R2: '去掉会办 Mock 后不得断言异议通过。',
       R3: 'approvalTier=approval+consult。',
-      R4: 'unwired → capability-unwired 缺口。',
+      R4: 'latent → capability-latent 缺口（非 collaborate-handoff）。',
     },
     adversary: {
       A1: '缺 Mock→拒收。',

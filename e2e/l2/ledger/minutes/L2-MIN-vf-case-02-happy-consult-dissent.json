@@ -8,7 +8,7 @@
     {
       "role": "Generator",
       "verdict": "pass",
-      "notes": "Phase2b-scale happy；MC-land-1-approval+consult-happy；harness=unwired。"
+      "notes": "Phase2b-scale happy；MC-land-1-approval+consult-happy；harness=latent。"
     },
     {
       "role": "Legality Challenger",
@@ -46,7 +46,7 @@
     "R1": "domain/source/party 指回种子 02。",
     "R2": "去掉会办 Mock 后不得断言异议通过。",
     "R3": "approvalTier=approval+consult。",
-    "R4": "unwired → capability-unwired 缺口。"
+    "R4": "latent → capability-latent 缺口（非 collaborate-handoff）。"
   },
   "adversarySection": {
     "A1": "缺 Mock→拒收。",
@@ -59,5 +59,5 @@
   "g6LineCited": "§1.5：能力 latent/unwired → 缺口账，非生成拒收",
   "synthesizer": "admit",
   "diffOnly": true,
-  "inputFingerprint": "4e699d33a91ea30d"
+  "inputFingerprint": "ece33815b5501caf"
 }

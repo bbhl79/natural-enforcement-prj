@@ -51,8 +51,8 @@
   "oracleId": "L2-ORACLE-vf-case-02-E1-terminate-unfounded",
   "g6Disposition": "admit-ok",
   "harnessCapability": "latent",
-  "capabilityId": "filing-decline",
+  "capabilityId": "terminate-unfounded",
   "panelMinutesId": "L2-MIN-vf-case-02-E1-terminate-unfounded",
   "mockRatio": 0.25,
-  "notes": "Phase2b-scale E1；capability=filing-decline/latent；不横铺 E2/E3；不宣称 Min。"
+  "notes": "Phase2b-scale E1；capability=terminate-unfounded/latent；不横铺 E2/E3；不宣称 Min。"
 }

@@ -1,9 +1,0 @@
-{
-  "id": "L2-GAP-vf-case-02-consult-unwired",
-  "caseId": "L2-CASE-vf-case-02-happy-consult-dissent",
-  "edgeClass": "happy",
-  "matrixCellId": "MC-land-1-approval+consult-happy",
-  "gapKind": "capability-unwired",
-  "productHint": "collaborate-handoff 仍为 unwired；接入前不计能力覆盖分子",
-  "status": "open"
-}
