@@ -505,6 +505,35 @@ export function lintLedger() {
 
   enforceScaleGate(cases, capability, errors);
 
+  // X6：rebuild-map 引用须在账内；rebuilt 禁止指向 unwired/latent/missing 能力用例
+  const rebuildMapPath = join(L2, 'succession/rebuild-map.json');
+  if (existsSync(rebuildMapPath)) {
+    const rebuildMap = readJson(rebuildMapPath);
+    const byId = new Map(cases.map((c) => [c.id, c]));
+    for (const item of rebuildMap.items || []) {
+      for (const id of item.l2CaseIds || []) {
+        if (!byId.has(id)) {
+          errors.push(`X6: rebuild-map ${item.verifyScenarioId} 引用缺失用例 ${id}`);
+        }
+      }
+      if (item.disposition === 'rebuilt') {
+        if (!item.l2CaseIds || item.l2CaseIds.length === 0) {
+          errors.push(`X6: ${item.verifyScenarioId} 标 rebuilt 但无 l2CaseIds`);
+        }
+        for (const id of item.l2CaseIds || []) {
+          const c = byId.get(id);
+          if (!c) continue;
+          const bad = ['unwired', 'latent', 'missing'].includes(c.harnessCapability);
+          if (bad) {
+            errors.push(
+              `X6: ${item.verifyScenarioId} 标 rebuilt 但用例 ${id} harnessCapability=${c.harnessCapability}（禁直接承接）`,
+            );
+          }
+        }
+      }
+    }
+  }
+
   if (cases.length > 0) {
     const mean = mockSum / cases.length;
     if (mean > limits.ledgerMeanMockRatioMaxAtMin && cases.length >= 40) {

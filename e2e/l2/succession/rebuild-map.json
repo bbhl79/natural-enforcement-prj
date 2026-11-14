@@ -1,0 +1,132 @@
+{
+  "id": "L2-SUCCESSION-REBUILD-MAP",
+  "updatedAt": "2026-11-14T12:45:00Z",
+  "policy": {
+    "businessNarrative": "L2 ledger",
+    "verifyGreenMeans": "L3 regression smoke only; not business capability",
+    "x6RequiredToMarkRebuilt": true,
+    "forbidDirectInheritFromUnwired": true
+  },
+  "items": [
+    {
+      "verifyScenarioId": "vf-sc-verify-loop-survey-register",
+      "disposition": "rebuilt",
+      "l2CaseIds": [
+        "L2-CASE-vf-case-01-map-review-missing-happy-register"
+      ],
+      "notes": "Phase1/2 happy 登记根；已过 X* + 面板"
+    },
+    {
+      "verifyScenarioId": "vf-sc-verify-loop-land-register",
+      "disposition": "rebuilt",
+      "l2CaseIds": [
+        "L2-CASE-vf-case-02-occupy-without-approval-happy-register"
+      ],
+      "notes": "Phase2 land happy 登记根"
+    },
+    {
+      "verifyScenarioId": "vf-sc-verify-loop-land-verify-dispatch",
+      "disposition": "pending-rebuild",
+      "l2CaseIds": [],
+      "notes": "API_SUITE 有线；待按 L2 谱系重建派发环"
+    },
+    {
+      "verifyScenarioId": "vf-sc-next-todo-buttons",
+      "disposition": "l3-smoke",
+      "l2CaseIds": [],
+      "notes": "作者 UX 烟雾；非业务语料"
+    },
+    {
+      "verifyScenarioId": "vf-sc-neg-type-unconfirmed",
+      "disposition": "l3-negative",
+      "l2CaseIds": [],
+      "notes": "负例烟雾；保留 L3"
+    },
+    {
+      "verifyScenarioId": "vf-sc-neg-missing-narrative",
+      "disposition": "l3-negative",
+      "l2CaseIds": [],
+      "notes": "负例烟雾；保留 L3"
+    },
+    {
+      "verifyScenarioId": "vf-sc-neg-idempotency-conflict",
+      "disposition": "l3-negative",
+      "l2CaseIds": [],
+      "notes": "负例烟雾；保留 L3"
+    },
+    {
+      "verifyScenarioId": "vf-sc-neg-land-point-geometry",
+      "disposition": "l3-negative",
+      "l2CaseIds": [],
+      "notes": "负例烟雾；保留 L3"
+    },
+    {
+      "verifyScenarioId": "vf-sc-neg-supervisor-register",
+      "disposition": "l3-negative",
+      "l2CaseIds": [],
+      "notes": "负例烟雾；保留 L3"
+    },
+    {
+      "verifyScenarioId": "vf-sc-collaborate-handoff",
+      "disposition": "l3-hold-unwired",
+      "l2CaseIds": [],
+      "gapIds": [],
+      "notes": "跨组织交接 UNWIRED；与 consult-dissent 分列"
+    },
+    {
+      "verifyScenarioId": "vf-sc-register-mineral-transfer",
+      "disposition": "gap-tracked",
+      "l2CaseIds": [
+        "L2-CASE-vf-case-09-mine-overstep-happy-register"
+      ],
+      "notes": "UNWIRED mineral 登记；L2 happy + capability-unwired 缺口"
+    },
+    {
+      "verifyScenarioId": "vf-sc-register-planning",
+      "disposition": "gap-tracked",
+      "l2CaseIds": [
+        "L2-CASE-vf-case-04-build-without-permit-happy-register"
+      ],
+      "notes": "UNWIRED planning 登记；L2 happy + capability-unwired 缺口"
+    },
+    {
+      "verifyScenarioId": "vf-sc-latent-no-filing-survey",
+      "disposition": "gap-tracked",
+      "l2CaseIds": [
+        "L2-CASE-vf-case-01-E1-no-filing"
+      ],
+      "notes": "latent E1；L2 记 capability-latent"
+    },
+    {
+      "verifyScenarioId": "vf-sc-latent-suspend-resume-land",
+      "disposition": "gap-tracked",
+      "l2CaseIds": [
+        "L2-CASE-vf-case-02-E2-suspend-resume"
+      ],
+      "notes": "latent E2；禁止横铺至 wired|partial"
+    },
+    {
+      "verifyScenarioId": "vf-sc-filing-after-dispatch",
+      "disposition": "l3-hold-unwired",
+      "l2CaseIds": [],
+      "notes": "UNWIRED；禁直接承接"
+    },
+    {
+      "verifyScenarioId": "vf-sc-workbench-after-filing",
+      "disposition": "l3-hold-unwired",
+      "l2CaseIds": [],
+      "notes": "UNWIRED；禁直接承接"
+    },
+    {
+      "verifyScenarioId": "consult-dissent-profile",
+      "disposition": "gap-tracked",
+      "l2CaseIds": [
+        "L2-CASE-vf-case-02-happy-consult-dissent"
+      ],
+      "gapIds": [
+        "L2-GAP-vf-case-02-consult-dissent-latent"
+      ],
+      "notes": "呈批会办异议；capability=consult-dissent/latent；禁 rebuilt"
+    }
+  ]
+}
