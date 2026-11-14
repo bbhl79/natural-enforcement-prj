@@ -2,7 +2,7 @@
 // 用途：把 L1 合法合规判据底稿编译成模块内的 TS 常量，并校验底稿、官方原文快照、文件表与产物一致。
 // 调用方：dev 脚本的 lint criteria 子项、tools/generate-review-criteria.test.mjs。
 // 边界：只读仓库内文件，不联网；--check 不写盘，任一条断言失败即退出 1。
-// 依据：docs/research/criteria/README.md、docs/roadmap-next.md 的 2.4 与 2.5 节。
+// 依据：docs/research/criteria/README.md；docs/handoff-l1.md。
 
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -18,6 +18,13 @@ const PRODUCT_BY_MODULE = {
 };
 const INTERPRETATIONS = ['直译', '推导', '裁量'];
 const STATUSES = ['active', 'objected', 'superseded'];
+// 原文中文日数与期望 dayCount 的对应。只用于直译条目的交叉校验。
+const CN_DAY_TO_COUNT = new Map([
+  ['九十日', 90],
+  ['三十日', 30],
+  ['五日', 5],
+  ['三日', 3],
+]);
 
 // 去掉全部空白。摘录与原文的比对只做空白归一化，不做标点归一化。
 function normalize(text) {
@@ -150,8 +157,41 @@ function validateDocument(draft, documents, sources, today) {
   return errors;
 }
 
+// 校验消费方：路径在场且符号出现在文件正文中。
+function validateConsumer(consumer, where, root, errors) {
+  const split = String(consumer).split('#');
+  if (split.length !== 2) return;
+  const rel = split[0];
+  const symbol = split[1];
+  const absolute = join(root, rel);
+  if (!existsSync(absolute)) {
+    errors.push(`[结构] ${where} 的消费方文件不在场：${rel}`);
+    return;
+  }
+  const text = readFileSync(absolute, 'utf8');
+  if (!text.includes(symbol)) {
+    errors.push(`[结构] ${where} 的消费方符号不在文件内：${symbol}（${rel}）`);
+  }
+}
+
+// 推导父项与期望值的工作日口径是否一致（CRIT-DL-004 型：五日 + 工作日 → dayCount 5 dayBasis working）。
+function validateDerivationShape(item, draft, where, errors) {
+  if (item.interpretation !== '推导' || !item.expected) return;
+  const parents = (item.derivation ?? [])
+    .map((ref) => draft.items.find((row) => row.id === ref))
+    .filter((row) => row);
+  if (parents.length === 0) return;
+  const periodParent = parents.find((row) => row.expected?.period);
+  const unitParent = parents.find((row) => row.expected?.unit === '工作日');
+  if (periodParent?.expected?.period === '五日' && unitParent) {
+    if (item.expected.dayCount !== 5 || item.expected.dayBasis !== 'working') {
+      errors.push(`[结构] ${where} 的推导结果与父项五日/工作日不一致`);
+    }
+  }
+}
+
 // 校验单条判据项。draftIds 是本底稿全部判据编号。
-function validateItem(item, draft, snapshot, draftIds, today) {
+function validateItem(item, draft, snapshot, draftIds, today, root) {
   const errors = [];
   const where = `${draft.path} ${item.id ?? '(缺 id)'}`;
   for (const key of ['id', 'article', 'interpretation', 'status']) {
@@ -226,6 +266,13 @@ function validateItem(item, draft, snapshot, draftIds, today) {
         if (!normalize(item.excerpt ?? '').includes(normalize(value))) {
           errors.push(`[结构] ${where} 的 sourceValues.${key} 不是摘录的子串：${value}`);
         }
+        for (const [cn, count] of CN_DAY_TO_COUNT) {
+          if (!String(value).includes(cn)) continue;
+          const expectedNumber = item.expected[key];
+          if (typeof expectedNumber === 'number' && expectedNumber !== count) {
+            errors.push(`[结构] ${where} 的 sourceValues.${key} 含「${cn}」但 expected.${key} 不是 ${count}`);
+          }
+        }
       }
     }
   }
@@ -233,6 +280,20 @@ function validateItem(item, draft, snapshot, draftIds, today) {
   // 推导型必须有期望值。
   if (item.interpretation === '推导' && !item.expected) {
     errors.push(`[结构] ${where} 是推导型，缺少期望值`);
+  }
+  if (item.interpretation === '推导') {
+    validateDerivationShape(item, draft, where, errors);
+    if (typeof item.expected?.dayCount === 'number' || item.expected?.dayBasis) {
+      for (const ref of item.derivation ?? []) {
+        if (!draftIds.has(ref)) {
+          errors.push(`[结构] ${where} 的推导父项 ${ref} 不在本底稿内`);
+        }
+      }
+    }
+  }
+
+  for (const consumer of item.consumers ?? []) {
+    validateConsumer(consumer, where, root, errors);
   }
 
   // 施行日与今日的关系由文档级断言 5 兜住，条目级只登记尚未施行。
@@ -243,7 +304,7 @@ function validateItem(item, draft, snapshot, draftIds, today) {
 }
 
 // 校验全部底稿与决策。today 是 YYYY-MM-DD。
-export function validate(drafts, decisions, documents, sources, today) {
+export function validate(drafts, decisions, documents, sources, today, root = DEFAULT_ROOT) {
   const errors = [];
   const allIds = new Set();
   for (const draft of drafts) {
@@ -258,7 +319,7 @@ export function validate(drafts, decisions, documents, sources, today) {
     errors.push(...validateDocument(draft, documents, sources, today));
     const draftIds = new Set(draft.items.map((item) => item.id));
     for (const item of draft.items) {
-      errors.push(...validateItem(item, draft, snapshot, draftIds, today));
+      errors.push(...validateItem(item, draft, snapshot, draftIds, today, root));
     }
   }
 
@@ -276,6 +337,9 @@ export function validate(drafts, decisions, documents, sources, today) {
     }
     if (decision.consumer && !/^backend\/[a-z-]+\/.*#.+$/u.test(decision.consumer)) {
       errors.push(`[结构] 业务决策 ${decision.id} 的消费方格式不是 仓库路径#符号`);
+    }
+    if (decision.consumer) {
+      validateConsumer(decision.consumer, `业务决策 ${decision.id}`, root, errors);
     }
   }
   return { errors, decisionIds };
@@ -343,6 +407,7 @@ export function renderProduct(items, decisions) {
   lines.push('  readonly source: string;');
   lines.push('  readonly reason: string;');
   lines.push('  readonly risk: string;');
+  lines.push('  readonly expected: Readonly<Record<string, unknown>> | null;');
   lines.push('}');
   lines.push('');
   lines.push('/** 本模块消费的法规判据，按编号升序。 */');
@@ -360,10 +425,12 @@ export function renderProduct(items, decisions) {
   lines.push('/** 全部业务决策登记，按编号升序。 */');
   lines.push('export const BUSINESS_DECISIONS: readonly BusinessDecision[] = [');
   for (const decision of [...decisions].sort((a, b) => a.id.localeCompare(b.id))) {
+    const expected = decision.expected === undefined ? null : decision.expected;
     lines.push(
       `  { id: ${JSON.stringify(decision.id)}, subject: ${JSON.stringify(decision.subject)}, ` +
         `consumer: ${JSON.stringify(decision.consumer)}, source: ${JSON.stringify(decision.source)}, ` +
-        `reason: ${JSON.stringify(decision.reason)}, risk: ${JSON.stringify(decision.risk)} },`,
+        `reason: ${JSON.stringify(decision.reason)}, risk: ${JSON.stringify(decision.risk)}, ` +
+        `expected: ${JSON.stringify(expected)} },`,
     );
   }
   lines.push('];');
@@ -383,7 +450,7 @@ export function build(root, today) {
     if (!path) continue;
     sources.set(path, readIfExists(join(root, path)));
   }
-  const { errors: validationErrors } = validate(drafts, decisions, documents, sources, today);
+  const { errors: validationErrors } = validate(drafts, decisions, documents, sources, today, root);
   const errors = [...loadErrors, ...validationErrors];
   const { items, modules } = groupByModule(drafts);
   for (const item of items) {

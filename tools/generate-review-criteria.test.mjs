@@ -125,3 +125,55 @@ test('断言 8：入库产物与底稿渲染逐字节一致', () => {
     assert.equal(readFileSync(join(ROOT, path), 'utf8'), content, `[断言 8] ${path} 与底稿不一致`);
   }
 });
+
+test('结构：中文日数与 expected.dayCount 不一致即红', () => {
+  const draft = validDraft();
+  draft.items[0].sourceValues = { dayCount: '三十日' };
+  assert.ok(errorsOf(draft).some((error) => error.includes('expected.dayCount')));
+});
+
+test('结构：消费方文件或符号不在场即红', () => {
+  const draft = validDraft();
+  draft.items[0].consumers = ['backend/deadline/src/no-such-file.ts#case.handle'];
+  assert.ok(errorsOf(draft).some((error) => error.includes('消费方文件不在场')));
+  const draft2 = validDraft();
+  draft2.items[0].consumers = ['backend/deadline/src/rules.ts#not-a-real-symbol'];
+  assert.ok(errorsOf(draft2).some((error) => error.includes('消费方符号不在文件内')));
+});
+
+test('结构：推导父项五日与工作日子项不一致即红', () => {
+  const draft = validDraft();
+  draft.items = [
+    {
+      id: 'CRIT-DL-004A',
+      article: '第一条',
+      interpretation: '直译',
+      expected: { period: '五日' },
+      sourceValues: { period: '五日' },
+      consumers: [],
+      status: 'active',
+      excerpt: '本条规定五个工作日。',
+    },
+    {
+      id: 'CRIT-DL-004B',
+      article: '第二条',
+      interpretation: '直译',
+      expected: { unit: '工作日' },
+      sourceValues: { unit: '工作日' },
+      consumers: [],
+      status: 'active',
+      excerpt: '本条规定五个工作日。',
+    },
+    {
+      id: 'CRIT-DL-004',
+      article: '第一条',
+      interpretation: '推导',
+      expected: { ruleKey: 'hearing.apply', dayCount: 3, dayBasis: 'working' },
+      derivation: ['CRIT-DL-004A', 'CRIT-DL-004B'],
+      consumers: ['backend/deadline/src/rules.ts#hearing.apply'],
+      status: 'active',
+      excerpt: '本条规定五个工作日。',
+    },
+  ];
+  assert.ok(errorsOf(draft).some((error) => error.includes('推导结果与父项五日/工作日不一致')));
+});
