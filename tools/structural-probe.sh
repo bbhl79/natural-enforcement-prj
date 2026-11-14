@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# 用途：红探针：逐条注入违例源码，断言目标规则判红并能自清理。
-# 结构测试红探针（评审必修 C6，补 #51 AC 缺的负例证据）。
+# 用途：结构规则探针：红探针注入违例须判红；正例探针注入合规源码须判绿。
+# 结构测试红探针（评审必修 C6，补 #51 AC 缺的负例证据）与 L1 criteria 正例探针。
 # 为什么需要：兜底闸只出示「全绿」，无法区分「规则通过」与「规则根本没在扫」——
 # 本 PR 的 frontend-boundary 就是这么一条恒绿死规则（case 里的 pg|@prisma/* 永远取不到）。
 # 本用例逐条写入违例源码 → 断言结构测试确实判红且命中该规则 → 还原源码。
@@ -534,6 +534,11 @@ write_probe_criteria-traceability() {
   inplace_append "backend/deadline/src/rules.ts" "    basis: '自由文字，没有判据编号',"
 }
 
+# 正例：追加一条合规 basis（指向在场判据），criteria-traceability 须判绿。
+write_probe_criteria-traceability-green() {
+  inplace_append "$ROOT/backend/deadline/src/rules.ts" "    basis: '判据:CRIT-DL-001',"
+}
+
 SPECS=(
   "frontend-boundary|frontend-boundary|前端直连库（@prisma/client）"
   "spatial-orm-chain|spatial-no-orm-mutation|空间模型 ORM 写（换行链式）"
@@ -604,6 +609,11 @@ GATE_RED_SPECS=(
   "module-public-entry|module-public-entry|import 形态类：跨模块深路径导入下整闸变红"
   "compose-literal-secret|runtime-manifest|清单契约类：compose 字面量密钥下整闸变红"
   "g1-model-allowlist|g1-model-allowlist|形态入口类：白名单外 model 下整闸变红"
+)
+
+# 正例探针：注入合规源码，断言单规则判绿且理由命中预期子句（不写入 SPECS，免破坏「一规则一负例」接线）。
+GATE_GREEN_SPECS=(
+  "criteria-traceability-green|criteria-traceability|期限规则追加合规 basis 时单规则判绿"
 )
 
 # $1 = 说明，$2 = 期望规则名，$3 = 整闸输出，$4 = 整闸退出码
@@ -768,6 +778,22 @@ check_wiring() {
 }
 
 # $1 = 说明，$2 = 期望规则名，$3 = 结构测试输出，$4 = 结构测试退出码
+assert_rule_green() {
+  local label="$1" rule="$2" out="$3" rc="$4"
+  if [ "$rc" -ne 0 ]; then
+    report_bad "$label：合规源码未判绿（结构测试退出码 = $rc，期望 0）→ 规则误杀或扫错"
+    echo "$out" | grep -E '^\[(OK|FAIL)\]' | sed 's/^/    /' >&2
+    return
+  fi
+  if ! grep -qE "^\[OK\][[:space:]]+${rule}([（(][^）)]*[）)])?[：:].*全部指向在场判据或业务决策" <<< "$out"; then
+    report_bad "$label：结构测试判绿了，但理由未命中「全部指向在场判据或业务决策」"
+    grep -E '^\[(OK|FAIL)\]' <<< "$out" | sed 's/^/    /' >&2
+    return
+  fi
+  report_ok "$label：$rule 对合规 basis 判绿且理由命中预期"
+}
+
+# $1 = 说明，$2 = 期望规则名，$3 = 结构测试输出，$4 = 结构测试退出码
 assert_rule_red() {
   local label="$1" rule="$2" out="$3" rc="$4"
   if [ "$rc" -ne 1 ]; then
@@ -775,7 +801,7 @@ assert_rule_red() {
     echo "$out" | grep -E '^\[(OK|FAIL)\]' | sed 's/^/    /' >&2
     return
   fi
-  if ! grep -qE "^\[FAIL\] ${rule}[：:]" <<< "$out"; then
+  if ! grep -qE "^\[FAIL\] ${rule}([（(][^）)]*[）)])?[：:]" <<< "$out"; then
     report_bad "$label：结构测试判红了，但没命中期望规则 $rule（实际判红项见下）"
     grep -E '^\[FAIL\]' <<< "$out" | sed 's/^/    /' >&2
     return
@@ -820,6 +846,15 @@ main() {
     out="$("$STRUCTURAL" 2>&1)"; got=$?
     cleanup
     assert_gate_red "$label" "$rule" "$out" "$got"
+  done
+
+  # 3b. 正例探针：合规 basis 须判绿（单规则跑，不记入 SPECS 接线表）。
+  for spec in "${GATE_GREEN_SPECS[@]}"; do
+    IFS='|' read -r id rule label <<< "$spec"
+    "write_probe_$id"
+    out="$("$STRUCTURAL" --rule "$rule" 2>&1)"; got=$?
+    cleanup
+    assert_rule_green "$label" "$rule" "$out" "$got"
   done
 
   # 4. 收尾基线：全部还原后必须回到全绿（自清理的最终证据；全量，不带过滤器）

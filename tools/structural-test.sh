@@ -1737,49 +1737,77 @@ BEGIN {
 }
 '
 
-# 期限规则的登记文件与 L1 判据产物。规则只扫登记表里的 basis 行。
-CRITERIA_TRACE_SOURCE="$ROOT/backend/deadline/src/rules.ts"
-CRITERIA_TRACE_PRODUCT="$ROOT/backend/deadline/src/criteria.generated.ts"
+# L1 判据可追溯：期限 rules 与 case 清单里的 basis 行须指向在场判据或业务决策。
+CRITERIA_TRACE_DEADLINE_SOURCE="$ROOT/backend/deadline/src/rules.ts"
+CRITERIA_TRACE_DEADLINE_PRODUCT="$ROOT/backend/deadline/src/criteria.generated.ts"
+CRITERIA_TRACE_CASE_SOURCE_1="$ROOT/backend/case/src/legal-review/rules.ts"
+CRITERIA_TRACE_CASE_SOURCE_2="$ROOT/backend/case/src/transfer/rules.ts"
+CRITERIA_TRACE_CASE_PRODUCT="$ROOT/backend/case/src/criteria.generated.ts"
 
-# 规则：期限规则的 basis 必须指向在场判据或业务决策（E8 可追溯性）。
-check_criteria-traceability() {
+# 扫描 basis 行并核对编号是否在产物内。
+# $1 = 源文件路径，$2 = 产物路径，$3 = 人类可读标签
+# $4 = all：每条 basis 行都必须带编号；numbered：只核对含判据/业务决策的行
+criteria_trace_scan_file() {
+  local source="$1" product="$2" label="$3" mode="${4:-all}"
   local line token refs fails=0 checked=0
-  if [ ! -f "$CRITERIA_TRACE_SOURCE" ]; then
-    note_ok "criteria-traceability：期限规则文件不在场，跳过"
-    return
+  if [ ! -f "$source" ]; then
+    note_ok "criteria-traceability：${label}不在场，跳过"
+    return 0
   fi
-  if [ ! -f "$CRITERIA_TRACE_PRODUCT" ]; then
-    note_fail "criteria-traceability：判据产物不在场（${CRITERIA_TRACE_PRODUCT#"$ROOT"/}），先运行 node tools/generate-review-criteria.mjs"
-    return
+  if [ ! -f "$product" ]; then
+    note_fail "criteria-traceability：判据产物不在场（${product#"$ROOT"/}），先运行 node tools/generate-review-criteria.mjs"
+    return 1
   fi
   while IFS= read -r line; do
+    if [ "$mode" = numbered ]; then
+      case "$line" in
+        *判据:*|*业务决策:*) ;;
+        *) continue ;;
+      esac
+    fi
     refs=0
     for token in $(printf '%s\n' "$line" | grep -oE '判据:CRIT-[A-Z0-9-]+' | sed 's/^判据://'); do
       refs=$((refs + 1))
-      if ! grep -qF "id: \"$token\"" "$CRITERIA_TRACE_PRODUCT"; then
-        note_fail "criteria-traceability：basis 指向的判据不在产物内：$token"
+      if ! grep -qF "id: \"$token\"" "$product"; then
+        note_fail "criteria-traceability（${label}）：basis 指向的判据不在产物内：$token"
         fails=$((fails + 1))
       fi
     done
     for token in $(printf '%s\n' "$line" | grep -oE '业务决策:DEC-[0-9]+' | sed 's/^业务决策://'); do
       refs=$((refs + 1))
-      if ! grep -qF "id: \"$token\"" "$CRITERIA_TRACE_PRODUCT"; then
-        note_fail "criteria-traceability：basis 指向的业务决策不在产物内：$token"
+      if ! grep -qF "id: \"$token\"" "$product"; then
+        note_fail "criteria-traceability（${label}）：basis 指向的业务决策不在产物内：$token"
         fails=$((fails + 1))
       fi
     done
     checked=$((checked + 1))
     if [ "$refs" -eq 0 ]; then
-      note_fail "criteria-traceability：basis 未指向判据或业务决策：$line"
+      note_fail "criteria-traceability（${label}）：basis 未指向判据或业务决策：$line"
       fails=$((fails + 1))
     fi
-  done < <(grep -E "^[[:space:]]+basis: '" "$CRITERIA_TRACE_SOURCE" || true)
+  done < <(grep -E "^[[:space:]]+basis: '" "$source" || true)
   if [ "$checked" -eq 0 ]; then
-    note_fail "criteria-traceability：期限规则文件里没有 basis 行，规则可能扫错文件"
-    return
+    if [ "$mode" = numbered ]; then
+      note_fail "criteria-traceability（${label}）：源文件里没有带编号的 basis 行"
+    else
+      note_fail "criteria-traceability（${label}）：源文件里没有 basis 行，规则可能扫错文件"
+    fi
+    return 1
   fi
   if [ "$fails" -eq 0 ]; then
-    note_ok "criteria-traceability：期限规则的 basis 全部指向在场判据或业务决策（$checked 条）"
+    note_ok "criteria-traceability：${label} 的 basis 全部指向在场判据或业务决策（$checked 条）"
+  fi
+  return "$fails"
+}
+
+# 规则：期限规则与 case 清单的 basis 必须指向在场判据或业务决策（E8 可追溯性）。
+check_criteria-traceability() {
+  local fails=0
+  criteria_trace_scan_file "$CRITERIA_TRACE_DEADLINE_SOURCE" "$CRITERIA_TRACE_DEADLINE_PRODUCT" "期限规则" all || fails=$((fails + 1))
+  criteria_trace_scan_file "$CRITERIA_TRACE_CASE_SOURCE_1" "$CRITERIA_TRACE_CASE_PRODUCT" "法制审核清单" numbered || fails=$((fails + 1))
+  criteria_trace_scan_file "$CRITERIA_TRACE_CASE_SOURCE_2" "$CRITERIA_TRACE_CASE_PRODUCT" "移送停表" numbered || fails=$((fails + 1))
+  if [ "$fails" -gt 0 ]; then
+    return
   fi
 }
 
