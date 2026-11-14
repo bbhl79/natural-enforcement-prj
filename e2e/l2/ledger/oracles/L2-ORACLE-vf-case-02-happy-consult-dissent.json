@@ -1,0 +1,29 @@
+{
+  "id": "L2-ORACLE-vf-case-02-happy-consult-dissent",
+  "caseId": "L2-CASE-vf-case-02-happy-consult-dissent",
+  "legalExit": "EXIT-REGISTERED",
+  "legalRefs": [
+    {
+      "kind": "PROC",
+      "id": "PROC-REGISTER",
+      "reason": "登记仍为起点"
+    },
+    {
+      "kind": "PROC",
+      "id": "PROC-CONSULT",
+      "reason": "会办异议后协调"
+    }
+  ],
+  "asserts": [
+    {
+      "id": "consult-outcome",
+      "kind": "state",
+      "path": "body.consultations.outcome",
+      "op": "eq",
+      "expect": "dissent-then-pass",
+      "provenance": "mocked"
+    }
+  ],
+  "halfRunPolicy": "gap-not-reached",
+  "notes": "happy；产品未具备记缺口。"
+}

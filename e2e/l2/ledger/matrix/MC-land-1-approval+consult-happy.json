@@ -1,0 +1,13 @@
+{
+  "id": "MC-land-1-approval+consult-happy",
+  "domain": "land",
+  "sourceClass": "1",
+  "approvalTier": "approval+consult",
+  "edgeClass": "happy",
+  "status": "covered",
+  "coveringCaseIds": [
+    "L2-CASE-vf-case-02-happy-consult-dissent"
+  ],
+  "mandatoryMin": true,
+  "mandatoryTarget": true
+}

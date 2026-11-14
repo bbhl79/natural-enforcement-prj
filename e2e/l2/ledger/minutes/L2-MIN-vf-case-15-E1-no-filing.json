@@ -1,0 +1,63 @@
+{
+  "id": "L2-MIN-vf-case-15-E1-no-filing",
+  "caseId": "L2-CASE-vf-case-15-E1-no-filing",
+  "seedId": "vf-case-15-survey-template",
+  "edgeClass": "E1",
+  "iteration": 1,
+  "roles": [
+    {
+      "role": "Generator",
+      "verdict": "pass",
+      "notes": "Phase2b-scale E1；MC-survey-3-approval-only-E1；harness=latent。"
+    },
+    {
+      "role": "Legality Challenger",
+      "verdict": "pass",
+      "notes": "出口/PROC 在白名单；非处罚成功冒充。"
+    },
+    {
+      "role": "Coverage Challenger",
+      "verdict": "pass",
+      "notes": "补 M3/M6 或 E1 法域点；不宣称 Min；不横铺 E2/E3。"
+    },
+    {
+      "role": "Process/Edge Challenger",
+      "verdict": "pass",
+      "notes": "相对同种子 happy 仅声明差分。"
+    },
+    {
+      "role": "Reverse Validator",
+      "verdict": "pass",
+      "notes": "见 reverseSection。"
+    },
+    {
+      "role": "Adversary",
+      "verdict": "pass",
+      "notes": "见 adversarySection。"
+    },
+    {
+      "role": "Synthesizer",
+      "verdict": "pass",
+      "notes": "共识 admit。"
+    }
+  ],
+  "openMustFix": [],
+  "reverseSection": {
+    "R1": "domain/source/party 指回种子。",
+    "R2": "去掉 Mock 出口结论后断言不得成立。",
+    "R3": "approvalTier=approval-only。",
+    "R4": "latent → capability-latent 缺口。"
+  },
+  "adversarySection": {
+    "A1": "缺 Mock→拒收。",
+    "A2": "EXIT-PENALTY 则 X2 应红。",
+    "A3": "错法域由 X1 红。",
+    "A4": "n/a 非 E3。",
+    "A5": "n/a 非 E2。",
+    "A6": "X2b 覆盖坏 refs。"
+  },
+  "g6LineCited": "§1.5：能力 latent/unwired → 缺口账，非生成拒收",
+  "synthesizer": "admit",
+  "diffOnly": true,
+  "inputFingerprint": "766c79a0d940fe16"
+}

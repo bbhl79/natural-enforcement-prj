@@ -1,0 +1,15 @@
+{
+  "id": "MC-land-1-approval-only-E1",
+  "domain": "land",
+  "sourceClass": "1",
+  "approvalTier": "approval-only",
+  "edgeClass": "E1",
+  "status": "covered",
+  "coveringCaseIds": [
+    "L2-CASE-vf-case-02-E1-terminate-unfounded",
+    "L2-CASE-vf-case-02-E1-no-filing",
+    "L2-CASE-vf-case-05-E1-no-filing"
+  ],
+  "mandatoryMin": true,
+  "mandatoryTarget": true
+}

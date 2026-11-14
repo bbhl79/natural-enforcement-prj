@@ -1,0 +1,59 @@
+{
+  "id": "L2-CASE-vf-case-15-E1-no-filing",
+  "seedId": "vf-case-15-survey-template",
+  "edgeClass": "E1",
+  "matrixCellId": "MC-survey-3-approval-only-E1",
+  "domain": "survey",
+  "sourceCode": "305",
+  "sourceClass": "3",
+  "approvalTier": "approval-only",
+  "lineage": {
+    "fields": [
+      {
+        "path": "domain",
+        "provenance": "derived",
+        "value": "survey",
+        "seedPath": "domain"
+      },
+      {
+        "path": "sourceCode",
+        "provenance": "derived",
+        "value": "305",
+        "seedPath": "sourceCode"
+      },
+      {
+        "path": "party.displayName",
+        "provenance": "derived",
+        "value": "vf-某测绘相关单位",
+        "seedPath": "party.displayName"
+      },
+      {
+        "path": "stages.filing.system.conclusion",
+        "provenance": "mocked",
+        "value": "no-case",
+        "mockBasis": {
+          "product": "E1 薄种子发散 Mock；survey 第二点",
+          "legal": {
+            "kind": "PROC",
+            "id": "PROC-FILING-DECLINE"
+          }
+        }
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "e1-exit",
+      "action": "filing-decline",
+      "expectReachable": false
+    }
+  ],
+  "oracleId": "L2-ORACLE-vf-case-15-E1-no-filing",
+  "g6Disposition": "admit-ok",
+  "harnessCapability": "latent",
+  "capabilityId": "filing-decline",
+  "panelMinutesId": "L2-MIN-vf-case-15-E1-no-filing",
+  "mockRatio": 0.25,
+  "notes": "Phase2b-scale E1；capability=filing-decline/latent；不横铺 E2/E3；不宣称 Min。",
+  "verifyScenarioRef": "vf-sc-latent-no-filing-survey"
+}

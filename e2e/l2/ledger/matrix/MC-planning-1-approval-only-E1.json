@@ -1,0 +1,13 @@
+{
+  "id": "MC-planning-1-approval-only-E1",
+  "domain": "planning",
+  "sourceClass": "1",
+  "approvalTier": "approval-only",
+  "edgeClass": "E1",
+  "status": "covered",
+  "coveringCaseIds": [
+    "L2-CASE-vf-case-04-E1-no-filing"
+  ],
+  "mandatoryMin": true,
+  "mandatoryTarget": true
+}

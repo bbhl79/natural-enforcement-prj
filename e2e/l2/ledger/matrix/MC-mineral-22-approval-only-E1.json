@@ -1,0 +1,13 @@
+{
+  "id": "MC-mineral-22-approval-only-E1",
+  "domain": "mineral",
+  "sourceClass": "22",
+  "approvalTier": "approval-only",
+  "edgeClass": "E1",
+  "status": "covered",
+  "coveringCaseIds": [
+    "L2-CASE-vf-case-09-E1-terminate-unfounded"
+  ],
+  "mandatoryMin": true,
+  "mandatoryTarget": true
+}

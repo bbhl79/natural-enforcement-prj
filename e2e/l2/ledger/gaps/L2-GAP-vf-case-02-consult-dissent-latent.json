@@ -1,0 +1,9 @@
+{
+  "id": "L2-GAP-vf-case-02-consult-dissent-latent",
+  "caseId": "L2-CASE-vf-case-02-happy-consult-dissent",
+  "edgeClass": "happy",
+  "matrixCellId": "MC-land-1-approval+consult-happy",
+  "gapKind": "capability-latent",
+  "productHint": "consult-dissent 仍为 latent；接入前不计能力覆盖分子",
+  "status": "open"
+}

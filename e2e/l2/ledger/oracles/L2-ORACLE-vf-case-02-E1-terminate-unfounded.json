@@ -1,0 +1,32 @@
+{
+  "id": "L2-ORACLE-vf-case-02-E1-terminate-unfounded",
+  "caseId": "L2-CASE-vf-case-02-E1-terminate-unfounded",
+  "legalExit": "EXIT-TERMINATE-UNFOUNDED",
+  "legalRefs": [
+    {
+      "kind": "PROC",
+      "id": "PROC-TERMINATE-UNFOUNDED",
+      "reason": "E1 合法出口 EXIT-TERMINATE-UNFOUNDED"
+    }
+  ],
+  "asserts": [
+    {
+      "id": "e1-exit",
+      "kind": "state",
+      "path": "body.investigation.system.conclusion",
+      "op": "eq",
+      "expect": "unfounded",
+      "provenance": "mocked"
+    },
+    {
+      "id": "no-penalty",
+      "kind": "negative",
+      "path": "body.penalty.success",
+      "op": "eq",
+      "expect": false,
+      "provenance": "mocked"
+    }
+  ],
+  "halfRunPolicy": "gap-not-reached",
+  "notes": "E1；产品未具备记缺口。"
+}

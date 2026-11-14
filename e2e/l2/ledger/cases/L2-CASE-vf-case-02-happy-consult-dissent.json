@@ -1,0 +1,63 @@
+{
+  "id": "L2-CASE-vf-case-02-happy-consult-dissent",
+  "seedId": "vf-case-02-occupy-without-approval",
+  "edgeClass": "happy",
+  "matrixCellId": "MC-land-1-approval+consult-happy",
+  "domain": "land",
+  "sourceCode": "16",
+  "sourceClass": "1",
+  "approvalTier": "approval+consult",
+  "lineage": {
+    "fields": [
+      {
+        "path": "domain",
+        "provenance": "derived",
+        "value": "land",
+        "seedPath": "domain"
+      },
+      {
+        "path": "sourceCode",
+        "provenance": "derived",
+        "value": "16",
+        "seedPath": "sourceCode"
+      },
+      {
+        "path": "party.displayName",
+        "provenance": "derived",
+        "value": "vf-当事人甲",
+        "seedPath": "party.displayName"
+      },
+      {
+        "path": "process.consultations.outcome",
+        "provenance": "mocked",
+        "value": "dissent-then-pass",
+        "mockBasis": {
+          "product": "variant vf-case-02-occupy-without-approval.consult-dissent-then-pass",
+          "legal": {
+            "kind": "PROC",
+            "id": "PROC-CONSULT"
+          }
+        }
+      }
+    ]
+  },
+  "steps": [
+    {
+      "id": "register",
+      "action": "register-clue",
+      "expectReachable": true
+    },
+    {
+      "id": "consult",
+      "action": "consult-dissent",
+      "expectReachable": false
+    }
+  ],
+  "oracleId": "L2-ORACLE-vf-case-02-happy-consult-dissent",
+  "g6Disposition": "admit-ok",
+  "harnessCapability": "latent",
+  "capabilityId": "consult-dissent",
+  "panelMinutesId": "L2-MIN-vf-case-02-happy-consult-dissent",
+  "mockRatio": 0.25,
+  "notes": "Phase2b-scale happy；capability=consult-dissent/latent；不横铺 E2/E3；不宣称 Min。"
+}
