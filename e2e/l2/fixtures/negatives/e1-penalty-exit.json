@@ -1,0 +1,7 @@
+{
+  "id": "L2-NEG-e1-penalty-exit",
+  "purpose": "X2b：E1 使用 EXIT-PENALTY-OR-CLOSE",
+  "edgeClass": "E1",
+  "legalExit": "EXIT-PENALTY-OR-CLOSE",
+  "expectLint": "fail"
+}

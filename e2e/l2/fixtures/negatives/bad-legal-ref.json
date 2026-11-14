@@ -1,0 +1,9 @@
+{
+  "id": "L2-NEG-bad-legal-ref",
+  "purpose": "X2b：legalRefs 指向不存在的 CRIT",
+  "oracleFragment": {
+    "legalExit": "EXIT-REGISTERED",
+    "legalRefs": [{ "kind": "CRIT", "id": "CRIT-DOES-NOT-EXIST-999" }]
+  },
+  "expectLint": "fail"
+}

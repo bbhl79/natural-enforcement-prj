@@ -1,0 +1,48 @@
+{
+  "constantName": "L2_X5_TARGET_CELLS",
+  "caseCountRange": [120, 200],
+  "maxDeferredShareInMandatory": 0.1,
+  "minMandatoryCoverRate": 0.9,
+  "rules": [
+    {
+      "id": "T1",
+      "description": "每法域 × happy/E1/E2/E3",
+      "minCount": 16,
+      "match": {
+        "edgeClassAny": ["happy", "E1", "E2", "E3"],
+        "groupBy": ["domain", "edgeClass"]
+      }
+    },
+    {
+      "id": "T2",
+      "description": "每法域 × 主动发现 × happy",
+      "minCount": 4,
+      "match": { "sourceClass": "1", "edgeClass": "happy", "groupBy": "domain" }
+    },
+    {
+      "id": "T3",
+      "description": "每法域至少一类非主动来源 × happy 或显式 deferred",
+      "minCount": 4,
+      "match": {
+        "sourceClassAny": ["3", "5", "22"],
+        "allowDeferred": true,
+        "groupBy": "domain"
+      }
+    },
+    {
+      "id": "T4",
+      "description": "舆情大类 21：deferred 交代或 ≥1 Mock 用例",
+      "minCount": 1,
+      "match": { "sourceClass": "21", "allowDeferred": true }
+    },
+    {
+      "id": "T5",
+      "description": "每法域 approvalTier≠none 至少 1",
+      "minCount": 4,
+      "match": {
+        "approvalTierAny": ["approval-only", "approval+consult", "with-rework"],
+        "groupBy": "domain"
+      }
+    }
+  ]
+}

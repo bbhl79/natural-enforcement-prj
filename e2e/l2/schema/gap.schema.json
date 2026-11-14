@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "e2e/l2/schema/gap.schema.json",
+  "title": "L2Gap",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "caseId",
+    "edgeClass",
+    "matrixCellId",
+    "gapKind",
+    "status"
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^L2-GAP-" },
+    "caseId": { "type": "string", "pattern": "^L2-CASE-" },
+    "edgeClass": {
+      "type": "string",
+      "enum": ["happy", "E1", "E2", "E3", "E4", "E5", "E6"]
+    },
+    "matrixCellId": { "type": "string", "pattern": "^MC-" },
+    "gapKind": {
+      "type": "string",
+      "enum": [
+        "assert-failed",
+        "not-reached",
+        "capability-unwired",
+        "capability-latent",
+        "capability-missing",
+        "schema-mismatch"
+      ]
+    },
+    "failedAssertIds": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "productHint": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["open", "ticketed", "closed"]
+    },
+    "ticketRef": { "type": "string" }
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "id": "L2-HARVEST-CAPABILITY",
+  "scannedAt": "2026-11-14T09:30:00Z",
+  "sourceRefs": [
+    "e2e/verify/harness/suites.ts",
+    "e2e/verify/fixtures/scenarios/",
+    "e2e/verify/fixtures/case-profiles/"
+  ],
+  "capabilities": [
+    {
+      "capabilityId": "register-clue",
+      "edgeClasses": ["happy"],
+      "profileEvidence": "canonical seeds via stages.register",
+      "scenarioRefs": [
+        "vf-sc-verify-loop-survey-register",
+        "vf-sc-verify-loop-land-register"
+      ],
+      "suiteStatus": "API_SUITE",
+      "driverActions": ["register-clue"],
+      "oracleMachine": true,
+      "verdict": "wired"
+    },
+    {
+      "capabilityId": "dispatch-verify",
+      "edgeClasses": ["happy"],
+      "profileEvidence": "partial",
+      "scenarioRefs": ["vf-sc-verify-loop-land-verify-dispatch"],
+      "suiteStatus": "API_SUITE",
+      "driverActions": ["register-clue", "dispatch-related"],
+      "oracleMachine": true,
+      "verdict": "wired"
+    },
+    {
+      "capabilityId": "filing-after-dispatch",
+      "edgeClasses": ["happy", "E1"],
+      "profileEvidence": "processEvents on case-01/02",
+      "scenarioRefs": ["vf-sc-filing-after-dispatch", "vf-sc-workbench-after-filing"],
+      "suiteStatus": "UNWIRED_SCENARIOS",
+      "driverActions": ["filing-*"],
+      "oracleMachine": false,
+      "verdict": "unwired"
+    },
+    {
+      "capabilityId": "filing-decline",
+      "edgeClasses": ["E1"],
+      "profileEvidence": "no-filing variants",
+      "scenarioRefs": ["vf-sc-latent-no-filing-survey"],
+      "suiteStatus": "latent",
+      "driverActions": [],
+      "oracleMachine": false,
+      "verdict": "latent"
+    },
+    {
+      "capabilityId": "suspend-resume",
+      "edgeClasses": ["E2"],
+      "profileEvidence": "suspend-resume variants on case-01/02",
+      "scenarioRefs": ["vf-sc-latent-suspend-resume-land"],
+      "suiteStatus": "latent",
+      "driverActions": ["noop"],
+      "oracleMachine": false,
+      "verdict": "latent"
+    },
+    {
+      "capabilityId": "reassign-handler",
+      "edgeClasses": ["E3"],
+      "profileEvidence": "none",
+      "scenarioRefs": [],
+      "suiteStatus": "missing",
+      "driverActions": [],
+      "oracleMachine": false,
+      "verdict": "missing"
+    },
+    {
+      "capabilityId": "collaborate-handoff",
+      "edgeClasses": ["happy"],
+      "profileEvidence": "consultations on deep seeds",
+      "scenarioRefs": ["vf-sc-collaborate-handoff"],
+      "suiteStatus": "UNWIRED_SCENARIOS",
+      "driverActions": ["collaborate-handoff"],
+      "oracleMachine": false,
+      "verdict": "unwired"
+    }
+  ],
+  "scaleGate": {
+    "description": "E2/E3 同 edgeClass ≥3 或跨 ≥2 法域前，capability verdict 须为 wired 或 partial",
+    "blockedEdgeClasses": {
+      "E2": "latent",
+      "E3": "missing"
+    }
+  }
+}

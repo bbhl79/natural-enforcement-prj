@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "e2e/l2/schema/panel-minutes.schema.json",
+  "title": "L2PanelMinutes",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "caseId",
+    "seedId",
+    "edgeClass",
+    "iteration",
+    "roles",
+    "openMustFix",
+    "synthesizer",
+    "diffOnly"
+  ],
+  "properties": {
+    "id": { "type": "string", "pattern": "^L2-MIN-" },
+    "caseId": { "type": "string", "pattern": "^L2-CASE-" },
+    "seedId": { "type": "string" },
+    "edgeClass": {
+      "type": "string",
+      "enum": ["happy", "E1", "E2", "E3", "E4", "E5", "E6"]
+    },
+    "iteration": { "type": "integer", "minimum": 1 },
+    "roles": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "required": ["role", "verdict", "notes"],
+        "additionalProperties": false,
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "Generator",
+              "Legality Challenger",
+              "Coverage Challenger",
+              "Process/Edge Challenger",
+              "Reverse Validator",
+              "Adversary",
+              "Synthesizer"
+            ]
+          },
+          "verdict": {
+            "type": "string",
+            "enum": ["pass", "must-fix", "risk", "abstain"]
+          },
+          "notes": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "openMustFix": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "reverseSection": {
+      "type": "object",
+      "required": ["R1", "R2", "R3", "R4"],
+      "additionalProperties": false,
+      "properties": {
+        "R1": { "type": "string", "minLength": 1 },
+        "R2": { "type": "string", "minLength": 1 },
+        "R3": { "type": "string", "minLength": 1 },
+        "R4": { "type": "string", "minLength": 1 }
+      }
+    },
+    "adversarySection": {
+      "type": "object",
+      "required": ["A1", "A2", "A3", "A4", "A5", "A6"],
+      "additionalProperties": false,
+      "properties": {
+        "A1": { "type": "string", "minLength": 1 },
+        "A2": { "type": "string", "minLength": 1 },
+        "A3": { "type": "string", "minLength": 1 },
+        "A4": { "type": "string", "minLength": 1 },
+        "A5": { "type": "string", "minLength": 1 },
+        "A6": { "type": "string", "minLength": 1 }
+      }
+    },
+    "g6LineCited": { "type": "string" },
+    "synthesizer": {
+      "type": "string",
+      "enum": ["admit", "reject", "panel-blocked"]
+    },
+    "diffOnly": { "type": "boolean" }
+  }
+}

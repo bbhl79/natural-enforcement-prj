@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "kinds": ["CRIT", "DEC", "PROC", "STATE", "UNSPEC"],
+  "proc": [
+    {
+      "id": "PROC-REGISTER",
+      "meaning": "线索登记入池",
+      "anchors": ["e2e/verify/fixtures/scenarios/runnable/vf-sc-verify-loop-survey-register.json"]
+    },
+    {
+      "id": "PROC-FILING-DECLINE",
+      "meaning": "核查不实或不符立案条件→不立案",
+      "anchors": ["e2e/verify/fixtures/case-profiles/vf-case-01-map-review-missing.no-filing.json"]
+    },
+    {
+      "id": "PROC-TERMINATE-UNFOUNDED",
+      "meaning": "调查后违法事实不成立→终止",
+      "anchors": ["e2e/verify/fixtures/case-profiles/vf-case-02-occupy-without-approval.terminate-unfounded.json"]
+    },
+    {
+      "id": "PROC-SUSPEND",
+      "meaning": "调查中止呈批",
+      "anchors": ["e2e/verify/fixtures/scenarios/latent/vf-sc-latent-suspend-resume-land.json"]
+    },
+    {
+      "id": "PROC-RESUME",
+      "meaning": "中止后恢复调查",
+      "anchors": ["e2e/verify/fixtures/scenarios/latent/vf-sc-latent-suspend-resume-land.json"]
+    },
+    {
+      "id": "PROC-REASSIGN",
+      "meaning": "中途更换承办人",
+      "anchors": []
+    },
+    {
+      "id": "PROC-CONSULT",
+      "meaning": "会办",
+      "anchors": ["e2e/verify/fixtures/case-profiles/schema.md"]
+    },
+    {
+      "id": "PROC-LEGAL-REVIEW",
+      "meaning": "法制审核（含驳回再过）",
+      "anchors": ["e2e/verify/fixtures/case-profiles/schema.md"]
+    },
+    {
+      "id": "PROC-HEARING",
+      "meaning": "听证",
+      "anchors": ["e2e/verify/fixtures/case-profiles/schema.md"]
+    }
+  ],
+  "state": [
+    {
+      "id": "EXIT-REGISTERED",
+      "meaning": "登记入池成功（切片中途态）",
+      "allowedEdgeClasses": ["happy"]
+    },
+    {
+      "id": "EXIT-NO-FILING",
+      "meaning": "不立案结案",
+      "allowedEdgeClasses": ["happy", "E1"]
+    },
+    {
+      "id": "EXIT-TERMINATE-UNFOUNDED",
+      "meaning": "终止（不成立）",
+      "allowedEdgeClasses": ["E1"]
+    },
+    {
+      "id": "EXIT-SUSPENDED",
+      "meaning": "处于中止态",
+      "allowedEdgeClasses": ["E2"]
+    },
+    {
+      "id": "EXIT-RESUMED-CONTINUE",
+      "meaning": "恢复后可续办",
+      "allowedEdgeClasses": ["E2"]
+    },
+    {
+      "id": "EXIT-HANDLER-REASSIGNED",
+      "meaning": "承办人已切换、旧人不可写",
+      "allowedEdgeClasses": ["E3"]
+    },
+    {
+      "id": "EXIT-PENALTY-OR-CLOSE",
+      "meaning": "处罚或结案类终局",
+      "allowedEdgeClasses": ["happy"]
+    },
+    {
+      "id": "EXIT-DEFERRED-CAPABILITY",
+      "meaning": "合法出口产品未实现→记缺口",
+      "allowedEdgeClasses": ["happy", "E1", "E2", "E3"]
+    }
+  ],
+  "unspecId": "unspecified-local",
+  "forbiddenE1Exits": ["EXIT-PENALTY-OR-CLOSE"]
+}
