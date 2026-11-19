@@ -15,9 +15,9 @@ describe('haversineMeters', () => {
     expect(d).toBeLessThan(112_500)
   })
 
-  it('天安门→中关村 ≈ 9.7km（互证基准值，±10% 容差）', () => {
+  it('天安门→中关村 ≈ 10.9km（互证基准值，±5% 容差）', () => {
     const d = haversineMeters({ lat: 39.9087, lng: 116.3975 }, { lat: 39.9847, lng: 116.3159 })
-    expect(d).toBeGreaterThan(8_700)
-    expect(d).toBeLessThan(10_700)
+    expect(d).toBeGreaterThan(10_400)
+    expect(d).toBeLessThan(11_500)
   })
 })

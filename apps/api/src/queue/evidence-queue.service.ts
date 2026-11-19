@@ -1,9 +1,10 @@
 import { Injectable, type OnModuleDestroy } from '@nestjs/common'
 import { createHash } from 'node:crypto'
 import { Queue, Worker, type Job } from 'bullmq'
-import IORedis from 'ioredis'
-import type { PrismaService } from '../prisma/prisma.service.js'
-import type { StorageService } from '../storage/storage.service.js'
+import { Redis } from 'ioredis'
+// 注意：构造器注入的类必须值导入（import type 会擦除 → design:paramtypes 退化成 Function，DI 报错）
+import { PrismaService } from '../prisma/prisma.service.js'
+import { StorageService } from '../storage/storage.service.js'
 import { parseJob, type ProcessEvidenceJob } from './payload.js'
 
 export const EVIDENCE_QUEUE = 'evidence-processing'
@@ -14,7 +15,7 @@ export const EVIDENCE_QUEUE = 'evidence-processing'
  */
 @Injectable()
 export class EvidenceQueueService implements OnModuleDestroy {
-  private readonly connection: IORedis
+  private readonly connection: Redis
   private readonly queue: Queue
   private readonly worker: Worker
 
@@ -22,7 +23,7 @@ export class EvidenceQueueService implements OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
   ) {
-    this.connection = new IORedis(process.env.REDIS_URL ?? 'redis://localhost:6379', {
+    this.connection = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', {
       maxRetriesPerRequest: null,
     })
     this.queue = new Queue(EVIDENCE_QUEUE, { connection: this.connection })

@@ -5,15 +5,17 @@
 
 generator client {
   provider = "prisma-client"
-  output   = "./src/generated/client"
+  // Prisma 7：output 相对 schema 文件解析（不是包根）——落到 src/ 需写 ../src/...
+  output   = "../src/generated/client"
   runtime  = "nodejs"
   moduleFormat = "esm"
   generatedFileExtension = "ts"
 }
 
+// Prisma 7：schema 内 url 已禁用——连接串在 prisma.config.ts（migrate 用）
+// 与 PrismaService 的 adapter（client 用）；见 https://pris.ly/d/config-datasource
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
 }
 
 model EnforcementPoint {

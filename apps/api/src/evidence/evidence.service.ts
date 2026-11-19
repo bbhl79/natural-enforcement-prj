@@ -2,9 +2,9 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { EvidenceRecordDto } from '@ne/contracts'
-import type { PrismaService } from '../prisma/prisma.service.js'
-import type { EvidenceQueueService } from '../queue/evidence-queue.service.js'
-import type { StorageService } from '../storage/storage.service.js'
+import { PrismaService } from '../prisma/prisma.service.js'
+import { EvidenceQueueService } from '../queue/evidence-queue.service.js'
+import { StorageService } from '../storage/storage.service.js'
 import { buildObjectKey } from '../storage/keys.js'
 
 // 上传头契约（内部装配后校验；正式传输契约在 @ne/contracts/evidence）
@@ -52,14 +52,18 @@ export class EvidenceService {
     return this.toDto(record)
   }
 
-  async getRecord(id: string): Promise<EvidenceRecordDto> {
+  private async fetchRaw(id: string) {
     const record = await this.prisma.evidenceRecord.findUnique({ where: { id } })
     if (!record) throw new NotFoundException(`证据记录不存在：${id}`)
-    return this.toDto(record)
+    return record
+  }
+
+  async getRecord(id: string): Promise<EvidenceRecordDto> {
+    return this.toDto(await this.fetchRaw(id))
   }
 
   async getContent(id: string): Promise<{ bytes: Uint8Array; contentType: string }> {
-    const record = await this.getRecord(id)
+    const record = await this.fetchRaw(id)
     return {
       bytes: await this.storage.get(record.objectKey),
       contentType: record.contentType,
@@ -67,7 +71,7 @@ export class EvidenceService {
   }
 
   async getPresignedUrl(id: string, ttlSeconds = 300): Promise<{ url: string }> {
-    const record = await this.getRecord(id)
+    const record = await this.fetchRaw(id)
     return { url: await this.storage.presignGet(record.objectKey, ttlSeconds) }
   }
 

@@ -1,6 +1,7 @@
 import { Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common'
 import { PrismaPg } from '@prisma/adapter-pg'
-import { PrismaClient } from '../generated/client.js'
+// 生成入口是目录内文件 client.ts（nodenext 必须带全路径 + .js）
+import { PrismaClient } from '../generated/client/client.js'
 
 /**
  * Prisma 7 Rust-free 架构：prisma-client generator（生成到 src/generated/client）

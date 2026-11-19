@@ -2,9 +2,23 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { NearbyResultSchema } from '@ne/contracts'
-import { setupApp, type TestContext } from './helpers/app.js'
+import { createApp } from '../src/bootstrap.js'
 
-const ctx: TestContext = setupApp()
+// 每文件独立 boot（vitest forks 隔离），随机端口；复用 setup 逻辑见同目录说明
+// （vitest 5 + helpers 子目录的扩展名解析问题 → 直接内联）
+import { afterAll, beforeAll } from 'vitest'
+import type { INestApplication } from '@nestjs/common'
+
+const ctx: { app?: INestApplication; baseUrl?: string } = {}
+beforeAll(async () => {
+  ctx.app = await createApp({ logger: false })
+  await ctx.app!.listen(0)
+  ctx.baseUrl = await ctx.app!.getUrl()
+})
+afterAll(async () => {
+  await ctx.app!.close()
+})
+
 const runId = randomUUID().slice(0, 8)
 
 async function jfetch(path: string, init?: RequestInit): Promise<Response> {
@@ -31,7 +45,7 @@ describe('执法点位 HTTP 端点（契约校验走 zod 管道）', () => {
     const { id } = (await created.json()) as { id: number }
     expect(id).toBeGreaterThan(0)
 
-    const nearby = await jfetch(`/enforcement-points/nearby?lat=39.9151&lng=116.4041&radiusM=500`)
+    const nearby = await jfetch('/enforcement-points/nearby?lat=39.9151&lng=116.4041&radiusM=500')
     expect(nearby.status).toBe(200)
     const parsed = NearbyResultSchema.parse(await nearby.json())
     const hit = parsed.points.find((p) => p.name === name)
@@ -60,11 +74,13 @@ describe('证据全链路往返（rustfs 上传→BullMQ 处理→下载/presign
     const payload = new Uint8Array(randomBytes(1_000_000))
     const sha = createHash('sha256').update(payload).digest('hex')
 
+    // 注：HTTP header 不接受非 Latin-1 字符（undici 直接抛 TypeError）——
+    // unicode 文件名的传输契约（RFC 8187 / multipart / base64 头）留 SPEC 决策，见 NOTES.md
     const uploaded = await jfetch('/evidence', {
       method: 'POST',
       headers: {
         'content-type': 'application/octet-stream',
-        'x-original-name': `现场证据-${runId}.bin`,
+        'x-original-name': `evidence-${runId}.bin`,
       },
       body: payload,
     })
@@ -78,7 +94,7 @@ describe('证据全链路往返（rustfs 上传→BullMQ 处理→下载/presign
     for (;;) {
       const res = await jfetch(`/evidence/${record0.id}`)
       expect(res.status).toBe(200)
-      record = (await res.json()) as typeof record
+      record = (await res.json()) as NonNullable<typeof record>
       if (record.status !== 'pending') break
       if (Date.now() > deadline) throw new Error('队列处理超时（20s）')
       await new Promise((r) => setTimeout(r, 200))

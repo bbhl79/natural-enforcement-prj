@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { buildObjectKey } from './keys.js'
 
 describe('buildObjectKey', () => {
-  it('uuid 分层 + 文件名清洗', () => {
+  it('uuid 分层 + 文件名清洗（每个非安全字符替换为单个 _）', () => {
     expect(buildObjectKey({ uuid: 'u1', originalName: '现场照片 01.jpg' })).toBe(
-      'evidence/u1/________01.jpg',
+      'evidence/u1/_____01.jpg', // 现场(2)+照片(2)+空格(1) = 5 个非安全字符
     )
   })
 

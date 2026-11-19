@@ -1,6 +1,7 @@
 import 'reflect-metadata'
 import express from 'express'
-import { type INestApplication, Logger, NestFactory } from '@nestjs/core'
+import { Logger, type INestApplication } from '@nestjs/common'
+import { NestFactory } from '@nestjs/core'
 import { AppModule } from './app.module.js'
 
 /** 统一装配：main / 集成测试 / OpenAPI 派生共用（保证测试与运行时同构） */

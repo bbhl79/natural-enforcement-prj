@@ -80,6 +80,14 @@ in_tools() { # 在工具容器内执行（每次临时容器，退出即回收�
   compose run --rm tools "$@"
 }
 
+# 无 bind 架构：代码烘焙进镜像。凡消费当前源码的命令（up/test/lint/typecheck/migrate*/seed）
+# 先增量重建 workspace 镜像（层缓存命中时秒级），保证容器内即最新代码。
+ensure_fresh_workspace() {
+  ev step.started target="workspace image refresh"
+  docker build -q -t "$WS_IMAGE" -f "$DEVENV_DIR/workspace.Dockerfile" "$REPO_ROOT" >&2
+  ev step.completed target="workspace image refresh"
+}
+
 acquire_lock() { # $1=锁名 $2=超时秒；独占 flock（跨 worktree 生效）
   mkdir -p "$LOCK_DIR"
   exec 9>>"$LOCK_DIR/$1.lock"
@@ -91,8 +99,11 @@ acquire_lock() { # $1=锁名 $2=超时秒；独占 flock（跨 worktree 生效�
 svc_running() { docker ps --filter "label=com.docker.compose.project=$PROJECT_NAME" \
     --filter "label=com.docker.compose.service=$1" --format '{{.Names}}' | grep -q .; }
 svc_healthy() {
-  [[ "$(docker ps -a --filter "label=com.docker.compose.project=$PROJECT_NAME" \
-      --filter "label=com.docker.compose.service=$1" --format '{{.Status}}')" == *"(healthy)"* ]]
+  # podman 兼容层的 docker ps Status 不带 "(healthy)" 后缀——以 inspect 的 Health.Status 为准
+  local c
+  c="$(docker ps -a --filter "label=com.docker.compose.project=$PROJECT_NAME" \
+      --filter "label=com.docker.compose.service=$1" --format '{{.Names}}' | head -1)"
+  [[ -n "$c" ]] && [[ "$(docker inspect "$c" --format '{{.State.Health.Status}}' 2>/dev/null)" == "healthy" ]]
 }
 
 require_services() { # 确保基础设施在跑；$@=服务名
@@ -161,6 +172,7 @@ cmd_build() {
 }
 
 cmd_up() {
+  ensure_fresh_workspace
   compose up -d db redis rustfs api
   local s
   for s in db redis rustfs api; do
@@ -185,12 +197,13 @@ cmd_restart() {
 }
 
 cmd_ps() {
+  local -a ps_args=()
+  [[ -n "${ALL:-}" ]] && ps_args+=(-a)
+  ps_args+=(--filter "label=com.docker.compose.project=$PROJECT_NAME")
   if (( JSON )); then
-    docker ps "${ALL:+-a}" --filter "label=com.docker.compose.project=$PROJECT_NAME" \
-      --format '{{json .}}'
+    docker ps "${ps_args[@]}" --format '{{json .}}'
   else
-    docker ps "${ALL:+-a}" --filter "label=com.docker.compose.project=$PROJECT_NAME" \
-      --format 'table {{.Names}}\t{{.Service}}\t{{.Status}}'
+    docker ps "${ps_args[@]}" --format 'table {{.Names}}\t{{.Status}}'
   fi
 }
 
@@ -229,20 +242,24 @@ run_task() { # $@ = 容器内命令；任务失败 → 退出码 4
 }
 
 cmd_test() {
+  ensure_fresh_workspace
   require_services db redis rustfs
   if (( $# )); then
     run_task pnpm --filter @ne/api exec vitest run "$@"
   else
-    run_task pnpm exec turbo run test
+    # 运行期不走 turbo：podman-uid 场景下 turbo 缓存/日志写入 EACCES（坑记录 NOTES.md）；
+    # turbo 只用于镜像构建期（那边环境可用）。pnpm -r --no-bail = 全收集后汇总失败。
+    run_task pnpm -r --no-bail run test
   fi
   final ok 0 scope=all
 }
-cmd_test_unit() { run_task pnpm exec turbo run test:unit; final ok 0 scope=unit; }
-cmd_lint()      { run_task pnpm -w exec eslint .; final ok 0; }
-cmd_typecheck() { run_task pnpm exec turbo run typecheck; final ok 0; }
+cmd_test_unit() { ensure_fresh_workspace; run_task pnpm -r run test:unit; final ok 0 scope=unit; }
+cmd_lint()      { ensure_fresh_workspace; run_task pnpm -w exec eslint .; final ok 0; }
+cmd_typecheck() { ensure_fresh_workspace; run_task pnpm -r run typecheck; final ok 0; }
 
 cmd_migrate() {
   acquire_lock migrate 10
+  ensure_fresh_workspace
   require_services db
   run_task pnpm --filter @ne/api exec prisma migrate deploy
   final ok 0 mode=deploy
@@ -258,13 +275,29 @@ cmd_migrate_create() {
   done
   [[ -n "$name" ]] || die 2 "缺 --name"
   acquire_lock migrate 10
+  ensure_fresh_workspace
   require_services db
-  run_task pnpm --filter @ne/api exec prisma migrate dev --create-only --name "$name"
-  note "空迁移已生成——编辑 prisma/migrations/*_$name/migration.sql（PostGIS 手写段用 -- AddPostGIS: 注释头）后执行 devenv migrate"
-  final ok 0 name="$name"
+  # 无 bind 架构：迁移文件生成在容器内——用留名容器 + docker cp 导出（--rm 会丢文件）；
+  # 镜像内容物为 root 属主（buildah 以 root 构建），故以 root 身份运行写入
+  local cname="ne-migrate-create"
+  docker rm -f "$cname" >/dev/null 2>&1 || true
+  compose run --name "$cname" -u 0:0 tools \
+    pnpm --filter @ne/api exec prisma migrate dev --create-only --name "$name" >&2
+  # 容器已退出：docker cp 支持停止态容器——整目录导出后合并（镜像内原本无 migrations 目录）
+  mkdir -p "$REPO_ROOT/apps/api/prisma/migrations"
+  rm -rf "$REPO_ROOT/apps/api/prisma/.migrations-imp"
+  docker cp "$cname:/workspace/apps/api/prisma/migrations" "$REPO_ROOT/apps/api/prisma/.migrations-imp" >&2
+  mv "$REPO_ROOT/apps/api/prisma/.migrations-imp"/* "$REPO_ROOT/apps/api/prisma/migrations/" >&2
+  rmdir "$REPO_ROOT/apps/api/prisma/.migrations-imp" 2>/dev/null || true
+  docker rm "$cname" >/dev/null
+  local newest
+  newest="$(ls -1 "$REPO_ROOT/apps/api/prisma/migrations" | tail -1)"
+  note "空迁移已导出到 apps/api/prisma/migrations/$newest——编辑 migration.sql（PostGIS 手写段用 -- AddPostGIS: 注释头）后执行 devenv migrate"
+  final ok 0 name="$name" dir="$newest"
 }
 
 cmd_seed() {
+  ensure_fresh_workspace
   require_services db
   run_task pnpm --filter @ne/api run seed
   final ok 0
@@ -338,18 +371,27 @@ cmd_status() {
 
 cmd_images() {
   if [[ "${1:-}" == "--verify" ]]; then
-    # 校验运行中容器的镜像 digest 与锁文件一致
+    # 校验运行中容器镜像 digest 与锁一致：podman 的 ps 只报 tag——经容器→image RepoDigests 取 manifest sha
     set -a; . "$IMAGES_LOCK"; set +a
-    local s var img ref got rc=0
+    local s var ref cid img digest lock_sha run_sha rc=0
     for s in db redis rustfs; do
       var="$(echo "$s" | tr 'a-z' 'A-Z')_IMAGE"
       ref="${!var}"
-      got="$(docker ps --filter "label=com.docker.compose.project=$PROJECT_NAME" \
-        --filter "label=com.docker.compose.service=$s" --format '{{.Image}}')"
-      if [[ "$got" == "$ref" ]]; then
-        (( JSON )) && printf '{"service":"%s","result":"ok","locked":"%s"}\n' "$s" "$ref" || note "$s: ok ($ref)"
+      lock_sha="${ref##*@}"
+      cid="$(docker ps --filter "label=com.docker.compose.project=$PROJECT_NAME" \
+        --filter "label=com.docker.compose.service=$s" --format '{{.ID}}' | head -1)"
+      if [[ -z "$cid" ]]; then
+        (( JSON )) && printf '{"service":"%s","result":"not-running"}\n' "$s" || warn "$s: 未运行"
+        rc=1
+        continue
+      fi
+      img="$(docker inspect "$cid" --format '{{.Image}}')"
+      digest="$(docker image inspect "$img" --format '{{index .RepoDigests 0}}')"
+      run_sha="${digest##*@}"
+      if [[ "$run_sha" == "$lock_sha" ]]; then
+        (( JSON )) && printf '{"service":"%s","result":"ok","digest":"%s"}\n' "$s" "$run_sha" || note "$s: ok ($run_sha)"
       else
-        (( JSON )) && printf '{"service":"%s","result":"drift","locked":"%s","running":"%s"}\n' "$s" "$ref" "$got" || warn "$s: 漂移（锁=$ref，运行=$got）。修复：devenv down && devenv up"
+        (( JSON )) && printf '{"service":"%s","result":"drift","locked":"%s","running":"%s"}\n' "$s" "$lock_sha" "$run_sha" || warn "$s: 漂移（锁=$lock_sha，运行=$run_sha）。修复：devenv down && devenv up"
         rc=1
       fi
     done

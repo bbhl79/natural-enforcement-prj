@@ -1,8 +1,22 @@
-# PROTOTYPE（#11）— pnpm workspaces：包发现 + catalogs（第三方版本唯一事实源）+ tasks
-# tasks 与 turbo.json 语义对齐（双声明策略：pnpm pipeline 转正后可平替 turbo，见调研报告 4.4-4）
+# PROTOTYPE（#11）— pnpm workspaces：包发现 + catalogs（第三方版本唯一事实源）
+# 注：不声明 pnpm tasks（运行期命令走 pnpm -r 直跑、构建期走 turbo——见 devenv/NOTES.md）
 packages:
   - apps/*
   - packages/*
+
+# pnpm 12 供应链防护·新包冷却期：只认此处的 camelCase 键（npmrc 无效，实测 #11）。
+# 默认策略拦截"发布过新"的包（ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION）；原型期=0。
+# SPEC 决策点：确定性解析优先 vs 新包冷却期。
+minimumReleaseAge: 0
+
+# pnpm 12 供应链防护·构建脚本审批：键是 allowBuilds 且**必须带版本号**（裸包名不匹配，
+# 实测 #11；onlyBuiltDependencies/ignoredBuiltDependencies 在 12.21 不生效）。
+# 版本变更 → 此处需同步显式批准 = 强制人工/agent 审查点（AI-native 确定性友好）。
+allowBuilds:
+  prisma@7.10.1: true
+  "@prisma/engines@7.10.1": true
+  msgpackr-extract@3.0.7: true    # bullmq→msgpackr 的原生解压预构建
+  "@scarf/scarf@1.4.0": false    # prisma 的遥测上报器：显式拒绝执行
 
 catalog:
   # 语言/类型（TS 锁 6.0.3：latest 已是 7.0.2 原生编译器，按版本矩阵决策暂不采用）
@@ -32,13 +46,3 @@ catalog:
   eslint: "^10.15.0"
   "@eslint/js": "^10.0.1"
   typescript-eslint: "^8.73.0"
-
-tasks:
-  build:
-    dependsOn: ["^build"]
-  typecheck:
-    dependsOn: ["^build"]
-  test:
-    dependsOn: ["^build"]
-  "test:unit":
-    dependsOn: ["^build"]

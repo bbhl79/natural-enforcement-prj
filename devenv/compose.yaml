@@ -9,11 +9,14 @@ name: natural-enforcement
 x-app-base: &app-base
   image: ${WORKSPACE_IMAGE:?devenv 需注入 WORKSPACE_IMAGE（devenv build 产出）}
   working_dir: /workspace
-  user: "${DOCKER_UID:-1000}:${DOCKER_GID:-1000}"
+  # 以镜像默认 root 运行：镜像内容物为 buildah root 属主，uid 化容器对 dist/日志等
+  # 全线 EACCES（实测 #11）；dev 单机场景无安全边界损失，卷内容不回宿主。
   environment: &app-env
     HOME: /tmp
     NODE_ENV: development
     TURBO_TELEMETRY_DISABLED: "1"
+    # turbo 默认日志目录在镜像 root 属主层内不可写（uid 化容器）——指到容器 tmpfs
+    TURBO_LOG_DIR: /tmp/turbo-logs
     DATABASE_URL: postgresql://ne:ne-dev-only@db:5432/natural_enforcement_dev
     REDIS_URL: redis://redis:6379
     S3_ENDPOINT: http://rustfs:9000
@@ -32,7 +35,8 @@ services:
       POSTGRES_PASSWORD: ne-dev-only
       POSTGRES_DB: natural_enforcement_dev
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # PG18+ 官方约定：挂父目录 /var/lib/postgresql（data 落版本子目录，pg_upgrade 免挂载点边界问题）
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ne -d natural_enforcement_dev"]
       interval: 2s
