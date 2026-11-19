@@ -1,0 +1,44 @@
+# PROTOTYPE（#11）— pnpm workspaces：包发现 + catalogs（第三方版本唯一事实源）+ tasks
+# tasks 与 turbo.json 语义对齐（双声明策略：pnpm pipeline 转正后可平替 turbo，见调研报告 4.4-4）
+packages:
+  - apps/*
+  - packages/*
+
+catalog:
+  # 语言/类型（TS 锁 6.0.3：latest 已是 7.0.2 原生编译器，按版本矩阵决策暂不采用）
+  typescript: "6.0.3"
+  zod: "4.6.7"
+  "@types/node": "^26.6.6"
+  # NestJS 12（ESM-only，peer typescript@^6）
+  "@nestjs/common": "^12.5.1"
+  "@nestjs/core": "^12.5.1"
+  "@nestjs/platform-express": "^12.5.1"
+  "@nestjs/testing": "^12.5.1"
+  "@nestjs/swagger": "^12.1.2"
+  reflect-metadata: "^0.2.2"
+  rxjs: "^7.8.2"
+  # Prisma 7（Rust-free：prisma-client generator + adapter-pg）
+  # 注意：prisma CLI 的 npm latest 已是 8.0.0-rc.34（RC，不用）；三件套一律显式锁 7.10.1
+  prisma: "7.10.1"
+  "@prisma/client": "7.10.1"
+  "@prisma/adapter-pg": "7.10.1"
+  # 队列 / 对象存储
+  bullmq: "^6.7.8"
+  ioredis: "^6.0.0"
+  "@aws-sdk/client-s3": "^3.1172.0"
+  "@aws-sdk/s3-request-presigner": "^3.1172.0"
+  # 测试 / lint（typescript-eslint 8.73 peer 接受 eslint ^10；eslint 10.15 为 latest）
+  vitest: "^5.1.1"
+  eslint: "^10.15.0"
+  "@eslint/js": "^10.0.1"
+  typescript-eslint: "^8.73.0"
+
+tasks:
+  build:
+    dependsOn: ["^build"]
+  typecheck:
+    dependsOn: ["^build"]
+  test:
+    dependsOn: ["^build"]
+  "test:unit":
+    dependsOn: ["^build"]

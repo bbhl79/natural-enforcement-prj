@@ -1,0 +1,9 @@
+# PROTOTYPE（#11）— 镜像锁：完整 tag + digest 双层锁定的唯一事实源。
+# devenv 自动 source 本文件注入 compose；升级只改这里，一律走 PR + 验证。
+# digest 解析命令：docker buildx imagetools inspect <ref> （取 Manifest List 顶层 Digest）
+# 格式：KEY=repo:tag@sha256:...
+
+NODE_IMAGE=node:26.13.1-slim@sha256:PENDING_DIGEST_RESOLVE
+DB_IMAGE=postgis/postgis:18-3.6@sha256:PENDING_DIGEST_RESOLVE
+REDIS_IMAGE=redis:8.2.11-alpine@sha256:PENDING_DIGEST_RESOLVE
+RUSTFS_IMAGE=rustfs/rustfs:1.0.6@sha256:PENDING_DIGEST_RESOLVE

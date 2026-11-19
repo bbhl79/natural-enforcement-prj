@@ -1,0 +1,6 @@
+{
+  "name": "@ne/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "description": "PROTOTYPE #11 占位：e2e 双轨原型属 Prototype-e2e双轨与CI原型（#13），本包暂无脚本不参与 turbo 任务"
+}

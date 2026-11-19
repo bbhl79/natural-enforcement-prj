@@ -1,0 +1,103 @@
+# PROTOTYPE（#11）— compose 拓扑：基础设施 + api + tools。
+# 人类/agent 禁止直接操作本文件对应的 compose 命令（地图硬不变量：devenv 唯一入口）。
+# 镜像引用一律经 ${XXX_IMAGE} 变量注入，事实源：devenv/images.lock（tag+digest 双层锁）。
+# 不发布任何宿主端口：所有访问走 compose 内网（多 agent 并发下天然零端口冲突）。
+name: natural-enforcement
+
+x-app-base: &app-base
+  build:
+    context: ..
+    dockerfile: devenv/tools.Dockerfile
+  image: natural-enforcement/tools:prototype1
+  working_dir: /workspace
+  user: "${DOCKER_UID:-1000}:${DOCKER_GID:-1000}"
+  environment: &app-env
+    HOME: /tmp
+    NODE_ENV: development
+    TURBO_TELEMETRY_DISABLED: "1"
+    DATABASE_URL: postgresql://ne:ne-dev-only@db:5432/natural_enforcement_dev
+    REDIS_URL: redis://redis:6379
+    S3_ENDPOINT: http://rustfs:9000
+    S3_REGION: us-east-1
+    S3_ACCESS_KEY: rustfsadmin
+    S3_SECRET_KEY: rustfs-dev-secret
+    S3_BUCKET: ne-dev-evidence
+  volumes:
+    - ..:/workspace
+    - pnpm-store:/pnpm/store
+
+services:
+  db:
+    image: ${DB_IMAGE:?images.lock 未加载（devenv 会自动 source）}
+    environment:
+      POSTGRES_USER: ne
+      POSTGRES_PASSWORD: ne-dev-only
+      POSTGRES_DB: natural_enforcement_dev
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ne -d natural_enforcement_dev"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
+    restart: unless-stopped
+
+  redis:
+    image: ${REDIS_IMAGE:?}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  rustfs:
+    image: ${RUSTFS_IMAGE:?}
+    # 数据目录以位置参数传入（官方约定）；named volume 规避非 root UID 10001 的 chown 问题
+    command: ["/data"]
+    environment:
+      RUSTFS_ACCESS_KEY: rustfsadmin
+      RUSTFS_SECRET_KEY: rustfs-dev-secret
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+      RUSTFS_CONSOLE_ENABLE: "true"
+    volumes:
+      - rustfs-data:/data
+    mem_limit: 1g   # 单节点内存增长 issue #9145 的缓解（调研报告 R2）
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
+  api:
+    <<: *app-base
+    command: ["pnpm", "--filter", "@ne/api", "start"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rustfs:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+
+  # 工具容器：仅经 `docker compose run --rm` 被 devenv 驱动（build/test/lint/migrate/seed/exec/shell）
+  tools:
+    <<: *app-base
+    profiles: ["tools"]
+    command: ["true"]
+
+volumes:
+  pgdata:
+  rustfs-data:
+  pnpm-store:

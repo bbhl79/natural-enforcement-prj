@@ -1,0 +1,9 @@
+{
+  "extends": "@ne/tsconfig/node.json",
+  "compilerOptions": {
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "noEmit": true
+  },
+  "include": ["src", "test", "prisma.config.ts"]
+}
