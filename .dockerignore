@@ -1,0 +1,12 @@
+.git
+node_modules
+**/node_modules
+**/dist
+**/coverage
+.turbo
+**/.turbo
+apps/api/src/generated
+docs
+.artifacts
+devenv
+!.dockerignore

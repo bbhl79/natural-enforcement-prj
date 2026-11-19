@@ -1,14 +1,13 @@
 # PROTOTYPE（#11）— compose 拓扑：基础设施 + api + tools。
 # 人类/agent 禁止直接操作本文件对应的 compose 命令（地图硬不变量：devenv 唯一入口）。
 # 镜像引用一律经 ${XXX_IMAGE} 变量注入，事实源：devenv/images.lock（tag+digest 双层锁）。
+# 运行时是 podman machine（bind mount 不可用）→ workspace 代码烘焙进镜像（devenv/workspace.Dockerfile），
+# compose 只挂命名卷（turbo 缓存），无任何宿主路径依赖。
 # 不发布任何宿主端口：所有访问走 compose 内网（多 agent 并发下天然零端口冲突）。
 name: natural-enforcement
 
 x-app-base: &app-base
-  build:
-    context: ..
-    dockerfile: devenv/tools.Dockerfile
-  image: natural-enforcement/tools:prototype1
+  image: ${WORKSPACE_IMAGE:?devenv 需注入 WORKSPACE_IMAGE（devenv build 产出）}
   working_dir: /workspace
   user: "${DOCKER_UID:-1000}:${DOCKER_GID:-1000}"
   environment: &app-env
@@ -23,8 +22,7 @@ x-app-base: &app-base
     S3_SECRET_KEY: rustfs-dev-secret
     S3_BUCKET: ne-dev-evidence
   volumes:
-    - ..:/workspace
-    - pnpm-store:/pnpm/store
+    - turbo-cache:/workspace/.turbo
 
 services:
   db:
@@ -91,7 +89,7 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  # 工具容器：仅经 `docker compose run --rm` 被 devenv 驱动（build/test/lint/migrate/seed/exec/shell）
+  # 工具容器：仅经 `docker compose run --rm` 被 devenv 驱动（test/lint/migrate/seed/exec/shell）
   tools:
     <<: *app-base
     profiles: ["tools"]
@@ -100,4 +98,4 @@ services:
 volumes:
   pgdata:
   rustfs-data:
-  pnpm-store:
+  turbo-cache:

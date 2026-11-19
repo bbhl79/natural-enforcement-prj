@@ -22,6 +22,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEVENV_DIR="$REPO_ROOT/devenv"
 PROJECT_NAME="natural-enforcement"
 TOOLS_IMAGE="natural-enforcement/tools:prototype1"
+WS_IMAGE="natural-enforcement/workspace:local"   # 代码烘焙镜像（无 bind mount 架构，见 devenv/workspace.Dockerfile）
 IMAGES_LOCK="$DEVENV_DIR/images.lock"
 COMPOSE_FILE="$DEVENV_DIR/compose.yaml"
 LOCK_DIR="/tmp/natural-enforcement-locks"   # 机器级锁（跨 worktree/跨 agent 共享）
@@ -37,7 +38,7 @@ die()  { local code="$1"; shift; printf '[devenv] ERROR: %s\n' "$*" >&2; exit "$
 jstr() { # JSON 字符串转义（覆盖常见控制字符，足够原型用）
   local s="$1"
   s="${s//\\/\\\\}"; s="${s//\"/\\\"}"
-  s="${s//$'\n'/\\n}"; s="${s//$'\t'/\\t}"; s="${s//$'\r'/\\r}'
+  s="${s//$'\n'/\\n}"; s="${s//$'\t'/\\t}"; s="${s//$'\r'/\\r}"
   printf '%s' "$s"
 }
 ev() { # 事件（--json 时输出 JSONL）：ev <name> [k=v]...
@@ -69,10 +70,10 @@ require_lock_file() {
 }
 compose() {
   require_lock_file
-  # 镜像引用（tag@digest）从锁文件注入 compose 变量插值
+  # 镜像引用（tag+digest）从锁文件注入 compose 变量插值
   set -a; # shellcheck disable=SC1090
   . "$IMAGES_LOCK"; set +a
-  DOCKER_UID="$(id -u)" DOCKER_GID="$(id -g)" \
+  REPO_ROOT="$REPO_ROOT" WORKSPACE_IMAGE="$WS_IMAGE" DOCKER_UID="$(id -u)" DOCKER_GID="$(id -g)" \
     docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" "$@"
 }
 in_tools() { # 在工具容器内执行（每次临时容器，退出即回收）
@@ -136,17 +137,24 @@ EOF
 cmd_build() {
   acquire_lock build 120
   local t0=$(( $(date +%s) ))
-  ev step.started target="tools image"
-  compose build tools api
-  ev step.completed target="tools image"
+  ev step.started target="tools base image"
+  # daemon 内建构建器直接构建（本机无 buildx；compose build 会试图拉 moby/buildkit 镜像）
+  docker build -q -t "$TOOLS_IMAGE" -f "$DEVENV_DIR/tools.Dockerfile" "$REPO_ROOT" >&2
+  ev step.completed target="tools base image"
 
-  ev step.started target="pnpm install"
-  in_tools pnpm install --frozen-lockfile
-  ev step.completed target="pnpm install"
+  # 首次引导：lockfile 经 lockgen 阶段生成后 docker cp 出来（全程容器内，无 bind mount）
+  if [[ ! -f "$REPO_ROOT/pnpm-lock.yaml" ]]; then
+    note "pnpm-lock.yaml 不存在——lockgen 阶段生成（生成后请随 git 提交）"
+    docker build -q -f "$DEVENV_DIR/workspace.Dockerfile" --target lockgen -t ne-lockgen:tmp "$REPO_ROOT" >&2
+    local cid
+    cid="$(docker create ne-lockgen:tmp)"
+    docker cp "$cid":/workspace/pnpm-lock.yaml "$REPO_ROOT/pnpm-lock.yaml"
+    docker rm "$cid" >/dev/null; docker rmi ne-lockgen:tmp >/dev/null
+  fi
 
-  ev step.started target="turbo build"
-  in_tools pnpm exec turbo run build
-  ev step.completed target="turbo build"
+  ev step.started target="workspace image (install + turbo build)"
+  docker build -q -t "$WS_IMAGE" -f "$DEVENV_DIR/workspace.Dockerfile" "$REPO_ROOT" >&2
+  ev step.completed target="workspace image"
 
   note "build 完成"
   final ok 0 duration="$(( $(date +%s) - t0 ))s"
@@ -303,8 +311,7 @@ cmd_doctor() {
   docker compose version >/dev/null 2>&1 && chk compose-plugin ok "ok" || chk compose-plugin fail "compose 插件缺失"
   [[ -f "$IMAGES_LOCK" ]] && chk images-lock ok "$(head -1 "$IMAGES_LOCK" | cut -c1-60)…" || chk images-lock fail "devenv/images.lock 缺失"
   docker image inspect "$TOOLS_IMAGE" >/dev/null 2>&1 && chk tools-image ok "$TOOLS_IMAGE" || chk tools-image fail "未构建。修复命令：devenv build"
-  [[ -d "$REPO_ROOT/node_modules" && -n "$(ls -A "$REPO_ROOT/node_modules" 2>/dev/null | head -1)" ]] \
-    && chk deps ok "node_modules 已安装" || chk deps fail "依赖未装。修复命令：devenv build"
+  docker image inspect "$WS_IMAGE" >/dev/null 2>&1 && chk workspace-image ok "$WS_IMAGE" || chk workspace-image fail "未构建。修复命令：devenv build"
   local s
   for s in db redis rustfs; do
     svc_healthy "$s" && chk "svc:$s" ok healthy || chk "svc:$s" fail "未健康。修复命令：devenv up"
