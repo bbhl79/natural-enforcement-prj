@@ -74,6 +74,7 @@ compose() {
   set -a; # shellcheck disable=SC1090
   . "$IMAGES_LOCK"; set +a
   REPO_ROOT="$REPO_ROOT" WORKSPACE_IMAGE="$WS_IMAGE" DOCKER_UID="$(id -u)" DOCKER_GID="$(id -g)" \
+    WEB_PORT="${WEB_PORT:-5173}" \
     docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" "$@"
 }
 in_tools() { # 在工具容器内执行（每次临时容器，退出即回收）
@@ -94,6 +95,19 @@ acquire_lock() { # $1=锁名 $2=超时秒；独占 flock（跨 worktree 生效�
   if ! flock -w "$2" 9; then
     die 6 "独占锁 [$1] 被占用（另一会话正在执行互斥操作），锁文件：$LOCK_DIR/$1.lock"
   fi
+}
+
+regen_lockfile() { # lockgen 靶生成 lockfile 后 docker cp 导出（全程容器内；--lockfile-only 不拉包）
+  ev step.started target="lockgen"
+  # 前置清理：上次异常退出可能留下持锁容器（image in use → rmi 失败 → 本命令连锁失败，#12 实测）
+  docker ps -a --filter ancestor=ne-lockgen:tmp -q | xargs -r docker rm -f >/dev/null 2>&1 || true
+  docker rmi -f ne-lockgen:tmp >/dev/null 2>&1 || true
+  docker build -q -f "$DEVENV_DIR/workspace.Dockerfile" --target lockgen -t ne-lockgen:tmp "$REPO_ROOT" >&2
+  local cid
+  cid="$(docker create ne-lockgen:tmp)"
+  docker cp "$cid":/workspace/pnpm-lock.yaml "$REPO_ROOT/pnpm-lock.yaml" >&2
+  docker rm "$cid" >/dev/null; docker rmi ne-lockgen:tmp >/dev/null
+  ev step.completed target="lockgen"
 }
 
 svc_running() { docker ps --filter "label=com.docker.compose.project=$PROJECT_NAME" \
@@ -119,9 +133,11 @@ devenv — 环境唯一入口（PROTOTYPE #11）
 用法：devenv [--json] <子命令> [参数]
 
 命令面：
-  build                     构建工具镜像 + 安装依赖 + turbo build（幂等）
+  build [--lockgen]         构建工具镜像 + 安装依赖 + turbo build（幂等；--lockgen 强制重生成 lockfile）
   up                        启动 db/redis/rustfs/api 并等待健康（幂等）
-  down [--volumes]          停止（--volumes 连带清数据卷）
+  web [--port N] [--down]   启动前端并发布宿主端口（#12；人类 opt-in，零端口不变量的唯一例外）
+  gen <kind> <name>         脚手架生成（#12）：kind = app | package | nest-module | page
+  down [--volumes]          停止（--volumes 连带清数据卷；不含 web，用 web --down）
   restart [svc...]          重启（默认全部）
   ps [-a]                   容器状态（--json 输出 JSONL）
   logs [svc] [-f] [--tail N] 跟随日志
@@ -146,6 +162,8 @@ EOF
 # 子命令
 # ---------------------------------------------------------------------------
 cmd_build() {
+  local lockgen=0
+  [[ "${1:-}" == "--lockgen" ]] && lockgen=1
   acquire_lock build 120
   local t0=$(( $(date +%s) ))
   ev step.started target="tools base image"
@@ -153,14 +171,10 @@ cmd_build() {
   docker build -q -t "$TOOLS_IMAGE" -f "$DEVENV_DIR/tools.Dockerfile" "$REPO_ROOT" >&2
   ev step.completed target="tools base image"
 
-  # 首次引导：lockfile 经 lockgen 阶段生成后 docker cp 出来（全程容器内，无 bind mount）
-  if [[ ! -f "$REPO_ROOT/pnpm-lock.yaml" ]]; then
-    note "pnpm-lock.yaml 不存在——lockgen 阶段生成（生成后请随 git 提交）"
-    docker build -q -f "$DEVENV_DIR/workspace.Dockerfile" --target lockgen -t ne-lockgen:tmp "$REPO_ROOT" >&2
-    local cid
-    cid="$(docker create ne-lockgen:tmp)"
-    docker cp "$cid":/workspace/pnpm-lock.yaml "$REPO_ROOT/pnpm-lock.yaml"
-    docker rm "$cid" >/dev/null; docker rmi ne-lockgen:tmp >/dev/null
+  # 首次引导 / 显式 --lockgen：lockfile 经 lockgen 阶段生成后 docker cp 出来（全程容器内，无 bind mount）
+  if [[ ! -f "$REPO_ROOT/pnpm-lock.yaml" ]] || (( lockgen )); then
+    note "lockgen：重生成 pnpm-lock.yaml（新增/变更 workspace 包后必须；生成后请随 git 提交）"
+    regen_lockfile
   fi
 
   ev step.started target="workspace image (install + turbo build)"
@@ -303,6 +317,63 @@ cmd_seed() {
   final ok 0
 }
 
+# 前端入口（#12）：人类 opt-in 发布宿主端口（零端口不变量的唯一例外——浏览器在宿主机）。
+# 无 bind 架构下无 HMR：改动反馈环 = 重新执行 `devenv web`（层缓存秒级重建）→ 浏览器刷新。
+cmd_web() {
+  local port=5173 down=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --port) port="${2:?--port 需要值}"; shift 2;;
+      --down) down=1; shift;;
+      *) die 2 "未知参数：$1（用法：web [--port N] [--down]）";;
+    esac
+  done
+  if (( down )); then
+    compose --profile web rm -sf web
+    final ok 0 action=down
+    return 0
+  fi
+  ensure_fresh_workspace
+  WEB_PORT="$port" compose --profile web up -d web
+  wait_healthy web 90
+  note "web 就绪：http://localhost:$port（地图瓦片由浏览器自行拉取 OSM；地图区右键/滚轮交互）"
+  final ok 0 url="http://localhost:$port" port="$port"
+}
+
+# 脚手架生成器（#12）：容器内 node 生成器。
+# 文件双向通道（无 bind 架构）：宿主锚点文件（workspace.Dockerfile / app.module.ts / App.tsx）
+#   经 stdin tar 进容器（补丁以宿主当前内容为基准——镜像烘焙件可能滞后）；生成物经 stdout tar 回宿主。
+# app/package 类会新增 workspace 包 → 生成后自动重生成 lockfile。
+# --no-refresh：跳过镜像刷新（批量连续生成时用；生成器不读镜像内的新文件目标，安全）。
+# 质量门验证：devenv lint && devenv typecheck && devenv test:unit
+cmd_gen() {
+  local refresh=1
+  [[ "${1:-}" == "--no-refresh" ]] && refresh=0 && shift
+  local kind="${1:-}"; local name="${2:-}"
+  case "$kind" in
+    app|package|nest-module|page) ;;
+    *) die 2 "用法：gen [--no-refresh] <app|package|nest-module|page> <kebab-case 名>";;
+  esac
+  [[ "$name" =~ ^[a-z][a-z0-9]*(-[a-z0-9]+)*$ ]] || die 2 "名称须为 kebab-case：$name"
+  (( refresh )) && ensure_fresh_workspace
+  ev step.started target="gen $kind $name"
+  tar -cf - -C "$REPO_ROOT" devenv/workspace.Dockerfile apps/api/src/app.module.ts apps/web/src/App.tsx \
+    | compose run --rm -T tools node "devenv/gen/gen.mjs" "$kind" "$name" \
+    | tar -x -C "$REPO_ROOT"
+  ev step.completed target="gen $kind $name"
+  case "$kind" in
+    app|package)
+      note "新增 workspace 包 → 重生成 pnpm-lock.yaml（lockgen）"
+      regen_lockfile
+      note "下一步：devenv build && devenv lint && devenv typecheck && devenv test:unit（生成物开箱即应全绿）"
+      ;;
+    *)
+      note "下一步：devenv lint && devenv typecheck && devenv test:unit（生成物开箱即应全绿）"
+      ;;
+  esac
+  final ok 0 kind="$kind" name="$name"
+}
+
 wait_healthy() { # $1=svc $2=超时秒
   local svc="$1" timeout="${2:-60}" waited=0
   while (( waited < timeout )); do
@@ -326,7 +397,7 @@ cmd_wait() {
       *) die 2 "未知参数：$1";;
     esac
   done
-  case "$svc" in db|redis|rustfs|api) ;; *) die 2 "未知服务：$svc";; esac
+  case "$svc" in db|redis|rustfs|api|web) ;; *) die 2 "未知服务：$svc";; esac
   wait_healthy "$svc" "$timeout"
   final ok 0 service="$svc"
 }
@@ -416,6 +487,8 @@ done
 case "$CMD" in
   build)          cmd_build "$@";;
   up)             cmd_up "$@";;
+  web)            cmd_web "$@";;
+  gen)            cmd_gen "$@";;
   down)           cmd_down "$@";;
   restart)        cmd_restart "$@";;
   ps)             [[ "${1:-}" == "-a" || "${1:-}" == "--all" ]] && ALL=1 && shift; cmd_ps "$@";;

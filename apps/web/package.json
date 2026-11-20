@@ -2,5 +2,40 @@
   "name": "@ne/web",
   "version": "0.0.0",
   "private": true,
-  "description": "PROTOTYPE #11 占位：前端纵切属 Prototype-工程基座纵切二（#12），本包暂无脚本不参与 turbo 任务"
+  "type": "module",
+  "description": "React+Vite+RTK Query+AntD+Tailwind 前端纵切（PROTOTYPE #12）：消费 @ne/contracts 手写 RTK Query，不做 codegen（#9 决议）",
+  "scripts": {
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0 --port 4173 --strictPort",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run"
+  },
+  "dependencies": {
+    "@ant-design/icons": "catalog:",
+    "@ne/contracts": "workspace:*",
+    "@reduxjs/toolkit": "catalog:",
+    "antd": "catalog:",
+    "leaflet": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-leaflet": "catalog:",
+    "react-redux": "catalog:"
+  },
+  "devDependencies": {
+    "@ne/tsconfig": "workspace:*",
+    "@tailwindcss/vite": "catalog:",
+    "@testing-library/dom": "catalog:",
+    "@testing-library/jest-dom": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@types/leaflet": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "jsdom": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "vitest": "catalog:"
+  }
 }

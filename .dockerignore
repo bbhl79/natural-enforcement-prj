@@ -9,4 +9,6 @@ apps/api/src/generated
 docs
 .artifacts
 devenv
+!devenv/gen
+!devenv/workspace.Dockerfile
 !.dockerignore

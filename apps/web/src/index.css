@@ -1,0 +1,11 @@
+/* PROTOTYPE（#12）— Tailwind 4 与 antd 6 共存：跳过 preflight（tailwindcss/preflight.css），
+   只引 theme + utilities——preflight 的元素级 reset 会与 antd 组件样式互相覆盖（事实记录 NOTES-slice2）。 */
+@layer theme, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+html,
+body,
+#root {
+  height: 100%;
+}

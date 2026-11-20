@@ -17,6 +17,8 @@ allowBuilds:
   "@prisma/engines@7.10.1": true
   msgpackr-extract@3.0.7: true    # bullmq→msgpackr 的原生解压预构建
   "@scarf/scarf@1.4.0": false    # prisma 的遥测上报器：显式拒绝执行
+  # 前端栈（#12 实测）零新增：vite 8 已转 rolldown（无 esbuild），rolldown/@tailwindcss/oxide/
+  # lightningcss 全走 napi 预构建 optional deps，不带 postinstall——供应链面比后端还干净。
 
 catalog:
   # 语言/类型（TS 锁 6.0.3：latest 已是 7.0.2 原生编译器，按版本矩阵决策暂不采用）
@@ -46,3 +48,24 @@ catalog:
   eslint: "^10.15.0"
   "@eslint/js": "^10.0.1"
   typescript-eslint: "^8.73.0"
+  # 前端栈（#12 纵切二；2026-11-20 registry 实查 latest，React 19.3 / Vite 8 / antd 6 / Tailwind 4）
+  react: "^19.3.1"
+  react-dom: "^19.3.1"
+  "@types/react": "^19.3.0"
+  "@types/react-dom": "^19.3.0"
+  antd: "^6.7.1"
+  "@ant-design/icons": "^6.3.4"
+  "@reduxjs/toolkit": "^2.15.0"
+  react-redux: "^9.3.1"
+  react-leaflet: "^5.0.0"
+  leaflet: "^1.9.4"
+  "@types/leaflet": "^1.9.22"
+  vite: "^8.3.8"
+  "@vitejs/plugin-react": "^6.3.0"
+  tailwindcss: "^4.3.5"
+  "@tailwindcss/vite": "^4.3.5"
+  jsdom: "^31.0.1"
+  "@testing-library/react": "^16.3.3"
+  "@testing-library/dom": "^10.4.2"
+  "@testing-library/jest-dom": "^8.0.0"
+  eslint-plugin-react-hooks: "^7.1.1"

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "@ne/tsconfig 浏览器包（React/tsx，bundler 解析——供 Vite 消费的包用这套）",
+  "extends": "./base.json",
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "lib": ["es2025", "dom", "dom.iterable"],
+    "jsx": "react-jsx",
+    "declaration": false,
+    "sourceMap": false
+  }
+}

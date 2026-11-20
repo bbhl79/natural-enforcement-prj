@@ -11,6 +11,7 @@ COPY apps/web/package.json apps/web/package.json
 COPY apps/e2e/package.json apps/e2e/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/tsconfig packages/tsconfig
+# @gen:pkg-copy
 RUN pnpm install --lockfile-only
 
 # deps 靶：依赖已装、源码已入、未构建——调试/工具用（docker build --target deps）
@@ -24,6 +25,7 @@ COPY apps/web/package.json apps/web/package.json
 COPY apps/e2e/package.json apps/e2e/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/tsconfig packages/tsconfig
+# @gen:pkg-copy
 RUN pnpm install --frozen-lockfile
 COPY . .
 
