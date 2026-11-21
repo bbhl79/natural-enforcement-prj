@@ -20,13 +20,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: devenv build（tools / workspace / e2e 三镜像；镜像锁 tag+digest）
-        run: ./devenv build
+        run: ./devenv/devenv build
 
       - name: devenv verify（质量门 + 生命周期防降级；与本地同一校验器）
-        run: ./devenv verify
+        run: ./devenv/devenv verify
 
       - name: devenv ci（起栈→只跑复现轨道→拆栈；run_id 天然数据级隔离键）
-        run: ./devenv ci --run-id "ci-${{ github.run_id }}-${{ github.run_attempt }}" --full-down
+        run: ./devenv/devenv ci --run-id "ci-${{ github.run_id }}-${{ github.run_attempt }}" --full-down
 
       # 失败产物链（playwright-e2e.md §4）：JSON(onlyFailures) → trace.zip → html；只上载可信 artifact
       - name: 上传 e2e 产物（trace/报告/JSON，30 天）
