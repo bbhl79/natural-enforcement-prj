@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "id": "DEF-0002",
+  "title": "创建点位接受纯空白名称（spec 债务：契约 min(1) 不含空白校验）",
+  "summary": "agent 会话评审发现：POST /enforcement-points 接受 name=\" \"（纯空格/制表符等）并入库。这是契约本意允许（z.string().min(1) 只查长度）还是应收紧为「非空白」，属 spec 债务而非实现缺陷——按 #10 决议走退役出口，留 SPEC（#14/#15）决策是否收紧契约。",
+  "status": "retired",
+  "engine": "agent-session",
+  "layer": "api",
+  "discoveredAt": "2026-11-21T02:15:00+08:00",
+  "discoveredBy": "hulei815(zcode) charter 会话",
+  "charter": "创建表单输入空间评审（charter-ui-journey 会话的副产物观察）",
+  "suspectedArea": "packages/contracts/src/enforcement-point.ts（name 空白语义）",
+  "severity": "low",
+  "reproducibility": {
+    "kind": "deterministic",
+    "replayCommand": "node apps/e2e/replay/DEF-0002.mjs",
+    "gate": {
+      "attempts": 1,
+      "keySpaces": [
+        "rep179522770215066"
+      ],
+      "allFailed": true
+    }
+  },
+  "evidence": [
+    {
+      "type": "json-report",
+      "uri": ".artifacts/e2e/exp179522660112198/results.json"
+    }
+  ],
+  "sanitized": true,
+  "retirement": {
+    "at": "2026-11-21T02:27:19.922Z",
+    "by": "hulei815(zcode)",
+    "reason": "spec 债务：契约允许纯空白名——是否收紧（trim/nonblank）留 Spec-e2e体系(#14)/Spec-工程基座(#15) 决策"
+  }
+}

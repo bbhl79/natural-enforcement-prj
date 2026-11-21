@@ -26,7 +26,7 @@ import {
   specRel,
   type DefectTree,
 } from './tree.js'
-import { rebuildRegistry, REGISTRY_FILE, verifyTree } from './verify.js'
+import { rebuildRegistry, REGISTRY_FILE, registryDrifted, verifyTree } from './verify.js'
 
 const argv = process.argv.slice(2)
 let root = '.'
@@ -326,6 +326,8 @@ function cmdRenumber(): number {
 function cmdVerify(): number {
   const tree = loadTree(root)
   const vs = verifyTree(tree)
+  if (registryDrifted(tree))
+    human('WARN: .registry.json 与事实源漂移（派生缓存过期或被手改）——本次自动重建；完整性以 defects/*.json 为准')
   if (vs.length > 0) {
     human(`生命周期校验失败（${vs.length} 项）：\n${vs.map((x) => `  [${x.rule}] ${x.detail}`).join('\n')}`)
     return end('error', 7, `生命周期校验失败：${vs.length} 项违规`)

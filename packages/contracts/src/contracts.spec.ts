@@ -16,6 +16,11 @@ describe('CreateEnforcementPointSchema', () => {
     ).toBe(false)
     expect(CreateEnforcementPointSchema.safeParse({ name: 'x', lat: 91, lng: 0 }).success).toBe(false)
   })
+
+  it('拒绝 NUL 字符（DEF-0001 修复：PostgreSQL text 禁存 → 400 而非 500）', () => {
+    expect(CreateEnforcementPointSchema.safeParse({ name: 'a\u0000b', lat: 0, lng: 0 }).success).toBe(false)
+    expect(CreateEnforcementPointSchema.safeParse({ name: '\u0000', lat: 0, lng: 0 }).success).toBe(false)
+  })
 })
 
 describe('NearbyQuerySchema', () => {

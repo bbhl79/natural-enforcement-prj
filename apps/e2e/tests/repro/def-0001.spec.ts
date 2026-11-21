@@ -4,7 +4,6 @@
 import { expect, test } from '@playwright/test'
 
 test("DEF-0001 创建点位接受 NUL 名称导致 500（契约 z.string() 未拦 PostgreSQL text 禁存字符）", async ({ request }) => {
-  test.fail() // expected-fail：DEF-0001 未修复；修复确认走 devenv e2e confirm-fix（摘除此行）
   const resp = await request.post("/enforcement-points", { data: {"name":"a\u0000b","lat":0,"lng":0} })
   expect(resp.status(), "契约内输入不应引发服务器错误").toBeLessThan(500)
 })

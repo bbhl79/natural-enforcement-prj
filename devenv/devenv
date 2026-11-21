@@ -234,6 +234,18 @@ apply_e2e_ops() { # $1=ops 文件：V 行先真跑校验（判定不符→9，�
   note "生命周期落账：$applied 项文件操作已应用到 apps/e2e/"
 }
 
+run_cli_and_apply() { # e2e_cli → 捕获 rc → 协议拒绝（有 END 行）经 apply 展示消息并透传码；崩溃（无 END）透传 rc
+  local ops rc=0
+  ops="$(mktemp)"
+  e2e_cli "$@" >"$ops" || rc=$?
+  if (( rc )) && ! grep -qP '^END\t' "$ops"; then
+    printf '[devenv] ERROR: 生命周期 CLI 异常退出（exit %s，无 END 行——容器/构建问题？）\n' "$rc" >&2
+    rm -f "$ops"; exit "$rc"
+  fi
+  apply_e2e_ops "$ops"
+  rm -f "$ops"
+}
+
 acquire_lock() { # $1=锁名 $2=超时秒；独占 flock（跨 worktree 生效）
   mkdir -p "$LOCK_DIR"
   exec 9>>"$LOCK_DIR/$1.lock"
@@ -649,7 +661,7 @@ cmd_ci() { # 与 CI 同构：起栈→只跑复现轨道→导产物→拆栈（
   done
   [[ -n "$rid" ]] || rid="$(new_run_id ci)"
   e2e_stack_up "$rid" 1
-  trap 'e2e_teardown "$rid"' EXIT
+  trap "e2e_teardown '$rid'" EXIT   # 立即展开：EXIT trap 里 local 已出栈（实测 #13：unbound 遮蔽真实退出码）
   local rc=0
   e2e_run_playwright "$rid" repro || rc=$?
   e2e_export_artifacts "$rid"
@@ -674,7 +686,7 @@ cmd_explore() { # 探索轨道：失败=产出（证据→缺陷报告），不�
   done
   rid="$(new_run_id exp)"
   e2e_stack_up "$rid" 1
-  trap 'e2e_teardown "$rid"' EXIT
+  trap "e2e_teardown '$rid'" EXIT   # 立即展开：EXIT trap 里 local 已出栈（实测 #13：unbound 遮蔽真实退出码）
   e2e_run_playwright "$rid" explore || rc=$?
   e2e_export_artifacts "$rid"
   if (( keep )); then
@@ -724,7 +736,7 @@ verify_diff_against() { # $1=基线 ref（CI 传 GITHUB_BASE_REF；本地传 ori
 }
 
 cmd_verify() { # 质量门 + 生命周期防降级（与 CI 同一校验器；--diff-base 加 diff 级检查）
-  local diff_base="" ops
+  local diff_base=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --diff-base) diff_base="${2:?--diff-base 需要值}"; shift 2;;
@@ -736,10 +748,7 @@ cmd_verify() { # 质量门 + 生命周期防降级（与 CI 同一校验器；--
   cmd_typecheck
   cmd_test_unit
   note "verify ②/③：生命周期防降级（索引/注解/编号/门禁/注册表）"
-  ops="$(mktemp)"
-  e2e_cli verify --write-registry >"$ops"
-  apply_e2e_ops "$ops"
-  rm -f "$ops"
+  run_cli_and_apply verify --write-registry
   if [[ -n "$diff_base" ]]; then
     note "verify ③/③：diff 级防降级（基线 $diff_base）"
     verify_diff_against "$diff_base"
@@ -753,8 +762,8 @@ cmd_e2e_report() { # 登记回填：实测复现门禁（0=复现）→ 全复�
   e2e_registry_lock 600
   local rid; rid="$(new_run_id rep)"
   e2e_stack_up "$rid" 0
-  trap 'e2e_teardown "$rid"' EXIT
-  local plan cmd attempts n=0 outcomes="" i rc2 ops
+  trap "e2e_teardown '$rid'" EXIT   # 立即展开：EXIT trap 里 local 已出栈（实测 #13：unbound 遮蔽真实退出码）
+  local plan cmd attempts n=0 outcomes="" i rc2
   plan="$(e2e_cli replay-plan "$id")"
   cmd="$(printf '%s\n' "$plan" | grep -P '^CMD\t' | cut -f2)"
   attempts="$(printf '%s\n' "$plan" | grep -P '^ATTEMPTS\t' | cut -f2)"
@@ -765,10 +774,7 @@ cmd_e2e_report() { # 登记回填：实测复现门禁（0=复现）→ 全复�
     note "复现门禁重放 $i/$attempts：exit $rc2（0=复现）"
   done
   outcomes="${outcomes%,}"
-  ops="$(mktemp)"
-  e2e_cli report "$id" --outcomes "$outcomes" --key-space "$rid" "$@" >"$ops"
-  apply_e2e_ops "$ops"
-  rm -f "$ops"
+  run_cli_and_apply report "$id" --outcomes "$outcomes" --key-space "$rid" "$@"
   e2e_teardown "$rid"; trap - EXIT
   final ok 0 defect="$id" attempts="$attempts" keySpace="$rid"
 }
@@ -780,7 +786,7 @@ cmd_e2e_replay() { # 手动重放缺陷（诊断用）：默认按门禁下限�
   e2e_registry_lock 60
   rid="$(new_run_id rpl)"
   e2e_stack_up "$rid" 0
-  trap 'e2e_teardown "$rid"' EXIT
+  trap "e2e_teardown '$rid'" EXIT   # 立即展开：EXIT trap 里 local 已出栈（实测 #13：unbound 遮蔽真实退出码）
   plan="$(e2e_cli replay-plan "$id")"
   cmd="$(printf '%s\n' "$plan" | grep -P '^CMD\t' | cut -f2)"
   local n; n="$(printf '%s\n' "$plan" | grep -P '^ATTEMPTS\t' | cut -f2)"
@@ -808,11 +814,8 @@ cmd_e2e_graduate() { # 毕业事务：预检→转写→真跑校验→原子落
   local rid; rid="$(new_run_id grad)"
   E2E_CUR_RUN_ID="$rid"
   e2e_stack_up "$rid" 1
-  trap 'e2e_teardown "$rid"' EXIT
-  local ops; ops="$(mktemp)"
-  e2e_cli graduate "$id" "$@" >"$ops"
-  apply_e2e_ops "$ops"
-  rm -f "$ops"
+  trap "e2e_teardown '$rid'" EXIT   # 立即展开：EXIT trap 里 local 已出栈（实测 #13：unbound 遮蔽真实退出码）
+  run_cli_and_apply graduate "$id" "$@"
   note "毕业完成：测试文件与缺陷记录放同一 commit（#10 决议 §6）"
   e2e_teardown "$rid"; trap - EXIT
   final ok 0 defect="$id" keySpace="$rid"
@@ -824,11 +827,8 @@ cmd_e2e_confirm_fix() { # 修复确认：真跑（无 fail 标记）必须通过
   local rid; rid="$(new_run_id cfx)"
   E2E_CUR_RUN_ID="$rid"
   e2e_stack_up "$rid" 1
-  trap 'e2e_teardown "$rid"' EXIT
-  local ops; ops="$(mktemp)"
-  e2e_cli confirm-fix "$id" "$@" >"$ops"
-  apply_e2e_ops "$ops"
-  rm -f "$ops"
+  trap "e2e_teardown '$rid'" EXIT   # 立即展开：EXIT trap 里 local 已出栈（实测 #13：unbound 遮蔽真实退出码）
+  run_cli_and_apply confirm-fix "$id" "$@"
   note "修复确认完成：用例转常绿回归（fixed）"
   e2e_teardown "$rid"; trap - EXIT
   final ok 0 defect="$id" keySpace="$rid"
@@ -845,15 +845,11 @@ cmd_e2e() { # 子命令面（#10 决议 §9）
     defect)     e2e_cli defect "$@";;                       # 只读查询，stdout 直接透传
     retire)
       e2e_registry_lock 120
-      ops="$(mktemp)"
-      e2e_cli retire "$@" >"$ops"
-      apply_e2e_ops "$ops"; rm -f "$ops"
+      run_cli_and_apply retire "$@"
       final ok 0 action=retire;;
     renumber)
       e2e_registry_lock 120
-      ops="$(mktemp)"
-      e2e_cli renumber "$@" >"$ops"
-      apply_e2e_ops "$ops"; rm -f "$ops"
+      run_cli_and_apply renumber "$@"
       final ok 0 action=renumber;;
     *) die 2 "未知 e2e 子命令：$sub";;
   esac

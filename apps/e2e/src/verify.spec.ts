@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { DefectRecord } from './defect/schema.js'
 import { loadTree } from './tree.js'
-import { rebuildRegistry, REGISTRY_FILE, verifyTree } from './verify.js'
+import { rebuildRegistry, REGISTRY_FILE, registryDrifted, verifyTree } from './verify.js'
 import { PLACEHOLDER_ASSERT, transcribeDraft, transcribeMechanical } from './transcribe.js'
 
 const dirs: string[] = []
@@ -143,13 +143,14 @@ describe('verifyTree：防降级规则逐条触发', () => {
     expect(verifyTree(loadTree(root))).toEqual([])
   })
 
-  it('注册表漂移即红', () => {
+  it('注册表漂移不作硬门禁（缓存自愈；实测 #13 死锁修复）', () => {
     const root = makeTree({
       'defects/DEF-0001.json': JSON.stringify(reported),
       'replay/DEF-0001.mjs': 'export {}',
       [REGISTRY_FILE]: JSON.stringify({ defects: [{ id: 'DEF-0001', status: 'fixed', engine: 'fast-check', specPath: null }] }),
     })
-    expect(verifyTree(loadTree(root)).some((v) => v.rule === 'registry:drift')).toBe(true)
+    expect(verifyTree(loadTree(root))).toEqual([]) // 事实源干净 → 缓存漂移不红（CLI WARN + 重建）
+    expect(registryDrifted(loadTree(root))).toBe(true) // 但漂移可被检测（供 WARN）
   })
 })
 

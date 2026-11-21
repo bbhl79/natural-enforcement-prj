@@ -3,7 +3,7 @@
   "id": "DEF-0001",
   "title": "创建点位接受 NUL 名称导致 500（契约 z.string() 未拦 PostgreSQL text 禁存字符）",
   "summary": "POST /enforcement-points 的 name 契约为 z.string().min(1).max(200)，接受 NUL（\\u0000，含字符串内嵌形态）字符；PostgreSQL text 类型拒绝存储 NUL 字节，Prisma 抛未处理异常，接口返回 500。契约内输入引发 5xx，属输入校验缺口（修复方向：契约层拒绝 NUL，返回 400）。",
-  "status": "graduated",
+  "status": "fixed",
   "engine": "fast-check",
   "layer": "api",
   "discoveredAt": "2026-11-21T01:56:41+08:00",
@@ -48,7 +48,6 @@
       "uri": ".artifacts/e2e/exp179522660112198/test-results/charter-create-input-space-charter-创建点位——契约内输入空间全量安全（无-5xx）/error-context.md"
     }
   ],
-  "sanitized": true,
   "graduation": {
     "at": "2026-11-21T02:07:00.076Z",
     "by": "hulei815(zcode)",
@@ -59,5 +58,10 @@
       "outcome": "fail",
       "at": "2026-11-21T02:07:00.076Z"
     }
+  },
+  "sanitized": true,
+  "fix": {
+    "at": "2026-11-21T02:20:07.531Z",
+    "by": "hulei815(zcode)"
   }
 }

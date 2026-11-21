@@ -11,7 +11,12 @@ const lngSchema = z.number().min(-180).max(180)
 
 export const CreateEnforcementPointSchema = z
   .object({
-    name: z.string().min(1).max(200),
+    // NUL 修复（DEF-0001，#13 毕业闭环实证）：PostgreSQL text 禁存 NUL 字节——契约层拦截返回 400 而非 500
+    name: z
+      .string()
+      .min(1)
+      .max(200)
+      .refine((s) => !s.includes('\u0000'), { message: 'name 不能包含 NUL 字符（PostgreSQL text 禁存）' }),
     lat: latSchema,
     lng: lngSchema,
   })

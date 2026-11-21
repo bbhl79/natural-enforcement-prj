@@ -11,10 +11,10 @@ export default tseslint.config(
       '**/src/generated/**', // prisma-client 生成物
       '**/coverage/**',
       '**/.turbo/**',
-      // e2e（#13）：run 产物卷导出位、毕业校验运行草稿、生命周期转写物（graduate 生成，非手写）
+      // e2e（#13）：run 产物卷导出位、毕业校验运行草稿、生命周期转写物（graduate 生成，非手写——含 _drafts/）
       'apps/e2e/.artifacts-run/**',
       'apps/e2e/.verify-run/**',
-      'apps/e2e/tests/repro/def-*.spec.ts',
+      'apps/e2e/tests/repro/**/def-*.spec.ts',
     ],
   },
   js.configs.recommended,

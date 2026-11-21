@@ -111,20 +111,23 @@ export function verifyTree(tree: DefectTree): Violation[] {
     if (!known.has(id)) push('index', `${rels.join(',')}: 无 ${id} 缺陷记录（毕业是唯一合法写入路径）`)
   }
 
-  // 5 注册表派生缓存：漂移即红（防手改注册表造第二本账）
-  const regPath = join(tree.root, REGISTRY_FILE)
-  if (existsSync(regPath)) {
-    try {
-      const existing = JSON.parse(readFileSync(regPath, 'utf8')) as { defects?: unknown }
-      const rebuilt = JSON.parse(rebuildRegistry(tree)) as { defects?: unknown }
-      if (JSON.stringify(existing) !== JSON.stringify(rebuilt))
-        push('registry:drift', '.registry.json 与事实源重建结果不一致（注册表是派生缓存，禁止手改）')
-    } catch {
-      push('registry:drift', '.registry.json 解析失败')
-    }
-  }
+  // 5 注册表（派生缓存）不再作硬门禁：失败运行后缓存过期会死锁（实测 #13）。
+  // 完整性在入库的 defects/*.json 本身；注册表漂移由 CLI 比对后 WARN + 自动重建（见 cmdVerify）。
 
   return v
+}
+
+/** 注册表漂移检测（非违规）：存在且与重建结果不一致 → true（CLI 据此 WARN 并重建） */
+export function registryDrifted(tree: DefectTree): boolean {
+  const regPath = join(tree.root, REGISTRY_FILE)
+  if (!existsSync(regPath)) return false
+  try {
+    const existing = JSON.parse(readFileSync(regPath, 'utf8')) as unknown
+    const rebuilt = JSON.parse(rebuildRegistry(tree)) as unknown
+    return JSON.stringify(existing) !== JSON.stringify(rebuilt)
+  } catch {
+    return true
+  }
 }
 
 // 状态条件字段（与 schema.ts validateRecordInvariants 同口径；独立导出供 verify 用）
