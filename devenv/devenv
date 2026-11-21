@@ -102,6 +102,9 @@ ensure_fresh_workspace() {
 # 隔离参数只在此层注入——测试代码只感知 baseURL（playwright-e2e.md §2.3 层 1）。
 # ---------------------------------------------------------------------------
 new_run_id() { printf '%s%s%s' "$1" "$(date +%s)" "$RANDOM"; }   # [a-z0-9]+，PG 库名/bucket 名安全
+e2e_dbid() { # run_id → PG 库名安全段（外显 run_id 可含 '-'（bucket/队列名允许），库标识符只留字母数字下划线）
+  printf '%s' "$1" | tr -c 'a-zA-Z0-9' '_'
+}
 
 ensure_fresh_e2e_image() { # e2e 执行器镜像（官方 Playwright 基座，tag+digest 锁注入）
   ev step.started target="e2e image refresh"
@@ -123,32 +126,34 @@ e2e_ensure_infra() { # 共享基础设施容器（dev 栈同款；幂等）
 }
 
 e2e_stack_up() { # $1=run_id $2=with_web(1/0)：建库→迁移→起 e2e-api(+e2e-web)→等健康
-  local rid="$1" with_web="${2:-1}"
+  local rid="$1" with_web="${2:-1}" dbid
+  dbid="$(e2e_dbid "$rid")"
   ensure_fresh_workspace
   ensure_fresh_e2e_image
   e2e_ensure_infra
   # 干净库（幂等重入）：FORCE DROP 断开活动连接再建（PG18）
   compose exec -T db psql -U ne -d natural_enforcement_dev \
-    -c "DROP DATABASE IF EXISTS e2e_$rid WITH (FORCE)" -c "CREATE DATABASE e2e_$rid" >&2
+    -c "DROP DATABASE IF EXISTS e2e_$dbid WITH (FORCE)" -c "CREATE DATABASE e2e_$dbid" >&2
   # 迁移到隔离库（migrations 是唯一版本真相；e2e 库走 deploy——prisma-postgis.md 决策）
   E2E_RUN_ID="$rid" compose run --rm -T \
-    -e DATABASE_URL="postgresql://ne:ne-dev-only@db:5432/e2e_$rid" \
+    -e DATABASE_URL="postgresql://ne:ne-dev-only@db:5432/e2e_$dbid" \
     tools pnpm --filter @ne/api exec prisma migrate deploy >&2
   local -a svcs=(e2e-api)
   (( with_web )) && svcs+=(e2e-web)
   E2E_RUN_ID="$rid" compose --profile e2e up -d "${svcs[@]}" >&2
   wait_healthy e2e-api 120
   (( with_web )) && wait_healthy e2e-web 120
-  note "e2e 隔离栈就绪（run=$rid）：db=e2e_$rid bucket=e2e-$rid keyspace=e2e:$rid:"
+  note "e2e 隔离栈就绪（run=$rid）：db=e2e_$dbid bucket=e2e-$rid queue-prefix=e2e-$rid-"
 }
 
 e2e_teardown() { # $1=run_id：best-effort，失败不阻塞报告产出（层 1 纪律）
-  local rid="$1"
+  local rid="$1" dbid
+  dbid="$(e2e_dbid "$rid")"
   compose --profile e2e rm -sf e2e-api e2e-web e2e >/dev/null 2>&1 || true
   compose exec -T db psql -U ne -d natural_enforcement_dev \
-    -c "DROP DATABASE IF EXISTS e2e_$rid WITH (FORCE)" >/dev/null 2>&1 || true
+    -c "DROP DATABASE IF EXISTS e2e_$dbid WITH (FORCE)" >/dev/null 2>&1 || true
   compose run --rm -T tools node apps/e2e/dist/teardown-bucket.js "e2e-$rid" >/dev/null 2>&1 || true
-  compose exec -T redis sh -c "redis-cli --scan --pattern '*e2e:$rid:*' | xargs -r redis-cli DEL" >/dev/null 2>&1 || true
+  compose exec -T redis sh -c "redis-cli --scan --pattern '*e2e-$rid-*' | xargs -r redis-cli DEL" >/dev/null 2>&1 || true
   note "e2e 隔离栈已拆（run=$rid；库/桶/键空间清理 best-effort）"
 }
 
@@ -162,8 +167,9 @@ e2e_export_artifacts() { # $1=run_id：产物命名卷 → 宿主 .artifacts/e2e
 }
 
 e2e_run_playwright() { # $1=run_id $2=config(repro|explore)
+  # pnpm --filter exec：cwd=包目录且 .bin 在 PATH（npx 从 /workspace 出发找不到子包 bin，实测 #13）
   E2E_RUN_ID="$1" compose --profile e2e run --rm -T e2e \
-    npx playwright test --config="apps/e2e/playwright.$2.config.ts"
+    pnpm --filter @ne/e2e exec playwright test --config="playwright.$2.config.ts"
 }
 
 e2e_replay_once() { # $1=run_id $2=command（缺陷记录的 replayCommand；退出 0=复现）

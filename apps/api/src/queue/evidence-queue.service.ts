@@ -8,7 +8,8 @@ import { StorageService } from '../storage/storage.service.js'
 import { parseJob, type ProcessEvidenceJob } from './payload.js'
 
 // 队列名带可选键空间前缀（#13 e2e 数据级隔离：run 级独立 Redis 键空间；
-// dev 默认无前缀，e2e 栈经 QUEUE_NAMESPACE=e2e:<run_id>: 注入）
+// dev 默认无前缀，e2e 栈经 QUEUE_NAMESPACE=e2e-<run_id>- 注入。
+// BullMQ 6 实测：队列名不得含 ":"（bull 保留为 Redis 键分隔符）→ 前缀用 "-"）
 export const EVIDENCE_QUEUE = process.env.QUEUE_NAMESPACE
   ? `${process.env.QUEUE_NAMESPACE}evidence-processing`
   : 'evidence-processing'

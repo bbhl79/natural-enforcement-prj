@@ -17,5 +17,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: { sourcemap: true },
   server: { host: true, port: 5173, strictPort: true, proxy: apiProxy },
-  preview: { host: true, port: 4173, strictPort: true, proxy: apiProxy },
+  // Vite 8 实测（#13）：preview 校验 Host 头——容器内网域名（e2e-web）会被拒；
+  // dev/e2e 专用服务器放开 allowedHosts（localhost 本就在默认白名单）
+  preview: { host: true, port: 4173, strictPort: true, proxy: apiProxy, allowedHosts: true },
 })
