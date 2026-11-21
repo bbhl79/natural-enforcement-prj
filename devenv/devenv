@@ -82,7 +82,7 @@ compose() {
   set -a; # shellcheck disable=SC1090
   . "$IMAGES_LOCK"; set +a
   REPO_ROOT="$REPO_ROOT" WORKSPACE_IMAGE="$WS_IMAGE" E2E_IMAGE="$E2E_IMAGE" DOCKER_UID="$(id -u)" DOCKER_GID="$(id -g)" \
-    WEB_PORT="${WEB_PORT:-5173}" \
+    WEB_PORT="${WEB_PORT:-5173}" E2E_RUN_ID="${E2E_RUN_ID:-local}" \
     docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" "$@"
 }
 in_tools() { # 在工具容器内执行（每次临时容器，退出即回收）
@@ -576,6 +576,9 @@ cmd_doctor() {
     svc_healthy "$s" && chk "svc:$s" ok healthy || chk "svc:$s" fail "未健康。修复命令：devenv up"
   done
   svc_running api && chk "svc:api" ok running || chk "svc:api" fail "未运行。修复命令：devenv up"
+  docker image inspect "$E2E_IMAGE" >/dev/null 2>&1 \
+    && chk e2e-image ok "$E2E_IMAGE" \
+    || chk e2e-image fail "未构建。修复命令：devenv build（e2e 双轨需要，#13）"
 
   if (( JSON )); then
     printf '{"command":"doctor","status":"%s","exitCode":%s,"checks":[%s]}\n' \

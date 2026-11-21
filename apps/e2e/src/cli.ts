@@ -206,15 +206,16 @@ function cmdGraduate(): number {
       human(`${id}（${r.engine}）无机械转写：草稿已生成 ${draftRel(id)}（CI 不收集）。补完断言后重跑 graduate 转正。`)
       return end('ok', 0, `${id} 草稿已生成（mode=draft，状态保持 reported）`)
     }
-    const draftContent = readIfExists(tree, drafts[0]!)
-    if (draftContent === undefined) return end('error', 10, `${id} 草稿读取失败：${drafts[0]}`)
+    const draftPath = drafts[0]!
+    const draftContent = readIfExists(tree, draftPath)
+    if (draftContent === undefined) return end('error', 10, `${id} 草稿读取失败：${draftPath}`)
     const act = activateDraft(draftContent, !fixed)
     if (!act.ok) return end('error', 8, `${id} 草稿不可转正：${act.error}`)
     specContent = act.content
     const actNofail = activateDraft(draftContent, false)
     if (!actNofail.ok) return end('error', 8, `${id} 草稿不可转正：${actNofail.error}`)
     verifyContent = actNofail.content
-    emit({ op: 'D', path: drafts[0] })
+    emit({ op: 'D', path: draftPath })
   }
 
   // 校验运行载荷（真跑一次：未修必须失败 / 已修必须通过——翻译质量把关）
@@ -340,20 +341,28 @@ const cmd = argv[0]
 switch (cmd) {
   case 'defect':
     process.exit(cmdDefect())
+    break // eslint 不识别 process.exit 的 never 返回
   case 'replay-plan':
     process.exit(cmdReplayPlan())
+    break
   case 'report':
     process.exit(cmdReport())
+    break
   case 'graduate':
     process.exit(cmdGraduate())
+    break
   case 'confirm-fix':
     process.exit(cmdConfirmFix())
+    break
   case 'retire':
     process.exit(cmdRetire())
+    break
   case 'renumber':
     process.exit(cmdRenumber())
+    break
   case 'verify':
     process.exit(cmdVerify())
+    break
   default:
     process.exit(usage())
 }

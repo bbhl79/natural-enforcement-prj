@@ -11,7 +11,7 @@ import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { minGateAttempts, MECHANICAL_ENGINES, type DefectId } from './defect/schema.js'
 import { countFailLines, headerDefectId } from './transcribe.js'
-import { loadTree, readIfExists, type DefectTree } from './tree.js'
+import { readIfExists, type DefectTree } from './tree.js'
 
 export interface Violation {
   rule: string
@@ -55,7 +55,7 @@ export function verifyTree(tree: DefectTree): Violation[] {
   }
 
   // 0/1/2/4/6 逐缺陷
-  for (const { file, record: d } of tree.defects.values()) {
+  for (const { record: d } of tree.defects.values()) {
     // 状态条件字段（schema 之上的语义校验）
     for (const e of invariantErrors(d)) push('status', `${d.id}: ${e}`)
 

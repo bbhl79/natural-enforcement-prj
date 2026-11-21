@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { DefectRecord } from './defect/schema.js'
 import { loadTree } from './tree.js'
 import { rebuildRegistry, REGISTRY_FILE, verifyTree } from './verify.js'
-import { PLACEHOLDER_ASSERT, stripFailLine, transcribeDraft, transcribeMechanical } from './transcribe.js'
+import { PLACEHOLDER_ASSERT, transcribeDraft, transcribeMechanical } from './transcribe.js'
 
 const dirs: string[] = []
 function makeTree(files: Record<string, string>): string {
@@ -99,11 +99,10 @@ describe('verifyTree：防降级规则逐条触发', () => {
     expect(verifyTree(loadTree(root2)).some((v) => v.detail.includes('必须（且仅）1 个 test.fail'))).toBe(true)
 
     const fixed = def({ status: 'fixed', graduation: gradBlock(), fix: { at: '2026-11-21T01:00:00Z', by: 'a' } })
-    const stripped = stripFailLine(spec)
     const root3 = makeTree({
       'defects/DEF-0001.json': JSON.stringify(fixed),
       'replay/DEF-0001.mjs': 'export {}',
-      'tests/repro/def-0001.spec.ts': stripped.ok ? stripped.content : spec, // fixed 却带 fail 行
+      'tests/repro/def-0001.spec.ts': spec, // fixed 却带 fail 行（修复确认未摘标记）
     })
     expect(verifyTree(loadTree(root3)).some((v) => v.detail.includes('仅限 graduated'))).toBe(true)
   })

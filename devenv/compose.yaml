@@ -130,7 +130,8 @@ services:
     command: ["pnpm", "--filter", "@ne/api", "start"]
     environment:
       <<: *app-env
-      DATABASE_URL: postgresql://ne:ne-dev-only@db:5432/e2e_${E2E_RUN_ID:?devenv 注入 E2E_RUN_ID}
+      # E2E_RUN_ID 由 devenv 注入（compose() 兜底 local——插值在 profile 未激活时也会发生，:? 会炸掉常规命令）
+      DATABASE_URL: postgresql://ne:ne-dev-only@db:5432/e2e_${E2E_RUN_ID}
       S3_BUCKET: e2e-${E2E_RUN_ID}
       QUEUE_NAMESPACE: "e2e:${E2E_RUN_ID}:"
     depends_on:

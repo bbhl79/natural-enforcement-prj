@@ -32,7 +32,7 @@ export const MECHANICAL_ENGINES: ReadonlySet<DefectEngine> = new Set(['fast-chec
 export const CounterexampleRequestSchema = z.object({
   method: z.string().min(1),
   path: z.string().min(1),
-  headers: z.record(z.string()).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
   body: z.unknown().optional(),
 })
 export type CounterexampleRequest = z.infer<typeof CounterexampleRequestSchema>
