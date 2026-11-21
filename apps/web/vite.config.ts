@@ -5,10 +5,12 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+// API_ORIGIN：代理目标可注入（#13 e2e 栈指向 e2e-api；dev 默认 api）
+const apiOrigin = process.env.API_ORIGIN ?? 'http://api:3000'
 const apiProxy = {
-  '/enforcement-points': 'http://api:3000',
-  '/evidence': 'http://api:3000',
-  '/health': 'http://api:3000',
+  '/enforcement-points': apiOrigin,
+  '/evidence': apiOrigin,
+  '/health': apiOrigin,
 }
 
 export default defineConfig({

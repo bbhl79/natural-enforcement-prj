@@ -1,0 +1,8 @@
+{
+  "extends": "@ne/tsconfig/node.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["src", "tests", "playwright.repro.config.ts", "playwright.explore.config.ts", "playwright.verify.config.ts"]
+}

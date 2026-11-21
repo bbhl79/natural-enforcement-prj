@@ -12,3 +12,8 @@ devenv
 !devenv/gen
 !devenv/workspace.Dockerfile
 !.dockerignore
+# e2e（#13）：run 产物/校验草稿/派生注册表不入任何镜像
+apps/e2e/.artifacts-run
+apps/e2e/.verify-run
+apps/e2e/.registry.json
+!devenv/e2e.Dockerfile

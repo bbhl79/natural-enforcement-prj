@@ -8,3 +8,5 @@ NODE_IMAGE=node:26.13.1-slim@sha256:a5a5adfee3013de54504e0e6aff49993acf7daed072e
 DB_IMAGE=postgis/postgis:18-3.6@sha256:4a43e3c3e5d55b9208240fc71db543b79c638766280c625a425bd0a2390989c4
 REDIS_IMAGE=redis:8.2.11-alpine@sha256:a18fce2f705d9782ccf6968f8dd94fa04566ff97e10a8d322ad72645243e4c0c
 RUSTFS_IMAGE=rustfs/rustfs:1.0.6@sha256:0dff1515b3c52b5ce8c5df2263420c7f93ae1c5d07cca79e19e57cff86b84c85
+# e2e 执行器基座（#13）：npm 包 @playwright/test 与镜像 tag 必须严格同版本（playwright-e2e.md §1.1）
+PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.65.1-noble@sha256:1507cbfc550a63a6b7396791ca4f00df17beb56342d2447b3f106c306f525579

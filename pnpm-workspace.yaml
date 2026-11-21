@@ -21,6 +21,9 @@ allowBuilds:
   # lightningcss 全走 napi 预构建 optional deps，不带 postinstall——供应链面比后端还干净。
 
 catalog:
+  # e2e 双轨（#13）：npm 包与 mcr 镜像 tag 严格同版本（playwright-e2e.md §1.1，exact pin 无 ^）
+  "@playwright/test": "1.65.1"
+  fast-check: "4.10.3"
   # 语言/类型（TS 锁 6.0.3：latest 已是 7.0.2 原生编译器，按版本矩阵决策暂不采用）
   typescript: "6.0.3"
   zod: "4.6.7"

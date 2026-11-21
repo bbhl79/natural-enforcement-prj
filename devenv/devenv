@@ -12,9 +12,14 @@
 #   0 成功
 #   2 用法错误（未知子命令/缺参数）
 #   3 环境未就绪（镜像未构建/容器未起/依赖未装——按提示先跑对应命令）
-#   4 任务失败（test/lint/typecheck/build 等任务自身非零退出）
+#   4 任务失败（test/lint/typecheck/build 等任务自身非零退出；探索轨道"发现失败"亦属此类）
 #   5 超时（wait/健康等待超时）
 #   6 独占锁冲突（另一 agent 正在执行互斥操作）
+#   ── e2e 生命周期（#13；码表与 apps/e2e/src/cli.ts 联合定型）──
+#   7 生命周期校验失败（verify 防降级校验器）
+#   8 状态转移/前置条件不合法（report 门禁未过/graduate 重复或非法转移等）
+#   9 毕业校验运行判定不符（未修必须失败/已修必须通过——翻译质量把关）
+#   10 缺陷不存在或 schema 不符
 # ============================================================================
 set -Eeuo pipefail
 
@@ -25,6 +30,9 @@ TOOLS_IMAGE="natural-enforcement/tools:prototype1"
 WS_IMAGE="natural-enforcement/workspace:local"   # 代码烘焙镜像（无 bind mount 架构，见 devenv/workspace.Dockerfile）
 IMAGES_LOCK="$DEVENV_DIR/images.lock"
 COMPOSE_FILE="$DEVENV_DIR/compose.yaml"
+E2E_IMAGE="natural-enforcement/e2e:local"          # e2e 执行器（官方 Playwright 镜像 + 项目运行时，#13）
+E2E_DOCKERFILE="$DEVENV_DIR/e2e.Dockerfile"
+E2E_CUR_RUN_ID=""                                   # 当前隔离栈 run_id（verify-run 注入用）
 LOCK_DIR="/tmp/natural-enforcement-locks"   # 机器级锁（跨 worktree/跨 agent 共享）
 JSON=0
 
@@ -73,7 +81,7 @@ compose() {
   # 镜像引用（tag+digest）从锁文件注入 compose 变量插值
   set -a; # shellcheck disable=SC1090
   . "$IMAGES_LOCK"; set +a
-  REPO_ROOT="$REPO_ROOT" WORKSPACE_IMAGE="$WS_IMAGE" DOCKER_UID="$(id -u)" DOCKER_GID="$(id -g)" \
+  REPO_ROOT="$REPO_ROOT" WORKSPACE_IMAGE="$WS_IMAGE" E2E_IMAGE="$E2E_IMAGE" DOCKER_UID="$(id -u)" DOCKER_GID="$(id -g)" \
     WEB_PORT="${WEB_PORT:-5173}" \
     docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" "$@"
 }
@@ -87,6 +95,137 @@ ensure_fresh_workspace() {
   ev step.started target="workspace image refresh"
   docker build -q -t "$WS_IMAGE" -f "$DEVENV_DIR/workspace.Dockerfile" "$REPO_ROOT" >&2
   ev step.completed target="workspace image refresh"
+}
+
+# ---------------------------------------------------------------------------
+# e2e 双轨编排（#13）：数据级隔离（共享基础设施容器 + 独立库/bucket/键空间）。
+# 隔离参数只在此层注入——测试代码只感知 baseURL（playwright-e2e.md §2.3 层 1）。
+# ---------------------------------------------------------------------------
+new_run_id() { printf '%s%s%s' "$1" "$(date +%s)" "$RANDOM"; }   # [a-z0-9]+，PG 库名/bucket 名安全
+
+ensure_fresh_e2e_image() { # e2e 执行器镜像（官方 Playwright 基座，tag+digest 锁注入）
+  ev step.started target="e2e image refresh"
+  set -a; # shellcheck disable=SC1090
+  . "$IMAGES_LOCK"; set +a
+  docker build -q --build-arg PLAYWRIGHT_IMAGE="$PLAYWRIGHT_IMAGE" \
+    -t "$E2E_IMAGE" -f "$E2E_DOCKERFILE" "$REPO_ROOT" >&2
+  ev step.completed target="e2e image refresh"
+}
+
+e2e_registry_lock() { # 生命周期写入互斥（per-worktree；跨 worktree 各自独立不误伤）
+  acquire_lock "e2e-$(printf '%s' "$REPO_ROOT" | md5sum | cut -c1-8)" "${1:-600}"
+}
+
+e2e_ensure_infra() { # 共享基础设施容器（dev 栈同款；幂等）
+  compose up -d db redis rustfs >&2
+  local s
+  for s in db redis rustfs; do wait_healthy "$s" 120; done
+}
+
+e2e_stack_up() { # $1=run_id $2=with_web(1/0)：建库→迁移→起 e2e-api(+e2e-web)→等健康
+  local rid="$1" with_web="${2:-1}"
+  ensure_fresh_workspace
+  ensure_fresh_e2e_image
+  e2e_ensure_infra
+  # 干净库（幂等重入）：FORCE DROP 断开活动连接再建（PG18）
+  compose exec -T db psql -U ne -d natural_enforcement_dev \
+    -c "DROP DATABASE IF EXISTS e2e_$rid WITH (FORCE)" -c "CREATE DATABASE e2e_$rid" >&2
+  # 迁移到隔离库（migrations 是唯一版本真相；e2e 库走 deploy——prisma-postgis.md 决策）
+  E2E_RUN_ID="$rid" compose run --rm -T \
+    -e DATABASE_URL="postgresql://ne:ne-dev-only@db:5432/e2e_$rid" \
+    tools pnpm --filter @ne/api exec prisma migrate deploy >&2
+  local -a svcs=(e2e-api)
+  (( with_web )) && svcs+=(e2e-web)
+  E2E_RUN_ID="$rid" compose --profile e2e up -d "${svcs[@]}" >&2
+  wait_healthy e2e-api 120
+  (( with_web )) && wait_healthy e2e-web 120
+  note "e2e 隔离栈就绪（run=$rid）：db=e2e_$rid bucket=e2e-$rid keyspace=e2e:$rid:"
+}
+
+e2e_teardown() { # $1=run_id：best-effort，失败不阻塞报告产出（层 1 纪律）
+  local rid="$1"
+  compose --profile e2e rm -sf e2e-api e2e-web e2e >/dev/null 2>&1 || true
+  compose exec -T db psql -U ne -d natural_enforcement_dev \
+    -c "DROP DATABASE IF EXISTS e2e_$rid WITH (FORCE)" >/dev/null 2>&1 || true
+  compose run --rm -T tools node apps/e2e/dist/teardown-bucket.js "e2e-$rid" >/dev/null 2>&1 || true
+  compose exec -T redis sh -c "redis-cli --scan --pattern '*e2e:$rid:*' | xargs -r redis-cli DEL" >/dev/null 2>&1 || true
+  note "e2e 隔离栈已拆（run=$rid；库/桶/键空间清理 best-effort）"
+}
+
+e2e_export_artifacts() { # $1=run_id：产物命名卷 → 宿主 .artifacts/e2e/<run_id>/（docker cp，无 bind）
+  local dest="$REPO_ROOT/.artifacts/e2e/$1" cid
+  mkdir -p "$dest"
+  cid="$(docker create --mount "type=volume,source=${PROJECT_NAME}_e2e-artifacts,target=/art" "$E2E_IMAGE" true)"
+  docker cp "$cid":/art/. "$dest" >&2 || true
+  docker rm "$cid" >/dev/null
+  note "e2e 产物已导出：$dest"
+}
+
+e2e_run_playwright() { # $1=run_id $2=config(repro|explore)
+  E2E_RUN_ID="$1" compose --profile e2e run --rm -T e2e \
+    npx playwright test --config="apps/e2e/playwright.$2.config.ts"
+}
+
+e2e_replay_once() { # $1=run_id $2=command（缺陷记录的 replayCommand；退出 0=复现）
+  E2E_RUN_ID="$1" compose --profile e2e run --rm -T e2e bash -c "$2" >/dev/null 2>&1
+}
+
+e2e_cli() { # 生命周期 CLI 桥（#13）：宿主树经 stdin tar 入容器（无 bind 读取通道）；
+  # CLI 为纯决策引擎，stdout=op 行协议（W/D/V/END），stderr=人类可读。
+  ensure_fresh_workspace
+  local -a tar_args=(defects replay tests)
+  [[ -f "$REPO_ROOT/apps/e2e/.registry.json" ]] && tar_args+=(".registry.json")
+  (cd "$REPO_ROOT/apps/e2e" && tar -cf - "${tar_args[@]}") \
+    | compose run --rm -T tools bash -c \
+      'mkdir -p /tmp/in && tar -x -C /tmp/in && exec node /workspace/apps/e2e/dist/cli.js --root /tmp/in "$@"' _ "$@"
+}
+
+run_verify_payload() { # $1=defNNNN(数字段) $2=expect(fail|pass) $3=b64 → 0 判定相符 / 9 不符
+  local vid="$1" expect="$2" b64="$3" rc=0
+  svc_healthy e2e-api || die 3 "e2e-api 未就绪（毕业校验运行需要隔离栈；修复命令：重跑本命令）"
+  local tmpd="$REPO_ROOT/apps/e2e/.verify-run"
+  rm -rf "$tmpd"; mkdir -p "$tmpd"
+  printf '%s' "$b64" | base64 -d > "$tmpd/def-$vid.verify.spec.ts"
+  ev step.started target="graduate verify-run" defect="$vid" expect="$expect"
+  (cd "$tmpd" && tar -cf - .) \
+    | E2E_RUN_ID="${E2E_CUR_RUN_ID:-local}" compose --profile e2e run --rm -T e2e bash -c \
+      'mkdir -p /workspace/apps/e2e/.verify-run && tar -x -C /workspace/apps/e2e/.verify-run && cd /workspace/apps/e2e && npx playwright test --config=playwright.verify.config.ts' || rc=$?
+  rm -rf "$tmpd"
+  if [[ "$expect" == "fail" ]]; then
+    if (( rc != 0 )); then ev step.completed target="graduate verify-run" verdict="reproduced"; return 0; fi
+    ev step.completed target="graduate verify-run" verdict="did-not-fail"; return 9
+  fi
+  if (( rc == 0 )); then ev step.completed target="graduate verify-run" verdict="passed"; return 0; fi
+  ev step.completed target="graduate verify-run" verdict="still-failing"; return 9
+}
+
+apply_e2e_ops() { # $1=ops 文件：V 行先真跑校验（判定不符→9，零落盘）；END error→透传码；然后原子应用 W/D
+  local opsfile="$1" end_status="ok" end_code=0 end_msg="" applied=0 vline vid vexpect vb64
+  vline="$(grep -P '^V\t' "$opsfile" | head -1 || true)"
+  if [[ -n "$vline" ]]; then
+    IFS=$'\t' read -r _t vid vexpect vb64 <<<"$vline"
+    if ! run_verify_payload "$vid" "$vexpect" "$vb64"; then
+      printf '[devenv] ERROR: 毕业校验运行判定不符（expect=%s）——工作区零改动（全有或全无）\n' "$vexpect" >&2
+      exit 9
+    fi
+  fi
+  local endline
+  endline="$(grep -P '^END\t' "$opsfile" | tail -1 || true)"
+  if [[ -n "$endline" ]]; then
+    IFS=$'\t' read -r _t end_status end_code end_msg <<<"$endline"
+  fi
+  if [[ "$end_status" != "ok" ]]; then
+    printf '[devenv] ERROR: %s\n' "$end_msg" >&2
+    exit "${end_code:-8}"
+  fi
+  local op f1 f2
+  while IFS=$'\t' read -r op f1 f2 _rest; do
+    case "$op" in
+      W) mkdir -p "$(dirname "$REPO_ROOT/apps/e2e/$f1")"; printf '%s' "$f2" | base64 -d > "$REPO_ROOT/apps/e2e/$f1"; applied=$((applied+1));;
+      D) rm -f "$REPO_ROOT/apps/e2e/$f1"; applied=$((applied+1));;
+    esac
+  done < <(grep -P '^[WD]\t' "$opsfile" || true)
+  note "生命周期落账：$applied 项文件操作已应用到 apps/e2e/"
 }
 
 acquire_lock() { # $1=锁名 $2=超时秒；独占 flock（跨 worktree 生效）
@@ -133,7 +272,7 @@ devenv — 环境唯一入口（PROTOTYPE #11）
 用法：devenv [--json] <子命令> [参数]
 
 命令面：
-  build [--lockgen]         构建工具镜像 + 安装依赖 + turbo build（幂等；--lockgen 强制重生成 lockfile）
+  build [--lockgen]         构建工具/workspace/e2e 三镜像 + 依赖 + turbo build（幂等；--lockgen 重生成 lockfile）
   up                        启动 db/redis/rustfs/api 并等待健康（幂等）
   web [--port N] [--down]   启动前端并发布宿主端口（#12；人类 opt-in，零端口不变量的唯一例外）
   gen <kind> <name>         脚手架生成（#12）：kind = app | package | nest-module | page
@@ -153,8 +292,20 @@ devenv — 环境唯一入口（PROTOTYPE #11）
   doctor                    一键体检；退出码即"可开工与否"
   status                    人读总览（容器+锁）
   images [--verify]         查看/校验镜像锁（tag+digest）
+  ── e2e 双轨（#13）──────────────────────────────────────────────────────────
+  ci [--run-id ID] [--full-down]  与 CI 同构：起隔离栈→只跑复现轨道→导产物→拆栈
+  explore [--keep]          探索轨道（失败=产出：证据→缺陷报告；--keep 保留栈调试）
+  verify [--diff-base REF]  质量门 + 生命周期防降级校验（CI 同一校验器）
+  e2e report <ID>           登记缺陷：实测复现门禁（确定性 1 次/非确定 ≥3 次全复现）后落账
+  e2e graduate <ID> [--fixed]     毕业事务：预检→转写→真跑校验→原子落账（不可机械转写→_drafts 草稿）
+  e2e confirm-fix <ID>      修复确认：真跑通过→摘除 expected-fail→fixed
+  e2e retire <ID> --reason "…" [--issue N]   退役：同事务删测试，记录永久留档
+  e2e replay <ID> [--attempts N]  手动重放（诊断）
+  e2e renumber              撞号/断号机械重排
+  e2e defect list|show <ID> 缺陷查询（--json 输出 JSON）
 
 退出码：0 成功 | 2 用法 | 3 环境未就绪 | 4 任务失败 | 5 超时 | 6 锁冲突
+        | 7 生命周期校验失败 | 8 状态转移/前置条件不合法 | 9 毕业校验运行判定不符 | 10 缺陷不存在/schema
 EOF
 }
 
@@ -180,6 +331,10 @@ cmd_build() {
   ev step.started target="workspace image (install + turbo build)"
   docker build -q -t "$WS_IMAGE" -f "$DEVENV_DIR/workspace.Dockerfile" "$REPO_ROOT" >&2
   ev step.completed target="workspace image"
+
+  ev step.started target="e2e image (playwright base + e2e runtime)"
+  ensure_fresh_e2e_image
+  ev step.completed target="e2e image"
 
   note "build 完成"
   final ok 0 duration="$(( $(date +%s) - t0 ))s"
@@ -472,6 +627,230 @@ cmd_images() {
 }
 
 # ---------------------------------------------------------------------------
+# e2e 顶层命令（#13）：ci / explore / verify + e2e 子命令
+# ---------------------------------------------------------------------------
+cmd_ci() { # 与 CI 同构：起栈→只跑复现轨道→导产物→拆栈（run_id 天然数据级隔离键）
+  local rid="" full_down=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --run-id) rid="${2:?--run-id 需要值}"; shift 2;;
+      --full-down) full_down=1; shift;;
+      *) die 2 "未知参数：$1（用法：ci [--run-id ID] [--full-down]）";;
+    esac
+  done
+  [[ -n "$rid" ]] || rid="$(new_run_id ci)"
+  e2e_stack_up "$rid" 1
+  trap 'e2e_teardown "$rid"' EXIT
+  local rc=0
+  e2e_run_playwright "$rid" repro || rc=$?
+  e2e_export_artifacts "$rid"
+  e2e_teardown "$rid"
+  trap - EXIT
+  (( full_down )) && compose down >/dev/null 2>&1
+  if (( rc )); then
+    note "复现轨道失败（exit $rc）：JSON(onlyFailures)→trace.zip 已在 .artifacts/e2e/$rid/"
+    final failed "$rc" runId="$rid"; exit 4
+  fi
+  note "复现轨道全绿（run=$rid）"
+  final ok 0 runId="$rid"
+}
+
+cmd_explore() { # 探索轨道：失败=产出（证据→缺陷报告），不是事故
+  local rid keep=0 rc=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --keep) keep=1; shift;;
+      *) die 2 "未知参数：$1（用法：explore [--keep]）";;
+    esac
+  done
+  rid="$(new_run_id exp)"
+  e2e_stack_up "$rid" 1
+  trap 'e2e_teardown "$rid"' EXIT
+  e2e_run_playwright "$rid" explore || rc=$?
+  e2e_export_artifacts "$rid"
+  if (( keep )); then
+    trap - EXIT
+    note "--keep：隔离栈保留调试（run=$rid；用后手动清理或复用同 run_id 重跑）"
+  else
+    e2e_teardown "$rid"
+    trap - EXIT
+  fi
+  if (( rc )); then
+    note "探索轨道发现失败（exit $rc）——这是产出：trace/video/JSON 在 .artifacts/e2e/$rid/；按 apps/e2e/defects/README.md 登记缺陷"
+    final explore-found "$rc" runId="$rid"; exit 4
+  fi
+  note "探索轨道本轮无失败发现（run=$rid）"
+  final ok 0 runId="$rid"
+}
+
+verify_removed_path() { # $1=被删路径（diff 级防降级：删记录=无条件红；删用例⇒伴随 retire）
+  local path="$1" id st
+  if [[ "$path" == apps/e2e/defects/DEF-*.json ]]; then
+    printf '[devenv] ERROR: [diff] 缺陷记录被删除：%s（无条件红——缺陷记录永不删除，退役仍留档）\n' "$path" >&2
+    return 1
+  fi
+  if [[ "$path" == apps/e2e/tests/repro/def-*.spec.ts ]]; then
+    id="DEF-$(printf '%s' "$path" | grep -oP 'def-\K\d{4}')"
+    st="$(grep -oP '"status":\s*"\K[a-z]+' "$REPO_ROOT/apps/e2e/defects/$id.json" 2>/dev/null || true)"
+    if [[ "$st" != "retired" ]]; then
+      printf '[devenv] ERROR: [diff] 复现用例被删除/移出：%s（须伴随 retire %s；当前状态=%s）\n' "$path" "$id" "${st:-无记录}" >&2
+      return 1
+    fi
+  fi
+  return 0
+}
+
+verify_diff_against() { # $1=基线 ref（CI 传 GITHUB_BASE_REF；本地传 origin/dev）
+  local base="$1" bad=0 status path rest
+  git -C "$REPO_ROOT" rev-parse --verify -q "$base^{commit}" >/dev/null || die 2 "diff 基线不可解析：$base"
+  base="$(git -C "$REPO_ROOT" merge-base HEAD "$base")"
+  while IFS=$'\t' read -r status path rest; do
+    [[ -z "${status:-}" ]] && continue
+    case "$status" in
+      D)  verify_removed_path "$path" || bad=1;;
+      R*) verify_removed_path "$path" || bad=1;;   # 重命名 = 删除 + 新增，旧路径按删除处理
+    esac
+  done < <(git -C "$REPO_ROOT" diff --name-status "$base" HEAD -- apps/e2e/defects apps/e2e/tests/repro 2>/dev/null || true)
+  (( bad )) && die 7 "diff 级防降级检查失败（见上）"
+}
+
+cmd_verify() { # 质量门 + 生命周期防降级（与 CI 同一校验器；--diff-base 加 diff 级检查）
+  local diff_base="" ops
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --diff-base) diff_base="${2:?--diff-base 需要值}"; shift 2;;
+      *) die 2 "未知参数：$1（用法：verify [--diff-base <git-ref>]）";;
+    esac
+  done
+  note "verify ①/③：质量门（lint / typecheck / test:unit）"
+  cmd_lint
+  cmd_typecheck
+  cmd_test_unit
+  note "verify ②/③：生命周期防降级（索引/注解/编号/门禁/注册表）"
+  ops="$(mktemp)"
+  e2e_cli verify --write-registry >"$ops"
+  apply_e2e_ops "$ops"
+  rm -f "$ops"
+  if [[ -n "$diff_base" ]]; then
+    note "verify ③/③：diff 级防降级（基线 $diff_base）"
+    verify_diff_against "$diff_base"
+  fi
+  note "verify 全绿"
+  final ok 0
+}
+
+cmd_e2e_report() { # 登记回填：实测复现门禁（0=复现）→ 全复现才落账 status=reported
+  local id="${1:?用法：e2e report <DEF-NNNN> [--by WHO]}"; shift
+  e2e_registry_lock 600
+  local rid; rid="$(new_run_id rep)"
+  e2e_stack_up "$rid" 0
+  trap 'e2e_teardown "$rid"' EXIT
+  local plan cmd attempts n=0 outcomes="" i rc2 ops
+  plan="$(e2e_cli replay-plan "$id")"
+  cmd="$(printf '%s\n' "$plan" | grep -P '^CMD\t' | cut -f2)"
+  attempts="$(printf '%s\n' "$plan" | grep -P '^ATTEMPTS\t' | cut -f2)"
+  [[ -n "$cmd" && -n "$attempts" ]] || die 10 "replay-plan 输出不完整（缺陷记录缺 replayCommand？）"
+  for i in $(seq 1 "$attempts"); do
+    rc2=0; e2e_replay_once "$rid" "$cmd" || rc2=$?
+    outcomes+="$rc2,"
+    note "复现门禁重放 $i/$attempts：exit $rc2（0=复现）"
+  done
+  outcomes="${outcomes%,}"
+  ops="$(mktemp)"
+  e2e_cli report "$id" --outcomes "$outcomes" --key-space "$rid" "$@" >"$ops"
+  apply_e2e_ops "$ops"
+  rm -f "$ops"
+  e2e_teardown "$rid"; trap - EXIT
+  final ok 0 defect="$id" attempts="$attempts" keySpace="$rid"
+}
+
+cmd_e2e_replay() { # 手动重放缺陷（诊断用）：默认按门禁下限次数
+  local id="${1:?用法：e2e replay <DEF-NNNN> [--attempts N]}"; shift
+  local attempts=0 rid plan cmd i rc2 reproduced=0
+  [[ "${1:-}" == "--attempts" ]] && attempts="${2:?--attempts 需要值}"
+  e2e_registry_lock 60
+  rid="$(new_run_id rpl)"
+  e2e_stack_up "$rid" 0
+  trap 'e2e_teardown "$rid"' EXIT
+  plan="$(e2e_cli replay-plan "$id")"
+  cmd="$(printf '%s\n' "$plan" | grep -P '^CMD\t' | cut -f2)"
+  local n; n="$(printf '%s\n' "$plan" | grep -P '^ATTEMPTS\t' | cut -f2)"
+  (( attempts > 0 )) && n="$attempts"
+  [[ -n "$cmd" ]] || die 10 "replay-plan 输出不完整"
+  for i in $(seq 1 "$n"); do
+    rc2=0; e2e_replay_once "$rid" "$cmd" || rc2=$?
+    (( rc2 == 0 )) && reproduced=$((reproduced+1))
+    note "重放 $i/$n：exit $rc2（0=复现）"
+  done
+  e2e_teardown "$rid"; trap - EXIT
+  if (( reproduced == n )); then
+    note "缺陷复现：$reproduced/$n"
+    final ok 0 defect="$id" reproduced="$reproduced" attempts="$n"
+  else
+    note "未全部复现：$reproduced/$n（环境漂移或已修复？）"
+    final not-reproduced 4 defect="$id" reproduced="$reproduced" attempts="$n"
+    exit 4
+  fi
+}
+
+cmd_e2e_graduate() { # 毕业事务：预检→转写→真跑校验→原子落账（含 _drafts 草稿流）
+  local id="${1:?用法：e2e graduate <DEF-NNNN> [--fixed] [--by WHO]}"; shift
+  e2e_registry_lock 600
+  local rid; rid="$(new_run_id grad)"
+  E2E_CUR_RUN_ID="$rid"
+  e2e_stack_up "$rid" 1
+  trap 'e2e_teardown "$rid"' EXIT
+  local ops; ops="$(mktemp)"
+  e2e_cli graduate "$id" "$@" >"$ops"
+  apply_e2e_ops "$ops"
+  rm -f "$ops"
+  note "毕业完成：测试文件与缺陷记录放同一 commit（#10 决议 §6）"
+  e2e_teardown "$rid"; trap - EXIT
+  final ok 0 defect="$id" keySpace="$rid"
+}
+
+cmd_e2e_confirm_fix() { # 修复确认：真跑（无 fail 标记）必须通过 → 摘标记 → fixed
+  local id="${1:?用法：e2e confirm-fix <DEF-NNNN> [--by WHO]}"; shift
+  e2e_registry_lock 600
+  local rid; rid="$(new_run_id cfx)"
+  E2E_CUR_RUN_ID="$rid"
+  e2e_stack_up "$rid" 1
+  trap 'e2e_teardown "$rid"' EXIT
+  local ops; ops="$(mktemp)"
+  e2e_cli confirm-fix "$id" "$@" >"$ops"
+  apply_e2e_ops "$ops"
+  rm -f "$ops"
+  note "修复确认完成：用例转常绿回归（fixed）"
+  e2e_teardown "$rid"; trap - EXIT
+  final ok 0 defect="$id" keySpace="$rid"
+}
+
+cmd_e2e() { # 子命令面（#10 决议 §9）
+  local sub="${1:?用法：e2e <report|graduate|confirm-fix|retire|replay|renumber|defect> …}"; shift
+  local ops
+  case "$sub" in
+    report)     cmd_e2e_report "$@";;
+    replay)     cmd_e2e_replay "$@";;
+    graduate)   cmd_e2e_graduate "$@";;
+    confirm-fix) cmd_e2e_confirm_fix "$@";;
+    defect)     e2e_cli defect "$@";;                       # 只读查询，stdout 直接透传
+    retire)
+      e2e_registry_lock 120
+      ops="$(mktemp)"
+      e2e_cli retire "$@" >"$ops"
+      apply_e2e_ops "$ops"; rm -f "$ops"
+      final ok 0 action=retire;;
+    renumber)
+      e2e_registry_lock 120
+      ops="$(mktemp)"
+      e2e_cli renumber "$@" >"$ops"
+      apply_e2e_ops "$ops"; rm -f "$ops"
+      final ok 0 action=renumber;;
+    *) die 2 "未知 e2e 子命令：$sub";;
+  esac
+}
+
+# ---------------------------------------------------------------------------
 # 入口
 # ---------------------------------------------------------------------------
 CMD=""
@@ -506,5 +885,9 @@ case "$CMD" in
   doctor)         cmd_doctor "$@";;
   status)         cmd_status "$@";;
   images)         cmd_images "$@";;
+  ci)             cmd_ci "$@";;
+  explore)        cmd_explore "$@";;
+  verify)         cmd_verify "$@";;
+  e2e)            cmd_e2e "$@";;
   *)              usage; die 2 "未知子命令：$CMD";;
 esac

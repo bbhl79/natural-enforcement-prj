@@ -119,7 +119,73 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  # ── e2e 双轨（#13）───────────────────────────────────────────────────────────
+  # 数据级隔离栈：基础设施容器共享（db/redis/rustfs），数据面独立——
+  # 独立数据库 e2e_<run_id>（setup 建库 + migrate deploy）、独立 bucket e2e-<run_id>
+  # （api onModuleInit 自建）、独立 Redis 键空间 e2e:<run_id>:（队列名前缀）。
+  # E2E_RUN_ID 由 devenv ci / explore / e2e 命令注入；人类/agent 不直接操作（devenv 唯一入口）。
+  e2e-api:
+    <<: *app-base
+    profiles: ["e2e"]
+    command: ["pnpm", "--filter", "@ne/api", "start"]
+    environment:
+      <<: *app-env
+      DATABASE_URL: postgresql://ne:ne-dev-only@db:5432/e2e_${E2E_RUN_ID:?devenv 注入 E2E_RUN_ID}
+      S3_BUCKET: e2e-${E2E_RUN_ID}
+      QUEUE_NAMESPACE: "e2e:${E2E_RUN_ID}:"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rustfs:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  # e2e 专属前端：preview proxy 经 API_ORIGIN 指向 e2e-api（浏览器在 e2e 容器内，走容器内网，零宿主端口）
+  e2e-web:
+    <<: *app-base
+    profiles: ["e2e"]
+    command: ["pnpm", "--filter", "@ne/web", "run", "preview"]
+    environment:
+      <<: *app-env
+      API_ORIGIN: http://e2e-api:3000
+    depends_on:
+      e2e-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:4173/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  # e2e 执行器：官方 Playwright 镜像（+项目 e2e 运行时，见 devenv/e2e.Dockerfile）。
+  # 官方三参数（playwright-e2e.md §1.2）：--init 防僵尸 + --ipc=host 防 Chromium /dev/shm 崩溃 + root 可信运行。
+  # 产物落命名卷 e2e-artifacts（容器销毁后 devenv 经 docker cp 导出到宿主 .artifacts/e2e/<run_id>/）。
+  e2e:
+    image: ${E2E_IMAGE:?devenv 注入 E2E_IMAGE（devenv build 产出）}
+    working_dir: /workspace
+    init: true
+    ipc: host
+    profiles: ["e2e"]
+    environment: &e2e-env
+      E2E_RUN_ID: ${E2E_RUN_ID:-local}
+      E2E_API_BASE_URL: http://e2e-api:3000
+      E2E_WEB_BASE_URL: http://e2e-web:4173
+      E2E_ARTIFACTS_DIR: /workspace/apps/e2e/.artifacts-run
+      CI: ${CI:-}
+    volumes:
+      - e2e-artifacts:/workspace/apps/e2e/.artifacts-run
+    command: ["true"]
+
 volumes:
   pgdata:
   rustfs-data:
   turbo-cache:
+  e2e-artifacts:

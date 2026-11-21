@@ -7,3 +7,8 @@ coverage/
 apps/api/src/generated/
 .artifacts/
 .pnpm-store/
+# e2e 双轨（#13）：run 产物（容器内卷，经 devenv 导出到 .artifacts/）、校验运行草稿、派生注册表
+apps/e2e/.artifacts-run/
+apps/e2e/.verify-run/
+apps/e2e/.registry.json
+playwright/.auth/

@@ -1,0 +1,38 @@
+# PROTOTYPE #13 草稿 — e2e 复现轨道 CI（与本地 `devenv ci` 同构：devenv 唯一入口不变量的 CI 延伸）。
+# 毕业不改本文件（#10 决议 §1）：复现用例经目录约定 tests/repro/ 自动纳入，探索轨道 tests/explore/ 永不进 CI。
+# 触发面为草稿口径（原型分支 push + 手动）；SPEC 批准后改为逐 PR。
+name: e2e repro (draft #13)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [prototype/e2e-dualtrack]
+
+concurrency:
+  group: e2e-draft-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repro:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60   # 须显著大于 repro 配置 globalTimeout=10min（playwright-e2e.md §1.4）
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: devenv build（tools / workspace / e2e 三镜像；镜像锁 tag+digest）
+        run: ./devenv build
+
+      - name: devenv verify（质量门 + 生命周期防降级；与本地同一校验器）
+        run: ./devenv verify
+
+      - name: devenv ci（起栈→只跑复现轨道→拆栈；run_id 天然数据级隔离键）
+        run: ./devenv ci --run-id "ci-${{ github.run_id }}-${{ github.run_attempt }}" --full-down
+
+      # 失败产物链（playwright-e2e.md §4）：JSON(onlyFailures) → trace.zip → html；只上载可信 artifact
+      - name: 上传 e2e 产物（trace/报告/JSON，30 天）
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-artifacts
+          path: .artifacts/e2e/
+          retention-days: 30

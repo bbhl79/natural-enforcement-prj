@@ -2,5 +2,26 @@
   "name": "@ne/e2e",
   "version": "0.0.0",
   "private": true,
-  "description": "PROTOTYPE #11 占位：e2e 双轨原型属 Prototype-e2e双轨与CI原型（#13），本包暂无脚本不参与 turbo 任务"
+  "type": "module",
+  "description": "e2e 双轨（探索/复现）+ 缺陷生命周期命令面（PROTOTYPE #13）：Playwright runner，默认黑盒（API/UI）；复现用例唯一合法产生方式 = devenv e2e graduate",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:repro": "playwright test --config=playwright.repro.config.ts",
+    "test:explore": "playwright test --config=playwright.explore.config.ts",
+    "test:unit": "vitest run src"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "catalog:",
+    "@ne/contracts": "workspace:*",
+    "@playwright/test": "catalog:",
+    "fast-check": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@ne/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
 }
