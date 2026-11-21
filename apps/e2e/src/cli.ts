@@ -81,15 +81,19 @@ function writeJson(record: DefectRecord): void {
 function cmdDefect(): number {
   const sub = argv[1]
   const tree = loadTree(root)
+  // 查询命令：输出走 stdout（可管道）；进度类才走 stderr
+  const out = (s: string): void => {
+    process.stdout.write(`${s}\n`)
+  }
   if (sub === 'list') {
     if (jsonOut) {
       process.stdout.write(JSON.stringify([...tree.defects.values()].map((d) => d.record), null, 2) + '\n')
       return 0
     }
-    if (tree.defects.size === 0) human('（无缺陷记录）')
+    if (tree.defects.size === 0) out('（无缺陷记录）')
     for (const d of [...tree.defects.values()].sort((a, b) => (a.record.id < b.record.id ? -1 : 1))) {
       const r = d.record
-      human(
+      out(
         `${r.id}  [${r.status}]  ${r.severity}  ${r.engine}/${r.layer}  ${r.title}  (replay×${r.reproducibility.gate.attempts})`,
       )
     }
@@ -103,16 +107,16 @@ function cmdDefect(): number {
       process.stdout.write(JSON.stringify(r, null, 2) + '\n')
       return 0
     }
-    human(`${r.id} — ${r.title}`)
-    human(`  状态：${r.status}｜引擎：${r.engine}/${r.layer}｜严重度：${r.severity}`)
-    human(`  摘要：${r.summary}`)
-    human(`  charter：${r.charter}`)
-    human(`  复现：kind=${r.reproducibility.kind} replayCommand=${r.reproducibility.replayCommand}`)
-    human(`  门禁：attempts=${r.reproducibility.gate.attempts} keySpaces=${r.reproducibility.gate.keySpaces.join(',')} allFailed=${r.reproducibility.gate.allFailed}`)
-    for (const e of r.evidence) human(`  证据：[${e.type}] ${e.uri}`)
-    if (r.graduation) human(`  毕业：${r.graduation.mode} → ${r.graduation.specPath}（verifiedRun ${r.graduation.verifiedRun.expect}=${r.graduation.verifiedRun.outcome}）`)
-    if (r.fix) human(`  修复：${r.fix.at} by ${r.fix.by}`)
-    if (r.retirement) human(`  退役：${r.retirement.reason}`)
+    out(`${r.id} — ${r.title}`)
+    out(`  状态：${r.status}｜引擎：${r.engine}/${r.layer}｜严重度：${r.severity}`)
+    out(`  摘要：${r.summary}`)
+    out(`  charter：${r.charter}`)
+    out(`  复现：kind=${r.reproducibility.kind} replayCommand=${r.reproducibility.replayCommand}`)
+    out(`  门禁：attempts=${r.reproducibility.gate.attempts} keySpaces=${r.reproducibility.gate.keySpaces.join(',')} allFailed=${r.reproducibility.gate.allFailed}`)
+    for (const e of r.evidence) out(`  证据：[${e.type}] ${e.uri}`)
+    if (r.graduation) out(`  毕业：${r.graduation.mode} → ${r.graduation.specPath}（verifiedRun ${r.graduation.verifiedRun.expect}=${r.graduation.verifiedRun.outcome}）`)
+    if (r.fix) out(`  修复：${r.fix.at} by ${r.fix.by}`)
+    if (r.retirement) out(`  退役：${r.retirement.reason}`)
     return 0
   }
   return usage()
