@@ -27,6 +27,9 @@ export function summarize(raw) {
   let executionMs = null
   let events = 0
   let parseErrors = 0
+  let hasSummary = false
+  const errors = []
+  const scripts = new Map() // `${depPath}|${stage}` -> {dep, stage, exitCode}
   const imported = {}
 
   for (const line of raw.split('\n')) {
@@ -39,6 +42,14 @@ export function summarize(raw) {
       continue
     }
     events += 1
+    if (e.level === 'error') errors.push(e.code ?? 'UNKNOWN')
+    if (e.name === 'pnpm:summary') hasSummary = true
+    if (e.name === 'pnpm:lifecycle' && e.depPath && e.stage) {
+      const key = `${e.depPath}|${e.stage}`
+      const entry = scripts.get(key) ?? { dep: e.depPath, stage: e.stage, exitCode: null }
+      if (Number.isInteger(e.exitCode)) entry.exitCode = e.exitCode
+      scripts.set(key, entry)
+    }
     if (e.name === 'pnpm:fetching-progress' && e.status === 'started' && e.packageId) {
       if (!fetchedIds.has(e.packageId)) {
         fetchedIds.add(e.packageId)
@@ -53,8 +64,23 @@ export function summarize(raw) {
     }
   }
 
+  const lifecycleScripts = [...scripts.values()]
+
+  // 判定顺序即防“静默通过”：只有流完整、无错误、零下载、且无脚本执行才是 zero-download。
+  // 脚本（如 @prisma/engines postinstall）可在 pnpm 记账之外联网，零下载+脚本执行须另证。
+  let verdict
+  if (events === 0) verdict = 'no-evidence'
+  else if (errors.length > 0) verdict = 'failed'
+  else if (!hasSummary || executionMs === null) verdict = 'incomplete'
+  else if (fetchedIds.size > 0) verdict = 'downloaded'
+  else if (lifecycleScripts.length > 0) verdict = 'zero-fetch-scripts-ran'
+  else verdict = 'zero-download'
+
   const ids = [...fetchedIds]
   return {
+    verdict,
+    errors,
+    lifecycleScripts,
     fetchedPackages: ids.length,
     fetchedBytes,
     fetchedIds: ids,

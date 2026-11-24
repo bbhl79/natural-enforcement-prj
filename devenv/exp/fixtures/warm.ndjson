@@ -1,0 +1,20 @@
+{"time":1795532811392,"hostname":"b625920e06d5","pid":77,"name":"pnpm:scope","level":"debug","selected":1}
+{"time":1795532811393,"hostname":"b625920e06d5","pid":77,"name":"pnpm:package-manifest","level":"debug","prefix":"/tmp/p","initial":{"name":"probe","version":"1.0.0","dependencies":{"is-odd":"3.0.1"}}}
+{"time":1795532811393,"hostname":"b625920e06d5","pid":77,"name":"pnpm:context","level":"debug","currentLockfileExists":false,"storeDir":"/tmp/.local/share/pnpm/store/v11","virtualStoreDir":"/tmp/p/node_modules/.pnpm"}
+{"time":1795532811393,"hostname":"b625920e06d5","pid":77,"name":"pnpm:stage","level":"debug","prefix":"/tmp/p","stage":"importing_started"}
+{"time":1795532811394,"hostname":"b625920e06d5","pid":77,"name":"pnpm","level":"info","message":"Lockfile is up to date, resolution step is skipped","prefix":"/tmp/p"}
+{"time":1795532811398,"hostname":"b625920e06d5","pid":77,"name":"pnpm:lockfile-verification","level":"debug","status":"cached","verifiedAt":"2026-11-24T15:06:51.357Z","lockfilePath":"/tmp/p/pnpm-lock.yaml"}
+{"time":1795532811399,"hostname":"b625920e06d5","pid":77,"name":"pnpm:progress","level":"debug","status":"resolved","packageId":"is-odd@3.0.1","requester":"/tmp/p"}
+{"time":1795532811399,"hostname":"b625920e06d5","pid":77,"name":"pnpm:progress","level":"debug","status":"resolved","packageId":"is-number@6.0.0","requester":"/tmp/p"}
+{"time":1795532811399,"hostname":"b625920e06d5","pid":77,"name":"pnpm:progress","level":"debug","status":"found_in_store","packageId":"is-number@6.0.0","requester":"/tmp/p"}
+{"time":1795532811399,"hostname":"b625920e06d5","pid":77,"name":"pnpm:progress","level":"debug","status":"found_in_store","packageId":"is-odd@3.0.1","requester":"/tmp/p"}
+{"time":1795532811399,"hostname":"b625920e06d5","pid":77,"name":"pnpm:package-import-method","level":"debug","method":"hardlink"}
+{"time":1795532811399,"hostname":"b625920e06d5","pid":77,"name":"pnpm:progress","level":"debug","status":"imported","method":"hardlink","requester":"/tmp/p","to":"/tmp/p/node_modules/.pnpm/is-number@6.0.0/node_modules/is-number"}
+{"time":1795532811399,"hostname":"b625920e06d5","pid":77,"name":"pnpm:progress","level":"debug","status":"imported","method":"hardlink","requester":"/tmp/p","to":"/tmp/p/node_modules/.pnpm/is-odd@3.0.1/node_modules/is-odd"}
+{"time":1795532811400,"hostname":"b625920e06d5","pid":77,"name":"pnpm:stats","level":"debug","prefix":"/tmp/p","added":2}
+{"time":1795532811400,"hostname":"b625920e06d5","pid":77,"name":"pnpm:stats","level":"debug","prefix":"/tmp/p","removed":0}
+{"time":1795532811400,"hostname":"b625920e06d5","pid":77,"name":"pnpm:root","level":"debug","prefix":"/tmp/p","added":{"name":"is-odd","realName":"is-odd","version":"3.0.1","dependencyType":"prod"}}
+{"time":1795532811401,"hostname":"b625920e06d5","pid":77,"name":"pnpm:stage","level":"debug","prefix":"/tmp/p","stage":"importing_done"}
+{"time":1795532811401,"hostname":"b625920e06d5","pid":77,"name":"pnpm:ignored-scripts","level":"debug","packageNames":[]}
+{"time":1795532811428,"hostname":"b625920e06d5","pid":77,"name":"pnpm:summary","level":"debug","prefix":"/tmp/p"}
+{"time":1795532811428,"hostname":"b625920e06d5","pid":77,"name":"pnpm:execution-time","level":"debug","startedAt":1795532811387,"endedAt":1795532811428}

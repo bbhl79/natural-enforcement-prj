@@ -1,0 +1,6 @@
+{"time":1795532811449,"hostname":"b625920e06d5","pid":152,"name":"pnpm:scope","level":"debug","selected":1}
+{"time":1795532811449,"hostname":"b625920e06d5","pid":152,"name":"pnpm:package-manifest","level":"debug","prefix":"/tmp/q","initial":{"name":"probe2","version":"1.0.0","dependencies":{"left-pad":"1.3.0"}}}
+{"time":1795532811449,"hostname":"b625920e06d5","pid":152,"name":"pnpm:context","level":"debug","currentLockfileExists":false,"storeDir":"/tmp/.local/share/pnpm/store/v11","virtualStoreDir":"/tmp/q/node_modules/.pnpm"}
+{"time":1795532811449,"hostname":"b625920e06d5","pid":152,"name":"pnpm:stage","level":"debug","prefix":"/tmp/q","stage":"importing_started"}
+{"time":1795532811450,"hostname":"b625920e06d5","pid":152,"name":"pnpm:stage","level":"debug","prefix":"/tmp/q","stage":"resolution_started"}
+{"time":1795532811456,"hostname":"b625920e06d5","pid":152,"name":"pnpm","level":"error","code":"ERR_PNPM_NO_OFFLINE_META","message":"Failed to resolve left-pad@1.3.0 in package mirror \"/tmp/.cache/pnpm/v12/metadata/https%3A+registry.npmjs.org/left-pad.jsonl\"\n\nFailed to resolve left-pad@1.3.0","prefix":"/tmp/q"}
