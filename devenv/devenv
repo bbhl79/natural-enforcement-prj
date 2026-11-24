@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# ============================================================================
+# devenv（最小骨架，feat/github-app-auth）—— 当前仅含 GitHub App 认证入口。
+#
+# 本骨架只实现认证相关命令，不搬运原型分支的其他命令面。
+# 命令面权威文档：devenv/COMMANDS.md
+#
+# 调用形态：./devenv/devenv <子命令> [参数]
+#
+# 退出码枚举：
+#   0  成功
+#   2  用法错误（未知子命令 / 缺参数 / 被拒绝的 gh auth）
+#   20 配置或授权不符（仓库声明与本机授权不匹配、字段缺失）
+#   21 私钥缺失 / 权限错误 / JWT 签名失败
+#   22 installation token 换取失败（网络 / 超时 / GitHub 拒绝）
+#   23 目标仓库或推送 URL 未授权
+#   其他 透传 gh / git 自身的退出码
+# ============================================================================
+set -Eeuo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=lib/github-app-auth.sh
+source "$REPO_ROOT/devenv/lib/github-app-auth.sh"
+
+usage() {
+  cat >&2 <<'EOF'
+用法：./devenv/devenv <子命令> [参数]
+
+GitHub App 认证入口（身份：GitHub App，非个人账号）：
+  gh <args...>        以 App 身份执行 gh（拒绝 gh auth；拒绝 -R 指向未授权仓库）
+  git-push <remote> <refspec...>
+                      以 App 身份经 HTTPS 推送（只接受已配置 remote 名；
+                      目标必须是授权仓库；不改写 remote 配置）
+
+测试：
+  test:auth           离线测试（不访问 GitHub，默认测试命令）
+  test:auth:integration [--issue-comment N] [--push-test-branch] [--key-outage]
+                      真实 GitHub 集成测试（默认只读；写操作需显式旗标）
+
+退出码：0 成功 / 2 用法 / 20 授权不符 / 21 私钥或签名 / 22 换取 token 失败 / 23 目标未授权
+EOF
+  exit 2
+}
+
+cmd="${1:-}"
+[[ -n "$cmd" ]] || usage
+shift
+
+case "$cmd" in
+  gh)                     gha_cmd_gh "$@" ;;
+  git-push)               gha_cmd_git_push "$@" ;;
+  test:auth)              bash "$REPO_ROOT/devenv/test/offline.test.sh" ;;
+  test:auth:integration)  bash "$REPO_ROOT/devenv/test/integration.test.sh" "$@" ;;
+  -h|--help|help)         usage ;;
+  *)                      usage ;;
+esac

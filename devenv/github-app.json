@@ -1,0 +1,7 @@
+{
+  "app_id": 5899686,
+  "app_slug": "bbhl79-agent",
+  "repositories": ["bbhl79/natural-enforcement-prj"],
+  "docs": "docs/agents/github-app-auth.md",
+  "comment": "身份声明（非敏感）。实际授权以仓库外 ~/.config/github-apps/bbhl79-agent/authorization.json 为准；本文件与其不匹配时入口拒绝执行，本文件不能扩大授权范围。"
+}
