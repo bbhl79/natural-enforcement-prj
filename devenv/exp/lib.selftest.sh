@@ -407,5 +407,16 @@ capture rc_ls3 loop_summary 1 "$LS3" "$LS3/summary.json"
 check "loop_summary: nothing passed -> median is null (not 0), exit 1" \
   "[ $rc_ls3 = 1 ] && jq -e '.passed.n==0 and .passed.median==null and .passed.worst==null' $LS3/summary.json >/dev/null"
 
+# ---------------------------------------------------------------- lint-local.awk（防止“同条 local 引用前变量”复发）
+LC="$(mktemp -d)"
+printf '%s\n' 'f() {' '  local i="$1" pkg="x-$i"' '}' >"$LC/bad.sh"
+printf '%s\n' 'f() {' '  local i="$1"' '  local pkg="x-$i"' '}' >"$LC/ok.sh"
+capture rc_lint_bad  awk -f "$HERE/lint-local.awk" "$LC/bad.sh" >/dev/null 2>&1
+capture rc_lint_ok   awk -f "$HERE/lint-local.awk" "$LC/ok.sh"  >/dev/null 2>&1
+check "lint-local: catches same-statement forward reference (exit 1)" "[ $rc_lint_bad = 1 ]"
+check "lint-local: split statements are clean (exit 0)" "[ $rc_lint_ok = 0 ]"
+check "lint-local: the whole experiment codebase is clean" \
+  "awk -f '$HERE/lint-local.awk' '$HERE'/*.sh '$HERE/../devenv' 2>/dev/null"
+
 echo "---- lib selftest exit=$fail ----"
 exit "$fail"

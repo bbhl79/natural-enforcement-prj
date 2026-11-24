@@ -38,7 +38,9 @@ warmup() {
 }
 
 loop_once() { # loop_once <i>
-  local i="$1" pkg="exp-loop-$i"
+  # 两条 local：同一条 local 语句里引用前一个变量会在赋值前展开（set -u 下 unbound，见 lint-local.awk）
+  local i="$1"
+  local pkg="exp-loop-$i"
   git_reset
   cache_state "loop$i-before"
   timed "loop$i-gen"       "$REPO_ROOT/devenv/devenv" --json gen package "$pkg"
