@@ -443,3 +443,39 @@ loop_total() { # loop_total <N> <out.json>：第 N 次闭环的总耗时（gen �
   printf '%s\n' "$res" >"$out"
   jq -e '.exitCode == 0' "$out" >/dev/null
 }
+
+loop_summary() { # loop_summary <runs> <dir-with-loopN-total.json> <out.json>
+  # SPEC：报告“中位数与最差值”。只有通过的闭环才进入中位数——失败/不完整的闭环不能把中位数拉低或抬高：
+  #   passed        exitCode==0 的闭环（含 n/median/worst/all）
+  #   failed        门失败的闭环（保留其耗时，供报告如实列出）
+  #   incomplete    没有总耗时文件/内容为空（闭环没跑完）——不是“耗时 0 的成功”
+  #   allCompleted  所有跑完的闭环（含失败的）：最差值按“最差一次”的字面意思也给出
+  # 退出码：0 全部通过 | 1 存在失败或不完整，或没有任何通过 | 2 参数/目录无效。
+  local runs="$1" dir="$2" out="$3" i f
+  : >"$out"
+  [[ "$runs" =~ ^[0-9]+$ ]] && [[ -d "$dir" ]] || return 2
+  local files=()
+  for ((i = 1; i <= runs; i++)); do
+    f="$dir/loop$i-total.json"
+    if [[ -s "$f" ]] && jq -e 'type=="object" and (.durationMs|type=="number")' "$f" >/dev/null 2>&1; then
+      files+=("$f")
+    fi
+  done
+  jq -n --argjson runs "$runs" --slurpfile all <(
+        if ((${#files[@]})); then cat "${files[@]}"; fi
+      ) '
+    def med($v): ($v|sort) as $s | ($s|length) as $n
+      | if $n == 0 then null elif $n % 2 == 1 then $s[($n/2|floor)] else (($s[$n/2-1] + $s[$n/2]) / 2) end;
+    def num($x): $x | sub("^loop"; "") | sub("-total$"; "") | tonumber;
+    ($all) as $a
+    | ($a | map(select(.exitCode == 0))) as $p
+    | ($a | map(select(.exitCode != 0))) as $f
+    | ($a | map(num(.name))) as $done
+    | { runs: $runs,
+        passed: { n: ($p|length), median: med($p|map(.durationMs)), worst: ($p|map(.durationMs)|max),
+                  all: ($p|map(.durationMs)|sort) },
+        failed: { n: ($f|length), loops: ($f|map(num(.name))), durationsMs: ($f|map(.durationMs)|sort) },
+        incomplete: { n: ($runs - ($a|length)), loops: ([range(1; $runs+1)] | map(select(. as $i | $done | index($i) | not))) },
+        allCompleted: { n: ($a|length), worst: ($a|map(.durationMs)|max) } }' >"$out" || { : >"$out"; return 2; }
+  jq -e '.passed.n > 0 and .failed.n == 0 and .incomplete.n == 0' "$out" >/dev/null
+}
