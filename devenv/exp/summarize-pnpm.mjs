@@ -10,6 +10,8 @@
 //   fetchedPackages == 0  ⇒ 本次 install 未发起任何包内容下载。
 // 版本/安全元数据查询不在 fetching-progress 事件内，允许联网（见 SPEC 口径）。
 import fs from 'node:fs'
+import process from 'node:process'
+import { URL } from 'node:url'
 
 /**
  * @param {string} raw ndjson 文本

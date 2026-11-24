@@ -4,6 +4,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import process from 'node:process'
+import { URL } from 'node:url'
 import { summarize } from './summarize-pnpm.mjs'
 
 const fx = (name) => fs.readFileSync(new URL(`./fixtures/${name}.ndjson`, import.meta.url), 'utf8')
