@@ -82,3 +82,8 @@
 - **候选（已验证）**：pnpm store + registry 元数据挂引擎原生 cache mount（`RUN --mount=type=cache`，`sharing=locked`）。新增包后重建**零包内容下载**（pnpm ndjson 结构化证据），产物树与干净下载基线逐文件一致；新增外部依赖只下载该依赖；离线（`--network=none`）可建成；并发构建经 `sharing=locked` 串行。
 - **闭环**：新增包闭环（gen→lint→typecheck→test:unit）5 次测量，中位 111 s / 最差 122 s，远低于 10 min 预算。
 - **注意**：store 是缓存不是信任根（pnpm 12.21 对篡改静默导入、`store status` 不报）；干净重建换 cache id。详见 [deps-cache-reuse.md](deps-cache-reuse.md) + [deps-cache-evidence/](deps-cache-evidence/)。
+
+## 六、ARM 路线增补（2026-11-24，#53 阶段 0）
+
+- **postgis/postgis arm64 扩大复核**：2026-11-24 经 Docker Registry API 逐一实查，该仓库 12 个维护标签（latest、19-3.7、18-3.6、18-3.7、17-3.5/3.6/3.7、16-3.5/3.6/3.7、15-3.5、15-3.7）均 amd64-only，比 11-19 复核（仅证"存在"）更严格。macOS ARM 候选路线（Rosetta 仿真 / kartoza 第三方 multiarch / postgres 自建）与 Mac 实验 runbook 见 [macos-arm-db-route.md](macos-arm-db-route.md)。
+- 上表版本矩阵中 `postgis/postgis:18-3.6` 锁定值**不变**（amd64  digest 锁跨架构语义见 Spec-工程基座 §2）；该增补不改变任何锁定决策，只补 ARM 路线事实。
