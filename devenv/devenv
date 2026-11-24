@@ -118,7 +118,11 @@ regen_lockfile() { # lockgen 靶生成 lockfile 后 docker cp 导出（全程容
   local cid
   cid="$(docker create "$LOCKGEN_TAG")"
   docker cp "$cid":/workspace/pnpm-lock.yaml "$REPO_ROOT/pnpm-lock.yaml" >&2
-  docker rm "$cid" >/dev/null; docker rmi "$LOCKGEN_TAG" >/dev/null
+  docker rm "$cid" >/dev/null
+  # 判据是“临时标签是否还在”，不是 rmi 的退出码：失败构建泄漏的 buildah working container 会钉住共享祖先层，
+  # 此时 rmi 退出 1（"in use"）但标签已被删除（实测复现）。set -e 下用退出码判断会让 gen 在 lockfile 已写入后中途退出。
+  docker rmi "$LOCKGEN_TAG" >/dev/null 2>&1 || true
+  if docker image inspect "$LOCKGEN_TAG" >/dev/null 2>&1; then die 3 "lockgen 临时镜像 $LOCKGEN_TAG 未能删除（lockfile 已更新）"; fi
   ev step.completed target="lockgen"
 }
 

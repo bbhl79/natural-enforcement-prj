@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# lib.sh 辅助函数自检（无需 docker 的部分）。每条断言都有可能失败；含反例。
+# lib.sh 辅助函数自检（regen_lockfile_direct 部分用 alpine 微型构建，需要 docker）。每条断言都有可能失败；含反例。
 # 用法：./devenv/exp/lib.selftest.sh   → 全过 exit 0，否则非零
 set -Eeuo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -203,6 +203,180 @@ capture rc_x run_step_case "$XE" usehelpers \
   'body() { claim from-step "$EVIDENCE_DIR/ev.json" ".fetchedPackages==0"; assert_evidence "$EVIDENCE_DIR/ev.json" ".fetchedPackages==0" inline; echo reached >"$EVIDENCE_DIR/reached"; }'
 check "step body can call claim() and assert_evidence() (every lib function is visible in the child)" \
   "[ $rc_x = 0 ] && [ -e $XE/reached ] && jq -se '.[0].name==\"from-step\" and .[0].pass==true' $XE/claims.jsonl >/dev/null"
+
+# ---------------------------------------------------------------- result_json（从 results.jsonl 取某一步的记录）
+RD="$(mktemp -d)"
+printf '%s\n' \
+  '{"name":"b7-offline","startMs":1,"endMs":2,"durationMs":100,"exitCode":1}' \
+  '{"name":"b7-offline-extra","startMs":1,"endMs":2,"durationMs":5,"exitCode":9}' \
+  '{"name":"b7-offline","startMs":3,"endMs":4,"durationMs":200,"exitCode":0}' >"$RD/results.jsonl"
+capture rc_rj1 env EVIDENCE_DIR="$RD" bash -c "source '$HERE/lib.sh'; result_json b7-offline '$RD/out.json'"
+check "result_json: found -> exit 0 and the LAST record for that exact name (rerun wins, no prefix match)" \
+  "[ $rc_rj1 = 0 ] && jq -e '.durationMs==200 and .exitCode==0' $RD/out.json >/dev/null"
+capture rc_rj2 env EVIDENCE_DIR="$RD" bash -c "source '$HERE/lib.sh'; result_json nope '$RD/none.json'"
+check "result_json: absent -> exit 1 and NO file written (so claim() reads it as unverifiable, not false)" \
+  "[ $rc_rj2 = 1 ] && [ ! -e $RD/none.json ]"
+capture rc_rj3 env EVIDENCE_DIR="$RD/no-such-dir" bash -c "source '$HERE/lib.sh'; result_json b7-offline '$RD/none2.json'"
+check "result_json: missing results.jsonl -> exit 1 and no file" "[ $rc_rj3 = 1 ] && [ ! -e $RD/none2.json ]"
+
+# ---------------------------------------------------------------- regen_lockfile_direct：失败不得伪装成功（用 alpine 微型构建，需 docker）
+RG="$(mktemp -d)"
+mk_regen_repo() { # mk_regen_repo <dir> <lockgen 靶里的 RUN 命令>：旧 lockfile + 最小 Dockerfile
+  mkdir -p "$1/devenv"
+  printf 'OLD-LOCKFILE\n' >"$1/pnpm-lock.yaml"
+  printf 'FROM alpine:3.21 AS lockgen\nWORKDIR /workspace\nRUN %s\n' "$2" >"$1/devenv/workspace.Dockerfile"
+}
+run_regen() { # run_regen <repo-dir> <tag> -> 子进程退出码（REPO_ROOT 必须在 source 之后覆盖）
+  mkdir -p "$1/ev"
+  EVIDENCE_DIR="$1/ev" DEVENV_LOCKGEN_TAG="$2" bash -c "source '$HERE/lib.sh'; REPO_ROOT='$1'; regen_lockfile_direct" >/dev/null 2>&1
+}
+mk_regen_repo "$RG/fail" 'false'
+capture rc_rg1 run_regen "$RG/fail" ne-exp54-selftest-lockgen:fail
+check "regen: failing lockgen build -> exit exactly 11" "[ $rc_rg1 = 11 ]"
+check "regen: failing lockgen build leaves the OLD lockfile untouched" "[ \"\$(cat $RG/fail/pnpm-lock.yaml)\" = OLD-LOCKFILE ]"
+
+mk_regen_repo "$RG/nolock" 'true'
+capture rc_rg2 run_regen "$RG/nolock" ne-exp54-selftest-lockgen:nolock
+check "regen: build ok but no lockfile produced (docker cp fails) -> exit exactly 14" "[ $rc_rg2 = 14 ]"
+check "regen: cp failure leaves the OLD lockfile untouched" "[ \"\$(cat $RG/nolock/pnpm-lock.yaml)\" = OLD-LOCKFILE ]"
+
+mk_regen_repo "$RG/ok" 'echo NEW-LOCKFILE > /workspace/pnpm-lock.yaml'
+capture rc_rg3 run_regen "$RG/ok" ne-exp54-selftest-lockgen:ok
+check "regen: successful lockgen -> exit 0 and the lockfile is replaced" \
+  "[ $rc_rg3 = 0 ] && [ \"\$(cat $RG/ok/pnpm-lock.yaml)\" = NEW-LOCKFILE ]"
+check "regen: success removes its temporary lockgen image" "! docker image inspect ne-exp54-selftest-lockgen:ok >/dev/null 2>&1"
+check "regen: a record with the real exit code is appended to results.jsonl" \
+  "jq -se 'map(select(.name==\"lockgen-direct\")) | last | .exitCode==0' $RG/ok/ev/results.jsonl >/dev/null"
+
+mk_regen_repo "$RG/shared" 'echo SHOULD-NOT-RUN > /workspace/pnpm-lock.yaml'
+capture rc_rg4 run_regen "$RG/shared" ne-lockgen:tmp
+check "regen: refuses the shared tag ne-lockgen:tmp (exit 2) and does not touch the lockfile" \
+  "[ $rc_rg4 = 2 ] && [ \"\$(cat $RG/shared/pnpm-lock.yaml)\" = OLD-LOCKFILE ]"
+
+# ---- 引擎事实（实测）：失败的构建会泄漏 buildah working container；它钉住共享祖先层，使对兄弟镜像的 `docker rmi`
+# 退出码为 1（"in use"）——但标签其实已被删除。所以判据必须是“标签是否还在”，不能是 rmi 的退出码。
+# 复现：先用失败构建泄漏容器，再让 regen 的临时镜像与它共享前缀。
+PIN="$(mktemp -d)"; NONCE="selftest-pin-$RANDOM$RANDOM"
+printf 'FROM alpine:3.21 AS lockgen\nLABEL nonce=%s\nWORKDIR /workspace\nRUN false\n' "$NONCE" >"$PIN/Dockerfile.leak"
+docker build -f "$PIN/Dockerfile.leak" -t ne-exp54-selftest-leak:x "$PIN" >/dev/null 2>&1 || true   # 故意失败 → 泄漏
+mkdir -p "$PIN/repo/devenv" && printf 'OLD-LOCKFILE\n' >"$PIN/repo/pnpm-lock.yaml"
+printf 'FROM alpine:3.21 AS lockgen\nLABEL nonce=%s\nWORKDIR /workspace\nRUN echo NEW-LOCKFILE > /workspace/pnpm-lock.yaml\n' "$NONCE" >"$PIN/repo/devenv/workspace.Dockerfile"
+capture rc_pin run_regen "$PIN/repo" ne-exp54-selftest-lockgen:pinned
+check "regen: succeeds (exit 0) even when a leaked build container pins the image's ancestor layers" "[ $rc_pin = 0 ]"
+check "regen: lockfile replaced in the pinned-ancestor case" "[ \"\$(cat $PIN/repo/pnpm-lock.yaml)\" = NEW-LOCKFILE ]"
+check "regen: temporary image tag is gone in the pinned-ancestor case" "! docker image inspect ne-exp54-selftest-lockgen:pinned >/dev/null 2>&1"
+
+# ---------------------------------------------------------------- compare_trees（null==null 陷阱：两侧都没有哈希不得算“相同”）
+CT="$(mktemp -d)"
+H1="$(printf 'a%.0s' $(seq 1 64))"; H2="$(printf 'b%.0s' $(seq 1 64))"; H3="$(printf 'c%.0s' $(seq 1 64))"
+mk_tree() { # mk_tree <file> <files> <content> <modes> <links>
+  jq -nc --argjson f "$2" --arg c "$3" --arg m "$4" --arg l "$5" '{label:"t",image:"i",files:$f,content:$c,modes:$m,links:$l}' >"$1"
+}
+mk_tree "$CT/base.json" 52116 "$H1" "$H2" "$H3"
+mk_tree "$CT/same.json" 52116 "$H1" "$H2" "$H3"
+mk_tree "$CT/dcontent.json" 52116 "$H2" "$H2" "$H3"
+mk_tree "$CT/dlinks.json" 52116 "$H1" "$H2" "$H1"
+mk_tree "$CT/dfiles.json" 52117 "$H1" "$H2" "$H3"
+printf '{"label":"t","image":"i","error":"tree hash failed"}\n' >"$CT/err.json"
+printf 'not json\n' >"$CT/garbage.json"
+
+capture rc_t1 compare_trees "$CT/base.json" "$CT/same.json" "$CT/o1.json"
+check "compare_trees: identical -> exit 0, identical:true, differs:[]" \
+  "[ $rc_t1 = 0 ] && jq -e '.identical==true and .differs==[]' $CT/o1.json >/dev/null"
+capture rc_t2 compare_trees "$CT/base.json" "$CT/dcontent.json" "$CT/o2.json"
+check "compare_trees: content differs -> exit 1, differs==[content]" \
+  "[ $rc_t2 = 1 ] && jq -e '.identical==false and .differs==[\"content\"]' $CT/o2.json >/dev/null"
+capture rc_t3 compare_trees "$CT/base.json" "$CT/dlinks.json" "$CT/o3.json"
+check "compare_trees: only links differ -> differs==[links]" "[ $rc_t3 = 1 ] && jq -e '.differs==[\"links\"]' $CT/o3.json >/dev/null"
+capture rc_t4 compare_trees "$CT/base.json" "$CT/dfiles.json" "$CT/o4.json"
+check "compare_trees: file count differs -> differs==[files]" "[ $rc_t4 = 1 ] && jq -e '.differs==[\"files\"]' $CT/o4.json >/dev/null"
+
+capture rc_t5 compare_trees "$CT/err.json" "$CT/err.json" "$CT/o5.json"
+check "compare_trees: BOTH sides failed (null==null) -> exit 2, NOT identical" "[ $rc_t5 = 2 ]"
+check "compare_trees: ...and writes no evidence (empty file => claim() reads it as unverifiable)" "[ ! -s $CT/o5.json ]"
+capture rc_t6 compare_trees "$CT/base.json" "$CT/err.json" "$CT/o6.json"
+check "compare_trees: one side failed -> exit 2" "[ $rc_t6 = 2 ] && [ ! -s $CT/o6.json ]"
+capture rc_t7 compare_trees "$CT/base.json" "$CT/garbage.json" "$CT/o7.json"
+check "compare_trees: unparseable input -> exit 2" "[ $rc_t7 = 2 ]"
+capture rc_t8 compare_trees "$CT/base.json" "$CT/nope.json" "$CT/o8.json"
+check "compare_trees: missing input -> exit 2" "[ $rc_t8 = 2 ]"
+# 陈旧证据：先产生一份有效输出，再用失败输入重跑同一输出路径 → 旧内容必须被清空
+capture rc_t9a compare_trees "$CT/base.json" "$CT/same.json" "$CT/o9.json"
+capture rc_t9b compare_trees "$CT/err.json" "$CT/err.json" "$CT/o9.json"
+check "compare_trees: a failed rerun truncates the stale evidence from the earlier valid run" \
+  "[ $rc_t9a = 0 ] && [ $rc_t9b = 2 ] && [ ! -s $CT/o9.json ]"
+# 与 claim 的衔接：空文件 → null（不是 false，更不是 true）
+capture rc_t10 env EVIDENCE_DIR="$CT" bash -c "source '$HERE/lib.sh'; claim tree-identical '$CT/o5.json' '.identical==true' 2>/dev/null"
+check "compare_trees + claim: failed comparison is recorded as pass:null" \
+  "[ $rc_t10 = 0 ] && jq -se '.[0].name==\"tree-identical\" and .[0].pass==null' $CT/claims.jsonl >/dev/null"
+
+# ---------------------------------------------------------------- concurrency_report（pnpm 自报区间 → 是否串行）
+CR="$(mktemp -d)"
+mk_ev() { # mk_ev <file> <verdict> <startedAt|null> <endedAt|null>
+  jq -nc --arg v "$2" --argjson s "$3" --argjson e "$4" '{stage:"deps",verdict:$v,startedAt:$s,endedAt:$e}' >"$1"
+}
+run_cr() { # run_cr <tag> <a-ev> <b-ev> <rcA> <rcB> -> 退出码；输出到 $CR/<tag>.raw.json / $CR/<tag>.json
+  concurrency_report "$2" "$3" "$4" "$5" "$CR/$1.raw.json" "$CR/$1.json"
+}
+mk_ev "$CR/a1.json" zero-download 100 200; mk_ev "$CR/b1.json" zero-download 250 400
+capture rc_c1 run_cr gap "$CR/a1.json" "$CR/b1.json" 0 0
+check "concurrency: disjoint (A 100-200, B 250-400): overlap -50 -> serialized:true" \
+  "[ $rc_c1 = 0 ] && jq -e '.overlapMs==-50 and .serialized==true and .exitCodes==[0,0] and .bothZeroDownload==true' $CR/gap.json >/dev/null"
+mk_ev "$CR/a2.json" zero-download 100 300; mk_ev "$CR/b2.json" zero-download 200 400
+capture rc_c2 run_cr overlap "$CR/a2.json" "$CR/b2.json" 0 0
+check "concurrency: overlapping (A 100-300, B 200-400): overlap 100 -> serialized:false" \
+  "jq -e '.overlapMs==100 and .serialized==false' $CR/overlap.json >/dev/null"
+mk_ev "$CR/a3.json" zero-download 100 200; mk_ev "$CR/b3.json" zero-download 200 300
+capture rc_c3 run_cr touch "$CR/a3.json" "$CR/b3.json" 0 0
+check "concurrency: touching intervals (A ends 200, B starts 200): overlap 0 -> serialized:true" \
+  "jq -e '.overlapMs==0 and .serialized==true' $CR/touch.json >/dev/null"
+mk_ev "$CR/a4.json" zero-download 100 200; mk_ev "$CR/b4.json" zero-download 50 400
+capture rc_c4 run_cr nested "$CR/a4.json" "$CR/b4.json" 0 0
+check "concurrency: nested (A inside B): overlap 100 -> serialized:false" "jq -e '.overlapMs==100 and .serialized==false' $CR/nested.json >/dev/null"
+
+# 缺区间（层缓存命中 / 失败 → 证据里没有 startedAt）：不得报成“未串行(false)”——输出空文件，使 claim 判 null
+printf '{"stage":"deps","verdict":"layer-cache-hit","installExecuted":false}\n' >"$CR/a5.json"
+capture rc_c5 run_cr nointerval "$CR/a5.json" "$CR/b1.json" 0 0
+check "concurrency: one side has no interval -> overlapMs:null in the raw file" "jq -e '.overlapMs==null' $CR/nointerval.raw.json >/dev/null"
+check "concurrency: ...and the verdict file is EMPTY (serialized is unverifiable, not false)" "[ ! -s $CR/nointerval.json ]"
+mk_ev "$CR/a6.json" zero-download 100 null
+capture rc_c6 run_cr noend "$CR/a6.json" "$CR/b1.json" 0 0
+check "concurrency: a null endedAt also yields no verdict (never treats null as 0)" "[ ! -s $CR/noend.json ]"
+
+# 其余字段：退出码照录；bothZeroDownload 仅当两侧都是 zero-download
+capture rc_c7 run_cr rcs "$CR/a1.json" "$CR/b1.json" 0 1
+check "concurrency: exit codes are recorded verbatim ([0,1])" "jq -e '.exitCodes==[0,1]' $CR/rcs.json >/dev/null"
+mk_ev "$CR/b8.json" downloaded 250 400
+capture rc_c8 run_cr notboth "$CR/a1.json" "$CR/b8.json" 0 0
+check "concurrency: bothZeroDownload is false when one side downloaded" "jq -e '.bothZeroDownload==false and .verdicts==[\"zero-download\",\"downloaded\"]' $CR/notboth.json >/dev/null"
+# 证据文件缺失 → 退出 2 且不写 verdict 文件（旧的有效结果也要被清掉）
+capture rc_c9a run_cr stale "$CR/a1.json" "$CR/b1.json" 0 0
+capture rc_c9b run_cr stale "$CR/a1.json" "$CR/missing.json" 0 0
+check "concurrency: missing evidence file -> exit 2 and stale verdict from an earlier run is truncated" \
+  "[ $rc_c9a = 0 ] && [ $rc_c9b = 2 ] && [ ! -s $CR/stale.json ] && [ ! -s $CR/stale.raw.json ]"
+
+# ---------------------------------------------------------------- loop_total（闭环总耗时：从 gen 起点到最后一个门终点）
+LT="$(mktemp -d)"
+printf '%s\n' \
+  '{"name":"loop1-gen","startMs":1000,"endMs":1400,"durationMs":400,"exitCode":0}' \
+  '{"name":"loop1-lint","startMs":1500,"endMs":2000,"durationMs":500,"exitCode":0}' \
+  '{"name":"loop1-typecheck","startMs":2000,"endMs":2600,"durationMs":600,"exitCode":0}' \
+  '{"name":"loop1-testunit","startMs":2700,"endMs":3500,"durationMs":800,"exitCode":0}' >"$LT/results.jsonl"
+capture rc_lt1 env EVIDENCE_DIR="$LT" bash -c "source '$HERE/lib.sh'; loop_total 1 '$LT/loop1-total.json'"
+check "loop_total: wall = last gate end - gen start (3500-1000=2500), NOT the sum of step durations (2300)" \
+  "[ $rc_lt1 = 0 ] && jq -e '.durationMs==2500 and .exitCode==0 and .startMs==1000 and .endMs==3500' $LT/loop1-total.json >/dev/null"
+printf '%s\n' \
+  '{"name":"loop2-gen","startMs":10,"endMs":20,"durationMs":10,"exitCode":0}' \
+  '{"name":"loop2-lint","startMs":20,"endMs":90,"durationMs":70,"exitCode":1}' >"$LT/results.jsonl"
+capture rc_lt2 env EVIDENCE_DIR="$LT" bash -c "source '$HERE/lib.sh'; loop_total 2 '$LT/loop2-total.json'"
+check "loop_total: a failed gate makes the loop non-passing (exitCode=1) even though it ran" \
+  "[ $rc_lt2 = 1 ] && jq -e '.exitCode==1 and .durationMs==80' $LT/loop2-total.json >/dev/null"
+printf '%s\n' '{"name":"loop3-gen","startMs":10,"endMs":20,"durationMs":10,"exitCode":0}' >"$LT/results.jsonl"
+capture rc_lt3 env EVIDENCE_DIR="$LT" bash -c "source '$HERE/lib.sh'; loop_total 3 '$LT/loop3-total.json'"
+check "loop_total: gen done but gates missing (incomplete loop) -> exit 2 and NO total file (not a short 'success')" \
+  "[ $rc_lt3 = 2 ] && [ ! -s $LT/loop3-total.json ]"
+capture rc_lt4 env EVIDENCE_DIR="$LT" bash -c "source '$HERE/lib.sh'; loop_total 9 '$LT/loop9-total.json'"
+check "loop_total: unknown loop -> exit 2 and no file" "[ $rc_lt4 = 2 ] && [ ! -s $LT/loop9-total.json ]"
 
 echo "---- lib selftest exit=$fail ----"
 exit "$fail"

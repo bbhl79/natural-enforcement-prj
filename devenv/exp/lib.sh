@@ -113,12 +113,10 @@ record_env() { # record_env <label>
   printf '[exp] environment recorded: %s\n' "$out" >&2
 }
 
-docker_build_deps() { # docker_build_deps <tag> [额外参数...]：与 devenv 同一套 cache id 传参规则（未设置则用 Dockerfile 默认值）
-  local tag="$1" args=()
+docker_build_deps() { # docker_build_deps <tag> [额外参数...]：deps 靶；cache id 传参统一走 docker_build_target
+  local tag="$1"
   shift
-  [[ -n "${PNPM_STORE_CACHE_ID:-}" ]] && args+=(--build-arg "PNPM_STORE_CACHE_ID=$PNPM_STORE_CACHE_ID")
-  [[ -n "${PNPM_META_CACHE_ID:-}" ]] && args+=(--build-arg "PNPM_META_CACHE_ID=$PNPM_META_CACHE_ID")
-  docker build ${args[@]+"${args[@]}"} "$@" --target deps -t "$tag" -f "$REPO_ROOT/devenv/workspace.Dockerfile" "$REPO_ROOT"
+  docker_build_target deps "$tag" "$@"
 }
 
 step() { # step <name> <cmd...>：幂等；已完成则跳过（冷启动类步骤重跑就不再是冷的）。FORCE=1 强制重跑。
@@ -179,20 +177,23 @@ regen_lockfile_direct() { # 实验用：复刻 devenv regen_lockfile（lockgen �
   local tag="${DEVENV_LOCKGEN_TAG:-ne-exp54-lockgen:tmp}"
   [[ "$tag" != "ne-lockgen:tmp" ]] || { echo "[exp] refusing to touch shared tag ne-lockgen:tmp" >&2; return 2; }
   t0="$(now_ms)"
-  set +e
-  {
+  # 每一步显式检查（不依赖 errexit：组命令里 set -e 不生效）。任何一步失败 → 立刻停止并返回非零，
+  # 绝不继续对空镜像/空容器 id 做 cp，更不能让一个失败的 lockgen 看起来成功、留下旧 lockfile。
+  # 子 shell（不是 { } 组）：组命令在当前 shell 执行，里面的 exit 会杀掉整个调用进程；子 shell 的 exit 只离开它自己。
+  rc=0
+  (
     docker ps -a --filter "ancestor=$tag" -q | xargs -r docker rm -f >/dev/null 2>&1 || true
     docker rmi -f "$tag" >/dev/null 2>&1 || true
-    docker build --target lockgen -t "$tag" \
-      -f "$REPO_ROOT/devenv/workspace.Dockerfile" "$REPO_ROOT"
-    local cid
-    cid="$(docker create "$tag")"
-    docker cp "$cid":/workspace/pnpm-lock.yaml "$REPO_ROOT/pnpm-lock.yaml"
-    docker rm "$cid" >/dev/null
-    docker rmi "$tag" >/dev/null
-  } >"$log" 2>&1
-  rc=$?
-  set -e
+    docker_build_target lockgen "$tag" || exit 11
+    cid="$(docker create "$tag")" || exit 12
+    [[ -n "$cid" ]] || exit 13
+    docker cp "$cid":/workspace/pnpm-lock.yaml "$REPO_ROOT/pnpm-lock.yaml" || { docker rm "$cid" >/dev/null 2>&1; exit 14; }
+    docker rm "$cid" >/dev/null || exit 15
+    # 判据是“标签是否还在”，不是 rmi 的退出码：失败构建泄漏的 buildah working container 会钉住共享祖先层，
+    # 此时 rmi 退出 1（"in use"）但标签已被删除（实测复现）。
+    docker rmi "$tag" >/dev/null 2>&1 || true
+    if docker image inspect "$tag" >/dev/null 2>&1; then exit 16; fi
+  ) >"$log" 2>&1 || rc=$?
   t1="$(now_ms)"
   record lockgen-direct "$t0" "$t1" "$rc"
   printf '[exp] %-34s exit=%s duration=%sms log=%s\n' lockgen-direct "$rc" "$((t1 - t0))" "$log" >&2
@@ -355,4 +356,90 @@ claim() { # claim <name> <evidence.json> <jq-expr>：软断言——记录结论
     '{name: $name, expr: $expr, evidence: $evidence, pass: $pass}' >>"$EVIDENCE_DIR/claims.jsonl"
   printf '[exp] claim %-44s %s\n' "$name" "$pass" >&2
   return 0
+}
+
+result_json() { # result_json <name> <out.json>：取 results.jsonl 中该步骤（名称精确匹配）的最后一条记录（重跑以最后一次为准）
+  # 找不到 → 退出 1 且不写文件，使后续 claim() 把它判为“无法验证(null)”而不是“不成立(false)”。
+  local name="$1" out="$2" f="$EVIDENCE_DIR/results.jsonl" rec
+  [[ -s "$f" ]] || return 1
+  rec="$(jq -c --arg n "$name" 'select(.name==$n)' "$f" 2>/dev/null | tail -1)" || true
+  [[ -n "$rec" ]] || return 1
+  printf '%s\n' "$rec" >"$out"
+}
+
+docker_build_target() { # docker_build_target <target> <tag> [额外参数...]：与 devenv 同一套 cache id 传参规则
+  local target="$1" tag="$2" args=()
+  shift 2
+  [[ -n "${PNPM_STORE_CACHE_ID:-}" ]] && args+=(--build-arg "PNPM_STORE_CACHE_ID=$PNPM_STORE_CACHE_ID")
+  [[ -n "${PNPM_META_CACHE_ID:-}" ]] && args+=(--build-arg "PNPM_META_CACHE_ID=$PNPM_META_CACHE_ID")
+  # --force-rm：失败的构建默认会泄漏 buildah working container（实测），它们会钉住共享层、拖慢/破坏后续 rmi。
+  docker build --force-rm ${args[@]+"${args[@]}"} "$@" --target "$target" -t "$tag" -f "$REPO_ROOT/devenv/workspace.Dockerfile" "$REPO_ROOT"
+}
+
+compare_trees() { # compare_trees <a.json> <b.json> <out.json>：比较两份 tree_hash 结果
+  # 退出码：0 相同 | 1 不同 | 2 无法比较（任一侧缺失 / 非 JSON / 缺哈希字段）——无法比较 ≠ 相同。
+  # jq 里 null == null 为 true：两侧 tree_hash 都失败时朴素比较会报“相同”。所以先要求两侧四个字段齐全且非空。
+  # out 先清空：失败的重跑不得留下上一次的有效证据（claim() 会把空文件读成“无法验证”）。
+  local a="$1" b="$2" out="$3" f
+  : >"$out"
+  for f in "$a" "$b"; do
+    [[ -s "$f" ]] || return 2
+    jq -e 'type=="object" and (.files|type=="number") and (.content|type=="string" and length>0)
+           and (.modes|type=="string" and length>0) and (.links|type=="string" and length>0)' "$f" >/dev/null 2>&1 || return 2
+  done
+  jq -n --slurpfile a "$a" --slurpfile b "$b" '
+    ($a[0]) as $A | ($b[0]) as $B
+    | ([ ("files","content","modes","links") | select($A[.] != $B[.]) ]) as $d
+    | { a: $A, b: $B, differs: $d, identical: ($d | length == 0) }' >"$out" || { : >"$out"; return 2; }
+  jq -e '.identical==true' "$out" >/dev/null
+}
+
+concurrency_report() { # concurrency_report <a.evidence.json> <b.evidence.json> <rcA> <rcB> <raw-out> <verdict-out>
+  # raw-out：汇总（有效 JSON，供取证）。verdict-out：仅当两个构建都带 pnpm 自报区间时才写入 serialized；
+  # 否则保持为空文件——claim() 会据此记“无法验证(null)”，而不是把“没有区间”误报成“未串行(false)”。
+  # 退出码：0 已产出汇总 | 2 证据文件缺失/非 JSON（两个输出文件都被清空，不留旧结果）。
+  local a="$1" b="$2" rca="$3" rcb="$4" raw="$5" verdict="$6" f
+  : >"$raw"; : >"$verdict"
+  for f in "$a" "$b"; do
+    [[ -s "$f" ]] && jq -e 'type=="object"' "$f" >/dev/null 2>&1 || return 2
+  done
+  jq -n --slurpfile a "$a" --slurpfile b "$b" --argjson rca "$rca" --argjson rcb "$rcb" '
+    ($a[0]) as $A | ($b[0]) as $B
+    | { exitCodes: [$rca, $rcb],
+        verdicts: [$A.verdict, $B.verdict],
+        intervals: { a: [$A.startedAt, $A.endedAt], b: [$B.startedAt, $B.endedAt] },
+        overlapMs: (if ($A.startedAt != null and $B.startedAt != null and $A.endedAt != null and $B.endedAt != null)
+                    then ([($A.endedAt, $B.endedAt)] | min) - ([($A.startedAt, $B.startedAt)] | max) else null end),
+        bothZeroDownload: ($A.verdict == "zero-download" and $B.verdict == "zero-download") }' >"$raw" || { : >"$raw"; return 2; }
+  if jq -e '.overlapMs != null' "$raw" >/dev/null 2>&1; then
+    jq '. + {serialized: (.overlapMs <= 0)}' "$raw" >"$verdict"
+  fi
+}
+
+loop_total() { # loop_total <N> <out.json>：第 N 次闭环的总耗时（gen 起点 → 最后一个质量门终点，墙钟）
+  # 退出码：0 闭环完整且全部通过 | 1 有门失败（仍写总耗时，失败本身是结果）| 2 闭环不完整/找不到（不写文件）。
+  # 不完整 ≠ 成功：只跑了 gen 就停下的“闭环”不能当作一次很快的成功。耗时取首尾时刻之差而不是各步耗时之和，
+  # 否则会漏掉命令之间的间隙——那段时间调用方实际上是在等的。
+  local n="$1" out="$2" f="$EVIDENCE_DIR/results.jsonl" res
+  : >"$out"
+  [[ -s "$f" ]] || return 2
+  res="$(jq -sc --arg n "$n" '
+    . as $all
+    | [ "gen", "lint", "typecheck", "testunit" | . as $s | $all | map(select(.name == "loop\($n)-\($s)")) | last ] as $recs
+    | ($recs | map(select(. != null))) as $present
+    | if $recs[0] == null then empty
+      else
+        ($present | map(select(.exitCode != 0)) | length > 0) as $failed
+        | ($present | length == 4) as $complete
+        | if ($failed | not) and ($complete | not) then empty
+          else
+            ($present | map(.endMs) | max) as $end
+            | { name: "loop\($n)-total", startMs: $recs[0].startMs, endMs: $end,
+                durationMs: ($end - $recs[0].startMs),
+                exitCode: (if $failed then 1 else 0 end), steps: ($present | map(.name)) }
+          end
+      end' "$f" 2>/dev/null)" || return 2
+  [[ -n "$res" ]] || return 2
+  printf '%s\n' "$res" >"$out"
+  jq -e '.exitCode == 0' "$out" >/dev/null
 }
