@@ -34,11 +34,21 @@
    以 `GH_TOKEN=<installation token>` 运行 gh。token 无效时 gh 直接报错退出，
    不存在回退个人登录的路径。
 5. `devenv git-push`：校验 remote 的 push URL 归一化后等于授权仓库（拒绝裸 URL
-   参数，不改写任何 remote 配置）；按调用用 `-c credential.helper=` 清空继承的
-   credential helper（含全局的 `gh auth git-credential`），只挂
-   `devenv/bin/github-app-git-credential`（从环境变量取 token 交给 git）；
-   `GIT_TERMINAL_PROMPT=0` 禁止交互式回退。**`GH_TOKEN` 对 git push 无效，
-   本入口不依赖它**。
+   参数，不改写任何 remote 配置）；**只接受 `https://github.com/` 形式的实际推送
+   地址**——`git remote get-url --push` 返回的是 `url.*.insteadOf` /
+   `url.*.pushInsteadOf` 改写后的地址，SSH 形式（`git@github.com:` / `ssh://`，
+   含被改写而成的）一律 exit 23 拒绝并提示改用 HTTPS remote，避免回退个人 SSH
+   密钥；按调用用 `-c credential.helper=` 清空继承的 credential helper（含全局的
+   `gh auth git-credential`），只挂 `devenv/bin/github-app-git-credential`（从环境
+   变量取 token 交给 git）；`GIT_TERMINAL_PROMPT=0` 禁止交互式回退。
+   **`GH_TOKEN` 对 git push 无效，本入口不依赖它**。
+
+## 依赖与已知限制
+
+- 宿主依赖白名单：bash、git、gh、**jq、openssl、curl**（后三者已列入 #23 白名单）。
+- **macOS 未验证**：私钥权限检查使用 `stat -c`（GNU/Linux 写法），在 macOS（BSD
+  stat）上会失败并以 exit 21 退出——失败方向是关闭而非放行，不存在回退路径；
+  macOS 支持列入后续验证，未验证前不声称可用。
 
 ## 退出码
 

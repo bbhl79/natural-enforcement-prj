@@ -301,7 +301,38 @@ expect_rc "T15 git-push 成功" 0 t15
   && pass "T15 旧 token 被忽略，使用新换取 token" || fail "T15" "沿用了启动时 token"
 unset GH_APP_INSTALLATION_TOKEN
 
-# T16 泄露扫描：虚构 token 与测试私钥不出现在任何输出/日志/临时文件
+# T16 SSH push URL 必须被拒（exit 23，不回退个人 SSH 密钥）
+reset_mocks
+git -C "$SANDBOX" remote set-url --push origin "git@github.com:bbhl79/natural-enforcement-prj.git"
+run t16a "$DEVENV" git-push origin HEAD:refs/heads/test-z
+expect_rc "T16 scp 式 SSH URL 拒绝" 23 t16a
+[[ ! -f "$MOCK_GIT_LOG" ]] && pass "T16 SSH 未执行 push" || fail "T16" "push 被执行"
+grep -q 'HTTPS' "$OUT/t16a.err" && pass "T16 提示改用 HTTPS remote" || fail "T16" "缺少 HTTPS 提示"
+
+git -C "$SANDBOX" remote set-url --push origin "ssh://git@github.com/bbhl79/natural-enforcement-prj.git"
+run t16b "$DEVENV" git-push origin HEAD:refs/heads/test-z
+expect_rc "T16 ssh:// URL 拒绝" 23 t16b
+git -C "$SANDBOX" remote set-url --push origin "https://github.com/bbhl79/natural-enforcement-prj.git"
+
+# T17 insteadOf / pushInsteadOf 把 HTTPS 改写成 SSH 后，按实际推送地址拒绝
+reset_mocks
+git -C "$SANDBOX" config url."git@github.com:".insteadOf "https://github.com/"
+run t17a "$DEVENV" git-push origin HEAD:refs/heads/test-z
+expect_rc "T17 insteadOf 改写为 SSH 拒绝" 23 t17a
+[[ ! -f "$MOCK_GIT_LOG" ]] && pass "T17 insteadOf 未执行 push" || fail "T17" "push 被执行"
+git -C "$SANDBOX" config --unset url."git@github.com:".insteadOf
+
+# pushInsteadOf 不改写显式 pushurl（git 语义），先移除 T16 留下的显式 pushurl，
+# 使推送地址回到 url 派生，pushInsteadOf 才会生效
+git -C "$SANDBOX" config --unset remote.origin.pushurl
+git -C "$SANDBOX" config url."git@github.com:".pushInsteadOf "https://github.com/"
+run t17b "$DEVENV" git-push origin HEAD:refs/heads/test-z
+expect_rc "T17 pushInsteadOf 改写为 SSH 拒绝" 23 t17b
+[[ ! -f "$MOCK_GIT_LOG" ]] && pass "T17 pushInsteadOf 未执行 push" || fail "T17" "push 被执行"
+git -C "$SANDBOX" config --unset url."git@github.com:".pushInsteadOf
+git -C "$SANDBOX" remote set-url --push origin "https://github.com/bbhl79/natural-enforcement-prj.git"
+
+# T18 泄露扫描：虚构 token 与测试私钥不出现在任何输出/日志/临时文件
 leak=$(grep -rl 'FAKETOKEN\|STALE_TOKEN\|PRIVATE KEY' "$OUT" "$MOCK_GH_LOG_DIR" \
         "$MOCK_GIT_LOG" "$MOCK_CURL_BODIES" 2>/dev/null || true)
 [[ -z "$leak" ]] && pass "T16 输出/日志/临时文件无 token 与私钥泄露" || fail "T16" "泄露于：$leak"

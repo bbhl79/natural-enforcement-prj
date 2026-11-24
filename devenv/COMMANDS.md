@@ -8,7 +8,7 @@
 | Action | Command | 期望退出码 |
 |---|---|---|
 | 以 App 身份执行 gh（拒绝 `gh auth`；拒绝 `-R` 指向未授权仓库） | `devenv gh <args...>` | 0 或 2/20/21/22/23 或 gh 自身退出码 |
-| 以 App 身份 HTTPS 推送（只接受已配置 remote 名；目标必须授权） | `devenv git-push <remote> <refspec...>` | 0 或 2/20/21/22/23 或 git 自身退出码 |
+| 以 App 身份 HTTPS 推送（只接受已配置 remote 名；实际推送地址必须为 https://github.com/ 形式，SSH 及 insteadOf 改写一律拒绝；目标必须授权） | `devenv git-push <remote> <refspec...>` | 0 或 2/20/21/22/23 或 git 自身退出码 |
 | 离线测试（不访问 GitHub，默认测试命令） | `devenv test:auth` | 0 或 1 |
 | 真实集成测试（默认只读；写操作需显式旗标） | `devenv test:auth:integration [--issue-comment N] [--push-test-branch] [--key-outage]` | 0 或 1 |
 

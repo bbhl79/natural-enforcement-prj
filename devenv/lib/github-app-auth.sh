@@ -162,11 +162,20 @@ gha_cmd_git_push() {
   [[ $# -ge 1 ]] || { gha_die 2 "缺少 refspec"; return; }
   gha_load_config "$REPO_ROOT" || return
 
+  # get-url --push 返回 insteadOf/pushInsteadOf 改写后的实际推送地址。
+  # 只接受 https://github.com/ 形式；SSH 形式一律拒绝，避免回退个人 SSH 密钥。
   local url target
   url=$(git -C "$REPO_ROOT" remote get-url --push "$remote" 2>/dev/null) || {
     gha_die 23 "remote 不存在或不可读：$remote（本入口只接受已配置的 remote 名，不接受 URL）"; return; }
+  case "$url" in
+    https://github.com/*) ;;
+    git@github.com:*|ssh://*)
+      gha_die 23 "push URL 为 SSH 形式（$url，含 insteadOf/pushInsteadOf 改写后结果），本入口只允许 HTTPS，拒绝回退个人 SSH 密钥；请改用 HTTPS remote"; return ;;
+    *)
+      gha_die 23 "push URL 非 https://github.com 形式：$url"; return ;;
+  esac
   target=$(gha_normalize_repo "$url") || {
-    gha_die 23 "push URL 不是可识别的 github.com 地址：$url"; return; }
+    gha_die 23 "push URL 无法解析为 github.com 仓库：$url"; return; }
   [[ "$target" == "$GHA_REPO" ]] || {
     gha_die 23 "push 目标 $target 未授权（允许：$GHA_REPO）"; return; }
 
