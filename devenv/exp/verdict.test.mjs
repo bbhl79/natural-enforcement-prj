@@ -62,3 +62,45 @@ test('真实 side-effects 缓存命中的热安装（脚本被缓存跳过）→
   assert.equal(s.verdict, 'zero-download')
   assert.deepEqual(s.lifecycleScripts, [])
 })
+
+// ---- 切片 3：CLI 契约。--target deps 构建时 lockgen 阶段也会打印 EVIDENCE 行；
+// 取“最后一行”会在 deps 层命中缓存、lockgen 重跑时把 lockgen 的行误当安装证据。
+import { spawnSync } from 'node:child_process'
+
+const runCli = (input, ...args) =>
+  spawnSync(process.execPath, [new URL('./summarize-pnpm.mjs', import.meta.url).pathname, ...args], {
+    input,
+    encoding: 'utf8',
+  })
+
+test('CLI：带 stage 参数 → 恰好一行 EVIDENCE，JSON 内含 stage 与 verdict', () => {
+  const r = runCli(fx('warm'), 'deps')
+  assert.equal(r.status, 0)
+  const lines = r.stdout.trim().split('\n')
+  assert.equal(lines.length, 1)
+  assert.ok(lines[0].startsWith('EVIDENCE {'), lines[0])
+  const j = JSON.parse(lines[0].slice('EVIDENCE '.length))
+  assert.equal(j.stage, 'deps')
+  assert.equal(j.verdict, 'zero-download')
+})
+
+test('CLI：不带 stage 参数 → 不含 stage 字段（保持旧输出形态）', () => {
+  const j = JSON.parse(runCli(fx('cold')).stdout.trim().slice('EVIDENCE '.length))
+  assert.equal('stage' in j, false)
+  assert.equal(j.verdict, 'downloaded')
+})
+
+// ---- 切片 4：证据带 pnpm 自报的起止时刻（epoch ms），供并发构建的区间重叠判定（sharing=locked 是否串行）。
+// 期望值是 jq 从夹具 pnpm:execution-time 事件读出的字面量。
+test('冷安装证据含 startedAt/endedAt（pnpm 自报）', () => {
+  const s = summarize(fx('cold'))
+  assert.equal(s.startedAt, 1795532810254)
+  assert.equal(s.endedAt, 1795532811366)
+  assert.equal(s.executionMs, 1112)
+})
+
+test('无 execution-time 的流（失败安装）→ startedAt/endedAt 为 null，不是 0', () => {
+  const s = summarize(fx('failed-offline'))
+  assert.equal(s.startedAt, null)
+  assert.equal(s.endedAt, null)
+})

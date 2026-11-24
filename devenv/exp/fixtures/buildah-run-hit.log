@@ -1,0 +1,23 @@
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  10.24kB
+STEP 1/5: FROM natural-enforcement/tools:prototype1
+STEP 2/5: COPY summarize-pnpm.mjs /opt/exp/summarize-pnpm.mjs
+--> Using cache b80a8c976e3123aa8604eb8965dea4e882af18ca394d16d5f62b5fe84477a194
+--> b80a8c976e31
+STEP 3/5: ARG PNPM_STORE_CACHE_ID=ne54-fmt-probe
+--> Using cache a3619e2db874f1553f8774679a4d98ffa70a224485e88f8cb5bc16a3612df914
+--> a3619e2db874
+STEP 4/5: RUN --mount=type=cache,id=${PNPM_STORE_CACHE_ID},target=/pnpm/store,sharing=locked     bash -o pipefail -c 'echo "{}" | node /opt/exp/summarize-pnpm.mjs deps'
+--> Using cache 1300c123fc6207e9a4e755fd0dd1ce750093a14570f270042884bc553832efca
+--> 1300c123fc62
+STEP 5/5: COPY summarize-pnpm.mjs /tmp/after.mjs
+--> Using cache 8f73c971462019795a7daaab7372022ae2cbb44f46a275e67142e9d18f69cabe
+COMMIT docker.io/library/fmt-probe:latest
+--> 8f73c9714620
+Successfully tagged docker.io/library/fmt-probe:latest
+8f73c971462019795a7daaab7372022ae2cbb44f46a275e67142e9d18f69cabe
+Successfully built 8f73c9714620
+Successfully tagged fmt-probe

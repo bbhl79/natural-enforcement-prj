@@ -15,8 +15,13 @@ COPY packages/tsconfig packages/tsconfig
 # 本实验为隔离“缓存复用”变量，让 lockgen 基于现有 lockfile 增量解析；首引导场景仍需另行处理。
 COPY pnpm-lock.yaml ./
 COPY devenv/exp/summarize-pnpm.mjs /opt/exp/summarize-pnpm.mjs
+# 候选（#54）：registry 元数据（packument）缓存走引擎原生 cache mount——lockgen 的耗时是元数据往返，
+# 不是包内容下载（实测 A3：0 个包下载、331s）。--prefer-offline：已缓存的元数据不再联网复验；
+# catalog 一律精确 pin，解析结果由 lockfile + 精确版本决定，不依赖元数据新鲜度。
+ARG PNPM_META_CACHE_ID=ne-pnpm-meta-v12
 # @gen:pkg-copy
-RUN bash -o pipefail -c 'pnpm install --lockfile-only --reporter=ndjson 2>&1 | tee /tmp/pnpm-lockgen.ndjson | node /opt/exp/summarize-pnpm.mjs'
+RUN --mount=type=cache,id=${PNPM_META_CACHE_ID},target=/root/.cache/pnpm,sharing=locked \
+    bash -o pipefail -c 'pnpm install --lockfile-only --prefer-offline --reporter=ndjson 2>&1 | tee /tmp/pnpm-lockgen.ndjson | node /opt/exp/summarize-pnpm.mjs lockgen'
 
 # deps 靶：依赖已装、源码已入、未构建——调试/工具用（docker build --target deps）
 # 注意：COPY 一律取自构建上下文（lockfile 已由 devenv 经 lockgen 导出并提交），
@@ -30,8 +35,16 @@ COPY apps/e2e/package.json apps/e2e/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/tsconfig packages/tsconfig
 COPY devenv/exp/summarize-pnpm.mjs /opt/exp/summarize-pnpm.mjs
+# 候选（#54）：pnpm 内容寻址 store 走引擎原生 cache mount，跨构建、跨 worktree 复用。
+# - sharing=locked：并发构建串行使用 store（实测 P3：A 476→488 结束，B 489 才开始）
+# - 重建 deps 层（新增包/lockfile 变化）时 store 命中，只下载新增内容
+# - store 是缓存不是信任根：实测 pnpm 12.21 对被篡改的 store 文件静默导入、pnpm store status 也不报
+#   （P2/P5）。需要干净重建时换 id：--build-arg PNPM_STORE_CACHE_ID=<新 id>（P4 实测空 store）
+# - store 不再随镜像层落盘：镜像体积不含 ~745MB store
+ARG PNPM_STORE_CACHE_ID=ne-pnpm-store-v11
 # @gen:pkg-copy
-RUN bash -o pipefail -c 'pnpm install --frozen-lockfile --reporter=ndjson 2>&1 | tee /tmp/pnpm-install.ndjson | node /opt/exp/summarize-pnpm.mjs'
+RUN --mount=type=cache,id=${PNPM_STORE_CACHE_ID},target=/pnpm/store,sharing=locked \
+    bash -o pipefail -c 'pnpm install --frozen-lockfile --store-dir=/pnpm/store --reporter=ndjson 2>&1 | tee /tmp/pnpm-install.ndjson | node /opt/exp/summarize-pnpm.mjs deps'
 COPY . .
 
 # 终靶：构建产物入镜像

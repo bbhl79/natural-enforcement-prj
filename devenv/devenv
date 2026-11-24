@@ -20,9 +20,11 @@ set -Eeuo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEVENV_DIR="$REPO_ROOT/devenv"
-PROJECT_NAME="natural-enforcement"
+# 实验（#54）：名称可由环境覆盖（默认值不变），使实验不触碰共享镜像标签/compose 资源（SPEC：同 tag 并发竞争）。
+PROJECT_NAME="${DEVENV_PROJECT_NAME:-natural-enforcement}"
+LOCKGEN_TAG="${DEVENV_LOCKGEN_TAG:-ne-lockgen:tmp}"
 TOOLS_IMAGE="natural-enforcement/tools:prototype1"
-WS_IMAGE="natural-enforcement/workspace:local"   # 代码烘焙镜像（无 bind mount 架构，见 devenv/workspace.Dockerfile）
+WS_IMAGE="${DEVENV_WS_IMAGE:-natural-enforcement/workspace:local}"   # 代码烘焙镜像（无 bind mount 架构，见 devenv/workspace.Dockerfile）
 IMAGES_LOCK="$DEVENV_DIR/images.lock"
 COMPOSE_FILE="$DEVENV_DIR/compose.yaml"
 LOCK_DIR="/tmp/natural-enforcement-locks"   # 机器级锁（跨 worktree/跨 agent 共享）
@@ -85,12 +87,17 @@ in_tools() { # 在工具容器内执行（每次临时容器，退出即回收�
 # 实验（#54）：DEVENV_BUILD_VERBOSE=1 时不加 -q，保留构建日志（含 pnpm EVIDENCE 行）。
 BUILD_QUIET=(-q)
 [[ "${DEVENV_BUILD_VERBOSE:-0}" == "1" ]] && BUILD_QUIET=()
+# 实验（#54）：cache mount id 可由环境覆盖（干净重建 / 隔离实验）；未设置则不传，Dockerfile 的 ARG 默认值生效。
+# 空数组展开一律用 ${a[@]+"${a[@]}"}：macOS 自带 bash 3.2 在 set -u 下展开空数组会报 unbound variable。
+CACHE_ARGS=()
+[[ -n "${PNPM_STORE_CACHE_ID:-}" ]] && CACHE_ARGS+=(--build-arg "PNPM_STORE_CACHE_ID=$PNPM_STORE_CACHE_ID")
+[[ -n "${PNPM_META_CACHE_ID:-}" ]] && CACHE_ARGS+=(--build-arg "PNPM_META_CACHE_ID=$PNPM_META_CACHE_ID")
 
 # 无 bind 架构：代码烘焙进镜像。凡消费当前源码的命令（up/test/lint/typecheck/migrate*/seed）
 # 先增量重建 workspace 镜像（层缓存命中时秒级），保证容器内即最新代码。
 ensure_fresh_workspace() {
   ev step.started target="workspace image refresh"
-  docker build "${BUILD_QUIET[@]}" -t "$WS_IMAGE" -f "$DEVENV_DIR/workspace.Dockerfile" "$REPO_ROOT" >&2
+  docker build ${BUILD_QUIET[@]+"${BUILD_QUIET[@]}"} ${CACHE_ARGS[@]+"${CACHE_ARGS[@]}"} -t "$WS_IMAGE" -f "$DEVENV_DIR/workspace.Dockerfile" "$REPO_ROOT" >&2
   ev step.completed target="workspace image refresh"
 }
 
@@ -105,13 +112,13 @@ acquire_lock() { # $1=锁名 $2=超时秒；独占 flock（跨 worktree 生效�
 regen_lockfile() { # lockgen 靶生成 lockfile 后 docker cp 导出（全程容器内；--lockfile-only 不拉包）
   ev step.started target="lockgen"
   # 前置清理：上次异常退出可能留下持锁容器（image in use → rmi 失败 → 本命令连锁失败，#12 实测）
-  docker ps -a --filter ancestor=ne-lockgen:tmp -q | xargs -r docker rm -f >/dev/null 2>&1 || true
-  docker rmi -f ne-lockgen:tmp >/dev/null 2>&1 || true
-  docker build "${BUILD_QUIET[@]}" -f "$DEVENV_DIR/workspace.Dockerfile" --target lockgen -t ne-lockgen:tmp "$REPO_ROOT" >&2
+  docker ps -a --filter ancestor="$LOCKGEN_TAG" -q | xargs -r docker rm -f >/dev/null 2>&1 || true
+  docker rmi -f "$LOCKGEN_TAG" >/dev/null 2>&1 || true
+  docker build ${BUILD_QUIET[@]+"${BUILD_QUIET[@]}"} ${CACHE_ARGS[@]+"${CACHE_ARGS[@]}"} -f "$DEVENV_DIR/workspace.Dockerfile" --target lockgen -t "$LOCKGEN_TAG" "$REPO_ROOT" >&2
   local cid
-  cid="$(docker create ne-lockgen:tmp)"
+  cid="$(docker create "$LOCKGEN_TAG")"
   docker cp "$cid":/workspace/pnpm-lock.yaml "$REPO_ROOT/pnpm-lock.yaml" >&2
-  docker rm "$cid" >/dev/null; docker rmi ne-lockgen:tmp >/dev/null
+  docker rm "$cid" >/dev/null; docker rmi "$LOCKGEN_TAG" >/dev/null
   ev step.completed target="lockgen"
 }
 
@@ -173,7 +180,7 @@ cmd_build() {
   local t0=$(( $(date +%s) ))
   ev step.started target="tools base image"
   # daemon 内建构建器直接构建（本机无 buildx；compose build 会试图拉 moby/buildkit 镜像）
-  docker build "${BUILD_QUIET[@]}" -t "$TOOLS_IMAGE" -f "$DEVENV_DIR/tools.Dockerfile" "$REPO_ROOT" >&2
+  docker build ${BUILD_QUIET[@]+"${BUILD_QUIET[@]}"} -t "$TOOLS_IMAGE" -f "$DEVENV_DIR/tools.Dockerfile" "$REPO_ROOT" >&2
   ev step.completed target="tools base image"
 
   # 首次引导 / 显式 --lockgen：lockfile 经 lockgen 阶段生成后 docker cp 出来（全程容器内，无 bind mount）
@@ -183,7 +190,7 @@ cmd_build() {
   fi
 
   ev step.started target="workspace image (install + turbo build)"
-  docker build "${BUILD_QUIET[@]}" -t "$WS_IMAGE" -f "$DEVENV_DIR/workspace.Dockerfile" "$REPO_ROOT" >&2
+  docker build ${BUILD_QUIET[@]+"${BUILD_QUIET[@]}"} ${CACHE_ARGS[@]+"${CACHE_ARGS[@]}"} -t "$WS_IMAGE" -f "$DEVENV_DIR/workspace.Dockerfile" "$REPO_ROOT" >&2
   ev step.completed target="workspace image"
 
   note "build 完成"

@@ -25,6 +25,8 @@ export function summarize(raw) {
   let fetchedBytes = 0
   let resolved = 0
   let executionMs = null
+  let startedAt = null
+  let endedAt = null
   let events = 0
   let parseErrors = 0
   let hasSummary = false
@@ -61,6 +63,8 @@ export function summarize(raw) {
       resolved += 1
     } else if (e.name === 'pnpm:execution-time' && Number.isFinite(e.startedAt) && Number.isFinite(e.endedAt)) {
       executionMs = e.endedAt - e.startedAt
+      startedAt = e.startedAt
+      endedAt = e.endedAt
     }
   }
 
@@ -88,6 +92,8 @@ export function summarize(raw) {
     imported,
     resolved,
     executionMs,
+    startedAt,
+    endedAt,
     events,
     parseErrors,
   }
@@ -95,6 +101,9 @@ export function summarize(raw) {
 
 const isMain = process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href
 if (isMain) {
+  // 可选 argv[2] = 阶段标签（lockgen / deps）。--target deps 构建时两个阶段都会打印 EVIDENCE 行，
+  // 带标签后消费方按 stage 选取，而不是取“最后一行”。
+  const stage = process.argv[2]
   const summary = summarize(fs.readFileSync(0, 'utf8'))
-  process.stdout.write(`EVIDENCE ${JSON.stringify(summary)}\n`)
+  process.stdout.write(`EVIDENCE ${JSON.stringify(stage ? { stage, ...summary } : summary)}\n`)
 }
