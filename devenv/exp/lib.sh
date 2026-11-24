@@ -70,9 +70,11 @@ network_probe() { # 记录实际网络（只报告不控制）；单流 tarball 
 record_env() { # record_env <label>
   local label="$1"
   local out="$EVIDENCE_DIR/env-$label.txt"
+  local net="$EVIDENCE_DIR/.network-$label.txt"
+  network_probe "$net"
   {
     echo "=== label: $label ==="
-    network_probe /dev/stdout
+    cat "$net"
     echo
     echo "=== platform ==="
     uname -a
@@ -90,6 +92,7 @@ record_env() { # record_env <label>
     git -C "$REPO_ROOT" rev-parse HEAD
     git -C "$REPO_ROOT" status --short
   } >"$out" 2>&1
+  rm -f "$net"
   printf '[exp] environment recorded: %s\n' "$out" >&2
 }
 
