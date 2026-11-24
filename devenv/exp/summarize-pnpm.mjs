@@ -9,9 +9,9 @@
 // pnpm:progress（status=resolved/imported）。因此：
 //   fetchedPackages == 0  ⇒ 本次 install 未发起任何包内容下载。
 // 版本/安全元数据查询不在 fetching-progress 事件内，允许联网（见 SPEC 口径）。
-import fs from 'node:fs'
 import process from 'node:process'
 import { URL } from 'node:url'
+import { Buffer } from 'node:buffer'
 
 /**
  * @param {string} raw ndjson 文本
@@ -106,6 +106,10 @@ if (isMain) {
   // 可选 argv[2] = 阶段标签（lockgen / deps）。--target deps 构建时两个阶段都会打印 EVIDENCE 行，
   // 带标签后消费方按 stage 选取，而不是取“最后一行”。
   const stage = process.argv[2]
-  const summary = summarize(fs.readFileSync(0, 'utf8'))
+  // 用流式读 stdin，不用 fs.readFileSync(0)：管道场景下同步 fd 读在负载/背压下会抛
+  // EAGAIN: resource temporarily unavailable（实测闭环 warmup 构建里出现）。for await 正确处理背压。
+  const chunks = []
+  for await (const chunk of process.stdin) chunks.push(chunk)
+  const summary = summarize(Buffer.concat(chunks).toString('utf8'))
   process.stdout.write(`EVIDENCE ${JSON.stringify(stage ? { stage, ...summary } : summary)}\n`)
 }
