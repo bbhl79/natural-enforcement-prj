@@ -11,8 +11,12 @@ COPY apps/web/package.json apps/web/package.json
 COPY apps/e2e/package.json apps/e2e/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/tsconfig packages/tsconfig
+# 实验（#54）：原型 lockgen 未 COPY 现有 lockfile → 每次全量重解析（caret 漂移、慢）。
+# 本实验为隔离“缓存复用”变量，让 lockgen 基于现有 lockfile 增量解析；首引导场景仍需另行处理。
+COPY pnpm-lock.yaml ./
+COPY devenv/exp/summarize-pnpm.mjs /opt/exp/summarize-pnpm.mjs
 # @gen:pkg-copy
-RUN pnpm install --lockfile-only
+RUN bash -o pipefail -c 'pnpm install --lockfile-only --reporter=ndjson 2>&1 | tee /tmp/pnpm-lockgen.ndjson | node /opt/exp/summarize-pnpm.mjs'
 
 # deps 靶：依赖已装、源码已入、未构建——调试/工具用（docker build --target deps）
 # 注意：COPY 一律取自构建上下文（lockfile 已由 devenv 经 lockgen 导出并提交），
@@ -25,8 +29,9 @@ COPY apps/web/package.json apps/web/package.json
 COPY apps/e2e/package.json apps/e2e/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/tsconfig packages/tsconfig
+COPY devenv/exp/summarize-pnpm.mjs /opt/exp/summarize-pnpm.mjs
 # @gen:pkg-copy
-RUN pnpm install --frozen-lockfile
+RUN bash -o pipefail -c 'pnpm install --frozen-lockfile --reporter=ndjson 2>&1 | tee /tmp/pnpm-install.ndjson | node /opt/exp/summarize-pnpm.mjs'
 COPY . .
 
 # 终靶：构建产物入镜像

@@ -10,5 +10,7 @@ docs
 .artifacts
 devenv
 !devenv/gen
+!devenv/exp
+!devenv/exp/**
 !devenv/workspace.Dockerfile
 !.dockerignore

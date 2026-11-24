@@ -41,6 +41,7 @@ jstr() { # JSON 字符串转义（覆盖常见控制字符，足够原型用）
   s="${s//$'\n'/\\n}"; s="${s//$'\t'/\\t}"; s="${s//$'\r'/\\r}"
   printf '%s' "$s"
 }
+now_ms() { date +%s%3N; }   # 实验（#54）：JSONL 事件带毫秒时间戳（SPEC 测量协议要求）
 ev() { # 事件（--json 时输出 JSONL）：ev <name> [k=v]...
   (( JSON )) || return 0
   local name="$1"; shift
@@ -49,7 +50,7 @@ ev() { # 事件（--json 时输出 JSONL）：ev <name> [k=v]...
     k="${kv%%=*}"; v="${kv#*=}"
     pairs+=",\"$k\":\"$(jstr "$v")\""
   done
-  printf '{"event":"%s"%s}\n' "$name" "$pairs"
+  printf '{"event":"%s","ts":%s%s}\n' "$name" "$(now_ms)" "$pairs"
 }
 final() { # 终值（--json 时输出单 JSON；非 json 不输出）：final <status> <exitCode> [k=v...]
   local status="$1" exit_code="$2"; shift 2
@@ -59,7 +60,7 @@ final() { # 终值（--json 时输出单 JSON；非 json 不输出）：final <s
     k="${kv%%=*}"; v="${kv#*=}"
     pairs+=",\"$k\":\"$(jstr "$v")\""
   done
-  printf '{"command":"%s","status":"%s","exitCode":%s%s}\n' "$CMD" "$status" "$exit_code" "$pairs"
+  printf '{"command":"%s","status":"%s","exitCode":%s,"ts":%s%s}\n' "$CMD" "$status" "$exit_code" "$(now_ms)" "$pairs"
 }
 
 # ---------------------------------------------------------------------------
@@ -81,11 +82,15 @@ in_tools() { # 在工具容器内执行（每次临时容器，退出即回收�
   compose run --rm tools "$@"
 }
 
+# 实验（#54）：DEVENV_BUILD_VERBOSE=1 时不加 -q，保留构建日志（含 pnpm EVIDENCE 行）。
+BUILD_QUIET=(-q)
+[[ "${DEVENV_BUILD_VERBOSE:-0}" == "1" ]] && BUILD_QUIET=()
+
 # 无 bind 架构：代码烘焙进镜像。凡消费当前源码的命令（up/test/lint/typecheck/migrate*/seed）
 # 先增量重建 workspace 镜像（层缓存命中时秒级），保证容器内即最新代码。
 ensure_fresh_workspace() {
   ev step.started target="workspace image refresh"
-  docker build -q -t "$WS_IMAGE" -f "$DEVENV_DIR/workspace.Dockerfile" "$REPO_ROOT" >&2
+  docker build "${BUILD_QUIET[@]}" -t "$WS_IMAGE" -f "$DEVENV_DIR/workspace.Dockerfile" "$REPO_ROOT" >&2
   ev step.completed target="workspace image refresh"
 }
 
@@ -102,7 +107,7 @@ regen_lockfile() { # lockgen 靶生成 lockfile 后 docker cp 导出（全程容
   # 前置清理：上次异常退出可能留下持锁容器（image in use → rmi 失败 → 本命令连锁失败，#12 实测）
   docker ps -a --filter ancestor=ne-lockgen:tmp -q | xargs -r docker rm -f >/dev/null 2>&1 || true
   docker rmi -f ne-lockgen:tmp >/dev/null 2>&1 || true
-  docker build -q -f "$DEVENV_DIR/workspace.Dockerfile" --target lockgen -t ne-lockgen:tmp "$REPO_ROOT" >&2
+  docker build "${BUILD_QUIET[@]}" -f "$DEVENV_DIR/workspace.Dockerfile" --target lockgen -t ne-lockgen:tmp "$REPO_ROOT" >&2
   local cid
   cid="$(docker create ne-lockgen:tmp)"
   docker cp "$cid":/workspace/pnpm-lock.yaml "$REPO_ROOT/pnpm-lock.yaml" >&2
@@ -168,7 +173,7 @@ cmd_build() {
   local t0=$(( $(date +%s) ))
   ev step.started target="tools base image"
   # daemon 内建构建器直接构建（本机无 buildx；compose build 会试图拉 moby/buildkit 镜像）
-  docker build -q -t "$TOOLS_IMAGE" -f "$DEVENV_DIR/tools.Dockerfile" "$REPO_ROOT" >&2
+  docker build "${BUILD_QUIET[@]}" -t "$TOOLS_IMAGE" -f "$DEVENV_DIR/tools.Dockerfile" "$REPO_ROOT" >&2
   ev step.completed target="tools base image"
 
   # 首次引导 / 显式 --lockgen：lockfile 经 lockgen 阶段生成后 docker cp 出来（全程容器内，无 bind mount）
@@ -178,7 +183,7 @@ cmd_build() {
   fi
 
   ev step.started target="workspace image (install + turbo build)"
-  docker build -q -t "$WS_IMAGE" -f "$DEVENV_DIR/workspace.Dockerfile" "$REPO_ROOT" >&2
+  docker build "${BUILD_QUIET[@]}" -t "$WS_IMAGE" -f "$DEVENV_DIR/workspace.Dockerfile" "$REPO_ROOT" >&2
   ev step.completed target="workspace image"
 
   note "build 完成"
