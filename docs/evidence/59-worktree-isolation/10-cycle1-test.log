@@ -1,0 +1,56 @@
+[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
+{"event":"engine","identity":"podman","version":"6.1.4","os":"linux","arch":"amd64","endpoint":"unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock","source":"DOCKER_HOST 环境变量"}
+{"event":"step.started","target":"workspace image freshness"}
+{"event":"snapshot.captured","hash":"b66febb012e7d636c04a61154639f2e34c1b77bc"}
+{"event":"tools.fresh","imageId":"sha256:d6fb6674882dd85407efa7ec2432cf7518eebb79272cfb090fbe83eedd9772bd","inputHash":"4842d6391742396e725c2eab7e33b4332ac3bd51d7a29b2d05af6e28f9beece6"}
+{"event":"step.completed","target":"workspace image freshness"}
+{"event":"step.started","target":"workspace image (snapshot build)"}
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+{"event":"workspace.built","imageId":"sha256:6323fbf03ab1a7af9afedceec98b13f08b6a40d507b99c10da4c8ce29a60da70","snapshot":"b66febb012e7d636c04a61154639f2e34c1b77bc","base":"sha256:d6fb6674882dd85407efa7ec2432cf7518eebb79272cfb090fbe83eedd9772bd"}
+{"event":"step.completed","target":"workspace image (snapshot build)"}
+Scope: 4 of 5 workspace projects
+packages/contracts test$ vitest run
+packages/contracts test: 
+packages/contracts test:  RUN  v5.1.1 /workspace/packages/contracts
+packages/contracts test: 
+packages/contracts test:  ✓ src/contracts.spec.ts (10 tests) 13ms
+packages/contracts test: 
+packages/contracts test:  Test Files  1 passed (1)
+packages/contracts test:       Tests  10 passed (10)
+packages/contracts test:    Start at  15:15:07
+packages/contracts test:    Duration  228ms (import 49%, transform 38%, tests 10%, worker 3%)
+packages/contracts test: 
+packages/contracts test: Done
+apps/api test$ vitest run
+apps/web test$ vitest run
+apps/api test: 
+apps/api test:  RUN  v5.1.1 /workspace/apps/api
+apps/api test: 
+apps/web test: 
+apps/web test:  RUN  v5.1.1 /workspace/apps/web
+apps/web test: 
+apps/api test:  ✓ src/util/geo.spec.ts (3 tests) 6ms
+apps/api test:  ✓ test/geo.spec.ts (3 tests) 184ms
+apps/web test:  ✓ test/format.spec.ts (3 tests) 5ms
+apps/web test:  ✓ test/validate.spec.ts (2 tests) 8ms
+apps/web test:  ✓ test/api-contract.spec.ts (4 tests) 9ms
+apps/api test:  ✓ test/api-flow.spec.ts (4 tests) 291ms
+apps/api test: 
+apps/api test:  Test Files  3 passed (3)
+apps/api test:       Tests  10 passed (10)
+apps/api test:    Start at  15:15:08
+apps/api test:    Duration  934ms (import 45%, tests 34%, transform 19%, worker 1%)
+apps/api test: 
+apps/api test: Done
+apps/web test:  ✓ test/nearby-table.spec.tsx (2 tests) 242ms
+apps/web test: 
+apps/web test:  Test Files  4 passed (4)
+apps/web test:       Tests  11 passed (11)
+apps/web test:    Start at  15:15:08
+apps/web test:    Duration  1.88s (environment 52%, import 25%, setup 11%, tests 7%, transform 5%, worker 1%)
+apps/web test: 
+apps/web test: Done
+{"command":"test","status":"ok","exitCode":0,"scope":"all"}

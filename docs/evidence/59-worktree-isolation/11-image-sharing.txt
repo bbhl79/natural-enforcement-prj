@@ -1,0 +1,7 @@
+=== 镜像共享实证（A/B 各自构建，同输入 → 同不可变 image ID）===
+[A 状态] IMAGE_ID=sha256:7ca97c62a89782ea40bcb955f0d8fa454ef9b4d9e685034d3f5234e82b39c40c TOOLS_IMAGE_ID=sha256:d6fb6674882dd85407efa7ec2432cf7518eebb79272cfb090fbe83eedd9772bd 
+[B 状态] IMAGE_ID=sha256:45729ebe6bafd73234a45f7a32e11cab6d9e5ac9dc9fd0ff0efb4843ba3a2663 TOOLS_IMAGE_ID=sha256:d6fb6674882dd85407efa7ec2432cf7518eebb79272cfb090fbe83eedd9772bd 
+[docker 侧 tools tag → ID 映射]
+
+B tag tools:wt-a1648842 -> sha256:d6fb6674882dd85407efa7ec2432cf7518eebb79272cfb090fbe83eedd9772bd
+[结论] 两个 per-worktree tag 指向同一 image ID = 内容按不可变产物共享

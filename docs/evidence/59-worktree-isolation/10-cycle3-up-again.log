@@ -1,0 +1,55 @@
+[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
+{"event":"engine","identity":"podman","version":"6.1.4","os":"linux","arch":"amd64","endpoint":"unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock","source":"DOCKER_HOST 环境变量"}
+{"event":"step.started","target":"workspace image freshness"}
+{"event":"snapshot.captured","hash":"1fbf1bc3a0c126f004f7526a11f2871f5f51e6b2"}
+{"event":"tools.fresh","imageId":"sha256:d6fb6674882dd85407efa7ec2432cf7518eebb79272cfb090fbe83eedd9772bd","inputHash":"4842d6391742396e725c2eab7e33b4332ac3bd51d7a29b2d05af6e28f9beece6"}
+{"event":"step.completed","target":"workspace image freshness"}
+{"event":"step.started","target":"workspace image (snapshot build)"}
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+{"event":"workspace.built","imageId":"sha256:05d993b232fc2e153516b52d95aa3188b531f3a27df6b7b33508b643ef10cda1","snapshot":"1fbf1bc3a0c126f004f7526a11f2871f5f51e6b2","base":"sha256:d6fb6674882dd85407efa7ec2432cf7518eebb79272cfb090fbe83eedd9772bd"}
+{"event":"step.completed","target":"workspace image (snapshot build)"}
+ Network natural-enforcement-90e22128_default  Creating
+ Network natural-enforcement-90e22128_default  Created
+ Volume natural-enforcement-90e22128_pgdata  Creating
+ Volume natural-enforcement-90e22128_pgdata  Created
+ Container natural-enforcement-90e22128-db-1  Creating
+ Container natural-enforcement-90e22128-db-1  Created
+ Container natural-enforcement-90e22128-db-1  Starting
+ Container natural-enforcement-90e22128-db-1  Started
+{"event":"wait.started","service":"db"}
+{"event":"wait.ok","service":"db"}
+{"event":"step.started","target":"migrate deploy"}
+ Volume natural-enforcement-90e22128_turbo-cache  Creating
+ Volume natural-enforcement-90e22128_turbo-cache  Created
+Loaded Prisma config from prisma.config.ts.
+
+Prisma schema loaded from prisma/schema.prisma.
+Datasource "db": PostgreSQL database "natural_enforcement_dev", schema "public" at "db:5432"
+
+1 migration found in prisma/migrations
+
+Applying migration `20261125000000_init_enforcement_point_geo`
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 20261125000000_init_enforcement_point_geo/
+    └─ migration.sql
+
+All migrations have been successfully applied.
+{"event":"step.completed","target":"migrate deploy"}
+ Container natural-enforcement-90e22128-db-1  Running
+ Container natural-enforcement-90e22128-api-1  Creating
+ Container natural-enforcement-90e22128-api-1  Created
+ Container natural-enforcement-90e22128-db-1  Waiting
+ Container natural-enforcement-90e22128-db-1  Healthy
+ Container natural-enforcement-90e22128-api-1  Starting
+ Container natural-enforcement-90e22128-api-1  Started
+{"event":"wait.started","service":"api"}
+{"event":"wait.ok","service":"api"}
+{"event":"image.verified","service":"api","imageId":"sha256:05d993b232fc2e153516b52d95aa3188b531f3a27df6b7b33508b643ef10cda1"}
+[devenv] 全部服务健康（db, api），迁移已应用
+{"command":"up","status":"ok","exitCode":0,"services":"db,api"}

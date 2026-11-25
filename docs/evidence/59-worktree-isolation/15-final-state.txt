@@ -1,0 +1,6 @@
+=== 终态一致性 ===
+SNAPSHOT_HASH=629c52fc79cdbc1a761d2fead3cb24dabd94f78c
+IMAGE_ID=sha256:e774abb7aafeea49aeef3feeb0f8de9691bd1581f25196e0fcb9d42a4a492930
+TOOLS_IMAGE_ID=sha256:d6fb6674882dd85407efa7ec2432cf7518eebb79272cfb090fbe83eedd9772bd
+api 运行镜像=sha256:e774abb7aafeea49aeef3feeb0f8de9691bd1581f25196e0fcb9d42a4a492930
+{"status":"ok","uptime":9}

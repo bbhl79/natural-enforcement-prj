@@ -1,0 +1,23 @@
+[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+ Container natural-enforcement-90e22128-db-1  Running
+Loaded Prisma config from prisma.config.ts.
+
+Prisma schema loaded from prisma/schema.prisma.
+Datasource "db": PostgreSQL database "natural_enforcement_dev", schema "public" at "db:5432"
+
+1 migration found in prisma/migrations
+
+
+No pending migrations to apply.
+ Container natural-enforcement-90e22128-db-1  Running
+ Container natural-enforcement-90e22128-api-1  Recreate
+ Container natural-enforcement-90e22128-api-1  Recreated
+ Container natural-enforcement-90e22128-db-1  Waiting
+ Container natural-enforcement-90e22128-db-1  Healthy
+ Container natural-enforcement-90e22128-api-1  Starting
+ Container natural-enforcement-90e22128-api-1  Started
+[devenv] 全部服务健康（db, api），迁移已应用
