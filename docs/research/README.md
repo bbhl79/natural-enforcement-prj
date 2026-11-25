@@ -78,7 +78,7 @@
 
 ## 五、deps 层缓存复用（2026-11-25，#54 阶段 0）
 
-- **归因**：新增包使 deps 层失效的根因是 pnpm store 随镜像层落盘、层缓存失效即丢弃——新增 1 个包也全量重下 600 包 / 158.8 MB（基线实测 803 s），与首次冷启动等量。非"无 bind 架构"直接后果。
+- **归因**：新增包使 deps 层失效的根因是 pnpm store 随镜像层落盘、层缓存失效即丢弃——新增 1 个包也全量重下 600 包 / 158.8 MiB（基线实测 803 s），与首次冷启动等量。非"无 bind 架构"直接后果。
 - **候选（已验证）**：pnpm store + registry 元数据挂引擎原生 cache mount（`RUN --mount=type=cache`，`sharing=locked`）。新增包后重建**零包内容下载**（pnpm ndjson 结构化证据），产物树与干净下载基线逐文件一致；新增外部依赖只下载该依赖；离线（`--network=none`）可建成；并发构建经 `sharing=locked` 串行。
 - **闭环**：新增包闭环（gen→lint→typecheck→test:unit）5 次测量，中位 111 s / 最差 122 s，远低于 10 min 预算。
 - **注意**：store 是缓存不是信任根（pnpm 12.21 对篡改静默导入、`store status` 不报）；干净重建换 cache id。详见 [deps-cache-reuse.md](deps-cache-reuse.md) + [deps-cache-evidence/](deps-cache-evidence/)。
