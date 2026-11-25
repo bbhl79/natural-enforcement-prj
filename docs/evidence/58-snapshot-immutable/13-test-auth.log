@@ -1,0 +1,76 @@
+沙箱：/tmp/gha-offline-test.y88GMn
+PASS: T1 app_id 不符拒绝
+PASS: T1 未执行 gh
+PASS: T2 仓库未授权拒绝
+PASS: T2 未执行 gh
+PASS: T2b 声明被篡改拒绝
+PASS: T2b 未执行 gh
+PASS: T3 私钥缺失
+PASS: T3 未请求 token
+PASS: T3 未执行 gh
+PASS: T4 签名失败
+PASS: T4 未执行 gh
+PASS: T4b 私钥权限 644 拒绝
+PASS: T5 GitHub 错误
+PASS: T5 未执行 gh
+PASS: T6 超时
+PASS: T6 未执行 gh
+PASS: T7 gh 路径成功
+PASS: T7 子进程 GH_TOKEN 是 App token
+PASS: T7 个人 GITHUB_TOKEN 已排除
+PASS: T7 GH_CONFIG_DIR 已排除
+PASS: T8 请求体限定目标仓库
+PASS: T9 拒绝 gh auth
+PASS: T9 未换取 token
+PASS: T9 未执行 gh
+PASS: T10 -R 未授权仓库拒绝
+PASS: T10 未执行 gh
+PASS: T10 --repo= 未授权拒绝
+PASS: T10 -R 授权仓库放行
+PASS: T11 8 路全部执行
+PASS: T11 8 个 token 互不相同
+PASS: T11 token 均来自本次换取
+PASS: T11 每个并发调用参数完整
+PASS: T12 git-push 成功
+PASS: T12 交互提示已禁用
+PASS: T12 GH_TOKEN 未传入 git
+PASS: T12 GITHUB_TOKEN 未传入 git
+PASS: T12 helper 提供 App token
+PASS: T12 环境 token 与 helper 一致
+PASS: T12 push 参数正确
+PASS: T12 token 不在 git 参数与日志
+PASS: T12 credential helper 继承已清空并替换
+PASS: T13 未授权 push URL 拒绝
+PASS: T13 未执行 push
+PASS: T14 URL 参数拒绝（rc=23）
+PASS: T14 未执行 push
+PASS: T15 git-push 成功
+PASS: T15 旧 token 被忽略，使用新换取 token
+PASS: T16 scp 式 SSH URL 拒绝
+PASS: T16 SSH 未执行 push
+PASS: T16 提示改用 HTTPS remote
+PASS: T16 ssh:// URL 拒绝
+PASS: T17 insteadOf 改写为 SSH 拒绝
+PASS: T17 insteadOf 未执行 push
+PASS: T17 pushInsteadOf 改写为 SSH 拒绝
+PASS: T17 pushInsteadOf 未执行 push
+PASS: T18 输出/日志/临时文件无 token 与私钥泄露
+[2026-11-25T14:04:08Z] evidence dir: /tmp/gha-offline-test.y88GMn/evidence
+[2026-11-25T14:04:08Z] cmd[demo]: bash -c echo\ out-line\;\ echo\ err-line\ \>\&2\;\ exit\ 3 → rc=3
+PASS: T19 ev_run 透传退出码
+PASS: T19 stdout/stderr 分别捕获
+PASS: T19 证据日志含命令与退出码
+PASS: T20 活 token 精确值检出
+PASS: T21 ghs_ 形态检出
+PASS: T21 命中写入证据日志
+PASS: T22 PEM 标记检出
+PASS: T23 干净目录扫描通过
+PASS: T24 进程链证据已记录
+PASS: T25 缺失路径扫描失败（rc=2，fail-closed）
+PASS: T25 扫描失败写入 SCAN-ERROR
+PASS: T26 不可读目录扫描失败（rc=2，fail-closed）
+PASS: T27 ev_run 参数边界可还原（%q 记录）
+PASS: T28 --issue-comment 缺值返回 2
+PASS: T28 --evidence-dir 缺值返回 2
+------------------------------------------------------------
+离线测试完成：71 通过，0 失败

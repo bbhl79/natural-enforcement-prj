@@ -1,0 +1,54 @@
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Sending build context to Docker daemon  419.8kB
+[4/4] STEP 1/10: FROM natural-enforcement/tools:local AS deps
+[4/4] STEP 2/10: WORKDIR /workspace
+--> 4db533381db9
+[4/4] STEP 3/10: COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+--> ce759e3995f8
+[4/4] STEP 4/10: COPY apps/api/package.json apps/api/package.json
+--> f37730f30ae6
+[4/4] STEP 5/10: COPY apps/web/package.json apps/web/package.json
+--> 8cf52840e993
+[4/4] STEP 6/10: COPY packages/contracts/package.json packages/contracts/package.json
+--> 5420801f6010
+[4/4] STEP 7/10: COPY packages/tsconfig packages/tsconfig
+--> b592631f0e7c
+[4/4] STEP 8/10: ARG PNPM_STORE_CACHE_ID=ne-pnpm-store-v11
+--> 4643fb05f610
+[4/4] STEP 9/10: RUN --mount=type=cache,id=${PNPM_STORE_CACHE_ID},target=/pnpm/store,sharing=locked     pnpm install --frozen-lockfile --store-dir=/pnpm/store
+Scope: all 5 workspace projects
+? Verifying lockfile against supply-chain policies (589 entries)...
+✓ Lockfile passes supply-chain policies (589 entries in 0ms)
+Lockfile is up to date, resolution step is skipped
+Packages are copied from the content-addressable store to the virtual store.
+  Content-addressable store is at: /pnpm/store/v11
+  Virtual store is at:             node_modules/.pnpm
+Packages: +544
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+Progress: resolved 544, reused 544, downloaded 0, added 544, done
+.../node_modules/prisma preinstall$ node scripts/preinstall-entry.js
+.../node_modules/prisma preinstall: ┌────────────────────────────────────────────────────────────────────┐
+.../node_modules/prisma preinstall: │    Prisma only supports Node.js versions 20.19+, 22.12+, 24.0+.    │
+.../node_modules/prisma preinstall: │    Please use a supported Node.js version.                         │
+.../node_modules/prisma preinstall: └────────────────────────────────────────────────────────────────────┘
+.../node_modules/prisma preinstall: Done
+Agent skills awaiting approval: @reduxjs/toolkit.
+Run "pnpm approve" to review them.
+
+devDependencies:
++ @eslint/js 10.0.1
++ eslint 10.15.0
++ eslint-plugin-react-hooks 7.1.1
++ turbo 2.11.11
++ typescript-eslint 8.73.0
+
+Done in 607ms using pnpm v12.21.0
+--> 00374fa2ff22
+[4/4] STEP 10/10: COPY . .
+[4/4] COMMIT
+--> 11d681807a9e
+11d681807a9efdd46f199501efa5ac5291b452ff15b36e2ccee13e66736c1ea9
+Successfully built 11d681807a9e

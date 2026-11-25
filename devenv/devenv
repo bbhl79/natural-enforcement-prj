@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # ============================================================================
-# devenv —— 工程基座唯一入口（Spec-工程基座 §4；issue #56 最小空间数据开发栈）
+# devenv —— 工程基座唯一入口（Spec-工程基座 §4；#56 最小空间数据开发栈 + #58 固定快照与不可变绑定）
 #
 # 宿主工具链零安装：本脚本只使用白名单宿主工具（bash、docker CLI + compose v2、
-# git、coreutils、jq、openssl、curl、gh）；一切 node/pnpm/prisma 执行都在容器内。
+# git、coreutils、tar、find、jq、openssl、curl、gh；macOS 自带 bsdtar/BSD find
+# 兼容所用法的）；一切 node/pnpm/prisma 执行都在容器内。
 #
 # 命令面权威文档：devenv/COMMANDS.md（Action | Command | 期望退出码 + JSON schema
 # + 并发语义）。AGENTS.md 只放关键入口与指针。
@@ -29,12 +30,14 @@ source "$REPO_ROOT/devenv/lib/output.sh"
 source "$REPO_ROOT/devenv/lib/engine.sh"
 # shellcheck source=lib/lock.sh
 source "$REPO_ROOT/devenv/lib/lock.sh"
+# shellcheck source=lib/snapshot.sh
+source "$REPO_ROOT/devenv/lib/snapshot.sh"
 # shellcheck source=lib/stack.sh
 source "$REPO_ROOT/devenv/lib/stack.sh"
 # shellcheck source=lib/github-app-auth.sh
 source "$REPO_ROOT/devenv/lib/github-app-auth.sh"
 
-trap lock_release_all EXIT
+trap 'lock_release_all; snapshot_cleanup' EXIT
 
 usage() {
   cat >&2 <<'EOF'
@@ -44,7 +47,7 @@ devenv — 工程基座唯一入口（命令面权威文档：devenv/COMMANDS.md
 工程栈（一切构建/启停/观察/执行的唯一入口；禁止直接操作 compose）：
   doctor                    一键体检（端点/引擎/矩阵/锁文件/镜像/服务）；退出码=可开工与否
   prefetch                  预取镜像锁中的上游镜像（分阶段、有进度/超时、可中断续跑）
-  build [--lockgen]         构建工具镜像 + 安装依赖 + turbo build（幂等；--lockgen 强制重生成 lockfile）
+  build [--lockgen]         固定快照构建（tools + install + turbo build；幂等；--lockgen 强制重生成 lockfile）
   up                        启动 db/api 并等待真实健康终态（幂等）
   down [--volumes]          停止（--volumes 连带清数据卷）
   restart [svc...]          重启（默认全部）
@@ -72,7 +75,7 @@ GitHub App 认证入口（身份：GitHub App，非个人账号）：
 测试：
   test:auth                 认证入口离线测试（不访问 GitHub）
   test:auth:integration     认证入口真实集成测试（默认只读；写操作需显式旗标）
-  test:devenv               命令面离线测试（引擎解析/锁/输出协议，mock docker）
+  test:devenv               命令面离线测试（引擎解析/锁/输出协议/快照与不可变绑定，mock docker）
 
 退出码：0 成功 | 2 用法 | 3 环境未就绪 | 4 任务失败 | 5 超时 | 6 锁冲突 | 20–23 认证入口
 EOF
@@ -145,6 +148,20 @@ cmd_doctor() {
     else
       chk workspace-image warn "未构建（冷启动正常；构建命令：devenv build）"
     fi
+    # 快照状态（#58）：状态文件记录 快照 ↔ workspace/tools 不可变镜像标识（信息项）
+    snapshot_state_load
+    if [[ -z "$STATE_IMAGE_ID" && -z "$STATE_TOOLS_IMAGE_ID" ]]; then
+      chk snapshot-state warn "无快照状态（冷启动正常；构建命令：devenv build）"
+    else
+      local ws_st="workspace 未构建" tools_st="tools 未构建"
+      if [[ -n "$STATE_IMAGE_ID" ]] && docker image inspect "$STATE_IMAGE_ID" >/dev/null 2>&1; then
+        ws_st="workspace ${STATE_IMAGE_ID:0:19}…"
+      fi
+      if [[ -n "$STATE_TOOLS_IMAGE_ID" ]] && docker image inspect "$STATE_TOOLS_IMAGE_ID" >/dev/null 2>&1; then
+        tools_st="tools ${STATE_TOOLS_IMAGE_ID:0:19}…"
+      fi
+      chk snapshot-state ok "快照 ${STATE_SNAPSHOT_HASH:0:12}… ↔ $ws_st / $tools_st"
+    fi
     local s
     for s in db api; do
       if svc_healthy "$s"; then chk "svc:$s" ok healthy;
@@ -196,28 +213,39 @@ cmd_build() {
   local t0=$(( $(date +%s) ))
   images_load
 
-  ev step.started target="tools base image"
-  run_step "tools 镜像构建" \
-    docker build -q -t "$TOOLS_IMAGE" -f "$REPO_ROOT/devenv/tools.Dockerfile" \
-      --build-arg "NODE_IMAGE=$NODE_IMAGE" "$REPO_ROOT"
-  ev step.completed target="tools base image"
+  # 固定输入快照（#58）：一次采集覆盖未提交修改/新增/删除及 Dockerfile、构建脚本、
+  # 锁文件等构建输入；采集后构建只读快照（git 对象库），不再读取活工作树。
+  local s dir
+  s="$(snapshot_capture)"
+  ev snapshot.captured hash="$s"
+
+  # tools 基础镜像：同一快照链路核对/重建（NODE_IMAGE 取自快照内 images.lock）；
+  # DB_IMAGE 是运行时输入（compose 注入），仍经 images_load 生效值 + 覆盖报告
+  ensure_tools_image "$s"
 
   # 首次引导 / 显式 --lockgen：lockfile 经 lockgen 靶生成后 docker cp 导出（全程容器内，无 bind mount）
-  if [[ ! -f "$REPO_ROOT/pnpm-lock.yaml" ]] || (( lockgen )); then
+  snapshot_materialize_new "$s"
+  dir="$SNAPSHOT_MATERIALIZED_DIR"
+  if [[ ! -f "$dir/pnpm-lock.yaml" ]] || (( lockgen )); then
     note "lockgen：重生成 pnpm-lock.yaml（新增/变更 workspace 包后必须；生成后请随 git 提交并审查 diff）"
-    regen_lockfile
+    regen_lockfile "$dir"
+    # lockfile 已导出回工作树 → 重新采集快照再构建 workspace（构建输入必须含新 lockfile）；
+    # 重新采集后基础镜像输入若变，必须重新核对（评审要求）
+    s="$(snapshot_capture)"
+    ev snapshot.captured hash="$s" reason="lockgen"
+    snapshot_discard "$dir"
+    ensure_tools_image "$s"
   fi
+  snapshot_discard "$dir"
 
-  ev step.started target="workspace image (install + turbo build)"
-  run_step "workspace 镜像构建" \
-    docker build -q -t "$WS_IMAGE" -f "$REPO_ROOT/devenv/workspace.Dockerfile" "$REPO_ROOT"
-  ev step.completed target="workspace image"
+  build_workspace_from_snapshot "$s"
 
   note "build 完成"
-  final ok 0 duration="$(( $(date +%s) - t0 ))s"
+  final ok 0 duration="$(( $(date +%s) - t0 ))s" snapshot="$s"
 }
 
-regen_lockfile() { # lockgen 靶生成 lockfile 后 docker cp 导出（--lockfile-only 不拉包）
+regen_lockfile() { # $1=快照物化目录；lockgen 靶生成 lockfile 后 docker cp 导出（--lockfile-only 不拉包）
+  local dir="$1" target="lockgen"
   ev step.started target="lockgen"
   # 前置清理：上次异常退出可能留下持锁容器（image in use → rmi 失败连锁，原型实测坑）
   # （不用 xargs -r：macOS 宿主 xargs 无 -r）
@@ -226,8 +254,12 @@ regen_lockfile() { # lockgen 靶生成 lockfile 后 docker cp 导出（--lockfil
   # shellcheck disable=SC2086
   [[ -n "$stale_cids" ]] && docker rm -f $stale_cids >/dev/null 2>&1 || true
   docker rmi -f ne-lockgen:tmp >/dev/null 2>&1 || true
+  # 首引导（快照内无 lockfile）走 lockgen-fresh 全量解析；有 lockfile 走增量解析（#54 §六.2）
+  [[ -f "$dir/pnpm-lock.yaml" ]] || target="lockgen-fresh"
+  # 基础镜像经 build-arg 绑定本次 tools 不可变 ID（不依赖可被覆盖的 tools:local 标签）
   run_step "lockgen 镜像构建" \
-    docker build -q -f "$REPO_ROOT/devenv/workspace.Dockerfile" --target lockgen -t ne-lockgen:tmp "$REPO_ROOT"
+    docker build -q -f "$dir/devenv/workspace.Dockerfile" --target "$target" -t ne-lockgen:tmp \
+      --build-arg "TOOLS_IMAGE=$TOOLS_IMAGE_EFFECTIVE" "$dir"
   local cid
   cid="$(docker create ne-lockgen:tmp)"
   run_step "lockfile 导出" docker cp "$cid":/workspace/pnpm-lock.yaml "$REPO_ROOT/pnpm-lock.yaml"
@@ -252,6 +284,7 @@ cmd_up() {
   ev wait.started service="api"
   wait_healthy api 120
   ev wait.ok service="api"
+  verify_svc_image api  # 启动核对：运行容器 == 本次构建的不可变镜像标识（#58）
   note "全部服务健康（db, api），迁移已应用"
   final ok 0 services="db,api"
 }
@@ -441,6 +474,7 @@ cmd_web() {
   ensure_fresh_workspace
   WEB_PORT="$port" run_step "web 启动" compose --profile web up -d web
   wait_healthy web 120
+  verify_svc_image web  # 启动核对：运行容器 == 本次构建的不可变镜像标识（#58）
   note "web 就绪：http://localhost:$port（地图瓦片由浏览器自行拉取 OSM）"
   final ok 0 url="http://localhost:$port" port="$port"
 }
@@ -461,11 +495,14 @@ cmd_wait() {
 
 cmd_status() {
   if (( JSON )); then
-    # 结构化总览：容器 JSONL + 终值（锁+镜像生效值），不静默退化成 ps
+    # 结构化总览：容器 JSONL + 终值（锁+镜像生效值+快照状态），不静默退化成 ps
     docker ps --filter "label=com.docker.compose.project=$PROJECT_NAME" --format '{{json .}}'
     images_load
+    snapshot_state_load
     final ok 0 locks="$(ls -1 "$LOCK_ROOT" 2>/dev/null | paste -sd, -)" \
-      node_image="$NODE_IMAGE" db_image="$DB_IMAGE_EFFECTIVE" db_image_source="$DB_IMAGE_SOURCE"
+      node_image="$NODE_IMAGE" db_image="$DB_IMAGE_EFFECTIVE" db_image_source="$DB_IMAGE_SOURCE" \
+      snapshot_hash="${STATE_SNAPSHOT_HASH:-none}" workspace_image_id="${STATE_IMAGE_ID:-none}" \
+      tools_image_id="${STATE_TOOLS_IMAGE_ID:-none}"
     return 0
   fi
   note "容器："
@@ -473,8 +510,11 @@ cmd_status() {
   note "锁（$LOCK_ROOT）："
   ls -1 "$LOCK_ROOT" 2>/dev/null | sed 's/^/  /' >&2 || true
   images_load
+  snapshot_state_load
   note "镜像：node=$NODE_IMAGE"
   note "镜像：db=$DB_IMAGE_EFFECTIVE（来源：$DB_IMAGE_SOURCE）"
+  note "快照：${STATE_SNAPSHOT_HASH:-无}"
+  note "绑定：workspace=${STATE_IMAGE_ID:-无} tools=${STATE_TOOLS_IMAGE_ID:-无}"
 }
 
 cmd_images() {
@@ -535,7 +575,7 @@ case "$CMD" in
   git-push)               gha_cmd_git_push "$@" ;;
   test:auth)              bash "$REPO_ROOT/devenv/test/offline.test.sh" ;;
   test:auth:integration)  bash "$REPO_ROOT/devenv/test/integration.test.sh" "$@" ;;
-  test:devenv)            bash "$REPO_ROOT/devenv/test/stack-offline.test.sh" ;;
+  test:devenv)            bash "$REPO_ROOT/devenv/test/stack-offline.test.sh" && bash "$REPO_ROOT/devenv/test/snapshot-offline.test.sh" ;;
   help)                   usage; exit 0 ;;
   # doctor 自带软引擎检查（体检报告全部检查项，不在首个失败处退出）
   doctor)                 cmd_doctor "$@" ;;
