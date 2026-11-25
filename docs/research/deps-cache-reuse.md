@@ -128,7 +128,7 @@ RUN --mount=type=cache,id=${PNPM_STORE_CACHE_ID},target=/pnpm/store,sharing=lock
 
 ## 七、复现
 
-实验装置（throwaway 分支，未合入 dev）：`research/deps-cache-exp`（基于 `prototype/foundation-slice-2`，HEAD `a84aedf`）。关键文件：
+实验装置（throwaway 分支，未合入 dev）：`research/deps-cache-exp`（基于 `prototype/foundation-slice-2`，HEAD `78f4666`）。关键文件：
 
 - `devenv/exp/summarize-pnpm.mjs` + `verdict.test.mjs`：ndjson → 六档判定（16 项单测，容器内 `node --test`）。
 - `devenv/exp/lib.sh` + `lib.selftest.sh`（91 项自检含反例）+ `lint-local.awk`：计时/取证/缓存状态/产物树哈希/闭环汇总。
