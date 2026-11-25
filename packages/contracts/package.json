@@ -1,0 +1,27 @@
+{
+  "name": "@ne/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "zod-first 传输契约：schema + 推断类型 + 路由常量（#9 决议；只产 ESM dist）",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run src"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@ne/tsconfig": "workspace:*",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

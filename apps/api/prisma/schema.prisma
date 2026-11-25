@@ -1,0 +1,26 @@
+// Prisma 7 + PostGIS 双轨模式（调研报告 docs/research/prisma-postgis.md 主线）：
+// - 地理列用 Unsupported 占位（必须可空，否则 create/update/upsert 全禁用）
+// - GiST 索引/CREATE EXTENSION/空间函数手写进同一份 migration.sql（唯一版本真相）
+// - 空间读写全部走 $queryRaw + ST_DWithin（geography 版，单位米，走 GiST）
+
+generator client {
+  provider = "prisma-client"
+  // Prisma 7：output 相对 schema 文件解析（不是包根）——落到 src/ 需写 ../src/...
+  output   = "../src/generated/client"
+  runtime  = "nodejs"
+  moduleFormat = "esm"
+  generatedFileExtension = "ts"
+}
+
+// Prisma 7：schema 内 url 已禁用——连接串在 prisma.config.ts（migrate 用）
+// 与 PrismaService 的 adapter（client 用）；见 https://pris.ly/d/config-datasource
+datasource db {
+  provider = "postgresql"
+}
+
+model EnforcementPoint {
+  id        Int                          @id @default(autoincrement())
+  name      String                       @unique
+  location  Unsupported("geography(Point,4326)")?
+  createdAt DateTime                     @default(now())
+}

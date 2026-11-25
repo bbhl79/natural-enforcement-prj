@@ -1,0 +1,33 @@
+[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
+[devenv] prefetch：拉取 node:26.13.1-slim@sha256:a5a5adfee3013de54504e0e6aff49993acf7daed072e86be75b8818c0f6ac258（超时 900s，可中断续跑——重复执行即可）
+d3bb6c414d94: Already exists
+3aa4e94aa6cc: Already exists
+1af4b9986b04: Already exists
+37fb86c2a767: Already exists
+bd57e13a3a21: Pulling fs layer
+bd57e13a3a21: Download complete
+bd57e13a3a21: Download complete
+docker.io/library/node:26.13.1-slim@sha256:a5a5adfee3013de54504e0e6aff49993acf7daed072e86be75b8818c0f6ac258
+[devenv] prefetch：拉取 postgis/postgis:18-3.6@sha256:4a43e3c3e5d55b9208240fc71db543b79c638766280c625a425bd0a2390989c4（超时 900s，可中断续跑——重复执行即可）
+33e59af3458c: Already exists
+5bf0df4dfeec: Already exists
+36f05ca1a259: Already exists
+fc259989795e: Already exists
+af1084bcb355: Already exists
+f2be67225471: Already exists
+bea9e19f5a74: Already exists
+40ebd398ec37: Already exists
+19f779d0bd48: Already exists
+cf9efa127f85: Already exists
+4f4fb700ef54: Already exists
+92accee5624e: Already exists
+651da43c3743: Already exists
+00490e632b75: Already exists
+4c262099acfb: Already exists
+9dd4c9ed21b9: Already exists
+8ed0c854313a: Already exists
+4bcf45999358: Pulling fs layer
+4bcf45999358: Download complete
+4bcf45999358: Download complete
+docker.io/postgis/postgis:18-3.6@sha256:4a43e3c3e5d55b9208240fc71db543b79c638766280c625a425bd0a2390989c4
+[devenv] prefetch 完成（2 个上游镜像就绪）

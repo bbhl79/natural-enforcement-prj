@@ -1,0 +1,21 @@
+=== 幂等重入证据（状态改变命令重复执行同结果）===
+--- up ×2（第二次：服务已健康，迁移无 pending，快速通过）---
+up#2 exit=0
+--- seed ×2（ON CONFLICT DO NOTHING）---
+{"seeded":5,"mode":"idempotent"}
+seed#2 exit=0
+{"seeded":5,"mode":"idempotent"}
+--- migrate ×2（无 pending 迁移）---
+No pending migrations to apply.
+migrate#2 exit=0
+--- 数据复核：种子点位仍各一份（无重复插入）---
+[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
+        name        | count 
+--------------------+-------
+ 天河体育中心执法点 |     1
+ 广州塔执法点       |     1
+ 沙面执法点         |     1
+ 珠江新城执法点     |     1
+ 越秀公园执法点     |     1
+(5 rows)
+

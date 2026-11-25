@@ -1,0 +1,6 @@
+{"event":"engine","identity":"podman","version":"6.1.4","os":"linux","arch":"amd64","endpoint":"unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock","source":"DOCKER_HOST 环境变量"}
+{"event":"step.started","target":"tools base image"}
+{"event":"step.completed","target":"tools base image"}
+{"event":"step.started","target":"workspace image (install + turbo build)"}
+{"event":"step.completed","target":"workspace image"}
+{"command":"build","status":"ok","exitCode":0,"duration":"7s"}

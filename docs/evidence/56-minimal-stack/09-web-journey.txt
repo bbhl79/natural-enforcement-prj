@@ -1,0 +1,16 @@
+=== 浏览器旅程证据（经 web 源 http://localhost:5173，与浏览器同路径）===
+（诚实口径：curl 经 web 源 = 浏览器所走路径的代理——同 preview proxy、同 api、同契约校验；
+  RTK Query 浏览器内执行由 web 侧 jsdom 组件/契约测试覆盖，见 06-test.stderr.txt）
+--- 1. GET / （HTML 200，vite preview 供烘焙产物）---
+HTTP 200, 416 bytes
+<title>自然执法 · 执法点位</title>
+--- 2. GET /health （经 preview proxy → api:3000；响应契约 HealthResultSchema）---
+{"status":"ok","uptime":67}
+--- 3. GET /enforcement-points/nearby?lat=23.1291&lng=113.2644&radiusM=8000 （PostGIS ST_DWithin 真实空间查询）---
+{"center":{"lat":23.1291,"lng":113.2644},"radiusM":8000,"points":[{"name":"越秀公园执法点","distanceM":766.61355336},{"name":"沙面执法点","distanceM":3124.11929649},{"name":"珠江新城执法点","distanceM":5890.16656617},{"name":"天河体育中心执法点","distanceM":5935.61134195},{"name":"广州塔执法点","distanceM":6645.5709956}]}
+--- 4. 非法 query → 400 + zod issues（API 请求经 zod 校验）---
+{"message":"契约校验失败","issues":[{"path":"lat","code":"invalid_type","message":"Invalid input: expected number, received NaN"}]}
+HTTP 400
+--- 5. POST 非法 body → 400 + issues ---
+{"message":"契约校验失败","issues":[{"path":"lat","code":"too_big","message":"Too big: expected number to be <=90"}]}
+HTTP 400

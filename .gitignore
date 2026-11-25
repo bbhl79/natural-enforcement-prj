@@ -1,2 +1,15 @@
 # 运行证据与运行元数据（spec #23：允许足迹，gitignored）
 .artifacts/
+
+# Windows 侧 crashpad 日志（经 WSL 挂载写入工作树，非项目产物）
+debug.log
+
+# 工程基座（#56）：依赖/构建产物/缓存一律容器内管理，宿主工作树零工具链残留
+node_modules/
+dist/
+coverage/
+.turbo/
+*.tsbuildinfo
+.env
+apps/api/src/generated/
+.pnpm-store/

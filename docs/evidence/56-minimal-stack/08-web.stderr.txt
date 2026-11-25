@@ -1,0 +1,21 @@
+[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+4b780e5082a58c644c52efcbedf3b57c60ffcf45b305f4beb8e65d0cecdedd6f
+time="2026-11-25T17:18:39+08:00" level=warning msg="Found orphan containers ([natural-enforcement-redis-1 natural-enforcement-rustfs-1]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container natural-enforcement-db-1  Running
+ Container natural-enforcement-api-1  Recreate
+ Container natural-enforcement-api-1  Recreated
+ Container natural-enforcement-web-1  Recreate
+ Container natural-enforcement-web-1  Recreated
+ Container natural-enforcement-db-1  Waiting
+ Container natural-enforcement-db-1  Healthy
+ Container natural-enforcement-api-1  Starting
+ Container natural-enforcement-api-1  Started
+ Container natural-enforcement-api-1  Waiting
+ Container natural-enforcement-api-1  Healthy
+ Container natural-enforcement-web-1  Starting
+ Container natural-enforcement-web-1  Started
+[devenv] web 就绪：http://localhost:5173（地图瓦片由浏览器自行拉取 OSM）
