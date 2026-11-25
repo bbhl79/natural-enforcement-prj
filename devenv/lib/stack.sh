@@ -17,7 +17,8 @@
 PROJECT_NAME="natural-enforcement"
 TOOLS_IMAGE="natural-enforcement/tools:local"
 WS_IMAGE="natural-enforcement/workspace:local"
-WS_IMAGE_EFFECTIVE=""  # 本次新鲜度核对/构建绑定的不可变镜像标识（image ID）
+WS_IMAGE_EFFECTIVE=""     # 本次新鲜度核对/构建绑定的 workspace 不可变镜像标识（image ID）
+TOOLS_IMAGE_EFFECTIVE=""  # 本次新鲜度核对/构建绑定的 tools 不可变镜像标识（image ID）
 IMAGES_LOCK="$REPO_ROOT/devenv/images.lock"
 COMPOSE_FILE="$REPO_ROOT/devenv/compose.yaml"
 
@@ -95,11 +96,77 @@ run_step_out() { # run_step_out <步骤描述> <cmd...>：同 run_step，stdout 
   fi
 }
 
+# 镜像 label 读取探针（新鲜度核对用）：镜像不存在 / label 缺失 → 打印空（未命中）；
+# 引擎故障（inspect 失败且引擎探活失败）→ die 3 明确报错，不吞。
+# 注意：不能用 docker image ls 做存在性探针——podman 不列出完全无 tag 的悬空镜像
+# （tag 被覆盖后状态镜像变悬空，会被误判不存在，实测）。
+image_label_or_miss() { # <imageId> <label-format>
+  local id="$1" fmt="$2" out rc=0
+  [[ -n "$id" ]] || return 0
+  out="$(docker image inspect "$id" --format "$fmt" 2>/dev/null)" || rc=$?
+  if (( rc != 0 )); then
+    docker version --format '{{.Server.Version}}' >/dev/null 2>&1 \
+      || die 3 "引擎连接异常（docker image inspect 失败且引擎探活失败）。排查：devenv doctor"
+    return 0  # 引擎正常 → 镜像不存在 → 未命中（空）
+  fi
+  printf '%s' "$out"
+}
+
+# tools 输入哈希：tools.Dockerfile blob + 快照内 images.lock 的 NODE_IMAGE
+# （tools 镜像内容只由这两项决定——pnpm 版本 pin 在 tools.Dockerfile 内）
+tools_input_hash() { # <tree>
+  local blob node_image
+  blob="$(git -C "$REPO_ROOT" rev-parse "$1:devenv/tools.Dockerfile")"
+  node_image="$(git -C "$REPO_ROOT" show "$1:devenv/images.lock" | grep '^NODE_IMAGE=' | cut -d= -f2-)"
+  [[ -n "$blob" && -n "$node_image" ]] || die 3 "快照内 tools 构建输入缺失（devenv/tools.Dockerfile 或 images.lock NODE_IMAGE 行）"
+  printf '%s\n%s\n' "$blob" "$node_image" | sha256sum | awk '{print $1}'
+}
+
+# tools 基础镜像新鲜度核对/重建（#58 评审修复：tools 纳入快照与不可变绑定）。
+# 命中 → TOOLS_IMAGE_EFFECTIVE=状态 ID；未命中（无状态/镜像丢失/输入哈希不符）→
+# 从快照物化目录重建并记录。NODE_IMAGE 取自快照内 images.lock，不读活工作树。
+ensure_tools_image() { # <tree>
+  local s="$1" h
+  h="$(tools_input_hash "$s")"
+  snapshot_state_load
+  local labeled
+  labeled="$(image_label_or_miss "$STATE_TOOLS_IMAGE_ID" '{{index .Config.Labels "devenv.tools.input-hash"}}')"
+  if [[ -n "$STATE_TOOLS_IMAGE_ID" && "$STATE_TOOLS_INPUT_HASH" == "$h" && "$labeled" == "$h" ]]; then
+    TOOLS_IMAGE_EFFECTIVE="$STATE_TOOLS_IMAGE_ID"
+    ev tools.fresh imageId="$STATE_TOOLS_IMAGE_ID" inputHash="$h"
+    return 0
+  fi
+  snapshot_materialize_new "$s"
+  local dir="$SNAPSHOT_MATERIALIZED_DIR" node_image img_id
+  node_image="$(grep '^NODE_IMAGE=' "$dir/devenv/images.lock" | cut -d= -f2-)"
+  ev step.started target="tools base image"
+  run_step_out "tools 镜像构建" \
+    docker build -q -t "$TOOLS_IMAGE" \
+      --label "devenv.tools.input-hash=$h" \
+      --build-arg "NODE_IMAGE=$node_image" \
+      -f "$dir/devenv/tools.Dockerfile" "$dir"
+  img_id="$RUN_STEP_OUT"
+  [[ "$img_id" == sha256:* ]] || img_id="sha256:$img_id"  # podman 兼容层 -q 输出无前缀 64hex，归一
+  if [[ ! "$img_id" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    snapshot_discard "$dir"
+    die 4 "tools 镜像构建未返回不可变标识（输出：$img_id）"
+  fi
+  TOOLS_IMAGE_EFFECTIVE="$img_id"
+  snapshot_state_write_tools "$h" "$img_id"
+  ev tools.built imageId="$img_id" inputHash="$h"
+  ev step.completed target="tools base image"
+  snapshot_discard "$dir"
+  return 0
+}
+
 # 从固定快照构建 workspace 镜像并记录不可变绑定（#58）。
-# 镜像 label 记录快照哈希 + 关键构建输入清单；构建返回的 image ID（docker build -q
-# 输出，免 tag 二次解析竞态）写入状态文件；compose 消费经 WS_IMAGE_EFFECTIVE 注入。
+# 基础镜像经 --build-arg TOOLS_IMAGE=<不可变 ID> 传入（不依赖可被覆盖的 tools:local
+# 标签）；镜像 label 记录快照哈希 + 构建输入清单 + 基础镜像 ID（可核对链路：
+# 固定快照 → tools 不可变 ID → workspace 不可变 ID）；构建返回的 image ID
+# （docker build -q 输出，免 tag 二次解析竞态）写入状态文件。
 build_workspace_from_snapshot() { # <tree> [已物化目录]
   local s="$1" dir="${2:-}" own_dir=0
+  [[ -n "$TOOLS_IMAGE_EFFECTIVE" ]] || die 4 "内部错误：构建 workspace 前未绑定 tools 镜像（ensure_tools_image 未运行）"
   if [[ -z "$dir" ]]; then
     snapshot_materialize_new "$s"
     dir="$SNAPSHOT_MATERIALIZED_DIR"
@@ -110,6 +177,8 @@ build_workspace_from_snapshot() { # <tree> [已物化目录]
     docker build -q -t "$WS_IMAGE" \
       --label "devenv.snapshot.hash=$s" \
       --label "devenv.snapshot.inputs=$(snapshot_inputs_manifest "$s")" \
+      --label "devenv.base.image=$TOOLS_IMAGE_EFFECTIVE" \
+      --build-arg "TOOLS_IMAGE=$TOOLS_IMAGE_EFFECTIVE" \
       -f "$dir/devenv/workspace.Dockerfile" "$dir"
   # docker build -q 输出即本次构建的不可变标识（免 tag 二次解析竞态）；
   # podman 兼容层输出无前缀 64hex，docker 输出带 sha256: 前缀——归一为带前缀形
@@ -121,25 +190,27 @@ build_workspace_from_snapshot() { # <tree> [已物化目录]
   fi
   snapshot_state_write "$s" "$img_id"
   WS_IMAGE_EFFECTIVE="$img_id"
-  ev workspace.built imageId="$img_id" snapshot="$s"
+  ev workspace.built imageId="$img_id" snapshot="$s" base="$TOOLS_IMAGE_EFFECTIVE"
   ev step.completed target="workspace image (snapshot build)"
   (( own_dir )) && snapshot_discard "$dir"
   return 0
 }
 
-# 凡消费当前源码的命令前置（#58）：固定输入快照 → 新鲜度核对（快照哈希 ↔ 镜像
-# devenv.snapshot.hash label ↔ 状态文件一致才跳过重构）→ 绑定不可变镜像标识
-# （WS_IMAGE_EFFECTIVE）。层缓存命中时重构秒级；快照一致时亚秒级跳过。
+# 凡消费当前源码的命令前置（#58）：固定输入快照 → tools 新鲜度核对 → workspace
+# 新鲜度核对（快照哈希 ↔ 镜像 devenv.snapshot.hash label ↔ 状态文件，且基础镜像
+# label == 本次绑定的 tools ID，才跳过重构）→ 绑定不可变镜像标识。
+# 未命中三态（无状态/镜像不存在/label 缺失或不符）一律进重建；引擎故障 die 3。
+# 层缓存命中时重构秒级；快照一致时亚秒级跳过。
 ensure_fresh_workspace() {
   ev step.started target="workspace image freshness"
   local s
-  s="$(snapshot_capture)"  # 双采集；持续不稳 → die 4（明确拒绝，不出混合内容）
+  s="$(snapshot_capture)"  # stat 括号采集；窗口内有写入 → 重试/明确拒绝（die 4）
   ev snapshot.captured hash="$s"
+  ensure_tools_image "$s"
   snapshot_state_load
-  # 单次 inspect：镜像不存在或 label 缺失/不符均为空 → 不新鲜 → 重建
   local labeled
-  labeled="$(docker image inspect "$STATE_IMAGE_ID" --format '{{index .Config.Labels "devenv.snapshot.hash"}}' 2>/dev/null)"
-  if [[ -n "$STATE_IMAGE_ID" && "$STATE_SNAPSHOT_HASH" == "$s" && "$labeled" == "$s" ]]; then
+  labeled="$(image_label_or_miss "$STATE_IMAGE_ID" '{{index .Config.Labels "devenv.snapshot.hash"}} {{index .Config.Labels "devenv.base.image"}}')"
+  if [[ -n "$STATE_IMAGE_ID" && "$STATE_SNAPSHOT_HASH" == "$s" && "$labeled" == "$s $TOOLS_IMAGE_EFFECTIVE" ]]; then
     WS_IMAGE_EFFECTIVE="$STATE_IMAGE_ID"
     ev workspace.fresh imageId="$STATE_IMAGE_ID" snapshot="$s"
     note "workspace 镜像新鲜（快照 ${s:0:12}… ↔ ${STATE_IMAGE_ID:0:19}…），跳过重建"

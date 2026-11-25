@@ -146,18 +146,27 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
   快照（内容寻址树哈希），覆盖未提交修改、新增、删除，以及 Dockerfile、构建脚本、
   锁文件等构建输入（gitignored 内容不进快照）；构建上下文 = 快照物化目录
   （git archive 自对象库），**采集后不再读取活工作树**。
-- **采集竞态口径**：采集双跑比对，工作树持续变化 → 重试 3 次后**明确拒绝**
-  （exit 4），不产生混合内容却报告来源一致；构建期间工作树再变不影响本次
-  （构建只读快照）。
-- **新鲜度核对**：快照哈希 ↔ 镜像 label（`devenv.snapshot.hash`）↔ 状态文件
-  一致才跳过重建；任一不符即重建（层缓存命中时秒级）。`devenv.snapshot.inputs`
-  构建输入清单随镜像记录（审计用，不参与新鲜度比对）。
-- **不可变绑定**：状态文件 `.devenv-state/workspace-image.env`（gitignored，每
-  worktree 私有）记录 快照哈希 ↔ 不可变镜像标识（image ID，取自 `docker build -q`
-  输出，免 tag 二次解析竞态）；compose 注入 image ID 而非可变 tag；up/web 启动后
-  核对运行容器 `.Image` == 本次绑定 ID——同 worktree 可变 tag 被覆盖，原构建仍
-  按自己的不可变标识启动。restart 只重启既有容器（不重新解析镜像、无新绑定
-  产生），绑定核对在容器创建路径（up/web）完成。
+- **采集一致性（stat 括号）**：读取窗口用 文件清单 + 逐文件 `(mtime,size,inode)`
+  括号夹住——窗口内任何写入（原地写/追加/原子重命名保存/新建/删除）都被检出 →
+  重试 3 次后**明确拒绝**（exit 4），不产生混合内容却报告来源一致；机制、成立
+  条件与残余孔洞见 `docs/adr/2026-11-25-21-19-快照采集一致性机制.md`。构建期间
+  工作树再变不影响本次（构建只读快照）。
+- **新鲜度核对**：无状态 / 状态镜像不存在 / label 缺失或不符 = 未命中 → 重建；
+  引擎故障（无法列出本地镜像）→ exit 3 明确报错，不吞。命中条件：快照哈希 ↔
+  镜像 `devenv.snapshot.hash` label ↔ 状态文件一致，且镜像 `devenv.base.image`
+  label == 本次绑定的 tools ID。`devenv.snapshot.inputs` 构建输入清单随镜像记录
+  （审计用，不参与比对）。
+- **不可变绑定链**：固定快照 → tools 不可变镜像 ID → workspace 不可变镜像 ID。
+  tools 输入哈希（tools.Dockerfile blob + 快照内 NODE_IMAGE）↔ tools image ID、
+  快照哈希 ↔ workspace image ID 均记入状态文件
+  `.devenv-state/workspace-image.env`（gitignored，每 worktree 私有）；workspace
+  与 lockgen 构建经 `--build-arg TOOLS_IMAGE=<不可变 ID>` 绑定基础镜像（不依赖
+  可被覆盖的 tools:local 标签）；workspace 镜像 label `devenv.base.image` 记录
+  其基础镜像 ID（可核对）。image ID 取自 `docker build -q` 输出（免 tag 二次解析
+  竞态；podman 兼容层输出无前缀 64hex，已归一）；compose 注入 image ID 而非可变
+  tag；up/web 启动后核对运行容器 `.Image` == 本次绑定 ID——同 worktree 可变 tag
+  被覆盖，原构建仍按自己的不可变标识启动。restart 只重启既有容器（不重新解析
+  镜像、无新绑定产生），绑定核对在容器创建路径（up/web）完成。
 - **构建输入 vs 运行时输入**：构建上下文（含 Dockerfile、构建脚本、锁文件、
   `NODE_IMAGE`）一律取自快照物化目录，采集后不读活工作树；`compose.yaml` 与
   `DB_IMAGE` 生效值是运行时输入（compose 注入），其变更经快照哈希在下次消费

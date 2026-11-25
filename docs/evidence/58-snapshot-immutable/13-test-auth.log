@@ -1,4 +1,4 @@
-沙箱：/tmp/gha-offline-test.NJMHxJ
+沙箱：/tmp/gha-offline-test.cqs7ca
 PASS: T1 app_id 不符拒绝
 PASS: T1 未执行 gh
 PASS: T2 仓库未授权拒绝
@@ -55,8 +55,8 @@ PASS: T17 insteadOf 未执行 push
 PASS: T17 pushInsteadOf 改写为 SSH 拒绝
 PASS: T17 pushInsteadOf 未执行 push
 PASS: T18 输出/日志/临时文件无 token 与私钥泄露
-[2026-11-25T13:03:07Z] evidence dir: /tmp/gha-offline-test.NJMHxJ/evidence
-[2026-11-25T13:03:07Z] cmd[demo]: bash -c echo\ out-line\;\ echo\ err-line\ \>\&2\;\ exit\ 3 → rc=3
+[2026-11-25T13:32:18Z] evidence dir: /tmp/gha-offline-test.cqs7ca/evidence
+[2026-11-25T13:32:18Z] cmd[demo]: bash -c echo\ out-line\;\ echo\ err-line\ \>\&2\;\ exit\ 3 → rc=3
 PASS: T19 ev_run 透传退出码
 PASS: T19 stdout/stderr 分别捕获
 PASS: T19 证据日志含命令与退出码

@@ -15,8 +15,12 @@
 # --frozen-lockfile。store 是缓存不是信任根（#54 §六.1）：需要干净重建时换
 # cache id（--build-arg PNPM_STORE_CACHE_ID=<新 id>）。
 
+# 基础镜像经 build-arg 注入不可变标识（#58：固定快照 → tools 不可变 ID →
+# workspace 不可变 ID；不依赖可被覆盖的 tools:local 标签——标签仅为手工/调试默认）。
+ARG TOOLS_IMAGE=natural-enforcement/tools:local
+
 # lockgen 公共靶：manifest 层（lockfile 可选——首引导无 lockfile 走 lockgen-fresh）
-FROM natural-enforcement/tools:local AS lockgen-base
+FROM ${TOOLS_IMAGE} AS lockgen-base
 WORKDIR /workspace
 COPY pnpm-workspace.yaml package.json ./
 COPY apps/api/package.json apps/api/package.json
@@ -44,7 +48,7 @@ RUN --mount=type=cache,id=${PNPM_META_CACHE_ID},target=/root/.cache/pnpm,sharing
 # deps 靶：依赖已装、源码已入、未构建——调试/工具用（docker build --target deps）
 # 注意：COPY 一律取自构建上下文（lockfile 已由 devenv 经 lockgen 导出并提交），
 # 换 COPY --from 来源会改变层缓存链导致 install 全量重跑（原型 #11 实测）。
-FROM natural-enforcement/tools:local AS deps
+FROM ${TOOLS_IMAGE} AS deps
 WORKDIR /workspace
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY apps/api/package.json apps/api/package.json

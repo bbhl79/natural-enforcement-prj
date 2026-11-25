@@ -3,16 +3,17 @@
 # 快照与不可变绑定离线测试（#58）——不访问真实引擎（docker 全部 mock）
 #
 # 覆盖（Spec-工程基座 §3 ensure_fresh_workspace 固定输入快照 + 不可变绑定）：
-#   1. 快照采集：稳定工作树双采集一致；修改/新增/删除均反映到树哈希；
+#   1. 快照采集：稳定工作树采集一致；修改/新增/删除均反映到树哈希；
 #      gitignored 内容（node_modules、.devenv-state）不进入快照
-#   2. 采集竞态：工作树持续变化 → 明确拒绝（exit 4），不产生混合内容却报告
-#      来源一致；重试后稳定 → 接受
-#   3. 物化：快照目录含构建输入；mtime 归一（跨构建缓存稳定）
-#   4. 构建输入清单：label 用 manifest 覆盖 Dockerfile/构建脚本/锁文件
-#   5. 新鲜度：状态文件 + 镜像 label 一致 → 跳过重建；不符/无状态/镜像丢失 → 重建
-#   6. 不可变绑定：compose 注入 image ID（非可变 tag）；build 记录状态
-#   7. devenv build 全命令：快照构建 tools+workspace；lockgen 有/无 lockfile
-#      双靶（lockgen / lockgen-fresh）；lockgen 后重新采集
+#   2. 采集一致性（stat 括号）：窗口内写入 → 重试；持续写入 → 明确拒绝（exit 4）；
+#      确定性多文件竞态（钩子注入）：只接受完整版本或明确拒绝，禁止混合组合
+#   3. 物化：快照目录含构建输入；mtime 归一；登记 EXIT 清理（当前 shell）
+#   4. 构建输入清单：label 用 manifest 覆盖 Dockerfile/构建脚本/锁文件/各包 manifest
+#   5. 新鲜度：无状态/镜像不存在/label 不符 → 重建；一致 → 跳过；
+#      引擎故障 → die 3（不吞）；真实入口 set -Eeuo pipefail 下不提前退出
+#   6. 不可变绑定链：固定快照 → tools 不可变 ID → workspace 不可变 ID；
+#      tools 输入变更/标签覆盖反例；compose 注入 image ID；启动核对
+#   7. devenv build 全命令：快照构建 tools+workspace；lockgen 双靶；lockgen 后重新采集
 # ============================================================================
 set -Eeuo pipefail
 
@@ -50,8 +51,8 @@ git -C "$MINI" config user.name "offline"
 git -C "$MINI" add -A
 git -C "$MINI" commit -qm init
 
-# mock docker：build 记录标签并落假镜像（id=内容哈希）；image inspect 按格式串应答；
-# compose 仅记录；create/cp/rm/rmi 支撑 lockgen 路径。
+# mock docker：build 记录标签/build-arg 并落假镜像（id=输入哈希）；image ls/inspect
+# 按格式串应答；compose 仅记录；create/cp/rm/rmi 支撑 lockgen 路径。
 MOCK_DOCKER_STATE="$SANDBOX/docker-state"
 mkdir -p "$MOCK_DOCKER_STATE/images" "$MOCK_DOCKER_STATE/tags" "$SANDBOX/stubbin"
 cat > "$SANDBOX/stubbin/docker" <<'MOCK'
@@ -67,12 +68,13 @@ mkdir -p "$STATE/images" "$STATE/tags"
 cmd="${1:-}"; [[ $# -gt 0 ]] && shift
 case "$cmd" in
   version)
+    [[ "${MOCK_ENGINE_DOWN:-}" == "1" ]] && exit 1
     cat "${MOCK_DOCKER_VERSION_JSON:?}" ;;
   compose)
     [[ "${1:-}" == "version" ]] && echo "2.40.3"
     exit 0 ;;
   build)
-    tag=""; snap=""; inputs=""; target=""
+    tag=""; snap=""; inputs=""; target=""; base=""; toolshash=""; bargs=""
     while [[ $# -gt 0 ]]; do
       case "$1" in
         -t) tag="$2"; shift 2 ;;
@@ -80,23 +82,29 @@ case "$cmd" in
           case "$2" in
             devenv.snapshot.hash=*) snap="${2#devenv.snapshot.hash=}" ;;
             devenv.snapshot.inputs=*) inputs="${2#devenv.snapshot.inputs=}" ;;
+            devenv.base.image=*) base="${2#devenv.base.image=}" ;;
+            devenv.tools.input-hash=*) toolshash="${2#devenv.tools.input-hash=}" ;;
           esac
           shift 2 ;;
         --target) target="$2"; shift 2 ;;
-        --build-arg|-f) shift 2 ;;
+        --build-arg) bargs="$bargs$2;"; shift 2 ;;
+        -f) shift 2 ;;
         *) shift ;;
       esac
     done
-    id="sha256:$(printf '%s:%s:%s' "$tag" "$snap" "$target" | sha256sum | awk '{print $1}')"
-    printf 'SNAPSHOT_HASH=%s\nINPUTS=%s\nTAG=%s\n' "$snap" "$inputs" "$tag" > "$STATE/images/$id"
+    [[ "${MOCK_BUILD_FAIL:-}" == "1" ]] && exit 1
+    id="sha256:$(printf '%s|%s|%s|%s' "$tag" "$snap" "$target" "$bargs" | sha256sum | awk '{print $1}')"
+    printf 'SNAPSHOT_HASH=%s\nINPUTS=%s\nBASE_IMAGE=%s\nTOOLS_HASH=%s\nTAG=%s\n' \
+      "$snap" "$inputs" "$base" "$toolshash" "$tag" > "$STATE/images/$id"
     if [[ -n "$tag" ]]; then
       printf '%s\n' "$id" > "$STATE/tags/$(printf '%s' "$tag" | tr '/:' '__')"
     fi
     # podman 兼容层 -q 输出无前缀 64hex（实测），lib 负责归一；MOCK_BUILD_PREFIXED=1 模拟 docker 带前缀
     if [[ "${MOCK_BUILD_PREFIXED:-}" == "1" ]]; then printf '%s\n' "$id"; else printf '%s\n' "${id#sha256:}"; fi ;;
   image)
-    [[ "${1:-}" == "inspect" ]] || exit 0
-    shift
+    sub="${1:-}"; [[ $# -gt 0 ]] && shift
+    [[ "$sub" == "inspect" ]] || exit 0
+    [[ "${MOCK_ENGINE_DOWN:-}" == "1" ]] && exit 1
     ref=""; fmt=""
     while [[ $# -gt 0 ]]; do
       case "$1" in
@@ -106,15 +114,20 @@ case "$cmd" in
     done
     id="$ref"
     if [[ "$ref" != sha256:* ]]; then
-      local_tag_file="$STATE/tags/$(printf '%s' "$ref" | tr '/:' '__')"
-      [[ -f "$local_tag_file" ]] || exit 1
-      id="$(cat "$local_tag_file")"
+      tf="$STATE/tags/$(printf '%s' "$ref" | tr '/:' '__')"
+      [[ -f "$tf" ]] || exit 1
+      id="$(cat "$tf")"
     fi
     [[ -f "$STATE/images/$id" ]] || exit 1
     case "$fmt" in
       '{{.Id}}') printf '%s\n' "$id" ;;
+      *devenv.snapshot.hash*devenv.base.image*)
+        h="$(awk -F= '/^SNAPSHOT_HASH=/{print $2}' "$STATE/images/$id")"
+        b="$(awk -F= '/^BASE_IMAGE=/{print $2}' "$STATE/images/$id")"
+        printf '%s %s\n' "$h" "$b" ;;
       *devenv.snapshot.hash*) awk -F= '/^SNAPSHOT_HASH=/{print $2}' "$STATE/images/$id" ;;
       *devenv.snapshot.inputs*) awk -F= '/^INPUTS=/{print $2}' "$STATE/images/$id" ;;
+      *devenv.tools.input-hash*) awk -F= '/^TOOLS_HASH=/{print $2}' "$STATE/images/$id" ;;
       *) printf '\n' ;;
     esac ;;
   create) printf 'cid-mock\n' ;;
@@ -167,10 +180,11 @@ run() { # run <name> <cmd...>；当前 shell 执行（仅用于不会 die 的成
   set -e
 }
 
-runsub() { # runsub <name> <cmd...>；子 shell 执行（die/exit 不拖垮套件），记录 RC 与输出
+runsub() { # runsub <name> <cmd...>；子 shell 执行——被测进程保留与真实入口一致的
+  # set -Eeuo pipefail（父测试只捕获退出码，不掩盖真实入口行为）
   local name="$1"; shift
   set +e
-  ( "$@" ) > "$SANDBOX/$name.out" 2> "$SANDBOX/$name.err"
+  ( set -Eeuo pipefail; "$@" ) > "$SANDBOX/$name.out" 2> "$SANDBOX/$name.err"
   RC=$?
   set -e
 }
@@ -180,6 +194,12 @@ ensure_and_echo() { # 子 shell 内跑新鲜度检查并回传绑定结果（供
   printf 'EFFECTIVE=%s\n' "$WS_IMAGE_EFFECTIVE"
 }
 
+# 镜像 fixture：write_image <id> <snapHash> <baseImage> <toolsHash>
+write_image() {
+  printf 'SNAPSHOT_HASH=%s\nINPUTS=\nBASE_IMAGE=%s\nTOOLS_HASH=%s\nTAG=\n' "$2" "$3" "$4" \
+    > "$MOCK_DOCKER_STATE/images/$1"
+}
+
 # ---------------------------------------------------------------------------
 # 1. 快照采集语义
 # ---------------------------------------------------------------------------
@@ -187,7 +207,7 @@ ensure_and_echo() { # 子 shell 内跑新鲜度检查并回传绑定结果（供
 H0="$(snapshot_capture)"
 [[ "$H0" =~ ^[0-9a-f]{40}$ ]] && pass "S1 采集返回 git 树哈希" || fail "S1" "非树哈希：$H0"
 H0b="$(snapshot_capture)"
-[[ "$H0" == "$H0b" ]] && pass "S1 稳定工作树双采集一致" || fail "S1" "双采集不一致：$H0 vs $H0b"
+[[ "$H0" == "$H0b" ]] && pass "S1 稳定工作树采集一致" || fail "S1" "两次采集不一致：$H0 vs $H0b"
 [[ "$H0" == "$(expected_tree)" ]] && pass "S1 快照==独立参照树（git add -A）" || fail "S1" "与独立参照不符"
 
 printf '// change\n' >> "$MINI/package.json"
@@ -221,30 +241,31 @@ H4="$(snapshot_capture)"
   && pass "S5 gitignored 内容不进入快照" || fail "S5" "gitignored 内容泄漏进快照"
 
 # ---------------------------------------------------------------------------
-# 2. 采集竞态：持续变化 → 明确拒绝（exit 4）；重试后稳定 → 接受
+# 2. 采集一致性（stat 括号）：窗口内写入 → 重试；持续写入 → 明确拒绝
 # ---------------------------------------------------------------------------
 
-ORIG_TREE_ONCE="$(declare -f snapshot_tree_once)"
+ORIG_ONCE="$(declare -f snapshot_capture_once)"
 
-# S6 双采集永不一致 → die 4
-snapshot_tree_once() { printf 'unstable-%s-%s\n' "$RANDOM" "$RANDOM"; }
+# S6 每次采集窗口内均有写入 → die 4（确定性，不撞概率）
+snapshot_capture_once() { return 1; }
 runsub s6 snapshot_capture
-[[ "$RC" == 4 ]] && pass "S6 持续变化明确拒绝 exit 4" || fail "S6" "rc=$RC（期望 4）"
+[[ "$RC" == 4 ]] && pass "S6 持续写入明确拒绝 exit 4" || fail "S6" "rc=$RC（期望 4）"
 grep -q '拒绝' "$SANDBOX/s6.err" && pass "S6 拒绝原因入 stderr" || fail "S6" "stderr 无拒绝说明"
 
 # S7 第 2 次尝试后稳定 → 接受（计数走文件：$(...) 子 shell 会丢变量增量）
-eval "$ORIG_TREE_ONCE"  # 还原
+eval "$ORIG_ONCE"  # 还原
 CALL_FILE="$SANDBOX/call-n"
 printf '0\n' > "$CALL_FILE"
-snapshot_tree_once() {
+snapshot_capture_once() {
   local n=$(( $(cat "$CALL_FILE") + 1 ))
   printf '%s\n' "$n" > "$CALL_FILE"
-  if (( n <= 2 )); then printf 'unstable-%s\n' "$n"; else printf 'stable-tree\n'; fi
+  if (( n == 1 )); then return 1; fi
+  printf 'stable-tree\n'
 }
 runsub s7 snapshot_capture
 [[ "$RC" == 0 && "$(cat "$SANDBOX/s7.out")" == "stable-tree" ]] \
   && pass "S7 重试后稳定即接受" || fail "S7" "rc=$RC out=$(cat "$SANDBOX/s7.out")"
-eval "$ORIG_TREE_ONCE"  # 还原
+eval "$ORIG_ONCE"  # 还原
 
 # ---------------------------------------------------------------------------
 # 3. 物化与构建输入清单
@@ -283,42 +304,53 @@ API_PKG_SHA="$(git -C "$MINI" rev-parse "$H4:apps/api/package.json")"
   && pass "S9 清单动态覆盖各包 package.json" || fail "S9" "缺 apps/api/package.json"
 
 # ---------------------------------------------------------------------------
-# 4. 新鲜度与不可变绑定（ensure_fresh_workspace / compose）
+# 4. 新鲜度与不可变绑定（ensure_fresh_workspace / compose / verify_svc_image）
 # ---------------------------------------------------------------------------
 
-# S10 状态 + 镜像 label 一致 → 跳过重建，绑定状态镜像 ID
+# 公共 fixture：tools 输入哈希 + tools/workspace 镜像 + 全字段状态
 H="$(snapshot_capture)"
-IMG="sha256:$(printf 'fixture-image' | sha256sum | awk '{print $1}')"
-printf 'SNAPSHOT_HASH=%s\nINPUTS=\nTAG=\n' "$H" > "$MOCK_DOCKER_STATE/images/$IMG"
-snapshot_state_write "$H" "$IMG"
+TH="$(tools_input_hash "$H")"
+TOOLS_IMG="sha256:$(printf 'tools-fixture' | sha256sum | awk '{print $1}')"
+WS_IMG="sha256:$(printf 'ws-fixture' | sha256sum | awk '{print $1}')"
+write_image "$TOOLS_IMG" "" "" "$TH"
+write_image "$WS_IMG" "$H" "$TOOLS_IMG" ""
+snapshot_state_store "$H" "$WS_IMG" "$TH" "$TOOLS_IMG"
+
+# S10 状态 + 镜像 label + tools 绑定一致 → 跳过重建，绑定状态镜像 ID
 : > "$MOCK_DOCKER_STATE/calls.log"
 runsub s10 ensure_and_echo
 S10_EFFECTIVE="$(awk -F= '/^EFFECTIVE=/{print $2}' "$SANDBOX/s10.out")"
-if [[ "$RC" == 0 && "$S10_EFFECTIVE" == "$IMG" ]] && ! grep -q 'docker build' "$MOCK_DOCKER_STATE/calls.log"; then
+if [[ "$RC" == 0 && "$S10_EFFECTIVE" == "$WS_IMG" ]] && ! grep -q 'docker build' "$MOCK_DOCKER_STATE/calls.log"; then
   pass "S10 快照一致跳过重构并绑定不可变 ID"
 else
   fail "S10" "rc=$RC effective=$S10_EFFECTIVE builds=$(grep -c 'docker build' "$MOCK_DOCKER_STATE/calls.log")"
 fi
 
-# S11 快照不符 → 重建；状态更新；构建带快照 label；绑定新 ID
-snapshot_state_write "0000000000000000000000000000000000000000" "$IMG"
+# S11 快照不符 → 仅重建 workspace（tools 新鲜）；绑定新 ID；带 base.image label
+snapshot_state_store "0000000000000000000000000000000000000000" "$WS_IMG" "$TH" "$TOOLS_IMG"
 : > "$MOCK_DOCKER_STATE/calls.log"
 runsub s11 ensure_and_echo
 NEW_IMG="$(awk -F= '/^EFFECTIVE=/{print $2}' "$SANDBOX/s11.out")"
-EXPECTED_NEW="sha256:$(printf '%s:%s:%s' "natural-enforcement/workspace:local" "$H" "" | sha256sum | awk '{print $1}')"
-if [[ "$RC" == 0 && "$NEW_IMG" == "$EXPECTED_NEW" && "$NEW_IMG" != "$IMG" ]]; then
+EXPECTED_NEW="sha256:$(printf '%s|%s|%s|%s' "natural-enforcement/workspace:local" "$H" "" "TOOLS_IMAGE=$TOOLS_IMG;" | sha256sum | awk '{print $1}')"
+if [[ "$RC" == 0 && "$NEW_IMG" == "$EXPECTED_NEW" && "$NEW_IMG" != "$WS_IMG" ]]; then
   pass "S11 快照不符重建并绑定新不可变 ID"
 else
   fail "S11" "rc=$RC effective=$NEW_IMG（期望 $EXPECTED_NEW）"
 fi
-grep -q -- "--label devenv.snapshot.hash=$H" "$MOCK_DOCKER_STATE/calls.log" \
-  && pass "S11 构建携带快照哈希 label" || fail "S11" "缺快照 label：$(cat "$MOCK_DOCKER_STATE/calls.log")"
+if grep -q -- "--label devenv.snapshot.hash=$H" "$MOCK_DOCKER_STATE/calls.log" \
+  && grep -q -- "--label devenv.base.image=$TOOLS_IMG" "$MOCK_DOCKER_STATE/calls.log" \
+  && grep -q -- "--build-arg TOOLS_IMAGE=$TOOLS_IMG" "$MOCK_DOCKER_STATE/calls.log" \
+  && ! grep -qE '\-f [^ ]*devenv/tools\.Dockerfile' "$MOCK_DOCKER_STATE/calls.log"; then
+  pass "S11 重建携带快照/基础镜像 label 且 tools 未重建"
+else
+  fail "S11" "构建参数不符：$(cat "$MOCK_DOCKER_STATE/calls.log")"
+fi
 grep -q "SNAPSHOT_HASH=$H" "$DEVENV_STATE_DIR/workspace-image.env" \
   && pass "S11 状态文件记录新快照哈希" || fail "S11" "状态未更新"
 
 # S11b docker 带前缀输出（CI docker 路径）同样归一绑定
 : > "$MOCK_DOCKER_STATE/calls.log"
-snapshot_state_write "0000000000000000000000000000000000000000" "$IMG"
+snapshot_state_store "0000000000000000000000000000000000000000" "$WS_IMG" "$TH" "$TOOLS_IMG"
 export MOCK_BUILD_PREFIXED=1
 runsub s11b ensure_and_echo
 unset MOCK_BUILD_PREFIXED
@@ -326,19 +358,30 @@ S11B_EFFECTIVE="$(awk -F= '/^EFFECTIVE=/{print $2}' "$SANDBOX/s11b.out")"
 [[ "$RC" == 0 && "$S11B_EFFECTIVE" == "$EXPECTED_NEW" ]] \
   && pass "S11b 带前缀构建输出归一为同一不可变 ID" || fail "S11b" "rc=$RC effective=$S11B_EFFECTIVE"
 
-# S12 无状态文件 → 重建
+# S12 无状态文件 → 重建（tools + workspace 均建）
 rm -f "$DEVENV_STATE_DIR/workspace-image.env"
 : > "$MOCK_DOCKER_STATE/calls.log"
 runsub s12 ensure_and_echo
 [[ "$RC" == 0 ]] && grep -q 'docker build' "$MOCK_DOCKER_STATE/calls.log" \
   && pass "S12 无状态文件触发重建" || fail "S12" "未重建（rc=$RC）"
 
-# S13 状态指向的镜像已丢失 → 重建
-snapshot_state_write "$H" "sha256:$(printf 'deleted' | sha256sum | awk '{print $1}')"
+# S13 状态指向的 workspace 镜像已丢失 → 重建（严格模式子 shell：修复前此处 set -e 提前退出）
+snapshot_state_store "$H" "sha256:$(printf 'deleted' | sha256sum | awk '{print $1}')" "$TH" "$TOOLS_IMG"
 : > "$MOCK_DOCKER_STATE/calls.log"
 runsub s13 ensure_and_echo
 [[ "$RC" == 0 ]] && grep -q 'docker build' "$MOCK_DOCKER_STATE/calls.log" \
-  && pass "S13 镜像丢失触发重建" || fail "S13" "未重建（rc=$RC）"
+  && pass "S13 镜像丢失触发重建（不提前退出）" || fail "S13" "rc=$RC（期望 0 重建）"
+
+# S13b 引擎故障（inspect 失败且探活失败）→ die 3 明确报错，不吞成未命中
+snapshot_state_store "$H" "$WS_IMG" "$TH" "$TOOLS_IMG"
+export MOCK_ENGINE_DOWN=1
+runsub s13b ensure_and_echo
+unset MOCK_ENGINE_DOWN
+[[ "$RC" == 3 ]] && pass "S13b 引擎故障明确报错 exit 3（不吞）" || fail "S13b" "rc=$RC（期望 3）"
+# 引擎恢复后同一状态正常命中（证明 S13b 未误清状态）
+runsub s13c ensure_and_echo
+[[ "$RC" == 0 && "$(awk -F= '/^EFFECTIVE=/{print $2}' "$SANDBOX/s13c.out")" == "$WS_IMG" ]] \
+  && pass "S13c 引擎恢复后新鲜度命中" || fail "S13c" "rc=$RC"
 
 # S14 compose 注入：EFFECTIVE 优先 → 状态回退 → tag 兜底
 : > "$MOCK_DOCKER_STATE/calls.log"
@@ -370,17 +413,18 @@ runsub s15b verify_svc_image api
 rm -f "$MOCK_DOCKER_STATE/container" "$MOCK_DOCKER_STATE/container-image"
 
 # ---------------------------------------------------------------------------
-# 5. devenv build 全命令（子进程驱动真入口）
+# 5. devenv build / test:unit 全命令（子进程驱动真实入口，严格模式）
 # ---------------------------------------------------------------------------
 
 DEVENV="$MINI/devenv/devenv"
+TOOLS_TAG_FILE="$MOCK_DOCKER_STATE/tags/natural-enforcement_tools_local"
 
 # S16 lockfile 在场：tools + workspace 快照构建，不走 lockgen；状态/标签齐全
 git -C "$MINI" checkout -q -- . 2>/dev/null || true
 : > "$MOCK_DOCKER_STATE/calls.log"
 run s16 "$DEVENV" build
 if [[ "$RC" == 0 ]] \
-  && grep -q 'devenv/tools.Dockerfile' "$MOCK_DOCKER_STATE/calls.log" \
+  && grep -qE '\-f [^ ]*devenv/tools\.Dockerfile' "$MOCK_DOCKER_STATE/calls.log" \
   && grep -q 'devenv/workspace.Dockerfile' "$MOCK_DOCKER_STATE/calls.log" \
   && ! grep -q 'lockgen' "$MOCK_DOCKER_STATE/calls.log"; then
   pass "S16 build 快照构建 tools+workspace（无 lockgen）"
@@ -394,11 +438,20 @@ else
   fail "S16" "状态哈希不符：$(cat "$BT" 2>/dev/null)"
 fi
 # S16b 构建输入来自快照：tools 构建上下文是物化目录（非活工作树），NODE_IMAGE 取自快照内 images.lock
-TOOLS_LINE="$(grep 'tools.Dockerfile' "$MOCK_DOCKER_STATE/calls.log")"
+TOOLS_LINE="$(grep -E '\-f [^ ]*devenv/tools\.Dockerfile' "$MOCK_DOCKER_STATE/calls.log")"
 if [[ "$TOOLS_LINE" == *"ne-snapshot."* && "$TOOLS_LINE" != *"$MINI "* && "$TOOLS_LINE" == *"NODE_IMAGE=node:26.13.1-slim"* ]]; then
   pass "S16b tools 构建上下文与 NODE_IMAGE 取自快照"
 else
   fail "S16b" "tools 构建未用快照输入：$TOOLS_LINE"
+fi
+# S16c 不可变绑定链：workspace 构建经 build-arg 绑定 tools 不可变 ID + base.image label
+TOOLS_ID="$(cat "$TOOLS_TAG_FILE")"
+WS_LINE="$(grep 'workspace.Dockerfile' "$MOCK_DOCKER_STATE/calls.log")"
+if [[ "$WS_LINE" == *"--build-arg TOOLS_IMAGE=$TOOLS_ID"* && "$WS_LINE" == *"--label devenv.base.image=$TOOLS_ID"* ]] \
+  && grep -q "TOOLS_IMAGE_ID=$TOOLS_ID" "$BT"; then
+  pass "S16c workspace 经 build-arg 绑定 tools 不可变 ID（可核对链路）"
+else
+  fail "S16c" "绑定链断裂：$WS_LINE"
 fi
 
 # S17 lockfile 缺席：lockgen-fresh 全量解析 → 导出 → 重新采集 → workspace 构建
@@ -418,6 +471,14 @@ if grep -q "SNAPSHOT_HASH=$(expected_tree)" "$DEVENV_STATE_DIR/workspace-image.e
 else
   fail "S17" "状态哈希未随 lockgen 更新"
 fi
+# S17b lockgen 构建同样绑定 tools 不可变 ID；重新采集后 tools 输入未变 → 不重复建 tools
+LOCKGEN_LINE="$(grep 'lockgen-fresh' "$LOG")"
+if [[ "$LOCKGEN_LINE" == *"--build-arg TOOLS_IMAGE=$(cat "$TOOLS_TAG_FILE")"* ]] \
+  && [[ "$(grep -cE '\-f [^ ]*devenv\/tools\.Dockerfile' "$LOG")" == "0" ]]; then
+  pass "S17b lockgen 绑定 tools ID 且重新采集后不重复建 tools"
+else
+  fail "S17b" "lockgen 绑定/重检不符：$LOG"
+fi
 
 # S18 --lockgen 且 lockfile 在场：走增量 lockgen 靶
 : > "$MOCK_DOCKER_STATE/calls.log"
@@ -428,6 +489,147 @@ if [[ "$RC" == 0 ]] && grep -q -- '--target lockgen ' "$LOG" && ! grep -q 'lockg
 else
   fail "S18" "rc=$RC log=$LOG"
 fi
+
+# S19 真实入口回归（test:unit，严格模式）：未命中三态重建成功；构建失败正确失败
+# a. 无状态 → 重建成功并写状态
+rm -f "$DEVENV_STATE_DIR/workspace-image.env"
+: > "$MOCK_DOCKER_STATE/calls.log"
+run s19a "$DEVENV" test:unit
+if [[ "$RC" == 0 && -f "$DEVENV_STATE_DIR/workspace-image.env" ]] \
+  && grep -q 'workspace.Dockerfile' "$MOCK_DOCKER_STATE/calls.log"; then
+  pass "S19a 真实入口：无状态重建成功"
+else
+  fail "S19a" "rc=$RC"
+fi
+# b. 状态镜像不存在 → 重建成功（修复前：set -e 下 inspect 失败提前退出）
+H_NOW="$(expected_tree)"
+snapshot_state_write "$H_NOW" "sha256:$(printf 'gone' | sha256sum | awk '{print $1}')"
+: > "$MOCK_DOCKER_STATE/calls.log"
+run s19b "$DEVENV" test:unit
+if [[ "$RC" == 0 ]] && grep -q 'workspace.Dockerfile' "$MOCK_DOCKER_STATE/calls.log"; then
+  pass "S19b 真实入口：状态镜像不存在重建成功"
+else
+  fail "S19b" "rc=$RC err=$(tail -2 "$SANDBOX/s19b.err")"
+fi
+# c. label 不符 → 重建成功
+WRONG_IMG="sha256:$(printf 'wrong-label' | sha256sum | awk '{print $1}')"
+write_image "$WRONG_IMG" "0000000000000000000000000000000000000000" "$(cat "$TOOLS_TAG_FILE")" ""
+snapshot_state_write "$H_NOW" "$WRONG_IMG"
+: > "$MOCK_DOCKER_STATE/calls.log"
+run s19c "$DEVENV" test:unit
+if [[ "$RC" == 0 ]] && grep -q 'workspace.Dockerfile' "$MOCK_DOCKER_STATE/calls.log"; then
+  pass "S19c 真实入口：label 不符重建成功"
+else
+  fail "S19c" "rc=$RC err=$(tail -2 "$SANDBOX/s19c.err")"
+fi
+# d. 构建失败 → exit 4，不写成功状态（不误报）
+rm -f "$DEVENV_STATE_DIR/workspace-image.env"
+: > "$MOCK_DOCKER_STATE/calls.log"
+export MOCK_BUILD_FAIL=1
+run s19d "$DEVENV" test:unit
+unset MOCK_BUILD_FAIL
+if [[ "$RC" == 4 && ! -f "$DEVENV_STATE_DIR/workspace-image.env" ]]; then
+  pass "S19d 真实入口：构建失败 exit 4 且不写成功状态"
+else
+  fail "S19d" "rc=$RC state=$(ls "$DEVENV_STATE_DIR" 2>/dev/null)"
+fi
+
+# S20 受控反例：修改 tools 输入后直接消费（不先手工 build）→ tools 重建并绑定新 ID
+printf '# tools input change\n' >> "$MINI/devenv/tools.Dockerfile"
+: > "$MOCK_DOCKER_STATE/calls.log"
+run s20 "$DEVENV" test:unit
+NEW_TOOLS_ID="$(cat "$TOOLS_TAG_FILE")"
+WS_LINE="$(grep 'workspace.Dockerfile' "$MOCK_DOCKER_STATE/calls.log")"
+if [[ "$RC" == 0 ]] && grep -qE '\-f [^ ]*devenv/tools\.Dockerfile' "$MOCK_DOCKER_STATE/calls.log" \
+  && [[ "$WS_LINE" == *"--build-arg TOOLS_IMAGE=$NEW_TOOLS_ID"* ]] \
+  && grep -q "TOOLS_IMAGE_ID=$NEW_TOOLS_ID" "$DEVENV_STATE_DIR/workspace-image.env"; then
+  pass "S20 tools 输入变更后消费命令自动重建并绑定新 tools ID"
+else
+  fail "S20" "rc=$RC log=$(cat "$MOCK_DOCKER_STATE/calls.log")"
+fi
+
+# S21 受控反例：构建前覆盖 tools:local → 不重建 tools，workspace 仍绑定状态 tools ID
+OTHER_ID="sha256:$(printf 'override-target' | sha256sum | awk '{print $1}')"
+write_image "$OTHER_ID" "" "" ""
+printf '%s\n' "$OTHER_ID" > "$TOOLS_TAG_FILE"  # 覆盖 tools:local 指向另一个镜像
+: > "$MOCK_DOCKER_STATE/calls.log"
+run s21a "$DEVENV" test:unit
+if [[ "$RC" == 0 ]] && ! grep -q 'docker build' "$MOCK_DOCKER_STATE/calls.log"; then
+  pass "S21 tools:local 被覆盖后消费不重建（状态绑定仍新鲜）"
+else
+  fail "S21a" "rc=$RC log=$(cat "$MOCK_DOCKER_STATE/calls.log")"
+fi
+printf '// src change\n' >> "$MINI/package.json"  # 使 workspace 失鲜，tools 仍新鲜
+: > "$MOCK_DOCKER_STATE/calls.log"
+run s21b "$DEVENV" test:unit
+WS_LINE="$(grep 'workspace.Dockerfile' "$MOCK_DOCKER_STATE/calls.log")"
+if [[ "$RC" == 0 ]] && [[ "$WS_LINE" == *"--build-arg TOOLS_IMAGE=$NEW_TOOLS_ID"* && "$WS_LINE" != *"$OTHER_ID"* ]]; then
+  pass "S21 workspace 重建绑定状态 tools ID（非被覆盖的标签）"
+else
+  fail "S21b" "rc=$RC log=$(cat "$MOCK_DOCKER_STATE/calls.log")"
+fi
+
+# S22 旧版状态文件（无 tools 字段）→ tools 重建一次并补齐状态
+H_NOW="$(expected_tree)"
+WS_NOW="sha256:$(printf 'legacy-ws' | sha256sum | awk '{print $1}')"
+write_image "$WS_NOW" "$H_NOW" "$NEW_TOOLS_ID" ""
+printf 'SNAPSHOT_HASH=%s\nIMAGE_ID=%s\n' "$H_NOW" "$WS_NOW" > "$DEVENV_STATE_DIR/workspace-image.env"
+: > "$MOCK_DOCKER_STATE/calls.log"
+run s22 "$DEVENV" test:unit
+if [[ "$RC" == 0 ]] && grep -qE '\-f [^ ]*devenv/tools\.Dockerfile' "$MOCK_DOCKER_STATE/calls.log" \
+  && grep -q 'TOOLS_IMAGE_ID=sha256:' "$DEVENV_STATE_DIR/workspace-image.env"; then
+  pass "S22 旧版状态（无 tools 字段）重建 tools 并补齐状态"
+else
+  fail "S22" "rc=$RC log=$(cat "$MOCK_DOCKER_STATE/calls.log")"
+fi
+
+# ---------------------------------------------------------------------------
+# 6. 确定性多文件竞态（钩子注入）：只接受完整版本或明确拒绝，禁止混合组合
+# ---------------------------------------------------------------------------
+
+mkdir -p "$MINI/src"
+printf 'v1\n' > "$MINI/src/a.txt"
+printf 'meta-v1\n' > "$MINI/src/b.txt"
+# 禁止接受的混合组合（独立计算其树哈希）
+printf 'v2\n' > "$MINI/src/a.txt"
+MIXED_A="$(snapshot_tree_once)"   # (v2, meta-v1)
+printf 'v1\n' > "$MINI/src/a.txt"
+printf 'meta-v2\n' > "$MINI/src/b.txt"
+MIXED_B="$(snapshot_tree_once)"   # (v1, meta-v2)
+printf 'v1\n' > "$MINI/src/a.txt"
+printf 'meta-v1\n' > "$MINI/src/b.txt"
+
+RACE_COUNTER="$SANDBOX/race-n"
+printf '0\n' > "$RACE_COUNTER"
+snapshot_test_hook() { # 第 1 窗口只写 a（制造 (v2,meta-v1) 窗口），第 2 窗口补写 b
+  [[ "$1" == "before-add" ]] || return 0
+  local n=$(( $(cat "$RACE_COUNTER") + 1 ))
+  printf '%s\n' "$n" > "$RACE_COUNTER"
+  if (( n == 1 )); then printf 'v2\n' > "$MINI/src/a.txt"; fi
+  if (( n == 2 )); then printf 'meta-v2\n' > "$MINI/src/b.txt"; fi
+}
+T_RACE="$(snapshot_capture)"
+unset -f snapshot_test_hook
+EXPECTED_V2="$(snapshot_tree_once)"  # 当前工作树 = (v2, meta-v2) 完整新版本
+if [[ "$T_RACE" == "$EXPECTED_V2" ]]; then
+  pass "S23 多文件竞态只接受完整版本（v2,meta-v2）"
+else
+  fail "S23" "接受树 $T_RACE ≠ 完整版本 $EXPECTED_V2"
+fi
+if [[ "$T_RACE" != "$MIXED_A" && "$T_RACE" != "$MIXED_B" ]]; then
+  pass "S23 禁止接受的混合组合均未出现"
+else
+  fail "S23" "接受了混合内容！"
+fi
+
+# S23b 每个窗口都写入 → 明确拒绝（确定性）
+snapshot_test_hook() { [[ "$1" == "before-add" ]] || return 0; printf 'churn\n' >> "$MINI/src/a.txt"; }
+runsub s23b snapshot_capture
+unset -f snapshot_test_hook
+[[ "$RC" == 4 ]] && pass "S23b 持续多文件写入明确拒绝 exit 4" || fail "S23b" "rc=$RC（期望 4）"
+
+# 清理竞态现场（src/ 为未跟踪文件，避免影响后续用例的快照）
+rm -rf "$MINI/src"
 
 # ---------------------------------------------------------------------------
 echo "------------------------------------------------------------"

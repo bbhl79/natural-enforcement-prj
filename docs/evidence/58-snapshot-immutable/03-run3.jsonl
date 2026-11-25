@@ -1,9 +1,10 @@
 {"event":"engine","identity":"podman","version":"6.1.4","os":"linux","arch":"amd64","endpoint":"unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock","source":"DOCKER_HOST 环境变量"}
 {"event":"step.started","target":"workspace image freshness"}
-{"event":"snapshot.captured","hash":"5f7c72807abdf91a38d3c992f07653c9ab5749aa"}
+{"event":"snapshot.captured","hash":"fad36ec161c5f8421615447f1eec263208aac306"}
+{"event":"tools.fresh","imageId":"sha256:d6fb6674882dd85407efa7ec2432cf7518eebb79272cfb090fbe83eedd9772bd","inputHash":"4842d6391742396e725c2eab7e33b4332ac3bd51d7a29b2d05af6e28f9beece6"}
 {"event":"step.completed","target":"workspace image freshness"}
 {"event":"step.started","target":"workspace image (snapshot build)"}
-{"event":"workspace.built","imageId":"sha256:d37c37a78f1ba046daa6fce88ee11edbc366c810732b9f3ab16c01e8ac25e986","snapshot":"5f7c72807abdf91a38d3c992f07653c9ab5749aa"}
+{"event":"workspace.built","imageId":"sha256:7440940f0d29e74513b94328482d17b890ca511abba7f91f517996040a36b75c","snapshot":"fad36ec161c5f8421615447f1eec263208aac306","base":"sha256:d6fb6674882dd85407efa7ec2432cf7518eebb79272cfb090fbe83eedd9772bd"}
 {"event":"step.completed","target":"workspace image (snapshot build)"}
 {"event":"wait.started","service":"db"}
 {"event":"wait.ok","service":"db"}
@@ -11,5 +12,5 @@
 {"event":"step.completed","target":"migrate deploy"}
 {"event":"wait.started","service":"api"}
 {"event":"wait.ok","service":"api"}
-{"event":"image.verified","service":"api","imageId":"sha256:d37c37a78f1ba046daa6fce88ee11edbc366c810732b9f3ab16c01e8ac25e986"}
+{"event":"image.verified","service":"api","imageId":"sha256:7440940f0d29e74513b94328482d17b890ca511abba7f91f517996040a36b75c"}
 {"command":"up","status":"ok","exitCode":0,"services":"db,api"}

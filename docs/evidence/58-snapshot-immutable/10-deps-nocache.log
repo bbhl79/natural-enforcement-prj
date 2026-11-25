@@ -2,22 +2,22 @@ DEPRECATED: The legacy builder is deprecated and will be removed in a future rel
             Install the buildx component to build images with BuildKit:
             https://docs.docker.com/go/buildx/
 
-Sending build context to Docker daemon  421.4kB
+Sending build context to Docker daemon  419.8kB
 [4/4] STEP 1/10: FROM natural-enforcement/tools:local AS deps
 [4/4] STEP 2/10: WORKDIR /workspace
---> d36be2a0288d
+--> 4db533381db9
 [4/4] STEP 3/10: COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
---> febd31f49f83
+--> ce759e3995f8
 [4/4] STEP 4/10: COPY apps/api/package.json apps/api/package.json
---> 224f8de86351
+--> f37730f30ae6
 [4/4] STEP 5/10: COPY apps/web/package.json apps/web/package.json
---> 8b0f68250304
+--> 8cf52840e993
 [4/4] STEP 6/10: COPY packages/contracts/package.json packages/contracts/package.json
---> 6acfd0445624
+--> 5420801f6010
 [4/4] STEP 7/10: COPY packages/tsconfig packages/tsconfig
---> 5a8f045ac4e3
+--> b592631f0e7c
 [4/4] STEP 8/10: ARG PNPM_STORE_CACHE_ID=ne-pnpm-store-v11
---> 7b333a8020b3
+--> 4643fb05f610
 [4/4] STEP 9/10: RUN --mount=type=cache,id=${PNPM_STORE_CACHE_ID},target=/pnpm/store,sharing=locked     pnpm install --frozen-lockfile --store-dir=/pnpm/store
 Scope: all 5 workspace projects
 ? Verifying lockfile against supply-chain policies (589 entries)...
@@ -45,10 +45,10 @@ devDependencies:
 + turbo 2.11.11
 + typescript-eslint 8.73.0
 
-Done in 622ms using pnpm v12.21.0
---> 434d84343bd3
+Done in 607ms using pnpm v12.21.0
+--> 00374fa2ff22
 [4/4] STEP 10/10: COPY . .
 [4/4] COMMIT
---> 3959bb323bc2
-3959bb323bc287ecfef4f6992c754acc73d5a31381dd3b75252d2d6927ef750d
-Successfully built 3959bb323bc2
+--> 11d681807a9e
+11d681807a9efdd46f199501efa5ac5291b452ff15b36e2ccee13e66736c1ea9
+Successfully built 11d681807a9e
