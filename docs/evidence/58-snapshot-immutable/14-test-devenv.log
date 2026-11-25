@@ -1,4 +1,4 @@
-沙箱：/tmp/devenv-stack-offline.pfno1d
+沙箱：/tmp/devenv-stack-offline.BQ4nHf
 PASS: T1 覆盖后端点可用 doctor 通过
 PASS: T1 报告覆盖关系
 PASS: T1 使用覆盖端点
@@ -23,13 +23,13 @@ PASS: T11 报告 DB 镜像覆盖来源
 PASS: T12 DB 镜像覆盖格式非法 exit 2
 PASS: T13 持锁期间第二个取得 exit 6
 PASS: T13 退出后锁释放
-[devenv] WARN: 锁 [stale] 持有者已死，清理失效锁：/tmp/devenv-stack-offline.pfno1d/locks/stale.lock
+[devenv] WARN: 锁 [stale] 持有者已死，清理失效锁：/tmp/devenv-stack-offline.BQ4nHf/locks/stale.lock
 PASS: T14 失效锁清理后可取得
 PASS: T15 存活持有者锁不被误清（exit 6）
 PASS: T15 锁目录仍在（未误清）
 ------------------------------------------------------------
 命令面离线测试完成：27 通过，0 失败
-沙箱：/tmp/devenv-snapshot-offline.3b35oq
+沙箱：/tmp/devenv-snapshot-offline.HSsNKL
 PASS: S1 采集返回 git 树哈希
 PASS: S1 稳定工作树采集一致
 PASS: S1 快照==独立参照树（git add -A）
@@ -77,11 +77,16 @@ PASS: S20 tools 输入变更后消费命令自动重建并绑定新 tools ID
 PASS: S21 tools:local 被覆盖后消费不重建（状态绑定仍新鲜）
 PASS: S21 workspace 重建绑定状态 tools ID（非被覆盖的标签）
 PASS: S22 旧版状态（无 tools 字段）重建 tools 并补齐状态
-[devenv] WARN: 快照采集窗口内检测到工作树写入（第 1 次），重试…
-[devenv] WARN: 快照采集窗口内检测到工作树写入（第 2 次），重试…
-[devenv] 快照采集第 3 次尝试后稳定
-PASS: S23 多文件竞态只接受完整版本（v2,meta-v2）
-PASS: S23 禁止接受的混合组合均未出现
-PASS: S23b 持续多文件写入明确拒绝 exit 4
+PASS: S23 交替更新：已读文件被改检出重试，最终接受完整当前状态
+PASS: S23 从未存在组合 (a-v1,b-v2) 未被接受
+PASS: S24 空格仓库+空格/通配文件名采集正确
+PASS: S24 空格文件名窗口内修改被检测并重试，接受完整新状态
+PASS: S25 mtime 恢复型等长覆写交错被内容双读检出（重试后接受完整状态）
+PASS: S25 从未存在组合 (G1,F2) 未被接受
+PASS: S26a 枚举失败 die 4 且无树输出
+PASS: S26b 读取失败 die 4 且无树输出
+PASS: S26c stat 瞬态失败重试后拒绝 exit 4
+PASS: S26d stat 硬错误传播 exit 3（不重试）
+PASS: S27 真实入口+空格文件名全链路成功
 ------------------------------------------------------------
-快照与不可变绑定离线测试完成：50 通过，0 失败
+快照与不可变绑定离线测试完成：58 通过，0 失败

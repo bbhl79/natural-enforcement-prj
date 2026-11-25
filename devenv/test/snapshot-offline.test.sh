@@ -584,52 +584,148 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 6. 确定性多文件竞态（钩子注入）：只接受完整版本或明确拒绝，禁止混合组合
+# 6. 采集一致性（stat 括号 + 内容双读）：确定性竞态与失败传播
 # ---------------------------------------------------------------------------
 
-mkdir -p "$MINI/src"
-printf 'v1\n' > "$MINI/src/a.txt"
-printf 'meta-v1\n' > "$MINI/src/b.txt"
-# 禁止接受的混合组合（独立计算其树哈希）
-printf 'v2\n' > "$MINI/src/a.txt"
-MIXED_A="$(snapshot_tree_once)"   # (v2, meta-v1)
-printf 'v1\n' > "$MINI/src/a.txt"
-printf 'meta-v2\n' > "$MINI/src/b.txt"
-MIXED_B="$(snapshot_tree_once)"   # (v1, meta-v2)
-printf 'v1\n' > "$MINI/src/a.txt"
-printf 'meta-v1\n' > "$MINI/src/b.txt"
-
+# S23 交替更新（读取交错钩子注入）：已读文件被改 → 重试；最终只接受完整当前状态
+printf 'a-v1\n' > "$MINI/aaa-race-a.txt"   # 排序最前 → batch1（钩子触发时已读）
+printf 'b-v1\n' > "$MINI/zzz-race-b.txt"   # 排序最后 → batch2（钩子触发时未读）
+# 禁止出现的从未存在组合 (a-v1, b-v2)：独立计算其树哈希
+printf 'b-v2\n' > "$MINI/zzz-race-b.txt"
+NEVER_EXISTED="$(snapshot_tree_once)"
+printf 'b-v1\n' > "$MINI/zzz-race-b.txt"
 RACE_COUNTER="$SANDBOX/race-n"
 printf '0\n' > "$RACE_COUNTER"
-snapshot_test_hook() { # 第 1 窗口只写 a（制造 (v2,meta-v1) 窗口），第 2 窗口补写 b
-  [[ "$1" == "before-add" ]] || return 0
+snapshot_test_hook() { # 第 1 窗口改 batch1 的 a（已读→必须重试）；第 2 窗口改 batch2 的 b
+  [[ "$1" == "read-interleave" ]] || return 0
   local n=$(( $(cat "$RACE_COUNTER") + 1 ))
   printf '%s\n' "$n" > "$RACE_COUNTER"
-  if (( n == 1 )); then printf 'v2\n' > "$MINI/src/a.txt"; fi
-  if (( n == 2 )); then printf 'meta-v2\n' > "$MINI/src/b.txt"; fi
+  if (( n == 1 )); then printf 'a-v2\n' > "$MINI/aaa-race-a.txt"; fi
+  if (( n == 2 )); then printf 'b-v2\n' > "$MINI/zzz-race-b.txt"; fi
 }
-T_RACE="$(snapshot_capture)"
+runsub s23 snapshot_capture
 unset -f snapshot_test_hook
-EXPECTED_V2="$(snapshot_tree_once)"  # 当前工作树 = (v2, meta-v2) 完整新版本
-if [[ "$T_RACE" == "$EXPECTED_V2" ]]; then
-  pass "S23 多文件竞态只接受完整版本（v2,meta-v2）"
+T23="$(cat "$SANDBOX/s23.out")"
+EXPECTED23="$(expected_tree)"
+if [[ "$RC" == 0 && "$T23" == "$EXPECTED23" ]] && grep -q '重试' "$SANDBOX/s23.err"; then
+  pass "S23 交替更新：已读文件被改检出重试，最终接受完整当前状态"
 else
-  fail "S23" "接受树 $T_RACE ≠ 完整版本 $EXPECTED_V2"
+  fail "S23" "rc=$RC tree=$T23 expected=$EXPECTED23 err=$(cat "$SANDBOX/s23.err")"
 fi
-if [[ "$T_RACE" != "$MIXED_A" && "$T_RACE" != "$MIXED_B" ]]; then
-  pass "S23 禁止接受的混合组合均未出现"
+[[ "$T23" != "$NEVER_EXISTED" ]] \
+  && pass "S23 从未存在组合 (a-v1,b-v2) 未被接受" || fail "S23" "接受了从未存在组合！"
+rm -f "$MINI/aaa-race-a.txt" "$MINI/zzz-race-b.txt"
+
+# S24 空格仓库 + 空格/通配字符文件名：采集正确，窗口内修改被检测
+SPACE_REPO="$SANDBOX/space repo"
+mkdir -p "$SPACE_REPO"
+git -C "$SPACE_REPO" init -q
+git -C "$SPACE_REPO" config user.email "offline@test"
+git -C "$SPACE_REPO" config user.name "offline"
+printf 'a1\n' > "$SPACE_REPO/a[1].txt"
+printf 'm1\n' > "$SPACE_REPO/my file.txt"
+printf 'n1\n' > "$SPACE_REPO/normal.txt"
+printf 's1\n' > "$SPACE_REPO/star*.txt"
+git -C "$SPACE_REPO" add -A
+git -C "$SPACE_REPO" commit -qm init
+MAIN_REPO_ROOT="$REPO_ROOT"
+REPO_ROOT="$SPACE_REPO"
+T24="$(snapshot_capture)"
+T24_LIST="$(git -C "$SPACE_REPO" archive "$T24" | tar -t | sort)"
+if [[ "$T24" == "$(git -C "$SPACE_REPO" add -A && git -C "$SPACE_REPO" write-tree)" ]] \
+  && grep -qxF 'my file.txt' <<< "$T24_LIST" && grep -qxF 'a[1].txt' <<< "$T24_LIST" \
+  && grep -qxF 'star*.txt' <<< "$T24_LIST"; then
+  pass "S24 空格仓库+空格/通配文件名采集正确"
 else
-  fail "S23" "接受了混合内容！"
+  fail "S24" "tree=$T24 list=$T24_LIST"
+fi
+# 窗口内修改 batch1 的 "my file.txt"（含空格文件名）→ 必须检出重试
+printf '0\n' > "$RACE_COUNTER"
+snapshot_test_hook() {
+  [[ "$1" == "read-interleave" ]] || return 0
+  local n=$(( $(cat "$RACE_COUNTER") + 1 ))
+  printf '%s\n' "$n" > "$RACE_COUNTER"
+  if (( n == 1 )); then printf 'm2\n' > "$SPACE_REPO/my file.txt"; fi
+}
+runsub s24b snapshot_capture
+unset -f snapshot_test_hook
+T24B="$(cat "$SANDBOX/s24b.out")"
+if [[ "$RC" == 0 && "$T24B" == "$(git -C "$SPACE_REPO" add -A && git -C "$SPACE_REPO" write-tree)" ]] \
+  && grep -q '重试' "$SANDBOX/s24b.err" \
+  && [[ "$(git -C "$SPACE_REPO" show "$T24B:my file.txt")" == "m2" ]]; then
+  pass "S24 空格文件名窗口内修改被检测并重试，接受完整新状态"
+else
+  fail "S24b" "rc=$RC tree=$T24B err=$(cat "$SANDBOX/s24b.err")"
 fi
 
-# S23b 每个窗口都写入 → 明确拒绝（确定性）
-snapshot_test_hook() { [[ "$1" == "before-add" ]] || return 0; printf 'churn\n' >> "$MINI/src/a.txt"; }
-runsub s23b snapshot_capture
+# S25 项二反例：两个 mtime 恢复型等长覆写交错（从未存在组合）→ 必须检出
+# G="my file.txt"（batch1，钩子前已读）；F="normal.txt"（batch2，钩子后读）
+printf 'G1-content-x\n' > "$SPACE_REPO/my file.txt"
+printf 'F1-content-y\n' > "$SPACE_REPO/normal.txt"
+touch -d "2020-01-01 00:00:00" "$SPACE_REPO/my file.txt" "$SPACE_REPO/normal.txt"
+# 禁止组合 (G1, F2)：G1 止于 t1，F2 起于 t2>t1，从未同时存在
+printf 'F2-content-y\n' > "$SPACE_REPO/normal.txt"
+FORBIDDEN="$(snapshot_tree_once)"
+printf 'F1-content-y\n' > "$SPACE_REPO/normal.txt"
+touch -d "2020-01-01 00:00:00" "$SPACE_REPO/normal.txt"
+printf '0\n' > "$RACE_COUNTER"
+snapshot_test_hook() { # 等长原地覆写 + 恢复 mtime（stat 不可见），G 先于 F
+  [[ "$1" == "read-interleave" ]] || return 0
+  local n=$(( $(cat "$RACE_COUNTER") + 1 ))
+  printf '%s\n' "$n" > "$RACE_COUNTER"
+  if (( n == 1 )); then
+    printf 'G2-content-x\n' > "$SPACE_REPO/my file.txt"
+    touch -d "2020-01-01 00:00:00" "$SPACE_REPO/my file.txt"
+    printf 'F2-content-y\n' > "$SPACE_REPO/normal.txt"
+    touch -d "2020-01-01 00:00:00" "$SPACE_REPO/normal.txt"
+  fi
+}
+runsub s25 snapshot_capture
 unset -f snapshot_test_hook
-[[ "$RC" == 4 ]] && pass "S23b 持续多文件写入明确拒绝 exit 4" || fail "S23b" "rc=$RC（期望 4）"
+T25="$(cat "$SANDBOX/s25.out")"
+EXPECTED25="$(git -C "$SPACE_REPO" add -A && git -C "$SPACE_REPO" write-tree)"
+if [[ "$RC" == 0 && "$T25" == "$EXPECTED25" ]] && grep -q '重试' "$SANDBOX/s25.err"; then
+  pass "S25 mtime 恢复型等长覆写交错被内容双读检出（重试后接受完整状态）"
+else
+  fail "S25" "rc=$RC tree=$T25 expected=$EXPECTED25 err=$(cat "$SANDBOX/s25.err")"
+fi
+[[ "$T25" != "$FORBIDDEN" ]] \
+  && pass "S25 从未存在组合 (G1,F2) 未被接受" || fail "S25" "接受了从未存在组合（stat 括号盲区）！"
+REPO_ROOT="$MAIN_REPO_ROOT"
 
-# 清理竞态现场（src/ 为未跟踪文件，避免影响后续用例的快照）
-rm -rf "$MINI/src"
+# S26 失败传播：任一步骤失败不得当作成功采集
+# a. 枚举失败（git ls-files 失败）→ die 4，无树输出
+STUB2="$SANDBOX/stubbin2"
+mkdir -p "$STUB2"
+REAL_GIT="$(command -v git)"
+printf '#!/usr/bin/env bash\nfor a in "$@"; do [[ "$a" == "ls-files" ]] && exit 1; done\nexec %s "$@"\n' "$REAL_GIT" > "$STUB2/git"
+chmod +x "$STUB2/git"
+capture_with_stub_git() { PATH="$STUB2:$PATH" snapshot_capture; }
+runsub s26a capture_with_stub_git
+[[ "$RC" == 4 && ! -s "$SANDBOX/s26a.out" ]] \
+  && pass "S26a 枚举失败 die 4 且无树输出" || fail "S26a" "rc=$RC out=$(cat "$SANDBOX/s26a.out")"
+# b. 读取失败（chmod 000 不可读）→ 重试后 die 4，无树输出、无成功状态
+chmod 000 "$MINI/apps/api/package.json"
+runsub s26b snapshot_capture
+chmod 644 "$MINI/apps/api/package.json"
+[[ "$RC" == 4 && ! -s "$SANDBOX/s26b.out" ]] \
+  && pass "S26b 读取失败 die 4 且无树输出" || fail "S26b" "rc=$RC out=$(cat "$SANDBOX/s26b.out")"
+# c. stat 失败（瞬态 rc 1 → 重试后拒绝；硬错误 rc 3 → 直接传播不重试）
+ORIG_STAT_FILES="$(declare -f snapshot_stat_files)"
+snapshot_stat_files() { return 1; }
+runsub s26c snapshot_capture
+[[ "$RC" == 4 ]] && pass "S26c stat 瞬态失败重试后拒绝 exit 4" || fail "S26c" "rc=$RC（期望 4）"
+snapshot_stat_files() { return 3; }
+runsub s26d snapshot_capture
+[[ "$RC" == 3 ]] && pass "S26d stat 硬错误传播 exit 3（不重试）" || fail "S26d" "rc=$RC（期望 3）"
+eval "$ORIG_STAT_FILES"  # 还原
+
+# S27 真实入口（严格模式）+ 空格文件名：全链路成功
+printf 'x\n' > "$MINI/space file.txt"
+run s27 "$DEVENV" test:unit
+[[ "$RC" == 0 && -f "$DEVENV_STATE_DIR/workspace-image.env" ]] \
+  && pass "S27 真实入口+空格文件名全链路成功" || fail "S27" "rc=$RC err=$(tail -2 "$SANDBOX/s27.err")"
+rm -f "$MINI/space file.txt"
 
 # ---------------------------------------------------------------------------
 echo "------------------------------------------------------------"

@@ -1,8 +1,8 @@
 == 计时集内容断言（docker run --rm <imageId> 实查）==
-run3（新增 probe2）镜像 sha256:7440940f0d29e74513b94328482d17b890ca511abba7f91f517996040a36b75c 内容:
+run3（新增 probe2）镜像 sha256:e7c4f2eb5bcd44d84d4ef73e8054cc684a5da78e1520198f65d32ac388de590d 内容:
 probe2
-run4（删除 probe2）镜像 sha256:9a619219039f537131530b5e8ef43701dd715220767a868faeec2e746c60776b:
+run4（删除 probe2）镜像 sha256:d6bf0e1463a572f6aa4c47d9add364993ca22e237f5ec3917dc347641bd3e9ad:
 ls: cannot access '/workspace/apps/api/snapshot-probe2.txt': No such file or directory
   probe2 不存在 ✔
-run5（修改 r5）镜像 sha256:625b08a55e1e035f630af04b92a7fda5595d6633f3a2ac4d91ebfacfa64a1b5d 内容:
+run5（修改 r5）镜像 sha256:9ff5e0acd60f95c02c8ee09b09c498ca54943b26cb4b71ac9a26ae25549e518b 内容:
 probe-r5

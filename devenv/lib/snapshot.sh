@@ -7,10 +7,11 @@
 #     未提交修改、新增、删除，以及 Dockerfile、构建脚本、锁文件等构建输入
 #     （gitignored 内容——node_modules、.devenv-state 等——不进入快照）。
 #   - 采集后构建只读快照（git 对象库），不再读取活工作树。
-#   - 采集一致性（机制与成立条件见 docs/adr/2026-11-25-快照采集一致性机制.md）：
-#     读取窗口用 文件清单 + 逐文件 (mtime, size, inode)  stat 括号夹住——窗口内
-#     任何写入（原地写/追加/原子重命名保存）都会改变 stat → 重试；3 次均不稳 →
-#     明确拒绝（exit 4），不产生混合内容却报告来源一致。
+#   - 采集一致性（机制与成立条件见 docs/adr/2026-11-25-21-19-快照采集一致性机制.md）：
+#     stat 括号（文件清单 + 逐文件 (mtime,size,inode,mode) 端点比对）+ 内容双读
+#     （两遍全量读取的 mode+blob 清单比对）——窗口内任何未完美复原的写入（含
+#     mtime 恢复型等长覆写）都被检出 → 重试；3 次均不稳 → 明确拒绝（exit 4），
+#     不产生混合内容却报告来源一致。
 #   - 状态：.devenv-state/workspace-image.env（gitignored）记录 快照哈希 ↔
 #     workspace 不可变镜像标识 + tools 输入哈希 ↔ tools 不可变镜像标识；
 #     镜像 label 另记快照哈希 / 构建输入清单 / 基础镜像 ID（可核对链路）。
@@ -19,7 +20,6 @@
 
 SNAPSHOT_TMPDIRS=()
 SNAPSHOT_MATERIALIZED_DIR=""
-SNAPSHOT_STAT_BIN=""
 
 snapshot_tree_once() { # 单次树计算：打印当前工作树的 git 树哈希（临时索引，不动用户索引）
   local tmp_index tree rc=0
@@ -35,61 +35,151 @@ snapshot_tree_once() { # 单次树计算：打印当前工作树的 git 树哈�
 }
 
 snapshot_stat_bin() { # GNU stat（macOS 为 coreutils 的 gstat）；缺失 → die 3
-  if [[ -z "$SNAPSHOT_STAT_BIN" ]]; then
-    if stat -c '%Y' / >/dev/null 2>&1; then
-      SNAPSHOT_STAT_BIN=stat
-    elif gstat -c '%Y' / >/dev/null 2>&1; then
-      SNAPSHOT_STAT_BIN=gstat
-    else
-      die 3 "缺少 GNU stat（coreutils；macOS：brew install coreutils）"
-    fi
+  if stat -c '%Y' / >/dev/null 2>&1; then
+    printf 'stat'
+  elif gstat -c '%Y' / >/dev/null 2>&1; then
+    printf 'gstat'
+  else
+    die 3 "缺少 GNU stat（coreutils；macOS：brew install coreutils）"
   fi
-  printf '%s' "$SNAPSHOT_STAT_BIN"
 }
 
-snapshot_stat_files() { # $@=仓库相对路径 → 排序后的 "路径|mtime(ns)|size|inode" 行（读取窗口的 stat 括号）
-  local bin out
-  bin="$(snapshot_stat_bin)"
-  # 缺失文件不出现在输出中——两次括号输出集合不同即判不稳定（语义正确）
-  out="$("$bin" -c '%n|%y|%s|%i' ${@/#/$REPO_ROOT/} 2>/dev/null)" || true
-  printf '%s\n' "$out" | sort
+snapshot_stat_files() { # $@=仓库相对路径（数组传参，空格/通配符安全）→ 排序 stat 行
+  # rc 0=成功（含空集合）；rc 1=stat 执行失败（调用方按不稳定重试）；rc 3=无 GNU stat（硬错误）
+  # 失败不吞：任何 stat 错误都显式传播，不落入「两次都漏检查却判定稳定」
+  local bin f rc=0
+  local out=""
+  local -a args=() missing=()
+  bin="$(snapshot_stat_bin)" || return 3
+  for f in "$@"; do
+    if [[ -e "$REPO_ROOT/$f" || -L "$REPO_ROOT/$f" ]]; then
+      args+=("$REPO_ROOT/$f")
+    else
+      missing+=("$f")  # 枚举后消失：记 MISSING——两端一致则稳定，不一致即检出
+    fi
+  done
+  if (( ${#args[@]} > 0 )); then
+    out="$("$bin" -c '%n|%y|%s|%i|%a' "${args[@]}")" || rc=$?
+    (( rc == 0 )) || return 1
+  fi
+  for f in ${missing[@]+"${missing[@]}"}; do
+    out+="${out:+$'\n'}$REPO_ROOT/$f|MISSING"
+  done
+  if [[ -n "$out" ]]; then
+    printf '%s\n' "$out" | sort
+  fi
+  return 0
 }
 
-snapshot_capture_once() { # 稳定 → 打印树哈希 rc 0；采集窗口内检测到写入 → rc 1（无输出）
-  # stat 括号：读取前记录 清单+stat，读取后复核——窗口内任何改变 (mtime,size,inode)
-  # 或清单的写入都被检出（覆盖原地写/追加/原子重命名保存；成立条件与限制见 ADR）。
+snapshot_capture_once() { # 一致 → 打印树哈希 rc 0；窗口内写入/读取失败 → rc 1；硬错误 → die/返回非 1
+  # 机制（ADR 2026-11-25-21-19）：stat 括号（端点）+ 内容双读（两遍全量读取的
+  # mode+blob 清单比对）+ 文件清单复核。接受 ⟺ 三者一致——窗口内任何未完美复原
+  # 的写入（含 mtime 恢复型等长覆写）都被检出；完美往返（内容+stat 复原）为原理性
+  # 盲区（任何只读机制不可检出，但捕获内容即盘上内容）。
+  # 注意：本函数经 $(...) 在 || 守卫下调用，set -e 在其内部被抑制——每步失败必须
+  # 显式处理，不得依赖 set -e 兜底。
+  local rc=0 list_tmp list_sha1 list_sha2
+  # 枚举：NUL 分隔清单不能过 bash 变量（命令替换丢 NUL）——落临时文件，rc 显式检查
+  list_tmp="$(mktemp /tmp/ne-snapshot-list.XXXXXX)"
+  git -C "$REPO_ROOT" ls-files -c -o --exclude-standard -z > "$list_tmp" || rc=$?
+  if (( rc != 0 )); then
+    rm -f "$list_tmp"
+    die 4 "快照采集失败（git ls-files 枚举退出码 $rc——非 git 仓库或索引损坏）"
+  fi
   local -a files=()
-  local f tree list_sha1 list_sha2 stats1 stats2
-  while IFS= read -r -d '' f; do files+=("$f"); done \
-    < <(git -C "$REPO_ROOT" ls-files -c -o --exclude-standard -z | sort -z)
-  list_sha1="$(printf '%s\0' ${files[@]+"${files[@]}"} | sha256sum | awk '{print $1}')"
-  stats1="$(snapshot_stat_files ${files[@]+"${files[@]}"})"
-  # 测试钩子（仅离线测试注入确定性竞态；生产未定义即为空操作）
-  if declare -F snapshot_test_hook >/dev/null 2>&1; then snapshot_test_hook before-add; fi
-  tree="$(snapshot_tree_once)"
-  if declare -F snapshot_test_hook >/dev/null 2>&1; then snapshot_test_hook after-add; fi
-  stats2="$(snapshot_stat_files ${files[@]+"${files[@]}"})"
-  list_sha2="$(git -C "$REPO_ROOT" ls-files -c -o --exclude-standard -z | sort -z | sha256sum | awk '{print $1}')"
-  if [[ "$stats1" != "$stats2" || "$list_sha1" != "$list_sha2" ]]; then
+  local f
+  while IFS= read -r -d '' f; do files+=("$f"); done < "$list_tmp"
+  list_sha1="$(sha256sum < "$list_tmp" | awk '{print $1}')"
+  rm -f "$list_tmp"
+
+  local stats1 stats2 m1 m2 tree idx
+  rc=0
+  stats1="$(snapshot_stat_files ${files[@]+"${files[@]}"})" || rc=$?
+  if (( rc != 0 )); then
+    (( rc == 1 )) && return 1
+    return "$rc"
+  fi
+
+  # 第一遍读取（分两批，批间为「读取交错」测试缝；生产语义与单次 add -A 等价）
+  idx="$(mktemp /tmp/ne-snapshot-index.XXXXXX)"
+  rm -f "$idx"  # 不存在的索引文件 = 空索引
+  # 批次 pathspec 只收当前存在的文件：空临时索引下「已删除文件」无需 add（缺席即
+  # 删除），且空索引里 pathspec 匹配不到它会报 did not match（实测）
+  local -a batch1=() batch2=()
+  local half=$(( ${#files[@]} / 2 )) i=0
+  for f in ${files[@]+"${files[@]}"}; do
+    if [[ -e "$REPO_ROOT/$f" || -L "$REPO_ROOT/$f" ]]; then
+      if (( i < half )); then batch1+=("$f"); else batch2+=("$f"); fi
+      i=$((i + 1))
+    fi
+  done
+  if (( ${#batch1[@]} > 0 )); then
+    rc=0
+    GIT_INDEX_FILE="$idx" git -C "$REPO_ROOT" --literal-pathspecs add -A -- "${batch1[@]}" || rc=$?
+    if (( rc != 0 )); then rm -f "$idx"; return 1; fi  # 多为窗口内文件消失（瞬态）→ 重试
+  fi
+  # 测试钩子（仅离线测试注入确定性读取交错；生产未定义即为空操作）
+  if declare -F snapshot_test_hook >/dev/null 2>&1; then snapshot_test_hook read-interleave || return 1; fi
+  if (( ${#batch2[@]} > 0 )); then
+    rc=0
+    GIT_INDEX_FILE="$idx" git -C "$REPO_ROOT" --literal-pathspecs add -A -- "${batch2[@]}" || rc=$?
+    if (( rc != 0 )); then rm -f "$idx"; return 1; fi
+  fi
+  rc=0
+  m1="$(GIT_INDEX_FILE="$idx" git -C "$REPO_ROOT" ls-files -s)" || rc=$?
+  if (( rc != 0 )); then rm -f "$idx"; die 4 "快照采集失败（读取索引清单退出码 $rc）"; fi
+
+  # 第二遍全量重读（内容双读：抓 mtime 恢复型等长覆写——stat 盲区）
+  rc=0
+  GIT_INDEX_FILE="$idx" git -C "$REPO_ROOT" read-tree --empty || rc=$?
+  if (( rc != 0 )); then rm -f "$idx"; die 4 "快照采集失败（索引重置退出码 $rc）"; fi
+  rc=0
+  GIT_INDEX_FILE="$idx" git -C "$REPO_ROOT" add -A || rc=$?
+  if (( rc != 0 )); then rm -f "$idx"; return 1; fi
+  rc=0
+  m2="$(GIT_INDEX_FILE="$idx" git -C "$REPO_ROOT" ls-files -s)" || rc=$?
+  if (( rc != 0 )); then rm -f "$idx"; die 4 "快照采集失败（读取索引清单退出码 $rc）"; fi
+  rc=0
+  tree="$(GIT_INDEX_FILE="$idx" git -C "$REPO_ROOT" write-tree)" || rc=$?
+  rm -f "$idx"
+  (( rc == 0 )) || die 4 "快照采集失败（write-tree 退出码 $rc）"
+
+  # 端点 stat 括号 + 文件清单复核
+  rc=0
+  stats2="$(snapshot_stat_files ${files[@]+"${files[@]}"})" || rc=$?
+  if (( rc != 0 )); then
+    (( rc == 1 )) && return 1
+    return "$rc"
+  fi
+  rc=0
+  list_sha2="$(git -C "$REPO_ROOT" ls-files -c -o --exclude-standard -z | sha256sum | awk '{print $1}')" || rc=$?
+  (( rc == 0 )) || die 4 "快照采集失败（git ls-files 复核退出码 $rc）"
+
+  if [[ "$m1" != "$m2" || "$stats1" != "$stats2" || "$list_sha1" != "$list_sha2" ]]; then
     return 1
   fi
   printf '%s\n' "$tree"
   return 0
 }
 
-snapshot_capture() { # stat 括号采集；窗口内有写入 → 重试；3 次均不稳 → 明确拒绝（die 4）
-  local attempt tree
+snapshot_capture() { # 重试 3 次；均不稳 → 明确拒绝（die 4）；硬错误直接传播
+  local attempt tree rc
   for attempt in 1 2 3; do
-    if tree="$(snapshot_capture_once)"; then
+    rc=0
+    tree="$(snapshot_capture_once)" || rc=$?
+    if (( rc == 0 )); then
       if (( attempt > 1 )); then
         note "快照采集第 $attempt 次尝试后稳定"
       fi
       printf '%s\n' "$tree"
       return 0
+    elif (( rc == 1 )); then
+      warn "快照采集窗口内检测到工作树写入或读取失败（第 $attempt 次），重试…"
+    else
+      return "$rc"  # 硬错误（枚举失败/无 GNU stat 等）：不重试，直接传播
     fi
-    warn "快照采集窗口内检测到工作树写入（第 $attempt 次），重试…"
   done
-  die 4 "工作树在快照采集期间持续变化（3 次采集窗口均检测到写入）——明确拒绝，不产生混合内容却报告来源一致。请暂停文件修改后重试。"
+  die 4 "工作树在快照采集期间持续变化或无法读取（3 次采集窗口均不稳定）——明确拒绝，不产生混合内容却报告来源一致。请暂停文件修改后重试。"
 }
 
 snapshot_materialize() { # <tree> <destdir>：把快照展开为构建上下文目录
