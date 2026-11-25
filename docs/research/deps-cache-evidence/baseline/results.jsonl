@@ -1,0 +1,4 @@
+{"name":"a1-baseline-cold","startMs":1795530925250,"endMs":1795531693902,"durationMs":768652,"exitCode":0}
+{"name":"a2-baseline-warm","startMs":1795531693926,"endMs":1795531706480,"durationMs":12554,"exitCode":0}
+{"name":"a3-baseline-gen","startMs":1795531706494,"endMs":1795532056979,"durationMs":350485,"exitCode":0}
+{"name":"a4-baseline-add","startMs":1795532057104,"endMs":1795532860573,"durationMs":803469,"exitCode":0}

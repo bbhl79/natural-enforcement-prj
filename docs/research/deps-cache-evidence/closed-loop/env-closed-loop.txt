@@ -1,0 +1,73 @@
+=== label: closed-loop ===
+epoch=1795563780
+date=2026-11-25T07:43:00+08:00
+--- tarball https://registry.npmjs.org/typescript/-/typescript-6.0.3.tgz ---
+bytes=4515854 seconds=2.562685 speed_Bps=1762157
+--- metadata https://registry.npmjs.org/is-odd ---
+bytes=20171 seconds=0.391404 speed_Bps=51534
+
+=== platform ===
+Linux hulei-laptop 6.18.58.1-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Tue Oct 27 00:24:11 UTC 2026 x86_64 GNU/Linux
+kernel=6.18.58.1-microsoft-standard-WSL2 arch=x86_64
+DOCKER_HOST=unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock
+Client:
+ Version:           29.1.3
+ API version:       1.44 (downgraded from 1.52)
+ Go version:        go1.24.13
+ Git commit:        29.1.3-0ubuntu4.1
+ Built:             Wed Apr 29 16:40:20 2026
+ OS/Arch:           linux/amd64
+ Context:           default
+
+Server: linux/amd64/fedora-44
+ Podman Engine:
+  Version:          6.1.4
+  APIVersion:       6.1.4
+  Arch:             amd64
+  BuildTime:        2026-10-12T08:00:00+08:00
+  Experimental:     false
+  GitCommit:        464c15fec06f0074c916f9eff87c4806869c2833
+  GoVersion:        go1.26.9-X:nodwarf5
+  KernelVersion:    6.18.58.1-microsoft-standard-WSL2
+  MinAPIVersion:    4.0.0
+  Os:               linux
+ Conmon:
+  Version:          conmon version 2.2.1, commit: 
+  Package:          conmon-2.2.1-2.fc44.x86_64
+ OCI Runtime (crun):
+  Version:          crun version 1.28
+commit: 54f16ffbefcd022bf032af768b5c5ce075c18bfc
+rundir: /run/crun
+spec: 1.0.0
++SYSTEMD +SELINUX +APPARMOR +CAP +SECCOMP +EBPF +CRIU +LIBKRUN +WASM:wasmedge +JSON_C
+  Package:          crun-1.28-1.fc44.x86_64
+ Engine:
+  Version:          6.1.4
+  API version:      1.44 (minimum version 1.24)
+  Go version:       
+  Git commit:       
+  Built:            
+  OS/Arch:          linux/amd64
+  Experimental:     
+
+=== images (related) ===
+node:<none> c10884952bb8 173MB
+alpine:latest b92841763c5c 8.72MB
+alpine:3.20 bf8527eb54c3 8.1MB
+alpine:3 3ea06e4cb95e 8.73MB
+redis:8.2.11-alpine b1ea8d6d7e78 72.3MB
+node:26.13.1-slim bd57e13a3a21 255MB
+natural-enforcement/tools:prototype1 a1e87b80da0a 363MB
+natural-enforcement/e2e:local 74baa162dd25 2.95GB
+natural-enforcement/workspace:local 0a3cd9ad52d9 1.27GB
+alpine:3.21 e50d940e9d2c 8.09MB
+
+=== system df ===
+TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE
+Images          605       62        36.83GB   35.41GB (96%)
+Containers      5         0         71.83kB   71.83kB (100%)
+Local Volumes   7         4         220.9MB   2.759MB (1%)
+Build Cache     0         0         0B        0B
+
+=== git ===
+a84aedf3b488064eb2c4af17a69f0ef258d25cd9

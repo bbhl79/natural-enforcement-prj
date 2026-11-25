@@ -1,0 +1,14 @@
+{"name":"loop1-lockfile-only-new-importer","expr":".ok==true","evidence":"/home/hulei815/ne-deps-evidence/closed-loop/loop1-lockfile-delta.json","pass":true}
+{"name":"loop1-store-unchanged-by-loop","expr":".s.listingSha256==\"9562140cbb4d47231994597de51918e8222281e8d41ead341634e26291709267\"","evidence":"/home/hulei815/ne-deps-evidence/closed-loop/cache-loop1-after.json","pass":true}
+{"name":"loop2-lockfile-only-new-importer","expr":".ok==true","evidence":"/home/hulei815/ne-deps-evidence/closed-loop/loop2-lockfile-delta.json","pass":true}
+{"name":"loop2-store-unchanged-by-loop","expr":".s.listingSha256==\"9562140cbb4d47231994597de51918e8222281e8d41ead341634e26291709267\"","evidence":"/home/hulei815/ne-deps-evidence/closed-loop/cache-loop2-after.json","pass":true}
+{"name":"loop3-lockfile-only-new-importer","expr":".ok==true","evidence":"/home/hulei815/ne-deps-evidence/closed-loop/loop3-lockfile-delta.json","pass":true}
+{"name":"loop3-store-unchanged-by-loop","expr":".s.listingSha256==\"9562140cbb4d47231994597de51918e8222281e8d41ead341634e26291709267\"","evidence":"/home/hulei815/ne-deps-evidence/closed-loop/cache-loop3-after.json","pass":true}
+{"name":"loop4-lockfile-only-new-importer","expr":".ok==true","evidence":"/home/hulei815/ne-deps-evidence/closed-loop/loop4-lockfile-delta.json","pass":true}
+{"name":"loop4-store-unchanged-by-loop","expr":".s.listingSha256==\"9562140cbb4d47231994597de51918e8222281e8d41ead341634e26291709267\"","evidence":"/home/hulei815/ne-deps-evidence/closed-loop/cache-loop4-after.json","pass":true}
+{"name":"loop5-lockfile-only-new-importer","expr":".ok==true","evidence":"/home/hulei815/ne-deps-evidence/closed-loop/loop5-lockfile-delta.json","pass":true}
+{"name":"loop5-store-unchanged-by-loop","expr":".s.listingSha256==\"9562140cbb4d47231994597de51918e8222281e8d41ead341634e26291709267\"","evidence":"/home/hulei815/ne-deps-evidence/closed-loop/cache-loop5-after.json","pass":true}
+{"name":"loop4-lockfile-only-new-importer","expr":".ok==true","evidence":"/home/hulei815/ne-deps-evidence/closed-loop/loop4-lockfile-delta.json","pass":true}
+{"name":"loop4-store-unchanged-by-loop","expr":".s.listingSha256==\"9562140cbb4d47231994597de51918e8222281e8d41ead341634e26291709267\"","evidence":"/home/hulei815/ne-deps-evidence/closed-loop/cache-loop4-after.json","pass":true}
+{"name":"loop4-lockfile-only-new-importer","expr":".ok==true","evidence":"/home/hulei815/ne-deps-evidence/closed-loop/loop4-lockfile-delta.json","pass":true}
+{"name":"loop4-store-unchanged-by-loop","expr":".s.listingSha256==\"9562140cbb4d47231994597de51918e8222281e8d41ead341634e26291709267\"","evidence":"/home/hulei815/ne-deps-evidence/closed-loop/cache-loop4-after.json","pass":true}

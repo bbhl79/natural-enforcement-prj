@@ -1,0 +1,1 @@
+{"name":"loop5-total","startMs":1795568603572,"endMs":1795568714491,"durationMs":110919,"exitCode":0,"steps":["loop5-gen","loop5-lint","loop5-typecheck","loop5-testunit"]}
