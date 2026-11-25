@@ -36,12 +36,13 @@ worktree_identity() {
   printf '%s' "$id"
 }
 
+# source 期单次推导：身份与来源一次判定（git 只调一次；身份 == 工作树根路径即回退）
 WT_IDENTITY="$(worktree_identity)"
 WT_SUFFIX="$(printf '%s' "$WT_IDENTITY" | sha256sum | awk '{print $1}' | cut -c1-8)"
 WT_IDENTITY_SOURCE="git 目录"
 if [[ -n "${DEVENV_WORKTREE_ID:-}" ]]; then
   WT_IDENTITY_SOURCE="DEVENV_WORKTREE_ID（显式覆盖）"
-elif ! git -C "$REPO_ROOT" rev-parse --absolute-git-dir >/dev/null 2>&1; then
+elif [[ "$WT_IDENTITY" == "$REPO_ROOT" ]]; then
   WT_IDENTITY_SOURCE="工作树根路径（非 git 回退）"
 fi
 PROJECT_NAME="natural-enforcement-$WT_SUFFIX"

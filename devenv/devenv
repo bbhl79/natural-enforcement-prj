@@ -45,7 +45,7 @@ devenv — 工程基座唯一入口（命令面权威文档：devenv/COMMANDS.md
 用法：devenv [--json] <子命令> [参数]
 
 工程栈（一切构建/启停/观察/执行的唯一入口；禁止直接操作 compose）：
-  doctor                    一键体检（端点/引擎/矩阵/锁文件/镜像/服务）；退出码=可开工与否
+  doctor                    一键体检（端点/引擎/矩阵/锁文件/worktree 身份与凭据状态/镜像/服务）；退出码=可开工与否
   prefetch                  预取镜像锁中的上游镜像（分阶段、有进度/超时、可中断续跑）
   build [--lockgen]         固定快照构建（tools + install + turbo build；幂等；--lockgen 强制重生成 lockfile）
   up                        启动 db/api 并等待真实健康终态（幂等）
@@ -142,7 +142,7 @@ cmd_doctor() {
   if [[ -f "$db_cred_f" ]]; then
     chk db-credentials ok "每 worktree 随机口令已生成（$db_cred_f）"
   else
-    chk db-credentials ok "未生成（首个栈命令调用时自动生成每 worktree 随机口令并持久化）"
+    chk db-credentials ok "未生成（任一 compose 调用命令——含只读 ps/logs/down——首次执行时生成每 worktree 随机口令并持久化）"
   fi
 
   # 镜像/服务为信息项（冷启动流程 clone → doctor → prefetch → build：doctor 时未构建不判失败）
@@ -519,7 +519,7 @@ cmd_status() {
     docker ps --filter "label=com.docker.compose.project=$PROJECT_NAME" --format '{{json .}}'
     images_load
     snapshot_state_load
-    # 凭据只读报告（status 不生成状态）：存在=stored，否则 none（首个栈命令生成）
+    # 凭据只读报告（status 不生成状态）：存在=stored，否则 none（首次 compose 调用生成）
     local cred_origin="none"
     [[ -f "${DEVENV_STATE_DIR:-$REPO_ROOT/.devenv-state}/db-credentials.env" ]] && cred_origin="stored"
     final ok 0 project="$PROJECT_NAME" worktree_suffix="$WT_SUFFIX" worktree_source="$WT_IDENTITY_SOURCE" \

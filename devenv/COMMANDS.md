@@ -45,7 +45,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 以 App 身份 HTTPS 推送 | `devenv git-push <remote> <refspec...>` | 0 或 2/20/21/22/23 或 git 自身退出码 |
 | 认证入口离线测试（不访问 GitHub） | `devenv test:auth` | 0 或 1 |
 | 认证入口真实集成测试（默认只读；写操作需显式旗标） | `devenv test:auth:integration [旗标]` | 0 或 1 或 2 |
-| 命令面离线测试（引擎解析/锁/输出协议/快照与不可变绑定，mock docker） | `devenv test:devenv` | 0 或 1 |
+| 命令面离线测试（引擎解析/锁/输出协议/快照与不可变绑定/per-worktree 隔离，mock docker） | `devenv test:devenv` | 0 或 1 |
 
 ## 退出码枚举（总表归 Spec-工程基座；7–10 e2e 专用码段由 Spec-e2e 登记）
 
@@ -155,6 +155,14 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 - **遗留共享项目**：#59 前所有 worktree 共用 compose 项目 `natural-enforcement`
   （容器/卷/网络）。#59 后该项目不被任何 worktree 管理：down 不触碰，doctor
   发现遗留容器报 warn（exit 仍 0）；遗留卷/镜像回收归 #75（宁多留勿误删）。
+- **web 宿主端口（已声明残余，归 #62）**：web 是零宿主端口不变量的唯一 opt-in
+  例外，`--port` 默认 5173 为各 worktree 共享值——B 在 A 已发布 5173 时执行
+  `devenv web` 会在 **B 侧**绑定失败（报错明确），A 的访问地址不受影响；
+  并发 web 入口（派生/动态分配端口）整体归 #62（Task-提供并发web入口与可观察命令面）。
+- **对象存储凭据（前置声明）**：#56 最小栈暂无 rustfs/对象存储服务，"数据库/对象存储
+  凭据独立"中对象存储半条当前为空集；服务回归时必须复刻 db_credentials_ensure
+  模式（每 worktree 生成 + .devenv-state 持久化 + compose 同源注入），归该服务
+  的实施票并与 #75 回收核对衔接。
 
 ## 架构不变量（Spec-工程基座 硬不变量，本命令面执行）
 

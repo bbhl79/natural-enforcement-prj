@@ -6,14 +6,13 @@
 #   1. worktree 身份推导：git 目录哈希稳定、不同 worktree 不同名、非 git 上下文
 #      回退工作树根路径哈希（不 die）
 #   2. compose 项目名 per-worktree：compose 注入 -p natural-enforcement-<suffix>，
-#      不再使用共享项目名 natural-enforcement
+#      不再使用共享项目名 natural-enforcement（第 2 节）
 #   3. 数据库凭据 per-worktree：首调用生成随机口令（32 hex）持久化到
 #      .devenv-state/db-credentials.env（0600），二次调用稳定，不同 worktree 不同口令
-#   4. 镜像 tag per-worktree：tools/workspace 本地 tag 带 wt-<suffix> 后缀
-#   5. 锁分派：stack/migrate 锁 per-worktree（同名后缀的活跃锁只阻塞本 worktree），
+#   4. 锁分派：stack/migrate 锁 per-worktree（同名后缀的活跃锁只阻塞本 worktree），
 #      lockgen 机器级（经真实入口 build --lockgen 时锁在场断言）
-#   6. down 只作用本 worktree 项目（compose 参数断言，经真实入口）
-#   7. doctor：报告 worktree 身份；#59 前共享项目遗留容器 → warn（exit 仍 0）
+#   5. down 只作用本 worktree 项目（compose 参数断言，经真实入口）
+#   6. doctor：报告 worktree 身份；#59 前共享项目遗留容器 → warn（exit 仍 0）
 # ============================================================================
 set -Eeuo pipefail
 
@@ -176,7 +175,7 @@ runsub() { # runsub <name> <cmd...>；子 shell 执行（保留严格模式）
 
 # 以指定 worktree 身份 source 库并执行片段（subshell 隔离）
 wt_bash() { # wt_bash <wt-id> <bash-script> [args...]
-  local wt="$1"; script="$2"; shift 2
+  local wt="$1" script="$2"; shift 2
   DEVENV_WORKTREE_ID="$wt" bash -c "$script" _ "$MINI" "$@"
 }
 
