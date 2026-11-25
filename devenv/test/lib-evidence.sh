@@ -34,12 +34,15 @@ ev_log() { # 时间戳行 → stderr + evidence.log
 }
 
 # ev_run <label> <cmd...>：执行命令，stdout/stderr 捕获到 <label>.out/.err，
-# 证据日志记录命令文本与退出码；返回命令退出码。
+# 证据日志记录命令与退出码；返回命令退出码。
+# 命令经 printf %q 逐参数引用记录，参数边界可还原（含空格/特殊字符的参数
+# 不会与相邻参数混淆）。
 ev_run() {
   local label="$1"; shift
-  local rc=0
+  local rc=0 quoted
   "$@" > "$EV_DIR/$label.out" 2> "$EV_DIR/$label.err" || rc=$?
-  ev_log "cmd[$label]: $* → rc=$rc"
+  printf -v quoted '%q ' "$@"
+  ev_log "cmd[$label]: ${quoted% } → rc=$rc"
   return "$rc"
 }
 
@@ -56,7 +59,12 @@ ev_ancestry() {
   done
 }
 
-# ev_scan_paths <token|-> <path...>：泄露扫描，三类命中任一即返回 1：
+# ev_scan_paths <token|-> <path...>：泄露扫描（fail-closed）。返回码：
+#   0 = 三类扫描全部完成且无命中
+#   1 = 存在命中（证据日志逐条记录 LEAK 行）
+#   2 = 扫描失败（grep rc>=2：路径缺失/不可读等；证据日志记录 SCAN-ERROR，
+#       调用方不得视为通过）
+# 三类扫描：
 #   1. 活 token 精确值（stdin 传给 grep -F，不进 argv/文件）
 #   2. installation token 通用形态（ghs_ 前缀，-E）
 #   3. PEM 私钥标记（-----BEGIN ... PRIVATE KEY-----，-E）
@@ -65,19 +73,34 @@ ev_ancestry() {
 # 模式串经拼接构造，使本文件自身不含可被扫描命中的字面量。
 ev_scan_paths() {
   local token="$1"; shift
-  local hits=0 f
+  local hits=0 f rc out
   local pat_tok='gh''s_[A-Za-z0-9]{20,}'
   local pat_pem='-----BEGIN [A-Z ]*PRIVATE'' KEY-----'
   if [[ "$token" != "-" && -n "$token" ]]; then
-    while IFS= read -r f; do
-      ev_log "LEAK: 活 token 精确值出现于 $f"; hits=1
-    done < <(printf '%s' "$token" | grep -rIFl -f - "$@" 2>/dev/null)
+    out=$(printf '%s' "$token" | grep -rIFl -f - "$@" 2>&1) && rc=0 || rc=$?
+    if [[ $rc -ge 2 ]]; then
+      ev_log "SCAN-ERROR: 活 token 精确值扫描失败（grep rc=$rc）：$out"; return 2
+    elif [[ $rc -eq 0 ]]; then
+      while IFS= read -r f; do
+        ev_log "LEAK: 活 token 精确值出现于 $f"; hits=1
+      done <<< "$out"
+    fi
   fi
-  while IFS= read -r f; do
-    ev_log "LEAK: installation token 形态（ghs_…）出现于 $f"; hits=1
-  done < <(grep -rIEl -- "$pat_tok" "$@" 2>/dev/null)
-  while IFS= read -r f; do
-    ev_log "LEAK: PEM 私钥标记出现于 $f"; hits=1
-  done < <(grep -rIEl -- "$pat_pem" "$@" 2>/dev/null)
+  out=$(grep -rIEl -- "$pat_tok" "$@" 2>&1) && rc=0 || rc=$?
+  if [[ $rc -ge 2 ]]; then
+    ev_log "SCAN-ERROR: installation token 形态扫描失败（grep rc=$rc）：$out"; return 2
+  elif [[ $rc -eq 0 ]]; then
+    while IFS= read -r f; do
+      ev_log "LEAK: installation token 形态（ghs_…）出现于 $f"; hits=1
+    done <<< "$out"
+  fi
+  out=$(grep -rIEl -- "$pat_pem" "$@" 2>&1) && rc=0 || rc=$?
+  if [[ $rc -ge 2 ]]; then
+    ev_log "SCAN-ERROR: PEM 私钥标记扫描失败（grep rc=$rc）：$out"; return 2
+  elif [[ $rc -eq 0 ]]; then
+    while IFS= read -r f; do
+      ev_log "LEAK: PEM 私钥标记出现于 $f"; hits=1
+    done <<< "$out"
+  fi
   [[ "$hits" == 0 ]]
 }

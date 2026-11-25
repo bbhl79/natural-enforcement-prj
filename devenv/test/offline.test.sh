@@ -393,6 +393,35 @@ grep -q 'ancestry (from pid' "$SANDBOX/evidence/evidence.log" \
   && grep -q 'pid=[0-9]* comm=' "$SANDBOX/evidence/evidence.log" \
   && pass "T24 进程链证据已记录" || fail "T24" "evidence.log 缺进程链"
 
+# T25 ev_scan_paths fail-closed：缺失路径 → rc=2（扫描失败不得报成功）
+set +e
+ev_scan_paths "-" "$SANDBOX/no-such-dir" >/dev/null 2>&1; rc=$?
+set -e
+[[ "$rc" == 2 ]] && pass "T25 缺失路径扫描失败（rc=2，fail-closed）" || fail "T25" "rc=$rc（期望 2）"
+grep -q 'SCAN-ERROR' "$SANDBOX/evidence/evidence.log" \
+  && pass "T25 扫描失败写入 SCAN-ERROR" || fail "T25" "缺 SCAN-ERROR 记录"
+
+# T26 ev_scan_paths fail-closed：不可读目录 → rc=2
+mkdir -p "$SANDBOX/scan-noperm"; echo x > "$SANDBOX/scan-noperm/f"; chmod 000 "$SANDBOX/scan-noperm"
+set +e
+ev_scan_paths "-" "$SANDBOX/scan-noperm" >/dev/null 2>&1; rc=$?
+set -e
+chmod 755 "$SANDBOX/scan-noperm"
+[[ "$rc" == 2 ]] && pass "T26 不可读目录扫描失败（rc=2，fail-closed）" || fail "T26" "rc=$rc（期望 2）"
+
+# T27 ev_run 以 %q 记录命令：含空格参数边界可还原
+set +e
+ev_run demoq bash -c 'true' 'arg with space' >/dev/null 2>&1
+set -e
+grep -qF 'cmd[demoq]: bash -c true arg\ with\ space → rc=0' "$SANDBOX/evidence/evidence.log" \
+  && pass "T27 ev_run 参数边界可还原（%q 记录）" || fail "T27" "参数边界记录异常"
+
+# T28 集成测试参数校验：--issue-comment / --evidence-dir 缺值 → 退出码 2
+run t28a "$DEVENV" test:auth:integration --issue-comment
+expect_rc "T28 --issue-comment 缺值返回 2" 2 t28a
+run t28b "$DEVENV" test:auth:integration --evidence-dir
+expect_rc "T28 --evidence-dir 缺值返回 2" 2 t28b
+
 # ---------------------------------------------------------------------------
 echo "------------------------------------------------------------"
 echo "离线测试完成：$PASS_COUNT 通过，$FAILURES 失败"

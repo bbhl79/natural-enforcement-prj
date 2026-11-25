@@ -3,9 +3,9 @@
 # 真实 GitHub 集成测试（访问 api.github.com / github.com）
 #
 # 用途：spec #23 验收项 10 的 j–m（issue #55）真实证据留存。
-# 授权依据：issue #55（ready-for-agent）明确要求留存真实命令、退出码与
-# GitHub 侧证据；写操作（评论 / 推送测试分支 / 私钥不可用演练）即在该授权
-# 范围内执行，证据日志记录本依据。
+# 授权口径：写操作（评论 / 推送测试分支 / 私钥不可用演练）须由指挥者在每次
+# 运行前显式授权；issue #55 的授权范围仅限本仓库验收项 10 j–m 所需的测试
+# 评论与专用草稿分支推送，不构成对任意 issue / 任意写操作的默认授权。
 #
 # 默认只读：核实 App 身份、安装、仓库范围，以及 gh 入口确实以 App token 认证
 # （匿名访问同一端点作对照，排除"公开仓库谁都能读"的假阳性）。
@@ -39,12 +39,12 @@ source "$TEST_DIR/lib-evidence.sh"
 ISSUE=""; DO_PUSH=0; DO_OUTAGE=0; SUSTAINED=0; SUSTAINED_SECS=3700; EVIDENCE_DIR=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --issue-comment) ISSUE="${2:?--issue-comment 需要 issue 编号}"; shift 2 ;;
+    --issue-comment) [[ $# -ge 2 && "$2" != -* ]] || { echo "--issue-comment 需要 issue 编号" >&2; exit 2; }; ISSUE="$2"; shift 2 ;;
     --push-test-branch) DO_PUSH=1; shift ;;
     --key-outage) DO_OUTAGE=1; shift ;;
     --sustained) SUSTAINED=1; shift ;;
     --sustained=*) SUSTAINED=1; SUSTAINED_SECS="${1#--sustained=}"; shift ;;
-    --evidence-dir) EVIDENCE_DIR="${2:?--evidence-dir 需要路径}"; shift 2 ;;
+    --evidence-dir) [[ $# -ge 2 && "$2" != -* ]] || { echo "--evidence-dir 需要路径" >&2; exit 2; }; EVIDENCE_DIR="$2"; shift 2 ;;
     -h|--help)
       sed -n '2,30p' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) echo "未知参数：$1" >&2; exit 2 ;;
@@ -54,7 +54,7 @@ done
 
 [[ -n "$EVIDENCE_DIR" ]] || EVIDENCE_DIR="$REPO_ROOT/.artifacts/auth-acceptance/$(date -u +%Y%m%dT%H%M%SZ)"
 ev_init "$EVIDENCE_DIR"
-ev_log "授权依据：issue #55（spec #23 验收项 10 j–m 真实证据留存）"
+ev_log "授权口径：写操作须指挥者每次运行前显式授权；issue #55 仅覆盖本仓库验收项 10 j–m 所需操作，不默认覆盖任意 issue/写操作"
 ev_log "旗标：issue-comment=${ISSUE:-无} push=$DO_PUSH key-outage=$DO_OUTAGE sustained=$SUSTAINED(${SUSTAINED_SECS}s)"
 ev_ancestry
 
@@ -78,15 +78,17 @@ info "加载并校验 仓库声明 + 本机授权"
 gha_load_config "$REPO_ROOT" || { fail "配置加载" "gha_load_config 失败"; exit 1; }
 pass "配置匹配（app_id=$GHA_APP_ID slug=$GHA_APP_SLUG repo=$GHA_REPO）"
 
-info "JWT → GET /app（核实 App 身份，只读）"
+info "JWT → GET /app（核实 App 身份，只读；JWT 经 stdin 交 curl，不进 argv）"
 jwt=$(gha_make_jwt)
-app_json=$(curl -sf -H "Authorization: Bearer $jwt" -H "Accept: application/vnd.github+json" \
+app_json=$(printf 'Authorization: Bearer %s\n' "$jwt" | curl -sf -H @- \
+  -H "Accept: application/vnd.github+json" \
   -H "X-GitHub-Api-Version: 2022-11-28" "$GHA_API/app") || { fail "GET /app" "请求失败"; exit 1; }
 [[ "$(jq -r .id <<< "$app_json")" == "$GHA_APP_ID" && "$(jq -r .slug <<< "$app_json")" == "$GHA_APP_SLUG" ]] \
   && pass "App 身份核实（id/slug 一致）" || fail "App 身份" "id/slug 不符"
 
-info "GET /repos/$GHA_REPO/installation（核实安装与权限，只读）"
-inst_json=$(curl -sf -H "Authorization: Bearer $jwt" -H "Accept: application/vnd.github+json" \
+info "GET /repos/$GHA_REPO/installation（核实安装与权限，只读；JWT 经 stdin 交 curl）"
+inst_json=$(printf 'Authorization: Bearer %s\n' "$jwt" | curl -sf -H @- \
+  -H "Accept: application/vnd.github+json" \
   -H "X-GitHub-Api-Version: 2022-11-28" "$GHA_API/repos/$GHA_REPO/installation") \
   || { fail "installation 查询" "App 未安装到 $GHA_REPO 或查询失败"; exit 1; }
 [[ "$(jq -r .app_id <<< "$inst_json")" == "$GHA_APP_ID" ]] \
@@ -116,7 +118,7 @@ repos_json=$(cat "$EV_DIR/gh-repos.out")
 # 写操作：issue 评论（项 j 证据之一；按评论 ID 绑定作者，杜绝假阳性）
 # ---------------------------------------------------------------------------
 if [[ -n "$ISSUE" ]]; then
-  info "写操作：在 issue #$ISSUE 发测试评论（授权依据 issue #55）"
+  info "写操作：在 issue #$ISSUE 发测试评论（运行者须已获指挥者对该 issue 的显式授权）"
   body="认证入口集成测试评论（GitHub App 身份验证，可删除）。时间：$(date -Iseconds)"
   rc=0; ev_run comment "$DEVENV" gh issue comment "$ISSUE" --body "$body" || rc=$?
   if [[ $rc == 0 ]]; then
@@ -140,7 +142,7 @@ fi
 # 身份按 after==本次 sha 绑定，杜绝假阳性）
 # ---------------------------------------------------------------------------
 if [[ "$DO_PUSH" == 1 ]]; then
-  info "写操作：向 test/app-auth-push 推送测试提交（授权依据 issue #55）"
+  info "写操作：向 test/app-auth-push 推送测试提交（运行者须已获指挥者显式授权）"
   tmp=$(mktemp -d /tmp/gha-push-test.XXXXXX)
   git clone -q --no-local --branch "$(git -C "$REPO_ROOT" branch --show-current)" --single-branch "$REPO_ROOT" "$tmp/repo"
   git -C "$tmp/repo" remote set-url origin "https://github.com/$GHA_REPO.git"
@@ -183,27 +185,46 @@ if [[ "$DO_OUTAGE" == 1 ]]; then
   restore() { chmod 600 "$key"; }
   trap restore EXIT
 
-  personal=$(gh api /user --jq .login 2>/dev/null || true)
-  if [[ -n "$personal" ]]; then
-    pass "前置成立：个人 gh 登录仍有效（$personal）"
+  # 项 l 摘要按真实断言组合：任一环节失败都记入 l_bad，摘要不得写通过
+  l_bad=""
+  rc=0; ev_run outage-personal gh api /user --jq .login || rc=$?
+  personal=$(cat "$EV_DIR/outage-personal.out" 2>/dev/null || true)
+  if [[ $rc == 0 && -n "$personal" ]]; then
+    pass "前置成立：个人 gh 登录仍有效（$personal；命令与 rc 见 outage-personal）"
   else
-    fail "前置" "个人 gh 登录无效，项 l「即使个人账号已登录」不成立"
+    fail "前置" "无法证明个人账号在线（rc=$rc）——项 l「即使个人账号已登录」不成立"
+    l_bad="${l_bad}个人登录未证明在线(rc=$rc)；"
   fi
 
   rc=0; ev_run outage-gh "$DEVENV" gh api /installation/repositories || rc=$?
-  [[ $rc == 21 ]] && pass "私钥不可用时 gh 路径失败（rc=21）" || fail "gh 路径" "期望 rc=21，实际 $rc"
+  [[ $rc == 21 ]] && pass "私钥不可用时 gh 路径失败（rc=21）" \
+    || { fail "gh 路径" "期望 rc=21，实际 $rc"; l_bad="${l_bad}gh 路径 rc=$rc（期望 21）；"; }
   rc=0; ev_run outage-push "$DEVENV" git-push origin HEAD:refs/heads/should-not-exist || rc=$?
-  [[ $rc == 21 ]] && pass "私钥不可用时 git-push 路径失败（rc=21）" || fail "git-push 路径" "期望 rc=21，实际 $rc"
+  [[ $rc == 21 ]] && pass "私钥不可用时 git-push 路径失败（rc=21）" \
+    || { fail "git-push 路径" "期望 rc=21，实际 $rc"; l_bad="${l_bad}git-push 路径 rc=$rc（期望 21）；"; }
 
   restore; trap - EXIT
-  [[ "$(stat -c '%a' "$key")" == "600" ]] && pass "私钥权限已恢复 600" || fail "恢复" "权限异常"
+  [[ "$(stat -c '%a' "$key")" == "600" ]] && pass "私钥权限已恢复 600" \
+    || { fail "恢复" "权限异常"; l_bad="${l_bad}私钥权限恢复异常；"; }
   rc=0; ev_run outage-recover "$DEVENV" gh api /installation/repositories || rc=$?
-  [[ $rc == 0 ]] && pass "恢复后 gh 路径正常" || fail "恢复后验证" "rc=$rc"
-  # 回退推送未发生：should-not-exist 引用在远端不存在（404）
+  [[ $rc == 0 ]] && pass "恢复后 gh 路径正常" \
+    || { fail "恢复后验证" "rc=$rc"; l_bad="${l_bad}恢复后 gh rc=$rc；"; }
+  # 回退推送未发生：仅明确 HTTP 404 证明引用不存在；其他非零视为检查失败
   rc=0; ev_run outage-ref "$DEVENV" gh api "repos/$GHA_REPO/git/ref/heads/should-not-exist" || rc=$?
-  [[ $rc != 0 ]] && pass "远端无 should-not-exist 引用（私钥不可用期间无回退推送生效）" \
-    || fail "回退推送" "远端竟存在 should-not-exist 引用"
-  EV_L="私钥 chmod 000 期间 gh/git-push 均 rc=21（个人登录 $personal 在线）；恢复后远端无 should-not-exist 引用"
+  if [[ $rc == 0 ]]; then
+    fail "回退推送" "远端竟存在 should-not-exist 引用"
+    l_bad="${l_bad}远端存在 should-not-exist 引用；"
+  elif grep -q 'HTTP 404' "$EV_DIR/outage-ref.err"; then
+    pass "远端无 should-not-exist 引用（HTTP 404 确认；私钥不可用期间无回退推送生效）"
+  else
+    fail "远端引用检查" "非 404 失败（rc=$rc）：$(tail -1 "$EV_DIR/outage-ref.err")——不能证明引用不存在"
+    l_bad="${l_bad}远端引用检查失败(rc=$rc，非 404)；"
+  fi
+  if [[ -z "$l_bad" ]]; then
+    EV_L="私钥 chmod 000 期间 gh/git-push 均 rc=21（个人登录 $personal 在线，命令与 rc 见 outage-personal）；恢复后远端无 should-not-exist 引用（HTTP 404 确认）"
+  else
+    EV_L="项 l 不通过：$l_bad"
+  fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -268,13 +289,17 @@ else
 fi
 rc=0; ev_scan_paths "$tok" "$EV_DIR" "$REPO_ROOT" || rc=$?
 unset tok
-if [[ $rc == 0 ]]; then
-  pass "泄露扫描零命中（证据目录 + 仓库明文含 .git：无 token 精确值 / ghs_ 形态 / PEM 标记）"
-  EV_M="初扫零命中（范围：证据目录 + 仓库明文含 .git config/reflog；活 token 仅经内存/stdin）；summary.txt 由终扫覆盖，结果见 evidence.log 末行"
-else
-  fail "泄露扫描" "存在命中，见 evidence.log"
-  EV_M="存在命中（见 evidence.log）——不通过"
-fi
+case "$rc" in
+  0)
+    pass "泄露扫描零命中（证据目录 + 仓库明文含 .git：无 token 精确值 / ghs_ 形态 / PEM 标记）"
+    EV_M="初扫零命中（范围：证据目录 + 仓库明文含 .git config/reflog；活 token 仅经内存/stdin）；summary.txt 由终扫覆盖，结果见 evidence.log 末行" ;;
+  1)
+    fail "泄露扫描" "存在命中，见 evidence.log"
+    EV_M="存在命中（见 evidence.log）——不通过" ;;
+  *)
+    fail "泄露扫描" "扫描失败（rc=$rc），不得视为通过；见 evidence.log 的 SCAN-ERROR"
+    EV_M="扫描失败（rc=$rc）——不通过" ;;
+esac
 
 # ---------------------------------------------------------------------------
 # 验收映射摘要（issue #55 / spec #23 项 10 j–m）
@@ -292,10 +317,13 @@ fi
 } | tee "$EV_DIR/summary.txt"
 
 # 终扫（项 m）：覆盖 summary.txt 与此前全部证据内容；终扫结果行只含固定
-# 字符串，不引入新的未扫描内容。
+# 字符串，不引入新的未扫描内容。扫描失败（rc>=2）不得视为通过。
 rc=0; ev_scan_paths "-" "$EV_DIR" || rc=$?
-[[ $rc == 0 ]] && info "终扫零命中（覆盖 summary.txt 与全部证据文件）" \
-  || fail "终扫" "summary/日志存在命中，见 evidence.log"
+case "$rc" in
+  0) info "终扫零命中（覆盖 summary.txt 与全部证据文件）" ;;
+  1) fail "终扫" "summary/日志存在命中，见 evidence.log" ;;
+  *) fail "终扫" "扫描失败（rc=$rc），不得视为通过；见 evidence.log 的 SCAN-ERROR" ;;
+esac
 
 ev_log "集成测试完成：$PASS_COUNT 通过，$FAILURES 失败"
 echo "集成测试完成：$PASS_COUNT 通过，$FAILURES 失败"
