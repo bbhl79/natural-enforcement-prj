@@ -7,8 +7,9 @@
 # 不单纯按超时删锁——慢构建仍活着时锁有效，第二个进程不得闯入；进程被杀留下锁
 # 目录 → 识别持有者已死 → 清理失效锁后后续可取得。
 #
-# 锁命名空间：/tmp/natural-enforcement-locks（机器级，跨 worktree 共享；
-# per-worktree 锁细分归 #59/#61，本票先保证互斥原语两平台可用）。
+# 锁命名空间：/tmp/natural-enforcement-locks（机器级，跨 worktree 共享目录；
+# 锁名分派 #59：stack-<suffix>/migrate-<suffix> per-worktree，lockgen 机器级——
+# 跨 worktree 互斥的共享资源只有 lockgen 靶容器/标签（见 lib/stack.sh regen_lockfile））。
 # ============================================================================
 
 LOCK_ROOT="${DEVENV_LOCK_ROOT:-/tmp/natural-enforcement-locks}"

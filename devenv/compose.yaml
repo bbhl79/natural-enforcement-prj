@@ -1,10 +1,11 @@
-# compose 拓扑（#56 最小空间数据开发栈）：db + api + tools + web。
+# compose 拓扑（#56 最小空间数据开发栈 + #59 per-worktree 隔离）：db + api + tools + web。
 # 人类/agent 禁止直接操作本文件对应的 compose 命令（硬不变量 2：devenv 唯一入口）。
 # 镜像引用一律经变量注入，事实源：devenv/images.lock（tag+digest 双层锁）；
 # DB 镜像经 devenv 注入生效值（DEVENV_DB_IMAGE 可覆盖，见 COMMANDS.md）。
 # 无 bind 烘焙架构：代码经 workspace.Dockerfile COPY 进镜像，compose 只挂命名卷，
 # 无任何宿主路径依赖；零宿主端口发布（web 是唯一显式例外，profile 隔离 opt-in）。
-name: natural-enforcement
+# 项目名不写死：devenv 按 worktree 身份注入（-p natural-enforcement-<suffix>），
+# 容器/卷/网络随之 per-worktree 独立；数据库口令同理由 devenv 注入每 worktree 随机值。
 
 x-app-base: &app-base
   image: ${WORKSPACE_IMAGE:?devenv 需注入 WORKSPACE_IMAGE（devenv build 产出）}
@@ -17,7 +18,9 @@ x-app-base: &app-base
     TURBO_TELEMETRY_DISABLED: "1"
     # turbo 日志目录指到容器 tmpfs（镜像层 root 属主不可写的前科）
     TURBO_LOG_DIR: /tmp/turbo-logs
-    DATABASE_URL: postgresql://ne:ne-dev-only@db:5432/natural_enforcement_dev
+    # 口令经 devenv 注入（每 worktree 随机，.devenv-state/db-credentials.env 持久化）；
+    # 32 hex 口令 URI 安全，无需转义
+    DATABASE_URL: postgresql://ne:${DB_PASSWORD:?devenv 需注入 DB_PASSWORD（devenv 自动生成每 worktree 随机值）}@db:5432/natural_enforcement_dev
   volumes:
     - turbo-cache:/workspace/.turbo
 
@@ -26,7 +29,7 @@ services:
     image: ${DB_IMAGE:?images.lock 未加载（devenv 会自动注入生效值）}
     environment:
       POSTGRES_USER: ne
-      POSTGRES_PASSWORD: ne-dev-only
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: natural_enforcement_dev
     volumes:
       # PG18+ 官方约定：挂父目录 /var/lib/postgresql（data 落版本子目录，pg_upgrade 免挂载点边界问题）

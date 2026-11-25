@@ -75,7 +75,7 @@ GitHub App 认证入口（身份：GitHub App，非个人账号）：
 测试：
   test:auth                 认证入口离线测试（不访问 GitHub）
   test:auth:integration     认证入口真实集成测试（默认只读；写操作需显式旗标）
-  test:devenv               命令面离线测试（引擎解析/锁/输出协议/快照与不可变绑定，mock docker）
+  test:devenv               命令面离线测试（引擎解析/锁/输出协议/快照与不可变绑定/per-worktree 隔离，mock docker）
 
 退出码：0 成功 | 2 用法 | 3 环境未就绪 | 4 任务失败 | 5 超时 | 6 锁冲突 | 20–23 认证入口
 EOF
@@ -136,6 +136,15 @@ cmd_doctor() {
     chk db-image fail "镜像锁不可用"
   fi
 
+  # worktree 身份与 per-worktree 隔离状态（#59）：不触引擎，纯状态报告
+  chk worktree ok "project=$PROJECT_NAME（suffix=$WT_SUFFIX；身份来源：$WT_IDENTITY_SOURCE）；本地镜像 tag 后缀 wt-$WT_SUFFIX；stack/migrate 锁 per-worktree、lockgen 机器级"
+  local db_cred_f="${DEVENV_STATE_DIR:-$REPO_ROOT/.devenv-state}/db-credentials.env"
+  if [[ -f "$db_cred_f" ]]; then
+    chk db-credentials ok "每 worktree 随机口令已生成（$db_cred_f）"
+  else
+    chk db-credentials ok "未生成（首个栈命令调用时自动生成每 worktree 随机口令并持久化）"
+  fi
+
   # 镜像/服务为信息项（冷启动流程 clone → doctor → prefetch → build：doctor 时未构建不判失败）
   if (( engine_ok )); then
     if docker image inspect "$TOOLS_IMAGE" >/dev/null 2>&1; then
@@ -168,6 +177,11 @@ cmd_doctor() {
       elif svc_running "$s"; then chk "svc:$s" warn "运行中但未健康";
       else chk "svc:$s" warn "未运行（启动命令：devenv up）"; fi
     done
+    # #59 前共享项目 natural-enforcement 的遗留容器：不属于任何 worktree，
+    # per-worktree down 不触碰；人工确认后清理，卷/镜像回收归 #75（宁多留勿误删）
+    if docker ps -a --filter "label=com.docker.compose.project=natural-enforcement" --format '{{.Names}}' 2>/dev/null | grep -q .; then
+      chk legacy-project warn "发现 #59 前共享项目 natural-enforcement 的遗留容器（不被任何 worktree 管理，不影响隔离语义）；修复：人工确认后 docker rm，资源回收归 #75"
+    fi
   fi
 
   if (( JSON )); then
@@ -209,7 +223,7 @@ cmd_prefetch() {
 cmd_build() {
   local lockgen=0
   [[ "${1:-}" == "--lockgen" ]] && lockgen=1
-  lock_acquire stack 120
+  lock_acquire "stack-$WT_SUFFIX" 120
   local t0=$(( $(date +%s) ))
   images_load
 
@@ -247,6 +261,10 @@ cmd_build() {
 regen_lockfile() { # $1=快照物化目录；lockgen 靶生成 lockfile 后 docker cp 导出（--lockfile-only 不拉包）
   local dir="$1" target="lockgen"
   ev step.started target="lockgen"
+  # lockgen 用机器级共享资源（ne-lockgen:tmp 标签 + 同名遗留容器清理），跨 worktree
+  # 互斥（#59：stack/migrate 锁 per-worktree，lockgen 机器级）；持锁期间其它 worktree
+  # 的 build 触发 lockgen 会等待或 exit 6（重跑即续）
+  lock_acquire lockgen 300
   # 前置清理：上次异常退出可能留下持锁容器（image in use → rmi 失败连锁，原型实测坑）
   # （不用 xargs -r：macOS 宿主 xargs 无 -r）
   local stale_cids
@@ -256,7 +274,7 @@ regen_lockfile() { # $1=快照物化目录；lockgen 靶生成 lockfile 后 dock
   docker rmi -f ne-lockgen:tmp >/dev/null 2>&1 || true
   # 首引导（快照内无 lockfile）走 lockgen-fresh 全量解析；有 lockfile 走增量解析（#54 §六.2）
   [[ -f "$dir/pnpm-lock.yaml" ]] || target="lockgen-fresh"
-  # 基础镜像经 build-arg 绑定本次 tools 不可变 ID（不依赖可被覆盖的 tools:local 标签）
+  # 基础镜像经 build-arg 绑定本次 tools 不可变 ID（不依赖 per-worktree 可变标签 wt-<suffix>）
   run_step "lockgen 镜像构建" \
     docker build -q -f "$dir/devenv/workspace.Dockerfile" --target "$target" -t ne-lockgen:tmp \
       --build-arg "TOOLS_IMAGE=$TOOLS_IMAGE_EFFECTIVE" "$dir"
@@ -268,7 +286,7 @@ regen_lockfile() { # $1=快照物化目录；lockgen 靶生成 lockfile 后 dock
 }
 
 cmd_up() {
-  lock_acquire stack 60
+  lock_acquire "stack-$WT_SUFFIX" 60
   ensure_fresh_workspace
   # 顺序：db 健康 → 迁移幂等应用（fresh clone 的 SPEC 冷启动流无独立 migrate 步，
   # up 必须交付"真实健康终态"= 可用 schema）→ api 启动（不服务于无 schema 窗口期）
@@ -290,16 +308,18 @@ cmd_up() {
 }
 
 cmd_down() {
-  lock_acquire stack 60
+  lock_acquire "stack-$WT_SUFFIX" 60
   local args=(--remove-orphans) vol=kept
-  # --remove-orphans：清掉已不在 compose 文件中的本项目容器（如原型遗留的 redis/rustfs）
+  # --remove-orphans：清掉已不在 compose 文件中的本项目容器（如原型遗留的 redis/rustfs）；
+  # 仅本 worktree 项目范围（-p per-worktree）——#59 前共享项目 natural-enforcement 的
+  # 遗留资源不在此列（doctor 会 warn；回收归 #75）
   [[ "${1:-}" == "--volumes" ]] && args+=(-v) && vol=removed
   run_step "栈停止" compose down "${args[@]}"
   final ok 0 volumes="$vol"
 }
 
 cmd_restart() {
-  lock_acquire stack 60
+  lock_acquire "stack-$WT_SUFFIX" 60
   run_step "栈重启" compose restart "$@"
   final ok 0 services="${*:-all}"
 }
@@ -404,8 +424,8 @@ cmd_verify() {
 }
 
 cmd_migrate() {
-  lock_acquire stack 10
-  lock_acquire migrate 10
+  lock_acquire "stack-$WT_SUFFIX" 10
+  lock_acquire "migrate-$WT_SUFFIX" 10
   ensure_fresh_workspace
   require_services db
   run_task pnpm --filter @ne/api exec prisma migrate deploy
@@ -421,13 +441,13 @@ cmd_migrate_create() {
     esac
   done
   [[ -n "$name" ]] || die 2 "缺 --name"
-  lock_acquire stack 10
-  lock_acquire migrate 10
+  lock_acquire "stack-$WT_SUFFIX" 10
+  lock_acquire "migrate-$WT_SUFFIX" 10
   ensure_fresh_workspace
   require_services db
   # 无 bind 架构：迁移文件生成在容器内——用留名容器 + docker cp 导出（--rm 会丢文件）；
-  # 镜像内容物为 root 属主，故以 root 身份运行写入
-  local cname="ne-migrate-create"
+  # 镜像内容物为 root 属主，故以 root 身份运行写入；容器名 per-worktree（机器级唯一）
+  local cname="ne-migrate-create-$WT_SUFFIX"
   docker rm -f "$cname" >/dev/null 2>&1 || true
   compose run --name "$cname" -u 0:0 tools \
     pnpm --filter @ne/api exec prisma migrate dev --create-only --name "$name" >&2
@@ -470,7 +490,7 @@ cmd_web() {
     final ok 0 action=down
     return 0
   fi
-  lock_acquire stack 60  # web 做栈变更（构建+启动），与 down/restart 等互斥（COMMANDS.md 锁表）
+  lock_acquire "stack-$WT_SUFFIX" 60  # web 做栈变更（构建+启动），与 down/restart 等互斥（COMMANDS.md 锁表）
   ensure_fresh_workspace
   WEB_PORT="$port" run_step "web 启动" compose --profile web up -d web
   wait_healthy web 120
@@ -495,24 +515,31 @@ cmd_wait() {
 
 cmd_status() {
   if (( JSON )); then
-    # 结构化总览：容器 JSONL + 终值（锁+镜像生效值+快照状态），不静默退化成 ps
+    # 结构化总览：容器 JSONL + 终值（worktree 身份+锁+镜像生效值+快照状态），不静默退化成 ps
     docker ps --filter "label=com.docker.compose.project=$PROJECT_NAME" --format '{{json .}}'
     images_load
     snapshot_state_load
-    final ok 0 locks="$(ls -1 "$LOCK_ROOT" 2>/dev/null | paste -sd, -)" \
+    # 凭据只读报告（status 不生成状态）：存在=stored，否则 none（首个栈命令生成）
+    local cred_origin="none"
+    [[ -f "${DEVENV_STATE_DIR:-$REPO_ROOT/.devenv-state}/db-credentials.env" ]] && cred_origin="stored"
+    final ok 0 project="$PROJECT_NAME" worktree_suffix="$WT_SUFFIX" worktree_source="$WT_IDENTITY_SOURCE" \
+      db_credentials="$cred_origin" \
+      locks="$(ls -1 "$LOCK_ROOT" 2>/dev/null | paste -sd, -)" \
       node_image="$NODE_IMAGE" db_image="$DB_IMAGE_EFFECTIVE" db_image_source="$DB_IMAGE_SOURCE" \
       snapshot_hash="${STATE_SNAPSHOT_HASH:-none}" workspace_image_id="${STATE_IMAGE_ID:-none}" \
       tools_image_id="${STATE_TOOLS_IMAGE_ID:-none}"
     return 0
   fi
-  note "容器："
+  note "worktree：project=$PROJECT_NAME（suffix=$WT_SUFFIX；身份来源：$WT_IDENTITY_SOURCE）"
+  note "容器（本项目）："
   cmd_ps
-  note "锁（$LOCK_ROOT）："
+  note "锁（$LOCK_ROOT，机器级命名空间；本 worktree 锁名 stack-$WT_SUFFIX / migrate-$WT_SUFFIX，机器级 lockgen）："
   ls -1 "$LOCK_ROOT" 2>/dev/null | sed 's/^/  /' >&2 || true
   images_load
   snapshot_state_load
   note "镜像：node=$NODE_IMAGE"
   note "镜像：db=$DB_IMAGE_EFFECTIVE（来源：$DB_IMAGE_SOURCE）"
+  note "镜像 tag：tools=$TOOLS_IMAGE workspace=$WS_IMAGE（per-worktree；运行绑定不可变 ID）"
   note "快照：${STATE_SNAPSHOT_HASH:-无}"
   note "绑定：workspace=${STATE_IMAGE_ID:-无} tools=${STATE_TOOLS_IMAGE_ID:-无}"
 }
@@ -575,7 +602,7 @@ case "$CMD" in
   git-push)               gha_cmd_git_push "$@" ;;
   test:auth)              bash "$REPO_ROOT/devenv/test/offline.test.sh" ;;
   test:auth:integration)  bash "$REPO_ROOT/devenv/test/integration.test.sh" "$@" ;;
-  test:devenv)            bash "$REPO_ROOT/devenv/test/stack-offline.test.sh" && bash "$REPO_ROOT/devenv/test/snapshot-offline.test.sh" ;;
+  test:devenv)            bash "$REPO_ROOT/devenv/test/stack-offline.test.sh" && bash "$REPO_ROOT/devenv/test/snapshot-offline.test.sh" && bash "$REPO_ROOT/devenv/test/isolation-offline.test.sh" ;;
   help)                   usage; exit 0 ;;
   # doctor 自带软引擎检查（体检报告全部检查项，不在首个失败处退出）
   doctor)                 cmd_doctor "$@" ;;
