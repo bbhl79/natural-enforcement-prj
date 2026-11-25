@@ -99,14 +99,15 @@ gha_make_jwt() {
 }
 
 # 换取仅限 GHA_REPO_NAME 的 installation token。token 只经 stdout 返回。
+# JWT 经 stdin 交给 curl（-H @-），不进命令参数（ps//proc 不可见）。
 # 任何网络错误 / 非 2xx / 超时都非零返回，不产出半成品 token。
 gha_mint_token() {
   local jwt body resp token
   jwt=$(gha_make_jwt) || return
   body=$(jq -nc --arg r "$GHA_REPO_NAME" '{repositories:[$r]}')
-  resp=$(curl -sf --max-time 20 \
+  resp=$(printf 'Authorization: Bearer %s\n' "$jwt" | curl -sf --max-time 20 \
       -X POST \
-      -H "Authorization: Bearer $jwt" \
+      -H @- \
       -H "Accept: application/vnd.github+json" \
       -H "X-GitHub-Api-Version: 2022-11-28" \
       "$GHA_API/app/installations/$GHA_INSTALLATION_ID/access_tokens" \

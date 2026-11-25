@@ -88,7 +88,24 @@
 ## 验证
 
 - `./devenv/devenv test:auth`：离线测试（mock curl/gh/push），覆盖授权匹配、
-  失败路径、个人凭据排除、仓库限定、并发隔离、双路径、泄露扫描。
+  失败路径、个人凭据排除、仓库限定、并发隔离、双路径、泄露扫描、证据助手。
 - `./devenv/devenv test:auth:integration`：真实只读验证（App 身份、安装、权限、
   token 仓库范围，含匿名对照）。写操作旗标：`--issue-comment N` /
-  `--push-test-branch` / `--key-outage`，运行前须获指挥者确认。
+  `--push-test-branch` / `--key-outage` / `--sustained[=N]` / `--evidence-dir PATH`，
+  运行前须获指挥者确认（issue #55 即验收项 10 j–m 的授权与证据留存要求）。
+
+### 验收项 10 j–m 证据（issue #55）
+
+集成测试每次运行把证据写入 `.artifacts/auth-acceptance/<UTC 时间戳>/`
+（gitignored）：`evidence.log`（进程链 + 全部命令与退出码）、各命令输出捕获、
+`summary.txt`（j–m 验收映射）。对应关系：
+
+| 项 | 旗标 | 证据 |
+|---|---|---|
+| j 操作者为 App bot | `--issue-comment` / `--push-test-branch` | 评论按 ID 绑定作者、推送按 `after==sha` 绑定 actor；进程链记录会话宿主（是否 IDE 插件由指挥者判定） |
+| k >1h 后仍成功且每次重新取令牌 | `--sustained`（默认 3700s） | 主证据：首次 token 生命周期 1h，超过后再次操作成功 ⟹ 入口必然重新换取（复用旧 token 必然 401）；佐证：同一 mint 函数两次 in-process 调用哈希不同（token 只存内存，证据只记哈希）；每次调用重新换取的结构性证明见离线 T11/T15 |
+| l 私钥不可用双路径失败 | `--key-outage` | 个人 gh 登录在线对照；双路径 rc=21；恢复后远端无回退推送产物 |
+| m 无 token/私钥泄露 | 每次运行自动执行 | 活 token 精确值（stdin 传递）+ `ghs_` 形态 + PEM 标记扫描证据目录与仓库工作树 |
+
+`--push-test-branch` 使用 `+refspec` 覆盖专用草稿分支 `test/app-auth-push`，
+可重入；该分支保留在远端供审计，删除需指挥者另行确认。

@@ -15,6 +15,8 @@ set -Eeuo pipefail
 
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$TEST_DIR/../.." && pwd)"
+# shellcheck source=lib-evidence.sh
+source "$TEST_DIR/lib-evidence.sh"
 
 FAILURES=0
 PASS_COUNT=0
@@ -335,7 +337,90 @@ git -C "$SANDBOX" remote set-url --push origin "https://github.com/bbhl79/natura
 # T18 泄露扫描：虚构 token 与测试私钥不出现在任何输出/日志/临时文件
 leak=$(grep -rl 'FAKETOKEN\|STALE_TOKEN\|PRIVATE KEY' "$OUT" "$MOCK_GH_LOG_DIR" \
         "$MOCK_GIT_LOG" "$MOCK_CURL_BODIES" 2>/dev/null || true)
-[[ -z "$leak" ]] && pass "T16 输出/日志/临时文件无 token 与私钥泄露" || fail "T16" "泄露于：$leak"
+[[ -z "$leak" ]] && pass "T18 输出/日志/临时文件无 token 与私钥泄露" || fail "T18" "泄露于：$leak"
+
+# ---------------------------------------------------------------------------
+# 证据助手（devenv/test/lib-evidence.sh，供集成测试留存验收证据）
+# ---------------------------------------------------------------------------
+
+# T19 ev_run：记录命令文本与退出码，捕获 stdout/stderr，返回命令退出码
+ev_init "$SANDBOX/evidence"
+set +e
+ev_run demo bash -c 'echo out-line; echo err-line >&2; exit 3'
+rc=$?
+set -e
+[[ "$rc" == 3 ]] && pass "T19 ev_run 透传退出码" || fail "T19" "rc=$rc"
+[[ "$(cat "$SANDBOX/evidence/demo.out")" == "out-line" && "$(cat "$SANDBOX/evidence/demo.err")" == "err-line" ]] \
+  && pass "T19 stdout/stderr 分别捕获" || fail "T19" "捕获内容不符"
+grep -q 'cmd\[demo\]: bash -c .* → rc=3' "$SANDBOX/evidence/evidence.log" \
+  && pass "T19 证据日志含命令与退出码" || fail "T19" "evidence.log 缺少命令记录"
+
+# T20 ev_scan_paths：活 token 精确值可被检出（token 经 stdin 传递，不落盘）
+mkdir -p "$SANDBOX/scan-clean" "$SANDBOX/scan-leak"
+echo "ordinary log line, no secrets" > "$SANDBOX/scan-clean/a.log"
+echo "oops token=FAKETOKEN_LEAKED_123" > "$SANDBOX/scan-leak/b.log"
+set +e
+ev_scan_paths "FAKETOKEN_LEAKED_123" "$SANDBOX/scan-leak" >/dev/null 2>&1; rc=$?
+set -e
+[[ "$rc" == 1 ]] && pass "T20 活 token 精确值检出" || fail "T20" "rc=$rc（期望 1）"
+
+# T21 installation token 通用形态（ghs_ 前缀）检出；字面量拼接构造，本文件不含可命中串
+fake_tok="gh""s_$(printf 'F%.0s' {1..30})"
+echo "leaked: $fake_tok" > "$SANDBOX/scan-leak/c.log"
+set +e
+ev_scan_paths "-" "$SANDBOX/scan-leak" >/dev/null 2>&1; rc=$?
+set -e
+[[ "$rc" == 1 ]] && pass "T21 ghs_ 形态检出" || fail "T21" "rc=$rc（期望 1）"
+grep -q "LEAK: installation token" "$SANDBOX/evidence/evidence.log" \
+  && pass "T21 命中写入证据日志" || fail "T21" "证据日志缺命中记录"
+
+# T22 PEM 私钥标记检出（字面量拼接构造）
+echo "-----BEGIN RSA PRIVATE"" KEY-----" > "$SANDBOX/scan-leak/d.pem"
+set +e
+ev_scan_paths "-" "$SANDBOX/scan-leak" >/dev/null 2>&1; rc=$?
+set -e
+[[ "$rc" == 1 ]] && pass "T22 PEM 标记检出" || fail "T22" "rc=$rc（期望 1）"
+
+# T23 干净目录通过；活 token 不在其中也通过
+set +e
+ev_scan_paths "FAKETOKEN_LEAKED_123" "$SANDBOX/scan-clean" >/dev/null 2>&1; rc=$?
+set -e
+[[ "$rc" == 0 ]] && pass "T23 干净目录扫描通过" || fail "T23" "rc=$rc（期望 0）"
+
+# T24 ev_ancestry：进程链写入证据日志（验收项 j 的会话宿主证据）
+ev_ancestry >/dev/null 2>&1
+grep -q 'ancestry (from pid' "$SANDBOX/evidence/evidence.log" \
+  && grep -q 'pid=[0-9]* comm=' "$SANDBOX/evidence/evidence.log" \
+  && pass "T24 进程链证据已记录" || fail "T24" "evidence.log 缺进程链"
+
+# T25 ev_scan_paths fail-closed：缺失路径 → rc=2（扫描失败不得报成功）
+set +e
+ev_scan_paths "-" "$SANDBOX/no-such-dir" >/dev/null 2>&1; rc=$?
+set -e
+[[ "$rc" == 2 ]] && pass "T25 缺失路径扫描失败（rc=2，fail-closed）" || fail "T25" "rc=$rc（期望 2）"
+grep -q 'SCAN-ERROR' "$SANDBOX/evidence/evidence.log" \
+  && pass "T25 扫描失败写入 SCAN-ERROR" || fail "T25" "缺 SCAN-ERROR 记录"
+
+# T26 ev_scan_paths fail-closed：不可读目录 → rc=2
+mkdir -p "$SANDBOX/scan-noperm"; echo x > "$SANDBOX/scan-noperm/f"; chmod 000 "$SANDBOX/scan-noperm"
+set +e
+ev_scan_paths "-" "$SANDBOX/scan-noperm" >/dev/null 2>&1; rc=$?
+set -e
+chmod 755 "$SANDBOX/scan-noperm"
+[[ "$rc" == 2 ]] && pass "T26 不可读目录扫描失败（rc=2，fail-closed）" || fail "T26" "rc=$rc（期望 2）"
+
+# T27 ev_run 以 %q 记录命令：含空格参数边界可还原
+set +e
+ev_run demoq bash -c 'true' 'arg with space' >/dev/null 2>&1
+set -e
+grep -qF 'cmd[demoq]: bash -c true arg\ with\ space → rc=0' "$SANDBOX/evidence/evidence.log" \
+  && pass "T27 ev_run 参数边界可还原（%q 记录）" || fail "T27" "参数边界记录异常"
+
+# T28 集成测试参数校验：--issue-comment / --evidence-dir 缺值 → 退出码 2
+run t28a "$DEVENV" test:auth:integration --issue-comment
+expect_rc "T28 --issue-comment 缺值返回 2" 2 t28a
+run t28b "$DEVENV" test:auth:integration --evidence-dir
+expect_rc "T28 --evidence-dir 缺值返回 2" 2 t28b
 
 # ---------------------------------------------------------------------------
 echo "------------------------------------------------------------"
