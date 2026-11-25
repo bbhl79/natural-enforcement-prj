@@ -10,22 +10,23 @@
 
 ## j. 从正常启动的 IDE 插件经 devenv 操作，GitHub 上显示的操作者为 App bot
 
-**部分覆盖，IDE 插件段待指挥者补跑。** 本次证据会话宿主为 orca 编排的 Claude Code
-CLI（进程链：bash → claude → orca-agents → …），**不是 IDE 插件**，不声称覆盖该项的
-IDE 插件前提。已从本会话验证「经 devenv 入口操作，GitHub 侧操作者为 App bot」：
+**通过（指挥者 2026-11-25 裁定）。** 事实表述：证据会话宿主为 orca 编排的
+Claude Code CLI（进程链：bash → claude → orca-agents → …，见各 `evidence.log`
+ancestry 段），不是字面意义的 IDE 插件；指挥者裁定该 orca 会话即其正常使用的
+agent 入口，项 j 的「正常启动的 IDE 插件」前提据此接受，不再单独补跑。
 
-- 评论（按评论 ID 绑定作者，杜绝假阳性）：
+经 devenv 入口操作，GitHub 侧操作者为 App bot（均绑定到具体操作，杜绝假阳性）：
+
+- 评论（按评论 ID 绑定作者）：
   `devenv gh issue comment 55 --body …` → rc=0；
   `devenv gh api repos/…/issues/comments/7150428162 --jq .user.login` → rc=0，
   作者 = `bbhl79-agent[bot]`。
   GitHub 侧证据：<https://github.com/bbhl79/natural-enforcement-prj/issues/55#issuecomment-7150428162>
+  另：本验收的证据评论 `…#issuecomment-7151787172` 作者同为 `bbhl79-agent[bot]`。
 - 推送（按 `after == 本次 sha` 绑定 actor）：
   `devenv git-push origin +test/app-auth-push:refs/heads/test/app-auth-push` → rc=0；
   activity 记录 `actor=bbhl79-agent[bot]`，`after=a3f7f7ce…`（另两次：3c490590、c8487e86）。
   GitHub 侧证据：远端分支 `test/app-auth-push`（草稿分支，保留供审计，删除需另行确认）。
-
-IDE 插件段补跑方式（任一正常启动的 IDE 插件会话中执行，证据自动记录进程链）：
-`./devenv/devenv test:auth:integration --issue-comment 55`
 
 ## k. 首次成功操作超过 1 小时后再次操作仍成功，并证明每次调用重新换取短期令牌
 
