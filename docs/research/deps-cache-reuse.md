@@ -114,7 +114,7 @@ RUN --mount=type=cache,id=${PNPM_STORE_CACHE_ID},target=/pnpm/store,sharing=lock
 
 ## 六、风险、限制与对 SPEC/实施的输入
 
-1. **store 不是信任根**：pnpm 12.21 对被篡改的 store 文件**静默导入**（实测 P2：篡改后二次安装退出 0、内容与篡改一致、零重下），`pnpm store status` 也不报（P5）。**缓解**：store 仅作性能缓存；需要干净重建时换 cache id（P4 实测换 id 即空 store）；供应链完整性由 lockfile integrity + `--frozen-lockfile` 在解析层保证，不依赖 store。
+1. **store 不是信任根**：pnpm 12.21 对被篡改的 store 文件**静默导入**（实测 P2：篡改后二次安装退出 0、内容与篡改一致、零重下），`pnpm store status` 也不报（P5）。**注意**：lockfile integrity + `--frozen-lockfile` 只约束解析层（装哪些版本），**防不住** store 内文件被篡改——P2 已证明被篡改内容会被静默导入。**缓解（不声称完整性保证）**：store 仅作**本地性能缓存**，信任等级等同本机用户（能写 store 的人本来就能改本机代码）；**CI 与发布构建不复用来源不明的 store**——用新 cache id 干净构建（P4 实测换 id 即空 store）。本条作为**供应链门禁票**的输入。
 2. **lockgen 首引导**：本实验为隔离变量让 lockgen 基于现有 lockfile 增量解析；**无 lockfile 的首次引导**仍需全量解析（实施期处理，不在本票）。
 3. **prisma preinstall**：每次 install 都执行（热 store 也是，约 43 ms），side-effects 缓存不覆盖；实测无网络（离线构建成功），但实施期若引入更多带 lifecycle 脚本的依赖，需重新评估"零下载"判定（本实验的 `zero-fetch-scripts-ran` 档即为此设）。
 4. **冷启动仍是全量下载**：候选不减少首次冷启动的下载量（B1 仍 600 包），只消除"新增包/输入变化"的重复下载。冷启动下载段按 SPEC 无硬预算（有进度/超时/可续跑）。
@@ -128,7 +128,7 @@ RUN --mount=type=cache,id=${PNPM_STORE_CACHE_ID},target=/pnpm/store,sharing=lock
 
 ## 七、复现
 
-实验装置（throwaway 分支，未合入 dev）：`research/deps-cache-exp`（基于 `prototype/foundation-slice-2`，HEAD `78f4666`）。关键文件：
+实验装置（throwaway 分支，未合入 dev）：归档标签 **`archive/deps-cache-exp-54`**（指向 `78f4666`，基于 `prototype/foundation-slice-2`；源分支 `research/deps-cache-exp`）。关键文件：
 
 - `devenv/exp/summarize-pnpm.mjs` + `verdict.test.mjs`：ndjson → 六档判定（16 项单测，容器内 `node --test`）。
 - `devenv/exp/lib.sh` + `lib.selftest.sh`（91 项自检含反例）+ `lint-local.awk`：计时/取证/缓存状态/产物树哈希/闭环汇总。
