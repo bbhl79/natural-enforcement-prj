@@ -1,0 +1,87 @@
+# compose 拓扑（#56 最小空间数据开发栈）：db + api + tools + web。
+# 人类/agent 禁止直接操作本文件对应的 compose 命令（硬不变量 2：devenv 唯一入口）。
+# 镜像引用一律经变量注入，事实源：devenv/images.lock（tag+digest 双层锁）；
+# DB 镜像经 devenv 注入生效值（DEVENV_DB_IMAGE 可覆盖，见 COMMANDS.md）。
+# 无 bind 烘焙架构：代码经 workspace.Dockerfile COPY 进镜像，compose 只挂命名卷，
+# 无任何宿主路径依赖；零宿主端口发布（web 是唯一显式例外，profile 隔离 opt-in）。
+name: natural-enforcement
+
+x-app-base: &app-base
+  image: ${WORKSPACE_IMAGE:?devenv 需注入 WORKSPACE_IMAGE（devenv build 产出）}
+  working_dir: /workspace
+  # 以镜像默认 root 运行：镜像内容物为 root 属主，uid 化容器对 dist/日志等全线
+  # EACCES（原型 #11 实测）；dev 单机场景无安全边界损失，卷内容不回宿主。
+  environment: &app-env
+    HOME: /tmp
+    NODE_ENV: development
+    TURBO_TELEMETRY_DISABLED: "1"
+    # turbo 日志目录指到容器 tmpfs（镜像层 root 属主不可写的前科）
+    TURBO_LOG_DIR: /tmp/turbo-logs
+    DATABASE_URL: postgresql://ne:ne-dev-only@db:5432/natural_enforcement_dev
+  volumes:
+    - turbo-cache:/workspace/.turbo
+
+services:
+  db:
+    image: ${DB_IMAGE:?images.lock 未加载（devenv 会自动注入生效值）}
+    environment:
+      POSTGRES_USER: ne
+      POSTGRES_PASSWORD: ne-dev-only
+      POSTGRES_DB: natural_enforcement_dev
+    volumes:
+      # PG18+ 官方约定：挂父目录 /var/lib/postgresql（data 落版本子目录，pg_upgrade 免挂载点边界问题）
+      - pgdata:/var/lib/postgresql
+    healthcheck:
+      # 必须走 TCP（-h 127.0.0.1）：官方镜像 init 阶段的临时服务器只监听 unix socket，
+      # 裸 pg_isready（默认 socket）会在 init 窗口期误报健康——随后临时服务器停止、
+      # 真实服务器未起，消费方（migrate/api）撞上 P1001 竞态（#56 证据跑实测）。
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ne -d natural_enforcement_dev"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 15s
+    restart: unless-stopped
+
+  api:
+    <<: *app-base
+    command: ["pnpm", "--filter", "@ne/api", "start"]
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+
+  # 工具容器：仅经 `docker compose run --rm` 被 devenv 驱动（test/lint/verify/migrate/seed/exec/shell）
+  tools:
+    <<: *app-base
+    profiles: ["tools"]
+    command: ["true"]
+
+  # 前端：vite preview 供镜像烘焙产物；api 调用经 preview proxy 走容器内网。
+  # profile 隔离：`devenv up` 不启动 web（保持零宿主端口）；经 `devenv web` 显式
+  # opt-in 发布端口——这是"零宿主端口"不变量的唯一例外（浏览器在宿主机）。
+  web:
+    <<: *app-base
+    profiles: ["web"]
+    command: ["pnpm", "--filter", "@ne/web", "run", "preview"]
+    ports:
+      - "${WEB_PORT:-5173}:4173"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:4173/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  turbo-cache:

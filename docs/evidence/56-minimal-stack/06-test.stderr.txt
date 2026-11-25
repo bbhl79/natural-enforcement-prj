@@ -1,0 +1,48 @@
+[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+f98bc94bca15d3b33e729874413fdf53ad6b34584387dda72647bca86ce54b07
+Scope: 4 of 5 workspace projects
+packages/contracts test$ vitest run
+packages/contracts test: 
+packages/contracts test:  RUN  v5.1.1 /workspace/packages/contracts
+packages/contracts test: 
+packages/contracts test:  ✓ src/contracts.spec.ts (10 tests) 16ms
+packages/contracts test: 
+packages/contracts test:  Test Files  1 passed (1)
+packages/contracts test:       Tests  10 passed (10)
+packages/contracts test:    Start at  12:06:20
+packages/contracts test:    Duration  237ms (import 54%, transform 30%, tests 12%, worker 4%)
+packages/contracts test: 
+packages/contracts test: Done
+apps/api test$ vitest run
+apps/web test$ vitest run
+apps/api test: 
+apps/api test:  RUN  v5.1.1 /workspace/apps/api
+apps/api test: 
+apps/web test: 
+apps/web test:  RUN  v5.1.1 /workspace/apps/web
+apps/web test: 
+apps/api test:  ✓ src/util/geo.spec.ts (3 tests) 6ms
+apps/api test:  ✓ test/geo.spec.ts (3 tests) 208ms
+apps/web test:  ✓ test/format.spec.ts (3 tests) 4ms
+apps/web test:  ✓ test/validate.spec.ts (2 tests) 5ms
+apps/web test:  ✓ test/api-contract.spec.ts (4 tests) 9ms
+apps/api test:  ✓ test/api-flow.spec.ts (4 tests) 273ms
+apps/api test: 
+apps/api test:  Test Files  3 passed (3)
+apps/api test:       Tests  10 passed (10)
+apps/api test:    Start at  12:06:21
+apps/api test:    Duration  929ms (import 47%, tests 34%, transform 18%, worker 1%)
+apps/api test: 
+apps/api test: Done
+apps/web test:  ✓ test/nearby-table.spec.tsx (2 tests) 233ms
+apps/web test: 
+apps/web test:  Test Files  4 passed (4)
+apps/web test:       Tests  11 passed (11)
+apps/web test:    Start at  12:06:21
+apps/web test:    Duration  2.08s (environment 51%, import 26%, setup 12%, tests 6%, transform 5%)
+apps/web test: 
+apps/web test: Done

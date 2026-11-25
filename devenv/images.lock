@@ -1,0 +1,13 @@
+# 镜像锁：完整 tag + digest 双层锁定的唯一事实源（Spec-工程基座 §2）。
+# devenv 自动加载本文件注入 compose 与构建；升级只改这里，一律走 PR + e2e 演练。
+# digest 解析：docker pull <ref> 后 docker image inspect --format '{{index .RepoDigests 0}}'
+# （daemon 内建构建器无 buildx；RepoDigest 即所拉 manifest-list 的权威 digest）
+# 格式：KEY=repo:tag@sha256:...
+#
+# 多架构镜像锁 manifest-list digest（跨架构成立）；单架构镜像锁该平台 digest。
+# postgis/postgis 全维护标签 amd64-only（2026-11-24 registry 扩大复核，#53）——
+# macOS ARM 路线经 DEVENV_DB_IMAGE 覆盖切换（候选：Rosetta 仿真沿用本锁 /
+# kartoza multiarch / 自建 arm64，调研见 #53），实现不写死单一平台路线。
+
+NODE_IMAGE=node:26.13.1-slim@sha256:a5a5adfee3013de54504e0e6aff49993acf7daed072e86be75b8818c0f6ac258
+DB_IMAGE=postgis/postgis:18-3.6@sha256:4a43e3c3e5d55b9208240fc71db543b79c638766280c625a425bd0a2390989c4

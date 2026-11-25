@@ -1,0 +1,35 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "ui": "stream",
+  "globalEnv": ["NODE_ENV"],
+  "tasks": {
+    "build": {
+      "description": "产出构建产物（api: prisma generate + tsc；contracts: tsc→dist；web: vite build）",
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "typecheck": {
+      "description": "tsc --noEmit，零副作用",
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "test:unit": {
+      "description": "单元测试（纯函数式，不依赖基础设施，可缓存）",
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
+    },
+    "test": {
+      "description": "单元+集成测试（连真实 PostGIS；不可缓存）",
+      "cache": false,
+      "dependsOn": ["^build"],
+      "env": ["DATABASE_URL"]
+    },
+    "seed": {
+      "description": "幂等种子数据（依赖构建产物）",
+      "cache": false,
+      "dependsOn": ["build"]
+    },
+    "start": { "description": "启动服务（长驻）", "cache": false },
+    "dev": { "description": "开发模式（长驻）", "cache": false, "persistent": true }
+  }
+}

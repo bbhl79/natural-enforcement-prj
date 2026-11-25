@@ -1,0 +1,8 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "@ne/tsconfig Node 包（@types/node 显式加载，TS6 默认 types:[] 不自动加载）",
+  "extends": "./base.json",
+  "compilerOptions": {
+    "types": ["node"]
+  }
+}

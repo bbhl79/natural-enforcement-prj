@@ -1,5 +1,18 @@
 # 项目智能体指令
 
+## 工程基座（强制入口）
+
+一切构建、启停、观察、执行统一经 `./devenv/devenv`（唯一入口，禁止直接操作
+compose）；命令面权威文档：`devenv/COMMANDS.md`（命令表 / 退出码 / 输出协议 /
+并发语义）。硬不变量：
+
+- 宿主工具链零安装——node/pnpm/prisma 只在容器内执行；
+- 无 bind 烘焙镜像——源码 COPY 进镜像，只挂命名卷，零宿主端口（web 唯一例外，
+  经 `devenv web` opt-in）；调试一律 `devenv exec/shell/logs`；
+- 引擎端点解析与 DB 镜像覆盖规则见 `devenv/COMMANDS.md`。
+
+开工自检：`./devenv/devenv doctor`（退出码即可开工与否）。
+
 ## GitHub 认证入口（强制）
 
 所有 GitHub 操作必须以 GitHub App `bbhl79-agent` 身份经 devenv 入口执行，

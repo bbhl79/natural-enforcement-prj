@@ -1,0 +1,10 @@
+{"event":"engine","identity":"podman","version":"6.1.4","os":"linux","arch":"amd64","endpoint":"unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock","source":"DOCKER_HOST 环境变量"}
+{"event":"step.started","target":"workspace image refresh"}
+{"event":"step.completed","target":"workspace image refresh"}
+{"event":"gate.started","gate":"lint"}
+{"event":"gate.completed","gate":"lint","result":"ok"}
+{"event":"gate.started","gate":"typecheck"}
+{"event":"gate.completed","gate":"typecheck","result":"ok"}
+{"event":"gate.started","gate":"test:unit"}
+{"event":"gate.completed","gate":"test:unit","result":"ok"}
+{"command":"verify","status":"ok","exitCode":0,"lint":"ok","typecheck":"ok","test_unit":"ok"}

@@ -1,0 +1,33 @@
+{
+  "name": "@ne/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "NestJS 12 + Prisma 7 + PostGIS 后端（#56 最小空间数据开发栈）",
+  "scripts": {
+    "build": "prisma generate && tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run src",
+    "seed": "node dist/scripts/seed.js"
+  },
+  "dependencies": {
+    "@ne/contracts": "workspace:*",
+    "@nestjs/common": "catalog:",
+    "@nestjs/core": "catalog:",
+    "@nestjs/platform-express": "catalog:",
+    "@prisma/adapter-pg": "catalog:",
+    "@prisma/client": "catalog:",
+    "reflect-metadata": "catalog:",
+    "rxjs": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@ne/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "prisma": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
