@@ -40,7 +40,9 @@ warmup() {
 loop_once() { # loop_once <i>
   # 两条 local：同一条 local 语句里引用前一个变量会在赋值前展开（set -u 下 unbound，见 lint-local.awk）
   local i="$1"
-  local pkg="exp-loop-$i"
+  # PKG_OVERRIDE：重测某次闭环时用全新包名——若沿用旧名，其 deps 层已被上次构建缓存，
+  # lint 会命中层缓存而 install 不执行，违反“同一约定缓存状态、不累积”（实测 loop4 重测踩坑）。
+  local pkg="${PKG_OVERRIDE:-exp-loop-$i}"
   git_reset
   cache_state "loop$i-before"
   timed "loop$i-gen"       "$REPO_ROOT/devenv/devenv" --json gen package "$pkg"
