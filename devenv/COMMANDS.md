@@ -2,7 +2,8 @@
 
 调用形态：`./devenv/devenv [--json] <子命令> [参数]`。
 宿主工具链零安装：本命令面只使用白名单宿主工具（bash、docker CLI + compose v2、git、
-coreutils、jq、openssl、curl、gh）；一切 node/pnpm/prisma 执行都在容器内。
+coreutils、tar、find、jq、openssl、curl、gh；macOS 自带 bsdtar/BSD find 兼容所用法）；
+一切 node/pnpm/prisma 执行都在容器内。
 
 本文件是命令面的**唯一权威**（Action | Command | 期望退出码 + 输出协议 + 并发语义）；
 AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本表保持一致。
@@ -13,9 +14,9 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 
 | Action | Command | 期望退出码 |
 |---|---|---|
-| 一键体检（端点/引擎/矩阵/锁文件/镜像/服务；退出码=可开工与否） | `devenv doctor` | 0 或 3 |
+| 一键体检（端点/引擎/矩阵/锁文件/镜像/快照状态/服务；退出码=可开工与否） | `devenv doctor` | 0 或 3 |
 | 预取镜像锁中的上游镜像（分阶段、有进度/超时、可中断续跑） | `devenv prefetch` | 0 或 3/4/5 |
-| 构建工具镜像 + 安装依赖 + turbo build（幂等） | `devenv build [--lockgen]` | 0 或 3/4/6 |
+| 固定快照构建工具镜像 + 安装依赖 + turbo build（幂等；记录快照哈希与不可变镜像标识） | `devenv build [--lockgen]` | 0 或 3/4/6 |
 | 启动 db → 迁移幂等应用 → api，等待真实健康终态（幂等） | `devenv up` | 0 或 3/4/5/6 |
 | 停止（连带清掉不在 compose 文件中的本项目遗留容器；--volumes 再清数据卷；不含 profile 隔离的 web——用 `web --down`） | `devenv down [--volumes]` | 0 或 3/6 |
 | 重启 | `devenv restart [svc...]` | 0 或 3/6 |
@@ -44,7 +45,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 以 App 身份 HTTPS 推送 | `devenv git-push <remote> <refspec...>` | 0 或 2/20/21/22/23 或 git 自身退出码 |
 | 认证入口离线测试（不访问 GitHub） | `devenv test:auth` | 0 或 1 |
 | 认证入口真实集成测试（默认只读；写操作需显式旗标） | `devenv test:auth:integration [旗标]` | 0 或 1 或 2 |
-| 命令面离线测试（引擎解析/锁/输出协议，mock docker） | `devenv test:devenv` | 0 或 1 |
+| 命令面离线测试（引擎解析/锁/输出协议/快照与不可变绑定，mock docker） | `devenv test:devenv` | 0 或 1 |
 
 ## 退出码枚举（总表归 Spec-工程基座；7–10 e2e 专用码段由 Spec-e2e 登记）
 
@@ -53,7 +54,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 0 | 成功 | — |
 | 2 | 用法错误（未知子命令/缺参数/非法覆盖格式） | 按 Usage 与 COMMANDS.md |
 | 3 | 环境未就绪（引擎不在矩阵、端点解析失败、服务未起、锁文件缺失） | 按错误内嵌修复命令（多为 `devenv up`/`devenv build`） |
-| 4 | 任务失败（test/lint/typecheck/build/verify 非零；拉取失败） | 看 stderr 完整输出 |
+| 4 | 任务失败（test/lint/typecheck/build/verify 非零；拉取失败；快照采集期工作树持续变化——明确拒绝，不出混合内容） | 看 stderr 完整输出；采集拒绝时暂停文件修改后重试 |
 | 5 | 超时（健康等待/镜像拉取） | `devenv logs <svc>` 排查；prefetch 重跑续跑 |
 | 6 | 独占锁冲突（另一会话持锁） | 等待或确认持有者已死（失效锁会自动清理） |
 | 20 | 配置/授权不符（认证入口） | 核对 `devenv/github-app.json` 与本机授权 |
@@ -65,13 +66,18 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 
 1. **结构化命令**（build/up/test/verify/prefetch/doctor 等）`--json`：stdout 只放
    JSON/JSONL——长命令为 JSONL 事件流（`{"event":"engine",...}`、
-   `{"event":"step.started",...}`、`{"event":"gate.completed",...}` 等），终值事件
+   `{"event":"step.started",...}`、`{"event":"snapshot.captured",...}`、
+   `{"event":"workspace.fresh|built",...}`、`{"event":"image.verified",...}`、
+   `{"event":"gate.completed",...}` 等），终值事件
    `{"command":"<cmd>","status":"ok|failed","exitCode":N,...}`；短命令为单 JSON。
    人类可读进度一律走 stderr，子进程原始输出捕获分流，**不得混入结果流**。
 2. **透传命令**（exec/shell/logs）：输出为子进程原始流，不承诺其输出本身是 JSON；
    `--json` 对其仅包装终值元数据，原始流走独立通道。
 3. **引擎报告**：每条工程栈命令执行前解析并报告实际端点 + 引擎身份/版本/架构
    （stderr 人类行 + `--json` 时 `{"event":"engine",...}` JSONL 事件）。
+
+> 硬错误路径（die：锁冲突 6、快照采集拒绝 4、启动核对失败 4、环境未就绪 3 等）
+> 以 stderr `ERROR` 行 + 退出码收尾，不发终值事件——与既有锁冲突路径同口径。
 
 ## 引擎端点解析（Spec-工程基座 支持环境节）
 
@@ -129,6 +135,35 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
   opt-in）。调试访问一律经 `devenv exec/shell/logs`，不开放调试端口。
 - **宿主工具链零安装**：node/pnpm/prisma 只在容器内执行；源码消费型命令
   （up/test/lint/typecheck/verify/migrate*/seed/web）前置 `ensure_fresh_workspace`
-  增量重建（层缓存命中时秒级），保证容器内即当前工作树代码。
-  （固定输入快照与不可变镜像绑定归 #58；per-worktree 隔离归 #59。）
+  新鲜度核对（快照一致时亚秒级跳过，不一致时层缓存命中秒级重建），保证容器内
+  即当前工作树代码。（固定输入快照与不可变绑定机制见下节；per-worktree 隔离归 #59。）
 - **devenv 唯一入口**：禁止直接操作 compose；静态检查拦截归 #76。
+
+## 固定输入快照与不可变绑定（#58 落地，Spec-工程基座 §3）
+
+- **固定输入快照**：凡消费当前源码的命令（up/test/lint/typecheck/verify/migrate*/seed/web）
+  前置 `ensure_fresh_workspace`——用 git 临时索引 `add -A` + `write-tree` 采集工作树
+  快照（内容寻址树哈希），覆盖未提交修改、新增、删除，以及 Dockerfile、构建脚本、
+  锁文件等构建输入（gitignored 内容不进快照）；构建上下文 = 快照物化目录
+  （git archive 自对象库），**采集后不再读取活工作树**。
+- **采集竞态口径**：采集双跑比对，工作树持续变化 → 重试 3 次后**明确拒绝**
+  （exit 4），不产生混合内容却报告来源一致；构建期间工作树再变不影响本次
+  （构建只读快照）。
+- **新鲜度核对**：快照哈希 ↔ 镜像 label（`devenv.snapshot.hash`）↔ 状态文件
+  一致才跳过重建；任一不符即重建（层缓存命中时秒级）。`devenv.snapshot.inputs`
+  构建输入清单随镜像记录（审计用，不参与新鲜度比对）。
+- **不可变绑定**：状态文件 `.devenv-state/workspace-image.env`（gitignored，每
+  worktree 私有）记录 快照哈希 ↔ 不可变镜像标识（image ID，取自 `docker build -q`
+  输出，免 tag 二次解析竞态）；compose 注入 image ID 而非可变 tag；up/web 启动后
+  核对运行容器 `.Image` == 本次绑定 ID——同 worktree 可变 tag 被覆盖，原构建仍
+  按自己的不可变标识启动。restart 只重启既有容器（不重新解析镜像、无新绑定
+  产生），绑定核对在容器创建路径（up/web）完成。
+- **构建输入 vs 运行时输入**：构建上下文（含 Dockerfile、构建脚本、锁文件、
+  `NODE_IMAGE`）一律取自快照物化目录，采集后不读活工作树；`compose.yaml` 与
+  `DB_IMAGE` 生效值是运行时输入（compose 注入），其变更经快照哈希在下次消费
+  命令触发重建。
+- **deps 层缓存（#54 结论采纳）**：pnpm store 与 registry 元数据走引擎原生
+  cache mount（`sharing=locked`），普通构建保持 `--frozen-lockfile`；store 是
+  缓存不是信任根，干净重建换 cache id（`--build-arg PNPM_STORE_CACHE_ID=<新 id>`）。
+- **诚实口径**：本机制检查来源一致性、减少运行旧代码，**不声称完整构建证明**；
+  锁实现与租约细分归 #61，per-worktree 隔离归 #59。

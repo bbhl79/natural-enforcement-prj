@@ -1,0 +1,53 @@
+[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+Scope: 4 of 5 workspace projects
+packages/contracts typecheck$ tsc -p tsconfig.json --noEmit
+packages/contracts typecheck: Done
+apps/api typecheck$ tsc -p tsconfig.json --noEmit
+apps/web typecheck$ tsc -p tsconfig.json --noEmit
+apps/api typecheck: Done
+apps/web typecheck: Done
+Scope: 4 of 5 workspace projects
+packages/contracts test:unit$ vitest run src
+packages/contracts test:unit: 
+packages/contracts test:unit:  RUN  v5.1.1 /workspace/packages/contracts
+packages/contracts test:unit: 
+packages/contracts test:unit:  ✓ src/contracts.spec.ts (10 tests) 12ms
+packages/contracts test:unit: 
+packages/contracts test:unit:  Test Files  1 passed (1)
+packages/contracts test:unit:       Tests  10 passed (10)
+packages/contracts test:unit:    Start at  13:02:50
+packages/contracts test:unit:    Duration  233ms (import 54%, transform 31%, tests 10%, worker 5%)
+packages/contracts test:unit: 
+packages/contracts test:unit: Done
+apps/web test:unit$ vitest run
+apps/api test:unit$ vitest run src
+apps/api test:unit: 
+apps/api test:unit:  RUN  v5.1.1 /workspace/apps/api
+apps/api test:unit: 
+apps/web test:unit: 
+apps/web test:unit:  RUN  v5.1.1 /workspace/apps/web
+apps/web test:unit: 
+apps/api test:unit:  ✓ src/util/geo.spec.ts (3 tests) 4ms
+apps/api test:unit: 
+apps/api test:unit:  Test Files  1 passed (1)
+apps/api test:unit:       Tests  3 passed (3)
+apps/api test:unit:    Start at  13:02:50
+apps/api test:unit:    Duration  171ms (transform 63%, import 21%, worker 9%, tests 6%)
+apps/api test:unit: 
+apps/api test:unit: Done
+apps/web test:unit:  ✓ test/format.spec.ts (3 tests) 6ms
+apps/web test:unit:  ✓ test/validate.spec.ts (2 tests) 8ms
+apps/web test:unit:  ✓ test/api-contract.spec.ts (4 tests) 9ms
+apps/web test:unit:  ✓ test/nearby-table.spec.tsx (2 tests) 263ms
+apps/web test:unit: 
+apps/web test:unit:  Test Files  4 passed (4)
+apps/web test:unit:       Tests  11 passed (11)
+apps/web test:unit:    Start at  13:02:50
+apps/web test:unit:    Duration  1.92s (environment 48%, import 27%, setup 12%, tests 8%, transform 5%)
+apps/web test:unit: 
+apps/web test:unit: Done
+[devenv] verify 全绿（lint + typecheck + test:unit）

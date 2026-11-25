@@ -1,0 +1,15 @@
+{"event":"engine","identity":"podman","version":"6.1.4","os":"linux","arch":"amd64","endpoint":"unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock","source":"DOCKER_HOST 环境变量"}
+{"event":"step.started","target":"workspace image freshness"}
+{"event":"snapshot.captured","hash":"a59eee9d4489b5ac1e3b7f1787c357da49d2f758"}
+{"event":"step.completed","target":"workspace image freshness"}
+{"event":"step.started","target":"workspace image (snapshot build)"}
+{"event":"workspace.built","imageId":"sha256:9acbe5c4f2e9792c3dd67e9bc658f9b9f6ba3d391494d9a89abfd8424b979d02","snapshot":"a59eee9d4489b5ac1e3b7f1787c357da49d2f758"}
+{"event":"step.completed","target":"workspace image (snapshot build)"}
+{"event":"wait.started","service":"db"}
+{"event":"wait.ok","service":"db"}
+{"event":"step.started","target":"migrate deploy"}
+{"event":"step.completed","target":"migrate deploy"}
+{"event":"wait.started","service":"api"}
+{"event":"wait.ok","service":"api"}
+{"event":"image.verified","service":"api","imageId":"sha256:9acbe5c4f2e9792c3dd67e9bc658f9b9f6ba3d391494d9a89abfd8424b979d02"}
+{"command":"up","status":"ok","exitCode":0,"services":"db,api"}

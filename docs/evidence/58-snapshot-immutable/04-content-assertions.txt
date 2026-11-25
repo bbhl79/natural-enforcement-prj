@@ -1,0 +1,13 @@
+== 计时集内容断言（docker run --rm <imageId> 实查）==
+run3（新增 probe2）镜像 sha256:d37c37a78f1ba046daa6fce88ee11edbc366c810732b9f3ab16c01e8ac25e986 内容:
+probe2
+run4（删除 probe2）镜像 sha256:9acbe5c4f2e9792c3dd67e9bc658f9b9f6ba3d391494d9a89abfd8424b979d02:
+ls: cannot access '/workspace/apps/api/snapshot-probe2.txt': No such file or directory
+  probe2 不存在 ✔
+run5（修改 r5）镜像 sha256:6ea7088b2647077e3891fbfef69767caff75b17a55e42af14e35fc3e169585f1 内容:
+probe-r5
+
+== 构建期变更断言（04）==
+采集完成后工作树被改为 probe-DURING-BUILD-should-not-leak；当次构建镜像内容：
+probe-pre-mutation
+（= 采集前内容 probe-pre-mutation——活工作树的构建期修改未泄漏进镜像）

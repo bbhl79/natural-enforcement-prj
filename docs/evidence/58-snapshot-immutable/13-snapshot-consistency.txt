@@ -1,0 +1,8 @@
+背景：race test 1 在 50ms 间隔持续修改下，双采集窗口（~20ms）未捕捉到变化，
+按「使用完整旧快照」路径接受——本检查证明被接受的快照与镜像内容逐字节一致。
+
+快照 bb126527e3bb06a52372a31b99d2f0698aa81684 中 apps/api/snapshot-probe.txt 的 blob 内容 sha256:
+8deb29392728287f02eb66310d69ab13b37c23d2ef27fe0880d2905a0d8ff6b5  -
+镜像 sha256:b7e6515a1bb0b6a5c40dceff2a9976671a4f5a37fb7405eefa9e98db6616b8bb 内 /workspace/apps/api/snapshot-probe.txt 的 sha256:
+8deb29392728287f02eb66310d69ab13b37c23d2ef27fe0880d2905a0d8ff6b5  /workspace/apps/api/snapshot-probe.txt
+两者一致 → 报告来源 == 镜像内容（无混合内容却报告来源一致）

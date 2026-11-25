@@ -1,0 +1,8 @@
+{"event":"engine","identity":"podman","version":"6.1.4","os":"linux","arch":"amd64","endpoint":"unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock","source":"DOCKER_HOST 环境变量"}
+{"event":"snapshot.captured","hash":"0a5774808e36973c1d8d71d7e28fa4f05d84f9bf"}
+{"event":"step.started","target":"tools base image"}
+{"event":"step.completed","target":"tools base image"}
+{"event":"step.started","target":"workspace image (snapshot build)"}
+{"event":"workspace.built","imageId":"sha256:1777e8dd50582eaa26bdfb6ca44557fb09a9914dfed5341a00d2a4f86fba1687","snapshot":"0a5774808e36973c1d8d71d7e28fa4f05d84f9bf"}
+{"event":"step.completed","target":"workspace image (snapshot build)"}
+{"command":"build","status":"ok","exitCode":0,"duration":"7s","snapshot":"0a5774808e36973c1d8d71d7e28fa4f05d84f9bf"}

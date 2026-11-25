@@ -1,0 +1,9 @@
+前置：状态文件绑定镜像 = sha256:f8454d1737d28b88fe836cb2ac68e34ba5e8cf2a02121cf1f2da1e1ec0f75b37（工作树自上次构建无变化）
+受控覆盖：docker tag natural-enforcement/tools:local natural-enforcement/workspace:local
+覆盖后 workspace:local 指向 = sha256:a1e87b80da0a40707e2846a7b3f67a8680f57619a976f9ce51d3b29f3ce4445d（tools 镜像，另一个镜像）
+--- devenv --json up（关键事件）:
+{"event":"workspace.fresh","imageId":"sha256:f8454d1737d28b88fe836cb2ac68e34ba5e8cf2a02121cf1f2da1e1ec0f75b37","snapshot":"41f704dc0178f44d6a1f50eaa18096cdf769ec11"}
+{"event":"image.verified","service":"api","imageId":"sha256:f8454d1737d28b88fe836cb2ac68e34ba5e8cf2a02121cf1f2da1e1ec0f75b37"}
+运行容器 .Image = sha256:f8454d1737d28b88fe836cb2ac68e34ba5e8cf2a02121cf1f2da1e1ec0f75b37
+结论：tag 被覆盖到另一个镜像后，up 经 workspace.fresh 跳建（未重建），运行容器仍是本次绑定镜像——不可变绑定成立
+（tag 已恢复指向绑定镜像）

@@ -1,0 +1,69 @@
+沙箱：/tmp/devenv-stack-offline.M4YRDH
+PASS: T1 覆盖后端点可用 doctor 通过
+PASS: T1 报告覆盖关系
+PASS: T1 使用覆盖端点
+PASS: T2 DOCKER_HOST 生效 doctor 通过
+PASS: T2 报告环境变量来源
+PASS: T3 端点连接失败 exit 3
+PASS: T3 报告失败端点
+PASS: T3 未偷换下一个候选
+PASS: T4 moby 非 CI 拒绝 exit 3
+PASS: T4 报告矩阵拒绝
+PASS: T5 moby + CI 通过
+PASS: T6 未识别引擎 exit 3
+PASS: T7 podman doctor --json 通过
+PASS: T7 JSON 可解析且引擎检查 ok
+PASS: T7 JSONL 含 engine 事件（身份/版本/架构/端点）
+PASS: T8 进度不混入结果流
+PASS: T8 进度走 stderr
+PASS: T9 未知子命令 exit 2
+PASS: T10 锁文件缺失 exit 3
+PASS: T11 DB 镜像覆盖 doctor 通过
+PASS: T11 报告 DB 镜像覆盖来源
+PASS: T12 DB 镜像覆盖格式非法 exit 2
+PASS: T13 持锁期间第二个取得 exit 6
+PASS: T13 退出后锁释放
+[devenv] WARN: 锁 [stale] 持有者已死，清理失效锁：/tmp/devenv-stack-offline.M4YRDH/locks/stale.lock
+PASS: T14 失效锁清理后可取得
+PASS: T15 存活持有者锁不被误清（exit 6）
+PASS: T15 锁目录仍在（未误清）
+------------------------------------------------------------
+命令面离线测试完成：27 通过，0 失败
+沙箱：/tmp/devenv-snapshot-offline.TtWYNE
+PASS: S1 采集返回 git 树哈希
+PASS: S1 稳定工作树双采集一致
+PASS: S1 快照==独立参照树（git add -A）
+PASS: S2 修改被快照覆盖
+PASS: S3 新增（未跟踪）文件进入快照
+PASS: S4 删除被快照覆盖
+PASS: S5 gitignored 内容不进入快照
+PASS: S6 持续变化明确拒绝 exit 4
+PASS: S6 拒绝原因入 stderr
+PASS: S7 重试后稳定即接受
+PASS: S8 物化目录含构建输入（Dockerfile/锁文件/manifest）
+PASS: S8 物化 mtime 归一到固定纪元
+PASS: S8 物化不含 .git/gitignored
+PASS: S8b 物化目录登记 EXIT 清理（当前 shell）
+PASS: S8b snapshot_cleanup 清理物化目录
+PASS: S9 构建输入清单含 Dockerfile/锁文件 blob 哈希
+PASS: S9 清单动态覆盖各包 package.json
+PASS: S10 快照一致跳过重构并绑定不可变 ID
+PASS: S11 快照不符重建并绑定新不可变 ID
+PASS: S11 构建携带快照哈希 label
+PASS: S11 状态文件记录新快照哈希
+PASS: S11b 带前缀构建输出归一为同一不可变 ID
+PASS: S12 无状态文件触发重建
+PASS: S13 镜像丢失触发重建
+PASS: S14 compose 注入 EFFECTIVE 不可变 ID
+PASS: S14 无 EFFECTIVE 回退状态 ID
+PASS: S14 无状态兜底可变 tag（仅 down/ps 等场景）
+PASS: S15 启动核对一致通过
+PASS: S15 启动核对不符 exit 4
+PASS: S16 build 快照构建 tools+workspace（无 lockgen）
+PASS: S16 状态记录构建快照哈希
+PASS: S16b tools 构建上下文与 NODE_IMAGE 取自快照
+PASS: S17 无 lockfile 走 lockgen-fresh 并导出后重建
+PASS: S17 lockgen 后状态记录新快照（含导出 lockfile）
+PASS: S18 --lockgen 有 lockfile 走增量 lockgen 靶
+------------------------------------------------------------
+快照与不可变绑定离线测试完成：35 通过，0 失败

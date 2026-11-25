@@ -13,3 +13,6 @@ coverage/
 .env
 apps/api/src/generated/
 .pnpm-store/
+
+# 快照状态（#58）：快照哈希 ↔ 不可变镜像标识（devenv 维护，每 worktree 私有）
+.devenv-state/

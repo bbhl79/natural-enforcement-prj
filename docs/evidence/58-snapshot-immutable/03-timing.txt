@@ -1,0 +1,25 @@
+run1 [修改（probe r1）]
+  wall: 29524ms  rc: 0
+  api 容器: d089dbf38d9a -> 2350750a7f10（重建=是）
+  构建/绑定镜像: sha256:7ad38ae05ad987872f5797100b80048f9e0318a61eb747c2b37abbe325fede1f
+  image.verified: sha256:7ad38ae05ad987872f5797100b80048f9e0318a61eb747c2b37abbe325fede1f  api 健康: api
+run2 [修改（probe r2）]
+  wall: 29026ms  rc: 0
+  api 容器: 2350750a7f10 -> 6e80e2b1dcaf（重建=是）
+  构建/绑定镜像: sha256:9acbe5c4f2e9792c3dd67e9bc658f9b9f6ba3d391494d9a89abfd8424b979d02
+  image.verified: sha256:9acbe5c4f2e9792c3dd67e9bc658f9b9f6ba3d391494d9a89abfd8424b979d02  api 健康: api
+run3 [新增 probe2]
+  wall: 29648ms  rc: 0
+  api 容器: 6e80e2b1dcaf -> c3109634b2e8（重建=是）
+  构建/绑定镜像: sha256:d37c37a78f1ba046daa6fce88ee11edbc366c810732b9f3ab16c01e8ac25e986
+  image.verified: sha256:d37c37a78f1ba046daa6fce88ee11edbc366c810732b9f3ab16c01e8ac25e986  api 健康: api
+run4 [删除 probe2]
+  wall: 21636ms  rc: 0
+  api 容器: c3109634b2e8 -> 7f677907918b（重建=是）
+  构建/绑定镜像: sha256:9acbe5c4f2e9792c3dd67e9bc658f9b9f6ba3d391494d9a89abfd8424b979d02
+  image.verified: sha256:9acbe5c4f2e9792c3dd67e9bc658f9b9f6ba3d391494d9a89abfd8424b979d02  api 健康: api
+run5 [修改（probe r5）]
+  wall: 29012ms  rc: 0
+  api 容器: 7f677907918b -> 18c6e5f16155（重建=是）
+  构建/绑定镜像: sha256:6ea7088b2647077e3891fbfef69767caff75b17a55e42af14e35fc3e169585f1
+  image.verified: sha256:6ea7088b2647077e3891fbfef69767caff75b17a55e42af14e35fc3e169585f1  api 健康: api
