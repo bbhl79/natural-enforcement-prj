@@ -9,8 +9,8 @@
 
 ## 一、结论先行
 
-1. **归因（验收 1）**：新增包使 deps 层失效，**不是**"无 bind 架构"的直接后果，而是 **store 随镜像层落盘、层缓存失效即被丢弃** 的后果。deps 层是 `COPY 各 package.json + pnpm-lock.yaml` → `RUN pnpm install --frozen-lockfile`；新增包改变 package.json 与 lockfile → 该 RUN 层缓存必然失效 → install 重跑。原型把 pnpm store 放在该层内部，层一失效 store 随之丢弃，于是 **新增 1 个包也全量重下 600 个包（158.8 MB）**。实测：基线新增包后重建 **803 s、下载 600 包 / 158.8 MB**（A4），与首次冷启动（A1：768 s、600 包 / 158.8 MB）等量——"新增包后的缓存失效"与"首次冷启动下载"在基线上是同一量级，对照成立。
-2. **候选方案（验收 2）**：把 pnpm store 与 registry 元数据挂到引擎原生 cache mount（`RUN --mount=type=cache`，`sharing=locked`），store 跨构建、跨 worktree 复用。实测：同样新增 1 个包后重建，**包内容下载 = 0**（pnpm ndjson 中 `pnpm:fetching-progress` 事件 0 条），store 清单哈希不变，产出的 `node_modules` 内容树与"干净下载"基线**逐文件一致**；新增包 + 1 个新外部依赖（left-pad）时**只下载 left-pad 1 个包**。
+1. **归因（验收 1）**：新增包使 deps 层失效，**不是**"无 bind 架构"的直接后果，而是 **store 随镜像层落盘、层缓存失效即被丢弃** 的后果。deps 层是 `COPY 各 package.json + pnpm-lock.yaml` → `RUN pnpm install --frozen-lockfile`；新增包改变 package.json 与 lockfile → 该 RUN 层缓存必然失效 → install 重跑。原型把 pnpm store 放在该层内部，层一失效 store 随之丢弃，于是 **新增 1 个包也全量重下 600 个包（158.8 MiB）**。实测：基线新增包后重建 **803 s、下载 600 包 / 158.8 MiB**（A4），与首次冷启动（A1：768 s、600 包 / 158.8 MiB）等量——"新增包后的缓存失效"与"首次冷启动下载"在基线上是同一量级，对照成立。
+2. **候选方案（验收 2）**：把 pnpm store 与 registry 元数据挂到引擎原生 cache mount（`RUN --mount=type=cache`，`sharing=locked`），store 跨构建、跨 worktree 复用。实测：同样新增 1 个包后重建，**包内容下载 = 0**（pnpm ndjson 中 `pnpm:fetching-progress` 事件 0 条），store 清单哈希不变，产出的 `node_modules` 内容树与"干净下载"基线**逐文件一致**；新增包 + 1 个新外部依赖（left-pad）时**只下载 left-pad 1 个包**。（按本实验最严档"零下载且无 lifecycle 脚本"，因 prisma preinstall 每次执行，claim 账本 4 条记 false——实质零下载成立，最严档未达成，见 §四对账、§六.3。）
 3. **闭环（验收 3）**：新增包闭环（`gen package` → lint → typecheck → test:unit）从同一源码基线 + 约定缓存出发连测 5 次，**中位数 111 s、最差 122 s**，远低于 10 min 预算；5 次 lint 阶段 deps 安装均零包下载（结构化 ndjson），不触发"无法验收"。
 4. **超预算判定（验收 5）**：闭环耗时若超 10 min 预算，按 SPEC 提交实测报告由指挥者裁决，本报告不预领"自动通过"。
 5. **附带发现（影响 SPEC/实施，非本票验收项）**：
@@ -49,12 +49,12 @@
 
 | 运行 | 操作 | 墙钟 | pnpm 下载包数 | 下载量 | 说明 |
 |---|---|---|---|---|---|
-| A1 | 首次冷启动（`--no-cache`，deps 靶） | 768 s | **600** | 158.8 MB | 全量下载 |
+| A1 | 首次冷启动（`--no-cache`，deps 靶） | 768 s | **600** | 158.8 MiB | 全量下载 |
 | A2 | 同输入重建（无 `--no-cache`） | 12 s | —（install 未执行） | 0 | **层缓存命中**，9 个 `Using cache` |
-| A3 | `gen package exp-base-one` + lockgen | 350 s | 0（lockfile-only） | 0 | 但 lockgen 全量重解析耗时 331 s |
-| A4 | 新增包后重建 deps 层 | **803 s** | **600** | **158.8 MB** | **层失效 → 全量重下** |
+| A3 | `gen package exp-base-one` + lockgen | 350 s | 0（lockfile-only） | 0 | 但 lockgen 全量重解析耗时 331 s（ndjson 证据：`a3-baseline-gen.log` 的 lockgen EVIDENCE 行，`fetchedPackages=0`、`executionMs=331061`） |
+| A4 | 新增包后重建 deps 层 | **803 s** | **600** | **158.8 MiB** | **层失效 → 全量重下** |
 
-**归因结论**：A4 与 A1 等量（600 包 / 158.8 MB），证明新增包的代价 = 一次完整冷下载。失效链条：新增包 → `packages/exp-base-one/package.json` 新增 + `pnpm-lock.yaml` 变更 → deps 层 COPY 与 RUN 缓存失效 → install 重跑 → **store 在层内随之丢弃** → 全量重下。A2 证明：只要输入不变，层缓存命中、install 不执行（12 s）——问题专属于"输入变化"，与"无 bind"无因果。
+**归因结论**：A4 与 A1 等量（600 包 / 158.8 MiB），证明新增包的代价 = 一次完整冷下载。失效链条：新增包 → `packages/exp-base-one/package.json` 新增 + `pnpm-lock.yaml` 变更 → deps 层 COPY 与 RUN 缓存失效 → install 重跑 → **store 在层内随之丢弃** → 全量重下。A2 证明：只要输入不变，层缓存命中、install 不执行（12 s）——问题专属于"输入变化"，与"无 bind"无因果。
 
 ---
 
@@ -71,7 +71,7 @@ RUN --mount=type=cache,id=${PNPM_STORE_CACHE_ID},target=/pnpm/store,sharing=lock
 
 | 运行 | 操作 | 墙钟 | 包下载 | 关键证据 |
 |---|---|---|---|---|
-| B1 | 首次冷启动（空 store） | 348 s | 600 / 158.8 MB | store 填充至 44460 文件 / 742920 KB |
+| B1 | 首次冷启动（空 store） | 348 s | 600 / 158.8 MiB | store 填充至 44460 文件 / 742920 KB |
 | B2 | 同输入重建 | 8 s | —（层命中） | install 未执行 |
 | B3 | `gen package exp-base-one` | 128 s | 0 | gen+lockgen 合计 128 s（基线 A3 为 350 s） |
 | **B4** | **新增包后重建** | **51 s** | **0** | **store 哈希不变；产物树与基线逐文件一致** |
@@ -83,8 +83,10 @@ RUN --mount=type=cache,id=${PNPM_STORE_CACHE_ID},target=/pnpm/store,sharing=lock
 
 - B4 的 pnpm ndjson 中 `pnpm:fetching-progress` 事件 **0 条**（`fetchedPackages=0`），`resolved=600` 全部命中 store。
 - store 清单哈希在 B1→B4 全程不变（`01e4c815…`），证明未变更依赖**包内容**命中本地存储、零网络下载。
-- **确定性**：B4 产物 `node_modules`（52116 文件）与基线"干净下载"的 A4 产物**内容/权限/符号链接逐文件一致**（`determinism-add1.json: identical=true`）——热 store 不改变产物。B1（空 store + cache mount）产物同样与基线冷启动一致，证明 cache mount 机制本身不改变产物。
-- 元数据缓存：B3 后元数据缓存 233 文件 / 190 MB；`gen`+lockgen 合计从基线 A3 的 350 s 降到 B3 的 128 s（COPY 现有 lockfile 增量解析 + `--prefer-offline` 复用已缓存元数据）。
+- **确定性**：B4 产物 `node_modules`（52116 文件）与基线"干净下载"的 A4 产物**内容/权限/符号链接逐文件一致**（`determinism-add1.json: identical=true`）——热 store 不改变产物。B1（空 store + cache mount）产物同样与基线冷启动一致，证明 cache mount 机制本身不改变产物。（命名说明：`determinism-add1.json` 里候选侧标签为 `b6-candidate-add1`，因为它在 B6 确定性步骤计算；其镜像 `ne-exp54/deps:add1` 就是 B4 新增的镜像，`b6-cold-*` 同理对应 B1。）
+- 元数据缓存：B3 后元数据缓存 233 文件 / 186 MiB（190,480 KB）；`gen`+lockgen 合计从基线 A3 的 350 s 降到 B3 的 128 s（COPY 现有 lockfile 增量解析 + `--prefer-offline` 复用已缓存元数据）。
+
+**claim 账本的对账（诚实口径，防"静默通过"）**：本实验的软断言账本 `candidate/claims.jsonl` 有 **4 条记录为 false**——`b4-add-zero-download`、`b4-add-no-lifecycle-scripts-ran`、`b7-offline-install-zero-fetch-no-scripts`、`b8-concurrent-builds-zero-download`。它们失败在**最严档**（§二的六档判定里只有 `zero-download` = 零下载且无 lifecycle 脚本才算通过）：`prisma` 的 `preinstall` 脚本在每次 install（含热 store）都执行，使这些运行被判为 `zero-fetch-scripts-ran` 而非 `zero-download`。**其实质（未变更依赖包内容零网络下载）成立**：`fetchedPackages=0`、store 哈希不变、离线构建成功、产物树一致——但按本实验自己定的最严档，"零下载且无脚本"**未达成**，验收 2 的达成是**在"允许 prisma preinstall 这类无网络 lifecycle 脚本"的口径下**成立（§六.3）。账本原文未删改，4 条 false 与 11 条 true 一并留档。
 
 ---
 
@@ -104,7 +106,7 @@ RUN --mount=type=cache,id=${PNPM_STORE_CACHE_ID},target=/pnpm/store,sharing=lock
 
 **中位数 111 s，最差 122 s**（SPEC 测量协议：5 次取中位数并记录最差）。**远低于 10 min（600 s）预算**——新增包闭环的耗时大头是质量门本身（lint/typecheck/test:unit 的容器启动与执行），依赖层重建因 store 命中几乎不占时间。
 
-**下载证据（验收 3 的"无法取得可靠下载证据时判为无法验收"不触发）**：5 次闭环的 lint 阶段（新增包后首个重建 deps 层的门）pnpm ndjson 均为 `zero-fetch-scripts-ran`、`fetchedPackages=0`——未变更依赖包内容全部命中本地 store，零网络下载；各次闭环前后 store 清单哈希不变（`claims.jsonl` 14 条全 true，含 `loopN-store-unchanged-by-loop` 与 `loopN-lockfile-only-new-importer`）。
+**下载证据（验收 3 的"无法取得可靠下载证据时判为无法验收"不触发）**：5 次闭环的 lint 阶段（新增包后首个重建 deps 层的门）pnpm ndjson 均为 `zero-fetch-scripts-ran`、`fetchedPackages=0`——未变更依赖包内容全部命中本地 store，零网络下载；各次闭环前后 store 清单哈希不变（闭环 `claims.jsonl` 14 条全 true，含 `loopN-store-unchanged-by-loop` 与 `loopN-lockfile-only-new-importer`；各次 `cache-loopN-before/after.json` 清单已留档）。
 
 **样本有效性说明（诚实口径）**：loop4 首次测量时宿主休眠，产生 72 min 死时间（wall-clock 4392 s，但构建实际秒级）——判为无效样本；直接重测又因其 deps 层已被首次构建缓存（lint 命中层缓存、install 不执行），违反"同一约定缓存状态、不累积"。最终用**全新包名**（`exp-loop-4r`）重测，deps 层真正新建、install 运行且零下载，为上表 loop4。休眠原始证据保留于 `loop4-total.suspend-artifact.json`。
 
@@ -119,6 +121,8 @@ RUN --mount=type=cache,id=${PNPM_STORE_CACHE_ID},target=/pnpm/store,sharing=lock
 5. **网络条件混杂**：基线 A1 与候选 B1 的冷启动墙钟不可直接比（实测有效带宽分别约 316 / 719 KB/s）。公平比较是 **A4 vs B4**（同一"新增包"操作）：下载包数 600 vs 0、墙钟 803 s vs 51 s——下载包数是受控变量，墙钟差主要由下载量解释。
 6. **引擎差异**：cache mount 行为在 Podman/buildah（本机）与 Docker Engine + BuildKit（CI）间可能不同；`sharing=locked` 语义、cache id 隔离需 CI 侧复验（SPEC 已要求 CI 独立验收）。
 7. **bash 3.2 兼容**：devenv 的数组展开已用 `${a[@]+"${a[@]}"}` 可移植写法（macOS 自带 bash 3.2 在 `set -u` 下展开空数组报 unbound，实测 bash:3.2 容器验证）。
+8. **测量协议偏差（如实申报）**：① 父 SPEC §测量通用协议要求"计时取 devenv JSONL 事件时间戳"，本实验闭环总耗时取**运行器墙钟**（`loop_total` = 末个门终点 − gen 起点）；devenv JSONL 事件已带毫秒时间戳（本实验所加）且与各步墙钟一致，但严格说计时源是运行器而非 devenv 事件。② 父 SPEC 要求"每次记录平台/缓存状态/实际网络"，本实验**平台与缓存状态按阶段记录**（`env-*.txt` + 各次 `cache-loopN-*.json`），**网络状况按阶段记录**（`env-*.txt` 的 tarball 测速）+ 从 ndjson 抓取窗口推算有效带宽，**未做到每次闭环单独记录网络**——5 次闭环在同一时段连续执行，网络条件视为相同，但严格按协议这是一处缺口。
+9. **额外实验与 SPEC 候选验证要求的对应**：B8 并发（`sharing=locked` 串行）、P2/P5 store 篡改、P4 换 id 干净重建、确定性树比对，对应父 SPEC §3"候选须验**可追溯/干净重建/并发/缓存失效**"的要求，非任意加戏；但它们确实占用了 2 天窗口的一部分，如实说明。
 
 ---
 
@@ -139,7 +143,7 @@ RUN --mount=type=cache,id=${PNPM_STORE_CACHE_ID},target=/pnpm/store,sharing=lock
 | #54 验收标准 | 状态 | 证据 |
 |---|---|---|
 | 1. 对照实验区分首次冷启动下载与新增包后缓存失效，记录平台/缓存/网络 | **达成** | §三 A1 vs A4（等量 600 包）；§二环境记录；§六.5 网络混杂声明 |
-| 2. 候选以包管理器结构化输出/下载统计证明未变更依赖命中本地存储、零网络下载 | **达成** | §四 B4（0 下载事件 + store 哈希不变 + 产物树一致）；B6-ext（仅 left-pad）；B7 离线建成 |
+| 2. 候选以包管理器结构化输出/下载统计证明未变更依赖命中本地存储、零网络下载 | **达成（口径见备注）** | §四 B4（0 下载事件 + store 哈希不变 + 产物树一致）；B6-ext（仅 left-pad）；B7 离线建成。**备注**：实质（包内容零下载）由结构化 ndjson 证明；但按本实验最严档"零下载且无 lifecycle 脚本"，因 prisma preinstall 每次执行，claim 账本 4 条记 false（§四对账、§六.3）——达成是在"允许无网络 lifecycle 脚本"口径下成立 |
 | 3. 新增包闭环同基线同缓存测 5 次，报中位数与最差；证据不可靠判无法验收 | **达成** | §五：中位 111 s / 最差 122 s；5 次 lint 均零下载（ndjson），证据可靠 |
 | 4. 到期无结论 → 保留 frozen 构建 + 记录预算缺口 | 不适用（已有结论） | — |
 | 5. 超预算 → 实测报告由指挥者裁决，不自动通过 | **未超预算** | §五：中位 111 s ≤ 600 s，无需裁决 |
