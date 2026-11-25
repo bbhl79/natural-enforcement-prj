@@ -102,9 +102,11 @@ expected_perms=$(tr ' ' '\n' <<< "$EXPECTED_PERMISSIONS" | sort | tr '\n' ' ' | 
   || fail "权限差异" "实际：$actual_perms / 预期：$expected_perms（仅报告，不调整）"
 
 info "对照：匿名访问 /installation/repositories（应 401/403，证明该端点必须认证）"
-anon_code=$(curl -s -o /dev/null -w '%{http_code}' "$GHA_API/installation/repositories")
+# || true：传输错误（curl rc!=0，anon_code=000）不得触发 set -e 静默退出，
+# 交由下方断言判 FAIL（失败方向为关闭）
+anon_code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$GHA_API/installation/repositories" || true)
 [[ "$anon_code" == "401" || "$anon_code" == "403" ]] \
-  && pass "匿名对照被拒绝（HTTP $anon_code）" || fail "匿名对照" "HTTP $anon_code（端点行为异常）"
+  && pass "匿名对照被拒绝（HTTP $anon_code）" || fail "匿名对照" "HTTP $anon_code（端点行为异常或传输错误）"
 
 info "经 devenv gh 入口访问 /installation/repositories（验证 gh 路径以 App token 认证且限定仓库）"
 rc=0; ev_run gh-repos "$DEVENV" gh api /installation/repositories \
