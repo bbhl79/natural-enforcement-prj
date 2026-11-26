@@ -1,0 +1,5 @@
+[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
+ Container natural-enforcement-f6c59a50-web-1  Stopping
+ Container natural-enforcement-f6c59a50-web-1  Stopped
+ Container natural-enforcement-f6c59a50-web-1  Removing
+ Container natural-enforcement-f6c59a50-web-1  Removed

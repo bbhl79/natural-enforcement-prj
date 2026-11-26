@@ -1,0 +1,4 @@
+NAMES                                STATUS             PORTS
+natural-enforcement-90e22128-db-1    Up About an hour   5432/tcp
+natural-enforcement-90e22128-api-1   Up 14 seconds      
+natural-enforcement-90e22128-web-1   Up 8 seconds       0.0.0.0:32931->4173/tcp
