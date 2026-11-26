@@ -1,0 +1,5 @@
+真实 build 在持锁后被 SIGSTOP（pid=1035743）
+down 前 stack-lock 在场：yes
+down 后 stack-lock 仍在：yes
+build 恢复后 rc=0
+build 退出后 stack-lock 仍在：no

@@ -1,0 +1,16 @@
+holder=build           pid=1024889 stopped-after-lock=yes
+cleanup holder=build           stack-lock-present=no
+holder=up              pid=1026307 stopped-after-lock=yes
+cleanup holder=up              stack-lock-present=no
+holder=down            pid=1027710 stopped-after-lock=yes
+cleanup holder=down            stack-lock-present=no
+holder=restart         pid=1029096 stopped-after-lock=yes
+cleanup holder=restart         stack-lock-present=no
+holder=web             pid=1030431 stopped-after-lock=yes
+cleanup holder=web             stack-lock-present=no
+holder=web-down        pid=1031843 stopped-after-lock=yes
+cleanup holder=web-down        stack-lock-present=no
+holder=migrate         pid=1033126 stopped-after-lock=yes
+cleanup holder=migrate         stack-lock-present=no
+holder=migrate-create  pid=1034420 stopped-after-lock=yes
+cleanup holder=migrate-create  stack-lock-present=no

@@ -1,5 +1,5 @@
 [devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
-[devenv] workspace 镜像新鲜（快照 51ba81333b95… ↔ sha256:78147786ea22…），跳过重建
+[devenv] workspace 镜像新鲜（快照 9c3b995e82fe… ↔ sha256:563de1c8d9a2…），跳过重建
  Network natural-enforcement-90e22128_default  Creating
  Network natural-enforcement-90e22128_default  Created
  Container natural-enforcement-90e22128-db-1  Creating

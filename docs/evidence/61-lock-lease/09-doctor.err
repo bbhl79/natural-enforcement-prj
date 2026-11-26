@@ -9,7 +9,7 @@
   [ok] db-credentials     每 worktree 随机口令已生成（/home/hulei815/Workspaces/natural-enforcement-prj/.devenv-state/db-credentials.env）
   [ok] tools-image        natural-enforcement/tools:wt-90e22128
   [ok] workspace-image    natural-enforcement/workspace:wt-90e22128
-  [ok] snapshot-state     快照 51ba81333b95… ↔ workspace sha256:78147786ea22… / tools sha256:d6fb6674882d…
+  [ok] snapshot-state     快照 945ca61b8f6d… ↔ workspace sha256:67dc13b7e9dd… / tools sha256:d6fb6674882d…
   [ok] svc:db             healthy
   [ok] svc:api            healthy
   [warn] legacy-project     发现 #59 前共享项目 natural-enforcement 的遗留容器（不被任何 worktree 管理，不影响隔离语义）；修复：人工确认后 docker rm，资源回收归 #75

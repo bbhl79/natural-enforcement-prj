@@ -1,6 +1,8 @@
 [devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
-[devenv] WARN: 锁门 [stack-90e22128.gate] 持有者已死，清理：/tmp/natural-enforcement-locks/stack-90e22128.gate
-[devenv] workspace 镜像新鲜（快照 51ba81333b95… ↔ sha256:78147786ea22…），跳过重建
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
 Scope: 4 of 5 workspace projects
 packages/contracts typecheck$ tsc -p tsconfig.json --noEmit
 packages/contracts typecheck: Done
@@ -13,41 +15,39 @@ packages/contracts test:unit$ vitest run src
 packages/contracts test:unit: 
 packages/contracts test:unit:  RUN  v5.1.1 /workspace/packages/contracts
 packages/contracts test:unit: 
-packages/contracts test:unit:  ✓ src/contracts.spec.ts (10 tests) 48ms
+packages/contracts test:unit:  ✓ src/contracts.spec.ts (10 tests) 14ms
 packages/contracts test:unit: 
 packages/contracts test:unit:  Test Files  1 passed (1)
 packages/contracts test:unit:       Tests  10 passed (10)
-packages/contracts test:unit:    Start at  09:46:11
-packages/contracts test:unit:    Duration  784ms (import 58%, transform 27%, tests 12%, worker 4%)
+packages/contracts test:unit:    Start at  12:06:47
+packages/contracts test:unit:    Duration  237ms (import 55%, transform 29%, tests 12%, worker 3%)
 packages/contracts test:unit: 
 packages/contracts test:unit: Done
 apps/api test:unit$ vitest run src
 apps/web test:unit$ vitest run
-apps/web test:unit: 
-apps/web test:unit:  RUN  v5.1.1 /workspace/apps/web
-apps/web test:unit: 
 apps/api test:unit: 
 apps/api test:unit:  RUN  v5.1.1 /workspace/apps/api
 apps/api test:unit: 
-apps/api test:unit:  ✓ src/util/geo.spec.ts (3 tests) 16ms
+apps/web test:unit: 
+apps/web test:unit:  RUN  v5.1.1 /workspace/apps/web
+apps/web test:unit: 
+apps/api test:unit:  ✓ src/util/geo.spec.ts (3 tests) 4ms
 apps/api test:unit: 
 apps/api test:unit:  Test Files  1 passed (1)
 apps/api test:unit:       Tests  3 passed (3)
-apps/api test:unit:    Start at  09:46:13
-apps/api test:unit:    Duration  665ms (transform 58%, import 25%, tests 11%, worker 6%, environment 1%)
+apps/api test:unit:    Start at  12:06:47
+apps/api test:unit:    Duration  195ms (transform 65%, import 20%, worker 10%, tests 5%)
 apps/api test:unit: 
 apps/api test:unit: Done
-apps/web test:unit:  ✓ test/format.spec.ts (3 tests) 7ms
-apps/web test:unit:  ✓ test/validate.spec.ts (2 tests) 14ms
-apps/web test:unit:  ✓ test/api-contract.spec.ts (4 tests) 20ms
-apps/web test:unit:  ✓ test/nearby-table.spec.tsx (2 tests) 412ms
-apps/web test:unit:    ✓ NearbyTable（纯展示组件） (2)
-apps/web test:unit:      ✓ 渲染点位名称与格式化距离 355ms
+apps/web test:unit:  ✓ test/format.spec.ts (3 tests) 4ms
+apps/web test:unit:  ✓ test/validate.spec.ts (2 tests) 6ms
+apps/web test:unit:  ✓ test/api-contract.spec.ts (4 tests) 14ms
+apps/web test:unit:  ✓ test/nearby-table.spec.tsx (2 tests) 279ms
 apps/web test:unit: 
 apps/web test:unit:  Test Files  4 passed (4)
 apps/web test:unit:       Tests  11 passed (11)
-apps/web test:unit:    Start at  09:46:13
-apps/web test:unit:    Duration  4.13s (environment 58%, import 22%, setup 10%, tests 5%, transform 4%)
+apps/web test:unit:    Start at  12:06:47
+apps/web test:unit:    Duration  2.14s (environment 47%, import 28%, setup 13%, tests 7%, transform 4%, worker 1%)
 apps/web test:unit: 
 apps/web test:unit: Done
 [devenv] verify 全绿（lint + typecheck + test:unit）

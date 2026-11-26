@@ -1,0 +1,5 @@
+真实 verify 在持租约后被 SIGSTOP（pid=1036016）
+down 前租约槽：1
+down 后租约槽：1
+verify 恢复后 rc=0
+verify 退出后租约槽：0

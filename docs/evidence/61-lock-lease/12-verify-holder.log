@@ -1,0 +1,50 @@
+[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
+[devenv] workspace 镜像新鲜（快照 9c3b995e82fe… ↔ sha256:155d4d474773…），跳过重建
+Scope: 4 of 5 workspace projects
+packages/contracts typecheck$ tsc -p tsconfig.json --noEmit
+packages/contracts typecheck: Done
+apps/web typecheck$ tsc -p tsconfig.json --noEmit
+apps/api typecheck$ tsc -p tsconfig.json --noEmit
+apps/api typecheck: Done
+apps/web typecheck: Done
+Scope: 4 of 5 workspace projects
+packages/contracts test:unit$ vitest run src
+packages/contracts test:unit: 
+packages/contracts test:unit:  RUN  v5.1.1 /workspace/packages/contracts
+packages/contracts test:unit: 
+packages/contracts test:unit:  ✓ src/contracts.spec.ts (10 tests) 12ms
+packages/contracts test:unit: 
+packages/contracts test:unit:  Test Files  1 passed (1)
+packages/contracts test:unit:       Tests  10 passed (10)
+packages/contracts test:unit:    Start at  12:12:12
+packages/contracts test:unit:    Duration  207ms (import 52%, transform 34%, tests 11%, worker 3%)
+packages/contracts test:unit: 
+packages/contracts test:unit: Done
+apps/web test:unit$ vitest run
+apps/api test:unit$ vitest run src
+apps/api test:unit: 
+apps/api test:unit:  RUN  v5.1.1 /workspace/apps/api
+apps/api test:unit: 
+apps/web test:unit: 
+apps/web test:unit:  RUN  v5.1.1 /workspace/apps/web
+apps/web test:unit: 
+apps/api test:unit:  ✓ src/util/geo.spec.ts (3 tests) 4ms
+apps/api test:unit: 
+apps/api test:unit:  Test Files  1 passed (1)
+apps/api test:unit:       Tests  3 passed (3)
+apps/api test:unit:    Start at  12:12:12
+apps/api test:unit:    Duration  176ms (transform 63%, import 21%, worker 8%, tests 8%)
+apps/api test:unit: 
+apps/api test:unit: Done
+apps/web test:unit:  ✓ test/format.spec.ts (3 tests) 3ms
+apps/web test:unit:  ✓ test/validate.spec.ts (2 tests) 6ms
+apps/web test:unit:  ✓ test/api-contract.spec.ts (4 tests) 10ms
+apps/web test:unit:  ✓ test/nearby-table.spec.tsx (2 tests) 247ms
+apps/web test:unit: 
+apps/web test:unit:  Test Files  4 passed (4)
+apps/web test:unit:       Tests  11 passed (11)
+apps/web test:unit:    Start at  12:12:12
+apps/web test:unit:    Duration  1.88s (environment 47%, import 28%, setup 12%, tests 7%, transform 5%, worker 1%)
+apps/web test:unit: 
+apps/web test:unit: Done
+[devenv] verify 全绿（lint + typecheck + test:unit）

@@ -4,4 +4,4 @@ DEPRECATED: The legacy builder is deprecated and will be removed in a future rel
             https://docs.docker.com/go/buildx/
 
 [devenv] lockgen：重生成 pnpm-lock.yaml（新增/变更 workspace 包后必须；生成后请随 git 提交并审查 diff）
-[devenv] ERROR: 独占锁 [lockgen] 被占用（持有者 pid/启动时间：972244 1795686425），等待 2s 超时。锁目录：/tmp/natural-enforcement-locks/lockgen.lock
+[devenv] ERROR: 独占锁 [lockgen] 被占用（持有者 pid/启动时间：1022754 1795694857 1022754.1795694857.15386），等待 2s 超时。锁目录：/tmp/natural-enforcement-locks/lockgen.lock

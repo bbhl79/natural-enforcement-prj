@@ -14,7 +14,16 @@ SUFFIX="$(printf '%s' "$(git -C "$REPO" rev-parse --absolute-git-dir)" | sha256s
 STACK="stack-$SUFFIX"
 RESULTS="$EV/results.tsv"
 HOLDER_PID=""
+REAL_HOLDER=""
 PA=""; PB=""
+
+cleanup() { # 任何路径退出都不留下辅助持有者/临时 worktree
+  [[ -n "${REAL_HOLDER:-}" ]] && kill -9 "$REAL_HOLDER" 2>/dev/null || true
+  [[ -n "${HOLDER_PID:-}" ]] && kill -9 "$HOLDER_PID" 2>/dev/null || true
+  git -C "$REPO" worktree remove --force /tmp/ne-61-evidence-b >/dev/null 2>&1 || true
+  return 0
+}
+trap cleanup EXIT
 
 mkdir -p "$EV"
 : > "$RESULTS"
@@ -55,6 +64,80 @@ stop_holder() { # stop_holder <tag>
   wait "$HOLDER_PID" 2>/dev/null || true
   HOLDER_PID=""
   log "holder $tag stopped"
+}
+
+# 把真实命令 exec 到后台子 shell：exec 后 devenv 的 $$ 即子 shell pid，
+# SIGSTOP 后锁 owner 仍是"活"进程（kill -0 成功），得到确定性的真实持有者窗口。
+writer_exec() { # <名>
+  case "$1" in
+    build)          exec "$DEVENV" build ;;
+    up)             exec "$DEVENV" up ;;
+    down)           exec "$DEVENV" down ;;
+    restart)        exec "$DEVENV" restart ;;
+    web)            exec "$DEVENV" web --port 5199 ;;
+    web-down)       exec "$DEVENV" web --down ;;
+    migrate)        exec "$DEVENV" migrate ;;
+    migrate-create) exec "$DEVENV" migrate:create --name evidence_61_pair ;;
+    *) die_evidence "未知写者命令：$1" ;;
+  esac
+}
+
+die_evidence() { printf '[evidence] ERROR: %s\n' "$*" >&2; exit 1; }
+
+writer_with_timeout() { # <名>：被阻塞侧（带 DEVENV_LOCK_TIMEOUT=1）
+  case "$1" in
+    build)          DEVENV_LOCK_TIMEOUT=1 "$DEVENV" build ;;
+    up)             DEVENV_LOCK_TIMEOUT=1 "$DEVENV" up ;;
+    down)           DEVENV_LOCK_TIMEOUT=1 "$DEVENV" down ;;
+    restart)        DEVENV_LOCK_TIMEOUT=1 "$DEVENV" restart ;;
+    web)            DEVENV_LOCK_TIMEOUT=1 "$DEVENV" web --port 5199 ;;
+    web-down)       DEVENV_LOCK_TIMEOUT=1 "$DEVENV" web --down ;;
+    migrate)        DEVENV_LOCK_TIMEOUT=1 "$DEVENV" migrate ;;
+    migrate-create) DEVENV_LOCK_TIMEOUT=1 "$DEVENV" migrate:create --name evidence_61_pair ;;
+    *) die_evidence "未知写者命令：$1" ;;
+  esac
+}
+
+start_real_holder() { # <tag>：启动真实写者命令并 SIGSTOP 在持锁之后
+  local tag="$1" i
+  rm -f "$EV/10-$tag.holder.log"
+  set +e
+  ( writer_exec "$tag" ) > "$EV/10-$tag.holder.log" 2>&1 &
+  REAL_HOLDER=$!
+  set -e
+  if wait_for_lock 400; then
+    kill -STOP "$REAL_HOLDER" 2>/dev/null || true
+    printf 'holder=%-15s pid=%s stopped-after-lock=yes\n' "$tag" "$REAL_HOLDER" >> "$EV/10-writer-pairs.txt"
+    log "real holder $tag stopped (pid=$REAL_HOLDER)"
+    return 0
+  fi
+  printf 'holder=%-15s FAILED（未在超时内到达 stack 锁）\n' "$tag" >> "$EV/10-writer-pairs.txt"
+  kill -9 "$REAL_HOLDER" 2>/dev/null || true
+  wait "$REAL_HOLDER" 2>/dev/null || true
+  REAL_HOLDER=""
+  return 1
+}
+
+stop_real_holder() { # 杀掉真实持有者（SIGSTOP 中不能正常退出），后续 cleanup 命令清失效锁
+  if [[ -n "$REAL_HOLDER" ]]; then
+    kill -9 "$REAL_HOLDER" 2>/dev/null || true
+    wait "$REAL_HOLDER" 2>/dev/null || true
+    REAL_HOLDER=""
+  fi
+}
+
+cleanup_after_holder() { # <tag>：清 web profile + 失效锁，并恢复 db/api
+  local tag="$1"
+  set +e
+  DEVENV_LOCK_TIMEOUT=10 "$DEVENV" web --down > "$EV/10-cleanup-$tag-webdown.log" 2>&1
+  DEVENV_LOCK_TIMEOUT=10 "$DEVENV" down > "$EV/10-cleanup-$tag-down.log" 2>&1
+  # migrate 持有者的二级 migrate-<wt> 锁也须清理（down 只清 stack 锁）
+  if [[ "$tag" == migrate || "$tag" == migrate-create ]]; then
+    DEVENV_LOCK_TIMEOUT=10 "$DEVENV" migrate > "$EV/10-cleanup-$tag-migrate.log" 2>&1
+  fi
+  "$DEVENV" up > "$EV/10-cleanup-$tag-up.log" 2>&1
+  set -e
+  return 0
 }
 
 wait_for_lease() { # wait_for_lease <秒上限（×0.2）>
@@ -107,7 +190,11 @@ section_02() {
     echo "B verify: start=$b0 end=$b1 rc=$rcb"
     if (( a0 < b1 && b0 < a1 )); then echo "overlap=yes"; else echo "overlap=no"; fi
   } > "$EV/02-readers-parallel.txt"
-  record 02-readers-parallel 0
+  if (( a0 < b1 && b0 < a1 )) && [[ "$rca" == 0 && "$rcb" == 0 ]]; then
+    record 02-readers-parallel 0
+  else
+    record 02-readers-parallel 1
+  fi
   log "02 完成：A rc=$rca B rc=$rcb"
 }
 
@@ -177,7 +264,7 @@ section_05() {
   run_log 05-b-status "$BDEVENV" --json status
   git -C "$REPO" worktree remove --force "$B" > "$EV/05-worktree-remove.log" 2>&1
   git -C "$REPO" worktree prune
-  record 05-cross-worktree 0
+  log "05 完成（逐条结果见 results.tsv）"
 }
 
 section_06() {
@@ -239,6 +326,81 @@ section_08() {
   stop_holder live-lease
 }
 
+section_10() {
+  log "10 写者↔写者逐对矩阵（真实写者命令 + SIGSTOP 于持锁后）"
+  : > "$EV/10-writer-pairs.txt"
+  local writers=(build up down restart web web-down migrate migrate-create)
+  local h b
+  for h in "${writers[@]}"; do
+    if ! start_real_holder "$h"; then
+      cleanup_after_holder "$h"
+      continue
+    fi
+    for b in "${writers[@]}"; do
+      [[ "$b" == "$h" ]] && continue
+      run_log "10-${h}-vs-${b}" writer_with_timeout "$b"
+    done
+    stop_real_holder
+    cleanup_after_holder "$h"
+    printf 'cleanup holder=%-15s stack-lock-present=%s\n' "$h" \
+      "$([[ -d "$LOCKROOT/$STACK.lock" ]] && echo yes || echo no)" >> "$EV/10-writer-pairs.txt"
+  done
+  git -C "$REPO" status --porcelain > "$EV/10-git-status.txt"
+  log "10 完成"
+}
+
+section_11() {
+  log "11 真实慢构建存活：锁不被误清（非替代持有者）"
+  local f="$EV/11-live-real-build.txt"
+  : > "$f"
+  ( exec "$DEVENV" build ) > "$EV/11-build-holder.log" 2>&1 &
+  REAL_HOLDER=$!
+  if wait_for_lock 400; then
+    kill -STOP "$REAL_HOLDER" 2>/dev/null || true
+    echo "真实 build 在持锁后被 SIGSTOP（pid=$REAL_HOLDER）" >> "$f"
+    echo "down 前 stack-lock 在场：$([[ -d "$LOCKROOT/$STACK.lock" ]] && echo yes || echo no)" >> "$f"
+    run_log 11-down-vs-live-real-build env DEVENV_LOCK_TIMEOUT=2 "$DEVENV" down
+    echo "down 后 stack-lock 仍在：$([[ -d "$LOCKROOT/$STACK.lock" ]] && echo yes || echo no)" >> "$f"
+    kill -CONT "$REAL_HOLDER" 2>/dev/null || true
+    set +e
+    wait "$REAL_HOLDER"; local rc=$?
+    set -e
+    echo "build 恢复后 rc=$rc" >> "$f"
+    echo "build 退出后 stack-lock 仍在：$([[ -d "$LOCKROOT/$STACK.lock" ]] && echo yes || echo no)" >> "$f"
+    record 11-live-real-build 0
+  else
+    echo "ERROR：未在超时内观察到 stack lock" >> "$f"
+    record 11-live-real-build 1
+  fi
+  REAL_HOLDER=""
+}
+
+section_12() {
+  log "12 真实测试存活：租约不被误清（非替代持有者）"
+  local f="$EV/12-live-real-verify.txt"
+  : > "$f"
+  ( exec "$DEVENV" verify ) > "$EV/12-verify-holder.log" 2>&1 &
+  REAL_HOLDER=$!
+  if wait_for_lease 400; then
+    kill -STOP "$REAL_HOLDER" 2>/dev/null || true
+    echo "真实 verify 在持租约后被 SIGSTOP（pid=$REAL_HOLDER）" >> "$f"
+    echo "down 前租约槽：$(find "$LOCKROOT/$STACK.lease" -maxdepth 2 -name owner -type f 2>/dev/null | wc -l | tr -d ' ')" >> "$f"
+    run_log 12-down-vs-live-real-verify env DEVENV_LOCK_TIMEOUT=2 "$DEVENV" down
+    echo "down 后租约槽：$(find "$LOCKROOT/$STACK.lease" -maxdepth 2 -name owner -type f 2>/dev/null | wc -l | tr -d ' ')" >> "$f"
+    kill -CONT "$REAL_HOLDER" 2>/dev/null || true
+    set +e
+    wait "$REAL_HOLDER"; local rc=$?
+    set -e
+    echo "verify 恢复后 rc=$rc" >> "$f"
+    echo "verify 退出后租约槽：$(find "$LOCKROOT/$STACK.lease" -maxdepth 2 -name owner -type f 2>/dev/null | wc -l | tr -d ' ')" >> "$f"
+    record 12-live-real-verify 0
+  else
+    echo "ERROR：未在超时内观察到租约槽" >> "$f"
+    record 12-live-real-verify 1
+  fi
+  REAL_HOLDER=""
+}
+
 section_09() {
   log "09 收尾：栈恢复与终态"
   run_log 09-up "$DEVENV" up
@@ -253,7 +415,7 @@ summary() {
     printf '%-40s %s\n' "file" "rc"
     while IFS=$'\t' read -r f rc; do printf '%-40s %s\n' "$f" "$rc"; done < "$RESULTS"
     echo
-    echo "expected rc=6 files:"
+    echo "observed rc=6 files:"
     awk -F'\t' '$2=="rc=6"{print $1}' "$RESULTS"
   } > "$EV/90-results.txt"
   log "汇总写入 $EV/90-results.txt"
@@ -261,7 +423,7 @@ summary() {
 
 SECTIONS="${*:-all}"
 if [[ "$SECTIONS" == "all" ]]; then
-  SECTIONS="00 02 03 04 05 06 07 08 09"
+  SECTIONS="00 02 03 04 05 06 07 08 10 11 12 09"
 fi
 for s in $SECTIONS; do
   "section_$s"
