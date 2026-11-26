@@ -20,13 +20,13 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 启动 db → 迁移幂等应用 → api，等待真实健康终态（幂等） | `devenv up` | 0 或 3/4/5/6 |
 | 停止（连带清掉不在 compose 文件中的本项目容器；--volumes 再清数据卷；仅本 worktree 项目范围；不含 profile 隔离的 web——用 `web --down`） | `devenv down [--volumes]` | 0 或 3/6 |
 | 重启 | `devenv restart [svc...]` | 0 或 3/6 |
-| 启动前端并发布宿主端口（零端口不变量的唯一例外） | `devenv web [--port N] [--down]` | 0 或 2/3/5 |
+| 启动前端并发布宿主端口（零端口不变量的唯一例外；up 与 --down 路径均持栈排他锁） | `devenv web [--port N] [--down]` | 0 或 2/3/5/6 |
 | 容器状态 | `devenv ps [-a]` | 0 或 3 |
 | 跟随日志（透传原始流） | `devenv logs [svc] [-f] [--tail N]` | 0 或 3 或子进程码 |
 | 容器内执行（默认 tools；透传原始流） | `devenv exec [svc] -- cmd...` | 0 或 2/3 或子进程码 |
 | 交互 shell（默认 tools；透传原始流） | `devenv shell [svc]` | 0 或 3 或子进程码 |
 | 单元+集成测试（需先 up；连真实 PostGIS；运行期持共享栈使用租约） | `devenv test [pattern...]` | 0 或 3/4/6 |
-| 仅单元测试（零基础设施；运行期持共享栈使用租约） | `devenv test:unit` | 0 或 3/4/6 |
+| 仅单元测试（零数据库基础设施；仍使用 tools 容器/项目网络，运行期持共享栈使用租约） | `devenv test:unit` | 0 或 3/4/6 |
 | ESLint（运行期持共享栈使用租约） | `devenv lint` | 0 或 3/4/6 |
 | tsc --noEmit（运行期持共享栈使用租约） | `devenv typecheck` | 0 或 3/4/6 |
 | 聚合质量门：lint + typecheck + test:unit（本地与 CI 同一入口；运行期持共享栈使用租约） | `devenv verify` | 0 或 3/4/6 |
@@ -151,7 +151,9 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
   列出持有者 pid/启动时间/槽与修复线索。`DEVENV_LOCK_TIMEOUT=<秒>` 显式覆盖
   等待上限（测试/故障演练用；日常不设）。
 - **机器级锁不参与租约**：prefetch/lockgen 只协调跨 worktree 的共享资源，
-  不取栈使用租约；租约仅协调 per-worktree 栈。
+  不取栈使用租约；租约仅协调 per-worktree 栈。prefetch 锁覆盖 `devenv prefetch`
+  的显式拉取；构建期 Dockerfile `FROM` 触发的隐式拉取由引擎按内容寻址去重，
+  不在本锁范围内（构建仍受 per-worktree 栈锁与 #58 不可变绑定保护）。
 - **可见性**：`devenv status` 报告锁目录条目与租约槽（`--json` 终值含
   `leases` 字段；stale 只标注，不清理——status 保持只读）。
 
@@ -178,9 +180,9 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
   注入。口令随 worktree 状态保留：down/up 周期稳定（数据卷按初始口令初始化，
   换装必炸）；`down --volumes` 重建空库仍用同一口令（凭据是 worktree 身份不是数据）。
   凭据文件损坏（非 32 hex）→ exit 3 并内嵌修复命令。
-- **锁分派**：stack-<wt>/migrate-<wt> per-worktree；lockgen 机器级（唯一跨
-  worktree 共享的可变资源是 ne-lockgen:tmp 标签 + 同名遗留容器清理）。
-  migrate:create 容器名 `ne-migrate-create-<wt>`（机器级唯一）。
+- **锁分派**：stack-<wt>/migrate-<wt> per-worktree；机器级 lockgen 与 prefetch
+  （跨 worktree 共享的 lockgen 靶容器/标签与基础镜像拉取；栈使用租约只协调
+  per-worktree 栈）。migrate:create 容器名 `ne-migrate-create-<wt>`（机器级唯一）。
 - **遗留共享项目**：#59 前所有 worktree 共用 compose 项目 `natural-enforcement`
   （容器/卷/网络）。#59 后该项目不被任何 worktree 管理：down 不触碰，doctor
   发现遗留容器报 warn（exit 仍 0）；遗留卷/镜像回收归 #75（宁多留勿误删）。

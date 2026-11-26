@@ -79,8 +79,15 @@ case "$cmd" in
         if [[ "$a" == "run" ]]; then has_run=1; fi
       done
       if (( has_run )); then
-        if find "${DEVENV_LOCK_ROOT:-/tmp/natural-enforcement-locks}" -maxdepth 3 \
-               -path '*.lease/*/owner' -type f 2>/dev/null | grep -q .; then
+        # 校验本 worktree 自己的租约目录（不是任意 stray lease）
+        lease_root="${DEVENV_LOCK_ROOT:-/tmp/natural-enforcement-locks}"
+        if [[ -n "${DEVENV_WORKTREE_ID:-}" ]]; then
+          wt_hash="$(printf '%s' "$DEVENV_WORKTREE_ID" | sha256sum | awk '{print $1}' | cut -c1-8)"
+          lease_dir="$lease_root/stack-$wt_hash.lease"
+        else
+          lease_dir="$lease_root"
+        fi
+        if find "$lease_dir" -maxdepth 2 -name owner -type f 2>/dev/null | grep -q .; then
           printf 'stack-lease-held\n' >> "$STATE/lease-check.txt"
         else
           printf 'stack-lease-MISSING\n' >> "$STATE/lease-check.txt"

@@ -46,25 +46,25 @@ devenv — 工程基座唯一入口（命令面权威文档：devenv/COMMANDS.md
 
 工程栈（一切构建/启停/观察/执行的唯一入口；禁止直接操作 compose）：
   doctor                    一键体检（端点/引擎/矩阵/锁文件/worktree 身份与凭据状态/镜像/服务）；退出码=可开工与否
-  prefetch                  预取镜像锁中的上游镜像（分阶段、有进度/超时、可中断续跑）
+  prefetch                  预取镜像锁中的上游镜像（分阶段、有进度/超时、可中断续跑；机器级拉取锁）
   build [--lockgen]         固定快照构建（tools + install + turbo build；幂等；--lockgen 强制重生成 lockfile）
   up                        启动 db/api 并等待真实健康终态（幂等）
   down [--volumes]          停止（--volumes 连带清数据卷）
   restart [svc...]          重启（默认全部）
-  web [--port N] [--down]   启动前端并发布宿主端口（零端口不变量的唯一例外）
+  web [--port N] [--down]   启动前端并发布宿主端口（零端口不变量唯一例外；与栈命令互斥）
   ps [-a]                   容器状态（--json 输出 JSONL）
   logs [svc] [-f] [--tail N] 跟随日志（透传原始流）
   exec [svc] -- cmd...      在容器内执行（默认 tools；透传原始流）
   shell [svc]               交互 shell（默认 tools；透传原始流）
-  test [pattern...]         单元+集成测试（需先 up；连真实 PostGIS）
-  test:unit                 仅单元测试（零基础设施）
-  lint / typecheck          ESLint / tsc --noEmit
-  verify                    聚合质量门：lint + typecheck + test:unit（本地与 CI 同一入口）
+  test [pattern...]         单元+集成测试（需先 up；连真实 PostGIS；运行期持共享栈租约）
+  test:unit                 仅单元测试（零数据库基础设施；运行期持共享栈租约）
+  lint / typecheck          ESLint / tsc --noEmit（运行期持共享栈租约）
+  verify                    聚合质量门：lint + typecheck + test:unit（运行期持共享栈租约）
   migrate                   应用全部 pending 迁移到 dev 库（prisma migrate deploy）
   migrate:create --name N   生成空迁移待编辑（prisma migrate dev --create-only）
-  seed                      幂等种子数据
+  seed                      幂等种子数据（运行期持共享栈租约）
   wait <svc> [--timeout N]  等待服务健康终态（默认 60s）
-  status                    人读总览（容器+锁+镜像）
+  status                    人读总览（容器+锁+租约+镜像）
   images [--verify]         查看镜像锁与生效 DB 镜像（含覆盖来源）/ 校验运行态 digest 漂移
 
 GitHub App 认证入口（身份：GitHub App，非个人账号）：
@@ -551,7 +551,7 @@ cmd_status() {
     [[ -n "$leases" ]] || leases="none"
     final ok 0 project="$PROJECT_NAME" worktree_suffix="$WT_SUFFIX" worktree_source="$WT_IDENTITY_SOURCE" \
       db_credentials="$cred_origin" \
-      locks="$(ls -1 "$LOCK_ROOT" 2>/dev/null | paste -sd, -)" \
+      locks="$(ls -1 "$LOCK_ROOT" 2>/dev/null | grep '\.lock$' | paste -sd, - || true)" \
       leases="$leases" \
       node_image="$NODE_IMAGE" db_image="$DB_IMAGE_EFFECTIVE" db_image_source="$DB_IMAGE_SOURCE" \
       snapshot_hash="${STATE_SNAPSHOT_HASH:-none}" workspace_image_id="${STATE_IMAGE_ID:-none}" \
@@ -562,7 +562,7 @@ cmd_status() {
   note "容器（本项目）："
   cmd_ps
   note "锁（$LOCK_ROOT，机器级命名空间；本 worktree 锁名 stack-$WT_SUFFIX / migrate-$WT_SUFFIX，机器级 lockgen/prefetch）："
-  ls -1 "$LOCK_ROOT" 2>/dev/null | sed 's/^/  /' >&2 || true
+  ls -1 "$LOCK_ROOT" 2>/dev/null | grep '\.lock$' | sed 's/^/  /' >&2 || true
   note "栈使用租约（#61；active=持有进程存活，stale=已死待下次取得清理）："
   local lease_lines=""
   lease_lines="$(lease_report_all)"

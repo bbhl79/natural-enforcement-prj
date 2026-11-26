@@ -13,8 +13,8 @@
 #      慢构建存活时锁不被误清
 #   7. 输出协议：进度走 stderr，stdout 只放 JSON；未知子命令 exit 2
 #   8. DEVENV_DB_IMAGE 覆盖生效并报告来源；非法格式 exit 2
-#   9. 共享栈使用租约（#61）：多个读者并行、与排他锁双向互斥、失效租约清理、
-#      kill 持有者与存活持有者两个故障反例
+#   9. 共享栈使用租约（#61）：多个读者并行、与排他锁双向互斥、失效租约清理
+#      （写者与读者两条路径）、空 owner 宽限、kill 持有者与存活持有者两个故障反例
 # ============================================================================
 set -Eeuo pipefail
 
@@ -308,6 +308,32 @@ kill -9 "$LOCK_HOLDER" 2>/dev/null; wait "$LOCK_HOLDER" 2>/dev/null || true
 ( trap 'lock_release_all' EXIT; lock_acquire killed 3 ) \
   && pass "T21 kill 持锁进程后失效锁被清理、后续可取得" \
   || fail "T21" "kill 后未恢复"
+
+# T22 读者登记时清理失效租约槽（#61 评审修复：不只写者路径清理）
+mkdir -p "$DEVENV_LOCK_ROOT/reader-clean.lease/99999999.0"
+echo "99999999 $(date +%s)" > "$DEVENV_LOCK_ROOT/reader-clean.lease/99999999.0/owner"
+( trap 'lease_release_all; lock_release_all' EXIT; lease_acquire reader-clean 5 ) \
+  && pass "T22 读者登记时清理失效租约槽并可取得" || fail "T22" "读者路径未清理失效槽"
+[[ ! -d "$DEVENV_LOCK_ROOT/reader-clean.lease/99999999.0" ]] \
+  && pass "T22 失效租约槽被读者路径清理" || fail "T22" "失效槽残留"
+
+# T23 owner 空文件给宽限，不立即误删；活 pid 出现后仍等待 → exit 6
+mkdir -p "$DEVENV_LOCK_ROOT/empty.lock"
+: > "$DEVENV_LOCK_ROOT/empty.lock/owner"
+(
+  sleep 0.3
+  printf '%s %s\n' "$$" "$(date +%s)" > "$DEVENV_LOCK_ROOT/empty.lock/owner"
+) &
+EMPTY_WRITER=$!
+set +e
+( lock_acquire empty 1 ) 2>/dev/null
+rc=$?
+set -e
+wait "$EMPTY_WRITER" 2>/dev/null || true
+[[ "$rc" == 6 ]] && pass "T23 空 owner 宽限后识别活锁（exit 6）" \
+  || fail "T23" "rc=$rc（期望 6；空 owner 被误判失效）"
+[[ -d "$DEVENV_LOCK_ROOT/empty.lock" ]] && pass "T23 活锁未被误删" || fail "T23" "活锁目录被误删"
+rm -rf "$DEVENV_LOCK_ROOT/empty.lock"
 
 # ---------------------------------------------------------------------------
 echo "------------------------------------------------------------"
