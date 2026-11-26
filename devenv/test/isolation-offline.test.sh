@@ -665,7 +665,7 @@ tail -1 "$SANDBOX/w2.out" | jq -e '.port == "8080" and .url == "http://localhost
 run w2b env DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-w2b" "$DEVENV" web --port abc
 [[ "$RC" == 2 ]] && pass "W2b --port 非数字 exit 2" || fail "W2b" "rc=$RC（期望 2）"
 run w2c env DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-w2b" "$DEVENV" web --port 70000
-[[ "$RC" == 2 ]] && pass "W2b --port 超范围 exit 2" || fail "W2b" "rc=$RC（期望 2）"
+[[ "$RC" == 2 ]] && pass "W2c --port 超范围 exit 2" || fail "W2c" "rc=$RC（期望 2）"
 
 # T-W3 显式端口被其它 worktree 容器占用：exit 3，错误含服务/端口/占用者/内嵌修复命令
 run w3 env MOCK_COMPOSE_WEB_FAIL=1 MOCK_FAIL_PORT=8080 \
@@ -696,7 +696,8 @@ if command -v python3 >/dev/null 2>&1; then
   grep -q '非容器进程' "$SANDBOX/w5.err" \
     && pass "W5 错误区分非容器占用者" || fail "W5" "err=$(tail -2 "$SANDBOX/w5.err")"
 else
-  pass "W5 跳过（无 python3；非容器占用者分支由实机证据覆盖）"
+  # python3 不在宿主白名单内（仅作测试 fixture）：白名单纯净化宿主上本分支由实机证据覆盖
+  printf 'SKIP: W5 非容器进程占用（无 python3；分支由实机证据 docs/evidence/62-web-concurrency 覆盖）\n'
 fi
 
 # T-P1 exec --json：原始流分流 stderr，stdout 只放 JSON（引擎事件 + 终值元数据）
@@ -773,7 +774,7 @@ tail -1 "$SANDBOX/s2.out" | jq -e '.web_port == "none"' >/dev/null 2>&1 \
   && pass "S2 web 未运行时如实报告 none" || fail "S2" "终值：$(tail -1 "$SANDBOX/s2.out")"
 
 # T-C1 零宿主端口不变量静态守卫：compose.yaml 仅 web 服务发布端口
-C1_OWNERS="$(awk '/^  [a-z0-9]+:/{svc=$1} /ports:/{print svc}' "$MINI/devenv/compose.yaml")"
+C1_OWNERS="$(awk '/^  [a-z0-9]+:/{svc=$1} /^    ports:$/{print svc}' "$MINI/devenv/compose.yaml")"
 [[ "$C1_OWNERS" == "web:" ]] \
   && pass "C1 compose 仅 web 发布宿主端口（调试零端口不变量）" \
   || fail "C1" "ports: 出现在：$C1_OWNERS"

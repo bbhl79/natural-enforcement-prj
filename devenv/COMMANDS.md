@@ -20,7 +20,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 启动 db → 迁移幂等应用 → api，等待真实健康终态（幂等） | `devenv up` | 0 或 3/4/5/6 |
 | 停止（连带清掉不在 compose 文件中的本项目容器；--volumes 再清数据卷；仅本 worktree 项目范围；不含 profile 隔离的 web——用 `web --down`） | `devenv down [--volumes]` | 0 或 3/6 |
 | 重启 | `devenv restart [svc...]` | 0 或 3/6 |
-| 启动前端并发布宿主端口（零端口不变量的唯一例外；省略 --port 由引擎运行时分配空闲端口并回读实际端口进终值/status，--port N 显式固定发布；up 与 --down 路径均持栈排他锁） | `devenv web [--port N] [--down]` | 0 或 2/3/5/6 |
+| 启动前端并发布宿主端口（零端口不变量的唯一例外；省略 --port 由引擎运行时分配空闲端口并回读实际端口进终值/status，--port N 显式固定发布；up 与 --down 路径均持栈排他锁） | `devenv web [--port N] [--down]` | 0 或 2/3/4/5/6 |
 | 容器状态（人读表含发布端口） | `devenv ps [-a]` | 0 或 3 |
 | 跟随日志（透传原始流） | `devenv logs [svc] [-f] [--tail N]` | 0 或 3 或子进程码 |
 | 容器内执行（默认 tools；透传原始流） | `devenv exec [svc] -- cmd...` | 0 或 2/3 或子进程码 |
@@ -79,8 +79,10 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 3. **引擎报告**：每条工程栈命令执行前解析并报告实际端点 + 引擎身份/版本/架构
    （stderr 人类行 + `--json` 时 `{"event":"engine",...}` JSONL 事件）。
 
-> 硬错误路径（die：锁冲突 6、快照采集拒绝 4、启动核对失败 4、环境未就绪 3 等）
-> 以 stderr `ERROR` 行 + 退出码收尾，不发终值事件——与既有锁冲突路径同口径。
+> 硬错误路径（die：锁冲突 6、快照采集拒绝 4、启动核对失败 4、环境未就绪 3——含
+> web 显式端口被占用等）以 stderr `ERROR` 行 + 退出码收尾，不发终值事件——与既有
+> 锁冲突路径同口径。结构化命令的**步骤/任务失败**（run_step/run_task 路径，exit 4）
+> 例外：先补发终值事件 `status:"failed"`（exitCode=4、taskRc=子进程码）再以退出码收尾。
 
 ## 引擎端点解析（Spec-工程基座 支持环境节）
 

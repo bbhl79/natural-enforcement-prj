@@ -305,13 +305,23 @@ ensure_fresh_workspace() {
   build_workspace_from_snapshot "$s"
 }
 
+# 本 worktree 项目内某服务的容器 ID（--all 含停止态；多容器取首个；无则空）。
+# 不用 | head -1：pipefail 下 SIGPIPE 竞态——先捕获再截首行。
+svc_container_id() { # <svc> [--all]
+  local svc="$1"
+  local -a extra=()
+  [[ "${2:-}" == "--all" ]] && extra=(-a)
+  local c
+  c="$(docker ps "${extra[@]}" --filter "label=com.docker.compose.project=$PROJECT_NAME" \
+      --filter "label=com.docker.compose.service=$svc" --format '{{.ID}}')"
+  printf '%s' "${c%%$'\n'*}"
+}
+
 # 启动核对（#58）：实际运行容器必须使用本次绑定的不可变镜像标识——
 # 同 worktree 可变 tag 被覆盖也不影响已绑定的运行产物。
 verify_svc_image() { # $1=svc
   local svc="$1" c img
-  c="$(docker ps --filter "label=com.docker.compose.project=$PROJECT_NAME" \
-      --filter "label=com.docker.compose.service=$svc" --format '{{.ID}}')"
-  c="${c%%$'\n'*}"
+  c="$(svc_container_id "$svc")"
   [[ -n "$c" ]] || die 4 "启动核对失败：服务 [$svc] 无运行中容器"
   img="$(docker inspect "$c" --format '{{.Image}}')"
   if [[ "$img" != "$WS_IMAGE_EFFECTIVE" ]]; then
@@ -330,13 +340,12 @@ verify_svc_image() { # $1=svc
 # 调用方按场景决定 die 与否——status 只读报告 none，web 启动后必须可读）。
 web_actual_port() {
   local c line
-  c="$(docker ps --filter "label=com.docker.compose.project=$PROJECT_NAME" \
-      --filter "label=com.docker.compose.service=web" --format '{{.ID}}' 2>/dev/null)"
-  c="${c%%$'\n'*}"
+  c="$(svc_container_id web)"
   [[ -n "$c" ]] || return 0
-  line="$(docker port "$c" 4173/tcp 2>/dev/null | head -1)" || line=""
+  line="$(docker port "$c" 4173/tcp 2>/dev/null)" || line=""
+  line="${line%%$'\n'*}"  # 可能多行（0.0.0.0/[::]），取首行；不用 | head -1（SIGPIPE 竞态）
   [[ -n "$line" ]] || return 0
-  # 输出形如 0.0.0.0:49152（或 [::]:49152）——取末段端口
+  # 行形如 0.0.0.0:49152（或 [::]:49152）——取末段端口
   printf '%s' "${line##*:}"
 }
 
@@ -364,17 +373,13 @@ web_bind_failure_diagnose() { # <显式端口，空=自动>；确认占用时 di
 }
 
 svc_running() {
-  [[ -n "$(docker ps --filter "label=com.docker.compose.project=$PROJECT_NAME" \
-      --filter "label=com.docker.compose.service=$1" --format '{{.Names}}')" ]]
+  [[ -n "$(svc_container_id "$1")" ]]
 }
 
 svc_healthy() {
   # podman 兼容层的 docker ps Status 不带 "(healthy)" 后缀——以 inspect 的 Health.Status 为准
-  # （不用 | head -1：pipefail 下 SIGPIPE 竞态；先捕获再截首行）
   local c
-  c="$(docker ps -a --filter "label=com.docker.compose.project=$PROJECT_NAME" \
-      --filter "label=com.docker.compose.service=$1" --format '{{.Names}}')"
-  c="${c%%$'\n'*}"
+  c="$(svc_container_id "$1" --all)"
   [[ -n "$c" ]] && [[ "$(docker inspect "$c" --format '{{.State.Health.Status}}' 2>/dev/null)" == "healthy" ]]
 }
 
