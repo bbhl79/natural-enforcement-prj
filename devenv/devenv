@@ -361,11 +361,27 @@ cmd_shell() {
 }
 
 run_task() { # $@ = 容器内命令；任务失败 → 退出码 4（终值 exitCode=4，子进程码入 taskRc）
+  # 防御 #56 起潜伏的真 bug：宿主函数名（run_gate）曾被直接传进容器执行。
+  # 容器内没有宿主 bash 函数——这类调用在本机响亮失败，而不是离线 mock 下被吞。
+  if declare -F "${1:-}" >/dev/null 2>&1; then
+    die 2 "内部错误：run_task 只接受容器内可执行命令，收到宿主函数名：$1（质量门请经 run_gate_task 调用）"
+  fi
   # 子进程原始输出分流到 stderr（--json 时 stdout 只放结果流，Spec §4 输出协议）
   local rc=0
   in_tools "$@" >&2 || rc=$?
   if (( rc )); then
     final failed 4 taskRc="$rc" hint="任务命令退出码 $rc（完整输出见上方 stderr）"
+    exit 4
+  fi
+}
+
+# 质量门执行：run_gate 是宿主函数（内部自行 in_tools），直接调用——失败映射
+# exit 4，与 run_task 同口径（防漂移：lint/typecheck/test:unit 与 verify 共用 run_gate）
+run_gate_task() {
+  local gate="$1" rc=0
+  run_gate "$gate" || rc=$?
+  if (( rc )); then
+    final failed 4 taskRc="$rc" hint="质量门 $gate 退出码 $rc（完整输出见上方 stderr）"
     exit 4
   fi
 }
@@ -393,9 +409,9 @@ cmd_test() {
   final ok 0 scope=all
 }
 
-cmd_test_unit() { ensure_fresh_workspace; run_task run_gate test:unit; final ok 0 scope=unit; }
-cmd_lint()      { ensure_fresh_workspace; run_task run_gate lint; final ok 0; }
-cmd_typecheck() { ensure_fresh_workspace; run_task run_gate typecheck; final ok 0; }
+cmd_test_unit() { ensure_fresh_workspace; run_gate_task test:unit; final ok 0 scope=unit; }
+cmd_lint()      { ensure_fresh_workspace; run_gate_task lint; final ok 0; }
+cmd_typecheck() { ensure_fresh_workspace; run_gate_task typecheck; final ok 0; }
 
 # verify：聚合确定性质量门（Spec §6：lint + typecheck + test:unit；e2e 生命周期校验归
 # Spec-e2e 体系，本票不含）。本地与 CI 同一入口同一校验器。各门独立收集结果，
