@@ -17,6 +17,8 @@
 #   7. doctor：报告 worktree 身份；#59 前共享项目遗留容器 → warn（exit 仍 0）
 #   8. 质量门容器命令回归：test:unit 的容器命令是 pnpm…而非宿主函数 run_gate
 #      （#56 起潜伏 bug 的守卫——离线 mock 曾使其不可见）
+#   9. 锁与栈使用租约（#61）：租约 per-worktree；真实入口读者命令持共享租约、
+#      与排他命令互斥；prefetch 机器级拉取锁跨 worktree 生效；web --down 持栈锁
 # ============================================================================
 set -Eeuo pipefail
 
@@ -69,6 +71,22 @@ case "$cmd" in
     [[ "${MOCK_ENGINE_DOWN:-}" == "1" ]] && exit 1
     cat "${MOCK_DOCKER_VERSION_JSON:?}" ;;
   compose)
+    # 读者命令持有共享栈使用租约的在场断言（#61）：run 容器创建时租约槽须存在
+    # （compose 调用带 -p/-f 前置参数，run 不在固定位置——逐参扫描）
+    if [[ "${MOCK_ASSERT_STACK_LEASE:-}" == "1" ]]; then
+      has_run=0
+      for a in "$@"; do
+        if [[ "$a" == "run" ]]; then has_run=1; fi
+      done
+      if (( has_run )); then
+        if find "${DEVENV_LOCK_ROOT:-/tmp/natural-enforcement-locks}" -maxdepth 3 \
+               -path '*.lease/*/owner' -type f 2>/dev/null | grep -q .; then
+          printf 'stack-lease-held\n' >> "$STATE/lease-check.txt"
+        else
+          printf 'stack-lease-MISSING\n' >> "$STATE/lease-check.txt"
+        fi
+      fi
+    fi
     {
       printf 'compose args:'
       for a in "$@"; do printf ' %q' "$a"; done
@@ -76,6 +94,16 @@ case "$cmd" in
         "${WORKSPACE_IMAGE:-}" "${DB_IMAGE:-}" "${DB_PASSWORD:-}" "${WEB_PORT:-}"
     } >> "$STATE/calls.log"
     [[ "${1:-}" == "version" ]] && echo "2.40.3"
+    exit 0 ;;
+  pull)
+    # 机器级基础镜像拉取锁（#61）：pull 期间 prefetch 锁须在场
+    if [[ "${MOCK_ASSERT_PREFETCH_LOCK:-}" == "1" ]]; then
+      if [[ -d "${DEVENV_LOCK_ROOT:-/tmp/natural-enforcement-locks}/prefetch.lock" ]]; then
+        printf 'prefetch-lock-held\n' >> "$STATE/prefetch-lock-check.txt"
+      else
+        printf 'prefetch-lock-MISSING\n' >> "$STATE/prefetch-lock-check.txt"
+      fi
+    fi
     exit 0 ;;
   build)
     tag=""; snap=""; target=""; base=""; toolshash=""; bargs=""
@@ -407,6 +435,117 @@ if [[ "$RC" == 0 ]] \
 else
   fail "I9" "rc=$RC log=$(cat "$MOCK_DOCKER_STATE/calls.log")"
 fi
+
+# ---------------------------------------------------------------------------
+# 9. 锁与栈使用租约（#61）
+# ---------------------------------------------------------------------------
+B_SUFFIX="${B_PROJ##*-}"
+
+# I10 租约 per-worktree：alpha 活跃租约只阻塞 alpha 排他命令，不阻塞 beta
+sleep 30 &
+I10_HOLDER=$!
+mkdir -p "$DEVENV_LOCK_ROOT/stack-$A_SUFFIX.lease/$I10_HOLDER.0"
+printf '%s %s\n' "$I10_HOLDER" "$(date +%s)" > "$DEVENV_LOCK_ROOT/stack-$A_SUFFIX.lease/$I10_HOLDER.0/owner"
+wt_bash wt-beta 'REPO_ROOT="$1"; source "$1/devenv/lib/output.sh"; source "$1/devenv/lib/lock.sh"; source "$1/devenv/lib/snapshot.sh"; source "$1/devenv/lib/stack.sh"; REPO_ROOT="$1"; lock_acquire "stack-$WT_SUFFIX" 5' \
+  && pass "I10 租约 per-worktree：beta 排他锁不被 alpha 租约阻塞" \
+  || fail "I10" "B 被 alpha 租约阻塞"
+set +e
+wt_bash wt-alpha 'REPO_ROOT="$1"; source "$1/devenv/lib/output.sh"; source "$1/devenv/lib/lock.sh"; source "$1/devenv/lib/snapshot.sh"; source "$1/devenv/lib/stack.sh"; REPO_ROOT="$1"; lock_acquire "stack-$WT_SUFFIX" 2' 2>/dev/null
+I10_RC=$?
+set -e
+kill -9 "$I10_HOLDER" 2>/dev/null; wait "$I10_HOLDER" 2>/dev/null || true
+rm -rf "$DEVENV_LOCK_ROOT/stack-$A_SUFFIX.lease"
+[[ "$I10_RC" == 6 ]] \
+  && pass "I10 alpha 排他锁被本 worktree 租约阻塞（exit 6）" || fail "I10" "alpha rc=$I10_RC（期望 6）"
+
+# I11 机器级 prefetch 锁：真实入口 pull 期间锁在场且退出后释放
+: > "$MOCK_DOCKER_STATE/calls.log"
+rm -f "$MOCK_DOCKER_STATE/prefetch-lock-check.txt"
+run i11 env MOCK_ASSERT_PREFETCH_LOCK=1 DEVENV_STATE_DIR="$SANDBOX/state-pf" "$DEVENV" prefetch
+[[ "$RC" == 0 ]] && pass "I11 prefetch 成功" || fail "I11" "rc=$RC err=$(tail -3 "$SANDBOX/i11.err")"
+[[ "$(grep -c 'prefetch-lock-held' "$MOCK_DOCKER_STATE/prefetch-lock-check.txt" 2>/dev/null || true)" == 2 ]] \
+  && pass "I11 两个镜像 pull 全程持机器级 prefetch 锁" \
+  || fail "I11" "锁未在场：$(cat "$MOCK_DOCKER_STATE/prefetch-lock-check.txt" 2>/dev/null)"
+[[ ! -d "$DEVENV_LOCK_ROOT/prefetch.lock" ]] \
+  && pass "I11 prefetch 退出后机器级锁释放" || fail "I11" "锁目录残留"
+
+# I11b 跨 worktree：机器级 prefetch 锁在另一 worktree 同样生效（等待超时 exit 6）
+sleep 30 &
+PF_HOLDER=$!
+mkdir -p "$DEVENV_LOCK_ROOT/prefetch.lock"
+printf '%s %s\n' "$PF_HOLDER" "$(date +%s)" > "$DEVENV_LOCK_ROOT/prefetch.lock/owner"
+run i11b env DEVENV_LOCK_TIMEOUT=2 DEVENV_WORKTREE_ID="wt-beta" DEVENV_STATE_DIR="$SANDBOX/state-pf" "$DEVENV" prefetch
+kill -9 "$PF_HOLDER" 2>/dev/null; wait "$PF_HOLDER" 2>/dev/null || true
+rm -rf "$DEVENV_LOCK_ROOT/prefetch.lock"
+[[ "$RC" == 6 ]] && pass "I11b 机器级 prefetch 锁跨 worktree 冲突 exit 6" \
+  || fail "I11b" "rc=$RC（期望 6）"
+grep -q 'prefetch' "$SANDBOX/i11b.err" \
+  && pass "I11b 错误消息指出 prefetch 锁与修复线索" || fail "I11b" "stderr: $(tail -2 "$SANDBOX/i11b.err")"
+
+# I12 真实入口读者命令持共享租约：test:unit 的容器创建时租约在场，退出后释放
+: > "$MOCK_DOCKER_STATE/calls.log"
+rm -f "$MOCK_DOCKER_STATE/lease-check.txt"
+run i12 env MOCK_ASSERT_STACK_LEASE=1 DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-lease" "$DEVENV" test:unit
+[[ "$RC" == 0 ]] && pass "I12 test:unit 成功" || fail "I12" "rc=$RC err=$(tail -3 "$SANDBOX/i12.err")"
+grep -q 'stack-lease-held' "$MOCK_DOCKER_STATE/lease-check.txt" 2>/dev/null \
+  && ! grep -q 'stack-lease-MISSING' "$MOCK_DOCKER_STATE/lease-check.txt" 2>/dev/null \
+  && pass "I12 test:unit 容器命令执行期间持共享栈使用租约" \
+  || fail "I12" "租约不在场：$(cat "$MOCK_DOCKER_STATE/lease-check.txt" 2>/dev/null)"
+[[ -z "$(find "$DEVENV_LOCK_ROOT" -maxdepth 3 -path '*.lease/*/owner' -type f 2>/dev/null)" ]] \
+  && pass "I12 test:unit 退出后租约释放" || fail "I12" "租约残留"
+
+# I13 真实入口读者被排他锁阻塞：活跃 stack 锁 → verify 等待超时 exit 6，不触 compose
+sleep 30 &
+I13_HOLDER=$!
+mkdir -p "$DEVENV_LOCK_ROOT/stack-$A_SUFFIX.lock"
+printf '%s %s\n' "$I13_HOLDER" "$(date +%s)" > "$DEVENV_LOCK_ROOT/stack-$A_SUFFIX.lock/owner"
+: > "$MOCK_DOCKER_STATE/calls.log"
+run i13 env DEVENV_LOCK_TIMEOUT=2 DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-lease" "$DEVENV" verify
+kill -9 "$I13_HOLDER" 2>/dev/null; wait "$I13_HOLDER" 2>/dev/null || true
+rm -rf "$DEVENV_LOCK_ROOT/stack-$A_SUFFIX.lock"
+[[ "$RC" == 6 ]] && pass "I13 排他锁在场时 verify exit 6" || fail "I13" "rc=$RC（期望 6）"
+[[ ! -s "$MOCK_DOCKER_STATE/calls.log" ]] \
+  && pass "I13 冲突时未执行任何 compose 步骤（不产生半状态）" \
+  || fail "I13" "冲突前已触 compose：$(cat "$MOCK_DOCKER_STATE/calls.log")"
+grep -q '共享租约' "$SANDBOX/i13.err" \
+  && pass "I13 错误消息说明租约与排他锁冲突" || fail "I13" "stderr: $(tail -2 "$SANDBOX/i13.err")"
+
+# I14 真实入口排他命令被活跃租约阻塞：down / migrate → exit 6，不触 compose
+sleep 30 &
+I14_HOLDER=$!
+mkdir -p "$DEVENV_LOCK_ROOT/stack-$A_SUFFIX.lease/$I14_HOLDER.0"
+printf '%s %s\n' "$I14_HOLDER" "$(date +%s)" > "$DEVENV_LOCK_ROOT/stack-$A_SUFFIX.lease/$I14_HOLDER.0/owner"
+: > "$MOCK_DOCKER_STATE/calls.log"
+run i14 env DEVENV_LOCK_TIMEOUT=2 DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-down2" "$DEVENV" down
+[[ "$RC" == 6 ]] && pass "I14 活跃租约时 down exit 6" || fail "I14" "down rc=$RC（期望 6）"
+[[ ! -s "$MOCK_DOCKER_STATE/calls.log" ]] \
+  && pass "I14 down 冲突时未执行 compose down" || fail "I14" "down 已触 compose"
+grep -q '活跃栈使用租约' "$SANDBOX/i14.err" \
+  && pass "I14 错误消息列出活跃租约持有者" || fail "I14" "stderr: $(tail -2 "$SANDBOX/i14.err")"
+
+run i14b env DEVENV_LOCK_TIMEOUT=2 DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-mig2" "$DEVENV" migrate
+[[ "$RC" == 6 ]] && pass "I14 活跃租约时 migrate exit 6" || fail "I14" "migrate rc=$RC（期望 6）"
+kill -9 "$I14_HOLDER" 2>/dev/null; wait "$I14_HOLDER" 2>/dev/null || true
+rm -rf "$DEVENV_LOCK_ROOT/stack-$A_SUFFIX.lease"
+
+# I15 web --down 也是栈变更：持本 worktree stack 锁；冲突 exit 6，无冲突时执行 rm
+sleep 30 &
+I15_HOLDER=$!
+mkdir -p "$DEVENV_LOCK_ROOT/stack-$A_SUFFIX.lock"
+printf '%s %s\n' "$I15_HOLDER" "$(date +%s)" > "$DEVENV_LOCK_ROOT/stack-$A_SUFFIX.lock/owner"
+: > "$MOCK_DOCKER_STATE/calls.log"
+run i15 env DEVENV_LOCK_TIMEOUT=2 DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-web" "$DEVENV" web --down
+kill -9 "$I15_HOLDER" 2>/dev/null; wait "$I15_HOLDER" 2>/dev/null || true
+rm -rf "$DEVENV_LOCK_ROOT/stack-$A_SUFFIX.lock"
+[[ "$RC" == 6 ]] && pass "I15 web --down 持栈锁（冲突 exit 6）" || fail "I15" "rc=$RC（期望 6）"
+[[ ! -s "$MOCK_DOCKER_STATE/calls.log" ]] \
+  && pass "I15 web --down 冲突时未触 compose" || fail "I15" "已触 compose"
+
+: > "$MOCK_DOCKER_STATE/calls.log"
+run i15b env DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-web" "$DEVENV" web --down
+[[ "$RC" == 0 ]] && pass "I15 web --down 无冲突成功" || fail "I15" "rc=$RC err=$(tail -2 "$SANDBOX/i15b.err")"
+grep -q -- '--profile web rm -sf web' "$MOCK_DOCKER_STATE/calls.log" \
+  && pass "I15 web --down 执行 compose profile web rm" || fail "I15" "log=$(cat "$MOCK_DOCKER_STATE/calls.log")"
 
 # ---------------------------------------------------------------------------
 echo "------------------------------------------------------------"

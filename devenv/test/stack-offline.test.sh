@@ -13,6 +13,8 @@
 #      慢构建存活时锁不被误清
 #   7. 输出协议：进度走 stderr，stdout 只放 JSON；未知子命令 exit 2
 #   8. DEVENV_DB_IMAGE 覆盖生效并报告来源；非法格式 exit 2
+#   9. 共享栈使用租约（#61）：多个读者并行、与排他锁双向互斥、失效租约清理、
+#      kill 持有者与存活持有者两个故障反例
 # ============================================================================
 set -Eeuo pipefail
 
@@ -208,6 +210,104 @@ kill "$SLEEP_PID" 2>/dev/null; wait "$SLEEP_PID" 2>/dev/null || true
 [[ "$rc" == 6 ]] && pass "T15 存活持有者锁不被误清（exit 6）" || fail "T15" "rc=$rc（期望 6）"
 [[ -d "$SANDBOX/locks/live.lock" ]] && pass "T15 锁目录仍在（未误清）" || fail "T15" "锁目录被误清"
 rm -rf "$SANDBOX/locks/live.lock"
+
+# ---------------------------------------------------------------------------
+# 共享栈使用租约（#61）：读者共享、与排他锁互斥、失效判定与故障演练
+# ---------------------------------------------------------------------------
+
+# T16 同一资源可同时持有多个共享租约（多个隔离测试可并行）
+(
+  trap 'lease_release_all; lock_release_all' EXIT
+  lease_acquire shared 5
+  # 第二个独立进程（后台子 shell）同时持租约；HELD_LEASES 不继承父进程的槽
+  (
+    HELD_LEASES=()
+    lease_acquire shared 5
+    : > "$SANDBOX/t16-ready"
+    sleep 30
+  ) &
+  T16_HOLDER=$!
+  for _ in 1 2 3 4 5; do [[ -f "$SANDBOX/t16-ready" ]] && break; sleep 1; done
+  n="$(find "$DEVENV_LOCK_ROOT/shared.lease" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')"
+  if [[ "$n" != 2 ]]; then
+    echo "租约槽数=$n"
+    kill -9 "$T16_HOLDER" 2>/dev/null || true
+    wait "$T16_HOLDER" 2>/dev/null || true
+    exit 1
+  fi
+  kill -9 "$T16_HOLDER" 2>/dev/null || true
+  wait "$T16_HOLDER" 2>/dev/null || true
+  # 子进程被 kill 的遗留槽由后续取得路径清理（T20 覆盖）；此处手工清掉以验证父槽释放
+  find "$DEVENV_LOCK_ROOT/shared.lease" -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} + 2>/dev/null || true
+) && pass "T16 共享租约可并行持有（2 持有者）" || fail "T16" "共享语义不符"
+[[ -z "$(find "$DEVENV_LOCK_ROOT/shared.lease" -mindepth 1 -maxdepth 1 -type d 2>/dev/null)" ]] \
+  && pass "T16 租约退出后槽位清理" || fail "T16" "租约槽残留"
+
+# T17 活跃租约阻塞排他锁（down/restart/migrate 类）→ exit 6；租约释放后可取得
+(
+  trap 'lease_release_all' EXIT
+  lease_acquire lease-writer 5
+  set +e
+  ( lock_acquire lease-writer 2 ) 2>/dev/null
+  rc=$?
+  set -e
+  [[ "$rc" == 6 ]] || { echo "排他锁 rc=$rc"; exit 1; }
+) && pass "T17 活跃租约阻塞排他锁（exit 6）" || fail "T17" "租约未阻塞排他锁"
+( trap 'lock_release_all' EXIT; lock_acquire lease-writer 5 ) \
+  && pass "T17 租约释放后排他锁可取得" || fail "T17" "租约释放后仍阻塞"
+
+# T18 排他锁阻塞共享租约（读者等待）→ exit 6；排他锁释放后可取得
+(
+  trap 'lock_release_all' EXIT
+  lock_acquire writer-lease 5
+  set +e
+  ( lease_acquire writer-lease 2 ) 2>/dev/null
+  rc=$?
+  set -e
+  [[ "$rc" == 6 ]] || { echo "租约 rc=$rc"; exit 1; }
+) && pass "T18 排他锁阻塞共享租约（exit 6）" || fail "T18" "排他锁未阻塞租约"
+( trap 'lease_release_all' EXIT; lease_acquire writer-lease 5 ) \
+  && pass "T18 排他锁释放后租约可取得" || fail "T18" "排他锁释放后仍阻塞"
+
+# T19 失效租约（持有者已死）→ 清理后可取得排他锁
+mkdir -p "$DEVENV_LOCK_ROOT/stale-lease.lease/99999999.0"
+echo "99999999 $(date +%s)" > "$DEVENV_LOCK_ROOT/stale-lease.lease/99999999.0/owner"
+( trap 'lock_release_all' EXIT; lock_acquire stale-lease 5 ) \
+  && pass "T19 失效租约清理后可取得排他锁" || fail "T19" "失效租约未清理"
+[[ ! -d "$DEVENV_LOCK_ROOT/stale-lease.lease/99999999.0" ]] \
+  && pass "T19 失效租约槽被清理" || fail "T19" "失效租约槽残留"
+
+# T20 存活租约不被误清（排他锁 exit 6）→ kill 持有者后恢复（故障反例）
+sleep 30 &
+LEASE_HOLDER=$!
+mkdir -p "$DEVENV_LOCK_ROOT/live-lease.lease/$LEASE_HOLDER.0"
+echo "$LEASE_HOLDER $(date +%s)" > "$DEVENV_LOCK_ROOT/live-lease.lease/$LEASE_HOLDER.0/owner"
+set +e
+( lock_acquire live-lease 2 ) 2>/dev/null
+rc=$?
+set -e
+[[ "$rc" == 6 ]] && pass "T20 存活租约不被误清（排他锁 exit 6）" || fail "T20" "rc=$rc（期望 6）"
+[[ -d "$DEVENV_LOCK_ROOT/live-lease.lease/$LEASE_HOLDER.0" ]] \
+  && pass "T20 存活租约槽仍在" || fail "T20" "租约槽被误清"
+kill -9 "$LEASE_HOLDER" 2>/dev/null; wait "$LEASE_HOLDER" 2>/dev/null || true
+( trap 'lock_release_all' EXIT; lock_acquire live-lease 3 ) \
+  && pass "T20 kill 租约持有者后失效租约被清理、排他锁可取得" \
+  || fail "T20" "kill 后未恢复"
+
+# T21 kill 持锁进程后恢复（确定性故障演练：失效锁被识别清理）
+sleep 30 &
+LOCK_HOLDER=$!
+mkdir -p "$DEVENV_LOCK_ROOT/killed.lock"
+echo "$LOCK_HOLDER $(date +%s)" > "$DEVENV_LOCK_ROOT/killed.lock/owner"
+set +e
+( lock_acquire killed 2 ) 2>/dev/null
+rc=$?
+set -e
+[[ "$rc" == 6 ]] && pass "T21 kill 前排他锁互斥（exit 6）" || fail "T21" "rc=$rc（期望 6）"
+kill -9 "$LOCK_HOLDER" 2>/dev/null; wait "$LOCK_HOLDER" 2>/dev/null || true
+( trap 'lock_release_all' EXIT; lock_acquire killed 3 ) \
+  && pass "T21 kill 持锁进程后失效锁被清理、后续可取得" \
+  || fail "T21" "kill 后未恢复"
 
 # ---------------------------------------------------------------------------
 echo "------------------------------------------------------------"

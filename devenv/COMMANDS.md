@@ -15,7 +15,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | Action | Command | 期望退出码 |
 |---|---|---|
 | 一键体检（端点/引擎/矩阵/锁文件/worktree 身份与凭据状态/镜像/快照状态/服务；退出码=可开工与否） | `devenv doctor` | 0 或 3 |
-| 预取镜像锁中的上游镜像（分阶段、有进度/超时、可中断续跑） | `devenv prefetch` | 0 或 3/4/5 |
+| 预取镜像锁中的上游镜像（分阶段、有进度/超时、可中断续跑；机器级拉取锁） | `devenv prefetch` | 0 或 3/4/5/6 |
 | 固定快照构建工具镜像 + 安装依赖 + turbo build（幂等；记录快照哈希与不可变镜像标识） | `devenv build [--lockgen]` | 0 或 3/4/6 |
 | 启动 db → 迁移幂等应用 → api，等待真实健康终态（幂等） | `devenv up` | 0 或 3/4/5/6 |
 | 停止（连带清掉不在 compose 文件中的本项目容器；--volumes 再清数据卷；仅本 worktree 项目范围；不含 profile 隔离的 web——用 `web --down`） | `devenv down [--volumes]` | 0 或 3/6 |
@@ -25,16 +25,16 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 跟随日志（透传原始流） | `devenv logs [svc] [-f] [--tail N]` | 0 或 3 或子进程码 |
 | 容器内执行（默认 tools；透传原始流） | `devenv exec [svc] -- cmd...` | 0 或 2/3 或子进程码 |
 | 交互 shell（默认 tools；透传原始流） | `devenv shell [svc]` | 0 或 3 或子进程码 |
-| 单元+集成测试（需先 up；连真实 PostGIS） | `devenv test [pattern...]` | 0 或 3/4 |
-| 仅单元测试（零基础设施） | `devenv test:unit` | 0 或 3/4 |
-| ESLint | `devenv lint` | 0 或 3/4 |
-| tsc --noEmit | `devenv typecheck` | 0 或 3/4 |
-| 聚合质量门：lint + typecheck + test:unit（本地与 CI 同一入口） | `devenv verify` | 0 或 3/4 |
-| 应用全部 pending 迁移（prisma migrate deploy） | `devenv migrate` | 0 或 3/4/6 |
-| 生成空迁移待编辑（prisma migrate dev --create-only） | `devenv migrate:create --name N` | 0 或 2/3/4/6 |
-| 幂等种子数据 | `devenv seed` | 0 或 3/4 |
+| 单元+集成测试（需先 up；连真实 PostGIS；运行期持共享栈使用租约） | `devenv test [pattern...]` | 0 或 3/4/6 |
+| 仅单元测试（零基础设施；运行期持共享栈使用租约） | `devenv test:unit` | 0 或 3/4/6 |
+| ESLint（运行期持共享栈使用租约） | `devenv lint` | 0 或 3/4/6 |
+| tsc --noEmit（运行期持共享栈使用租约） | `devenv typecheck` | 0 或 3/4/6 |
+| 聚合质量门：lint + typecheck + test:unit（本地与 CI 同一入口；运行期持共享栈使用租约） | `devenv verify` | 0 或 3/4/6 |
+| 应用全部 pending 迁移（prisma migrate deploy；与活跃租约互斥） | `devenv migrate` | 0 或 3/4/6 |
+| 生成空迁移待编辑（prisma migrate dev --create-only；与活跃租约互斥） | `devenv migrate:create --name N` | 0 或 2/3/4/6 |
+| 幂等种子数据（运行期持共享栈使用租约） | `devenv seed` | 0 或 3/4/6 |
 | 等待服务健康终态（默认 60s） | `devenv wait <db\|api\|web> [--timeout N]` | 0 或 2/3/5 |
-| 人读总览（容器+锁+镜像） | `devenv status` | 0 或 3 |
+| 人读总览（容器+锁+租约+镜像） | `devenv status` | 0 或 3 |
 | 查看镜像锁与生效 DB 镜像 / 校验运行态 digest 漂移 | `devenv images [--verify]` | 0 或 1/2/3 |
 
 ### GitHub App 认证入口（不触引擎；详见 docs/agents/github-app-auth.md）
@@ -45,7 +45,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 以 App 身份 HTTPS 推送 | `devenv git-push <remote> <refspec...>` | 0 或 2/20/21/22/23 或 git 自身退出码 |
 | 认证入口离线测试（不访问 GitHub） | `devenv test:auth` | 0 或 1 |
 | 认证入口真实集成测试（默认只读；写操作需显式旗标） | `devenv test:auth:integration [旗标]` | 0 或 1 或 2 |
-| 命令面离线测试（引擎解析/锁/输出协议/快照与不可变绑定/per-worktree 隔离，mock docker） | `devenv test:devenv` | 0 或 1 |
+| 命令面离线测试（引擎解析/锁与栈使用租约/输出协议/快照与不可变绑定/per-worktree 隔离，mock docker） | `devenv test:devenv` | 0 或 1 |
 
 ## 退出码枚举（总表归 Spec-工程基座；7–10 e2e 专用码段由 Spec-e2e 登记）
 
@@ -56,7 +56,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 3 | 环境未就绪（引擎不在矩阵、端点解析失败、服务未起、锁文件缺失） | 按错误内嵌修复命令（多为 `devenv up`/`devenv build`） |
 | 4 | 任务失败（test/lint/typecheck/build/verify 非零；拉取失败；快照采集期工作树持续变化——明确拒绝，不出混合内容） | 看 stderr 完整输出；采集拒绝时暂停文件修改后重试 |
 | 5 | 超时（健康等待/镜像拉取） | `devenv logs <svc>` 排查；prefetch 重跑续跑 |
-| 6 | 独占锁冲突（另一会话持锁） | 等待或确认持有者已死（失效锁会自动清理） |
+| 6 | 独占锁或栈使用租约冲突（另一会话持锁 / 测试运行中） | 等待或确认持有者已死（失效锁与失效租约会自动清理）；错误消息列出持有者与修复线索 |
 | 20 | 配置/授权不符（认证入口） | 核对 `devenv/github-app.json` 与本机授权 |
 | 21 | 私钥缺失/权限/JWT 签名失败（认证入口） | 检查私钥路径与权限 |
 | 22 | installation token 换取失败（认证入口） | 检查网络与 App 安装状态 |
@@ -117,19 +117,48 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 - 锁命名空间 `/tmp/natural-enforcement-locks`（机器级目录；锁名分派见下表）。
 - **跨 worktree**：栈/数据/网络已按 worktree 隔离（见下节），stack/migrate 锁
   随之 per-worktree——不同 worktree 的 build/up/down/migrate **互不阻塞**；
-  机器级仅 lockgen（共享 ne-lockgen:tmp 标签与遗留容器清理）。
+  机器级仅 lockgen（共享 ne-lockgen:tmp 标签与遗留容器清理）与 prefetch
+  （基础镜像拉取）。
+- **复合过程整体持锁**：build/up/down/restart/web 的"检查新鲜度 → 构建 →
+  启动/停止"从入口到退出持同一把排他锁（单步锁保护不了全过程）；进程被 kill
+  留下的失效锁由下一次取得识别并清理，不永久阻塞环境。
 
-| 命令 | 持有锁 | 互斥对象 |
+| 命令 | 持有锁/租约 | 互斥对象 |
 |---|---|---|
-| build / up / down / restart / web（up 路径） | stack-<wt>（排他，per-worktree） | 本 worktree 内彼此两两互斥 |
-| migrate / migrate:create | stack-<wt> + migrate-<wt>（排他，按此顺序取得） | 本 worktree 内互斥；与其它 worktree 互不阻塞 |
+| build / up / down / restart / web（up 与 --down 路径） | stack-<wt>（排他，per-worktree） | 本 worktree 内彼此两两互斥；有活跃共享租约时等待，超时 exit 6 |
+| migrate / migrate:create | stack-<wt> + migrate-<wt>（排他，按此顺序取得） | 本 worktree 内互斥；与活跃共享租约互斥（等待/exit 6）；与其它 worktree 互不阻塞 |
+| test / test:unit / verify / lint / typecheck / seed（运行期） | stack-<wt> 共享租约（per-worktree） | 多个租约可并行；与上述排他命令双向互斥（读者遇排他锁等待/exit 6） |
+| prefetch | prefetch（机器级） | 跨 worktree 互斥（基础镜像拉取）；冲突等待或 exit 6（重跑续跑） |
 | build 触发的 lockgen | lockgen（机器级） | 跨 worktree 互斥（共享标签/容器清理）；冲突等待或 exit 6（重跑即续） |
-| test / verify / lint / typecheck / seed | 无（#61 引入栈使用租约） | — |
 | 只读（ps/logs/status/images/doctor） | 无 | 任意并发 |
+| exec / shell（透传调试） | 无 | 交互时长无界，不持租约；需要稳定环境时先结束调试再拆栈 |
 
-> 完整冲突矩阵（测试运行期共享租约、e2e 锁细分）归 #61；锁原语与失效演练
-> 归 #58 验收（T13–T15）。另：凡加载 images.lock 的命令（prefetch/build/up/images/status/doctor 等）在
-> 锁文件缺失或 `DEVENV_DB_IMAGE` 格式非法时可退出 2（用法错误），上表不逐行重复。
+### 栈使用租约（#61）
+
+- **语义**：读者（test/test:unit/verify/lint/typecheck/seed）在运行期持
+  `stack-<wt>.lease/<pid>.<epoch>.<rand>/owner`（共享，可并行）；写者
+  （build/up/down/restart/web/migrate*）持 `stack-<wt>.lock`（排他）。
+  "启动不被打断 ≠ 测试不被打断"：测试运行期间 `down`/`restart`/`migrate`/
+  替换服务不得执行——写者须等待活跃租约释放，超时 **exit 6**，绝不强拆。
+- **读写进入决策**：短临界区门 `stack-<wt>.gate` 用 mkdir 原子取得，把"检查
+  对方是否在场 + 登记自己"串行化；门只持毫秒级，持有者死亡按 pid 存活判定
+  失效（与锁同口径）。
+- **失效处理**：租约槽 owner 记录 pid + 启动时间 + 槽名；持有进程被 kill 后，
+  下一次写者取得或读者登记时清理失效槽（kill -0 判定），不永久阻塞环境。
+  **不按超时清除**：慢构建/慢测试仍存活时锁与租约都有效，第二个进程不得闯入。
+- **等待上限**：读者等排他锁 120s；写者等租约沿用各自的锁等待（build 120s、
+  up/down/restart/web 60s、migrate/migrate:create 10s）；超时 exit 6，错误消息
+  列出持有者 pid/启动时间/槽与修复线索。`DEVENV_LOCK_TIMEOUT=<秒>` 显式覆盖
+  等待上限（测试/故障演练用；日常不设）。
+- **机器级锁不参与租约**：prefetch/lockgen 只协调跨 worktree 的共享资源，
+  不取栈使用租约；租约仅协调 per-worktree 栈。
+- **可见性**：`devenv status` 报告锁目录条目与租约槽（`--json` 终值含
+  `leases` 字段；stale 只标注，不清理——status 保持只读）。
+
+> Windows 实机冲突矩阵与故障演练证据见 `docs/evidence/61-lock-lease/`；锁原语
+> 与失效演练起于 #58 验收（T13–T15），本票扩展 T16–T21。另：凡加载 images.lock
+> 的命令（prefetch/build/up/images/status/doctor 等）在锁文件缺失或
+> `DEVENV_DB_IMAGE` 格式非法时可退出 2（用法错误），上表不逐行重复。
 
 ## per-worktree 运行资源隔离（#59，Spec-工程基座 硬不变量 4）
 
@@ -216,4 +245,5 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
   cache mount（`sharing=locked`），普通构建保持 `--frozen-lockfile`；store 是
   缓存不是信任根，干净重建换 cache id（`--build-arg PNPM_STORE_CACHE_ID=<新 id>`）。
 - **诚实口径**：本机制检查来源一致性、减少运行旧代码，**不声称完整构建证明**；
-  锁租约细分归 #61；per-worktree 隔离已落地（见「per-worktree 运行资源隔离」节）。
+  锁与栈使用租约已落地（见「并发语义」节，Windows 证据 `docs/evidence/61-lock-lease/`），
+  per-worktree 隔离已落地（见「per-worktree 运行资源隔离」节）。
