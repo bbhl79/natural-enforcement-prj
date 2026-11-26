@@ -194,6 +194,16 @@ tools_input_hash() { # <tree>
   printf '%s\n%s\n' "$blob" "$node_image" | sha256sum | awk '{print $1}'
 }
 
+# 登记 per-worktree 本地 tag（#59 评审修复）：新鲜度命中（直接采纳既有不可变镜像）
+# 也必须把该镜像登记到本 worktree 的 wt-<suffix> tag——tag 是归属可辨的职责，
+# 不随"构建还是采纳"分叉；否则 #75 回收核对与人工排查失去归属依据，且 Spec §3
+# "镜像 tag per-worktree" 在采纳路径落空。失败显式报错（exit 4），不静默跳过。
+register_local_image_tag() { # <imageId> <tag>
+  local id="$1" tag="$2"
+  [[ "$id" =~ ^sha256:[0-9a-f]{64}$ ]] || die 4 "内部错误：登记本地 tag 的 image ID 非法（id=$id tag=$tag）"
+  run_step "登记 per-worktree 镜像 tag（$tag → ${id:0:19}…）" docker tag "$id" "$tag"
+}
+
 # tools 基础镜像新鲜度核对/重建（#58 评审修复：tools 纳入快照与不可变绑定）。
 # 命中 → TOOLS_IMAGE_EFFECTIVE=状态 ID；未命中（无状态/镜像丢失/输入哈希不符）→
 # 从快照物化目录重建并记录。NODE_IMAGE 取自快照内 images.lock，不读活工作树。
@@ -205,6 +215,7 @@ ensure_tools_image() { # <tree>
   labeled="$(image_label_or_miss "$STATE_TOOLS_IMAGE_ID" '{{index .Config.Labels "devenv.tools.input-hash"}}')"
   if [[ -n "$STATE_TOOLS_IMAGE_ID" && "$STATE_TOOLS_INPUT_HASH" == "$h" && "$labeled" == "$h" ]]; then
     TOOLS_IMAGE_EFFECTIVE="$STATE_TOOLS_IMAGE_ID"
+    register_local_image_tag "$STATE_TOOLS_IMAGE_ID" "$TOOLS_IMAGE"
     ev tools.fresh imageId="$STATE_TOOLS_IMAGE_ID" inputHash="$h"
     return 0
   fi
@@ -284,6 +295,7 @@ ensure_fresh_workspace() {
   labeled="$(image_label_or_miss "$STATE_IMAGE_ID" '{{index .Config.Labels "devenv.snapshot.hash"}} {{index .Config.Labels "devenv.base.image"}}')"
   if [[ -n "$STATE_IMAGE_ID" && "$STATE_SNAPSHOT_HASH" == "$s" && "$labeled" == "$s $TOOLS_IMAGE_EFFECTIVE" ]]; then
     WS_IMAGE_EFFECTIVE="$STATE_IMAGE_ID"
+    register_local_image_tag "$STATE_IMAGE_ID" "$WS_IMAGE"
     ev workspace.fresh imageId="$STATE_IMAGE_ID" snapshot="$s"
     note "workspace 镜像新鲜（快照 ${s:0:12}… ↔ ${STATE_IMAGE_ID:0:19}…），跳过重建"
     ev step.completed target="workspace image freshness"

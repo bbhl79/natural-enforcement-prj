@@ -9,10 +9,14 @@
 #      不再使用共享项目名 natural-enforcement（第 2 节）
 #   3. 数据库凭据 per-worktree：首调用生成随机口令（32 hex）持久化到
 #      .devenv-state/db-credentials.env（0600），二次调用稳定，不同 worktree 不同口令
-#   4. 锁分派：stack/migrate 锁 per-worktree（同名后缀的活跃锁只阻塞本 worktree），
+#   4. 新鲜度命中仍登记 per-worktree tag（采纳既有不可变镜像也执行 docker tag；
+#      失败显式 exit 4）
+#   5. 锁分派：stack/migrate 锁 per-worktree（同名后缀的活跃锁只阻塞本 worktree），
 #      lockgen 机器级（经真实入口 build --lockgen 时锁在场断言）
-#   5. down 只作用本 worktree 项目（compose 参数断言，经真实入口）
-#   6. doctor：报告 worktree 身份；#59 前共享项目遗留容器 → warn（exit 仍 0）
+#   6. down 只作用本 worktree 项目（compose 参数断言，经真实入口）
+#   7. doctor：报告 worktree 身份；#59 前共享项目遗留容器 → warn（exit 仍 0）
+#   8. 质量门容器命令回归：test:unit 的容器命令是 pnpm…而非宿主函数 run_gate
+#      （#56 起潜伏 bug 的守卫——离线 mock 曾使其不可见）
 # ============================================================================
 set -Eeuo pipefail
 
@@ -124,10 +128,22 @@ case "$cmd" in
     fi
     [[ -f "$STATE/images/$id" ]] || exit 1
     case "$fmt" in
+      *devenv.snapshot.hash*devenv.base.image*)
+        h="$(awk -F= '/^SNAPSHOT_HASH=/{print $2}' "$STATE/images/$id")"
+        b="$(awk -F= '/^BASE_IMAGE=/{print $2}' "$STATE/images/$id")"
+        printf '%s %s\n' "$h" "$b" ;;
       *devenv.snapshot.hash*) awk -F= '/^SNAPSHOT_HASH=/{print $2}' "$STATE/images/$id" ;;
       *devenv.tools.input-hash*) awk -F= '/^TOOLS_HASH=/{print $2}' "$STATE/images/$id" ;;
       *) printf '\n' ;;
     esac ;;
+  tag)
+    {
+      printf 'tag'
+      for a in "$@"; do printf ' %q' "$a"; done
+      printf ' | WORKSPACE_IMAGE=%s\n' "${WORKSPACE_IMAGE:-}"
+    } >> "$STATE/calls.log"
+    [[ "${MOCK_TAG_FAIL:-}" == "1" ]] && exit 1
+    exit 0 ;;
   create) printf 'cid-mock\n' ;;
   cp|rm|rmi) exit 0 ;;
   ps)
@@ -257,8 +273,49 @@ PW_B="$(DEVENV_WORKTREE_ID="wt-beta" DEVENV_STATE_DIR="$SANDBOX/state-beta" bash
 [[ "$PW_B" =~ ^[0-9a-f]{32}$ && "$PW_B" != "$I2_PW" ]] \
   && pass "I3 不同 worktree 口令独立" || fail "I3" "B 口令异常：$PW_B"
 
+# 4. 新鲜度命中仍登记 per-worktree tag（#59 评审修复：采纳既有不可变镜像也须
+#    打 wt-<suffix> tag；失败显式 exit 4）
 # ---------------------------------------------------------------------------
-# 4. 锁分派：活跃的本 worktree 锁只阻塞本 worktree；lockgen 机器级
+
+write_image() { # 镜像 fixture：write_image <id> <snapHash> <baseImage> <toolsHash>
+  printf 'SNAPSHOT_HASH=%s\nINPUTS=\nBASE_IMAGE=%s\nTOOLS_HASH=%s\nTAG=\n' "$2" "$3" "$4" \
+    > "$MOCK_DOCKER_STATE/images/$1"
+}
+ensure_and_echo() { # 子 shell 内跑新鲜度检查并回传绑定结果（供 runsub 调用）
+  ensure_fresh_workspace
+  printf 'EFFECTIVE=%s\n' "$WS_IMAGE_EFFECTIVE"
+}
+
+H_FRESH="$(snapshot_capture)"
+TH_FRESH="$(tools_input_hash "$H_FRESH")"
+TOOLS_ID_FRESH="sha256:$(printf 'tools-fresh-fixture' | sha256sum | awk '{print $1}')"
+WS_ID_FRESH="sha256:$(printf 'ws-fresh-fixture' | sha256sum | awk '{print $1}')"
+write_image "$TOOLS_ID_FRESH" "" "" "$TH_FRESH"
+write_image "$WS_ID_FRESH" "$H_FRESH" "$TOOLS_ID_FRESH" ""
+snapshot_state_store "$H_FRESH" "$WS_ID_FRESH" "$TH_FRESH" "$TOOLS_ID_FRESH"
+
+: > "$MOCK_DOCKER_STATE/calls.log"
+runsub i7 ensure_and_echo
+I7_EFFECTIVE="$(awk -F= '/^EFFECTIVE=/{print $2}' "$SANDBOX/i7.out")"
+if [[ "$RC" == 0 && "$I7_EFFECTIVE" == "$WS_ID_FRESH" ]] \
+  && grep -q "tag $TOOLS_ID_FRESH $TOOLS_IMAGE" "$MOCK_DOCKER_STATE/calls.log" \
+  && grep -q "tag $WS_ID_FRESH $WS_IMAGE" "$MOCK_DOCKER_STATE/calls.log" \
+  && ! grep -q 'docker build' "$MOCK_DOCKER_STATE/calls.log"; then
+  pass "I7 新鲜度命中登记 tools/workspace per-worktree tag（无构建纯采纳）"
+else
+  fail "I7" "rc=$RC effective=$I7_EFFECTIVE log=$(cat "$MOCK_DOCKER_STATE/calls.log")"
+fi
+
+export MOCK_TAG_FAIL=1
+runsub i8 ensure_and_echo
+unset MOCK_TAG_FAIL
+[[ "$RC" == 4 ]] && pass "I8 tag 登记失败显式 exit 4（不静默跳过）" \
+  || fail "I8" "rc=$RC（期望 4）"
+grep -q '登记 per-worktree 镜像 tag' "$SANDBOX/i8.err" \
+  && pass "I8 失败步骤与原因入 stderr" || fail "I8" "stderr: $(tail -2 "$SANDBOX/i8.err")"
+
+# ---------------------------------------------------------------------------
+# 5. 锁分派：活跃的本 worktree 锁只阻塞本 worktree；lockgen 机器级
 # ---------------------------------------------------------------------------
 mkdir -p "$DEVENV_LOCK_ROOT"
 # 活跃持锁者（复用 lock.sh owner 格式：活 pid）占住 alpha 的 stack 锁名
@@ -291,7 +348,7 @@ grep -q 'lockgen-lock-held' "$MOCK_DOCKER_STATE/lockgen-lock-check.txt" \
   || fail "I4b" "锁未在场：$(cat "$MOCK_DOCKER_STATE/lockgen-lock-check.txt" 2>/dev/null)"
 
 # ---------------------------------------------------------------------------
-# 5. down 只作用本 worktree 项目（compose 参数断言，经真实入口）
+# 6. down 只作用本 worktree 项目（compose 参数断言，经真实入口）
 # ---------------------------------------------------------------------------
 : > "$MOCK_DOCKER_STATE/calls.log"
 run i5 env DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-down" "$DEVENV" down
@@ -307,7 +364,7 @@ grep -q -- "--remove-orphans" "$MOCK_DOCKER_STATE/calls.log" \
   && pass "I5 --remove-orphans 保留（仅本 worktree 项目范围）" || fail "I5" "缺 --remove-orphans"
 
 # ---------------------------------------------------------------------------
-# 6. doctor：worktree 身份报告 + 遗留共享项目 warn
+# 7. doctor：worktree 身份报告 + 遗留共享项目 warn
 # ---------------------------------------------------------------------------
 run i6 env DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-doc" "$DEVENV" --json doctor
 [[ "$RC" == 0 ]] && pass "I6 doctor 通过" || fail "I6" "rc=$RC err=$(tail -3 "$SANDBOX/i6.err")"
@@ -335,6 +392,20 @@ if jq -e '[.checks[] | select(.check == "legacy-project" and .result == "warn")]
   pass "I6b 遗留共享项目 → warn 检查项"
 else
   fail "I6b" "缺 legacy-project warn：$(cat "$SANDBOX/i6b.out")"
+fi
+
+# ---------------------------------------------------------------------------
+# 8. 质量门容器命令回归（#56 起潜伏 bug 守卫）：容器命令必须是真实可执行物
+# ---------------------------------------------------------------------------
+
+: > "$MOCK_DOCKER_STATE/calls.log"
+run i9 env DEVENV_STATE_DIR="$SANDBOX/state-i9" "$DEVENV" test:unit
+if [[ "$RC" == 0 ]] \
+  && grep -q 'run --rm tools pnpm -r run test:unit' "$MOCK_DOCKER_STATE/calls.log" \
+  && ! grep -q 'run --rm tools run_gate' "$MOCK_DOCKER_STATE/calls.log"; then
+  pass "I9 test:unit 容器命令为 pnpm（宿主函数 run_gate 不再进容器）"
+else
+  fail "I9" "rc=$RC log=$(cat "$MOCK_DOCKER_STATE/calls.log")"
 fi
 
 # ---------------------------------------------------------------------------
