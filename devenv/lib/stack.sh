@@ -9,14 +9,46 @@
 #   （快照哈希 ↔ 镜像 label ↔ 状态文件一致才跳过重构）+ 不可变镜像标识绑定
 #   （compose 注入 image ID，不绑定可变 tag；启动后核对运行容器实际镜像）。
 #
+# per-worktree 运行资源隔离（Spec-工程基座 硬不变量 4，#59）：
+#   compose 项目名/本地镜像 tag 按 worktree 身份派生（容器/卷/网络独立，
+#   镜像内容按不可变产物共享）；数据库凭据每 worktree 随机生成、状态持久化；
+#   锁分派：stack/migrate 锁 per-worktree，lockgen 机器级（见 COMMANDS.md 并发语义）。
+#
 # 镜像引用（Spec-工程基座 §2）：devenv/images.lock 是上游镜像 tag+digest 双层锁的
 # 唯一事实源；PostGIS 镜像引用是可配置输入——DEVENV_DB_IMAGE 环境变量覆盖
 # （#53 macOS ARM 路线实验的切换点），生效值与来源必须报告，不写死单一平台路线。
 # ============================================================================
 
-PROJECT_NAME="natural-enforcement"
-TOOLS_IMAGE="natural-enforcement/tools:local"
-WS_IMAGE="natural-enforcement/workspace:local"
+# --- worktree 身份（容器/卷/网络/镜像 tag/锁名 的派生根）---------------------
+# 身份 = git 目录路径（主工作树 <root>/.git；链接 worktree .git/worktrees/<id>）：
+# per-worktree 唯一，且对 worktree 目录改名/移动稳定（git 目录路径不变）。
+# 非 git 上下文（离线测试沙箱等）回退工作树根路径哈希——不同路径仍得不同名，
+# 且 source 期不 die（认证入口等不触引擎的命令不受影响）。
+# DEVENV_WORKTREE_ID 仅供离线测试注入确定性身份。
+worktree_identity() {
+  if [[ -n "${DEVENV_WORKTREE_ID:-}" ]]; then
+    printf '%s' "$DEVENV_WORKTREE_ID"
+    return 0
+  fi
+  local id=""
+  id="$(git -C "$REPO_ROOT" rev-parse --absolute-git-dir 2>/dev/null)" || id=""
+  [[ -n "$id" ]] || id="$REPO_ROOT"
+  printf '%s' "$id"
+}
+
+# source 期单次推导：身份与来源一次判定（git 只调一次；身份 == 工作树根路径即回退）
+WT_IDENTITY="$(worktree_identity)"
+WT_SUFFIX="$(printf '%s' "$WT_IDENTITY" | sha256sum | awk '{print $1}' | cut -c1-8)"
+WT_IDENTITY_SOURCE="git 目录"
+if [[ -n "${DEVENV_WORKTREE_ID:-}" ]]; then
+  WT_IDENTITY_SOURCE="DEVENV_WORKTREE_ID（显式覆盖）"
+elif [[ "$WT_IDENTITY" == "$REPO_ROOT" ]]; then
+  WT_IDENTITY_SOURCE="工作树根路径（非 git 回退）"
+fi
+PROJECT_NAME="natural-enforcement-$WT_SUFFIX"
+# 本地构建镜像 tag per-worktree（归属可辨；运行正确性仍靠不可变 image ID 绑定，#58）
+TOOLS_IMAGE="natural-enforcement/tools:wt-$WT_SUFFIX"
+WS_IMAGE="natural-enforcement/workspace:wt-$WT_SUFFIX"
 WS_IMAGE_EFFECTIVE=""     # 本次新鲜度核对/构建绑定的 workspace 不可变镜像标识（image ID）
 TOOLS_IMAGE_EFFECTIVE=""  # 本次新鲜度核对/构建绑定的 tools 不可变镜像标识（image ID）
 IMAGES_LOCK="$REPO_ROOT/devenv/images.lock"
@@ -25,6 +57,42 @@ COMPOSE_FILE="$REPO_ROOT/devenv/compose.yaml"
 IMAGES_LOADED=0
 DB_IMAGE_EFFECTIVE=""
 DB_IMAGE_SOURCE=""
+
+# --- per-worktree 数据库凭据（#59）--------------------------------------------
+# 首调用生成每 worktree 随机口令（openssl rand -hex 16 → 32 hex，URI 安全），
+# 持久化 .devenv-state/db-credentials.env（0600，gitignored，per-worktree 私有）。
+# 口令随 worktree 状态保留：down/up 周期稳定（数据卷按初始口令初始化，换装必炸）；
+# down --volumes 重建空库仍用同一口令（凭据是 worktree 身份，不是数据）。
+# 隔离的是项目运行资源与每 worktree 的数据库/对象存储访问凭据（硬不变量 4），
+# 与 GitHub 身份凭据无关。compose() 每次调用前置，注入 db/api/tools 容器。
+DB_CREDENTIALS_LOADED=0
+DB_CREDENTIALS_ORIGIN="none"
+DB_PASSWORD_EFFECTIVE=""
+
+db_credentials_ensure() {
+  (( DB_CREDENTIALS_LOADED )) && return 0
+  local f dir pw
+  dir="${DEVENV_STATE_DIR:-$REPO_ROOT/.devenv-state}"
+  f="$dir/db-credentials.env"
+  if [[ -f "$f" ]]; then
+    pw="$(awk -F= '/^DB_PASSWORD=/{print $2}' "$f" | tail -1)"
+    [[ "$pw" =~ ^[0-9a-f]{32}$ ]] || die 3 "数据库凭据文件损坏（DB_PASSWORD 应为 32 hex）：$f。修复：删除该文件后重跑（将生成新口令；旧数据卷若已按旧口令初始化，需 devenv down --volumes 重建）"
+    DB_PASSWORD_EFFECTIVE="$pw"
+    DB_CREDENTIALS_ORIGIN="stored"
+  else
+    DB_PASSWORD_EFFECTIVE="$(openssl rand -hex 16 2>/dev/null)" \
+      || DB_PASSWORD_EFFECTIVE=""
+    [[ "$DB_PASSWORD_EFFECTIVE" =~ ^[0-9a-f]{32}$ ]] \
+      || die 3 "数据库凭据生成失败（openssl rand -hex 16 未返回 32 hex）。修复：确认 openssl 在 PATH"
+    mkdir -p "$dir" || die 3 "状态目录不可写：$dir"
+    ( umask 077
+      printf '# devenv 数据库凭据（devenv 维护，勿手改；每 worktree 随机生成，随状态保留）\nDB_PASSWORD=%s\n' \
+        "$DB_PASSWORD_EFFECTIVE" > "$f" ) || die 3 "凭据文件写入失败：$dir"
+    DB_CREDENTIALS_ORIGIN="generated"
+  fi
+  DB_CREDENTIALS_LOADED=1
+  return 0
+}
 
 require_lock_file() {
   [[ -f "$IMAGES_LOCK" ]] || die 3 "镜像锁文件缺失：$IMAGES_LOCK（devenv/images.lock 是版本唯一事实源）"
@@ -56,6 +124,9 @@ compose() {
   images_load
   command -v docker >/dev/null 2>&1 || die 3 "docker CLI 不在 PATH"
   docker compose version >/dev/null 2>&1 || die 3 "compose v2 插件缺失（docker compose version 失败）"
+  # 每 worktree 数据库凭据（#59）：生成/加载后注入 compose（db POSTGRES_PASSWORD +
+  # api/tools DATABASE_URL 同源）；首次生成写入 .devenv-state（per-worktree 私有）
+  db_credentials_ensure
   # 不可变绑定（#58）：优先本次核对/构建的 image ID；未跑过新鲜度核对的命令
   # （down/ps/logs 等）回退状态文件记录；均无才兜底可变 tag（仅只读/拆栈场景）。
   local ws_image="$WS_IMAGE_EFFECTIVE"
@@ -64,6 +135,7 @@ compose() {
     ws_image="${STATE_IMAGE_ID:-$WS_IMAGE}"
   fi
   REPO_ROOT="$REPO_ROOT" WORKSPACE_IMAGE="$ws_image" DB_IMAGE="$DB_IMAGE_EFFECTIVE" \
+    DB_PASSWORD="$DB_PASSWORD_EFFECTIVE" \
     WEB_PORT="${WEB_PORT:-5173}" \
     docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" "$@"
 }
@@ -122,6 +194,16 @@ tools_input_hash() { # <tree>
   printf '%s\n%s\n' "$blob" "$node_image" | sha256sum | awk '{print $1}'
 }
 
+# 登记 per-worktree 本地 tag（#59 评审修复）：新鲜度命中（直接采纳既有不可变镜像）
+# 也必须把该镜像登记到本 worktree 的 wt-<suffix> tag——tag 是归属可辨的职责，
+# 不随"构建还是采纳"分叉；否则 #75 回收核对与人工排查失去归属依据，且 Spec §3
+# "镜像 tag per-worktree" 在采纳路径落空。失败显式报错（exit 4），不静默跳过。
+register_local_image_tag() { # <imageId> <tag>
+  local id="$1" tag="$2"
+  [[ "$id" =~ ^sha256:[0-9a-f]{64}$ ]] || die 4 "内部错误：登记本地 tag 的 image ID 非法（id=$id tag=$tag）"
+  run_step "登记 per-worktree 镜像 tag（$tag → ${id:0:19}…）" docker tag "$id" "$tag"
+}
+
 # tools 基础镜像新鲜度核对/重建（#58 评审修复：tools 纳入快照与不可变绑定）。
 # 命中 → TOOLS_IMAGE_EFFECTIVE=状态 ID；未命中（无状态/镜像丢失/输入哈希不符）→
 # 从快照物化目录重建并记录。NODE_IMAGE 取自快照内 images.lock，不读活工作树。
@@ -133,6 +215,7 @@ ensure_tools_image() { # <tree>
   labeled="$(image_label_or_miss "$STATE_TOOLS_IMAGE_ID" '{{index .Config.Labels "devenv.tools.input-hash"}}')"
   if [[ -n "$STATE_TOOLS_IMAGE_ID" && "$STATE_TOOLS_INPUT_HASH" == "$h" && "$labeled" == "$h" ]]; then
     TOOLS_IMAGE_EFFECTIVE="$STATE_TOOLS_IMAGE_ID"
+    register_local_image_tag "$STATE_TOOLS_IMAGE_ID" "$TOOLS_IMAGE"
     ev tools.fresh imageId="$STATE_TOOLS_IMAGE_ID" inputHash="$h"
     return 0
   fi
@@ -160,8 +243,8 @@ ensure_tools_image() { # <tree>
 }
 
 # 从固定快照构建 workspace 镜像并记录不可变绑定（#58）。
-# 基础镜像经 --build-arg TOOLS_IMAGE=<不可变 ID> 传入（不依赖可被覆盖的 tools:local
-# 标签）；镜像 label 记录快照哈希 + 构建输入清单 + 基础镜像 ID（可核对链路：
+# 基础镜像经 --build-arg TOOLS_IMAGE=<不可变 ID> 传入（不依赖 per-worktree 可变
+# 标签 wt-<suffix>）；镜像 label 记录快照哈希 + 构建输入清单 + 基础镜像 ID（可核对链路：
 # 固定快照 → tools 不可变 ID → workspace 不可变 ID）；构建返回的 image ID
 # （docker build -q 输出，免 tag 二次解析竞态）写入状态文件。
 build_workspace_from_snapshot() { # <tree> [已物化目录]
@@ -212,6 +295,7 @@ ensure_fresh_workspace() {
   labeled="$(image_label_or_miss "$STATE_IMAGE_ID" '{{index .Config.Labels "devenv.snapshot.hash"}} {{index .Config.Labels "devenv.base.image"}}')"
   if [[ -n "$STATE_IMAGE_ID" && "$STATE_SNAPSHOT_HASH" == "$s" && "$labeled" == "$s $TOOLS_IMAGE_EFFECTIVE" ]]; then
     WS_IMAGE_EFFECTIVE="$STATE_IMAGE_ID"
+    register_local_image_tag "$STATE_IMAGE_ID" "$WS_IMAGE"
     ev workspace.fresh imageId="$STATE_IMAGE_ID" snapshot="$s"
     note "workspace 镜像新鲜（快照 ${s:0:12}… ↔ ${STATE_IMAGE_ID:0:19}…），跳过重建"
     ev step.completed target="workspace image freshness"

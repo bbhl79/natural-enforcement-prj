@@ -1,0 +1,6 @@
+=== 遗留共享项目处置决策 ===
+#59 前共享项目 natural-enforcement 仍有运行容器（natural-enforcement-db-1/api-1，
+无宿主端口发布）。按 ADR「宁多留勿误删」与 #75 边界，本次验收不强制删除它们：
+per-worktree 项目名使 A/B 使用独立网络/卷/容器，遗留容器与本证据场景零干扰
+（doctor 的 legacy-project warn 如实报告其存在，见 00-prep-doctor.txt）。
+遗留资源的人工确认清理与卷/镜像回收归 #75。

@@ -331,7 +331,7 @@ snapshot_state_store "0000000000000000000000000000000000000000" "$WS_IMG" "$TH" 
 : > "$MOCK_DOCKER_STATE/calls.log"
 runsub s11 ensure_and_echo
 NEW_IMG="$(awk -F= '/^EFFECTIVE=/{print $2}' "$SANDBOX/s11.out")"
-EXPECTED_NEW="sha256:$(printf '%s|%s|%s|%s' "natural-enforcement/workspace:local" "$H" "" "TOOLS_IMAGE=$TOOLS_IMG;" | sha256sum | awk '{print $1}')"
+EXPECTED_NEW="sha256:$(printf '%s|%s|%s|%s' "$WS_IMAGE" "$H" "" "TOOLS_IMAGE=$TOOLS_IMG;" | sha256sum | awk '{print $1}')"
 if [[ "$RC" == 0 && "$NEW_IMG" == "$EXPECTED_NEW" && "$NEW_IMG" != "$WS_IMG" ]]; then
   pass "S11 快照不符重建并绑定新不可变 ID"
 else
@@ -398,7 +398,7 @@ grep -q 'WORKSPACE_IMAGE=sha256:bbb' "$MOCK_DOCKER_STATE/calls.log" \
 rm -f "$DEVENV_STATE_DIR/workspace-image.env"
 : > "$MOCK_DOCKER_STATE/calls.log"
 runsub s14c compose ps
-grep -q 'WORKSPACE_IMAGE=natural-enforcement/workspace:local' "$MOCK_DOCKER_STATE/calls.log" \
+grep -q "WORKSPACE_IMAGE=$WS_IMAGE" "$MOCK_DOCKER_STATE/calls.log" \
   && pass "S14 无状态兜底可变 tag（仅 down/ps 等场景）" || fail "S14" "未兜底 tag"
 
 # S15 启动核对（verify_svc_image）：运行容器镜像 == 绑定 ID 通过；不符拒绝
@@ -417,7 +417,10 @@ rm -f "$MOCK_DOCKER_STATE/container" "$MOCK_DOCKER_STATE/container-image"
 # ---------------------------------------------------------------------------
 
 DEVENV="$MINI/devenv/devenv"
-TOOLS_TAG_FILE="$MOCK_DOCKER_STATE/tags/natural-enforcement_tools_local"
+# 经真实入口（$DEVENV）的运行使用 MINI 自身的 worktree 身份——tag 文件须按 MINI 派生
+# （主测试 shell source 库时用的是真实仓库身份，两者 suffix 不同）
+MINI_WT_SUFFIX="$(printf '%s' "$(git -C "$MINI" rev-parse --absolute-git-dir)" | sha256sum | awk '{print $1}' | cut -c1-8)"
+TOOLS_TAG_FILE="$MOCK_DOCKER_STATE/tags/natural-enforcement_tools_wt-$MINI_WT_SUFFIX"
 
 # S16 lockfile 在场：tools + workspace 快照构建，不走 lockgen；状态/标签齐全
 git -C "$MINI" checkout -q -- . 2>/dev/null || true
@@ -548,14 +551,14 @@ else
   fail "S20" "rc=$RC log=$(cat "$MOCK_DOCKER_STATE/calls.log")"
 fi
 
-# S21 受控反例：构建前覆盖 tools:local → 不重建 tools，workspace 仍绑定状态 tools ID
+# S21 受控反例：构建前覆盖 tools wt 标签 → 不重建 tools，workspace 仍绑定状态 tools ID
 OTHER_ID="sha256:$(printf 'override-target' | sha256sum | awk '{print $1}')"
 write_image "$OTHER_ID" "" "" ""
-printf '%s\n' "$OTHER_ID" > "$TOOLS_TAG_FILE"  # 覆盖 tools:local 指向另一个镜像
+printf '%s\n' "$OTHER_ID" > "$TOOLS_TAG_FILE"  # 覆盖 tools wt 标签指向另一个镜像
 : > "$MOCK_DOCKER_STATE/calls.log"
 run s21a "$DEVENV" test:unit
 if [[ "$RC" == 0 ]] && ! grep -q 'docker build' "$MOCK_DOCKER_STATE/calls.log"; then
-  pass "S21 tools:local 被覆盖后消费不重建（状态绑定仍新鲜）"
+  pass "S21 tools wt 标签被覆盖后消费不重建（状态绑定仍新鲜）"
 else
   fail "S21a" "rc=$RC log=$(cat "$MOCK_DOCKER_STATE/calls.log")"
 fi

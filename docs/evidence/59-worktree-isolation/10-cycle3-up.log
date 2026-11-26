@@ -1,0 +1,44 @@
+[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
+{"event":"engine","identity":"podman","version":"6.1.4","os":"linux","arch":"amd64","endpoint":"unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock","source":"DOCKER_HOST 环境变量"}
+{"event":"step.started","target":"workspace image freshness"}
+{"event":"snapshot.captured","hash":"0ecbba327ce21c309621a57f8151ed1c6ea202fb"}
+{"event":"tools.fresh","imageId":"sha256:d6fb6674882dd85407efa7ec2432cf7518eebb79272cfb090fbe83eedd9772bd","inputHash":"4842d6391742396e725c2eab7e33b4332ac3bd51d7a29b2d05af6e28f9beece6"}
+{"event":"step.completed","target":"workspace image freshness"}
+{"event":"step.started","target":"workspace image (snapshot build)"}
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+{"event":"workspace.built","imageId":"sha256:f2381b0c50e630aeb54289618fa8b2f150635c499d996968c30d2484842242ac","snapshot":"0ecbba327ce21c309621a57f8151ed1c6ea202fb","base":"sha256:d6fb6674882dd85407efa7ec2432cf7518eebb79272cfb090fbe83eedd9772bd"}
+{"event":"step.completed","target":"workspace image (snapshot build)"}
+ Network natural-enforcement-90e22128_default  Creating
+ Network natural-enforcement-90e22128_default  Created
+ Container natural-enforcement-90e22128-db-1  Creating
+ Container natural-enforcement-90e22128-db-1  Created
+ Container natural-enforcement-90e22128-db-1  Starting
+ Container natural-enforcement-90e22128-db-1  Started
+{"event":"wait.started","service":"db"}
+{"event":"wait.ok","service":"db"}
+{"event":"step.started","target":"migrate deploy"}
+Loaded Prisma config from prisma.config.ts.
+
+Prisma schema loaded from prisma/schema.prisma.
+Datasource "db": PostgreSQL database "natural_enforcement_dev", schema "public" at "db:5432"
+
+1 migration found in prisma/migrations
+
+
+No pending migrations to apply.
+{"event":"step.completed","target":"migrate deploy"}
+ Container natural-enforcement-90e22128-db-1  Running
+ Container natural-enforcement-90e22128-api-1  Creating
+ Container natural-enforcement-90e22128-api-1  Created
+ Container natural-enforcement-90e22128-db-1  Waiting
+ Container natural-enforcement-90e22128-db-1  Healthy
+ Container natural-enforcement-90e22128-api-1  Starting
+ Container natural-enforcement-90e22128-api-1  Started
+{"event":"wait.started","service":"api"}
+{"event":"wait.ok","service":"api"}
+{"event":"image.verified","service":"api","imageId":"sha256:f2381b0c50e630aeb54289618fa8b2f150635c499d996968c30d2484842242ac"}
+[devenv] 全部服务健康（db, api），迁移已应用
+{"command":"up","status":"ok","exitCode":0,"services":"db,api"}

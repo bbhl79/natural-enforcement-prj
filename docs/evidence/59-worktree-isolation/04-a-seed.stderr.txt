@@ -1,0 +1,7 @@
+[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+$ node dist/scripts/seed.js
+{"seeded":5,"mode":"idempotent"}

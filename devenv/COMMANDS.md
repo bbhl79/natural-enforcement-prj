@@ -14,11 +14,11 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 
 | Action | Command | 期望退出码 |
 |---|---|---|
-| 一键体检（端点/引擎/矩阵/锁文件/镜像/快照状态/服务；退出码=可开工与否） | `devenv doctor` | 0 或 3 |
+| 一键体检（端点/引擎/矩阵/锁文件/worktree 身份与凭据状态/镜像/快照状态/服务；退出码=可开工与否） | `devenv doctor` | 0 或 3 |
 | 预取镜像锁中的上游镜像（分阶段、有进度/超时、可中断续跑） | `devenv prefetch` | 0 或 3/4/5 |
 | 固定快照构建工具镜像 + 安装依赖 + turbo build（幂等；记录快照哈希与不可变镜像标识） | `devenv build [--lockgen]` | 0 或 3/4/6 |
 | 启动 db → 迁移幂等应用 → api，等待真实健康终态（幂等） | `devenv up` | 0 或 3/4/5/6 |
-| 停止（连带清掉不在 compose 文件中的本项目遗留容器；--volumes 再清数据卷；不含 profile 隔离的 web——用 `web --down`） | `devenv down [--volumes]` | 0 或 3/6 |
+| 停止（连带清掉不在 compose 文件中的本项目容器；--volumes 再清数据卷；仅本 worktree 项目范围；不含 profile 隔离的 web——用 `web --down`） | `devenv down [--volumes]` | 0 或 3/6 |
 | 重启 | `devenv restart [svc...]` | 0 或 3/6 |
 | 启动前端并发布宿主端口（零端口不变量的唯一例外） | `devenv web [--port N] [--down]` | 0 或 2/3/5 |
 | 容器状态 | `devenv ps [-a]` | 0 或 3 |
@@ -45,7 +45,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 以 App 身份 HTTPS 推送 | `devenv git-push <remote> <refspec...>` | 0 或 2/20/21/22/23 或 git 自身退出码 |
 | 认证入口离线测试（不访问 GitHub） | `devenv test:auth` | 0 或 1 |
 | 认证入口真实集成测试（默认只读；写操作需显式旗标） | `devenv test:auth:integration [旗标]` | 0 或 1 或 2 |
-| 命令面离线测试（引擎解析/锁/输出协议/快照与不可变绑定，mock docker） | `devenv test:devenv` | 0 或 1 |
+| 命令面离线测试（引擎解析/锁/输出协议/快照与不可变绑定/per-worktree 隔离，mock docker） | `devenv test:devenv` | 0 或 1 |
 
 ## 退出码枚举（总表归 Spec-工程基座；7–10 e2e 专用码段由 Spec-e2e 登记）
 
@@ -114,19 +114,55 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 - 锁实现：宿主侧 **POSIX mkdir 原子目录锁**（不依赖 flock，macOS 可用）；
   锁目录含持有者 pid + 启动时间；失效判定以持有进程存活为准（kill -0），
   不按单纯超时删锁；持有者死亡留下的失效锁会被清理后可取得。
-- 锁命名空间 `/tmp/natural-enforcement-locks`（机器级，跨 worktree 共享）。
+- 锁命名空间 `/tmp/natural-enforcement-locks`（机器级目录；锁名分派见下表）。
+- **跨 worktree**：栈/数据/网络已按 worktree 隔离（见下节），stack/migrate 锁
+  随之 per-worktree——不同 worktree 的 build/up/down/migrate **互不阻塞**；
+  机器级仅 lockgen（共享 ne-lockgen:tmp 标签与遗留容器清理）。
 
 | 命令 | 持有锁 | 互斥对象 |
 |---|---|---|
-| build / up / down / restart / web（up 路径） | stack（排他） | 彼此两两互斥 |
-| migrate / migrate:create | stack + migrate（排他，按此顺序取得） | 彼此互斥；与 build/up/down 互斥 |
+| build / up / down / restart / web（up 路径） | stack-<wt>（排他，per-worktree） | 本 worktree 内彼此两两互斥 |
+| migrate / migrate:create | stack-<wt> + migrate-<wt>（排他，按此顺序取得） | 本 worktree 内互斥；与其它 worktree 互不阻塞 |
+| build 触发的 lockgen | lockgen（机器级） | 跨 worktree 互斥（共享标签/容器清理）；冲突等待或 exit 6（重跑即续） |
 | test / verify / lint / typecheck / seed | 无（#61 引入栈使用租约） | — |
 | 只读（ps/logs/status/images/doctor） | 无 | 任意并发 |
 
-> 完整冲突矩阵（测试运行期共享租约、per-worktree 锁细分、机器级 lockgen 锁）
-> 归 #61；本票先保证互斥原语两平台可用与 build/up/down/migrate/web 排他。
-> 另：凡加载 images.lock 的命令（prefetch/build/up/images/status/doctor 等）在
+> 完整冲突矩阵（测试运行期共享租约、e2e 锁细分）归 #61；锁原语与失效演练
+> 归 #58 验收（T13–T15）。另：凡加载 images.lock 的命令（prefetch/build/up/images/status/doctor 等）在
 > 锁文件缺失或 `DEVENV_DB_IMAGE` 格式非法时可退出 2（用法错误），上表不逐行重复。
+
+## per-worktree 运行资源隔离（#59，Spec-工程基座 硬不变量 4）
+
+- **worktree 身份**：git 目录路径（`git rev-parse --absolute-git-dir`；主工作树
+  `<root>/.git`，链接 worktree `.git/worktrees/<id>`）——per-worktree 唯一且对
+  worktree 目录改名/移动稳定。非 git 上下文（离线测试沙箱等）回退工作树根路径
+  哈希，source 期不 die。`DEVENV_WORKTREE_ID` 仅供离线测试注入确定性身份。
+- **派生命名**：compose 项目名 `natural-enforcement-<8hex>`（容器/卷/网络的隔离根；
+  compose.yaml 不写死 name，devenv 一律 `-p` 注入）；本地构建镜像 tag
+  `natural-enforcement/{tools,workspace}:wt-<8hex>`（归属可辨）。
+- **镜像共享**：镜像内容按不可变产物共享（同快照+同 tools 输入 → 同 image ID，
+  存储层内容寻址去重）；运行正确性由不可变 image ID 绑定保证（#58），
+  per-worktree tag 不替代绑定。
+- **数据库凭据 per-worktree**：首调用 `openssl rand -hex 16`（32 hex，URI 安全）
+  生成随机口令，持久化 `.devenv-state/db-credentials.env`（0600，gitignored，
+  per-worktree 私有）；db `POSTGRES_PASSWORD` 与 api/tools `DATABASE_URL` 同源
+  注入。口令随 worktree 状态保留：down/up 周期稳定（数据卷按初始口令初始化，
+  换装必炸）；`down --volumes` 重建空库仍用同一口令（凭据是 worktree 身份不是数据）。
+  凭据文件损坏（非 32 hex）→ exit 3 并内嵌修复命令。
+- **锁分派**：stack-<wt>/migrate-<wt> per-worktree；lockgen 机器级（唯一跨
+  worktree 共享的可变资源是 ne-lockgen:tmp 标签 + 同名遗留容器清理）。
+  migrate:create 容器名 `ne-migrate-create-<wt>`（机器级唯一）。
+- **遗留共享项目**：#59 前所有 worktree 共用 compose 项目 `natural-enforcement`
+  （容器/卷/网络）。#59 后该项目不被任何 worktree 管理：down 不触碰，doctor
+  发现遗留容器报 warn（exit 仍 0）；遗留卷/镜像回收归 #75（宁多留勿误删）。
+- **web 宿主端口（已声明残余，归 #62）**：web 是零宿主端口不变量的唯一 opt-in
+  例外，`--port` 默认 5173 为各 worktree 共享值——B 在 A 已发布 5173 时执行
+  `devenv web` 会在 **B 侧**绑定失败（报错明确），A 的访问地址不受影响；
+  并发 web 入口（派生/动态分配端口）整体归 #62（Task-提供并发web入口与可观察命令面）。
+- **对象存储凭据（前置声明）**：#56 最小栈暂无 rustfs/对象存储服务，"数据库/对象存储
+  凭据独立"中对象存储半条当前为空集；服务回归时必须复刻 db_credentials_ensure
+  模式（每 worktree 生成 + .devenv-state 持久化 + compose 同源注入），归该服务
+  的实施票并与 #75 回收核对衔接。
 
 ## 架构不变量（Spec-工程基座 硬不变量，本命令面执行）
 
@@ -136,7 +172,8 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 - **宿主工具链零安装**：node/pnpm/prisma 只在容器内执行；源码消费型命令
   （up/test/lint/typecheck/verify/migrate*/seed/web）前置 `ensure_fresh_workspace`
   新鲜度核对（快照一致时亚秒级跳过，不一致时层缓存命中秒级重建），保证容器内
-  即当前工作树代码。（固定输入快照与不可变绑定机制见下节；per-worktree 隔离归 #59。）
+  即当前工作树代码。（固定输入快照与不可变绑定机制见下节；per-worktree 隔离
+  已落地，见「per-worktree 运行资源隔离」节。）
 - **devenv 唯一入口**：禁止直接操作 compose；静态检查拦截归 #76。
 
 ## 固定输入快照与不可变绑定（#58 落地，Spec-工程基座 §3）
@@ -179,4 +216,4 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
   cache mount（`sharing=locked`），普通构建保持 `--frozen-lockfile`；store 是
   缓存不是信任根，干净重建换 cache id（`--build-arg PNPM_STORE_CACHE_ID=<新 id>`）。
 - **诚实口径**：本机制检查来源一致性、减少运行旧代码，**不声称完整构建证明**；
-  锁实现与租约细分归 #61，per-worktree 隔离归 #59。
+  锁租约细分归 #61；per-worktree 隔离已落地（见「per-worktree 运行资源隔离」节）。

@@ -1,0 +1,110 @@
+=== B 场景（worktree: /home/hulei815/Workspaces/ne-59-evidence-b，detached @ a714ecd）===
+B 项目名: natural-enforcement-a1648842
+--- B build ---
+[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
+{"event":"engine","identity":"podman","version":"6.1.4","os":"linux","arch":"amd64","endpoint":"unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock","source":"DOCKER_HOST 环境变量"}
+{"event":"snapshot.captured","hash":"831e1bf6d84a1e65fe409803c283a0a94269acf1"}
+{"event":"step.started","target":"tools base image"}
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+{"event":"tools.built","imageId":"sha256:d6fb6674882dd85407efa7ec2432cf7518eebb79272cfb090fbe83eedd9772bd","inputHash":"4842d6391742396e725c2eab7e33b4332ac3bd51d7a29b2d05af6e28f9beece6"}
+{"event":"step.completed","target":"tools base image"}
+{"event":"step.started","target":"workspace image (snapshot build)"}
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+{"event":"workspace.built","imageId":"sha256:45729ebe6bafd73234a45f7a32e11cab6d9e5ac9dc9fd0ff0efb4843ba3a2663","snapshot":"831e1bf6d84a1e65fe409803c283a0a94269acf1","base":"sha256:d6fb6674882dd85407efa7ec2432cf7518eebb79272cfb090fbe83eedd9772bd"}
+{"event":"step.completed","target":"workspace image (snapshot build)"}
+[devenv] build 完成
+{"command":"build","status":"ok","exitCode":0,"duration":"4s","snapshot":"831e1bf6d84a1e65fe409803c283a0a94269acf1"}
+>>> B build exit=0
+--- B up ---
+[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
+{"event":"engine","identity":"podman","version":"6.1.4","os":"linux","arch":"amd64","endpoint":"unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock","source":"DOCKER_HOST 环境变量"}
+{"event":"step.started","target":"workspace image freshness"}
+{"event":"snapshot.captured","hash":"831e1bf6d84a1e65fe409803c283a0a94269acf1"}
+{"event":"tools.fresh","imageId":"sha256:d6fb6674882dd85407efa7ec2432cf7518eebb79272cfb090fbe83eedd9772bd","inputHash":"4842d6391742396e725c2eab7e33b4332ac3bd51d7a29b2d05af6e28f9beece6"}
+{"event":"workspace.fresh","imageId":"sha256:45729ebe6bafd73234a45f7a32e11cab6d9e5ac9dc9fd0ff0efb4843ba3a2663","snapshot":"831e1bf6d84a1e65fe409803c283a0a94269acf1"}
+[devenv] workspace 镜像新鲜（快照 831e1bf6d84a… ↔ sha256:45729ebe6baf…），跳过重建
+{"event":"step.completed","target":"workspace image freshness"}
+ Network natural-enforcement-a1648842_default  Creating
+ Network natural-enforcement-a1648842_default  Created
+ Volume natural-enforcement-a1648842_pgdata  Creating
+ Volume natural-enforcement-a1648842_pgdata  Created
+ Container natural-enforcement-a1648842-db-1  Creating
+ Container natural-enforcement-a1648842-db-1  Created
+ Container natural-enforcement-a1648842-db-1  Starting
+ Container natural-enforcement-a1648842-db-1  Started
+{"event":"wait.started","service":"db"}
+{"event":"wait.ok","service":"db"}
+{"event":"step.started","target":"migrate deploy"}
+ Volume natural-enforcement-a1648842_turbo-cache  Creating
+ Volume natural-enforcement-a1648842_turbo-cache  Created
+Loaded Prisma config from prisma.config.ts.
+
+Prisma schema loaded from prisma/schema.prisma.
+Datasource "db": PostgreSQL database "natural_enforcement_dev", schema "public" at "db:5432"
+
+1 migration found in prisma/migrations
+
+Applying migration `20261125000000_init_enforcement_point_geo`
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 20261125000000_init_enforcement_point_geo/
+    └─ migration.sql
+
+All migrations have been successfully applied.
+{"event":"step.completed","target":"migrate deploy"}
+ Container natural-enforcement-a1648842-db-1  Running
+ Container natural-enforcement-a1648842-api-1  Creating
+ Container natural-enforcement-a1648842-api-1  Created
+ Container natural-enforcement-a1648842-db-1  Waiting
+ Container natural-enforcement-a1648842-db-1  Healthy
+ Container natural-enforcement-a1648842-api-1  Starting
+ Container natural-enforcement-a1648842-api-1  Started
+{"event":"wait.started","service":"api"}
+{"event":"wait.ok","service":"api"}
+{"event":"image.verified","service":"api","imageId":"sha256:45729ebe6bafd73234a45f7a32e11cab6d9e5ac9dc9fd0ff0efb4843ba3a2663"}
+[devenv] 全部服务健康（db, api），迁移已应用
+{"command":"up","status":"ok","exitCode":0,"services":"db,api"}
+>>> B up exit=0
+--- B migrate ---
+[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
+{"event":"engine","identity":"podman","version":"6.1.4","os":"linux","arch":"amd64","endpoint":"unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock","source":"DOCKER_HOST 环境变量"}
+{"event":"step.started","target":"workspace image freshness"}
+{"event":"snapshot.captured","hash":"831e1bf6d84a1e65fe409803c283a0a94269acf1"}
+{"event":"tools.fresh","imageId":"sha256:d6fb6674882dd85407efa7ec2432cf7518eebb79272cfb090fbe83eedd9772bd","inputHash":"4842d6391742396e725c2eab7e33b4332ac3bd51d7a29b2d05af6e28f9beece6"}
+{"event":"workspace.fresh","imageId":"sha256:45729ebe6bafd73234a45f7a32e11cab6d9e5ac9dc9fd0ff0efb4843ba3a2663","snapshot":"831e1bf6d84a1e65fe409803c283a0a94269acf1"}
+[devenv] workspace 镜像新鲜（快照 831e1bf6d84a… ↔ sha256:45729ebe6baf…），跳过重建
+{"event":"step.completed","target":"workspace image freshness"}
+Loaded Prisma config from prisma.config.ts.
+
+Prisma schema loaded from prisma/schema.prisma.
+Datasource "db": PostgreSQL database "natural_enforcement_dev", schema "public" at "db:5432"
+
+1 migration found in prisma/migrations
+
+
+No pending migrations to apply.
+{"command":"migrate","status":"ok","exitCode":0,"mode":"deploy"}
+>>> B migrate exit=0
+--- B down ---
+[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
+{"event":"engine","identity":"podman","version":"6.1.4","os":"linux","arch":"amd64","endpoint":"unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock","source":"DOCKER_HOST 环境变量"}
+ Container natural-enforcement-a1648842-api-1  Stopping
+ Container natural-enforcement-a1648842-api-1  Stopped
+ Container natural-enforcement-a1648842-api-1  Removing
+ Container natural-enforcement-a1648842-api-1  Removed
+ Container natural-enforcement-a1648842-db-1  Stopping
+ Container natural-enforcement-a1648842-db-1  Stopped
+ Container natural-enforcement-a1648842-db-1  Removing
+ Container natural-enforcement-a1648842-db-1  Removed
+ Network natural-enforcement-a1648842_default  Removing
+ Network natural-enforcement-a1648842_default  Removed
+{"command":"down","status":"ok","exitCode":0,"volumes":"kept"}
+>>> B down exit=0

@@ -1,0 +1,7 @@
+[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
+[devenv] WARN: 锁 [stack-90e22128] 持有者已死，清理失效锁：/tmp/natural-enforcement-locks/stack-90e22128.lock
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+[devenv] build 完成
