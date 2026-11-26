@@ -47,3 +47,18 @@ final() { # 终值（仅 --json 时输出单 JSON）：final <status> <exitCode>
   (( JSON )) || return 0
   printf '{"command":"%s","status":"%s","exitCode":%s%s}\n' "$CMD" "$status" "$exit_code" "$(json_pairs "$@")"
 }
+
+# 透传命令（exec/shell/logs）统一包装（Spec §4 第 2 类，#62）：
+#   - 默认：子进程原始流保持原通道（stdout/stderr 原样透传，可管道消费），退出码
+#     = 子进程码（set -e 原样传播）。
+#   - --json：子进程 stdout 分流到 stderr（原始流走独立通道，不污染结果流），
+#     stdout 只放终值元数据（command/status/exitCode=子进程码）；退出码仍是子进程码。
+run_passthrough() { # run_passthrough <cmd...>
+  if (( JSON )); then
+    local rc=0
+    "$@" 1>&2 || rc=$?
+    if (( rc )); then final failed "$rc"; else final ok 0; fi
+    exit "$rc"
+  fi
+  "$@"
+}

@@ -20,8 +20,8 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 启动 db → 迁移幂等应用 → api，等待真实健康终态（幂等） | `devenv up` | 0 或 3/4/5/6 |
 | 停止（连带清掉不在 compose 文件中的本项目容器；--volumes 再清数据卷；仅本 worktree 项目范围；不含 profile 隔离的 web——用 `web --down`） | `devenv down [--volumes]` | 0 或 3/6 |
 | 重启 | `devenv restart [svc...]` | 0 或 3/6 |
-| 启动前端并发布宿主端口（零端口不变量的唯一例外；up 与 --down 路径均持栈排他锁） | `devenv web [--port N] [--down]` | 0 或 2/3/5/6 |
-| 容器状态 | `devenv ps [-a]` | 0 或 3 |
+| 启动前端并发布宿主端口（零端口不变量的唯一例外；省略 --port 由引擎运行时分配空闲端口并回读实际端口进终值/status，--port N 显式固定发布；up 与 --down 路径均持栈排他锁） | `devenv web [--port N] [--down]` | 0 或 2/3/5/6 |
+| 容器状态（人读表含发布端口） | `devenv ps [-a]` | 0 或 3 |
 | 跟随日志（透传原始流） | `devenv logs [svc] [-f] [--tail N]` | 0 或 3 或子进程码 |
 | 容器内执行（默认 tools；透传原始流） | `devenv exec [svc] -- cmd...` | 0 或 2/3 或子进程码 |
 | 交互 shell（默认 tools；透传原始流） | `devenv shell [svc]` | 0 或 3 或子进程码 |
@@ -34,7 +34,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 生成空迁移待编辑（prisma migrate dev --create-only；与活跃租约互斥） | `devenv migrate:create --name N` | 0 或 2/3/4/6 |
 | 幂等种子数据（运行期持共享栈使用租约） | `devenv seed` | 0 或 3/4/6 |
 | 等待服务健康终态（默认 60s） | `devenv wait <db\|api\|web> [--timeout N]` | 0 或 2/3/5 |
-| 人读总览（容器+锁+租约+镜像） | `devenv status` | 0 或 3 |
+| 人读/机读总览（容器+锁+租约+镜像+web 实际端口；web 未运行如实报 none） | `devenv status` | 0 或 3 |
 | 查看镜像锁与生效 DB 镜像 / 校验运行态 digest 漂移 | `devenv images [--verify]` | 0 或 1/2/3 |
 
 ### GitHub App 认证入口（不触引擎；详见 docs/agents/github-app-auth.md）
@@ -53,7 +53,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 |---|---|---|
 | 0 | 成功 | — |
 | 2 | 用法错误（未知子命令/缺参数/非法覆盖格式） | 按 Usage 与 COMMANDS.md |
-| 3 | 环境未就绪（引擎不在矩阵、端点解析失败、服务未起、锁文件缺失） | 按错误内嵌修复命令（多为 `devenv up`/`devenv build`） |
+| 3 | 环境未就绪（引擎不在矩阵、端点解析失败、服务未起、锁文件缺失、web 显式端口被占用） | 按错误内嵌修复命令（多为 `devenv up`/`devenv build`；端口占用时报占用者并给替代命令） |
 | 4 | 任务失败（test/lint/typecheck/build/verify 非零；拉取失败；快照采集期工作树持续变化——明确拒绝，不出混合内容） | 看 stderr 完整输出；采集拒绝时暂停文件修改后重试 |
 | 5 | 超时（健康等待/镜像拉取） | `devenv logs <svc>` 排查；prefetch 重跑续跑 |
 | 6 | 独占锁或栈使用租约冲突（另一会话持锁 / 测试运行中） | 等待或确认持有者已死（失效锁与失效租约会自动清理）；错误消息列出持有者与修复线索 |
@@ -71,8 +71,11 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
    `{"event":"gate.completed",...}` 等），终值事件
    `{"command":"<cmd>","status":"ok|failed","exitCode":N,...}`；短命令为单 JSON。
    人类可读进度一律走 stderr，子进程原始输出捕获分流，**不得混入结果流**。
-2. **透传命令**（exec/shell/logs）：输出为子进程原始流，不承诺其输出本身是 JSON；
-   `--json` 对其仅包装终值元数据，原始流走独立通道。
+2. **透传命令**（exec/shell/logs）：默认输出为子进程原始流（stdout/stderr 原通道
+   透传，可管道消费），不承诺其输出本身是 JSON，退出码 = 子进程码。`--json`
+   仅包装终值元数据：子进程原始流整体分流到 stderr（独立通道），stdout 只放
+   引擎事件与终值（`{"command":"exec|shell|logs","status":"ok|failed","exitCode":<子进程码>}`），
+   进度与子进程输出不污染结构化结果流。
 3. **引擎报告**：每条工程栈命令执行前解析并报告实际端点 + 引擎身份/版本/架构
    （stderr 人类行 + `--json` 时 `{"event":"engine",...}` JSONL 事件）。
 
@@ -125,7 +128,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 
 | 命令 | 持有锁/租约 | 互斥对象 |
 |---|---|---|
-| build / up / down / restart / web（up 与 --down 路径） | stack-<wt>（排他，per-worktree） | 本 worktree 内彼此两两互斥；有活跃共享租约时等待，超时 exit 6 |
+| build / up / down / restart / web（up 与 --down 路径） | stack-<wt>（排他，per-worktree） | 本 worktree 内彼此两两互斥；有活跃共享租约时等待，超时 exit 6。web 端口分配不持锁：省略 --port 时引擎原子分配（#62），跨 worktree 无端口互斥 |
 | migrate / migrate:create | stack-<wt> + migrate-<wt>（排他，按此顺序取得） | 本 worktree 内互斥；与活跃共享租约互斥（等待/exit 6）；与其它 worktree 互不阻塞 |
 | test / test:unit / verify / lint / typecheck / seed（运行期） | stack-<wt> 共享租约（per-worktree） | 多个租约可并行；与上述排他命令双向互斥（读者遇排他锁等待/exit 6） |
 | prefetch | prefetch（机器级） | 跨 worktree 互斥（基础镜像拉取）；冲突等待或 exit 6（重跑续跑） |
@@ -186,10 +189,15 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 - **遗留共享项目**：#59 前所有 worktree 共用 compose 项目 `natural-enforcement`
   （容器/卷/网络）。#59 后该项目不被任何 worktree 管理：down 不触碰，doctor
   发现遗留容器报 warn（exit 仍 0）；遗留卷/镜像回收归 #75（宁多留勿误删）。
-- **web 宿主端口（已声明残余，归 #62）**：web 是零宿主端口不变量的唯一 opt-in
-  例外，`--port` 默认 5173 为各 worktree 共享值——B 在 A 已发布 5173 时执行
-  `devenv web` 会在 **B 侧**绑定失败（报错明确），A 的访问地址不受影响；
-  并发 web 入口（派生/动态分配端口）整体归 #62（Task-提供并发web入口与可观察命令面）。
+- **web 宿主端口（#62 已落地）**：web 是零宿主端口不变量的唯一 opt-in 例外。
+  省略 `--port` 时注入裸容器端口（`4173`），由引擎在绑定时**原子分配**空闲宿主
+  端口——不做"探测时空闲 → 再绑定"式预占（TOCTOU），两个 worktree 并发
+  `devenv web` 实际成功且天然不同端口（Windows 实机证据：
+  `docs/evidence/62-web-concurrency/`）；`--port N` 显式固定发布，冲突在引擎
+  绑定时真实失败后诊断占用者（容器占用者经 `docker ps` Ports 文本识别，非容器
+  监听者经 TCP 探测区分），exit 3 且错误含服务/端口/占用者/内嵌修复命令。
+  实际端口一律经 `docker port` 回读（不预测），进 `--json` 终值与 `status`
+  （`web_port`/`web_url`，按本 worktree 项目标签过滤；未运行如实报 none）。
 - **对象存储凭据（前置声明）**：#56 最小栈暂无 rustfs/对象存储服务，"数据库/对象存储
   凭据独立"中对象存储半条当前为空集；服务回归时必须复刻 db_credentials_ensure
   模式（每 worktree 生成 + .devenv-state 持久化 + compose 同源注入），归该服务
@@ -199,7 +207,8 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 
 - **无 bind 烘焙镜像**：源码经 `devenv/workspace.Dockerfile` COPY 进镜像；compose
   只挂命名卷（pgdata、turbo-cache）；零宿主端口（web 唯一显式例外，profile 隔离
-  opt-in）。调试访问一律经 `devenv exec/shell/logs`，不开放调试端口。
+  opt-in，端口默认引擎运行时分配、实际端口回读入 status——#62）。调试访问一律经
+  `devenv exec/shell/logs`，不开放调试端口（API/数据库等调试同此入口）。
 - **宿主工具链零安装**：node/pnpm/prisma 只在容器内执行；源码消费型命令
   （up/test/lint/typecheck/verify/migrate*/seed/web）前置 `ensure_fresh_workspace`
   新鲜度核对（快照一致时亚秒级跳过，不一致时层缓存命中秒级重建），保证容器内

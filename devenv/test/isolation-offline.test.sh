@@ -19,6 +19,11 @@
 #      （#56 起潜伏 bug 的守卫——离线 mock 曾使其不可见）
 #   9. 锁与栈使用租约（#61）：租约 per-worktree；真实入口读者命令持共享租约、
 #      与排他命令互斥；prefetch 机器级拉取锁跨 worktree 生效；web --down 持栈锁
+#  10. 并发 web 入口与可观察命令面（#62）：省略 --port 引擎运行时分配端口
+#      （裸容器端口注入，不做"探测时空闲"式预占）、--port 显式值注入与绑定冲突
+#      诊断（容器占用者/非容器占用者/通用失败三分）、实际端口回读进 --json 终值
+#      与 status；exec/shell/logs 透传语义（原始流原通道；--json 仅包装终值元数据，
+#      原始流分流 stderr）；零宿主端口不变量静态守卫（compose 仅 web 发布端口）
 # ============================================================================
 set -Eeuo pipefail
 
@@ -97,10 +102,42 @@ case "$cmd" in
     {
       printf 'compose args:'
       for a in "$@"; do printf ' %q' "$a"; done
-      printf ' | WORKSPACE_IMAGE=%s DB_IMAGE=%s DB_PASSWORD=%s WEB_PORT=%s\n' \
-        "${WORKSPACE_IMAGE:-}" "${DB_IMAGE:-}" "${DB_PASSWORD:-}" "${WEB_PORT:-}"
+      printf ' | WORKSPACE_IMAGE=%s DB_IMAGE=%s DB_PASSWORD=%s WEB_PORT_SPEC=%s\n' \
+        "${WORKSPACE_IMAGE:-}" "${DB_IMAGE:-}" "${DB_PASSWORD:-}" "${WEB_PORT_SPEC:-}"
     } >> "$STATE/calls.log"
     [[ "${1:-}" == "version" ]] && echo "2.40.3"
+    # web 绑定失败注入（#62）：显式端口冲突时 compose up -d web 非零退出
+    if [[ "${MOCK_COMPOSE_WEB_FAIL:-}" == "1" ]]; then
+      has_up=0; has_web=0
+      for a in "$@"; do [[ "$a" == "up" ]] && has_up=1; [[ "$a" == "web" ]] && has_web=1; done
+      if (( has_up && has_web )); then
+        echo "Error response from daemon: Bind for 0.0.0.0:${MOCK_FAIL_PORT:-8080} failed: port is already allocated" >&2
+        exit 1
+      fi
+    fi
+    # 透传载荷执行（#62 测试）：run --rm <svc> <payload...> / exec <svc> <payload...>
+    # 真实执行载荷命令，验证 exec/shell 的原始流走向与退出码传播
+    if [[ "${MOCK_EXEC_PAYLOAD:-}" == "1" ]]; then
+      mode=""; rest=()
+      for a in "$@"; do
+        if [[ -z "$mode" ]]; then
+          case "$a" in run|exec) mode="$a" ;; esac
+        else
+          rest+=("$a")
+        fi
+      done
+      if [[ -n "$mode" ]]; then
+        [[ "${rest[0]:-}" == "--rm" ]] && rest=("${rest[@]:1}")
+        rest=("${rest[@]:1}")  # 去 svc 名
+        if ((${#rest[@]})); then "${rest[@]}" </dev/null; exit $?; fi
+      fi
+    fi
+    # logs 透传 fixture（#62 测试）：打印原始日志行到 stdout
+    if [[ -n "${MOCK_LOGS_LINE:-}" ]]; then
+      for a in "$@"; do
+        [[ "$a" == "logs" ]] && printf '%s\n' "$MOCK_LOGS_LINE"
+      done
+    fi
     exit 0 ;;
   pull)
     # 机器级基础镜像拉取锁（#61）：pull 期间 prefetch 锁须在场
@@ -181,7 +218,44 @@ case "$cmd" in
     exit 0 ;;
   create) printf 'cid-mock\n' ;;
   cp|rm|rmi) exit 0 ;;
+  port)
+    # docker port <cid> 4173/tcp → 引擎分配结果回读（#62 fixture）
+    [[ "${MOCK_WEB_RUNNING:-}" == "1" ]] || exit 1
+    printf '0.0.0.0:%s\n' "${MOCK_WEB_PORT:-49152}" ;;
+  inspect)
+    # 容器 inspect（与 image inspect 区分）：健康状态与容器固化镜像（#62 web 路径）
+    fmt=""; ref=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --format) fmt="$2"; shift 2 ;;
+        *) ref="$1"; shift ;;
+      esac
+    done
+    case "$fmt" in
+      *Health.Status*)
+        [[ "${MOCK_WEB_RUNNING:-}" == "1" ]] && { printf 'healthy\n'; exit 0; }
+        exit 1 ;;
+      *'.Image'*)
+        # 容器镜像 = 创建它的 compose 调用注入的 WORKSPACE_IMAGE（真实引擎语义：创建时固化）
+        grep -o 'WORKSPACE_IMAGE=[^ ]*' "$STATE/calls.log" | tail -1 | cut -d= -f2- ;;
+      *) exit 0 ;;
+    esac ;;
   ps)
+    fmt=""; want_web=0; prev=""
+    for a in "$@"; do
+      [[ "$prev" == "--format" ]] && fmt="$a"
+      case "$a" in *service=web*) want_web=1 ;; esac
+      prev="$a"
+    done
+    # web 容器 fixture（#62）：MOCK_WEB_RUNNING=1 时按格式回 ID 或名称
+    if (( want_web )) && [[ "${MOCK_WEB_RUNNING:-}" == "1" ]]; then
+      case "$fmt" in
+        *ID*) printf 'webcid-mock\n' ;;
+        *) printf 'web-1\n' ;;
+      esac
+    fi
+    # 端口占用者 fixture（#62 绑定冲突诊断）：原始 Ports 文本行
+    [[ -n "${MOCK_PS_LINES:-}" ]] && printf '%s\n' "$MOCK_PS_LINES"
     # 遗留共享项目容器 fixture（#59 前 natural-enforcement 项目）
     if [[ "${MOCK_LEGACY_RUNNING:-}" == "1" ]]; then
       for a in "$@"; do
@@ -553,6 +627,156 @@ run i15b env DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-web"
 [[ "$RC" == 0 ]] && pass "I15 web --down 无冲突成功" || fail "I15" "rc=$RC err=$(tail -2 "$SANDBOX/i15b.err")"
 grep -q -- '--profile web rm -sf web' "$MOCK_DOCKER_STATE/calls.log" \
   && pass "I15 web --down 执行 compose profile web rm" || fail "I15" "log=$(cat "$MOCK_DOCKER_STATE/calls.log")"
+
+# ---------------------------------------------------------------------------
+# 10. 并发 web 入口与可观察命令面（#62）
+# ---------------------------------------------------------------------------
+
+# T-W1 省略 --port：注入裸容器端口（引擎运行时分配宿主端口，原子绑定、无探测竞态）；
+#     实际端口经 docker port 回读进 --json 终值
+: > "$MOCK_DOCKER_STATE/calls.log"
+run w1 env MOCK_WEB_RUNNING=1 MOCK_WEB_PORT=49152 DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-w1" "$DEVENV" --json web
+[[ "$RC" == 0 ]] && pass "W1 自动分配 web 成功" || fail "W1" "rc=$RC err=$(tail -3 "$SANDBOX/w1.err")"
+grep -- '--profile web up -d web' "$MOCK_DOCKER_STATE/calls.log" | grep -qE 'WEB_PORT_SPEC=4173$' \
+  && pass "W1 注入裸容器端口（WEB_PORT_SPEC=4173，引擎分配）" \
+  || fail "W1" "注入不符：$(grep -- '--profile web up' "$MOCK_DOCKER_STATE/calls.log")"
+if tail -1 "$SANDBOX/w1.out" | jq -e '.command == "web" and .status == "ok" and .exitCode == 0 and .port == "49152" and .url == "http://localhost:49152"' >/dev/null 2>&1; then
+  pass "W1 终值含回读实际端口与 url"
+else
+  fail "W1" "终值不符：$(tail -1 "$SANDBOX/w1.out")"
+fi
+if jq -c . "$SANDBOX/w1.out" >/dev/null 2>&1; then
+  pass "W1 stdout 全为 JSONL（进度/子进程输出不污染结果流）"
+else
+  fail "W1" "stdout 含非 JSON 行：$(head -3 "$SANDBOX/w1.out")"
+fi
+
+# T-W2 显式 --port：注入 host:container 固定发布；终值回读同一端口
+: > "$MOCK_DOCKER_STATE/calls.log"
+run w2 env MOCK_WEB_RUNNING=1 MOCK_WEB_PORT=8080 DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-w2" "$DEVENV" --json web --port 8080
+[[ "$RC" == 0 ]] && pass "W2 显式端口 web 成功" || fail "W2" "rc=$RC err=$(tail -3 "$SANDBOX/w2.err")"
+grep -- '--profile web up -d web' "$MOCK_DOCKER_STATE/calls.log" | grep -qE 'WEB_PORT_SPEC=8080:4173$' \
+  && pass "W2 注入固定发布（WEB_PORT_SPEC=8080:4173）" \
+  || fail "W2" "注入不符：$(grep -- '--profile web up' "$MOCK_DOCKER_STATE/calls.log")"
+tail -1 "$SANDBOX/w2.out" | jq -e '.port == "8080" and .url == "http://localhost:8080"' >/dev/null 2>&1 \
+  && pass "W2 终值回读显式端口" || fail "W2" "终值：$(tail -1 "$SANDBOX/w2.out")"
+
+# T-W2b --port 非法值 → exit 2（用法错误）
+run w2b env DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-w2b" "$DEVENV" web --port abc
+[[ "$RC" == 2 ]] && pass "W2b --port 非数字 exit 2" || fail "W2b" "rc=$RC（期望 2）"
+run w2c env DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-w2b" "$DEVENV" web --port 70000
+[[ "$RC" == 2 ]] && pass "W2b --port 超范围 exit 2" || fail "W2b" "rc=$RC（期望 2）"
+
+# T-W3 显式端口被其它 worktree 容器占用：exit 3，错误含服务/端口/占用者/内嵌修复命令
+run w3 env MOCK_COMPOSE_WEB_FAIL=1 MOCK_FAIL_PORT=8080 \
+  MOCK_PS_LINES='natural-enforcement-deadbeef-web-1 (project=natural-enforcement-deadbeef) 0.0.0.0:8080->4173/tcp' \
+  DEVENV_WORKTREE_ID="wt-beta" DEVENV_STATE_DIR="$SANDBOX/state-w3" "$DEVENV" web --port 8080
+[[ "$RC" == 3 ]] && pass "W3 容器占用冲突 exit 3" || fail "W3" "rc=$RC（期望 3）err=$(tail -2 "$SANDBOX/w3.err")"
+grep -q 'web' "$SANDBOX/w3.err" && grep -q '8080' "$SANDBOX/w3.err" \
+  && grep -q 'natural-enforcement-deadbeef' "$SANDBOX/w3.err" \
+  && grep -q 'devenv web --down' "$SANDBOX/w3.err" \
+  && pass "W3 错误含服务/端口/占用者/修复命令" || fail "W3" "err=$(tail -2 "$SANDBOX/w3.err")"
+
+# T-W4 compose 失败但无占用者（非端口问题）→ 通用失败 exit 4，不谎报端口占用
+run w4 env MOCK_COMPOSE_WEB_FAIL=1 MOCK_FAIL_PORT=8091 \
+  DEVENV_WORKTREE_ID="wt-beta" DEVENV_STATE_DIR="$SANDBOX/state-w4" "$DEVENV" web --port 8091
+[[ "$RC" == 4 ]] && pass "W4 无占用者时通用失败 exit 4" || fail "W4" "rc=$RC（期望 4）err=$(tail -2 "$SANDBOX/w4.err")"
+grep -q 'web 启动失败' "$SANDBOX/w4.err" \
+  && pass "W4 通用失败消息不谎报占用" || fail "W4" "err=$(tail -2 "$SANDBOX/w4.err")"
+
+# T-W5 显式端口被非容器进程占用（真实监听者）→ exit 3 并如实区分占用者类型
+if command -v python3 >/dev/null 2>&1; then
+  python3 -m http.server 8092 --bind 127.0.0.1 >/dev/null 2>&1 &
+  W5_LISTENER=$!
+  sleep 1
+  run w5 env MOCK_COMPOSE_WEB_FAIL=1 MOCK_FAIL_PORT=8092 \
+    DEVENV_WORKTREE_ID="wt-beta" DEVENV_STATE_DIR="$SANDBOX/state-w5" "$DEVENV" web --port 8092
+  kill "$W5_LISTENER" 2>/dev/null; wait "$W5_LISTENER" 2>/dev/null || true
+  [[ "$RC" == 3 ]] && pass "W5 非容器进程占用 exit 3" || fail "W5" "rc=$RC（期望 3）err=$(tail -2 "$SANDBOX/w5.err")"
+  grep -q '非容器进程' "$SANDBOX/w5.err" \
+    && pass "W5 错误区分非容器占用者" || fail "W5" "err=$(tail -2 "$SANDBOX/w5.err")"
+else
+  pass "W5 跳过（无 python3；非容器占用者分支由实机证据覆盖）"
+fi
+
+# T-P1 exec --json：原始流分流 stderr，stdout 只放 JSON（引擎事件 + 终值元数据）
+run p1 env MOCK_EXEC_PAYLOAD=1 DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-p1" "$DEVENV" --json exec -- echo hello-stdout
+[[ "$RC" == 0 ]] && pass "P1 exec --json 成功" || fail "P1" "rc=$RC err=$(tail -2 "$SANDBOX/p1.err")"
+if jq -c . "$SANDBOX/p1.out" >/dev/null 2>&1; then
+  pass "P1 stdout 全为 JSONL"
+else
+  fail "P1" "stdout 含非 JSON 行：$(head -3 "$SANDBOX/p1.out")"
+fi
+tail -1 "$SANDBOX/p1.out" | jq -e '.command == "exec" and .status == "ok" and .exitCode == 0' >/dev/null 2>&1 \
+  && pass "P1 终值元数据完整" || fail "P1" "终值：$(tail -1 "$SANDBOX/p1.out")"
+if grep -q 'hello-stdout' "$SANDBOX/p1.out"; then
+  fail "P1 原始流污染结果流" "stdout 出现 hello-stdout"
+else
+  pass "P1 子进程 stdout 不混入结果流"
+fi
+grep -q 'hello-stdout' "$SANDBOX/p1.err" \
+  && pass "P1 原始流走 stderr 独立通道" || fail "P1" "stderr 无原始输出：$(cat "$SANDBOX/p1.err")"
+
+# T-P2 exec 子进程失败：退出码原样传播，终值 status=failed
+run p2 env MOCK_EXEC_PAYLOAD=1 DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-p2" \
+  "$DEVENV" --json exec -- bash -c 'echo out1; echo err1 >&2; exit 7'
+[[ "$RC" == 7 ]] && pass "P2 子进程退出码原样传播（7）" || fail "P2" "rc=$RC（期望 7）"
+tail -1 "$SANDBOX/p2.out" | jq -e '.command == "exec" and .status == "failed" and .exitCode == 7' >/dev/null 2>&1 \
+  && pass "P2 终值报告失败与子进程码" || fail "P2" "终值：$(tail -1 "$SANDBOX/p2.out")"
+grep -q 'out1' "$SANDBOX/p2.err" && grep -q 'err1' "$SANDBOX/p2.err" \
+  && pass "P2 子进程两路原始流均走 stderr" || fail "P2" "stderr: $(cat "$SANDBOX/p2.err")"
+
+# T-P3 非 --json exec：原始流保持原通道（stdout 仍是子进程 stdout，可管道消费）
+run p3 env MOCK_EXEC_PAYLOAD=1 DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-p3" "$DEVENV" exec -- echo raw-stdout
+[[ "$RC" == 0 ]] && grep -q '^raw-stdout$' "$SANDBOX/p3.out" \
+  && pass "P3 非 --json 原始流保持 stdout 通道" || fail "P3" "rc=$RC out=$(cat "$SANDBOX/p3.out")"
+grep -q '"command"' "$SANDBOX/p3.out" \
+  && fail "P3 非 --json 混入终值" "stdout 出现 JSON" || pass "P3 非 --json 无终值包装"
+
+# T-P4 logs --json：原始日志走 stderr，stdout 只放终值
+run p4 env MOCK_LOGS_LINE='log-line-1' DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-p4" "$DEVENV" --json logs api
+[[ "$RC" == 0 ]] && pass "P4 logs --json 成功" || fail "P4" "rc=$RC err=$(tail -2 "$SANDBOX/p4.err")"
+if jq -c . "$SANDBOX/p4.out" >/dev/null 2>&1 && ! grep -q 'log-line-1' "$SANDBOX/p4.out"; then
+  pass "P4 stdout 全 JSON 且无原始日志"
+else
+  fail "P4" "stdout: $(cat "$SANDBOX/p4.out")"
+fi
+tail -1 "$SANDBOX/p4.out" | jq -e '.command == "logs" and .status == "ok"' >/dev/null 2>&1 \
+  && pass "P4 logs 终值元数据完整" || fail "P4" "终值：$(tail -1 "$SANDBOX/p4.out")"
+grep -q 'log-line-1' "$SANDBOX/p4.err" \
+  && pass "P4 原始日志走 stderr" || fail "P4" "stderr 无日志行"
+
+# T-P5 shell --json：同一透传包装（payload bash 以 /dev/null 为 stdin 立即退出）
+run p5 env MOCK_EXEC_PAYLOAD=1 DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-p5" "$DEVENV" --json shell
+[[ "$RC" == 0 ]] && pass "P5 shell --json 成功" || fail "P5" "rc=$RC err=$(tail -2 "$SANDBOX/p5.err")"
+if jq -c . "$SANDBOX/p5.out" >/dev/null 2>&1 \
+  && tail -1 "$SANDBOX/p5.out" | jq -e '.command == "shell" and .status == "ok"' >/dev/null 2>&1; then
+  pass "P5 shell 终值元数据完整"
+else
+  fail "P5" "stdout: $(cat "$SANDBOX/p5.out")"
+fi
+
+# T-S1 status --json：web 运行中 → 实际端口可按 worktree 查询（项目标签过滤回读）
+run s1 env MOCK_WEB_RUNNING=1 MOCK_WEB_PORT=49321 DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-s1" "$DEVENV" --json status
+[[ "$RC" == 0 ]] && pass "S1 status --json 成功" || fail "S1" "rc=$RC err=$(tail -2 "$SANDBOX/s1.err")"
+tail -1 "$SANDBOX/s1.out" | jq -e '.web_port == "49321" and .web_url == "http://localhost:49321"' >/dev/null 2>&1 \
+  && pass "S1 status 终值含 web 实际端口" || fail "S1" "终值：$(tail -1 "$SANDBOX/s1.out")"
+
+run s1b env MOCK_WEB_RUNNING=1 MOCK_WEB_PORT=49321 DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-s1" "$DEVENV" status
+grep -q 'http://localhost:49321' "$SANDBOX/s1b.err" \
+  && pass "S1 人读 status 报告 web 地址" || fail "S1" "stderr: $(grep -i web "$SANDBOX/s1b.err")"
+
+# T-S2 status --json：web 未运行 → web_port 如实报 none
+run s2 env DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-s2" "$DEVENV" --json status
+[[ "$RC" == 0 ]] && pass "S2 status --json 成功（web 未运行）" || fail "S2" "rc=$RC"
+tail -1 "$SANDBOX/s2.out" | jq -e '.web_port == "none"' >/dev/null 2>&1 \
+  && pass "S2 web 未运行时如实报告 none" || fail "S2" "终值：$(tail -1 "$SANDBOX/s2.out")"
+
+# T-C1 零宿主端口不变量静态守卫：compose.yaml 仅 web 服务发布端口
+C1_OWNERS="$(awk '/^  [a-z0-9]+:/{svc=$1} /ports:/{print svc}' "$MINI/devenv/compose.yaml")"
+[[ "$C1_OWNERS" == "web:" ]] \
+  && pass "C1 compose 仅 web 发布宿主端口（调试零端口不变量）" \
+  || fail "C1" "ports: 出现在：$C1_OWNERS"
 
 # ---------------------------------------------------------------------------
 echo "------------------------------------------------------------"
