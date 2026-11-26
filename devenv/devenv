@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# devenv —— 工程基座唯一入口（Spec-工程基座 §4；#56 最小空间数据开发栈 + #58 固定快照与不可变绑定）
+# devenv —— 工程基座唯一入口（Spec-工程基座 §4；#56 最小空间数据开发栈 + #58 固定快照与不可变绑定 + #59 per-worktree 隔离 + #61 锁与栈使用租约）
 #
 # 宿主工具链零安装：本脚本只使用白名单宿主工具（bash、docker CLI + compose v2、
 # git、coreutils、tar、find、jq、openssl、curl、gh；macOS 自带 bsdtar/BSD find
@@ -37,7 +37,7 @@ source "$REPO_ROOT/devenv/lib/stack.sh"
 # shellcheck source=lib/github-app-auth.sh
 source "$REPO_ROOT/devenv/lib/github-app-auth.sh"
 
-trap 'lock_release_all; snapshot_cleanup' EXIT
+trap 'lease_release_all; lock_release_all; snapshot_cleanup' EXIT
 
 usage() {
   cat >&2 <<'EOF'
@@ -46,25 +46,25 @@ devenv — 工程基座唯一入口（命令面权威文档：devenv/COMMANDS.md
 
 工程栈（一切构建/启停/观察/执行的唯一入口；禁止直接操作 compose）：
   doctor                    一键体检（端点/引擎/矩阵/锁文件/worktree 身份与凭据状态/镜像/服务）；退出码=可开工与否
-  prefetch                  预取镜像锁中的上游镜像（分阶段、有进度/超时、可中断续跑）
+  prefetch                  预取镜像锁中的上游镜像（分阶段、有进度/超时、可中断续跑；机器级拉取锁）
   build [--lockgen]         固定快照构建（tools + install + turbo build；幂等；--lockgen 强制重生成 lockfile）
   up                        启动 db/api 并等待真实健康终态（幂等）
   down [--volumes]          停止（--volumes 连带清数据卷）
   restart [svc...]          重启（默认全部）
-  web [--port N] [--down]   启动前端并发布宿主端口（零端口不变量的唯一例外）
+  web [--port N] [--down]   启动前端并发布宿主端口（零端口不变量唯一例外；与栈命令互斥）
   ps [-a]                   容器状态（--json 输出 JSONL）
   logs [svc] [-f] [--tail N] 跟随日志（透传原始流）
   exec [svc] -- cmd...      在容器内执行（默认 tools；透传原始流）
   shell [svc]               交互 shell（默认 tools；透传原始流）
-  test [pattern...]         单元+集成测试（需先 up；连真实 PostGIS）
-  test:unit                 仅单元测试（零基础设施）
-  lint / typecheck          ESLint / tsc --noEmit
-  verify                    聚合质量门：lint + typecheck + test:unit（本地与 CI 同一入口）
+  test [pattern...]         单元+集成测试（需先 up；连真实 PostGIS；运行期持共享栈租约）
+  test:unit                 仅单元测试（零数据库基础设施；运行期持共享栈租约）
+  lint / typecheck          ESLint / tsc --noEmit（运行期持共享栈租约）
+  verify                    聚合质量门：lint + typecheck + test:unit（运行期持共享栈租约）
   migrate                   应用全部 pending 迁移到 dev 库（prisma migrate deploy）
   migrate:create --name N   生成空迁移待编辑（prisma migrate dev --create-only）
-  seed                      幂等种子数据
+  seed                      幂等种子数据（运行期持共享栈租约）
   wait <svc> [--timeout N]  等待服务健康终态（默认 60s）
-  status                    人读总览（容器+锁+镜像）
+  status                    人读总览（容器+锁+租约+镜像）
   images [--verify]         查看镜像锁与生效 DB 镜像（含覆盖来源）/ 校验运行态 digest 漂移
 
 GitHub App 认证入口（身份：GitHub App，非个人账号）：
@@ -75,7 +75,7 @@ GitHub App 认证入口（身份：GitHub App，非个人账号）：
 测试：
   test:auth                 认证入口离线测试（不访问 GitHub）
   test:auth:integration     认证入口真实集成测试（默认只读；写操作需显式旗标）
-  test:devenv               命令面离线测试（引擎解析/锁/输出协议/快照与不可变绑定/per-worktree 隔离，mock docker）
+  test:devenv               命令面离线测试（引擎解析/锁与栈使用租约/输出协议/快照与不可变绑定/per-worktree 隔离，mock docker）
 
 退出码：0 成功 | 2 用法 | 3 环境未就绪 | 4 任务失败 | 5 超时 | 6 锁冲突 | 20–23 认证入口
 EOF
@@ -201,6 +201,9 @@ cmd_prefetch() {
   timeout_bin="$(command -v timeout || command -v gtimeout || true)"
   [[ -n "$timeout_bin" ]] || die 3 "缺少 timeout/gtimeout（coreutils；macOS：brew install coreutils）"
   local timeout_s="${DEVENV_PREFETCH_TIMEOUT:-900}"
+  # 机器级基础镜像拉取锁（#61）：跨 worktree 互斥；另一 worktree 正在 prefetch 时
+  # 等待，超时 exit 6（重跑续跑）。栈使用租约只协调 per-worktree 栈，不加在此。
+  lock_acquire prefetch 300
   local img rc
   for img in "$NODE_IMAGE" "$DB_IMAGE_EFFECTIVE"; do
     ev pull.started image="$img" timeout="$timeout_s"
@@ -397,6 +400,7 @@ run_gate() {
 }
 
 cmd_test() {
+  lease_acquire "stack-$WT_SUFFIX" 120  # 栈使用租约（#61）：测试运行期与拆栈/迁移/重启互斥
   ensure_fresh_workspace
   require_services db
   if (( $# )); then
@@ -409,14 +413,15 @@ cmd_test() {
   final ok 0 scope=all
 }
 
-cmd_test_unit() { ensure_fresh_workspace; run_gate_task test:unit; final ok 0 scope=unit; }
-cmd_lint()      { ensure_fresh_workspace; run_gate_task lint; final ok 0; }
-cmd_typecheck() { ensure_fresh_workspace; run_gate_task typecheck; final ok 0; }
+cmd_test_unit() { lease_acquire "stack-$WT_SUFFIX" 120; ensure_fresh_workspace; run_gate_task test:unit; final ok 0 scope=unit; }
+cmd_lint()      { lease_acquire "stack-$WT_SUFFIX" 120; ensure_fresh_workspace; run_gate_task lint; final ok 0; }
+cmd_typecheck() { lease_acquire "stack-$WT_SUFFIX" 120; ensure_fresh_workspace; run_gate_task typecheck; final ok 0; }
 
 # verify：聚合确定性质量门（Spec §6：lint + typecheck + test:unit；e2e 生命周期校验归
 # Spec-e2e 体系，本票不含）。本地与 CI 同一入口同一校验器。各门独立收集结果，
 # 任一失败 → 退出码 4。
 cmd_verify() {
+  lease_acquire "stack-$WT_SUFFIX" 120  # 栈使用租约（#61）：质量门运行期与拆栈/迁移互斥
   ensure_fresh_workspace
   # 不用关联数组（macOS 宿主 bash 3.2 不支持）——逐门记录
   local r_lint="" r_typecheck="" r_unit=""
@@ -482,6 +487,7 @@ cmd_migrate_create() {
 }
 
 cmd_seed() {
+  lease_acquire "stack-$WT_SUFFIX" 120  # 栈使用租约（#61）：种子运行期与拆栈/迁移互斥
   ensure_fresh_workspace
   require_services db
   run_task pnpm --filter @ne/api run seed
@@ -502,6 +508,7 @@ cmd_web() {
   done
   [[ "$port" =~ ^[0-9]+$ ]] || die 2 "--port 需要数字：$port"
   if (( down )); then
+    lock_acquire "stack-$WT_SUFFIX" 60  # web --down 也是栈变更（#61：复合过程整体持锁）
     compose --profile web rm -sf web
     final ok 0 action=down
     return 0
@@ -538,9 +545,14 @@ cmd_status() {
     # 凭据只读报告（status 不生成状态）：存在=stored，否则 none（首次 compose 调用生成）
     local cred_origin="none"
     [[ -f "${DEVENV_STATE_DIR:-$REPO_ROOT/.devenv-state}/db-credentials.env" ]] && cred_origin="stored"
+    # 租约只读报告（#61）：stale 仅标注，不清理（status 是只读命令）
+    local leases="none"
+    leases="$(lease_report_all | tr '\n' ';' | sed 's/;$//')"
+    [[ -n "$leases" ]] || leases="none"
     final ok 0 project="$PROJECT_NAME" worktree_suffix="$WT_SUFFIX" worktree_source="$WT_IDENTITY_SOURCE" \
       db_credentials="$cred_origin" \
-      locks="$(ls -1 "$LOCK_ROOT" 2>/dev/null | paste -sd, -)" \
+      locks="$(ls -1 "$LOCK_ROOT" 2>/dev/null | grep '\.lock$' | paste -sd, - || true)" \
+      leases="$leases" \
       node_image="$NODE_IMAGE" db_image="$DB_IMAGE_EFFECTIVE" db_image_source="$DB_IMAGE_SOURCE" \
       snapshot_hash="${STATE_SNAPSHOT_HASH:-none}" workspace_image_id="${STATE_IMAGE_ID:-none}" \
       tools_image_id="${STATE_TOOLS_IMAGE_ID:-none}"
@@ -549,8 +561,16 @@ cmd_status() {
   note "worktree：project=$PROJECT_NAME（suffix=$WT_SUFFIX；身份来源：$WT_IDENTITY_SOURCE）"
   note "容器（本项目）："
   cmd_ps
-  note "锁（$LOCK_ROOT，机器级命名空间；本 worktree 锁名 stack-$WT_SUFFIX / migrate-$WT_SUFFIX，机器级 lockgen）："
-  ls -1 "$LOCK_ROOT" 2>/dev/null | sed 's/^/  /' >&2 || true
+  note "锁（$LOCK_ROOT，机器级命名空间；本 worktree 锁名 stack-$WT_SUFFIX / migrate-$WT_SUFFIX，机器级 lockgen/prefetch）："
+  ls -1 "$LOCK_ROOT" 2>/dev/null | grep '\.lock$' | sed 's/^/  /' >&2 || true
+  note "栈使用租约（#61；active=持有进程存活，stale=已死待下次取得清理）："
+  local lease_lines=""
+  lease_lines="$(lease_report_all)"
+  if [[ -n "$lease_lines" ]]; then
+    printf '%s\n' "$lease_lines" | sed 's/^/  /' >&2
+  else
+    printf '  无\n' >&2
+  fi
   images_load
   snapshot_state_load
   note "镜像：node=$NODE_IMAGE"

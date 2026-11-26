@@ -1,0 +1,7 @@
+租约槽出现在 kill 前（pid=1023828）
+进程仍存活：yes
+--- kill 后租约槽 ---
+/tmp/natural-enforcement-locks/stack-90e22128.lease
+/tmp/natural-enforcement-locks/stack-90e22128.lease/1023828.1795694878.19420
+/tmp/natural-enforcement-locks/stack-90e22128.lease/1023828.1795694878.19420/owner
+失效租约清理警告：yes

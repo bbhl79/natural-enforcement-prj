@@ -1,0 +1,140 @@
+[evidence] 00 基线
+[evidence] 00-doctor rc=0
+[evidence] 00-status rc=0
+[evidence] 00-ps rc=0
+[evidence] 02 读者并行（两个真实 verify + 运行期 status）
+[evidence] 02-status-during-lease rc=0
+[evidence] 02 完成：A rc=0 B rc=0
+[evidence] 03 写者 vs 活跃租约（8 个真实命令）
+[evidence] holder leasewr ready (pid=1020630)
+[evidence] 03-ps-before rc=0
+[evidence] 03-build rc=6
+[evidence] 03-up rc=6
+[evidence] 03-down rc=6
+[evidence] 03-restart rc=6
+[evidence] 03-web rc=6
+[evidence] 03-web-down rc=6
+[evidence] 03-migrate rc=6
+[evidence] 03-migrate-create rc=6
+[evidence] 03-status-during-lease rc=0
+[evidence] holder leasewr stopped
+[evidence] 03-ps-after rc=0
+[evidence] 03-status-after rc=0
+[evidence] 04 读者 vs 活跃排他锁（6 个真实命令）
+[evidence] holder lockwr ready (pid=1021597)
+[evidence] 04-test rc=6
+[evidence] 04-test-unit rc=6
+[evidence] 04-lint rc=6
+[evidence] 04-typecheck rc=6
+[evidence] 04-verify rc=6
+[evidence] 04-seed rc=6
+[evidence] holder lockwr stopped
+[evidence] 05 跨 worktree 与机器级锁
+[evidence] 05-b-doctor rc=0
+[evidence] holder wt-lease ready (pid=1022263)
+[evidence] 05-b-down-vs-a-lease rc=0
+[evidence] holder wt-lease stopped
+[evidence] holder wt-lock ready (pid=1022401)
+[evidence] 05-b-down-vs-a-lock rc=0
+[evidence] holder wt-lock stopped
+[evidence] holder pf-a ready (pid=1022536)
+[evidence] 05-b-prefetch-vs-a-prefetch rc=6
+[evidence] holder pf-a stopped
+[evidence] holder pf-b ready (pid=1022641)
+[evidence] 05-a-prefetch-vs-b-prefetch rc=6
+[evidence] holder pf-b stopped
+[evidence] holder lg-a ready (pid=1022754)
+[evidence] 05-b-build-lockgen-vs-a-lockgen rc=6
+[evidence] holder lg-a stopped
+[evidence] 05-b-status rc=0
+[evidence] 05 完成（逐条结果见 results.tsv）
+[evidence] 06 故障演练：kill 持锁进程后恢复
+[evidence] 06-down-recover rc=0
+[evidence] 06-up-restore rc=0
+[evidence] 07 故障演练：kill 租约持有进程后恢复
+[evidence] 07-down-recover rc=0
+[evidence] 07-up-restore rc=0
+[evidence] 07-ps-after rc=0
+[evidence] 08 故障反例：持有者仍存活时锁/租约不被误清
+[evidence] holder live-lock ready (pid=1024668)
+[evidence] 08-down-vs-live-lock rc=6
+[evidence] holder live-lock stopped
+[evidence] holder live-lease ready (pid=1024771)
+[evidence] 08-down-vs-live-lease rc=6
+[evidence] holder live-lease stopped
+[evidence] 10 写者↔写者逐对矩阵（真实写者命令 + SIGSTOP 于持锁后）
+[evidence] real holder build stopped (pid=1024889)
+[evidence] 10-build-vs-up rc=6
+[evidence] 10-build-vs-down rc=6
+[evidence] 10-build-vs-restart rc=6
+[evidence] 10-build-vs-web rc=6
+[evidence] 10-build-vs-web-down rc=6
+[evidence] 10-build-vs-migrate rc=6
+[evidence] 10-build-vs-migrate-create rc=6
+[evidence] real holder up stopped (pid=1026307)
+[evidence] 10-up-vs-build rc=6
+[evidence] 10-up-vs-down rc=6
+[evidence] 10-up-vs-restart rc=6
+[evidence] 10-up-vs-web rc=6
+[evidence] 10-up-vs-web-down rc=6
+[evidence] 10-up-vs-migrate rc=6
+[evidence] 10-up-vs-migrate-create rc=6
+[evidence] real holder down stopped (pid=1027710)
+[evidence] 10-down-vs-build rc=6
+[evidence] 10-down-vs-up rc=6
+[evidence] 10-down-vs-restart rc=6
+[evidence] 10-down-vs-web rc=6
+[evidence] 10-down-vs-web-down rc=6
+[evidence] 10-down-vs-migrate rc=6
+[evidence] 10-down-vs-migrate-create rc=6
+[evidence] real holder restart stopped (pid=1029096)
+[evidence] 10-restart-vs-build rc=6
+[evidence] 10-restart-vs-up rc=6
+[evidence] 10-restart-vs-down rc=6
+[evidence] 10-restart-vs-web rc=6
+[evidence] 10-restart-vs-web-down rc=6
+[evidence] 10-restart-vs-migrate rc=6
+[evidence] 10-restart-vs-migrate-create rc=6
+[evidence] real holder web stopped (pid=1030431)
+[evidence] 10-web-vs-build rc=6
+[evidence] 10-web-vs-up rc=6
+[evidence] 10-web-vs-down rc=6
+[evidence] 10-web-vs-restart rc=6
+[evidence] 10-web-vs-web-down rc=6
+[evidence] 10-web-vs-migrate rc=6
+[evidence] 10-web-vs-migrate-create rc=6
+[evidence] real holder web-down stopped (pid=1031843)
+[evidence] 10-web-down-vs-build rc=6
+[evidence] 10-web-down-vs-up rc=6
+[evidence] 10-web-down-vs-down rc=6
+[evidence] 10-web-down-vs-restart rc=6
+[evidence] 10-web-down-vs-web rc=6
+[evidence] 10-web-down-vs-migrate rc=6
+[evidence] 10-web-down-vs-migrate-create rc=6
+[evidence] real holder migrate stopped (pid=1033126)
+[evidence] 10-migrate-vs-build rc=6
+[evidence] 10-migrate-vs-up rc=6
+[evidence] 10-migrate-vs-down rc=6
+[evidence] 10-migrate-vs-restart rc=6
+[evidence] 10-migrate-vs-web rc=6
+[evidence] 10-migrate-vs-web-down rc=6
+[evidence] 10-migrate-vs-migrate-create rc=6
+[evidence] real holder migrate-create stopped (pid=1034420)
+[evidence] 10-migrate-create-vs-build rc=6
+[evidence] 10-migrate-create-vs-up rc=6
+[evidence] 10-migrate-create-vs-down rc=6
+[evidence] 10-migrate-create-vs-restart rc=6
+[evidence] 10-migrate-create-vs-web rc=6
+[evidence] 10-migrate-create-vs-web-down rc=6
+[evidence] 10-migrate-create-vs-migrate rc=6
+[evidence] 10 完成
+[evidence] 11 真实慢构建存活：锁不被误清（非替代持有者）
+[evidence] 11-down-vs-live-real-build rc=6
+[evidence] 12 真实测试存活：租约不被误清（非替代持有者）
+[evidence] 12-down-vs-live-real-verify rc=6
+[evidence] 09 收尾：栈恢复与终态
+[evidence] 09-up rc=0
+[evidence] 09-doctor rc=0
+[evidence] 09-status rc=0
+[evidence] 09-ps rc=0
+[evidence] 汇总写入 /tmp/ne61-evidence/90-results.txt

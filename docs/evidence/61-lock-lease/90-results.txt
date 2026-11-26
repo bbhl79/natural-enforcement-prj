@@ -1,0 +1,182 @@
+# #61 证据运行结果（driver 自动生成）
+file                                     rc
+00-doctor                                rc=0
+00-status                                rc=0
+00-ps                                    rc=0
+02-status-during-lease                   rc=0
+02-readers-parallel                      rc=0
+03-ps-before                             rc=0
+03-build                                 rc=6
+03-up                                    rc=6
+03-down                                  rc=6
+03-restart                               rc=6
+03-web                                   rc=6
+03-web-down                              rc=6
+03-migrate                               rc=6
+03-migrate-create                        rc=6
+03-status-during-lease                   rc=0
+03-ps-after                              rc=0
+03-status-after                          rc=0
+04-test                                  rc=6
+04-test-unit                             rc=6
+04-lint                                  rc=6
+04-typecheck                             rc=6
+04-verify                                rc=6
+04-seed                                  rc=6
+05-b-doctor                              rc=0
+05-b-down-vs-a-lease                     rc=0
+05-b-down-vs-a-lock                      rc=0
+05-b-prefetch-vs-a-prefetch              rc=6
+05-a-prefetch-vs-b-prefetch              rc=6
+05-b-build-lockgen-vs-a-lockgen          rc=6
+05-b-status                              rc=0
+06-down-recover                          rc=0
+06-up-restore                            rc=0
+07-down-recover                          rc=0
+07-up-restore                            rc=0
+07-ps-after                              rc=0
+08-down-vs-live-lock                     rc=6
+08-down-vs-live-lease                    rc=6
+10-build-vs-up                           rc=6
+10-build-vs-down                         rc=6
+10-build-vs-restart                      rc=6
+10-build-vs-web                          rc=6
+10-build-vs-web-down                     rc=6
+10-build-vs-migrate                      rc=6
+10-build-vs-migrate-create               rc=6
+10-up-vs-build                           rc=6
+10-up-vs-down                            rc=6
+10-up-vs-restart                         rc=6
+10-up-vs-web                             rc=6
+10-up-vs-web-down                        rc=6
+10-up-vs-migrate                         rc=6
+10-up-vs-migrate-create                  rc=6
+10-down-vs-build                         rc=6
+10-down-vs-up                            rc=6
+10-down-vs-restart                       rc=6
+10-down-vs-web                           rc=6
+10-down-vs-web-down                      rc=6
+10-down-vs-migrate                       rc=6
+10-down-vs-migrate-create                rc=6
+10-restart-vs-build                      rc=6
+10-restart-vs-up                         rc=6
+10-restart-vs-down                       rc=6
+10-restart-vs-web                        rc=6
+10-restart-vs-web-down                   rc=6
+10-restart-vs-migrate                    rc=6
+10-restart-vs-migrate-create             rc=6
+10-web-vs-build                          rc=6
+10-web-vs-up                             rc=6
+10-web-vs-down                           rc=6
+10-web-vs-restart                        rc=6
+10-web-vs-web-down                       rc=6
+10-web-vs-migrate                        rc=6
+10-web-vs-migrate-create                 rc=6
+10-web-down-vs-build                     rc=6
+10-web-down-vs-up                        rc=6
+10-web-down-vs-down                      rc=6
+10-web-down-vs-restart                   rc=6
+10-web-down-vs-web                       rc=6
+10-web-down-vs-migrate                   rc=6
+10-web-down-vs-migrate-create            rc=6
+10-migrate-vs-build                      rc=6
+10-migrate-vs-up                         rc=6
+10-migrate-vs-down                       rc=6
+10-migrate-vs-restart                    rc=6
+10-migrate-vs-web                        rc=6
+10-migrate-vs-web-down                   rc=6
+10-migrate-vs-migrate-create             rc=6
+10-migrate-create-vs-build               rc=6
+10-migrate-create-vs-up                  rc=6
+10-migrate-create-vs-down                rc=6
+10-migrate-create-vs-restart             rc=6
+10-migrate-create-vs-web                 rc=6
+10-migrate-create-vs-web-down            rc=6
+10-migrate-create-vs-migrate             rc=6
+11-down-vs-live-real-build               rc=6
+11-live-real-build                       rc=0
+12-down-vs-live-real-verify              rc=6
+12-live-real-verify                      rc=0
+09-up                                    rc=0
+09-doctor                                rc=0
+09-status                                rc=0
+09-ps                                    rc=0
+
+observed rc=6 files:
+03-build
+03-up
+03-down
+03-restart
+03-web
+03-web-down
+03-migrate
+03-migrate-create
+04-test
+04-test-unit
+04-lint
+04-typecheck
+04-verify
+04-seed
+05-b-prefetch-vs-a-prefetch
+05-a-prefetch-vs-b-prefetch
+05-b-build-lockgen-vs-a-lockgen
+08-down-vs-live-lock
+08-down-vs-live-lease
+10-build-vs-up
+10-build-vs-down
+10-build-vs-restart
+10-build-vs-web
+10-build-vs-web-down
+10-build-vs-migrate
+10-build-vs-migrate-create
+10-up-vs-build
+10-up-vs-down
+10-up-vs-restart
+10-up-vs-web
+10-up-vs-web-down
+10-up-vs-migrate
+10-up-vs-migrate-create
+10-down-vs-build
+10-down-vs-up
+10-down-vs-restart
+10-down-vs-web
+10-down-vs-web-down
+10-down-vs-migrate
+10-down-vs-migrate-create
+10-restart-vs-build
+10-restart-vs-up
+10-restart-vs-down
+10-restart-vs-web
+10-restart-vs-web-down
+10-restart-vs-migrate
+10-restart-vs-migrate-create
+10-web-vs-build
+10-web-vs-up
+10-web-vs-down
+10-web-vs-restart
+10-web-vs-web-down
+10-web-vs-migrate
+10-web-vs-migrate-create
+10-web-down-vs-build
+10-web-down-vs-up
+10-web-down-vs-down
+10-web-down-vs-restart
+10-web-down-vs-web
+10-web-down-vs-migrate
+10-web-down-vs-migrate-create
+10-migrate-vs-build
+10-migrate-vs-up
+10-migrate-vs-down
+10-migrate-vs-restart
+10-migrate-vs-web
+10-migrate-vs-web-down
+10-migrate-vs-migrate-create
+10-migrate-create-vs-build
+10-migrate-create-vs-up
+10-migrate-create-vs-down
+10-migrate-create-vs-restart
+10-migrate-create-vs-web
+10-migrate-create-vs-web-down
+10-migrate-create-vs-migrate
+11-down-vs-live-real-build
+12-down-vs-live-real-verify

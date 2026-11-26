@@ -1,0 +1,2 @@
+[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
+[devenv] ERROR: 独占锁 [stack-90e22128] 被占用（持有者 pid/启动时间：1024889 1795694901 1024889.1795694901.18762），等待 1s 超时。锁目录：/tmp/natural-enforcement-locks/stack-90e22128.lock。修复：等待持有者结束，或确认其已死后重跑（失效锁自动清理）

@@ -1,0 +1,7 @@
+[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+[devenv] lockgen：重生成 pnpm-lock.yaml（新增/变更 workspace 包后必须；生成后请随 git 提交并审查 diff）
+[devenv] ERROR: 独占锁 [lockgen] 被占用（持有者 pid/启动时间：1022754 1795694857 1022754.1795694857.15386），等待 2s 超时。锁目录：/tmp/natural-enforcement-locks/lockgen.lock
