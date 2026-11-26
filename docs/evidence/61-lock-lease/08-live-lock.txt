@@ -1,0 +1,5 @@
+live lock 目录仍在：
+total 4
+drwxr-xr-x 2 hulei815 hulei815 60 Nov 26 17:47 .
+drwxr-xr-x 4 hulei815 hulei815 80 Nov 26 17:47 ..
+-rw-r--r-- 1 hulei815 hulei815 18 Nov 26 17:47 owner

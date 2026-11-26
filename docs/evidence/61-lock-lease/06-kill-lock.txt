@@ -1,0 +1,10 @@
+stack lock 出现在 kill 前（pid=972531）
+进程仍存活：yes
+--- kill 后锁目录 ---
+total 4
+drwxr-xr-x 2 hulei815 hulei815 60 Nov 26 17:47 .
+drwxr-xr-x 3 hulei815 hulei815 60 Nov 26 17:47 ..
+-rw-r--r-- 1 hulei815 hulei815 18 Nov 26 17:47 owner
+--- owner ---
+972531 1795686430
+失效锁清理警告：yes

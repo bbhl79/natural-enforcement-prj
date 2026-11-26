@@ -1,0 +1,65 @@
+# #61 证据运行结果（driver 自动生成）
+file                                     rc
+00-doctor                                rc=0
+00-status                                rc=0
+00-ps                                    rc=0
+02-status-during-lease                   rc=0
+02-readers-parallel                      rc=0
+03-ps-before                             rc=0
+03-build                                 rc=6
+03-up                                    rc=6
+03-down                                  rc=6
+03-restart                               rc=6
+03-web                                   rc=6
+03-web-down                              rc=6
+03-migrate                               rc=6
+03-migrate-create                        rc=6
+03-status-during-lease                   rc=0
+03-ps-after                              rc=0
+03-status-after                          rc=0
+04-test                                  rc=6
+04-test-unit                             rc=6
+04-lint                                  rc=6
+04-typecheck                             rc=6
+04-verify                                rc=6
+04-seed                                  rc=6
+05-b-doctor                              rc=0
+05-b-down-vs-a-lease                     rc=0
+05-b-down-vs-a-lock                      rc=0
+05-b-prefetch-vs-a-prefetch              rc=6
+05-a-prefetch-vs-b-prefetch              rc=6
+05-b-build-lockgen-vs-a-lockgen          rc=6
+05-b-status                              rc=0
+05-cross-worktree                        rc=0
+06-down-recover                          rc=0
+06-up-restore                            rc=0
+07-down-recover                          rc=0
+07-up-restore                            rc=0
+07-ps-after                              rc=0
+08-down-vs-live-lock                     rc=6
+08-down-vs-live-lease                    rc=6
+09-up                                    rc=0
+09-doctor                                rc=0
+09-status                                rc=0
+09-ps                                    rc=0
+
+expected rc=6 files:
+03-build
+03-up
+03-down
+03-restart
+03-web
+03-web-down
+03-migrate
+03-migrate-create
+04-test
+04-test-unit
+04-lint
+04-typecheck
+04-verify
+04-seed
+05-b-prefetch-vs-a-prefetch
+05-a-prefetch-vs-b-prefetch
+05-b-build-lockgen-vs-a-lockgen
+08-down-vs-live-lock
+08-down-vs-live-lease

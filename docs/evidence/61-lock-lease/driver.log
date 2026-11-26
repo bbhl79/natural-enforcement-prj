@@ -1,0 +1,69 @@
+[evidence] 00 基线
+[evidence] 00-doctor rc=0
+[evidence] 00-status rc=0
+[evidence] 00-ps rc=0
+[evidence] 02 读者并行（两个真实 verify + 运行期 status）
+[evidence] 02-status-during-lease rc=0
+[evidence] 02 完成：A rc=0 B rc=0
+[evidence] 03 写者 vs 活跃租约（8 个真实命令）
+[evidence] holder leasewr ready (pid=970321)
+[evidence] 03-ps-before rc=0
+[evidence] 03-build rc=6
+[evidence] 03-up rc=6
+[evidence] 03-down rc=6
+[evidence] 03-restart rc=6
+[evidence] 03-web rc=6
+[evidence] 03-web-down rc=6
+[evidence] 03-migrate rc=6
+[evidence] 03-migrate-create rc=6
+[evidence] 03-status-during-lease rc=0
+[evidence] holder leasewr stopped
+[evidence] 03-ps-after rc=0
+[evidence] 03-status-after rc=0
+[evidence] 04 读者 vs 活跃排他锁（6 个真实命令）
+[evidence] holder lockwr ready (pid=971196)
+[evidence] 04-test rc=6
+[evidence] 04-test-unit rc=6
+[evidence] 04-lint rc=6
+[evidence] 04-typecheck rc=6
+[evidence] 04-verify rc=6
+[evidence] 04-seed rc=6
+[evidence] holder lockwr stopped
+[evidence] 05 跨 worktree 与机器级锁
+[evidence] 05-b-doctor rc=0
+[evidence] holder wt-lease ready (pid=971801)
+[evidence] 05-b-down-vs-a-lease rc=0
+[evidence] holder wt-lease stopped
+[evidence] holder wt-lock ready (pid=971938)
+[evidence] 05-b-down-vs-a-lock rc=0
+[evidence] holder wt-lock stopped
+[evidence] holder pf-a ready (pid=972073)
+[evidence] 05-b-prefetch-vs-a-prefetch rc=6
+[evidence] holder pf-a stopped
+[evidence] holder pf-b ready (pid=972156)
+[evidence] 05-a-prefetch-vs-b-prefetch rc=6
+[evidence] holder pf-b stopped
+[evidence] holder lg-a ready (pid=972244)
+[evidence] 05-b-build-lockgen-vs-a-lockgen rc=6
+[evidence] holder lg-a stopped
+[evidence] 05-b-status rc=0
+[evidence] 06 故障演练：kill 持锁进程后恢复
+[evidence] 06-down-recover rc=0
+[evidence] 06-up-restore rc=0
+[evidence] 07 故障演练：kill 租约持有进程后恢复
+[evidence] 07-down-recover rc=0
+[evidence] 07-up-restore rc=0
+[evidence] 07-ps-after rc=0
+[evidence] 08 故障反例：持有者仍存活时锁/租约不被误清
+[evidence] holder live-lock ready (pid=974264)
+[evidence] 08-down-vs-live-lock rc=6
+[evidence] holder live-lock stopped
+[evidence] holder live-lease ready (pid=974344)
+[evidence] 08-down-vs-live-lease rc=6
+[evidence] holder live-lease stopped
+[evidence] 09 收尾：栈恢复与终态
+[evidence] 09-up rc=0
+[evidence] 09-doctor rc=0
+[evidence] 09-status rc=0
+[evidence] 09-ps rc=0
+[evidence] 汇总写入 /tmp/ne61-evidence/90-results.txt
