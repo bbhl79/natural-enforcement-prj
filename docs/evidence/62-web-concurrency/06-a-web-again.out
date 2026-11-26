@@ -1,0 +1,8 @@
+{"event":"engine","identity":"podman","version":"6.1.4","os":"linux","arch":"amd64","endpoint":"unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock","source":"DOCKER_HOST 环境变量"}
+{"event":"step.started","target":"workspace image freshness"}
+{"event":"snapshot.captured","hash":"e7bac9bca243a3687ab5409ef2304f07b34ee764"}
+{"event":"tools.fresh","imageId":"sha256:d6fb6674882dd85407efa7ec2432cf7518eebb79272cfb090fbe83eedd9772bd","inputHash":"4842d6391742396e725c2eab7e33b4332ac3bd51d7a29b2d05af6e28f9beece6"}
+{"event":"workspace.fresh","imageId":"sha256:6968eb11b553657c4fea8389665eb36d1279ac3821dd907205f058e39b020cf5","snapshot":"e7bac9bca243a3687ab5409ef2304f07b34ee764"}
+{"event":"step.completed","target":"workspace image freshness"}
+{"event":"image.verified","service":"web","imageId":"sha256:6968eb11b553657c4fea8389665eb36d1279ac3821dd907205f058e39b020cf5"}
+{"command":"web","status":"ok","exitCode":0,"url":"http://localhost:32931","port":"32931"}

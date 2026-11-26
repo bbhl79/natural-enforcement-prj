@@ -1,0 +1,2 @@
+{"event":"engine","identity":"podman","version":"6.1.4","os":"linux","arch":"amd64","endpoint":"unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock","source":"DOCKER_HOST 环境变量"}
+{"command":"logs","status":"ok","exitCode":0}

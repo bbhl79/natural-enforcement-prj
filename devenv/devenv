@@ -51,11 +51,11 @@ devenv — 工程基座唯一入口（命令面权威文档：devenv/COMMANDS.md
   up                        启动 db/api 并等待真实健康终态（幂等）
   down [--volumes]          停止（--volumes 连带清数据卷）
   restart [svc...]          重启（默认全部）
-  web [--port N] [--down]   启动前端并发布宿主端口（零端口不变量唯一例外；与栈命令互斥）
-  ps [-a]                   容器状态（--json 输出 JSONL）
-  logs [svc] [-f] [--tail N] 跟随日志（透传原始流）
-  exec [svc] -- cmd...      在容器内执行（默认 tools；透传原始流）
-  shell [svc]               交互 shell（默认 tools；透传原始流）
+  web [--port N] [--down]   启动前端并发布宿主端口（零端口不变量唯一例外；省略 --port 引擎自动分配空闲端口，实际端口见终值/status；与栈命令互斥）
+  ps [-a]                   容器状态（含发布端口；--json 输出 JSONL）
+  logs [svc] [-f] [--tail N] 跟随日志（透传原始流；--json 时原始流走 stderr，stdout 仅终值元数据）
+  exec [svc] -- cmd...      在容器内执行（默认 tools；透传原始流；--json 同上包装）
+  shell [svc]               交互 shell（默认 tools；透传原始流；--json 同 exec 包装）
   test [pattern...]         单元+集成测试（需先 up；连真实 PostGIS；运行期持共享栈租约）
   test:unit                 仅单元测试（零数据库基础设施；运行期持共享栈租约）
   lint / typecheck          ESLint / tsc --noEmit（运行期持共享栈租约）
@@ -334,11 +334,11 @@ cmd_ps() {
   if (( JSON )); then
     docker ps "${ps_args[@]}" --format '{{json .}}'
   else
-    docker ps "${ps_args[@]}" --format 'table {{.Names}}\t{{.Status}}'
+    docker ps "${ps_args[@]}" --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
   fi
 }
 
-cmd_logs() { compose logs "$@"; }  # 透传命令：子进程原始流
+cmd_logs() { run_passthrough compose logs "$@"; }  # 透传命令：子进程原始流（--json 包装终值元数据）
 
 cmd_exec() {
   local svc="tools"
@@ -346,20 +346,20 @@ cmd_exec() {
   [[ "${1:-}" == "--" ]] && shift
   [[ $# -gt 0 ]] || die 2 "exec 需要命令：devenv exec [svc] -- cmd..."
   if [[ "$svc" == "tools" ]]; then
-    in_tools "$@"
+    run_passthrough in_tools "$@"
   else
     svc_running "$svc" || die 3 "服务 [$svc] 未运行。修复命令：devenv up"
-    compose exec "$svc" "$@"
+    run_passthrough compose exec "$svc" "$@"
   fi
 }
 
 cmd_shell() {
   local svc="${1:-tools}"
   if [[ "$svc" == "tools" ]]; then
-    in_tools bash
+    run_passthrough in_tools bash
   else
     svc_running "$svc" || die 3 "服务 [$svc] 未运行。修复命令：devenv up"
-    compose exec "$svc" bash
+    run_passthrough compose exec "$svc" bash
   fi
 }
 
@@ -497,8 +497,12 @@ cmd_seed() {
 # 前端入口：人类/agent 显式 opt-in 发布宿主端口（零宿主端口不变量的唯一例外——
 # 浏览器在宿主机）。无 bind 架构下无 HMR：改动反馈环 = 重新执行 devenv web
 # （层缓存秒级重建）→ 浏览器刷新。
+# 并发端口分配（#62，Spec「并发端口分配」）：省略 --port 时注入裸容器端口，引擎在
+# 绑定时原子分配空闲宿主端口（两进程并发 web 实际成功、天然不同端口；判据是绑定
+# 结果，不是探测时空闲）；实际端口经 docker port 回读，进 --json 终值与 status。
+# 需要固定地址（人读书签等）时显式 --port N——冲突在引擎绑定时真实失败后诊断占用者。
 cmd_web() {
-  local port=5173 down=0
+  local port="" down=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --port) port="${2:?--port 需要值}"; shift 2;;
@@ -506,7 +510,10 @@ cmd_web() {
       *) die 2 "未知参数：$1（用法：web [--port N] [--down]）";;
     esac
   done
-  [[ "$port" =~ ^[0-9]+$ ]] || die 2 "--port 需要数字：$port"
+  if [[ -n "$port" ]]; then
+    [[ "$port" =~ ^[0-9]+$ ]] && (( 10#$port >= 1 && 10#$port <= 65535 )) \
+      || die 2 "--port 需要 1-65535 的数字：$port"
+  fi
   if (( down )); then
     lock_acquire "stack-$WT_SUFFIX" 60  # web --down 也是栈变更（#61：复合过程整体持锁）
     compose --profile web rm -sf web
@@ -515,11 +522,23 @@ cmd_web() {
   fi
   lock_acquire "stack-$WT_SUFFIX" 60  # web 做栈变更（构建+启动），与 down/restart 等互斥（COMMANDS.md 锁表）
   ensure_fresh_workspace
-  WEB_PORT="$port" run_step "web 启动" compose --profile web up -d web
+  # 省略 --port → 裸容器端口（引擎运行时分配）；显式 --port → 固定发布
+  local spec="4173"
+  [[ -n "$port" ]] && spec="$port:4173"
+  local rc=0
+  WEB_PORT_SPEC="$spec" compose --profile web up -d web >&2 || rc=$?
+  if (( rc )); then
+    web_bind_failure_diagnose "$port"  # 确认端口占用 → die 3（含占用者与内嵌修复命令）
+    final failed 4 step="web 启动" taskRc="$rc"
+    die 4 "web 启动失败（compose 退出码 $rc，完整输出见上方 stderr）"
+  fi
   wait_healthy web 120
   verify_svc_image web  # 启动核对：运行容器 == 本次构建的不可变镜像标识（#58）
-  note "web 就绪：http://localhost:$port（地图瓦片由浏览器自行拉取 OSM）"
-  final ok 0 url="http://localhost:$port" port="$port"
+  local actual
+  actual="$(web_actual_port)"
+  [[ -n "$actual" ]] || { final failed 4 step="web 端口回读"; die 4 "web 已健康但无法回读实际宿主端口（docker port 为空）。排查：devenv ps；devenv logs web"; }
+  note "web 就绪：http://localhost:$actual（地图瓦片由浏览器自行拉取 OSM）"
+  final ok 0 url="http://localhost:$actual" port="$actual"
 }
 
 cmd_wait() {
@@ -549,10 +568,15 @@ cmd_status() {
     local leases="none"
     leases="$(lease_report_all | tr '\n' ';' | sed 's/;$//')"
     [[ -n "$leases" ]] || leases="none"
+    # web 实际宿主端口（#62）：按本 worktree 项目标签回读运行容器；未运行如实报 none
+    local web_port web_url="none"
+    web_port="$(web_actual_port)"
+    [[ -n "$web_port" ]] && web_url="http://localhost:$web_port" || web_port="none"
     final ok 0 project="$PROJECT_NAME" worktree_suffix="$WT_SUFFIX" worktree_source="$WT_IDENTITY_SOURCE" \
       db_credentials="$cred_origin" \
       locks="$(ls -1 "$LOCK_ROOT" 2>/dev/null | grep '\.lock$' | paste -sd, - || true)" \
       leases="$leases" \
+      web_port="$web_port" web_url="$web_url" \
       node_image="$NODE_IMAGE" db_image="$DB_IMAGE_EFFECTIVE" db_image_source="$DB_IMAGE_SOURCE" \
       snapshot_hash="${STATE_SNAPSHOT_HASH:-none}" workspace_image_id="${STATE_IMAGE_ID:-none}" \
       tools_image_id="${STATE_TOOLS_IMAGE_ID:-none}"
@@ -561,6 +585,14 @@ cmd_status() {
   note "worktree：project=$PROJECT_NAME（suffix=$WT_SUFFIX；身份来源：$WT_IDENTITY_SOURCE）"
   note "容器（本项目）："
   cmd_ps
+  # web 实际宿主端口（#62）：按本 worktree 项目标签回读；per-worktree 可查询
+  local web_port
+  web_port="$(web_actual_port)"
+  if [[ -n "$web_port" ]]; then
+    note "web：http://localhost:$web_port（宿主 $web_port → 容器 4173；零宿主端口唯一例外）"
+  else
+    note "web：未运行（启动：devenv web——省略 --port 时引擎自动分配空闲端口）"
+  fi
   note "锁（$LOCK_ROOT，机器级命名空间；本 worktree 锁名 stack-$WT_SUFFIX / migrate-$WT_SUFFIX，机器级 lockgen/prefetch）："
   ls -1 "$LOCK_ROOT" 2>/dev/null | grep '\.lock$' | sed 's/^/  /' >&2 || true
   note "栈使用租约（#61；active=持有进程存活，stale=已死待下次取得清理）："

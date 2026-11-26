@@ -68,12 +68,15 @@ services:
   # 前端：vite preview 供镜像烘焙产物；api 调用经 preview proxy 走容器内网。
   # profile 隔离：`devenv up` 不启动 web（保持零宿主端口）；经 `devenv web` 显式
   # opt-in 发布端口——这是"零宿主端口"不变量的唯一例外（浏览器在宿主机）。
+  # 端口注入（#62）：WEB_PORT_SPEC 为完整发布规格——裸容器端口 "4173" = 引擎运行时
+  # 分配空闲宿主端口（原子绑定，不做"探测时空闲"式预占，并发 web 天然不同端口）；
+  # "8080:4173" = 显式固定发布（devenv web --port 8080）。实际端口经 docker port 回读。
   web:
     <<: *app-base
     profiles: ["web"]
     command: ["pnpm", "--filter", "@ne/web", "run", "preview"]
     ports:
-      - "${WEB_PORT:-5173}:4173"
+      - "${WEB_PORT_SPEC:-4173}"
     depends_on:
       api:
         condition: service_healthy

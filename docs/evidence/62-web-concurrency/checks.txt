@@ -1,0 +1,20 @@
+PASS: 01 B 项目名 per-worktree 独立
+PASS: 02 双方终值均含实际端口
+PASS: 02 并发实际绑定不同端口
+PASS: 02 双方实际访问成功（HTTP 200）
+PASS: 02 A status 含实际端口/url
+PASS: 02 B status 含实际端口/url
+PASS: 03 B 抢 A 端口 exit 3
+PASS: 03 错误含端口/A 项目占用者/修复命令
+PASS: 03 A 的 web 不受 B 冲突影响
+PASS: 04 非容器占用 exit 3
+PASS: 04 错误区分非容器占用者
+PASS: 05 exec 子进程码原样传播（3）
+PASS: 05 exec --json stdout 全 JSON 无原始流
+PASS: 05 exec --json 终值元数据
+PASS: 05 exec 原始流走 stderr
+PASS: 05 logs --json stdout 全 JSON + 终值
+PASS: 05 logs 原始日志走 stderr
+PASS: 05b 非 --json exec 原始流保持 stdout
+PASS: 06 重复 web 幂等（容器未重建、端口 32931 稳定）
+PASS: 07 锁与租约全部释放
