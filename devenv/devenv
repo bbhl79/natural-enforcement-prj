@@ -56,8 +56,8 @@ devenv — 工程基座唯一入口（命令面权威文档：devenv/COMMANDS.md
   down [--volumes]          停止（--volumes 连带清数据卷）
   restart [svc...]          重启（默认全部）
   web [--port N] [--down]   启动前端并发布宿主端口（零端口不变量唯一例外；省略 --port 引擎自动分配空闲端口，实际端口见终值/status；与栈命令互斥）
-  gen package <name>        当前工作树生成器生成新 workspace 包（来源路径+树哈希可核；自动补
-                            workspace.Dockerfile 清单并触发 lockgen；目标已存在即拒绝；#64）
+  gen <package|app> <name>  当前工作树生成器生成新 workspace 包或应用（来源路径+树哈希可核；自动补
+                            workspace.Dockerfile 清单并触发 lockgen；目标已存在即拒绝；#64/#65）
   gen evidence              读取绑定 workspace 镜像内的 pnpm 下载证据（需 DEVENV_PNPM_EVIDENCE=1 构建；缺失即 exit 4）
   ps [-a]                   容器状态（含发布端口；--json 输出 JSONL）
   logs [svc] [-f] [--tail N] 跟随日志（透传原始流；--json 时原始流走 stderr，stdout 仅终值元数据）
@@ -575,20 +575,20 @@ cmd_gen() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -h|--help) usage; exit 0 ;;
-      -*) die 2 "未知参数：$1（用法：gen package <kebab-case 名>）" ;;
+      -*) die 2 "未知参数：$1（用法：gen <package|app> <kebab-case 名>）" ;;
       *)
         if [[ -z "$kind" ]]; then kind="$1"
         elif [[ -z "$name" ]]; then name="$1"
-        else die 2 "多余参数：$1（用法：gen package <kebab-case 名>）"; fi
+        else die 2 "多余参数：$1（用法：gen <package|app> <kebab-case 名>）"; fi
         shift ;;
     esac
   done
-  [[ -n "$kind" && -n "$name" ]] || die 2 "用法：gen package <kebab-case 名>"
+  [[ -n "$kind" && -n "$name" ]] || die 2 "用法：gen <package|app> <kebab-case 名>"
   case "$kind" in
-    package) ;;
-    app|nest-module|page)
-      die 2 "gen ${kind} 尚未实现（本票 #64 交付 package；${kind} 归 #65/#67/#68）" ;;
-    *) die 2 "未知 kind：${kind}（当前可选：package）" ;;
+    package|app) ;;
+    nest-module|page)
+      die 2 "gen ${kind} 尚未实现（已交付 package/app；${kind} 归 #67/#68）" ;;
+    *) die 2 "未知 kind：${kind}（当前可选：package | app）" ;;
   esac
   [[ "$name" =~ ^[a-z][a-z0-9]*(-[a-z0-9]+)*$ ]] \
     || die 2 "名称须为 kebab-case（小写字母数字+连字符）：${name}"
@@ -624,10 +624,10 @@ cmd_gen() {
   gen_run_container "$txn" "$kind" "$name" "$s"
   local stage="$txn/stage"
   gen_stage_output "$txn" "$stage" "$kind" "$name" "$s"
-  gen_apply_transaction "$stage" "$txn" "$name" "$s"
+  gen_apply_transaction "$stage" "$txn" "$kind" "$name" "$s"
   ev gen.applied files="$(jq '.files | length' "$stage/$GEN_MANIFEST_NAME")" patches="1"
 
-  # 生成后的快照 → 机器级 lockgen（新增 workspace 包必须进入 lockfile）
+  # 生成后的快照 → 机器级 lockgen（新增 workspace 包/应用必须进入 lockfile）
   local s2 dir2
   s2="$(snapshot_capture)"
   ev snapshot.captured hash="$s2" reason="gen"
@@ -636,14 +636,15 @@ cmd_gen() {
   ensure_tools_image "$s2"
   cp -p "$REPO_ROOT/pnpm-lock.yaml" "$txn/pnpm-lock.old.yaml" \
     || die 4 "旧锁文件备份失败（未触发 lockgen；生成物保留供审查）"
-  note "新 workspace 包已落盘 → 触发 lockgen（机器级锁；只接受新增 importer 的预期 diff）"
+  note "新 workspace ${kind} 已落盘 → 触发 lockgen（机器级锁；只接受新增 importer 的预期 diff）"
   regen_lockfile "$dir2"
   snapshot_discard "$dir2"
 
-  local importer="packages/$name"
+  local importer
+  importer="$(gen_target_dir "$kind")/$name"
   gen_lockfile_has_importer "$REPO_ROOT/pnpm-lock.yaml" "$importer" \
     || { final failed 4 step="lockgen" importer="$importer"; gen_txn_commit
-         die 4 "lockgen 未将新包纳入 lockfile importer（${importer}）；已停止，请审查 pnpm-lock.yaml 与 workspace.Dockerfile"; }
+         die 4 "lockgen 未将新 ${kind} 纳入 lockfile importer（${importer}）；已停止，请审查 pnpm-lock.yaml 与 workspace.Dockerfile"; }
   if ! gen_lockfile_diff_expected "$txn/pnpm-lock.old.yaml" "$REPO_ROOT/pnpm-lock.yaml" "$importer"; then
     gen_txn_commit  # 保留生成物与锁文件供审查（非预期 diff 需要人/agent 判断）
     final failed 4 step="lockfile-review" importer="$importer" \
@@ -661,7 +662,7 @@ cmd_gen() {
   fi
 
   gen_txn_commit
-  note "gen package 完成：packages/${name}（lockgen diff=expected）"
+  note "gen ${kind} 完成：${importer}（lockgen diff=expected）"
   note "下一步：devenv verify（lint + typecheck + test:unit），审查 pnpm-lock.yaml diff 后随 git 提交"
   final ok 0 kind="$kind" name="$name" sourcePath="$REPO_ROOT/devenv/gen" \
     treeHash="$GEN_SOURCE_TREE" setHash="$GEN_SET_SHA256" files="$GEN_SOURCE_FILES" \

@@ -28,7 +28,7 @@ COPY pnpm-workspace.yaml package.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
-# @gen:pkg-copy（devenv gen package 在此行后追加两靶共用的 manifest COPY；
+# @gen:pkg-copy（devenv gen package/app 在此行后追加两靶共用的 manifest COPY；
 # 生成器要求本标记恰好两处——lockgen-base 与 deps 各一）
 COPY packages/tsconfig packages/tsconfig
 

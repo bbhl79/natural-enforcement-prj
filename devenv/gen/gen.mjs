@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // ============================================================================
-// 脚手架生成器（#64 落地；Spec-工程基座 §5）
+// 脚手架生成器（#64 package / #65 app；Spec-工程基座 §5）
 //
 // 调用形态（容器内）：
 //   node /tmp/ne-gen/input/devenv/gen/gen.mjs <kind> <kebab-case-name>
 //
 // 输入 channel（由 devenv 经 stdin tar 传入，解包到 $NE_GEN_SOURCE）：
 //   - 本次调用当前工作树的完整 `devenv/gen/` 集合（生成器自身，零第三方依赖）；
-//   - 锚点文件（package 类：`devenv/workspace.Dockerfile`）——补丁以宿主当前内容
+//   - 锚点文件（package/app 类：`devenv/workspace.Dockerfile`）——补丁以宿主当前内容
 //     为基准，镜像内没有可静默 fallback 的烘焙副本。
 //
 // 输出 channel（devenv 侧 tar 回宿主，先解包到暂存目录再原子落盘）：
@@ -25,7 +25,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 
-const KINDS = ['package']
+const KINDS = ['package', 'app']
 const SOURCE = process.env.NE_GEN_SOURCE || '/tmp/ne-gen/input'
 const OUTPUT = process.env.NE_GEN_OUTPUT || '/tmp/ne-gen/output'
 const MANIFEST_NAME = '.ne-gen-manifest.json'
@@ -38,7 +38,7 @@ const die = (m, code = 4) => {
 
 const [, , kind, name] = process.argv
 if (!KINDS.includes(kind)) {
-  die(`kind 尚未实现：${kind ?? '(缺)'}（#64 交付 package；app/nest-module/page 归 #65/#67/#68）`, 2)
+  die(`kind 尚未实现：${kind ?? '(缺)'}（已交付 package/app；nest-module/page 归 #67/#68）`, 2)
 }
 if (!/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(name ?? '')) {
   die(`名称须为 kebab-case（小写字母数字+连字符）：${name ?? '(缺)'}`, 2)
@@ -78,8 +78,8 @@ const PKG_JSON = `{
 }
 `
 
-const TSCONFIG = `{
-  "extends": "@ne/tsconfig/base.json",
+const makeTsconfig = (preset) => `{
+  "extends": "@ne/tsconfig/${preset}",
   "compilerOptions": {
     "noEmit": true
   },
@@ -107,7 +107,7 @@ export default defineConfig({
 })
 `
 
-const HELLO = `// 共享包 @ne/${name}：示例纯函数（生成后可直接替换）
+const makeHello = (label) => `// ${label} @ne/${name}：示例纯函数（生成后可直接替换）
 export function hello(target: string): string {
   return \`hello \${target} from @ne/${name}\`
 }
@@ -126,52 +126,99 @@ describe('${name}', () => {
 const INDEX_REEXPORT = `export { hello } from './hello.js'
 `
 
+const APP_PKG_JSON = `{
+  "name": "@ne/${name}",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "devenv gen app 生成的应用（#65）",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run src"
+  },
+  "devDependencies": {
+    "@ne/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
+`
+
+const APP_MAIN = `import { hello } from './hello.js'
+
+export function main(): void {
+  console.log(hello('app'))
+}
+
+main()
+`
+
 // ---------------------------------------------------------------------------
 // 装配：新文件 Map + 锚点补丁（全部在内存中完成，校验通过后才写盘）
 // ---------------------------------------------------------------------------
+const KIND_SPEC = {
+  package: {
+    targetRoot: 'packages',
+    pkgJson: PKG_JSON,
+    tsconfigPreset: 'base.json',
+    helloLabel: '共享包',
+    entryFile: ['src/index.ts', INDEX_REEXPORT],
+  },
+  app: {
+    targetRoot: 'apps',
+    pkgJson: APP_PKG_JSON,
+    tsconfigPreset: 'node.json',
+    helloLabel: '应用',
+    entryFile: ['src/main.ts', APP_MAIN],
+  },
+}
+
 /** @type {Map<string, {content: string, mode: number}>} */
 const files = new Map()
 /** @type {Array<{file: string, apply: (src: string) => string}>} */
 const patches = []
 
 const put = (rel, content, mode = 0o644) => files.set(rel, { content, mode })
+const spec = KIND_SPEC[kind]
+const base = `${spec.targetRoot}/${name}`
 
-if (kind === 'package') {
-  const base = `packages/${name}`
-  put(`${base}/package.json`, PKG_JSON)
-  put(`${base}/tsconfig.json`, TSCONFIG)
-  put(`${base}/tsconfig.build.json`, TSCONFIG_BUILD)
-  put(`${base}/vitest.config.ts`, VITEST_CONFIG)
-  put(`${base}/src/hello.ts`, HELLO)
-  put(`${base}/src/index.ts`, INDEX_REEXPORT)
-  put(`${base}/src/hello.spec.ts`, HELLO_SPEC)
+put(`${base}/package.json`, spec.pkgJson)
+put(`${base}/tsconfig.json`, makeTsconfig(spec.tsconfigPreset))
+put(`${base}/tsconfig.build.json`, TSCONFIG_BUILD)
+put(`${base}/vitest.config.ts`, VITEST_CONFIG)
+put(`${base}/src/hello.ts`, makeHello(spec.helloLabel))
+put(`${base}/${spec.entryFile[0]}`, spec.entryFile[1])
+put(`${base}/src/hello.spec.ts`, HELLO_SPEC)
 
-  // 无 bind 烘焙架构的隐藏耦合：workspace.Dockerfile 的 lockgen-base 与 deps
-  // 两靶按显式清单 COPY 各包 package.json。新包不进清单 → lockfile 解析不到
-  // （静默）且 deps 靶 --frozen-lockfile 直接断。补丁按整行插入标记行之后。
-  const copyLine = `COPY ${base}/package.json ${base}/package.json`
-  patches.push({
-    file: 'devenv/workspace.Dockerfile',
-    apply: (text) => {
-      if (text.split('\n').some((l) => l.trim() === copyLine)) {
-        die(`workspace.Dockerfile 已注入过 ${name} 的 manifest COPY 行（幂等保护，未写入任何文件）`)
+// 无 bind 烘焙架构的隐藏耦合：workspace.Dockerfile 的 lockgen-base 与 deps
+// 两靶按显式清单 COPY 各包/应用 package.json。未进清单 → lockfile 解析不到
+// （静默）且 deps 靶 --frozen-lockfile 直接断。补丁按整行插入标记行之后。
+const copyLine = `COPY ${base}/package.json ${base}/package.json`
+patches.push({
+  file: 'devenv/workspace.Dockerfile',
+  apply: (text) => {
+    if (text.split('\n').some((l) => l.trim() === copyLine)) {
+      die(`workspace.Dockerfile 已注入过 ${name} 的 manifest COPY 行（幂等保护，未写入任何文件）`)
+    }
+    const out = []
+    let hits = 0
+    for (const line of text.split('\n')) {
+      out.push(line)
+      if (line.trimStart().startsWith('# @gen:pkg-copy')) {
+        out.push(copyLine)
+        hits++
       }
-      const out = []
-      let hits = 0
-      for (const line of text.split('\n')) {
-        out.push(line)
-        if (line.trimStart().startsWith('# @gen:pkg-copy')) {
-          out.push(copyLine)
-          hits++
-        }
-      }
-      if (hits !== 2) {
-        die(`workspace.Dockerfile 的 @gen:pkg-copy 标记应恰好 2 处（lockgen-base/deps 两靶各一），实际 ${hits} 处（锚点失效，未写入任何文件）`)
-      }
-      return out.join('\n')
-    },
-  })
-}
+    }
+    if (hits !== 2) {
+      die(`workspace.Dockerfile 的 @gen:pkg-copy 标记应恰好 2 处（lockgen-base/deps 两靶各一），实际 ${hits} 处（锚点失效，未写入任何文件）`)
+    }
+    return out.join('\n')
+  },
+})
 
 // ---------------------------------------------------------------------------
 // 预检（全部在写盘前）：目标不存在 + 补丁基准可读 + JSON 自检
@@ -182,8 +229,8 @@ for (const rel of files.keys()) {
   }
 }
 // 目标目录也必须不存在（避免只检查文件漏掉空目录/遗留文件）
-if (kind === 'package' && fs.existsSync(src('packages', name))) {
-  die(`目标已存在：packages/${name}/（幂等保护，未写入任何文件；先删除再生成）`)
+if (fs.existsSync(src(spec.targetRoot, name))) {
+  die(`目标已存在：${base}/（幂等保护，未写入任何文件；先删除再生成）`)
 }
 for (const [rel, { content }] of files) {
   if (rel.endsWith('.json')) {
