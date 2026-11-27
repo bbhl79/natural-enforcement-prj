@@ -28,6 +28,8 @@ COPY pnpm-workspace.yaml package.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
+# @gen:pkg-copy（devenv gen package 在此行后追加两靶共用的 manifest COPY；
+# 生成器要求本标记恰好两处——lockgen-base 与 deps 各一）
 COPY packages/tsconfig packages/tsconfig
 
 # registry 元数据（packument）缓存走引擎原生 cache mount：lockgen 的耗时是元数据
@@ -56,18 +58,36 @@ COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
+# @gen:pkg-copy（与 lockgen-base 靶同源：生成器在此追加同一行，保证 lockfile
+# 解析与 frozen install 的 manifest 集合一致）
 COPY packages/tsconfig packages/tsconfig
 # 供应链门禁（#63）：install 后核对待审批的构建脚本/包内 agent skills。脚本先于
 # install COPY（不纳入源码层缓存链），默认拒绝：任何待审批项都停止构建并要求审查。
 COPY devenv/supply-chain/check-permissions.sh /usr/local/bin/ne-check-permissions
+COPY devenv/supply-chain/pnpm-evidence.mjs /usr/local/bin/ne-pnpm-evidence
 RUN chmod +x /usr/local/bin/ne-check-permissions
 ARG PNPM_STORE_CACHE_ID=ne-pnpm-store-v11
 # 元数据缓存 mount：minimumReleaseAge 严格校验需读取 589 条发布元数据；缓存发布
 # 时间元数据只影响性能，不改变 lockfile integrity 与解析结果（缓存非信任根）。
 ARG PNPM_META_CACHE_ID=ne-pnpm-meta-v12
+# 下载证据（#64 新增包闭环；默认关闭，普通构建零额外开销）：PNPM_EVIDENCE=1 时
+# 以 --reporter=ndjson 结构化事件摘要未变更依赖的下载包数，写入镜像内
+# /workspace/.devenv/pnpm-install.json，供 devenv/test/gen-loop.sh 判定
+# 「零包内容下载」。只有流完整且零下载才可判通过；证据缺失判「无法验收」。
+ARG PNPM_EVIDENCE=0
 RUN --mount=type=cache,id=${PNPM_STORE_CACHE_ID},target=/pnpm/store,sharing=locked \
     --mount=type=cache,id=${PNPM_META_CACHE_ID},target=/root/.cache/pnpm,sharing=locked \
-    pnpm install --frozen-lockfile --store-dir=/pnpm/store && ne-check-permissions
+    bash -euo pipefail -c '\
+      if [ "${PNPM_EVIDENCE}" = "1" ]; then \
+        mkdir -p /workspace/.devenv; \
+        pnpm install --frozen-lockfile --store-dir=/pnpm/store --reporter=ndjson 2>&1 \
+          | tee /tmp/pnpm-install.ndjson >/dev/null; \
+        node /usr/local/bin/ne-pnpm-evidence < /tmp/pnpm-install.ndjson \
+          > /workspace/.devenv/pnpm-install.json; \
+      else \
+        pnpm install --frozen-lockfile --store-dir=/pnpm/store; \
+      fi; \
+      ne-check-permissions'
 COPY . .
 
 # 终靶：构建产物入镜像

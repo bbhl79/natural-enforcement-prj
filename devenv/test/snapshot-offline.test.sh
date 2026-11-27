@@ -64,7 +64,7 @@ STATE="${MOCK_DOCKER_STATE:?}"
 mkdir -p "$STATE/images" "$STATE/tags"
 {
   printf 'docker'
-  for a in "$@"; do printf ' %q' "$a"; done
+  for a in "$@"; do printf ' %s' "$a"; done
   printf ' | WORKSPACE_IMAGE=%s\n' "${WORKSPACE_IMAGE:-}"
 } >> "$STATE/calls.log"
 cmd="${1:-}"; [[ $# -gt 0 ]] && shift
