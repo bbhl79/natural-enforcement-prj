@@ -12,6 +12,27 @@ export type NearbyRow = {
   createdAt: Date
 }
 
+export class DuplicateEnforcementPointNameError extends Error {
+  constructor(name: string) {
+    super(`执法点位名称已存在：${name}`)
+    this.name = 'DuplicateEnforcementPointNameError'
+  }
+}
+
+function isDuplicatePointNameError(err: unknown): boolean {
+  if (!err || typeof err !== 'object') return false
+  const cause = (
+    err as {
+      meta?: {
+        driverAdapterError?: {
+          cause?: { originalCode?: string; constraint?: { index?: string } }
+        }
+      }
+    }
+  ).meta?.driverAdapterError?.cause
+  return cause?.originalCode === '23505' && cause.constraint?.index === 'EnforcementPoint_name_key'
+}
+
 /**
  * 空间读写全部走 $queryRaw（Prisma client 不含 Unsupported 列）：
  * - geography(Point,4326) + ST_DWithin（geography 版第三参=米，bbox 比较走 GiST）
@@ -22,10 +43,18 @@ export class EnforcementPointRepo {
   constructor(private readonly db: PrismaService) {}
 
   async create(name: string, at: LatLng): Promise<CreateEnforcementPointResult> {
-    const rows = await this.db.$queryRaw<{ id: number }[]>`
-      INSERT INTO "EnforcementPoint" ("name", "location")
-      VALUES (${name}, ST_SetSRID(ST_Point(${at.lng}, ${at.lat}), 4326)::geography)
-      RETURNING id`
+    let rows: { id: number }[]
+    try {
+      rows = await this.db.$queryRaw<{ id: number }[]>`
+        INSERT INTO "EnforcementPoint" ("name", "location")
+        VALUES (${name}, ST_SetSRID(ST_Point(${at.lng}, ${at.lat}), 4326)::geography)
+        RETURNING id`
+    } catch (err) {
+      if (isDuplicatePointNameError(err)) {
+        throw new DuplicateEnforcementPointNameError(name)
+      }
+      throw err
+    }
     const row = rows[0]
     if (!row) throw new Error('INSERT 未返回行')
     return row

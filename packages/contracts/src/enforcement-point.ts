@@ -65,3 +65,68 @@ export const HealthResultSchema = z.object({
   uptime: z.number(),
 })
 export type HealthResult = z.infer<typeof HealthResultSchema>
+
+// 通用 HTTP 错误基类（与 NestJS HttpException 默认载荷同构）
+export const HttpErrorSchema = z.object({
+  message: z.string(),
+  error: z.string().optional(),
+  statusCode: z.number().int().optional(),
+})
+export type HttpError = z.infer<typeof HttpErrorSchema>
+
+// 400 请求契约校验错误载荷（兼容 ZodValidationPipe 与框架层非法 JSON 400）
+export const ValidationIssueSchema = z.object({
+  path: z.string(),
+  code: z.string(),
+  message: z.string(),
+})
+export type ValidationIssue = z.infer<typeof ValidationIssueSchema>
+
+export const ValidationErrorSchema = HttpErrorSchema.extend({
+  issues: z.array(ValidationIssueSchema).optional(),
+})
+export type ValidationError = z.infer<typeof ValidationErrorSchema>
+
+// 409 冲突错误载荷（如执法点位唯一名称冲突）
+export const ConflictErrorSchema = HttpErrorSchema
+export type ConflictError = z.infer<typeof ConflictErrorSchema>
+
+export type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete'
+
+export interface ApiContractEndpoint {
+  readonly method: HttpMethod
+  readonly path: string
+  readonly requestBody?: z.ZodType
+  readonly query?: z.ZodObject
+  readonly responses: Readonly<Record<number, z.ZodType>>
+}
+
+// 公开 API 端点契约总表（zod 唯一事实源；OpenAPI 完整性检查据此核对，遗漏即报错）
+export const API_CONTRACT_ENDPOINTS: readonly ApiContractEndpoint[] = [
+  {
+    method: 'post',
+    path: ENFORCEMENT_POINT_ROUTES.base,
+    requestBody: CreateEnforcementPointSchema,
+    responses: {
+      201: CreateEnforcementPointResultSchema,
+      400: ValidationErrorSchema,
+      409: ConflictErrorSchema,
+    },
+  },
+  {
+    method: 'get',
+    path: ENFORCEMENT_POINT_ROUTES.nearby,
+    query: NearbyQuerySchema,
+    responses: {
+      200: NearbyResultSchema,
+      400: ValidationErrorSchema,
+    },
+  },
+  {
+    method: 'get',
+    path: HEALTH_ROUTES.base,
+    responses: {
+      200: HealthResultSchema,
+    },
+  },
+] as const

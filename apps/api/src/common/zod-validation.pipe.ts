@@ -1,14 +1,23 @@
-// 请求校验管道（Spec-工程基座 §1）：NestJS 12 的 Standard Schema 原生支持是
-// 响应序列化拦截器，非请求管道（原型 #11 实证）——请求校验用自写 zod 管道。
-// zod 4 自身实现 Standard Schema（~standard），此管道只做 safeParse → BadRequestException。
-import { BadRequestException, type PipeTransform } from '@nestjs/common'
+// 请求校验管道（Spec-工程基座 §1 / #66）：
+// NestJS 12 原生支持 @Body({ schema, pipes }) / @Query({ schema, pipes })，把 zod
+// Standard Schema 同时透传给 ArgumentMetadata.schema 与 @nestjs/swagger 12 OpenAPI 派生；
+// 本管道优先使用构造参数 schema，缺省时读取 metadata.schema，保证运行时校验与 OpenAPI 同源。
+import { BadRequestException, type ArgumentMetadata, type PipeTransform } from '@nestjs/common'
 import type { ZodType } from 'zod'
 
-export class ZodValidationPipe implements PipeTransform {
-  constructor(private readonly schema: ZodType) {}
+function isZodSchema(value: unknown): value is ZodType {
+  return typeof value === 'object' && value !== null && 'safeParse' in value
+}
 
-  transform(value: unknown): unknown {
-    const parsed = this.schema.safeParse(value)
+export class ZodValidationPipe implements PipeTransform {
+  constructor(private readonly schema?: ZodType) {}
+
+  transform(value: unknown, metadata?: ArgumentMetadata): unknown {
+    const active = this.schema ?? (isZodSchema(metadata?.schema) ? metadata.schema : undefined)
+    if (!active) {
+      return value
+    }
+    const parsed = active.safeParse(value)
     if (!parsed.success) {
       throw new BadRequestException({
         message: '契约校验失败',
