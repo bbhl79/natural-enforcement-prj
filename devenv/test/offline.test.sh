@@ -40,11 +40,17 @@ case "${MOCK_CURL_MODE:-ok}" in
   fail)    exit 22 ;;
   timeout) exit 28 ;;
 esac
-exec 9>>"${MOCK_CURL_COUNTER:?}.lock"
-flock 9
+lock="${MOCK_CURL_COUNTER}.lock"
+for ((i=0; i<1000; i++)); do
+  if mkdir "$lock" 2>/dev/null; then break; fi
+  sleep 0.01
+done
+[[ -d "$lock" ]] || exit 1
+trap 'rmdir "$lock" 2>/dev/null || true' EXIT
 n=$(( $(cat "$MOCK_CURL_COUNTER" 2>/dev/null || echo 0) + 1 ))
 echo "$n" > "$MOCK_CURL_COUNTER"
-flock -u 9
+rmdir "$lock"
+trap - EXIT
 printf '{"token":"FAKETOKEN_%s","expires_at":"2026-11-24T16:00:00Z","permissions":{"contents":"write"}}\n' "$n"
 EOF
 
@@ -88,6 +94,31 @@ echo "HELPER_PASSWORD_SHA256: $(printf '%s' "$pw" | sha256sum | awk '{print $1}'
 echo "PUSH_SIMULATED_OK" >> "$MOCK_GIT_LOG"
 exit 0
 EOF
+  cat > "$SANDBOX/stubbin/stat" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+mode="${MOCK_STAT_MODE:-real}"
+if [[ "$mode" == "real" ]]; then exec "${REAL_STAT:?}" "$@"; fi
+[[ "$mode" == "fail" ]] && exit 1
+file=""
+for a in "$@"; do file="$a"; done
+if perm=$("$REAL_STAT" -c '%a' "$file" 2>/dev/null); then
+  :
+else
+  perm=$("$REAL_STAT" -f '%Lp' "$file" 2>/dev/null) || exit 1
+fi
+case "$mode" in
+  gnu)
+    [[ "${1:-}" == "-c" && "${2:-}" == "%a" ]] || exit 1
+    printf '0%s\n' "$perm" ;;
+  bsd)
+    [[ "${1:-}" == "-c" ]] && exit 1
+    [[ "${1:-}" == "-f" && "${2:-}" == "%OLp" ]] || exit 1
+    printf '0%s\n' "$perm" ;;
+  *) exit 1 ;;
+esac
+EOF
+
   chmod +x "$SANDBOX/stubbin/"*
 }
 
@@ -114,6 +145,8 @@ setup() {
   write_mocks
 
   export GHA_AUTHZ_FILE="$SANDBOX/authorization.json"
+  REAL_STAT=$(command -v stat)
+  export REAL_STAT
   export PATH="$SANDBOX/stubbin:$PATH"
   export MOCK_CURL_BODIES="$SANDBOX/curl-bodies.log"
   export MOCK_CURL_COUNTER="$SANDBOX/curl-counter"
@@ -126,7 +159,8 @@ setup() {
 }
 
 reset_mocks() {
-  rm -f "$MOCK_CURL_BODIES" "$MOCK_CURL_COUNTER" "$MOCK_CURL_COUNTER.lock" "$MOCK_GIT_LOG"
+  rm -f "$MOCK_CURL_BODIES" "$MOCK_CURL_COUNTER" "$MOCK_GIT_LOG"
+  rm -rf "$MOCK_CURL_COUNTER.lock"
   rm -rf "$MOCK_GH_LOG_DIR"; mkdir -p "$MOCK_GH_LOG_DIR"
 }
 
@@ -196,6 +230,31 @@ run t4b "$DEVENV" gh api /user
 expect_rc "T4b 私钥权限 644 拒绝" 21 t4b
 chmod 600 "$SANDBOX/test-key.pem"
 
+# T4c GNU stat 的 0400 归一化为 400 后接受
+reset_mocks
+chmod 400 "$SANDBOX/test-key.pem"
+write_authz 5899686 "$SANDBOX/test-key.pem" "bbhl79/natural-enforcement-prj"
+export MOCK_STAT_MODE=gnu
+run t4c "$DEVENV" gh api /user
+expect_rc "T4c GNU stat 前导零权限接受" 0 t4c
+unset MOCK_STAT_MODE
+chmod 600 "$SANDBOX/test-key.pem"
+
+# T4d GNU stat 不可用时回退 BSD stat，并归一化 0600
+reset_mocks
+export MOCK_STAT_MODE=bsd
+run t4d "$DEVENV" gh api /user
+expect_rc "T4d BSD stat 回退接受" 0 t4d
+unset MOCK_STAT_MODE
+
+# T4e 两种 stat 均不可用 → 21，不请求 token
+reset_mocks
+export MOCK_STAT_MODE=fail
+run t4e "$DEVENV" gh api /user
+expect_rc "T4e stat 不可用拒绝" 21 t4e
+unset MOCK_STAT_MODE
+no_curl_called "T4e 未请求 token"
+
 # T5 GitHub 返回错误 → 22，不执行 gh
 reset_mocks
 write_authz 5899686 "$SANDBOX/test-key.pem" "bbhl79/natural-enforcement-prj"
@@ -254,7 +313,7 @@ wait
 logs=( "$MOCK_GH_LOG_DIR"/gh.*.log )
 [[ "${#logs[@]}" == 8 ]] && pass "T11 8 路全部执行" || fail "T11" "gh 日志数 ${#logs[@]} != 8"
 distinct=$(grep -h 'GH_TOKEN_SHA256:' "${logs[@]}" | awk '{print $2}' | sort -u | wc -l)
-[[ "$distinct" == 8 ]] && pass "T11 8 个 token 互不相同" || fail "T11" "distinct=$distinct"
+[[ "$distinct" -eq 8 ]] && pass "T11 8 个 token 互不相同" || fail "T11" "distinct=$distinct"
 expected=$(for n in 1 2 3 4 5 6 7 8; do sha "FAKETOKEN_$n"; done | sort)
 actual=$(grep -h 'GH_TOKEN_SHA256:' "${logs[@]}" | awk '{print $2}' | sort)
 [[ "$actual" == "$expected" ]] && pass "T11 token 均来自本次换取" || fail "T11" "token 集合不符"
