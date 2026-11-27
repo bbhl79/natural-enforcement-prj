@@ -1,5 +1,0 @@
-iter=1 rc=0 elapsed=55s
-iter=2 rc=0 elapsed=55s
-iter=3 rc=0 elapsed=55s
-iter=4 rc=0 elapsed=54s
-iter=5 rc=0 elapsed=54s

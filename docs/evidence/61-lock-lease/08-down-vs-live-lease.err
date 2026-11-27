@@ -1,2 +1,0 @@
-[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
-[devenv] ERROR: 独占锁 [stack-90e22128] 有活跃栈使用租约（持有者 pid/启动时间/槽：1024771 1795694897 1024771.1795694897.512），等待 2s 超时。修复：等待测试/质量门结束，或确认持有进程已死后重跑（失效租约自动清理）

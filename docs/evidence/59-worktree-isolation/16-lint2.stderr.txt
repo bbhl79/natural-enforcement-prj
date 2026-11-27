@@ -1,2 +1,0 @@
-[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
-[devenv] workspace 镜像新鲜（快照 bbb67f18118b… ↔ sha256:55302df525d7…），跳过重建

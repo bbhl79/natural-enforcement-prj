@@ -1,6 +1,0 @@
-[devenv] engine: podman 6.1.4 (linux/amd64) @ unix:///mnt/wsl/podman-sockets/podman-machine-default/podman-root.sock（来源：DOCKER_HOST 环境变量）
-api-1  | [32m[Nest] 46  - [39m11/26/2026, 1:36:01 PM [32m    LOG[39m [38;5;3m[RoutesResolver] [39m[32mEnforcementPointController {/enforcement-points}:[39m[38;5;3m +0ms[39m
-api-1  | [32m[Nest] 46  - [39m11/26/2026, 1:36:01 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/enforcement-points, POST} route[39m[38;5;3m +1ms[39m
-api-1  | [32m[Nest] 46  - [39m11/26/2026, 1:36:01 PM [32m    LOG[39m [38;5;3m[RouterExplorer] [39m[32mMapped {/enforcement-points/nearby, GET} route[39m[38;5;3m +0ms[39m
-api-1  | [32m[Nest] 46  - [39m11/26/2026, 1:36:01 PM [32m    LOG[39m [38;5;3m[NestApplication] [39m[32mNest application successfully started[39m[38;5;3m +49ms[39m
-api-1  | [32m[Nest] 46  - [39m11/26/2026, 1:36:01 PM [32m    LOG[39m [38;5;3m[api] [39m[32mlistening on 3000[39m

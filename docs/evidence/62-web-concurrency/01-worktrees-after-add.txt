@@ -1,5 +1,0 @@
-/home/hulei815/Workspaces/natural-enforcement-prj                                         7f9aa52 [feat/web-concurrency-62]
-/home/hulei815/Workspaces/natural-enforcement-e2e                                         4f1a460 [prototype/e2e-dualtrack]
-/home/hulei815/Workspaces/natural-enforcement-slice2                                      02dba33 [prototype/foundation-slice-2]
-/home/hulei815/Workspaces/ne-62-evidence-b                                                7f9aa52 (detached HEAD)
-/home/hulei815/orca/workspaces/.orca-preparing/41180-f24e74c5-4657-4cce-97ce-c6825d54c7d9 939cc4c (detached HEAD) locked

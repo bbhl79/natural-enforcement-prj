@@ -1,4 +1,0 @@
-NAMES                                STATUS          PORTS
-natural-enforcement-f6c59a50-db-1    Up 43 seconds   5432/tcp
-natural-enforcement-f6c59a50-api-1   Up 31 seconds   
-natural-enforcement-f6c59a50-web-1   Up 18 seconds   0.0.0.0:33333->4173/tcp

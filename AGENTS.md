@@ -13,6 +13,14 @@ compose）；命令面权威文档：`devenv/COMMANDS.md`（命令表 / 退出�
 
 开工自检：`./devenv/devenv doctor`（退出码即可开工与否）。
 
+## 运行证据与产物（强制）
+
+- 一切原始运行证据（命令捕获 `.jsonl`/`.out`/`.err`/`.exitcode`/`.log` 等）一律写入
+  `.artifacts/<票号>-<slug>/`（已 `.gitignore`，不进代码库，不污染 `#58` 工作树快照）。
+- 验收结论、关键输出摘录与对应 commit SHA 归档至 GitHub Issue / PR 评论；长期有效
+  的设计/路线决策写入 `docs/adr/` 或 `docs/research/*.md`；可复用的测试脚本归入
+  `devenv/test/`。
+
 ## GitHub 认证入口（强制）
 
 所有 GitHub 操作必须以 GitHub App `bbhl79-agent` 身份经 devenv 入口执行，

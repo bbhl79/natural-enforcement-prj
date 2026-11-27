@@ -1,1 +1,0 @@
-{"name":"loop4-total","startMs":1795569171529,"endMs":1795569284633,"durationMs":113104,"exitCode":0,"steps":["loop4-gen","loop4-lint","loop4-typecheck","loop4-testunit"]}

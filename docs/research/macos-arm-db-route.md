@@ -3,7 +3,7 @@
 - 票：[#53 Task-阶段0核定macOS数据库路线](https://github.com/bbhl79/natural-enforcement-prj/issues/53)（parent [#23 Spec-工程基座](https://github.com/bbhl79/natural-enforcement-prj/issues/23) 阶段 0 实验①）
 - 日期：2026-11-24（Registry 结论）；2026-11-26 runbook 对齐当前 `dev` 命令面（#56/#58/#59 落地后，见 §四）；**2026-11-27 Mac 本机实跑（见 §七）**
 - 方法：Docker Registry HTTP API 实查（本机 WSL2 执行，命令与判定口径见 §2，可复跑）；Podman 上游一手文档（官方 man page / Podman Desktop docs / GitHub release 与 issue）；**2026-11-27 在 Apple Silicon Mac（libkrun）经 devenv 实跑候选 A/B**
-- 分工边界（诚实口径）：本文档 §2/§3 完成候选路线 registry 核实与 Rosetta 能力调研；§4/§五为实验 runbook；**§七为 2026-11-27 Mac 本机实跑结果与路线选择**。证据在 [macos-arm-evidence/](macos-arm-evidence/README.md)：**验收路径命令经 devenv**（路线切换只经 `DEVENV_DB_IMAGE`）；A/B 对照探针与镜像元数据为直接引擎/公开 API 的研究仪器（证据 README 已标注例外）。Mac 等待预算仍待指挥者核定；正式全量验收归 #78，本文档发布不构成 macOS 已支持的声称。
+- 分工边界（诚实口径）：本文档 §2/§3 完成候选路线 registry 核实与 Rosetta 能力调研；§4/§五为实验 runbook；**§七为 2026-11-27 Mac 本机实跑结果与路线选择**。验收摘要见 Issue #53，历史原始输出留存于 PR #88（`8a625aa`）：**验收路径命令经 devenv**（路线切换只经 `DEVENV_DB_IMAGE`）；A/B 对照探针与镜像元数据为直接引擎/公开 API 的研究仪器。Mac 等待预算仍待指挥者核定；正式全量验收归 #78，本文档发布不构成 macOS 已支持的声称。
 
 ---
 
@@ -66,7 +66,7 @@ jq -r '[.manifests[].platform | select(.architecture!="unknown") | .architecture
 
 > 执行环境：**当前 `dev`（或本 PR 变基后的分支）**。实验从当前 `dev` 建 worktree，一工作单元一 worktree；实验期间不改 `devenv/`、`devenv/images.lock` 或业务代码（路线切换只经 `DEVENV_DB_IMAGE` 环境变量覆盖）。
 > per-worktree 隔离（#59 已落地）：compose 项目名为 `natural-enforcement-<8hex>`（容器/卷/网络按 worktree 独立）；数据库用户/库名仍为 `ne` / `natural_enforcement_dev`；数据库口令是**每 worktree 随机值**，由 devenv 自动生成并持久化在 `.devenv-state/db-credentials.env`（0600，gitignored，per-worktree 私有），经 compose 同源注入 db 与 api/tools——文档与证据里都不要记录口令，也不要在宿主 shell 展开 `"$POSTGRES_USER"` 或 `"$DB_PASSWORD"`。
-> 证据格式（对齐 #53 验收标准）：每条留**命令 + 退出码 + JSON 输出**；建议证据文件（JSON 原样）存入仓库 `docs/research/macos-arm-evidence/`，随实验 PR 入库，issue 评论只贴摘要与指针。
+> 证据格式（对齐 #53 验收标准）：每条留**命令 + 退出码 + JSON 输出**；原始证据统一写入本地 `.artifacts/`（已 gitignored，不入代码库），验收摘要与关键输出贴至对应 Issue / PR 评论。
 > 计时：取 devenv JSONL 事件时间戳；同机同 worktree **连测 5 次取中位数并记录最差**（SPEC 测量通用协议）。
 
 **步骤 A — 虚拟化/Rosetta 能力核实（验收标准 1）**
@@ -148,7 +148,7 @@ docker info --format 'arch={{.Architecture}} os={{.OSType}}'   # 补记运行架
 | 同机二次冷启动 | ≤ 10min | **100.4s**（40.0+60.4，单次） | 待核定 |
 | 集成测试（devenv test） | — | **67.5s**（单次） | 待核定 |
 
-（SPEC 口径：Mac 各行不沿用 Windows 数字；本票只提供实测值，#78 正式验收按测量协议重跑。计时原始值 `macos-arm-evidence/16-timings.txt`；下载段无硬预算、未纳入预算行。）
+（SPEC 口径：Mac 各行不沿用 Windows 数字；本票只提供实测值，#78 正式验收按测量协议重跑。计时原始值留存于 PR #88 `8a625aa`；下载段无硬预算、未纳入预算行。）
 
 ---
 
@@ -157,7 +157,7 @@ docker info --format 'arch={{.Architecture}} os={{.OSType}}'   # 补记运行架
 | 验收标准 | 状态（截至 2026-11-27） |
 | --- | --- |
 | 1. 2 天内核实 Podman machine 虚拟化/Rosetta 能力，记录候选 ARM 路线、选择及理由 | **完成（本机）**：libkrun / Rosetta 未安装 / qemu-x86_64；A/B 同负载实测；选定 B（§七.1–七.4）。预算核定待指挥者 |
-| 2. 经 devenv 执行迁移、真实空间查询和集成测试，保存命令/退出码/JSON/运行环境 | **完成（路线 B）**：`devenv up` 含迁移、`devenv test`、`devenv exec db` EXPLAIN；证据见 [macos-arm-evidence/](macos-arm-evidence/README.md) |
+| 2. 经 devenv 执行迁移、真实空间查询和集成测试，保存命令/退出码/JSON/运行环境 | **完成（路线 B）**：`devenv up` 含迁移、`devenv test`、`devenv exec db` EXPLAIN；摘要见 Issue #53，历史原始输出留存于 PR #88 `8a625aa` |
 | 3. 实测开发等待时间，指挥者核定 Mac 预算 | **实测完成**（§五）；**核定待指挥者** |
 | 4. 到期无结论 → 保守配置 + 记录未决项 | 已有结论，不触发；未决项见 §七.6 |
 
@@ -165,7 +165,7 @@ docker info --format 'arch={{.Architecture}} os={{.OSType}}'   # 补记运行架
 
 ## 七、Mac 本机实跑结果与路线选择（2026-11-27）
 
-> 完整证据与命令/退出码：[macos-arm-evidence/README.md](macos-arm-evidence/README.md)。所有工程栈命令经 `./devenv/devenv`；路线切换只经 `DEVENV_DB_IMAGE`，未改 `images.lock`。
+> 完整摘要见 Issue #53（历史原始输出留存于 PR #88 `8a625aa`）。所有工程栈命令经 `./devenv/devenv`；路线切换只经 `DEVENV_DB_IMAGE`，未改 `images.lock`。
 
 **运行环境**：Apple Silicon / macOS 27.2 / arm64；Podman 6.1.4，machine provider **libkrun**（8 vCPU / 44.7 GiB）；`podman machine inspect` → `"Rosetta": false`，宿主 `arch -x86_64` 失败（Rosetta 未安装）；VM binfmt 注册 `qemu-x86_64`，即 amd64 走 **qemu 用户态仿真**而非 Rosetta。引擎端点经 `DEVENV_DOCKER_HOST` 显式指定（默认发现同时命中 podman socket 与 `/var/run/docker.sock`，按 SPEC 歧义即失败）。
 
