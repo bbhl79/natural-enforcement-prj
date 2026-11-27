@@ -25,6 +25,12 @@ describe('CreateEnforcementPointSchema', () => {
     ).toBe(false)
     expect(CreateEnforcementPointSchema.safeParse({ name: 'x', lat: 91, lng: 0 }).success).toBe(false)
   })
+
+  it('拒绝包含 NUL 字节的名称（PostgreSQL text 无法存储，须入口即 400 而非数据库 500）', () => {
+    expect(
+      CreateEnforcementPointSchema.safeParse({ name: 'a\u0000b', lat: 0, lng: 0 }).success,
+    ).toBe(false)
+  })
 })
 
 describe('CreateEnforcementPointResultSchema（create 类 {id} 响应契约）', () => {

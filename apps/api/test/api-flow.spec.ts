@@ -83,6 +83,17 @@ describe('执法点位 HTTP 端点（契约校验走 zod 管道）', () => {
     expect(hit!.distanceM).toBeLessThan(500)
   })
 
+  it('名称含 NUL 字节 → 400 + ValidationErrorSchema（契约拒绝，而非数据库 500）', async () => {
+    const res = await jfetch('/enforcement-points', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: `${PREFIX}nul\u0000name`, lat: 23.13, lng: 113.265 }),
+    })
+    expect(res.status).toBe(400)
+    const err = ValidationErrorSchema.parse(await res.json())
+    expect(err.issues?.some((i) => i.path === 'name')).toBe(true)
+  })
+
   it('非法 body → 400 + ValidationErrorSchema；非法 query → 400 + ValidationErrorSchema', async () => {
     const badBody = await jfetch('/enforcement-points', {
       method: 'POST',
