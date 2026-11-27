@@ -67,6 +67,12 @@ EOF
 
   export PATH="$SANDBOX/stubbin:$PATH"
   DEVENV="$SANDBOX/devenv/devenv"
+
+  # 离线用例自带全部输入：清除调用者继承的文档化环境。macOS 前置要求导出
+  # DEVENV_DOCKER_HOST（COMMANDS.md），届时 T2「无覆盖时 DOCKER_HOST 生效」
+  # 会误判来源；CI 托管上下文还会导出 GITHUB_ACTIONS，改变矩阵用例（T4）。
+  # 各用例在命令前按需显式注入（见各 T 用例的 `env ...`）。
+  unset DEVENV_DOCKER_HOST DOCKER_HOST DEVENV_DB_IMAGE GITHUB_ACTIONS
 }
 
 run() { # run <name> <cmd...>；记录 RC 与输出
