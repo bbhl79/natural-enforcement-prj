@@ -38,8 +38,10 @@ cp -r "$REPO_ROOT/devenv" "$MINI/devenv"
 mkdir -p "$MINI/apps/api" "$MINI/apps/web" "$MINI/packages/contracts" "$MINI/packages/tsconfig"
 printf 'node_modules/\n.devenv-state/\n' > "$MINI/.gitignore"
 printf '{"name":"mini","private":true}\n' > "$MINI/package.json"
-printf 'lockfileVersion: "9.0"\n' > "$MINI/pnpm-lock.yaml"
-printf 'packages: []\n' > "$MINI/pnpm-workspace.yaml"
+# 供应链静态门禁输入（#63）：doctor/build 预检要求 catalog 精确 pin、
+# minimumReleaseAge 定值 + strict、allowBuilds 版本化键，且锁文件与声明一致。
+printf 'lockfileVersion: "9.0"\ncatalogs:\n  default:\n    mini-probe:\n      specifier: 1.2.3\n      version: 1.2.3\nimporters:\n  .: {}\n' > "$MINI/pnpm-lock.yaml"
+printf 'packages: []\nminimumReleaseAge: 1440\nminimumReleaseAgeStrict: true\nallowBuilds:\n  mini-probe@1.2.3: true\ncatalog:\n  mini-probe: "1.2.3"\n' > "$MINI/pnpm-workspace.yaml"
 printf '{"name":"@ne/api"}\n' > "$MINI/apps/api/package.json"
 printf '{"name":"@ne/web"}\n' > "$MINI/apps/web/package.json"
 printf '{"name":"@ne/contracts"}\n' > "$MINI/packages/contracts/package.json"
@@ -210,7 +212,7 @@ H0b="$(snapshot_capture)"
 [[ "$H0" == "$H0b" ]] && pass "S1 稳定工作树采集一致" || fail "S1" "两次采集不一致：$H0 vs $H0b"
 [[ "$H0" == "$(expected_tree)" ]] && pass "S1 快照==独立参照树（git add -A）" || fail "S1" "与独立参照不符"
 
-printf '// change\n' >> "$MINI/package.json"
+printf '\n' >> "$MINI/package.json"
 H1="$(snapshot_capture)"
 [[ "$H1" != "$H0" && "$H1" == "$(expected_tree)" ]] && pass "S2 修改被快照覆盖" || fail "S2" "修改未反映：$H1"
 
@@ -562,7 +564,7 @@ if [[ "$RC" == 0 ]] && ! grep -q 'docker build' "$MOCK_DOCKER_STATE/calls.log"; 
 else
   fail "S21a" "rc=$RC log=$(cat "$MOCK_DOCKER_STATE/calls.log")"
 fi
-printf '// src change\n' >> "$MINI/package.json"  # 使 workspace 失鲜，tools 仍新鲜
+printf '\n' >> "$MINI/package.json"  # 使 workspace 失鲜，tools 仍新鲜（保持 JSON 合法）
 : > "$MOCK_DOCKER_STATE/calls.log"
 run s21b "$DEVENV" test:unit
 WS_LINE="$(grep 'workspace.Dockerfile' "$MOCK_DOCKER_STATE/calls.log")"

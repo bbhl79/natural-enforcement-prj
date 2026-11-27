@@ -44,3 +44,11 @@ Issues 和 specs 以 GitHub Issues 形式跟踪，使用 gh CLI。见 `docs/agen
 ### Domain docs
 
 Single-context 布局：根目录 `GLOSSARY.md` + `docs/adr/`。见 `docs/agents/domain.md`。
+
+### 供应链门禁
+
+第三方版本只认 `pnpm-workspace.yaml` catalog（精确 pin）；锁文件漂移、未版本化的
+`allowBuilds`、过新版本、未批准的构建脚本/包内 agent skills 都会停止构建。新增或
+升级依赖后跑 `./devenv/devenv supply-chain`，容器内权限用
+`./devenv/devenv supply-chain --container`。规则、冷却期与紧急安全更新流程见
+`docs/agents/supply-chain.md`。

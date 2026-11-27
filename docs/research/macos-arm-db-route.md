@@ -15,7 +15,7 @@
    - **B. 第三方 multiarch 镜像（`kartoza/postgis`）**：2026-11-24 实查 multiarch[amd64, arm64]，有可精确 pin 的 tag（见 §2）。**未经供应链审查不得采用**（SPEC：第三方按来源/构建过程/更新机制审查）。
    - **C. 自建 arm64 镜像**：以官方 `library/postgres`（multiarch 含 arm64，2026-11-24 实查）为基座装 PostGIS。维护成本最高（跟随 pg/postgis 版本、构建与扫描流水线），仅当 A 实测不可接受时评估。
 3. **到期（2 天）仍无 Mac 实验结论时的保守配置**：维持 A 路线（现有镜像锁不动 + Rosetta 仿真），未决项显式记录（SPEC 验收标准第 4 条口径）；不引入未经验证的 B/C。
-4. **Mac 实跑结论（2026-11-27，见 §七）——选定 B（kartoza multiarch，arm64 原生）**。本机 Podman machine 为 **libkrun**，宿主 **未安装 Rosetta**，amd64 走 VM 内 `qemu-x86_64`。同一 50k 点 + GiST 空间负载：B 比 A 快 **25–33 倍**（ST_DWithin 5.2 ms vs 133.5 ms），启动 7.4 s vs 19.7 s；且 A 的 amd64-only 镜像在 arm64 宿主直接 pull 失败，必须 per-service platform pin（devenv 无此机制）。B 经 devenv 全链路（prefetch→build→up 含迁移→seed→test→空间查询）绿，供应链审查在 digest pin 前提下可接受。**Mac 等待预算待指挥者核定；images.lock 未改，登记归 #63。**
+4. **Mac 实跑结论（2026-11-27，见 §七）——选定 B（kartoza multiarch，arm64 原生）**。本机 Podman machine 为 **libkrun**，宿主 **未安装 Rosetta**，amd64 走 VM 内 `qemu-x86_64`。同一 50k 点 + GiST 空间负载：B 比 A 快 **25–33 倍**（ST_DWithin 5.2 ms vs 133.5 ms），启动 7.4 s vs 19.7 s；且 A 的 amd64-only 镜像在 arm64 宿主直接 pull 失败，必须 per-service platform pin（devenv 无此机制）。B 经 devenv 全链路（prefetch→build→up 含迁移→seed→test→空间查询）绿，供应链审查在 digest pin 前提下可接受。**Mac 等待预算待指挥者核定；`images.lock` 的 `DB_IMAGE_MACOS` 已由 #63 登记（manifest-list digest + arm64 自动选择）。**
 
 ---
 
@@ -26,7 +26,7 @@
 | 镜像:tag | 架构 | digest（manifest-list） | 证据 |
 | --- | --- | --- | --- |
 | `postgis/postgis:latest` | amd64 only | `sha256:7e7edf180d29…` | manifest 200，platforms=[amd64] |
-| `postgis/postgis:18-3.6` | amd64 only | `sha256:4a43e3c3e5d55b9208240fc71db543b79c638766280c625a425bd0a2390989c4`（与当前 `devenv/images.lock` 锁定值一致） | 同上 |
+| `postgis/postgis:18-3.6` | amd64 only | `sha256:530bb81a…`（linux/amd64 平台 digest；index 为 `sha256:4a43e3c3…`；当前 `devenv/images.lock` 锁定平台值） | 同上 |
 | `postgis/postgis:18-3.7` / `17-3.5`~`17-3.7` / `16-3.5`~`16-3.7` / `15-3.5` / `15-3.7` / `19-3.7`（与上一行合计 12 个标签） | 全部 amd64 only | （略） | 同上 |
 | `postgis/postgis:15-3.4` 及以下旧标签 | amd64 only（单架构 manifest，config blob 确认） | （略） | blob GET `-L` |
 | `kartoza/postgis:18.6-3.7.0` | **amd64 + arm64** | `sha256:6b07ffc131b8…` | manifest 200 |
@@ -187,6 +187,6 @@ docker info --format 'arch={{.Architecture}} os={{.OSType}}'   # 补记运行架
 
 **5. 选择及理由**：选 **B**——原生 arm64、空间负载快 25–33 倍、无需平台 pin、现有命令面零改动跑通；A 在本机无 Rosetta 且需平台 pin，不作默认；C（自建）仅在 B 被否决时才评估，当前无必要。
 
-**6. 未决项（显式）**：Mac 预算待指挥者核定；`images.lock` 仍锁官方 amd64 镜像，#63 按本路线登记 kartoza tag + digest（或实现按平台选择）；Rosetta 未安装/未实测（若后续安装可复测 A 作对照）；macOS 上 GitHub App 真实集成未复测（离线套件通过）；正式全量验收归 #78，**本文档不声称 macOS 已支持**。
+**6. 未决项（显式）**：Mac 预算待指挥者核定；`images.lock` 的 `DB_IMAGE_MACOS` 已由 #63 登记为 kartoza tag + manifest-list digest（arm64 自动选择）；Rosetta 未安装/未实测（若后续安装可复测 A 作对照）；macOS 上 GitHub App 真实集成未复测（离线套件通过）；正式全量验收归 #78，**本文档不声称 macOS 已支持**。
 
 **7. 实验中发现并修复的 macOS 兼容缺陷**：bash 3.2 下 `$VAR` 紧邻全角字符被当作非法变量名（12 个脚本文件改为 `${VAR}`；rebase 到 PR #87 后其 `offline.test.sh` 新增 6 处同类写法，本分支一并修正，合计 13 个文件）；bash 3.2 空数组 `"${arr[@]}"` unbound（`stack.sh` 改为 `${arr[@]+"${arr[@]}"}`）。认证入口 BSD `stat` 回退与离线测试 `flock`/`wc` 可移植性由 PR #87 独立修复，本分支 rebase 后复验。复跑：`test:devenv` 191/191、`test:auth` 75/75、`verify` 全绿、`test` 全绿。

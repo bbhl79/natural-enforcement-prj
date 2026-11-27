@@ -8,6 +8,12 @@ node_modules
 apps/api/src/generated
 docs
 .artifacts
-devenv
+# devenv 不是运行时代码；唯一例外是 workspace deps 层的供应链权限门禁脚本
+# （#63），它必须在 install 后、源码层之前 COPY 进镜像。父目录先放行才能
+# 让负向规则生效（Docker 不允许重新包含被排除父目录中的文件）。
+devenv/*
+!devenv/supply-chain/
+devenv/supply-chain/*
+!devenv/supply-chain/check-permissions.sh
 debug.log
 !.dockerignore
