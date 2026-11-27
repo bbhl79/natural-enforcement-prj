@@ -10,13 +10,15 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run src",
-    "seed": "node dist/scripts/seed.js"
+    "seed": "node dist/scripts/seed.js",
+    "openapi": "node dist/scripts/emit-openapi.js"
   },
   "dependencies": {
     "@ne/contracts": "workspace:*",
     "@nestjs/common": "catalog:",
     "@nestjs/core": "catalog:",
     "@nestjs/platform-express": "catalog:",
+    "@nestjs/swagger": "catalog:",
     "@prisma/adapter-pg": "catalog:",
     "@prisma/client": "catalog:",
     "reflect-metadata": "catalog:",

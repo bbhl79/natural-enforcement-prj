@@ -1,11 +1,14 @@
-import { Injectable } from '@nestjs/common'
+import { ConflictException, Injectable } from '@nestjs/common'
 import type {
   CreateEnforcementPointDto,
   CreateEnforcementPointResult,
   NearbyQueryDto,
   NearbyResult,
 } from '@ne/contracts'
-import { EnforcementPointRepo } from './enforcement-point.repo.js'
+import {
+  DuplicateEnforcementPointNameError,
+  EnforcementPointRepo,
+} from './enforcement-point.repo.js'
 
 @Injectable()
 export class EnforcementPointService {
@@ -13,7 +16,14 @@ export class EnforcementPointService {
 
   // 入参/出参类型一律来自契约包（前后端同一真相，不内联重声明）
   async create(dto: CreateEnforcementPointDto): Promise<CreateEnforcementPointResult> {
-    return this.repo.create(dto.name, { lat: dto.lat, lng: dto.lng })
+    try {
+      return await this.repo.create(dto.name, { lat: dto.lat, lng: dto.lng })
+    } catch (err) {
+      if (err instanceof DuplicateEnforcementPointNameError) {
+        throw new ConflictException(err.message)
+      }
+      throw err
+    }
   }
 
   async nearby(q: NearbyQueryDto): Promise<NearbyResult> {

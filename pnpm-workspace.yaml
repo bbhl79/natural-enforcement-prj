@@ -47,6 +47,7 @@ catalog:
   "@nestjs/common": "12.6.0"
   "@nestjs/core": "12.6.0"
   "@nestjs/platform-express": "12.6.0"
+  "@nestjs/swagger": "12.1.2"
   reflect-metadata: "0.2.2"
   rxjs: "7.8.2"
   # Prisma 7（Rust-free：prisma-client generator + adapter-pg）；CLI latest 是 8.0.0-rc，不押 RC

@@ -1,11 +1,15 @@
 // 契约 schema 行为单元测试（可缓存、零基础设施）
 import { describe, expect, it } from 'vitest'
 import {
+  API_CONTRACT_ENDPOINTS,
   CreateEnforcementPointResultSchema,
   CreateEnforcementPointSchema,
+  ENFORCEMENT_POINT_ROUTES,
+  HEALTH_ROUTES,
   HealthResultSchema,
   NearbyQuerySchema,
   NearbyResultSchema,
+  ValidationErrorSchema,
 } from './enforcement-point.js'
 
 describe('CreateEnforcementPointSchema', () => {
@@ -77,5 +81,39 @@ describe('NearbyResultSchema', () => {
     expect(() =>
       NearbyResultSchema.parse({ center: { lat: 1, lng: 2 }, radiusM: 3, points: [{ id: 'x' }] }),
     ).toThrow()
+  })
+})
+
+describe('ValidationErrorSchema 与 API_CONTRACT_ENDPOINTS', () => {
+  it('解析 400 校验错误载荷并拒绝缺 message', () => {
+    expect(
+      ValidationErrorSchema.parse({
+        message: '契约校验失败',
+        issues: [{ path: 'lat', code: 'too_big', message: 'Too big' }],
+      }),
+    ).toMatchObject({ message: '契约校验失败' })
+    expect(
+      ValidationErrorSchema.parse({
+        message: 'Unexpected token',
+        error: 'Bad Request',
+        statusCode: 400,
+      }),
+    ).toMatchObject({ statusCode: 400 })
+    expect(ValidationErrorSchema.safeParse({ issues: [] }).success).toBe(false)
+  })
+
+  it('端点契约清单覆盖全部公开路由并声明请求体/参数/响应 schema', () => {
+    const keys = API_CONTRACT_ENDPOINTS.map((e) => `${e.method.toUpperCase()} ${e.path}`)
+    expect(keys).toEqual([
+      `POST ${ENFORCEMENT_POINT_ROUTES.base}`,
+      `GET ${ENFORCEMENT_POINT_ROUTES.nearby}`,
+      `GET ${HEALTH_ROUTES.base}`,
+    ])
+    const createEp = API_CONTRACT_ENDPOINTS.find(
+      (e) => e.method === 'post' && e.path === ENFORCEMENT_POINT_ROUTES.base,
+    )
+    expect(createEp?.requestBody).toBe(CreateEnforcementPointSchema)
+    expect(createEp?.responses[201]).toBe(CreateEnforcementPointResultSchema)
+    expect(createEp?.responses[400]).toBe(ValidationErrorSchema)
   })
 })
