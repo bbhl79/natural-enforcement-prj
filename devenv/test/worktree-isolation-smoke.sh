@@ -10,13 +10,17 @@
 # 验收断言失败即非零退出（不是只打印差异）：基线/复验探针缺失、A 不变量变化、
 # 项目名/凭据指纹/web 端口相同、B down 后 A 容器缺失、空间查询失败等均计入
 # FAILURES；步骤命令自身非零退出立即以该退出码终止。唯一例外是 --no-web：
-# 显式跳过 web 后不声称验证了宿主访问地址，终值记录 web_checked=0。
+# 显式跳过 web 后不声称验证了宿主访问地址，终值记录 web_checked=0 且结果写作
+# RESULT=PASS_NO_WEB（区别于完整 PASS）。
 #
 # 前置（脚本不替你创建/清理栈，避免误拆既有运行）：
 #   - 两个 worktree 均已存在且干净（B 须是独立 git worktree；建议与 A 同 commit）；
 #     为观察镜像共享差异，B 宜为无 .devenv-state 的新 worktree；
 #   - 两栈当前均未运行；
-#   - 宿主有 docker CLI + compose v2 + curl/jq/sha256sum（devenv 白名单同款）；
+#   - 宿主工具：docker CLI（含 compose v2 / inspect / volume / network / images）、
+#     podman machine list、curl、jq、sha256sum、awk/sed（与 devenv 同为 bash 3.2 兼容）；
+#   - 本脚本用宿主 docker CLI 独立只读观测引擎（不经 devenv 自报），这是隔离验收
+#     的交叉验证；不启停、不改 compose，启停/迁移等仍全部经 ./devenv/devenv。
 #   - macOS 若默认端点发现歧义，显式设置 DEVENV_DOCKER_HOST（见 COMMANDS.md）；
 #     ARM 主机 DB 路线未登记进 images.lock 前，按 #53 用 DEVENV_DB_IMAGE 覆盖。
 #   这两项由调用方环境决定，脚本原样继承并在 00-environment.txt 记录来源。
@@ -25,7 +29,8 @@
 #   devenv/test/worktree-isolation-smoke.sh --a <worktree-a> --b <worktree-b>
 #       [--evidence-dir DIR] [--no-web] [--b-cleanup-volumes]
 #
-#   --no-web              跳过 web 入口（不验证宿主访问地址；终值 web_checked=0）
+#   --no-web              跳过 web 入口（不验证宿主访问地址；终值 web_checked=0，
+#                         结果写作 RESULT=PASS_NO_WEB）
 #   --b-cleanup-volumes   B 的收尾 down 带 --volumes（额外清理，不属验收序列）
 #   --evidence-dir DIR    默认 <repo>/.artifacts/60-mac-worktree-isolation
 #
@@ -64,6 +69,8 @@ TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$TEST_DIR/../.." && pwd)"
 # shellcheck source=lib-evidence.sh
 source "$TEST_DIR/lib-evidence.sh"
+# 与 devenv/lib/lock.sh 同源：DEVENV_LOCK_ROOT 覆盖时，采样/对照必须跟随。
+LOCK_ROOT="${DEVENV_LOCK_ROOT:-/tmp/natural-enforcement-locks}"
 
 print_header() { # 头部说明（到 set -Eeuo 前一行）
   local end
@@ -472,7 +479,7 @@ A_UP_START="$(date +%s)"
 A_UP_PID=$!
 : > "$EV_DIR/09c-lock-samples.txt"
 while kill -0 "$A_UP_PID" 2>/dev/null; do
-  printf '%s %s\n' "$(date +%s)" "$(ls /tmp/natural-enforcement-locks 2>/dev/null | tr '\n' ' ')" >> "$EV_DIR/09c-lock-samples.txt"
+  printf '%s %s\n' "$(date +%s)" "$(ls "$LOCK_ROOT" 2>/dev/null | tr '\n' ' ')" >> "$EV_DIR/09c-lock-samples.txt"
   sleep 1
 done
 wait "$A_UP_PID" || true
@@ -560,7 +567,7 @@ fi
     printf '\n'
   done
   printf '锁命名空间（two stacks running）：\n'
-  ls -la /tmp/natural-enforcement-locks 2>&1 || true
+  ls -la "$LOCK_ROOT" 2>&1 || true
 } > "$EV_DIR/17b-during-b-inventory.txt" 2>&1
 grep -q "natural-enforcement-${B_SUFFIX}_default" "$EV_DIR/17b-during-b-inventory.txt" \
   || fail_check "B 运行中未观测到其独立网络（${BPROJ}_default）"
@@ -677,8 +684,8 @@ fi
   docker network ls --format '{{.Name}}' 2>&1 | grep -F 'natural-enforcement' || true
   printf '\n--- 本地构建镜像 tag ---\n'
   docker images --format '{{.Repository}}:{{.Tag}}|{{.ID}}' 2>&1 | grep -F 'natural-enforcement/' || true
-  printf '\n--- 锁命名空间 ---\n'
-  ls -la /tmp/natural-enforcement-locks 2>&1 || true
+  printf '\n--- 锁命名空间（%s）---\n' "$LOCK_ROOT"
+  ls -la "$LOCK_ROOT" 2>&1 || true
   printf '\n--- 共享镜像 ID 对照（A 状态 vs B 状态；仅记录，平台差异见诊断文件）---\n'
   AID="$(json_last "$EV_DIR/09-a-baseline.status.jsonl" '.workspace_image_id')"
   BID="$(json_last "$EV_DIR/11b-b-status.jsonl" '.workspace_image_id')"
@@ -718,5 +725,10 @@ if (( FAILURES > 0 )); then
   ev_log "RESULT=FAIL（$FAILURES 项验收失败）"
   exit 1
 fi
-printf 'RESULT=PASS\n' > "$EV_DIR/99-result.txt"
-ev_log "RESULT=PASS. 证据在 $EV_DIR"
+if (( DO_WEB )); then
+  printf 'RESULT=PASS\n' > "$EV_DIR/99-result.txt"
+  ev_log "RESULT=PASS. 证据在 $EV_DIR"
+else
+  printf 'RESULT=PASS_NO_WEB\n' > "$EV_DIR/99-result.txt"
+  ev_log "RESULT=PASS_NO_WEB（宿主访问地址不变量未覆盖）. 证据在 $EV_DIR"
+fi
