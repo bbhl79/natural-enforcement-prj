@@ -1,8 +1,0 @@
-前置：状态绑定 workspace = sha256:4ad53001baa19256cb5c511b22a323894f9176d67e0fcfb1ae6c26a467c31d57（工作树无变化）
-受控覆盖：docker tag natural-enforcement/tools:local natural-enforcement/workspace:local
-覆盖后 workspace:local = sha256:d6fb6674882dd85407e（tools 镜像）
-{"event":"workspace.fresh","imageId":"sha256:4ad53001baa1"}
-{"event":"image.verified","imageId":"sha256:4ad53001baa1"}
-运行容器 .Image = sha256:4ad53001baa19256cb5c511b22a323894f9176d67e0fcfb1ae6c26a467c31d57
-结论：tag 覆盖后 up 跳建，运行容器仍为绑定镜像——不可变绑定成立
-（tag 已恢复）

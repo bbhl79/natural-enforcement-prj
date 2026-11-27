@@ -1,7 +1,0 @@
-== A/B 对照：同一读取交错注入，stat-only 检测 vs stat+内容双读 ==
-A 侧（stat-only）：接受树 72956e870631f526b9908b0b28a53515804f6ae6
-  my file.txt=G1-content-x normal.txt=F2-content-y
-  → (G1,F2) 从未同时存在却被接受，零重试——盲区实证
-
-B 侧（stat+内容双读，生产实现）：同一场景
-  → S25 断言：内容双读检出交错覆写（重试），从未存在组合 (G1,F2) 未被接受（套件内绿）

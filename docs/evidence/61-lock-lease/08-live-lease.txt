@@ -1,2 +1,0 @@
-live lease 槽仍在：
-/tmp/natural-enforcement-locks/stack-90e22128.lease/1024771.1795694897.512/owner

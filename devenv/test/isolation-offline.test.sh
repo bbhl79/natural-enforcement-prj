@@ -697,7 +697,7 @@ if command -v python3 >/dev/null 2>&1; then
     && pass "W5 错误区分非容器占用者" || fail "W5" "err=$(tail -2 "$SANDBOX/w5.err")"
 else
   # python3 不在宿主白名单内（仅作测试 fixture）：白名单纯净化宿主上本分支由实机证据覆盖
-  printf 'SKIP: W5 非容器进程占用（无 python3；分支由实机证据 docs/evidence/62-web-concurrency 覆盖）\n'
+  printf 'SKIP: W5 非容器进程占用（无 python3；分支由 #62 实机证据覆盖，见 Issue #62 / PR #86）\n'
 fi
 
 # T-P1 exec --json：原始流分流 stderr，stdout 只放 JSON（引擎事件 + 终值元数据）

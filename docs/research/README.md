@@ -81,7 +81,7 @@
 - **归因**：新增包使 deps 层失效的根因是 pnpm store 随镜像层落盘、层缓存失效即丢弃——新增 1 个包也全量重下 600 包 / 158.8 MiB（基线实测 803 s），与首次冷启动等量。非"无 bind 架构"直接后果。
 - **候选（已验证）**：pnpm store + registry 元数据挂引擎原生 cache mount（`RUN --mount=type=cache`，`sharing=locked`）。新增包后重建**零包内容下载**（pnpm ndjson 结构化证据），产物树与干净下载基线逐文件一致；新增外部依赖只下载该依赖；离线（`--network=none`）可建成；并发构建经 `sharing=locked` 串行。
 - **闭环**：新增包闭环（gen→lint→typecheck→test:unit）5 次测量，中位 111 s / 最差 122 s，远低于 10 min 预算。
-- **注意**：store 是缓存不是信任根（pnpm 12.21 对篡改静默导入、`store status` 不报）；干净重建换 cache id。详见 [deps-cache-reuse.md](deps-cache-reuse.md) + [deps-cache-evidence/](deps-cache-evidence/)。
+- **注意**：store 是缓存不是信任根（pnpm 12.21 对篡改静默导入、`store status` 不报）；干净重建换 cache id。详见 [deps-cache-reuse.md](deps-cache-reuse.md)（历史原始证据留存于 PR #80 `1f09cc0`）。
 
 ## 六、ARM 路线增补（2026-11-24，#53 阶段 0）
 
@@ -93,4 +93,4 @@
 - **选定候选 B：`kartoza/postgis:18.6-3.6.4`（multiarch，arm64 原生）**，manifest-list digest `sha256:5fa6f8e2…`。本机 Podman machine 为 **libkrun**、宿主无 Rosetta，amd64 走 qemu；同负载 B 比 A（amd64 仿真）快 **25–33 倍**（ST_DWithin 5.2 ms vs 133.5 ms），且 A 的 amd64-only 镜像需 per-service 平台 pin（devenv 无此机制）。B 经 devenv 全链路绿（up 含迁移 58s、test 62s、增量重建中位 55s）。
 - **供应链**：Kartoza 维护、PGDG GPG 签名 apt、GitHub Actions 构建、镜像内记录 PG/PostGIS/base digest；以 digest pin 可接受，正式登记归 #63。
 - **未决**：Mac 等待预算待指挥者核定；`images.lock` 未改；Rosetta 未装未测；macOS 正式支持验收归 #78（本结论不声称已支持）。
-- 详情与证据：[macos-arm-db-route.md §七](macos-arm-db-route.md) · [macos-arm-evidence/](macos-arm-evidence/README.md)
+- 详情与证据：[macos-arm-db-route.md §七](macos-arm-db-route.md) · Issue #53 / PR #88（历史原始输出留存于 `8a625aa`）

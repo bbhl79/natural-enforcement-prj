@@ -1,4 +1,4 @@
-# 运行证据与运行元数据（spec #23：允许足迹，gitignored）
+# 运行证据与运行元数据（spec #23：允许足迹，gitignored；原始证据一律落此处，不入 docs/）
 .artifacts/
 
 # Windows 侧 crashpad 日志（经 WSL 挂载写入工作树，非项目产物）

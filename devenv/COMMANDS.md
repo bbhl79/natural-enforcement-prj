@@ -168,7 +168,8 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
 - **可见性**：`devenv status` 报告锁目录条目与租约槽（`--json` 终值含
   `leases` 字段；stale 只标注，不清理——status 保持只读）。
 
-> Windows 实机冲突矩阵与故障演练证据见 `docs/evidence/61-lock-lease/`；锁原语
+> Windows 实机冲突矩阵与故障演练证据摘要见 Issue #61（历史原始输出留存于合并提交
+> `d15712a` 的 `docs/evidence/61-lock-lease/`）；锁原语
 > 与失效演练起于 #58 验收（T13–T15），本票扩展 T16–T21。另：凡加载 images.lock
 > 的命令（prefetch/build/up/images/status/doctor 等）在锁文件缺失或
 > `DEVENV_DB_IMAGE` 格式非法时可退出 2（用法错误），上表不逐行重复。
@@ -200,8 +201,8 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
 - **web 宿主端口（#62 已落地）**：web 是零宿主端口不变量的唯一 opt-in 例外。
   省略 `--port` 时注入裸容器端口（`4173`），由引擎在绑定时**原子分配**空闲宿主
   端口——不做"探测时空闲 → 再绑定"式预占（TOCTOU），两个 worktree 并发
-  `devenv web` 实际成功且天然不同端口（Windows 实机证据：
-  `docs/evidence/62-web-concurrency/`）；`--port N` 显式固定发布，冲突在引擎
+  `devenv web` 实际成功且天然不同端口（Windows 实机证据摘要见 Issue #62，
+  历史原始输出留存于 `d84142c`）；`--port N` 显式固定发布，冲突在引擎
   绑定时真实失败后诊断占用者（容器占用者经 `docker ps` Ports 文本识别，非容器
   监听者经 TCP 探测区分），exit 3 且错误含服务/端口/占用者/内嵌修复命令。
   实际端口一律经 `docker port` 回读（不预测），进 `--json` 终值与 `status`
@@ -264,5 +265,5 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
   cache mount（`sharing=locked`），普通构建保持 `--frozen-lockfile`；store 是
   缓存不是信任根，干净重建换 cache id（`--build-arg PNPM_STORE_CACHE_ID=<新 id>`）。
 - **诚实口径**：本机制检查来源一致性、减少运行旧代码，**不声称完整构建证明**；
-  锁与栈使用租约已落地（见「并发语义」节，Windows 证据 `docs/evidence/61-lock-lease/`），
+  锁与栈使用租约已落地（见「并发语义」节，Windows 证据摘要见 Issue #61），
   per-worktree 隔离已落地（见「per-worktree 运行资源隔离」节）。

@@ -2,7 +2,7 @@
 
 - 票：[#54 Task-阶段0验证依赖缓存复用方案](https://github.com/bbhl79/natural-enforcement-prj/issues/54)（parent [#23 Spec-工程基座](https://github.com/bbhl79/natural-enforcement-prj/issues/23) 阶段 0 实验②）
 - 日期：2026-11-24/25
-- 方法：对照实验。基线 = 原型 `prototype/foundation-slice-2` 的 deps 层（无 store 复用）；候选 = pnpm 内容寻址 store + registry 元数据走引擎原生 cache mount。所有下载量证据来自 **pnpm 12.21.0 `--reporter=ndjson` 结构化事件**（非日志文本），原始事件流 gzip 留档于 [deps-cache-evidence/](deps-cache-evidence/)。
+- 方法：对照实验。基线 = 原型 `prototype/foundation-slice-2` 的 deps 层（无 store 复用）；候选 = pnpm 内容寻址 store + registry 元数据走引擎原生 cache mount。所有下载量证据来自 **pnpm 12.21.0 `--reporter=ndjson` 结构化事件**（非日志文本），历史原始事件流留存于 PR #80（`1f09cc0`）。
 - 执行环境：Windows 开发机（WSL2 Ubuntu，kernel 6.18.58.1，x86_64）+ Podman Engine 6.1.4 machine（Fedora 44，Rancher Desktop WSL 集成，经 `podman-root.sock`）+ docker CLI 29.1.3。实验在 `prototype/foundation-slice-2` 之上的 throwaway 分支进行（见 §七），未改动 dev 的任何生产文件。
 
 ---
@@ -134,7 +134,7 @@ RUN --mount=type=cache,id=${PNPM_STORE_CACHE_ID},target=/pnpm/store,sharing=lock
 - `devenv/exp/lib.sh` + `lib.selftest.sh`（91 项自检含反例）+ `lint-local.awk`：计时/取证/缓存状态/产物树哈希/闭环汇总。
 - `devenv/exp/run-baseline.sh` / `run-candidate.sh` / `run-closed-loop.sh`：三阶段运行器（步骤可恢复，判断用 `claim()` 软断言记录）。
 
-原始证据（pnpm ndjson gzip、各阶段 evidence/cache/determinism/concurrency JSON、环境记录）见 [deps-cache-evidence/](deps-cache-evidence/)。
+历史原始证据（pnpm ndjson gzip、各阶段 evidence/cache/determinism/concurrency JSON、环境记录）留存于 PR #80（合并提交 `1f09cc0`），摘要见 Issue #54。
 
 ---
 
