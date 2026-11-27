@@ -1,13 +1,32 @@
 # 镜像锁：完整 tag + digest 双层锁定的唯一事实源（Spec-工程基座 §2）。
 # devenv 自动加载本文件注入 compose 与构建；升级只改这里，一律走 PR + e2e 演练。
-# digest 解析：docker pull <ref> 后 docker image inspect --format '{{index .RepoDigests 0}}'
-# （daemon 内建构建器无 buildx；RepoDigest 即所拉 manifest-list 的权威 digest）
+# digest 解析：docker pull <ref> 后 docker image inspect --format '{{json .RepoDigests}}'
+# （daemon 内建构建器无 buildx；RepoDigest 即所拉 manifest 的权威 digest）
+# 单架构镜像：registry 可能仍以 OCI index 发布（含 attestation）；此时须取 index 中
+# 对应 platform 的 manifest digest，而不是 index 自身 digest——
+#   curl -H 'Accept: application/vnd.oci.image.index.v1+json' registry.../manifests/<tag>
+# 本文件 DB_IMAGE 即 linux/amd64 子 manifest digest（index digest 为 4a43e3c3…）。
 # 格式：KEY=repo:tag@sha256:...
 #
-# 多架构镜像锁 manifest-list digest（跨架构成立）；单架构镜像锁该平台 digest。
-# postgis/postgis 全维护标签 amd64-only（2026-11-24 registry 扩大复核，#53）——
-# macOS ARM 路线经 DEVENV_DB_IMAGE 覆盖切换（候选：Rosetta 仿真沿用本锁 /
-# kartoza multiarch / 自建 arm64，调研见 #53），实现不写死单一平台路线。
+# 类型语义（#63）：
+#   - 多架构镜像锁 manifest-list digest（跨架构成立）→ *_KIND=manifest-list
+#   - 单架构镜像锁该平台 digest → *_KIND=single-arch + *_PLATFORM=<os>/<arch>
+#   - devenv images --verify 校验运行态 RepoDigests 命中锁值，并核对 tools 镜像
+#     label devenv.node.image 与 NODE_IMAGE 一致。
+#
+# DB 镜像路线（#53）：
+#   - DB_IMAGE = 官方 postgis/postgis（amd64-only，默认锁；Windows/WSL2 等 amd64 引擎）。
+#   - DB_IMAGE_MACOS = macOS Apple Silicon 选定路线 B（kartoza multiarch，arm64 原生）；
+#     引擎架构为 arm64 时自动生效（来源在 doctor/status/images 中报告），
+#     DEVENV_DB_IMAGE 仍可显式覆盖。正式支持验收归 #78。
 
 NODE_IMAGE=node:26.13.1-slim@sha256:a5a5adfee3013de54504e0e6aff49993acf7daed072e86be75b8818c0f6ac258
-DB_IMAGE=postgis/postgis:18-3.6@sha256:4a43e3c3e5d55b9208240fc71db543b79c638766280c625a425bd0a2390989c4
+NODE_IMAGE_KIND=manifest-list
+
+DB_IMAGE=postgis/postgis:18-3.6@sha256:530bb81ad6c5993ae870ea66095d9dc758ef5866007186833f31fb2bebdd5791
+DB_IMAGE_KIND=single-arch
+DB_IMAGE_PLATFORM=linux/amd64
+
+# macOS ARM 路线（#53 Mac 实测选定；manifest-list digest，2026-11-27 本机 podman 实查）
+DB_IMAGE_MACOS=kartoza/postgis:18.6-3.6.4@sha256:5fa6f8e228a7496d544df3ab580cad9df1686b1f47d02c97f02056ecdc744739
+DB_IMAGE_MACOS_KIND=manifest-list

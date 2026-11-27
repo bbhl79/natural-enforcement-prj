@@ -4,9 +4,17 @@ packages:
   - apps/*
   - packages/*
 
-# pnpm 12 供应链防护·新包冷却期：只认此处的 camelCase 键（npmrc 无效，原型 #11 实测）。
-# 原型期=0；定值（提案 1 天冷却 + 紧急例外流程）归 #63 供应链门禁票。
-minimumReleaseAge: 0
+# pnpm 12 供应链防护·新包冷却期（分钟单位；只认此处的 camelCase 键，npmrc 无效，原型 #11 实测）。
+# pnpm 12.21 真实语义（#63 在锁定 tools 镜像内核实并实测 589 条解析全绿）：
+#   - 值单位是分钟；1440 = 1 天冷却（SPEC 提案）。
+#   - 显式配置 minimumReleaseAge 时 minimumReleaseAgeStrict 默认 true；这里显式写出，
+#     太新的版本会以 ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION 失败并要求审查，
+#     而不是静默写入 minimumReleaseAgeExclude。
+#   - 例外只允许精确 pkg@version（紧急安全更新流程见 docs/agents/supply-chain.md）。
+#   - minimumReleaseAgeIgnoreMissingTime 保持 false：缺发布时间不得静默跳过。
+minimumReleaseAge: 1440
+minimumReleaseAgeStrict: true
+minimumReleaseAgeIgnoreMissingTime: false
 
 # pnpm 12 供应链防护·构建脚本审批：键是 allowBuilds 且**必须带版本号**（裸包名不匹配，
 # 原型 #11 实测；onlyBuiltDependencies/ignoredBuiltDependencies 在 12.21 不生效）。
@@ -17,6 +25,15 @@ allowBuilds:
   "@scarf/scarf@1.4.0": false    # prisma 的遥测上报器：显式拒绝执行
   # 前端栈零新增（原型 #12 实测）：vite 8 转 rolldown（无 esbuild），rolldown/
   # @tailwindcss/oxide/lightningcss 全走 napi 预构建 optional deps，不带 postinstall。
+
+# 供应链防护·包内 agent skills 默认不自动采纳（Spec-工程基座 §8；#63）。
+# pnpm 12.21 只链接显式批准的依赖技能（skills/<name>/SKILL.md → .claude/skills）。
+# @reduxjs/toolkit 2.15.0 携带 13 个 Redux 指南技能；经审查仍不链接——本项目只消费
+# RTK Query 基础语义，不引入依赖注入的 agent 指令。任何新出现的待审批项（skills 或
+# 构建脚本）由 workspace.Dockerfile deps 层的 check-permissions.sh 拦截（默认拒绝）。
+permissions:
+  "@reduxjs/toolkit":
+    skills: false
 
 # catalog 一律精确 pin（Spec-工程基座 §2：caret 会在 lockgen 重解析时静默漂移——
 # 原型 #12 实测 @nestjs/common ^12.5.1 漂到 12.6.0 致编译断）。

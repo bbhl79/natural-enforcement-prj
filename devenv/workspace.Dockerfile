@@ -57,9 +57,17 @@ COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 COPY packages/tsconfig packages/tsconfig
+# 供应链门禁（#63）：install 后核对待审批的构建脚本/包内 agent skills。脚本先于
+# install COPY（不纳入源码层缓存链），默认拒绝：任何待审批项都停止构建并要求审查。
+COPY devenv/supply-chain/check-permissions.sh /usr/local/bin/ne-check-permissions
+RUN chmod +x /usr/local/bin/ne-check-permissions
 ARG PNPM_STORE_CACHE_ID=ne-pnpm-store-v11
+# 元数据缓存 mount：minimumReleaseAge 严格校验需读取 589 条发布元数据；缓存发布
+# 时间元数据只影响性能，不改变 lockfile integrity 与解析结果（缓存非信任根）。
+ARG PNPM_META_CACHE_ID=ne-pnpm-meta-v12
 RUN --mount=type=cache,id=${PNPM_STORE_CACHE_ID},target=/pnpm/store,sharing=locked \
-    pnpm install --frozen-lockfile --store-dir=/pnpm/store
+    --mount=type=cache,id=${PNPM_META_CACHE_ID},target=/root/.cache/pnpm,sharing=locked \
+    pnpm install --frozen-lockfile --store-dir=/pnpm/store && ne-check-permissions
 COPY . .
 
 # 终靶：构建产物入镜像

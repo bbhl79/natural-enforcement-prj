@@ -14,9 +14,9 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 
 | Action | Command | 期望退出码 |
 |---|---|---|
-| 一键体检（端点/引擎/矩阵/锁文件/worktree 身份与凭据状态/镜像/快照状态/服务；退出码=可开工与否） | `devenv doctor` | 0 或 3 |
+| 一键体检（端点/引擎/矩阵/锁文件/worktree 身份与凭据状态/供应链门禁/镜像/快照状态/服务；退出码=可开工与否） | `devenv doctor` | 0 或 3 |
 | 预取镜像锁中的上游镜像（分阶段、有进度/超时、可中断续跑；机器级拉取锁） | `devenv prefetch` | 0 或 3/4/5/6 |
-| 固定快照构建工具镜像 + 安装依赖 + turbo build（幂等；记录快照哈希与不可变镜像标识） | `devenv build [--lockgen]` | 0 或 3/4/6 |
+| 固定快照构建工具镜像 + 安装依赖 + turbo build（幂等；构建前跑供应链静态门禁；记录快照哈希与不可变镜像标识） | `devenv build [--lockgen]` | 0 或 3/4/6 |
 | 启动 db → 迁移幂等应用 → api，等待真实健康终态（幂等） | `devenv up` | 0 或 3/4/5/6 |
 | 停止（连带清掉不在 compose 文件中的本项目容器；--volumes 再清数据卷；仅本 worktree 项目范围；不含 profile 隔离的 web——用 `web --down`） | `devenv down [--volumes]` | 0 或 3/6 |
 | 重启 | `devenv restart [svc...]` | 0 或 3/6 |
@@ -36,6 +36,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 等待服务健康终态（默认 60s） | `devenv wait <db\|api\|web> [--timeout N]` | 0 或 2/3/5 |
 | 人读/机读总览（容器+锁+租约+镜像+web 实际端口；web 未运行如实报 none） | `devenv status` | 0 或 3 |
 | 查看镜像锁与生效 DB 镜像 / 校验运行态 digest 漂移 | `devenv images [--verify]` | 0 或 1/2/3 |
+| 供应链门禁：catalog 精确 pin / allowBuilds 版本化 / 冷却期 / 锁文件漂移 / 镜像锁类型静态核对；`--container` 追加核对待审批构建脚本与包内 agent skills（默认拒绝） | `devenv supply-chain [--container]` | 0 或 2/3/4/6 |
 
 ### GitHub App 认证入口（不触引擎；详见 docs/agents/github-app-auth.md）
 
@@ -45,7 +46,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 以 App 身份 HTTPS 推送 | `devenv git-push <remote> <refspec...>` | 0 或 2/20/21/22/23 或 git 自身退出码 |
 | 认证入口离线测试（不访问 GitHub） | `devenv test:auth` | 0 或 1 |
 | 认证入口真实集成测试（默认只读；写操作需显式旗标） | `devenv test:auth:integration [旗标]` | 0 或 1 或 2 |
-| 命令面离线测试（引擎解析/锁与栈使用租约/输出协议/快照与不可变绑定/per-worktree 隔离，mock docker） | `devenv test:devenv` | 0 或 1 |
+| 命令面离线测试（引擎解析/锁与栈使用租约/输出协议/快照与不可变绑定/per-worktree 隔离/供应链门禁，mock docker） | `devenv test:devenv` | 0 或 1 |
 
 ## 退出码枚举（总表归 Spec-工程基座；7–10 e2e 专用码段由 Spec-e2e 登记）
 
@@ -111,14 +112,61 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
 ## 镜像引用与可配置 DB 镜像
 
 - `devenv/images.lock` 是上游镜像 **tag + digest 双层锁**的唯一事实源
-  （`NODE_IMAGE` / `DB_IMAGE`）；升级只改锁文件，一律走 PR + 验证。
+  （`NODE_IMAGE` / `DB_IMAGE` / `DB_IMAGE_MACOS`）；升级只改锁文件，一律走 PR + 验证。
+- **digest 类型必须与镜像形态一致**（#63）：
+  - 多架构镜像锁 **manifest-list digest**（跨架构成立）→ `*_KIND=manifest-list`；
+  - 单架构镜像锁**该平台 digest** → `*_KIND=single-arch` 且声明
+    `*_PLATFORM=<os>/<arch>`（如 `linux/amd64`）。
+  - 官方 `postgis/postgis` 仅 amd64，故 `DB_IMAGE_KIND=single-arch`、
+    `DB_IMAGE_PLATFORM=linux/amd64`；锁值取 registry index 中该平台的 **manifest
+    digest**（`sha256:530b81…`），不是 index 自身的 digest。`NODE_IMAGE` 与
+    `DB_IMAGE_MACOS` 为 manifest-list。
+  - 静态门禁拒绝缺 digest、缺 kind/platform、字段格式非法的锁文件；镜像实际形态
+    （index vs 平台 manifest）需在登记时经 registry/`docker pull` 核对，静态检查
+    不联网。
 - **PostGIS 镜像引用是可配置输入**（不写死单一平台路线）：
   `DEVENV_DB_IMAGE=repo:tag[@sha256:<64hex>]` 环境变量覆盖锁定的 `DB_IMAGE`
   （#53 macOS ARM 路线实验的切换点：Rosetta 仿真沿用锁定值 / kartoza multiarch /
-  自建 arm64）。生效值与来源（images.lock / DEVENV_DB_IMAGE 显式覆盖）在
-  doctor / status / images 输出中报告；格式非法 exit 2。
-- `devenv images --verify` 校验运行中 db 容器镜像 digest 与生效引用一致
-  （生效引用无 digest 时如实报告无法校验，exit 1）。
+  自建 arm64）。**引擎架构为 arm64 时自动采用 `DB_IMAGE_MACOS`**（kartoza
+  multiarch，macOS Apple Silicon 路线 B），其余（Windows/WSL2/CI amd64）使用
+  `DB_IMAGE`。`DEVENV_DB_IMAGE` 始终最高优先。生效值与来源（images.lock /
+  macOS 路线 / DEVENV_DB_IMAGE 显式覆盖）在 doctor / status / images 输出中报告；
+  生效 `kind` 取 `manifest-list|single-arch`，显式覆盖无锁元数据时报告 `unknown`；
+  格式非法 exit 2。
+- `devenv images --verify` 校验运行中 db 容器镜像 digest 与**生效引用**一致
+  （`RepoDigests` 命中锁值；未运行、无 digest 或漂移均 exit 1），并核对 tools
+  镜像 label `devenv.node.image` 与 `NODE_IMAGE` 一致（未构建/漂移 exit 1）。
+
+## 供应链门禁（#63）
+
+规则与例外流程权威文档：`docs/agents/supply-chain.md`。命令面只做执行与报告：
+
+- `devenv supply-chain`：宿主侧静态核对（jq/awk，不触引擎）——
+  - `pnpm-workspace.yaml` 存在；`catalog` 非空且每个值都是**精确版本**
+    （拒绝 `^ ~ * latest`/URL）；
+  - `allowBuilds` 键必须带版本（`pkg@1.2.3` / `@scope/pkg@1.2.3`），值仅 true/false
+    （升级即新的显式审批点）；
+  - `minimumReleaseAge` 为**正整数分钟**（本仓库 1440 = 1 天），
+    `minimumReleaseAgeStrict: true`，`minimumReleaseAgeIgnoreMissingTime` 不得开启，
+    `dangerouslyAllowAllBuilds` 不得开启，`minimumReleaseAgeExclude` 只允许精确
+    `pkg@version`；
+  - 各 manifest 的第三方依赖必须走 `catalog:`（catalog 中的包不得写死版本），
+    `workspace:*` 仅用于内部包；
+  - `pnpm-lock.yaml` 与声明一致：catalog specifier/version、importer 直接依赖集合、
+    解析版本任一漂移都停止并提示 `devenv build --lockgen` 后审查 diff；
+  - `devenv/images.lock` digest/kind/platform 完整（含 `DB_IMAGE_MACOS` 登记）。
+  失败 **exit 4**，并输出逐条 `supply_chain.error` 事件。
+- `devenv supply-chain --container`：静态门禁通过后，确保当前快照 workspace 已
+  构建，再在 tools 容器内运行 `pnpm permissions list`：任何**待审批**的构建脚本或
+  包内 agent skills 都使门禁失败（**默认拒绝**，exit 4），须显式审查后
+  `pnpm approve` / `permissions.*` 落地；检查本身失败按 fail-closed 处理。
+- `devenv build`（非 `--lockgen`）在取得构建锁、进入引擎构建前跑同一静态门禁；
+  失败 exit 4 且**不调用引擎**。`--lockgen` 与首次引导（无 lockfile）跳过静态门禁，
+  用于生成待审查的锁文件。workspace 镜像 deps 层在 `pnpm install --frozen-lockfile`
+  之后运行权限门禁，任何新出现的待审批项都会中断镜像构建。
+- 依赖包自带的 agent skills **不自动采纳**；只有显式批准的才链接到
+  `.claude/skills`。当前 `@reduxjs/toolkit@2.15.0` 携带的 13 个技能已审查并显式
+  拒绝（`permissions."@reduxjs/toolkit".skills: false`）。
 
 ## 并发语义（幂等 ≠ 并发安全）
 
@@ -136,7 +184,7 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
 
 | 命令 | 持有锁/租约 | 互斥对象 |
 |---|---|---|
-| build / up / down / restart / web（up 与 --down 路径） | stack-<wt>（排他，per-worktree） | 本 worktree 内彼此两两互斥；有活跃共享租约时等待，超时 exit 6。web 端口分配不持锁：省略 --port 时引擎原子分配（#62），跨 worktree 无端口互斥 |
+| build / up / down / restart / web（up 与 --down 路径）/ supply-chain --container | stack-<wt>（排他，per-worktree） | 本 worktree 内彼此两两互斥；有活跃共享租约时等待，超时 exit 6。web 端口分配不持锁：省略 --port 时引擎原子分配（#62），跨 worktree 无端口互斥 |
 | migrate / migrate:create | stack-<wt> + migrate-<wt>（排他，按此顺序取得） | 本 worktree 内互斥；与活跃共享租约互斥（等待/exit 6）；与其它 worktree 互不阻塞 |
 | test / test:unit / verify / lint / typecheck / seed（运行期） | stack-<wt> 共享租约（per-worktree） | 多个租约可并行；与上述排他命令双向互斥（读者遇排他锁等待/exit 6） |
 | prefetch | prefetch（机器级） | 跨 worktree 互斥（基础镜像拉取）；冲突等待或 exit 6（重跑续跑） |

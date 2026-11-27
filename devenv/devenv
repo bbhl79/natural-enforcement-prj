@@ -34,6 +34,8 @@ source "$REPO_ROOT/devenv/lib/lock.sh"
 source "$REPO_ROOT/devenv/lib/snapshot.sh"
 # shellcheck source=lib/stack.sh
 source "$REPO_ROOT/devenv/lib/stack.sh"
+# shellcheck source=lib/supply-chain.sh
+source "$REPO_ROOT/devenv/lib/supply-chain.sh"
 # shellcheck source=lib/github-app-auth.sh
 source "$REPO_ROOT/devenv/lib/github-app-auth.sh"
 
@@ -66,6 +68,8 @@ devenv — 工程基座唯一入口（命令面权威文档：devenv/COMMANDS.md
   wait <svc> [--timeout N]  等待服务健康终态（默认 60s）
   status                    人读总览（容器+锁+租约+镜像）
   images [--verify]         查看镜像锁与生效 DB 镜像（含覆盖来源）/ 校验运行态 digest 漂移
+  supply-chain [--container] 供应链门禁：catalog/allowBuilds/冷却期/锁文件漂移静态核对；
+                            --container 再核对包内 agent skills/构建脚本待审批项（默认拒绝）
 
 GitHub App 认证入口（身份：GitHub App，非个人账号）：
   gh <args...>              以 App 身份执行 gh（拒绝 gh auth；拒绝 -R 指向未授权仓库）
@@ -75,7 +79,7 @@ GitHub App 认证入口（身份：GitHub App，非个人账号）：
 测试：
   test:auth                 认证入口离线测试（不访问 GitHub）
   test:auth:integration     认证入口真实集成测试（默认只读；写操作需显式旗标）
-  test:devenv               命令面离线测试（引擎解析/锁与栈使用租约/输出协议/快照与不可变绑定/per-worktree 隔离，mock docker）
+  test:devenv               命令面离线测试（引擎解析/锁与栈使用租约/输出协议/快照与不可变绑定/per-worktree 隔离/供应链门禁，mock docker）
 
 退出码：0 成功 | 2 用法 | 3 环境未就绪 | 4 任务失败 | 5 超时 | 6 锁冲突 | 20–23 认证入口
 EOF
@@ -126,7 +130,7 @@ cmd_doctor() {
     chk images-lock ok "$IMAGES_LOCK"
     # images_load 内含 die（锁格式/覆盖格式错误）——子shell 软化为体检项
     local db_info
-    if db_info="$( (images_load && printf '%s（来源：%s）' "$DB_IMAGE_EFFECTIVE" "$DB_IMAGE_SOURCE") 2>&1 )"; then
+    if db_info="$( (images_load && printf '%s（来源：%s；kind=%s%s）' "$DB_IMAGE_EFFECTIVE" "$DB_IMAGE_SOURCE" "$DB_IMAGE_KIND_EFFECTIVE" "${DB_IMAGE_PLATFORM_EFFECTIVE:+ platform=$DB_IMAGE_PLATFORM_EFFECTIVE}") 2>&1 )"; then
       chk db-image ok "$db_info"
     else
       chk db-image fail "$db_info"
@@ -134,6 +138,15 @@ cmd_doctor() {
   else
     chk images-lock fail "devenv/images.lock 缺失或缺 NODE_IMAGE/DB_IMAGE 行"
     chk db-image fail "镜像锁不可用"
+  fi
+
+  # 供应链门禁（#63）：catalog/allowBuilds/冷却期/锁文件漂移/镜像锁 digest（不触引擎）
+  if supply_chain_static_check "$REPO_ROOT" 0; then
+    chk supply-chain ok "catalog 精确 pin / allowBuilds 版本化 / minimumReleaseAge=1440 strict / 锁文件与声明一致 / 镜像锁 digest+平台类型"
+  else
+    local sc_msg="" sc_e
+    for sc_e in ${SC_ERRORS[@]+"${SC_ERRORS[@]}"}; do sc_msg="${sc_msg}${sc_e}；"; done
+    chk supply-chain fail "$(sc_error_count) 项：${sc_msg}"
   fi
 
   # worktree 身份与 per-worktree 隔离状态（#59）：不触引擎，纯状态报告
@@ -226,6 +239,16 @@ cmd_prefetch() {
 cmd_build() {
   local lockgen=0
   [[ "${1:-}" == "--lockgen" ]] && lockgen=1
+  # 供应链静态门禁（#63）：普通构建 frozen install 前先核对 catalog/allowBuilds/
+  # 冷却期/锁文件漂移/镜像锁。--lockgen 或首次引导（无锁文件）跳过"漂移"一项，
+  # 因为该路径的目的就是重新生成锁文件；生成后仍须审查 diff 再提交。
+  local sc_skip=0
+  [[ -f "$REPO_ROOT/pnpm-lock.yaml" && $lockgen -eq 0 ]] || sc_skip=1
+  if ! supply_chain_static_check "$REPO_ROOT" "$sc_skip"; then
+    sc_print_report
+    final failed 4 step="supply-chain" errors="$(sc_error_count)" hint="docs/agents/supply-chain.md"
+    die 4 "供应链门禁未通过（$(sc_error_count) 项）：构建已停止。审查后经 devenv build --lockgen 更新锁文件并审查 diff；规则见 docs/agents/supply-chain.md"
+  fi
   lock_acquire "stack-$WT_SUFFIX" 120
   local t0=$(( $(date +%s) ))
   images_load
@@ -612,43 +635,117 @@ cmd_status() {
   note "绑定：workspace=${STATE_IMAGE_ID:-无} tools=${STATE_TOOLS_IMAGE_ID:-无}"
 }
 
+cmd_supply_chain() {
+  local container=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --container) container=1; shift;;
+      *) die 2 "未知参数：$1（用法：supply-chain [--container]）";;
+    esac
+  done
+  if ! supply_chain_static_check "$REPO_ROOT" 0; then
+    local e
+    for e in ${SC_ERRORS[@]+"${SC_ERRORS[@]}"}; do ev supply_chain.error message="$e"; done
+    sc_print_report
+    final failed 4 errors="$(sc_error_count)" hints="docs/agents/supply-chain.md"
+    die 4 "供应链门禁未通过（$(sc_error_count) 项）。规则与例外流程：docs/agents/supply-chain.md"
+  fi
+  if (( container )); then
+    # 容器内权限门禁会确保快照 workspace 镜像存在（读状态/可能构建），与
+    # build/up/down 同属复合写过程：持 per-worktree 栈排他锁（COMMANDS 并发表），
+    # 避免与同 worktree 的 down/build/测试租约竞争镜像标签与状态文件。
+    engine_init
+    lock_acquire "stack-$WT_SUFFIX" 120
+    ensure_fresh_workspace
+    local prc=0
+    in_tools bash /workspace/devenv/supply-chain/check-permissions.sh >&2 || prc=$?
+    if (( prc )); then
+      final failed 4 step="supply-chain-permissions" taskRc="$prc" hint="docs/agents/supply-chain.md"
+      die 4 "供应链权限门禁未通过：存在待审批的构建脚本/包内 agent skills（默认不自动采纳）。审查后显式批准/拒绝（pnpm approve 或 permissions.*）"
+    fi
+    note "容器内权限门禁通过（无待审批项）"
+  fi
+  note "供应链门禁通过（catalog 精确 pin / allowBuilds 版本化 / 冷却期 / 锁文件一致 / 镜像锁 digest）"
+  final ok 0 errors=0 warnings="$(sc_warning_count)"
+}
+
 cmd_images() {
   images_load
   if [[ "${1:-}" == "--verify" ]]; then
-    # 校验运行中容器镜像 digest 与生效锁一致：经容器→image RepoDigests 取 manifest sha
-    local lock_sha run_sha cid img digest rc=0
+    # 上游镜像运行态核对（Spec §2）：db 运行容器 digest + tools 基座 node label。
+    # 多架构镜像锁 manifest-list digest；单架构镜像锁平台摘要——两者都要求运行态
+    # 的 RepoDigests 命中锁值（podman/docker 对 manifest-list 拉取均记录该 digest）。
+    note "生效 DB 镜像：${DB_IMAGE_EFFECTIVE}（来源：${DB_IMAGE_SOURCE}）"
+    ev images.effective image="$DB_IMAGE_EFFECTIVE" source="$DB_IMAGE_SOURCE" \
+      kind="$DB_IMAGE_KIND_EFFECTIVE" platform="$DB_IMAGE_PLATFORM_EFFECTIVE"
+    local rc=0 cid img digests running lock_sha label tools_ref tools_ok=0
+    # --- db ---
     lock_sha="${DB_IMAGE_EFFECTIVE##*@}"
     if [[ "$lock_sha" == "$DB_IMAGE_EFFECTIVE" ]]; then
-      # 生效引用无 digest（覆盖为裸 tag）：无法做 digest 级校验，如实报告
       (( JSON )) && printf '{"service":"db","result":"no-digest-in-ref","ref":"%s"}\n' "$(jstr "$DB_IMAGE_EFFECTIVE")" \
         || warn "db 生效引用无 digest（${DB_IMAGE_EFFECTIVE}），无法 digest 级校验"
-      exit 1
-    fi
-    cid="$(docker ps --filter "label=com.docker.compose.project=$PROJECT_NAME" \
-      --filter "label=com.docker.compose.service=db" --format '{{.ID}}' | head -1)"
-    if [[ -z "$cid" ]]; then
-      (( JSON )) && printf '{"service":"db","result":"not-running"}\n' || warn "db: 未运行"
-      exit 1
-    fi
-    img="$(docker inspect "$cid" --format '{{.Image}}')"
-    digest="$(docker image inspect "$img" --format '{{index .RepoDigests 0}}')"
-    run_sha="${digest##*@}"
-    if [[ "$run_sha" == "$lock_sha" ]]; then
-      (( JSON )) && printf '{"service":"db","result":"ok","digest":"%s"}\n' "$run_sha" || note "db: ok ($run_sha)"
+      rc=1
     else
-      (( JSON )) && printf '{"service":"db","result":"drift","locked":"%s","running":"%s"}\n' "$lock_sha" "$run_sha" \
-        || warn "db: 漂移（锁=${lock_sha}，运行=${run_sha}）。修复：devenv down && devenv up"
+      cid="$(svc_container_id db)"
+      if [[ -z "$cid" ]]; then
+        (( JSON )) && printf '{"service":"db","result":"not-running"}\n' || warn "db: 未运行（修复：devenv up）"
+        rc=1
+      else
+        img="$(docker inspect "$cid" --format '{{.Image}}')"
+        digests="$(docker image inspect "$img" --format '{{json .RepoDigests}}' 2>/dev/null || printf '[]')"
+        if printf '%s' "$digests" | jq -e --arg d "$lock_sha" 'map(split("@")[-1]) | index($d) != null' >/dev/null 2>&1; then
+          (( JSON )) && printf '{"service":"db","result":"ok","digest":"%s"}\n' "$lock_sha" \
+            || note "db: ok（${lock_sha}；kind=${DB_IMAGE_KIND_EFFECTIVE}${DB_IMAGE_PLATFORM_EFFECTIVE:+ platform=${DB_IMAGE_PLATFORM_EFFECTIVE}}）"
+        else
+          running="$(printf '%s' "$digests" | jq -r '[.[] | split("@")[-1]] | join(",")' 2>/dev/null || printf '%s' "$digests")"
+          (( JSON )) && printf '{"service":"db","result":"drift","locked":"%s","running":"%s"}\n' \
+            "$lock_sha" "$(jstr "$running")" \
+            || warn "db: 漂移（锁=${lock_sha}，运行=${running}）。修复：devenv down && devenv up"
+          rc=1
+        fi
+      fi
+    fi
+    # --- node（tools 基座）---
+    # 直接运行态是 db；node 以上游基座身份进入 tools/workspace 镜像，经构建期 label
+    # 核对（tools.Dockerfile: LABEL devenv.node.image="${NODE_IMAGE}"）。
+    tools_ref="$TOOLS_IMAGE"
+    if label="$(docker image inspect "$tools_ref" --format '{{index .Config.Labels "devenv.node.image"}}' 2>/dev/null)"; then
+      tools_ok=1
+    else
+      snapshot_state_load
+      tools_ref="${STATE_TOOLS_IMAGE_ID:-}"
+      if [[ -n "$tools_ref" ]] && label="$(docker image inspect "$tools_ref" --format '{{index .Config.Labels "devenv.node.image"}}' 2>/dev/null)"; then
+        tools_ok=1
+      fi
+    fi
+    if (( ! tools_ok )); then
+      (( JSON )) && printf '{"service":"node","result":"not-built"}\n' || warn "node: tools 镜像未构建（修复：devenv build）"
+      rc=1
+    elif [[ -z "$label" ]]; then
+      (( JSON )) && printf '{"service":"node","result":"unverifiable","reason":"label-missing"}\n' \
+        || warn "node: tools 镜像缺 devenv.node.image label（旧构建；修复：devenv build 后重试）"
+      rc=1
+    elif [[ "$label" == "$NODE_IMAGE" ]]; then
+      (( JSON )) && printf '{"service":"node","result":"ok","locked":"%s"}\n' "$(jstr "$NODE_IMAGE")" \
+        || note "node: ok（${NODE_IMAGE}；kind=${NODE_IMAGE_KIND}）"
+    else
+      (( JSON )) && printf '{"service":"node","result":"drift","locked":"%s","label":"%s"}\n' \
+        "$(jstr "$NODE_IMAGE")" "$(jstr "$label")" \
+        || warn "node: 漂移（锁=${NODE_IMAGE}，tools label=${label}）。修复：devenv build"
       rc=1
     fi
     exit "$rc"
   fi
   # 人读/机读双用：非 --json 猫锁文件原文 + 生效值；--json 只放结构化结果（不混原文进结果流）
   if (( JSON )); then
-    printf '{"node_image":"%s","db_image":"%s","source":"%s"}\n' \
-      "$(jstr "$NODE_IMAGE")" "$(jstr "$DB_IMAGE_EFFECTIVE")" "$(jstr "$DB_IMAGE_SOURCE")"
+    printf '{"node_image":"%s","node_kind":"%s","db_image":"%s","db_kind":"%s","db_platform":"%s","source":"%s","db_macos":"%s","db_macos_kind":"%s"}\n' \
+      "$(jstr "$NODE_IMAGE")" "$(jstr "$NODE_IMAGE_KIND")" "$(jstr "$DB_IMAGE_EFFECTIVE")" \
+      "$(jstr "$DB_IMAGE_KIND_EFFECTIVE")" "$(jstr "$DB_IMAGE_PLATFORM_EFFECTIVE")" \
+      "$(jstr "$DB_IMAGE_SOURCE")" "$(jstr "$DB_IMAGE_MACOS")" "$(jstr "$DB_IMAGE_MACOS_KIND")"
   else
     cat "$IMAGES_LOCK"
-    note "生效 DB 镜像：${DB_IMAGE_EFFECTIVE}（来源：${DB_IMAGE_SOURCE}）"
+    note "生效 DB 镜像：${DB_IMAGE_EFFECTIVE}（来源：${DB_IMAGE_SOURCE}；kind=${DB_IMAGE_KIND_EFFECTIVE}${DB_IMAGE_PLATFORM_EFFECTIVE:+ platform=${DB_IMAGE_PLATFORM_EFFECTIVE}}）"
+    note "macOS/arm64 路线登记：${DB_IMAGE_MACOS}（kind=${DB_IMAGE_MACOS_KIND}；引擎架构 arm64 时自动生效，DEVENV_DB_IMAGE 可显式覆盖）"
   fi
 }
 
@@ -670,8 +767,10 @@ case "$CMD" in
   git-push)               gha_cmd_git_push "$@" ;;
   test:auth)              bash "$REPO_ROOT/devenv/test/offline.test.sh" ;;
   test:auth:integration)  bash "$REPO_ROOT/devenv/test/integration.test.sh" "$@" ;;
-  test:devenv)            bash "$REPO_ROOT/devenv/test/stack-offline.test.sh" && bash "$REPO_ROOT/devenv/test/snapshot-offline.test.sh" && bash "$REPO_ROOT/devenv/test/isolation-offline.test.sh" ;;
+  test:devenv)            bash "$REPO_ROOT/devenv/test/stack-offline.test.sh" && bash "$REPO_ROOT/devenv/test/snapshot-offline.test.sh" && bash "$REPO_ROOT/devenv/test/isolation-offline.test.sh" && bash "$REPO_ROOT/devenv/test/supply-chain-offline.test.sh" ;;
   help)                   usage; exit 0 ;;
+  # 供应链静态门禁：不触引擎，可在任意平台/无引擎时执行
+  supply-chain)           cmd_supply_chain "$@" ;;
   # doctor 自带软引擎检查（体检报告全部检查项，不在首个失败处退出）
   doctor)                 cmd_doctor "$@" ;;
   # 工程栈命令：先解析/校验/报告引擎端点（Spec：每条命令报告实际端点+引擎身份）

@@ -57,6 +57,11 @@ COMPOSE_FILE="$REPO_ROOT/devenv/compose.yaml"
 IMAGES_LOADED=0
 DB_IMAGE_EFFECTIVE=""
 DB_IMAGE_SOURCE=""
+DB_IMAGE_KIND_EFFECTIVE=""
+DB_IMAGE_PLATFORM_EFFECTIVE=""
+NODE_IMAGE_KIND=""
+DB_IMAGE_MACOS=""
+DB_IMAGE_MACOS_KIND=""
 
 # --- per-worktree 数据库凭据（#59）--------------------------------------------
 # 首调用生成每 worktree 随机口令（openssl rand -hex 16 → 32 hex，URI 安全），
@@ -98,6 +103,11 @@ require_lock_file() {
   [[ -f "$IMAGES_LOCK" ]] || die 3 "镜像锁文件缺失：${IMAGES_LOCK}（devenv/images.lock 是版本唯一事实源）"
 }
 
+# 上游镜像锁必须是 tag+digest 双层锁（Spec §2；digest 缺失即无法校验字节级确定性）。
+images_valid_ref() { # <repo:tag@sha256:64hex>
+  [[ "${1:-}" =~ ^[a-z0-9]+([._/-][a-z0-9]+)*:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$ ]]
+}
+
 # 加载镜像锁并计算生效 DB 镜像（DEVENV_DB_IMAGE 覆盖优先，来源必须可报告）。
 images_load() {
   (( IMAGES_LOADED )) && return 0
@@ -106,6 +116,29 @@ images_load() {
   source "$IMAGES_LOCK"; set +a
   [[ -n "${NODE_IMAGE:-}" ]] || die 3 "images.lock 缺 NODE_IMAGE 行"
   [[ -n "${DB_IMAGE:-}" ]] || die 3 "images.lock 缺 DB_IMAGE 行"
+  images_valid_ref "$NODE_IMAGE" \
+    || die 3 "NODE_IMAGE 必须是 repo:tag@sha256:<64hex>（tag+digest 双层锁）：${NODE_IMAGE}"
+  [[ "${NODE_IMAGE_KIND:-}" == "manifest-list" ]] \
+    || die 3 "images.lock 缺 NODE_IMAGE_KIND=manifest-list（多架构镜像锁 manifest-list digest）"
+  images_valid_ref "$DB_IMAGE" \
+    || die 3 "DB_IMAGE 必须是 repo:tag@sha256:<64hex>（tag+digest 双层锁）：${DB_IMAGE}"
+  case "${DB_IMAGE_KIND:-}" in
+    single-arch)
+      [[ -n "${DB_IMAGE_PLATFORM:-}" ]] \
+        || die 3 "DB_IMAGE_KIND=single-arch 时必须声明 DB_IMAGE_PLATFORM（如 linux/amd64；单架构镜像锁平台摘要）"
+      [[ "$DB_IMAGE_PLATFORM" =~ ^[a-z0-9]+/[a-z0-9]+$ ]] \
+        || die 3 "DB_IMAGE_PLATFORM 格式非法：${DB_IMAGE_PLATFORM}（期望 os/arch）"
+      ;;
+    manifest-list) ;;
+    *) die 3 "images.lock 缺 DB_IMAGE_KIND（single-arch|manifest-list）" ;;
+  esac
+  # macOS ARM 路线（#53 选定 B：kartoza multiarch）登记为独立锁行；默认锁不变。
+  [[ -n "${DB_IMAGE_MACOS:-}" ]] \
+    || die 3 "images.lock 缺 DB_IMAGE_MACOS（#53 选定 macOS ARM 路线登记：kartoza multiarch）"
+  images_valid_ref "$DB_IMAGE_MACOS" \
+    || die 3 "DB_IMAGE_MACOS 必须是 repo:tag@sha256:<64hex>：${DB_IMAGE_MACOS}"
+  [[ "${DB_IMAGE_MACOS_KIND:-}" == "manifest-list" ]] \
+    || die 3 "DB_IMAGE_MACOS_KIND 必须为 manifest-list（kartoza multiarch）"
   if [[ -n "${DEVENV_DB_IMAGE:-}" ]]; then
     # 可配置输入校验：repo:tag 或 repo:tag@sha256:<64hex>（拒绝裸 latest 以外的无标签引用）
     if [[ ! "$DEVENV_DB_IMAGE" =~ ^[a-z0-9]+([._/-][a-z0-9]+)*:[A-Za-z0-9._-]+(@sha256:[0-9a-f]{64})?$ ]]; then
@@ -113,9 +146,19 @@ images_load() {
     fi
     DB_IMAGE_EFFECTIVE="$DEVENV_DB_IMAGE"
     DB_IMAGE_SOURCE="DEVENV_DB_IMAGE（显式覆盖，锁定值：${DB_IMAGE}）"
+    DB_IMAGE_KIND_EFFECTIVE="unknown"
+    DB_IMAGE_PLATFORM_EFFECTIVE=""
+  elif [[ "${ENGINE_ARCH:-}" == "arm64" ]]; then
+    # 引擎架构即容器运行平台：Apple Silicon / arm64 → #53 选定路线（原生 arm64）
+    DB_IMAGE_EFFECTIVE="$DB_IMAGE_MACOS"
+    DB_IMAGE_SOURCE="images.lock（macOS/arm64 路线 #53-B：kartoza multiarch；默认锁：${DB_IMAGE}）"
+    DB_IMAGE_KIND_EFFECTIVE="${DB_IMAGE_MACOS_KIND:-manifest-list}"
+    DB_IMAGE_PLATFORM_EFFECTIVE=""
   else
     DB_IMAGE_EFFECTIVE="$DB_IMAGE"
     DB_IMAGE_SOURCE="images.lock"
+    DB_IMAGE_KIND_EFFECTIVE="${DB_IMAGE_KIND:-}"
+    DB_IMAGE_PLATFORM_EFFECTIVE="${DB_IMAGE_PLATFORM:-}"
   fi
   IMAGES_LOADED=1
 }
