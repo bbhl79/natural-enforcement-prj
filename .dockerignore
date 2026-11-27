@@ -12,8 +12,12 @@ docs
 # （#63），它必须在 install 后、源码层之前 COPY 进镜像。父目录先放行才能
 # 让负向规则生效（Docker 不允许重新包含被排除父目录中的文件）。
 devenv/*
+# 生成器只在调用时经 stdin tar 进入容器（#64）；镜像内不得有可静默 fallback 的
+# 烘焙副本。`devenv/*` 已排除，这里显式声明并供 offline 测试断言。
+devenv/gen
 !devenv/supply-chain/
 devenv/supply-chain/*
 !devenv/supply-chain/check-permissions.sh
+!devenv/supply-chain/pnpm-evidence.mjs
 debug.log
 !.dockerignore

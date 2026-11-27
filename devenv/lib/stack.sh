@@ -298,6 +298,15 @@ build_workspace_from_snapshot() { # <tree> [已物化目录]
     dir="$SNAPSHOT_MATERIALIZED_DIR"
     own_dir=1
   fi
+  # 下载证据构建参数仅在显式请求时传入（#64）：普通构建不带该 arg，构建输入/
+  # 层缓存与既有行为一致；证据构建（DEVENV_PNPM_EVIDENCE=1）才改变 deps 层。
+  # 只接受空/0/1——拼写错误（true/yes 等）必须显式失败，不能静默构建出无证据镜像。
+  local -a evidence_args=()
+  case "${DEVENV_PNPM_EVIDENCE:-}" in
+    ""|0) ;;
+    1) evidence_args=(--build-arg "PNPM_EVIDENCE=1") ;;
+    *) die 2 "DEVENV_PNPM_EVIDENCE 只接受 0/1（当前：${DEVENV_PNPM_EVIDENCE}）" ;;
+  esac
   ev step.started target="workspace image (snapshot build)"
   run_step_out "workspace 镜像构建" \
     docker build -q -t "$WS_IMAGE" \
@@ -305,6 +314,7 @@ build_workspace_from_snapshot() { # <tree> [已物化目录]
       --label "devenv.snapshot.inputs=$(snapshot_inputs_manifest "$s")" \
       --label "devenv.base.image=$TOOLS_IMAGE_EFFECTIVE" \
       --build-arg "TOOLS_IMAGE=$TOOLS_IMAGE_EFFECTIVE" \
+      ${evidence_args[@]+"${evidence_args[@]}"} \
       -f "$dir/devenv/workspace.Dockerfile" "$dir"
   # docker build -q 输出即本次构建的不可变标识（免 tag 二次解析竞态）；
   # podman 兼容层输出无前缀 64hex，docker 输出带 sha256: 前缀——归一为带前缀形

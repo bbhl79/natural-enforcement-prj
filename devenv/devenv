@@ -36,10 +36,12 @@ source "$REPO_ROOT/devenv/lib/snapshot.sh"
 source "$REPO_ROOT/devenv/lib/stack.sh"
 # shellcheck source=lib/supply-chain.sh
 source "$REPO_ROOT/devenv/lib/supply-chain.sh"
+# shellcheck source=lib/gen.sh
+source "$REPO_ROOT/devenv/lib/gen.sh"
 # shellcheck source=lib/github-app-auth.sh
 source "$REPO_ROOT/devenv/lib/github-app-auth.sh"
 
-trap 'lease_release_all; lock_release_all; snapshot_cleanup' EXIT
+trap 'gen_txn_rollback; lease_release_all; lock_release_all; snapshot_cleanup' EXIT
 
 usage() {
   cat >&2 <<'EOF'
@@ -54,6 +56,9 @@ devenv — 工程基座唯一入口（命令面权威文档：devenv/COMMANDS.md
   down [--volumes]          停止（--volumes 连带清数据卷）
   restart [svc...]          重启（默认全部）
   web [--port N] [--down]   启动前端并发布宿主端口（零端口不变量唯一例外；省略 --port 引擎自动分配空闲端口，实际端口见终值/status；与栈命令互斥）
+  gen package <name>        当前工作树生成器生成新 workspace 包（来源路径+树哈希可核；自动补
+                            workspace.Dockerfile 清单并触发 lockgen；目标已存在即拒绝；#64）
+  gen evidence              读取绑定 workspace 镜像内的 pnpm 下载证据（需 DEVENV_PNPM_EVIDENCE=1 构建；缺失即 exit 4）
   ps [-a]                   容器状态（含发布端口；--json 输出 JSONL）
   logs [svc] [-f] [--tail N] 跟随日志（透传原始流；--json 时原始流走 stderr，stdout 仅终值元数据）
   exec [svc] -- cmd...      在容器内执行（默认 tools；透传原始流；--json 同上包装）
@@ -79,7 +84,7 @@ GitHub App 认证入口（身份：GitHub App，非个人账号）：
 测试：
   test:auth                 认证入口离线测试（不访问 GitHub）
   test:auth:integration     认证入口真实集成测试（默认只读；写操作需显式旗标）
-  test:devenv               命令面离线测试（引擎解析/锁与栈使用租约/输出协议/快照与不可变绑定/per-worktree 隔离/供应链门禁，mock docker）
+  test:devenv               命令面离线测试（引擎解析/锁与栈使用租约/输出协议/快照与不可变绑定/per-worktree 隔离/供应链门禁/脚手架生成，mock docker）
 
 退出码：0 成功 | 2 用法 | 3 环境未就绪 | 4 任务失败 | 5 超时 | 6 锁冲突 | 20–23 认证入口
 EOF
@@ -250,6 +255,10 @@ cmd_build() {
     die 4 "供应链门禁未通过（$(sc_error_count) 项）：构建已停止。审查后经 devenv build --lockgen 更新锁文件并审查 diff；规则见 docs/agents/supply-chain.md"
   fi
   lock_acquire "stack-$WT_SUFFIX" 120
+  # gen 与 build 互斥（Spec §4 锁表；#64）：gen 持 per-worktree 源码锁，build
+  # 消费源码/manifest 也必须持有同一把——build 的 stack 锁只协调栈资源，
+  # 不覆盖源码生成。取得顺序固定 stack → gen →（触发时）机器级 lockgen。
+  lock_acquire "gen-$WT_SUFFIX" 120
   local t0=$(( $(date +%s) ))
   images_load
 
@@ -517,6 +526,149 @@ cmd_seed() {
   final ok 0
 }
 
+# 脚手架生成器（#64；Spec §5）：当前工作树的完整 `devenv/gen/` 集合经 stdin tar
+# 在容器内执行（镜像内无烘焙副本），生成物经 stdout tar 回传；宿主校验清单/哈希
+# 后事务式落盘。package 类自动补 workspace.Dockerfile 两靶 manifest COPY 并触发
+# 机器级 lockgen；只接受新增 importer 的预期 lockfile diff。
+# ============================================================================
+# gen evidence —— 读取当前不可变 workspace 镜像内的 pnpm 下载证据（#64）
+# ----------------------------------------------------------------------------
+# 证据由 workspace.Dockerfile 的 deps 层在 PNPM_EVIDENCE=1 时写入镜像：
+# /workspace/.devenv/pnpm-install.json（ndjson 事件摘要，见
+# devenv/supply-chain/pnpm-evidence.mjs）。本命令只从绑定镜像读取，不重建、
+# 不触栈；证据缺失、事件流不完整（complete=false）或含错误事件（errors>0）
+# → exit 4「无法验收」。非 --json 时 stdout 为单行紧凑证据 JSON；--json 时另有
+# engine 事件（JSONL）。损坏证据先校验、不会把非 JSON 写进 stdout。
+cmd_gen_evidence() {
+  snapshot_state_load
+  [[ -n "$STATE_IMAGE_ID" ]] \
+    || die 4 "无 workspace 镜像绑定：先 DEVENV_PNPM_EVIDENCE=1 devenv build（无下载证据，无法验收）"
+  local json compact
+  if ! json="$(docker run --rm --network none --read-only --entrypoint sh \
+        "$STATE_IMAGE_ID" -c 'cat /workspace/.devenv/pnpm-install.json' 2>/dev/null)"; then
+    die 4 "镜像 ${STATE_IMAGE_ID} 内无 /workspace/.devenv/pnpm-install.json（构建未设 DEVENV_PNPM_EVIDENCE=1）——无下载证据，无法验收"
+  fi
+  # 先校验再输出：损坏的证据不得把非 JSON 写进 stdout（输出协议）。
+  jq -e . <<<"$json" >/dev/null 2>&1 \
+    || die 4 "下载证据不是合法 JSON（镜像 ${STATE_IMAGE_ID}）——无法验收"
+  compact="$(jq -c . <<<"$json")"
+  [[ "$(jq -r '.complete // false' <<<"$json")" == "true" ]] \
+    || { printf '%s\n' "$compact"; die 4 "下载证据事件流不完整（complete=false）——无法验收，不默认通过"; }
+  [[ "$(jq -r '.errors // 0' <<<"$json")" == "0" ]] \
+    || { printf '%s\n' "$compact"; die 4 "下载证据含 pnpm 错误事件（errors>0）——无法验收，不默认通过"; }
+  printf '%s\n' "$compact"
+  return 0
+}
+# 锁关系（#61 一致）：gen 持 per-worktree gen-<wt> 源码锁；build 也持该锁（互斥）；
+# 触发 lockgen 取机器级 lockgen 锁。gen 不做栈变更，不取栈使用租约。
+cmd_gen() {
+  # 下载证据读取（#64 验收）：读取当前绑定 workspace 镜像内构建期记录的
+  # /workspace/.devenv/pnpm-install.json。构建须设 DEVENV_PNPM_EVIDENCE=1；
+  # 证据不存在/流不完整一律 exit 4（「无法验收」，不默认通过）。
+  if [[ "${1:-}" == "evidence" ]]; then
+    shift
+    [[ $# -eq 0 ]] || die 2 "多余参数：$1（用法：gen evidence）"
+    cmd_gen_evidence
+    return 0
+  fi
+  local kind="" name=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      -*) die 2 "未知参数：$1（用法：gen package <kebab-case 名>）" ;;
+      *)
+        if [[ -z "$kind" ]]; then kind="$1"
+        elif [[ -z "$name" ]]; then name="$1"
+        else die 2 "多余参数：$1（用法：gen package <kebab-case 名>）"; fi
+        shift ;;
+    esac
+  done
+  [[ -n "$kind" && -n "$name" ]] || die 2 "用法：gen package <kebab-case 名>"
+  case "$kind" in
+    package) ;;
+    app|nest-module|page)
+      die 2 "gen ${kind} 尚未实现（本票 #64 交付 package；${kind} 归 #65/#67/#68）" ;;
+    *) die 2 "未知 kind：${kind}（当前可选：package）" ;;
+  esac
+  [[ "$name" =~ ^[a-z][a-z0-9]*(-[a-z0-9]+)*$ ]] \
+    || die 2 "名称须为 kebab-case（小写字母数字+连字符）：${name}"
+  [[ -f "$REPO_ROOT/pnpm-lock.yaml" ]] \
+    || die 4 "缺 pnpm-lock.yaml 基线：先用 devenv build --lockgen 建立锁文件基线并审查后重试（gen 需要可比较的旧锁文件）"
+
+  # 源码锁（per-worktree）：与其它 gen、与 build 互斥（build 取得同一把）
+  lock_acquire "gen-$WT_SUFFIX" 120
+  gen_host_preflight "$kind" "$name"
+  local t0; t0="$(date +%s)"
+
+  # 来源快照：完整生成器集合 + 锚点（工作树未提交修改/新增/删除均覆盖）。
+  # 报告宿主来源路径 + 生成器子树哈希；内容集哈希由宿主/容器双方重算核对。
+  local s
+  s="$(snapshot_capture)"
+  gen_source_verify "$s"
+  GEN_SET_SHA256="$(gen_set_hash_from_tree "$s")" \
+    || die 4 "生成器集合哈希计算失败（快照 ${s}:devenv/gen）"
+  ev gen.source path="$REPO_ROOT/devenv/gen" treeHash="$GEN_SOURCE_TREE" \
+    setHash="$GEN_SET_SHA256" files="$GEN_SOURCE_FILES" snapshot="$s"
+  note "生成器来源：${REPO_ROOT}/devenv/gen（子树哈希 ${GEN_SOURCE_TREE}；集哈希 ${GEN_SET_SHA256}；${GEN_SOURCE_FILES} 个文件）"
+
+  # 生成器容器基座：tools 不可变镜像（node + tar；镜像内无 devenv/gen 副本）
+  ensure_tools_image "$s"
+
+  # 仓库内事务目录（同一文件系统，rename 原子；.devenv-state gitignored，不进快照）
+  mkdir -p "${DEVENV_STATE_DIR:-$REPO_ROOT/.devenv-state}"
+  local txn
+  txn="$(mktemp -d "${DEVENV_STATE_DIR:-$REPO_ROOT/.devenv-state}/gen-txn.XXXXXX")" \
+    || die 4 "无法创建 gen 事务目录（${DEVENV_STATE_DIR:-$REPO_ROOT/.devenv-state}）"
+  SNAPSHOT_TMPDIRS+=("$txn")  # 复用 EXIT 清理
+
+  gen_run_container "$txn" "$kind" "$name" "$s"
+  local stage="$txn/stage"
+  gen_stage_output "$txn" "$stage" "$kind" "$name" "$s"
+  gen_apply_transaction "$stage" "$txn" "$name" "$s"
+  ev gen.applied files="$(jq '.files | length' "$stage/$GEN_MANIFEST_NAME")" patches="1"
+
+  # 生成后的快照 → 机器级 lockgen（新增 workspace 包必须进入 lockfile）
+  local s2 dir2
+  s2="$(snapshot_capture)"
+  ev snapshot.captured hash="$s2" reason="gen"
+  snapshot_materialize_new "$s2"
+  dir2="$SNAPSHOT_MATERIALIZED_DIR"
+  ensure_tools_image "$s2"
+  cp -p "$REPO_ROOT/pnpm-lock.yaml" "$txn/pnpm-lock.old.yaml" \
+    || die 4 "旧锁文件备份失败（未触发 lockgen；生成物保留供审查）"
+  note "新 workspace 包已落盘 → 触发 lockgen（机器级锁；只接受新增 importer 的预期 diff）"
+  regen_lockfile "$dir2"
+  snapshot_discard "$dir2"
+
+  local importer="packages/$name"
+  gen_lockfile_has_importer "$REPO_ROOT/pnpm-lock.yaml" "$importer" \
+    || { final failed 4 step="lockgen" importer="$importer"; gen_txn_commit
+         die 4 "lockgen 未将新包纳入 lockfile importer（${importer}）；已停止，请审查 pnpm-lock.yaml 与 workspace.Dockerfile"; }
+  if ! gen_lockfile_diff_expected "$txn/pnpm-lock.old.yaml" "$REPO_ROOT/pnpm-lock.yaml" "$importer"; then
+    gen_txn_commit  # 保留生成物与锁文件供审查（非预期 diff 需要人/agent 判断）
+    final failed 4 step="lockfile-review" importer="$importer" \
+      hint="审查 pnpm-lock.yaml diff；非预期变化需修正生成器/依赖后重新 gen"
+    die 4 "非预期 lockfile diff：已停止并要求审查（生成物与锁文件保留）。去掉 ${importer} importer 后仍与旧锁文件不同——不得自动接受"
+  fi
+  ev gen.lockfile result="expected" importer="$importer"
+
+  # 锁文件 ↔ 声明静态门禁（与 build 同一规则；失败保留现场供审查）
+  if ! supply_chain_static_check "$REPO_ROOT" 0; then
+    sc_print_report
+    gen_txn_commit
+    final failed 4 step="supply-chain" errors="$(sc_error_count)" hint="docs/agents/supply-chain.md"
+    die 4 "lockgen 后供应链门禁未通过（$(sc_error_count) 项）；生成物与锁文件保留供审查"
+  fi
+
+  gen_txn_commit
+  note "gen package 完成：packages/${name}（lockgen diff=expected）"
+  note "下一步：devenv verify（lint + typecheck + test:unit），审查 pnpm-lock.yaml diff 后随 git 提交"
+  final ok 0 kind="$kind" name="$name" sourcePath="$REPO_ROOT/devenv/gen" \
+    treeHash="$GEN_SOURCE_TREE" setHash="$GEN_SET_SHA256" files="$GEN_SOURCE_FILES" \
+    importer="$importer" lockgen="ok" lockfileDiff="expected" \
+    duration="$(( $(date +%s) - t0 ))s"
+}
+
 # 前端入口：人类/agent 显式 opt-in 发布宿主端口（零宿主端口不变量的唯一例外——
 # 浏览器在宿主机）。无 bind 架构下无 HMR：改动反馈环 = 重新执行 devenv web
 # （层缓存秒级重建）→ 浏览器刷新。
@@ -767,14 +919,14 @@ case "$CMD" in
   git-push)               gha_cmd_git_push "$@" ;;
   test:auth)              bash "$REPO_ROOT/devenv/test/offline.test.sh" ;;
   test:auth:integration)  bash "$REPO_ROOT/devenv/test/integration.test.sh" "$@" ;;
-  test:devenv)            bash "$REPO_ROOT/devenv/test/stack-offline.test.sh" && bash "$REPO_ROOT/devenv/test/snapshot-offline.test.sh" && bash "$REPO_ROOT/devenv/test/isolation-offline.test.sh" && bash "$REPO_ROOT/devenv/test/supply-chain-offline.test.sh" ;;
+  test:devenv)            bash "$REPO_ROOT/devenv/test/stack-offline.test.sh" && bash "$REPO_ROOT/devenv/test/snapshot-offline.test.sh" && bash "$REPO_ROOT/devenv/test/isolation-offline.test.sh" && bash "$REPO_ROOT/devenv/test/supply-chain-offline.test.sh" && bash "$REPO_ROOT/devenv/test/gen-offline.test.sh" ;;
   help)                   usage; exit 0 ;;
   # 供应链静态门禁：不触引擎，可在任意平台/无引擎时执行
   supply-chain)           cmd_supply_chain "$@" ;;
   # doctor 自带软引擎检查（体检报告全部检查项，不在首个失败处退出）
   doctor)                 cmd_doctor "$@" ;;
   # 工程栈命令：先解析/校验/报告引擎端点（Spec：每条命令报告实际端点+引擎身份）
-  prefetch|build|up|down|restart|ps|logs|exec|shell|test|test:unit|lint|typecheck|verify|migrate|migrate:create|seed|wait|status|images|web)
+  prefetch|build|up|down|restart|ps|logs|exec|shell|test|test:unit|lint|typecheck|verify|migrate|migrate:create|seed|wait|status|images|web|gen)
     engine_init
     case "$CMD" in
       prefetch)       cmd_prefetch "$@";;
@@ -798,6 +950,7 @@ case "$CMD" in
       status)         cmd_status "$@";;
       images)         cmd_images "$@";;
       web)            cmd_web "$@";;
+      gen)            cmd_gen "$@";;
     esac
     ;;
   *)

@@ -103,7 +103,7 @@ case "$cmd" in
     fi
     {
       printf 'compose args:'
-      for a in "$@"; do printf ' %q' "$a"; done
+      for a in "$@"; do printf ' %s' "$a"; done
       printf ' | WORKSPACE_IMAGE=%s DB_IMAGE=%s DB_PASSWORD=%s WEB_PORT_SPEC=%s\n' \
         "${WORKSPACE_IMAGE:-}" "${DB_IMAGE:-}" "${DB_PASSWORD:-}" "${WEB_PORT_SPEC:-}"
     } >> "$STATE/calls.log"
@@ -213,7 +213,7 @@ case "$cmd" in
   tag)
     {
       printf 'tag'
-      for a in "$@"; do printf ' %q' "$a"; done
+      for a in "$@"; do printf ' %s' "$a"; done
       printf ' | WORKSPACE_IMAGE=%s\n' "${WORKSPACE_IMAGE:-}"
     } >> "$STATE/calls.log"
     [[ "${MOCK_TAG_FAIL:-}" == "1" ]] && exit 1
