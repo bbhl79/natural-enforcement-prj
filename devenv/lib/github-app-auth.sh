@@ -75,7 +75,14 @@ gha_load_config() {
   a_key="${a_key/#\~/$HOME}"
   [[ -f "$a_key" ]] || { gha_die 21 "私钥文件不存在：$a_key"; return; }
   local perm
-  perm=$(stat -c '%a' "$a_key" 2>/dev/null) || { gha_die 21 "无法读取私钥权限：$a_key"; return; }
+  if perm=$(stat -c '%a' "$a_key" 2>/dev/null); then
+    :
+  elif perm=$(stat -f '%OLp' "$a_key" 2>/dev/null); then
+    :
+  else
+    gha_die 21 "无法读取私钥权限：$a_key"; return
+  fi
+  perm="${perm#"${perm%%[!0]*}"}"
   [[ "$perm" == "600" || "$perm" == "400" ]] || {
     gha_die 21 "私钥权限必须为 600 或 400，当前为 $perm"; return; }
 
