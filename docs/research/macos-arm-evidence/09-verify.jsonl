@@ -1,0 +1,16 @@
+{"event":"engine","identity":"podman","version":"6.1.4","os":"linux","arch":"arm64","endpoint":"unix:///Users/hulei815/.local/share/containers/podman/machine/podman.sock","source":"DEVENV_DOCKER_HOST（显式覆盖）"}
+{"event":"step.started","target":"workspace image freshness"}
+{"event":"snapshot.captured","hash":"1f3bd83d2029e0375f7affb427c6244b81b93bf8"}
+{"event":"tools.fresh","imageId":"sha256:7fe756b11b47811079be07b1ed63b965281e461a11f07dabcb77aa615b811b56","inputHash":"4842d6391742396e725c2eab7e33b4332ac3bd51d7a29b2d05af6e28f9beece6"}
+{"event":"step.completed","target":"workspace image freshness"}
+{"event":"step.started","target":"workspace image (snapshot build)"}
+{"event":"workspace.built","imageId":"sha256:42568ecc985d846736071acaeaebc8384302dca58f7dadb000350bf44412a853","snapshot":"1f3bd83d2029e0375f7affb427c6244b81b93bf8","base":"sha256:7fe756b11b47811079be07b1ed63b965281e461a11f07dabcb77aa615b811b56"}
+{"event":"step.completed","target":"workspace image (snapshot build)"}
+{"event":"gate.started","gate":"lint"}
+{"event":"gate.completed","gate":"lint","result":"ok"}
+{"event":"gate.started","gate":"typecheck"}
+{"event":"gate.completed","gate":"typecheck","result":"ok"}
+{"event":"gate.started","gate":"test:unit"}
+{"event":"gate.completed","gate":"test:unit","result":"ok"}
+{"command":"verify","status":"ok","exitCode":0,"lint":"ok","typecheck":"ok","test_unit":"ok"}
+verify (lint + typecheck + test:unit)  rc=0 wall_ms=100590

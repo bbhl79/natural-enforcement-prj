@@ -79,7 +79,7 @@ ev_scan_paths() {
   if [[ "$token" != "-" && -n "$token" ]]; then
     out=$(printf '%s' "$token" | grep -rIFl -f - "$@" 2>&1) && rc=0 || rc=$?
     if [[ $rc -ge 2 ]]; then
-      ev_log "SCAN-ERROR: 活 token 精确值扫描失败（grep rc=$rc）：$out"; return 2
+      ev_log "SCAN-ERROR: 活 token 精确值扫描失败（grep rc=${rc}）：$out"; return 2
     elif [[ $rc -eq 0 ]]; then
       while IFS= read -r f; do
         ev_log "LEAK: 活 token 精确值出现于 $f"; hits=1
@@ -88,7 +88,7 @@ ev_scan_paths() {
   fi
   out=$(grep -rIEl -- "$pat_tok" "$@" 2>&1) && rc=0 || rc=$?
   if [[ $rc -ge 2 ]]; then
-    ev_log "SCAN-ERROR: installation token 形态扫描失败（grep rc=$rc）：$out"; return 2
+    ev_log "SCAN-ERROR: installation token 形态扫描失败（grep rc=${rc}）：$out"; return 2
   elif [[ $rc -eq 0 ]]; then
     while IFS= read -r f; do
       ev_log "LEAK: installation token 形态（ghs_…）出现于 $f"; hits=1
@@ -96,7 +96,7 @@ ev_scan_paths() {
   fi
   out=$(grep -rIEl -- "$pat_pem" "$@" 2>&1) && rc=0 || rc=$?
   if [[ $rc -ge 2 ]]; then
-    ev_log "SCAN-ERROR: PEM 私钥标记扫描失败（grep rc=$rc）：$out"; return 2
+    ev_log "SCAN-ERROR: PEM 私钥标记扫描失败（grep rc=${rc}）：$out"; return 2
   elif [[ $rc -eq 0 ]]; then
     while IFS= read -r f; do
       ev_log "LEAK: PEM 私钥标记出现于 $f"; hits=1

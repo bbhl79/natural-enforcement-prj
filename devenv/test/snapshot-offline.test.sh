@@ -249,7 +249,7 @@ ORIG_ONCE="$(declare -f snapshot_capture_once)"
 # S6 每次采集窗口内均有写入 → die 4（确定性，不撞概率）
 snapshot_capture_once() { return 1; }
 runsub s6 snapshot_capture
-[[ "$RC" == 4 ]] && pass "S6 持续写入明确拒绝 exit 4" || fail "S6" "rc=$RC（期望 4）"
+[[ "$RC" == 4 ]] && pass "S6 持续写入明确拒绝 exit 4" || fail "S6" "rc=${RC}（期望 4）"
 grep -q '拒绝' "$SANDBOX/s6.err" && pass "S6 拒绝原因入 stderr" || fail "S6" "stderr 无拒绝说明"
 
 # S7 第 2 次尝试后稳定 → 接受（计数走文件：$(...) 子 shell 会丢变量增量）
@@ -335,7 +335,7 @@ EXPECTED_NEW="sha256:$(printf '%s|%s|%s|%s' "$WS_IMAGE" "$H" "" "TOOLS_IMAGE=$TO
 if [[ "$RC" == 0 && "$NEW_IMG" == "$EXPECTED_NEW" && "$NEW_IMG" != "$WS_IMG" ]]; then
   pass "S11 快照不符重建并绑定新不可变 ID"
 else
-  fail "S11" "rc=$RC effective=$NEW_IMG（期望 $EXPECTED_NEW）"
+  fail "S11" "rc=$RC effective=${NEW_IMG}（期望 ${EXPECTED_NEW}）"
 fi
 if grep -q -- "--label devenv.snapshot.hash=$H" "$MOCK_DOCKER_STATE/calls.log" \
   && grep -q -- "--label devenv.base.image=$TOOLS_IMG" "$MOCK_DOCKER_STATE/calls.log" \
@@ -363,21 +363,21 @@ rm -f "$DEVENV_STATE_DIR/workspace-image.env"
 : > "$MOCK_DOCKER_STATE/calls.log"
 runsub s12 ensure_and_echo
 [[ "$RC" == 0 ]] && grep -q 'docker build' "$MOCK_DOCKER_STATE/calls.log" \
-  && pass "S12 无状态文件触发重建" || fail "S12" "未重建（rc=$RC）"
+  && pass "S12 无状态文件触发重建" || fail "S12" "未重建（rc=${RC}）"
 
 # S13 状态指向的 workspace 镜像已丢失 → 重建（严格模式子 shell：修复前此处 set -e 提前退出）
 snapshot_state_store "$H" "sha256:$(printf 'deleted' | sha256sum | awk '{print $1}')" "$TH" "$TOOLS_IMG"
 : > "$MOCK_DOCKER_STATE/calls.log"
 runsub s13 ensure_and_echo
 [[ "$RC" == 0 ]] && grep -q 'docker build' "$MOCK_DOCKER_STATE/calls.log" \
-  && pass "S13 镜像丢失触发重建（不提前退出）" || fail "S13" "rc=$RC（期望 0 重建）"
+  && pass "S13 镜像丢失触发重建（不提前退出）" || fail "S13" "rc=${RC}（期望 0 重建）"
 
 # S13b 引擎故障（inspect 失败且探活失败）→ die 3 明确报错，不吞成未命中
 snapshot_state_store "$H" "$WS_IMG" "$TH" "$TOOLS_IMG"
 export MOCK_ENGINE_DOWN=1
 runsub s13b ensure_and_echo
 unset MOCK_ENGINE_DOWN
-[[ "$RC" == 3 ]] && pass "S13b 引擎故障明确报错 exit 3（不吞）" || fail "S13b" "rc=$RC（期望 3）"
+[[ "$RC" == 3 ]] && pass "S13b 引擎故障明确报错 exit 3（不吞）" || fail "S13b" "rc=${RC}（期望 3）"
 # 引擎恢复后同一状态正常命中（证明 S13b 未误清状态）
 runsub s13c ensure_and_echo
 [[ "$RC" == 0 && "$(awk -F= '/^EFFECTIVE=/{print $2}' "$SANDBOX/s13c.out")" == "$WS_IMG" ]] \
@@ -406,10 +406,10 @@ printf '%s\n' "$EXPECTED_NEW" > "$MOCK_DOCKER_STATE/container-image"
 : > "$MOCK_DOCKER_STATE/container"
 WS_IMAGE_EFFECTIVE="$EXPECTED_NEW"
 runsub s15a verify_svc_image api
-[[ "$RC" == 0 ]] && pass "S15 启动核对一致通过" || fail "S15" "rc=$RC（期望 0）"
+[[ "$RC" == 0 ]] && pass "S15 启动核对一致通过" || fail "S15" "rc=${RC}（期望 0）"
 WS_IMAGE_EFFECTIVE="sha256:$(printf 'other' | sha256sum | awk '{print $1}')"
 runsub s15b verify_svc_image api
-[[ "$RC" == 4 ]] && pass "S15 启动核对不符 exit 4" || fail "S15" "rc=$RC（期望 4）"
+[[ "$RC" == 4 ]] && pass "S15 启动核对不符 exit 4" || fail "S15" "rc=${RC}（期望 4）"
 rm -f "$MOCK_DOCKER_STATE/container" "$MOCK_DOCKER_STATE/container-image"
 
 # ---------------------------------------------------------------------------
@@ -417,7 +417,7 @@ rm -f "$MOCK_DOCKER_STATE/container" "$MOCK_DOCKER_STATE/container-image"
 # ---------------------------------------------------------------------------
 
 DEVENV="$MINI/devenv/devenv"
-# 经真实入口（$DEVENV）的运行使用 MINI 自身的 worktree 身份——tag 文件须按 MINI 派生
+# 经真实入口（${DEVENV}）的运行使用 MINI 自身的 worktree 身份——tag 文件须按 MINI 派生
 # （主测试 shell source 库时用的是真实仓库身份，两者 suffix 不同）
 MINI_WT_SUFFIX="$(printf '%s' "$(git -C "$MINI" rev-parse --absolute-git-dir)" | sha256sum | awk '{print $1}' | cut -c1-8)"
 TOOLS_TAG_FILE="$MOCK_DOCKER_STATE/tags/natural-enforcement_tools_wt-$MINI_WT_SUFFIX"
@@ -717,10 +717,10 @@ chmod 644 "$MINI/apps/api/package.json"
 ORIG_STAT_FILES="$(declare -f snapshot_stat_files)"
 snapshot_stat_files() { return 1; }
 runsub s26c snapshot_capture
-[[ "$RC" == 4 ]] && pass "S26c stat 瞬态失败重试后拒绝 exit 4" || fail "S26c" "rc=$RC（期望 4）"
+[[ "$RC" == 4 ]] && pass "S26c stat 瞬态失败重试后拒绝 exit 4" || fail "S26c" "rc=${RC}（期望 4）"
 snapshot_stat_files() { return 3; }
 runsub s26d snapshot_capture
-[[ "$RC" == 3 ]] && pass "S26d stat 硬错误传播 exit 3（不重试）" || fail "S26d" "rc=$RC（期望 3）"
+[[ "$RC" == 3 ]] && pass "S26d stat 硬错误传播 exit 3（不重试）" || fail "S26d" "rc=${RC}（期望 3）"
 eval "$ORIG_STAT_FILES"  # 还原
 
 # S27 真实入口（严格模式）+ 空格文件名：全链路成功

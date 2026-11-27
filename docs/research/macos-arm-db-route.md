@@ -1,9 +1,9 @@
 # Research：macOS Apple Silicon 数据库 ARM 路线核实（#53 阶段 0 实验①）
 
 - 票：[#53 Task-阶段0核定macOS数据库路线](https://github.com/bbhl79/natural-enforcement-prj/issues/53)（parent [#23 Spec-工程基座](https://github.com/bbhl79/natural-enforcement-prj/issues/23) 阶段 0 实验①）
-- 日期：2026-11-24（Registry 结论）；2026-11-26 runbook 对齐当前 `dev` 命令面（#56/#58/#59 落地后，见 §四）
-- 方法：Docker Registry HTTP API 实查（本机 WSL2 执行，命令与判定口径见 §2，可复跑）；Podman 上游一手文档（官方 man page / Podman Desktop docs / GitHub release 与 issue）
-- 分工边界（诚实口径）：本文档完成**候选路线 registry 核实 + Rosetta 能力调研 + Mac 实验 runbook**。验收标准中"经 devenv 执行迁移、真实空间查询和集成测试"与"实测等待时间"**必须在 Apple Silicon Mac 本机执行**，由指挥者完成；未执行前不声称 macOS 已支持。本文档发布不构成 #53 验收。
+- 日期：2026-11-24（Registry 结论）；2026-11-26 runbook 对齐当前 `dev` 命令面（#56/#58/#59 落地后，见 §四）；**2026-11-27 Mac 本机实跑（见 §七）**
+- 方法：Docker Registry HTTP API 实查（本机 WSL2 执行，命令与判定口径见 §2，可复跑）；Podman 上游一手文档（官方 man page / Podman Desktop docs / GitHub release 与 issue）；**2026-11-27 在 Apple Silicon Mac（libkrun）经 devenv 实跑候选 A/B**
+- 分工边界（诚实口径）：本文档 §2/§3 完成候选路线 registry 核实与 Rosetta 能力调研；§4/§五为实验 runbook；**§七为 2026-11-27 Mac 本机实跑结果与路线选择**。证据在 [macos-arm-evidence/](macos-arm-evidence/README.md)：**验收路径命令经 devenv**（路线切换只经 `DEVENV_DB_IMAGE`）；A/B 对照探针与镜像元数据为直接引擎/公开 API 的研究仪器（证据 README 已标注例外）。Mac 等待预算仍待指挥者核定；正式全量验收归 #78，本文档发布不构成 macOS 已支持的声称。
 
 ---
 
@@ -15,6 +15,7 @@
    - **B. 第三方 multiarch 镜像（`kartoza/postgis`）**：2026-11-24 实查 multiarch[amd64, arm64]，有可精确 pin 的 tag（见 §2）。**未经供应链审查不得采用**（SPEC：第三方按来源/构建过程/更新机制审查）。
    - **C. 自建 arm64 镜像**：以官方 `library/postgres`（multiarch 含 arm64，2026-11-24 实查）为基座装 PostGIS。维护成本最高（跟随 pg/postgis 版本、构建与扫描流水线），仅当 A 实测不可接受时评估。
 3. **到期（2 天）仍无 Mac 实验结论时的保守配置**：维持 A 路线（现有镜像锁不动 + Rosetta 仿真），未决项显式记录（SPEC 验收标准第 4 条口径）；不引入未经验证的 B/C。
+4. **Mac 实跑结论（2026-11-27，见 §七）——选定 B（kartoza multiarch，arm64 原生）**。本机 Podman machine 为 **libkrun**，宿主 **未安装 Rosetta**，amd64 走 VM 内 `qemu-x86_64`。同一 50k 点 + GiST 空间负载：B 比 A 快 **25–33 倍**（ST_DWithin 5.2 ms vs 133.5 ms），启动 7.4 s vs 19.7 s；且 A 的 amd64-only 镜像在 arm64 宿主直接 pull 失败，必须 per-service platform pin（devenv 无此机制）。B 经 devenv 全链路（prefetch→build→up 含迁移→seed→test→空间查询）绿，供应链审查在 digest pin 前提下可接受。**Mac 等待预算待指挥者核定；images.lock 未改，登记归 #63。**
 
 ---
 
@@ -137,25 +138,55 @@ docker info --format 'arch={{.Architecture}} os={{.OSType}}'   # 补记运行架
 
 ---
 
-## 五、Mac 等待预算核定表（模板，实测后由指挥者填核定值）
+## 五、Mac 等待预算核定表（2026-11-27 实测；核定权在指挥者）
 
 | 操作 | Windows 参考 | Mac 实测（中位 / 最差） | 指挥者核定 |
 | --- | --- | --- | --- |
-| 增量重建（含就绪检查） | ≤ 60s |  |  |
-| 新增包闭环 | ≤ 10min |  |  |
-| 首次冷启动（构建+启动） | ≤ 15min |  |  |
-| 同机二次冷启动 | ≤ 10min |  |  |
-| 集成测试（devenv test） | — |  |  |
+| 增量重建（含就绪检查） | ≤ 60s | **55s / 55s**（5 次） | 待核定 |
+| 新增包闭环 | ≤ 10min | 未测（归 #58） | 不适用本票 |
+| 首次冷启动（构建+启动；不含下载） | ≤ 15min | **约 300s**（build 244s + up 56.4s；首次 up 未单独留存） | 待核定 |
+| 同机二次冷启动 | ≤ 10min | **100.4s**（40.0+60.4，单次） | 待核定 |
+| 集成测试（devenv test） | — | **67.5s**（单次） | 待核定 |
 
-（SPEC 口径：Mac 各行不沿用 Windows 数字，待阶段 0 实测后指挥者核定。）
+（SPEC 口径：Mac 各行不沿用 Windows 数字；本票只提供实测值，#78 正式验收按测量协议重跑。计时原始值 `macos-arm-evidence/16-timings.txt`；下载段无硬预算、未纳入预算行。）
 
 ---
 
 ## 六、#53 验收标准对照
 
-| 验收标准 | 状态（截至 2026-11-24） |
+| 验收标准 | 状态（截至 2026-11-27） |
 | --- | --- |
-| 1. 2 天内核实 Podman machine 虚拟化/Rosetta 能力，记录候选 ARM 路线、选择及理由 | **部分完成**：候选路线已 registry 实查（§1/§2），Rosetta 能力与核实命令已调研（§3）；**Mac 本机核实 + 路线选择待执行**（§4 步骤 A/F） |
-| 2. 经 devenv 执行迁移、真实空间查询和集成测试，保存命令/退出码/JSON/运行环境 | **待 Mac 执行**（§4 步骤 B–D），证据格式已约定 |
-| 3. 实测开发等待时间，指挥者核定 Mac 预算 | **待 Mac 执行**（§4 步骤 E + §五） |
-| 4. 到期无结论 → 保守配置 + 记录未决项 | 预案已定（§一.3），不希望被用到 |
+| 1. 2 天内核实 Podman machine 虚拟化/Rosetta 能力，记录候选 ARM 路线、选择及理由 | **完成（本机）**：libkrun / Rosetta 未安装 / qemu-x86_64；A/B 同负载实测；选定 B（§七.1–七.4）。预算核定待指挥者 |
+| 2. 经 devenv 执行迁移、真实空间查询和集成测试，保存命令/退出码/JSON/运行环境 | **完成（路线 B）**：`devenv up` 含迁移、`devenv test`、`devenv exec db` EXPLAIN；证据见 [macos-arm-evidence/](macos-arm-evidence/README.md) |
+| 3. 实测开发等待时间，指挥者核定 Mac 预算 | **实测完成**（§五）；**核定待指挥者** |
+| 4. 到期无结论 → 保守配置 + 记录未决项 | 已有结论，不触发；未决项见 §七.6 |
+
+---
+
+## 七、Mac 本机实跑结果与路线选择（2026-11-27）
+
+> 完整证据与命令/退出码：[macos-arm-evidence/README.md](macos-arm-evidence/README.md)。所有工程栈命令经 `./devenv/devenv`；路线切换只经 `DEVENV_DB_IMAGE`，未改 `images.lock`。
+
+**运行环境**：Apple Silicon / macOS 27.2 / arm64；Podman 6.1.4，machine provider **libkrun**（8 vCPU / 44.7 GiB）；`podman machine inspect` → `"Rosetta": false`，宿主 `arch -x86_64` 失败（Rosetta 未安装）；VM binfmt 注册 `qemu-x86_64`，即 amd64 走 **qemu 用户态仿真**而非 Rosetta。引擎端点经 `DEVENV_DOCKER_HOST` 显式指定（默认发现同时命中 podman socket 与 `/var/run/docker.sock`，按 SPEC 歧义即失败）。
+
+**1. 候选路线同负载对比**（50k 随机点 + GiST，广州坐标；容器内 TCP 就绪后测量）：
+
+| 指标 | A：`postgis/postgis:18-3.6`（amd64/qemu） | B：`kartoza/postgis:18.6-3.6.4`（arm64） | A/B |
+| --- | --- | --- | --- |
+| 启动到口令可用 | 19.7 s | 7.4 s | 2.7× |
+| INSERT 50k | 916 ms | 34 ms | 27× |
+| GiST 索引 | 2545 ms | 78 ms | 33× |
+| ST_DWithin + KNN | 133.5 ms | 5.2 ms | 26× |
+| 镜像大小 | 698 MB | 1.84 GB | 0.38× |
+
+**2. A 的额外阻塞**：镜像 amd64-only，arm64 宿主直接 `docker pull` 失败（`no image found in image index for architecture "arm64"...`）。选 A 需在 db 服务 pin `linux/amd64`（devenv 当前无该机制）；本次仅用 `DOCKER_DEFAULT_PLATFORM=linux/amd64` 取证。
+
+**3. B 的 devenv 全链路（全绿）**：`doctor` 0 → `prefetch` 0（9.5s 缓存）→ `build` 0（冷 244s）→ `up` 0（56.4s，含 migrate deploy 与 api 健康）→ `seed` 0（49.0s，5 条幂等）→ `test` 0（67.5s，含 geo 集成用例）→ 二次 `build`+`up` 0（100.4s）→ 增量重建 ×5 中位 55s → `verify` 0（100.6s）→ `images --verify` 0（运行 digest = `sha256:5fa6…`）→ 空间查询 `Index Scan using "EnforcementPoint_location_idx"`（4.6ms）→ `test:devenv` 191/191（44+58+89）、`test:auth` 71/71（rebase 到 PR #87 后为 75/75）。计时原始值见证据 `16-timings.txt`。
+
+**4. 供应链审查（B）**：来源 `github.com/kartoza/docker-postgis`（Kartoza 维护，707 stars，2026-11-15 仍有推送）；`debian:trixie-slim` + PGDG **GPG 签名** apt；GitHub Actions `build-latest/check-image/deploy-image`；镜像内记录 `PG_VER_PROD=18.6`、`GIS_VER_PROD=3.6.4`、base digest。风险：非 Official Image、镜像 1.84GB、额外扩展（pgrouting/raster/cron/h3 等）、build 脚本 GPL-2.0（仅 dev 使用不分发）。以 manifest-list digest `sha256:5fa6f8e2…` pin 后可接受；正式登记归 #63。
+
+**5. 选择及理由**：选 **B**——原生 arm64、空间负载快 25–33 倍、无需平台 pin、现有命令面零改动跑通；A 在本机无 Rosetta 且需平台 pin，不作默认；C（自建）仅在 B 被否决时才评估，当前无必要。
+
+**6. 未决项（显式）**：Mac 预算待指挥者核定；`images.lock` 仍锁官方 amd64 镜像，#63 按本路线登记 kartoza tag + digest（或实现按平台选择）；Rosetta 未安装/未实测（若后续安装可复测 A 作对照）；macOS 上 GitHub App 真实集成未复测（离线套件通过）；正式全量验收归 #78，**本文档不声称 macOS 已支持**。
+
+**7. 实验中发现并修复的 macOS 兼容缺陷**：bash 3.2 下 `$VAR` 紧邻全角字符被当作非法变量名（12 个脚本文件改为 `${VAR}`；rebase 到 PR #87 后其 `offline.test.sh` 新增 6 处同类写法，本分支一并修正，合计 13 个文件）；bash 3.2 空数组 `"${arr[@]}"` unbound（`stack.sh` 改为 `${arr[@]+"${arr[@]}"}`）。认证入口 BSD `stat` 回退与离线测试 `flock`/`wc` 可移植性由 PR #87 独立修复，本分支 rebase 后复验。复跑：`test:devenv` 191/191、`test:auth` 75/75、`verify` 全绿、`test` 全绿。

@@ -1,0 +1,33 @@
+[devenv] engine: podman 6.1.4 (linux/arm64) @ unix:///Users/hulei815/.local/share/containers/podman/machine/podman.sock（来源：DEVENV_DOCKER_HOST（显式覆盖））
+[devenv] prefetch：拉取 node:26.13.1-slim@sha256:a5a5adfee3013de54504e0e6aff49993acf7daed072e86be75b8818c0f6ac258（超时 900s，可中断续跑——重复执行即可）
+d3bb6c414d94: Already exists
+1af4b9986b04: Already exists
+3aa4e94aa6cc: Already exists
+37fb86c2a767: Already exists
+bd57e13a3a21: Pulling fs layer
+bd57e13a3a21: Download complete
+bd57e13a3a21: Download complete
+docker.io/library/node:26.13.1-slim@sha256:a5a5adfee3013de54504e0e6aff49993acf7daed072e86be75b8818c0f6ac258
+[devenv] prefetch：拉取 kartoza/postgis:18.6-3.6.4@sha256:5fa6f8e228a7496d544df3ab580cad9df1686b1f47d02c97f02056ecdc744739（超时 900s，可中断续跑——重复执行即可）
+afbf51926e04: Already exists
+ddc0c1e36a67: Already exists
+9a4255be372e: Already exists
+7ae838cf8c94: Already exists
+14093f736747: Already exists
+9cabde043e33: Already exists
+dc2df785959a: Already exists
+74e1218771da: Already exists
+4f4fb700ef54: Already exists
+164912520f81: Already exists
+68a8a18d50ad: Already exists
+ccdbb941071d: Already exists
+ba85444017c7: Already exists
+4f4fb700ef54: Already exists
+350dc9563d5e: Already exists
+7e042d5ef015: Already exists
+ec0eda7d8bd5: Already exists
+01df42904744: Pulling fs layer
+01df42904744: Download complete
+01df42904744: Download complete
+docker.io/kartoza/postgis:18.6-3.6.4@sha256:5fa6f8e228a7496d544df3ab580cad9df1686b1f47d02c97f02056ecdc744739
+[devenv] prefetch 完成（2 个上游镜像就绪）

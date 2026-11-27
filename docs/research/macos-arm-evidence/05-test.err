@@ -1,0 +1,54 @@
+[devenv] engine: podman 6.1.4 (linux/arm64) @ unix:///Users/hulei815/.local/share/containers/podman/machine/podman.sock（来源：DEVENV_DOCKER_HOST（显式覆盖））
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+ Container natural-enforcement-7c25da02-tools-run-1e8e4bf6bd64 Creating 
+ Container natural-enforcement-7c25da02-tools-run-1e8e4bf6bd64 Created 
+Scope: 4 of 5 workspace projects
+packages/contracts test$ vitest run
+packages/contracts test: 
+packages/contracts test:  RUN  v5.1.1 /workspace/packages/contracts
+packages/contracts test: 
+packages/contracts test:  ✓ src/contracts.spec.ts (10 tests) 100ms
+packages/contracts test: 
+packages/contracts test:  Test Files  1 passed (1)
+packages/contracts test:       Tests  10 passed (10)
+packages/contracts test:    Start at  02:54:20
+packages/contracts test:    Duration  2.08s (import 48%, transform 36%, tests 12%, worker 4%)
+packages/contracts test: 
+packages/contracts test: Done
+apps/api test$ vitest run
+apps/web test$ vitest run
+apps/api test: 
+apps/api test:  RUN  v5.1.1 /workspace/apps/api
+apps/api test: 
+apps/web test: 
+apps/web test:  RUN  v5.1.1 /workspace/apps/web
+apps/web test: 
+apps/api test:  ✓ src/util/geo.spec.ts (3 tests) 38ms
+apps/api test:  ✓ test/geo.spec.ts (3 tests) 844ms
+apps/web test:  ✓ test/format.spec.ts (3 tests) 29ms
+apps/web test:  ✓ test/validate.spec.ts (2 tests) 55ms
+apps/web test:  ✓ test/api-contract.spec.ts (4 tests) 81ms
+apps/api test:  ✓ test/api-flow.spec.ts (4 tests) 1795ms
+apps/api test:    ✓ 执法点位 HTTP 端点（契约校验走 zod 管道） (3)
+apps/api test:      ✓ POST 创建（响应过 CreateEnforcementPointResultSchema）+ GET nearby 命中（响应过 NearbyResultSchema） 314ms
+apps/api test: 
+apps/api test:  Test Files  3 passed (3)
+apps/api test:       Tests  10 passed (10)
+apps/api test:    Start at  02:54:25
+apps/api test:    Duration  7.75s (import 46%, tests 26%, transform 26%, worker 1%)
+apps/api test: 
+apps/api test: Done
+apps/web test:  ✓ test/nearby-table.spec.tsx (2 tests) 2775ms
+apps/web test:    ✓ NearbyTable（纯展示组件） (2)
+apps/web test:      ✓ 渲染点位名称与格式化距离 2229ms
+apps/web test:      ✓ 无距离数据（异常态）渲染占位符 535ms
+apps/web test: 
+apps/web test:  Test Files  4 passed (4)
+apps/web test:       Tests  11 passed (11)
+apps/web test:    Start at  02:54:25
+apps/web test:    Duration  14.37s (environment 54%, import 20%, setup 10%, tests 10%, transform 5%)
+apps/web test: 
+apps/web test: Done

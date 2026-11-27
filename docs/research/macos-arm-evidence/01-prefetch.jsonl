@@ -1,0 +1,7 @@
+{"event":"engine","identity":"podman","version":"6.1.4","os":"linux","arch":"arm64","endpoint":"unix:///Users/hulei815/.local/share/containers/podman/machine/podman.sock","source":"DEVENV_DOCKER_HOST（显式覆盖）"}
+{"event":"pull.started","image":"node:26.13.1-slim@sha256:a5a5adfee3013de54504e0e6aff49993acf7daed072e86be75b8818c0f6ac258","timeout":"900"}
+{"event":"pull.completed","image":"node:26.13.1-slim@sha256:a5a5adfee3013de54504e0e6aff49993acf7daed072e86be75b8818c0f6ac258"}
+{"event":"pull.started","image":"kartoza/postgis:18.6-3.6.4@sha256:5fa6f8e228a7496d544df3ab580cad9df1686b1f47d02c97f02056ecdc744739","timeout":"900"}
+{"event":"pull.completed","image":"kartoza/postgis:18.6-3.6.4@sha256:5fa6f8e228a7496d544df3ab580cad9df1686b1f47d02c97f02056ecdc744739"}
+{"command":"prefetch","status":"ok","exitCode":0,"images":"node,db"}
+prefetch (route B, layers cached)      rc=0 wall_ms=9508

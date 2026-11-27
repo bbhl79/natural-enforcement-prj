@@ -357,7 +357,7 @@ rm -f "$DB_FILE"
 runsub i2 compose ps
 [[ "$RC" == 0 ]] && pass "I2 compose 调用成功" || fail "I2" "rc=$RC err=$(cat "$SANDBOX/i2.err")"
 grep -q -- "-p $PROJECT_NAME " "$MOCK_DOCKER_STATE/calls.log" \
-  && pass "I2 compose 注入 per-worktree 项目名（-p $PROJECT_NAME）" \
+  && pass "I2 compose 注入 per-worktree 项目名（-p ${PROJECT_NAME}）" \
   || fail "I2" "未注入项目名：$(cat "$MOCK_DOCKER_STATE/calls.log")"
 # 提取最后一次 compose 调用的口令（compose() 前置 version 检查也落日志，env 为空——取尾行）
 extract_pw() { grep -o 'DB_PASSWORD=[^ ]*' "$MOCK_DOCKER_STATE/calls.log" | tail -1 | cut -d= -f2; }
@@ -419,7 +419,7 @@ export MOCK_TAG_FAIL=1
 runsub i8 ensure_and_echo
 unset MOCK_TAG_FAIL
 [[ "$RC" == 4 ]] && pass "I8 tag 登记失败显式 exit 4（不静默跳过）" \
-  || fail "I8" "rc=$RC（期望 4）"
+  || fail "I8" "rc=${RC}（期望 4）"
 grep -q '登记 per-worktree 镜像 tag' "$SANDBOX/i8.err" \
   && pass "I8 失败步骤与原因入 stderr" || fail "I8" "stderr: $(tail -2 "$SANDBOX/i8.err")"
 
@@ -445,7 +445,7 @@ I4A_RC=$?
 set -e
 kill "$HOLDER_PID" 2>/dev/null; wait "$HOLDER_PID" 2>/dev/null || true
 [[ "$I4A_RC" == 6 ]] \
-  && pass "I4 同 worktree 活跃锁仍互斥（alpha exit 6）" || fail "I4" "alpha rc=$I4A_RC（期望 6）"
+  && pass "I4 同 worktree 活跃锁仍互斥（alpha exit 6）" || fail "I4" "alpha rc=${I4A_RC}（期望 6）"
 
 # lockgen 机器级锁：经真实入口 build --lockgen，lockgen 靶构建期间锁在场
 : > "$MOCK_DOCKER_STATE/calls.log"
@@ -490,7 +490,7 @@ if jq -e --arg p "$I6_EXPECT" '[.checks[] | select(.check == "worktree" and (.de
      "$SANDBOX/i6.out" >/dev/null 2>&1; then
   pass "I6 检查 detail 报告 per-worktree 项目名"
 else
-  fail "I6" "detail 无项目名（期望 $I6_EXPECT）：$(cat "$SANDBOX/i6.out")"
+  fail "I6" "detail 无项目名（期望 ${I6_EXPECT}）：$(cat "$SANDBOX/i6.out")"
 fi
 
 run i6b env MOCK_LEGACY_RUNNING=1 DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-doc" "$DEVENV" --json doctor
@@ -537,7 +537,7 @@ set -e
 kill -9 "$I10_HOLDER" 2>/dev/null; wait "$I10_HOLDER" 2>/dev/null || true
 rm -rf "$DEVENV_LOCK_ROOT/stack-$A_SUFFIX.lease"
 [[ "$I10_RC" == 6 ]] \
-  && pass "I10 alpha 排他锁被本 worktree 租约阻塞（exit 6）" || fail "I10" "alpha rc=$I10_RC（期望 6）"
+  && pass "I10 alpha 排他锁被本 worktree 租约阻塞（exit 6）" || fail "I10" "alpha rc=${I10_RC}（期望 6）"
 
 # I11 机器级 prefetch 锁：真实入口 pull 期间锁在场且退出后释放
 : > "$MOCK_DOCKER_STATE/calls.log"
@@ -559,7 +559,7 @@ run i11b env DEVENV_LOCK_TIMEOUT=2 DEVENV_WORKTREE_ID="wt-beta" DEVENV_STATE_DIR
 kill -9 "$PF_HOLDER" 2>/dev/null; wait "$PF_HOLDER" 2>/dev/null || true
 rm -rf "$DEVENV_LOCK_ROOT/prefetch.lock"
 [[ "$RC" == 6 ]] && pass "I11b 机器级 prefetch 锁跨 worktree 冲突 exit 6" \
-  || fail "I11b" "rc=$RC（期望 6）"
+  || fail "I11b" "rc=${RC}（期望 6）"
 grep -q 'prefetch' "$SANDBOX/i11b.err" \
   && pass "I11b 错误消息指出 prefetch 锁与修复线索" || fail "I11b" "stderr: $(tail -2 "$SANDBOX/i11b.err")"
 
@@ -584,7 +584,7 @@ printf '%s %s\n' "$I13_HOLDER" "$(date +%s)" > "$DEVENV_LOCK_ROOT/stack-$A_SUFFI
 run i13 env DEVENV_LOCK_TIMEOUT=2 DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-lease" "$DEVENV" verify
 kill -9 "$I13_HOLDER" 2>/dev/null; wait "$I13_HOLDER" 2>/dev/null || true
 rm -rf "$DEVENV_LOCK_ROOT/stack-$A_SUFFIX.lock"
-[[ "$RC" == 6 ]] && pass "I13 排他锁在场时 verify exit 6" || fail "I13" "rc=$RC（期望 6）"
+[[ "$RC" == 6 ]] && pass "I13 排他锁在场时 verify exit 6" || fail "I13" "rc=${RC}（期望 6）"
 [[ ! -s "$MOCK_DOCKER_STATE/calls.log" ]] \
   && pass "I13 冲突时未执行任何 compose 步骤（不产生半状态）" \
   || fail "I13" "冲突前已触 compose：$(cat "$MOCK_DOCKER_STATE/calls.log")"
@@ -598,14 +598,14 @@ mkdir -p "$DEVENV_LOCK_ROOT/stack-$A_SUFFIX.lease/$I14_HOLDER.0"
 printf '%s %s\n' "$I14_HOLDER" "$(date +%s)" > "$DEVENV_LOCK_ROOT/stack-$A_SUFFIX.lease/$I14_HOLDER.0/owner"
 : > "$MOCK_DOCKER_STATE/calls.log"
 run i14 env DEVENV_LOCK_TIMEOUT=2 DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-down2" "$DEVENV" down
-[[ "$RC" == 6 ]] && pass "I14 活跃租约时 down exit 6" || fail "I14" "down rc=$RC（期望 6）"
+[[ "$RC" == 6 ]] && pass "I14 活跃租约时 down exit 6" || fail "I14" "down rc=${RC}（期望 6）"
 [[ ! -s "$MOCK_DOCKER_STATE/calls.log" ]] \
   && pass "I14 down 冲突时未执行 compose down" || fail "I14" "down 已触 compose"
 grep -q '活跃栈使用租约' "$SANDBOX/i14.err" \
   && pass "I14 错误消息列出活跃租约持有者" || fail "I14" "stderr: $(tail -2 "$SANDBOX/i14.err")"
 
 run i14b env DEVENV_LOCK_TIMEOUT=2 DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-mig2" "$DEVENV" migrate
-[[ "$RC" == 6 ]] && pass "I14 活跃租约时 migrate exit 6" || fail "I14" "migrate rc=$RC（期望 6）"
+[[ "$RC" == 6 ]] && pass "I14 活跃租约时 migrate exit 6" || fail "I14" "migrate rc=${RC}（期望 6）"
 kill -9 "$I14_HOLDER" 2>/dev/null; wait "$I14_HOLDER" 2>/dev/null || true
 rm -rf "$DEVENV_LOCK_ROOT/stack-$A_SUFFIX.lease"
 
@@ -618,7 +618,7 @@ printf '%s %s\n' "$I15_HOLDER" "$(date +%s)" > "$DEVENV_LOCK_ROOT/stack-$A_SUFFI
 run i15 env DEVENV_LOCK_TIMEOUT=2 DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-web" "$DEVENV" web --down
 kill -9 "$I15_HOLDER" 2>/dev/null; wait "$I15_HOLDER" 2>/dev/null || true
 rm -rf "$DEVENV_LOCK_ROOT/stack-$A_SUFFIX.lock"
-[[ "$RC" == 6 ]] && pass "I15 web --down 持栈锁（冲突 exit 6）" || fail "I15" "rc=$RC（期望 6）"
+[[ "$RC" == 6 ]] && pass "I15 web --down 持栈锁（冲突 exit 6）" || fail "I15" "rc=${RC}（期望 6）"
 [[ ! -s "$MOCK_DOCKER_STATE/calls.log" ]] \
   && pass "I15 web --down 冲突时未触 compose" || fail "I15" "已触 compose"
 
@@ -663,15 +663,15 @@ tail -1 "$SANDBOX/w2.out" | jq -e '.port == "8080" and .url == "http://localhost
 
 # T-W2b --port 非法值 → exit 2（用法错误）
 run w2b env DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-w2b" "$DEVENV" web --port abc
-[[ "$RC" == 2 ]] && pass "W2b --port 非数字 exit 2" || fail "W2b" "rc=$RC（期望 2）"
+[[ "$RC" == 2 ]] && pass "W2b --port 非数字 exit 2" || fail "W2b" "rc=${RC}（期望 2）"
 run w2c env DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-w2b" "$DEVENV" web --port 70000
-[[ "$RC" == 2 ]] && pass "W2c --port 超范围 exit 2" || fail "W2c" "rc=$RC（期望 2）"
+[[ "$RC" == 2 ]] && pass "W2c --port 超范围 exit 2" || fail "W2c" "rc=${RC}（期望 2）"
 
 # T-W3 显式端口被其它 worktree 容器占用：exit 3，错误含服务/端口/占用者/内嵌修复命令
 run w3 env MOCK_COMPOSE_WEB_FAIL=1 MOCK_FAIL_PORT=8080 \
   MOCK_PS_LINES='natural-enforcement-deadbeef-web-1 (project=natural-enforcement-deadbeef) 0.0.0.0:8080->4173/tcp' \
   DEVENV_WORKTREE_ID="wt-beta" DEVENV_STATE_DIR="$SANDBOX/state-w3" "$DEVENV" web --port 8080
-[[ "$RC" == 3 ]] && pass "W3 容器占用冲突 exit 3" || fail "W3" "rc=$RC（期望 3）err=$(tail -2 "$SANDBOX/w3.err")"
+[[ "$RC" == 3 ]] && pass "W3 容器占用冲突 exit 3" || fail "W3" "rc=${RC}（期望 3）err=$(tail -2 "$SANDBOX/w3.err")"
 grep -q 'web' "$SANDBOX/w3.err" && grep -q '8080' "$SANDBOX/w3.err" \
   && grep -q 'natural-enforcement-deadbeef' "$SANDBOX/w3.err" \
   && grep -q 'devenv web --down' "$SANDBOX/w3.err" \
@@ -680,7 +680,7 @@ grep -q 'web' "$SANDBOX/w3.err" && grep -q '8080' "$SANDBOX/w3.err" \
 # T-W4 compose 失败但无占用者（非端口问题）→ 通用失败 exit 4，不谎报端口占用
 run w4 env MOCK_COMPOSE_WEB_FAIL=1 MOCK_FAIL_PORT=8091 \
   DEVENV_WORKTREE_ID="wt-beta" DEVENV_STATE_DIR="$SANDBOX/state-w4" "$DEVENV" web --port 8091
-[[ "$RC" == 4 ]] && pass "W4 无占用者时通用失败 exit 4" || fail "W4" "rc=$RC（期望 4）err=$(tail -2 "$SANDBOX/w4.err")"
+[[ "$RC" == 4 ]] && pass "W4 无占用者时通用失败 exit 4" || fail "W4" "rc=${RC}（期望 4）err=$(tail -2 "$SANDBOX/w4.err")"
 grep -q 'web 启动失败' "$SANDBOX/w4.err" \
   && pass "W4 通用失败消息不谎报占用" || fail "W4" "err=$(tail -2 "$SANDBOX/w4.err")"
 
@@ -692,7 +692,7 @@ if command -v python3 >/dev/null 2>&1; then
   run w5 env MOCK_COMPOSE_WEB_FAIL=1 MOCK_FAIL_PORT=8092 \
     DEVENV_WORKTREE_ID="wt-beta" DEVENV_STATE_DIR="$SANDBOX/state-w5" "$DEVENV" web --port 8092
   kill "$W5_LISTENER" 2>/dev/null; wait "$W5_LISTENER" 2>/dev/null || true
-  [[ "$RC" == 3 ]] && pass "W5 非容器进程占用 exit 3" || fail "W5" "rc=$RC（期望 3）err=$(tail -2 "$SANDBOX/w5.err")"
+  [[ "$RC" == 3 ]] && pass "W5 非容器进程占用 exit 3" || fail "W5" "rc=${RC}（期望 3）err=$(tail -2 "$SANDBOX/w5.err")"
   grep -q '非容器进程' "$SANDBOX/w5.err" \
     && pass "W5 错误区分非容器占用者" || fail "W5" "err=$(tail -2 "$SANDBOX/w5.err")"
 else
@@ -721,7 +721,7 @@ grep -q 'hello-stdout' "$SANDBOX/p1.err" \
 # T-P2 exec 子进程失败：退出码原样传播，终值 status=failed
 run p2 env MOCK_EXEC_PAYLOAD=1 DEVENV_WORKTREE_ID="wt-alpha" DEVENV_STATE_DIR="$SANDBOX/state-p2" \
   "$DEVENV" --json exec -- bash -c 'echo out1; echo err1 >&2; exit 7'
-[[ "$RC" == 7 ]] && pass "P2 子进程退出码原样传播（7）" || fail "P2" "rc=$RC（期望 7）"
+[[ "$RC" == 7 ]] && pass "P2 子进程退出码原样传播（7）" || fail "P2" "rc=${RC}（期望 7）"
 tail -1 "$SANDBOX/p2.out" | jq -e '.command == "exec" and .status == "failed" and .exitCode == 7' >/dev/null 2>&1 \
   && pass "P2 终值报告失败与子进程码" || fail "P2" "终值：$(tail -1 "$SANDBOX/p2.out")"
 grep -q 'out1' "$SANDBOX/p2.err" && grep -q 'err1' "$SANDBOX/p2.err" \

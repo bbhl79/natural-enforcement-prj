@@ -1,0 +1,158 @@
+##############################################################################
+# Base stage                                                                 #
+##############################################################################
+ARG DISTRO=debian
+ARG IMAGE_VERSION=trixie
+ARG IMAGE_VARIANT=slim
+FROM $DISTRO:$IMAGE_VERSION-$IMAGE_VARIANT AS postgis-base
+LABEL maintainer="Tim Sutton<tim@kartoza.com>"
+# Cache invalidation number is used to invalidate a cache.
+# Simply increment the number by 1 to reset the cache in local and GitHub Action
+# This is added because we can't purge GitHub Action cache manually
+LABEL cache.invalidation.number="1"
+ARG CACHE_INVALIDATION_NUMBER=1
+
+
+# Reset ARG for version
+ARG IMAGE_VERSION
+
+RUN apt-get -qq update --fix-missing && apt-get -qq --yes upgrade
+
+RUN set -eux \
+    && export DEBIAN_FRONTEND=noninteractive \
+    && apt-get update \
+    && apt-get -y --no-install-recommends install \
+        locales gnupg2 wget ca-certificates rpl pwgen   iputils-ping \
+        apt-transport-https curl gettext pgxnclient cmake && \
+    apt-get -y install build-essential autoconf  libxml2-dev zlib1g-dev netcat-openbsd gdal-bin \
+    figlet toilet gosu; \
+    # verify that the binary works
+	gosu nobody true && \
+    dpkg-divert --local --rename --add /sbin/initctl
+
+COPY ./base_build/scripts/locale.gen /etc/all.locale.gen
+COPY ./base_build/scripts/locale-filter.sh /etc/locale-filter.sh
+
+# Cleanup resources
+RUN apt-get -y --purge autoremove  \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+
+##############################################################################
+# Production Stage                                                           #
+##############################################################################
+FROM postgis-base AS postgis-prod
+
+
+# Reset ARG for version
+ARG IMAGE_VERSION
+ARG POSTGRES_MAJOR_VERSION=18
+ARG POSTGIS_MAJOR_VERSION=3
+ARG POSTGIS_MINOR_RELEASE=7
+# https://packagecloud.io/timescale/timescaledb
+ARG BUILD_TIMESCALE=false
+ARG BUILD_PG_DUCKDB=false
+ARG BUILD_IMAGE_SHA=''
+
+
+RUN set -eux \
+    && export DEBIAN_FRONTEND=noninteractive \
+    && apt-get update \
+    && wget -O- https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor |  sh -c 'cat > /usr/share/keyrings/postgresql.gpg' > /dev/null \
+    && echo deb [signed-by=/usr/share/keyrings/postgresql.gpg] https://apt.postgresql.org/pub/repos/apt/ ${IMAGE_VERSION}-pgdg main | tee /etc/apt/sources.list.d/pgdg.list 2>/dev/null \
+    && apt-get -y --purge autoremove \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && dpkg-divert --local --rename --add /sbin/initctl
+
+
+#-------------Application Specific Stuff ----------------------------------------------------
+
+# We add postgis as well to prevent build errors (that we dont see on local builds)
+# on docker hub e.g.
+# The following packages have unmet dependencies:
+
+RUN set -eux \
+    && export DEBIAN_FRONTEND=noninteractive \
+    &&  apt-get update \
+    && apt-get -y --no-install-recommends install postgresql-client-${POSTGRES_MAJOR_VERSION} \
+        postgresql-common postgresql-${POSTGRES_MAJOR_VERSION} \
+        postgresql-${POSTGRES_MAJOR_VERSION}-postgis-${POSTGIS_MAJOR_VERSION} \
+        postgresql-${POSTGRES_MAJOR_VERSION}-ogr-fdw \
+        postgresql-${POSTGRES_MAJOR_VERSION}-postgis-${POSTGIS_MAJOR_VERSION}-scripts \
+        postgresql-plpython3-${POSTGRES_MAJOR_VERSION} postgresql-${POSTGRES_MAJOR_VERSION}-pgrouting \
+        postgresql-server-dev-${POSTGRES_MAJOR_VERSION}  postgresql-${POSTGRES_MAJOR_VERSION}-cron \
+        postgresql-${POSTGRES_MAJOR_VERSION}-mysql-fdw \
+        postgresql-plperl-${POSTGRES_MAJOR_VERSION} && \
+        pgxn install h3
+
+
+RUN if [ "$(echo "${BUILD_TIMESCALE}" | tr '[:upper:]' '[:lower:]')" = "true" ]; then \
+        export DEBIAN_FRONTEND=noninteractive && \
+        echo "deb https://packagecloud.io/timescale/timescaledb/debian/ ${IMAGE_VERSION} main" |  tee /etc/apt/sources.list.d/timescaledb.list && \
+        wget --quiet -O - https://packagecloud.io/timescale/timescaledb/gpgkey | gpg --dearmor -o /etc/apt/trusted.gpg.d/timescaledb.gpg && \
+        apt-get update && \
+        apt-get -y --no-install-recommends install timescaledb-2-postgresql-${POSTGRES_MAJOR_VERSION} postgresql-client-${POSTGRES_MAJOR_VERSION} timescaledb-tools;\
+    fi;
+
+
+ENV \
+    PATH="$PATH:/usr/lib/postgresql/${POSTGRES_MAJOR_VERSION}/bin"
+
+
+
+RUN mkdir -p /etc/kartoza && \
+    PG_VER_PROD=$(apt-cache policy postgresql-${POSTGRES_MAJOR_VERSION} \
+      | awk '/Candidate:/ {print $2}' | sed 's/-.*//') && \
+    GIS_VER_PROD=$(apt-cache policy postgresql-${POSTGRES_MAJOR_VERSION}-postgis-${POSTGIS_MAJOR_VERSION} \
+      | awk '/Candidate:/ {print $2}' | sed 's/+.*//' | sed 's/-.*//') && \
+    printf '%s\n' \
+      "POSTGRES_MAJOR_VERSION=${POSTGRES_MAJOR_VERSION}" \
+      "POSTGIS_MAJOR_VERSION=${POSTGIS_MAJOR_VERSION}" \
+      "POSTGIS_MINOR_RELEASE=${POSTGIS_MINOR_RELEASE}" \
+      "PG_VER_PROD=${PG_VER_PROD}" \
+      "GIS_VER_PROD=${GIS_VER_PROD}" \
+      "BASE_IMAGE_DIGEST_SHA=${BUILD_IMAGE_SHA}" \
+      > /etc/kartoza/build_info.env
+
+
+# Cleanup resources
+RUN apt-get -y --purge autoremove  \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Open port 5432 so linked containers can see them
+EXPOSE 5432
+
+# Copy scripts
+ADD ./scripts /scripts
+WORKDIR /scripts
+RUN chmod +x *.sh
+
+# Run any additional tasks here that are too tedious to put in
+# this dockerfile directly.
+RUN set -eux \
+    && /scripts/compile_extensions.sh ;/scripts/setup.sh;rm /scripts/.pass_*
+RUN echo 'figlet -t "Kartoza Docker PostGIS"' >> ~/.bashrc
+
+
+ENTRYPOINT ["/bin/bash", "/scripts/docker-entrypoint.sh"]
+
+
+##############################################################################
+# Testing Stage                                                           #
+##############################################################################
+FROM postgis-prod AS postgis-test
+
+COPY ./scenario_tests/utils/requirements.txt /lib/utils/requirements.txt
+
+RUN set -eux \
+    && export DEBIAN_FRONTEND=noninteractive \
+    && apt-get update \
+    && apt-get -y --no-install-recommends install python3-pip procps \
+    && apt-get -y --purge autoremove \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install -r /lib/utils/requirements.txt --break-system-packages

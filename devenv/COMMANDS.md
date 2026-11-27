@@ -97,6 +97,12 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
    与 `/var/run/docker.sock`；裸 Linux = `/var/run/docker.sock`。
    候选唯一才采用；歧义即失败（exit 3）并列候选；无候选即失败。
 
+**macOS 宿主前置（2026-11-27 #53 实测）**：podman machine 已启动；宿主需有 `docker`
+CLI 与 compose v2 插件（`~/.docker/cli-plugins/docker-compose` 可指向已有
+`docker-compose`），以及 coreutils（快照用 `gstat`）。当默认发现同时命中 podman
+socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
+`DEVENV_DOCKER_HOST=unix://$HOME/.local/share/containers/podman/machine/podman.sock`。
+
 矩阵校验：Podman Engine（开发机：Windows WSL2 / macOS）与 Docker Engine/moby
 （仅 `GITHUB_ACTIONS=true` 的 CI 托管上下文）在矩阵内；裸 Linux + moby 开发环境
 未验证、不声称支持（exit 3）；未识别引擎 exit 3。doctor 与每条命令报告实际
