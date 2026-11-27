@@ -87,11 +87,11 @@ describe('执法点位 HTTP 端点（契约校验走 zod 管道）', () => {
     const res = await jfetch('/enforcement-points', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'nul\u0000name', lat: 23.13, lng: 113.265 }),
+      body: JSON.stringify({ name: `${PREFIX}nul\u0000name`, lat: 23.13, lng: 113.265 }),
     })
     expect(res.status).toBe(400)
     const err = ValidationErrorSchema.parse(await res.json())
-    expect(err.issues?.length ?? 0).toBeGreaterThan(0)
+    expect(err.issues?.some((i) => i.path === 'name')).toBe(true)
   })
 
   it('非法 body → 400 + ValidationErrorSchema；非法 query → 400 + ValidationErrorSchema', async () => {
