@@ -11,9 +11,20 @@ export const ENFORCEMENT_POINT_ROUTES = {
 const latSchema = z.number().min(-90).max(90)
 const lngSchema = z.number().min(-180).max(180)
 
+// PostgreSQL text 不接受 NUL 字节（SQLSTATE 22021）：契约在入口即拒绝，
+// 使「OpenAPI 声明的合法请求」与运行时行为一致（Schemathesis ST101 实测发现，
+// 否则契约校验放行的名称会在 INSERT 阶段炸成未声明的 500）。
+// 用 regex（而非 refine）以便该约束进入派生的 JSON Schema / OpenAPI pattern。
+const nameSchema = z
+  .string()
+  .min(1)
+  .max(200)
+  // eslint-disable-next-line no-control-regex -- 显式排除 NUL（U+0000）：PostgreSQL text 不接受该字节，规则此处为有意为之
+  .regex(/^[^\u0000]*$/, { message: '名称不能包含 NUL 字节' })
+
 export const CreateEnforcementPointSchema = z
   .object({
-    name: z.string().min(1).max(200),
+    name: nameSchema,
     lat: latSchema,
     lng: lngSchema,
   })

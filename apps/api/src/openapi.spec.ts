@@ -44,7 +44,7 @@ describe('OpenAPI 契约派生（zod 唯一事实源）', () => {
     expect(jsonSchemaOf(op!.requestBody)).toEqual({
       type: 'object',
       properties: {
-        name: { type: 'string', minLength: 1, maxLength: 200 },
+        name: { type: 'string', minLength: 1, maxLength: 200, pattern: '^[^\\u0000]*$' },
         lat: { type: 'number', minimum: -90, maximum: 90 },
         lng: { type: 'number', minimum: -180, maximum: 180 },
       },
