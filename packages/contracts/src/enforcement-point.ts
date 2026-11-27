@@ -2,6 +2,8 @@
 // zod-first（Spec-工程基座 §1）：schema 是唯一真相，类型经 z.infer 推断，
 // 路由常量前后端共享；响应 schema 全覆盖（含 create 类 {id} 响应，§9）。
 import { z } from 'zod'
+import type { ApiContractEndpoint } from './api-contract.js'
+import { ConflictErrorSchema, ValidationErrorSchema } from './http-errors.js'
 
 export const ENFORCEMENT_POINT_ROUTES = {
   base: '/enforcement-points',
@@ -77,43 +79,11 @@ export const HealthResultSchema = z.object({
 })
 export type HealthResult = z.infer<typeof HealthResultSchema>
 
-// 通用 HTTP 错误基类（与 NestJS HttpException 默认载荷同构）
-export const HttpErrorSchema = z.object({
-  message: z.string(),
-  error: z.string().optional(),
-  statusCode: z.number().int().optional(),
-})
-export type HttpError = z.infer<typeof HttpErrorSchema>
+// 通用 HTTP 错误载荷与端点类型见 ./http-errors.js / ./api-contract.js（生成契约共用）。
+// 本文件只保留执法点位自身的 schema 与端点清单，由 ./api-registry.js 汇总。
 
-// 400 请求契约校验错误载荷（兼容 ZodValidationPipe 与框架层非法 JSON 400）
-export const ValidationIssueSchema = z.object({
-  path: z.string(),
-  code: z.string(),
-  message: z.string(),
-})
-export type ValidationIssue = z.infer<typeof ValidationIssueSchema>
-
-export const ValidationErrorSchema = HttpErrorSchema.extend({
-  issues: z.array(ValidationIssueSchema).optional(),
-})
-export type ValidationError = z.infer<typeof ValidationErrorSchema>
-
-// 409 冲突错误载荷（如执法点位唯一名称冲突）
-export const ConflictErrorSchema = HttpErrorSchema
-export type ConflictError = z.infer<typeof ConflictErrorSchema>
-
-export type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete'
-
-export interface ApiContractEndpoint {
-  readonly method: HttpMethod
-  readonly path: string
-  readonly requestBody?: z.ZodType
-  readonly query?: z.ZodObject
-  readonly responses: Readonly<Record<number, z.ZodType>>
-}
-
-// 公开 API 端点契约总表（zod 唯一事实源；OpenAPI 完整性检查据此核对，遗漏即报错）
-export const API_CONTRACT_ENDPOINTS: readonly ApiContractEndpoint[] = [
+// 公开 API 端点契约总表（执法点位部分；zod 唯一事实源）
+export const ENFORCEMENT_POINT_ENDPOINTS: readonly ApiContractEndpoint[] = [
   {
     method: 'post',
     path: ENFORCEMENT_POINT_ROUTES.base,

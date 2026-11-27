@@ -30,7 +30,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | ESLint（运行期持共享栈使用租约） | `devenv lint` | 0 或 3/4/6 |
 | tsc --noEmit（运行期持共享栈使用租约） | `devenv typecheck` | 0 或 3/4/6 |
 | 聚合质量门：lint + typecheck + test:unit（本地与 CI 同一入口；运行期持共享栈使用租约） | `devenv verify` | 0 或 3/4/6 |
-| 从当前工作树生成器生成新 workspace 包或应用（来源路径+子树哈希+整集哈希可核；自动补 workspace.Dockerfile 两靶 manifest 并触发机器级 lockgen；目标已存在/补丁已注入即拒绝，全有或全无；非预期 lockfile diff 停止并保留现场） | `devenv gen <package\|app> <kebab-case 名>` | 0 或 2/3/4/6 |
+| 从当前工作树生成器生成新 workspace 包/应用或契约完整的 Nest 模块：package/app 自动补 workspace.Dockerfile 两靶 manifest 并触发机器级 lockgen；nest-module `--http` 生成契约/schema/校验/集成测试并整行锚点登记 OpenAPI 清单，`--internal` 仅生成 module/service（不强制 HTTP 契约）；来源路径+子树哈希+整集哈希可核；目标已存在/锚点已注入即拒绝，全有或全无；缺业务信息 exit 2；非预期 lockfile diff 停止并保留现场 | `devenv gen <package\|app> <kebab-case 名>` 或 `devenv gen nest-module <kebab-case 名> --http\|--internal --spec <仓库相对路径>` | 0 或 2/3/4/6 |
 | 读取当前绑定 workspace 镜像内的 pnpm 下载证据（构建须 `DEVENV_PNPM_EVIDENCE=1`；证据缺失/流不完整 exit 4，不默认通过） | `devenv gen evidence` | 0 或 3/4 |
 | 应用全部 pending 迁移（prisma migrate deploy；与活跃租约互斥） | `devenv migrate` | 0 或 3/4/6 |
 | 生成空迁移待编辑（prisma migrate dev --create-only；与活跃租约互斥） | `devenv migrate:create --name N` | 0 或 2/3/4/6 |
@@ -74,9 +74,11 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
    `{"event":"gate.completed",...}` 等），终值事件
    `{"command":"<cmd>","status":"ok|failed","exitCode":N,...}`；短命令为单 JSON。
    人类可读进度一律走 stderr，子进程原始输出捕获分流，**不得混入结果流**。
-   `gen package` / `gen app` 的 JSONL 含 `{"event":"gen.source",...}`（宿主来源路径/子树哈希/
-   整集哈希/文件数/快照）、`{"event":"gen.applied",...}`（落盘文件数与补丁数）、
-   `{"event":"gen.lockfile","result":"expected",...}`；生成器容器的 stdout tar
+   `gen package` / `gen app` / `gen nest-module` 的 JSONL 含 `{"event":"gen.source",...}`
+   （宿主来源路径/子树哈希/整集哈希/文件数/快照）、`{"event":"gen.applied",...}`
+   （落盘文件数与补丁数）；package/app 另有 `{"event":"gen.lockfile","result":"expected",...}`。
+   nest-module 的终值另含 `variant=http|internal`、`spec=<路径>`、`patches=<补丁数>`、
+   `lockgen=not-required`（不新增 workspace 包/依赖）。生成器容器的 stdout tar
    由 devenv 内部捕获到事务目录（**不经 devenv 的 stdout**），与结果流严格分离；
    `--json` 的 stdout 只有 JSONL。`gen evidence` 是短命令：非 `--json` 时 stdout
    为单行紧凑证据 JSON，`--json` 时为 engine 事件 + 同一证据 JSON（JSONL）。
@@ -187,14 +189,15 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
   机器级仅 lockgen（共享 ne-lockgen:tmp 标签与遗留容器清理）与 prefetch
   （基础镜像拉取）。
 - **复合过程整体持锁**：build/up/down/restart/web 的"检查新鲜度 → 构建 →
-  启动/停止"从入口到退出持同一把排他锁（单步锁保护不了全过程）；`gen package` / `gen app`
+  启动/停止"从入口到退出持同一把排他锁（单步锁保护不了全过程）；`gen package` /
+  `gen app` / `gen nest-module`
   从采集货源到 lockgen 结束持 `gen-<wt>`（build 在栈锁之后也取同一把，二者互斥），
   进程被 kill 留下的失效锁由下一次取得识别并清理，不永久阻塞环境。
 
 | 命令 | 持有锁/租约 | 互斥对象 |
 |---|---|---|
 | build / up / down / restart / web（up 与 --down 路径）/ supply-chain --container | stack-<wt>（排他，per-worktree）；build 另取 gen-<wt> | 本 worktree 内彼此两两互斥；有活跃共享租约时等待，超时 exit 6。web 端口分配不持锁：省略 --port 时引擎原子分配（#62），跨 worktree 无端口互斥 |
-| gen package / gen app | gen-<wt>（排他，per-worktree）+ 触发时 lockgen（机器级） | 与其它 gen、与 build 互斥（build 也取得 gen-<wt>，保证生成期源码/锁文件不被并发**构建**读取）；lockgen 跨 worktree 互斥；冲突等待或 exit 6。其余只读消费命令不取 gen 锁，靠快照采集的 stat 括号/双读检出混合状态并明确拒绝（exit 4），不与 gen 串行。gen 不做栈变更，不取栈使用租约 |
+| gen package / gen app / gen nest-module | gen-<wt>（排他，per-worktree）；package/app 触发时另取 lockgen（机器级） | 与其它 gen、与 build 互斥（build 也取得 gen-<wt>，保证生成期源码/锁文件不被并发**构建**读取）；lockgen 跨 worktree 互斥；冲突等待或 exit 6。nest-module 不新增 workspace 包，不触发 lockgen。其余只读消费命令不取 gen 锁，靠快照采集的 stat 括号/双读检出混合状态并明确拒绝（exit 4），不与 gen 串行。gen 不做栈变更，不取栈使用租约 |
 | migrate / migrate:create | stack-<wt> + migrate-<wt>（排他，按此顺序取得） | 本 worktree 内互斥；与活跃共享租约互斥（等待/exit 6）；与其它 worktree 互不阻塞 |
 | test / test:unit / verify / lint / typecheck / seed（运行期） | stack-<wt> 共享租约（per-worktree） | 多个租约可并行；与上述排他命令双向互斥（读者遇排他锁等待/exit 6） |
 | prefetch | prefetch（机器级） | 跨 worktree 互斥（基础镜像拉取）；冲突等待或 exit 6（重跑续跑） |
@@ -232,25 +235,30 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
 > 的命令（prefetch/build/up/images/status/doctor 等）在锁文件缺失或
 > `DEVENV_DB_IMAGE` 格式非法时可退出 2（用法错误），上表不逐行重复。
 
-## 脚手架生成（#64 package / #65 app，Spec-工程基座 §5）
+## 脚手架生成（#64 package / #65 app / #67 nest-module，Spec-工程基座 §5）
 
 - **来源可核，无烘焙 fallback**：生成器 = 当前工作树的完整 `devenv/gen/` 集合，
   经固定快照（#58）采集；报告宿主来源路径、git 子树哈希（`treeHash`）与整集内容
   哈希（`setHash`）。输入经 **stdin tar** 进入一次性容器（`--network none
   --read-only`），容器侧重算整集哈希并与宿主比对——不一致即退出 4，未执行生成。
+  nest-module 的业务 spec 与锚点文件（`apps/api/src/app.module.ts`、
+  `packages/contracts/src/api-registry.ts`）同经该 tar 传入，不读镜像内烘焙副本。
   `.dockerignore` 排除 `devenv/gen`，容器入口另断言 `/workspace/devenv/gen`
   不存在：镜像内没有可静默 fallback 的生成器副本。
 - **文件通道隔离**：生成器容器的 stdout tar 由 devenv 内部捕获到事务目录，不经
   devenv 的 stdout；`--json` 的 stdout 只有 JSONL 事件/终值。tar 内含
-  `.ne-gen-manifest.json`（每个文件的 sha256/mode + 补丁的旧/新哈希）。
+  `.ne-gen-manifest.json`（每个文件的 sha256/mode + 补丁的旧/新哈希/新增整行 +
+  nest-module spec 路径/哈希）。
 - **全有或全无**：宿主先列 tar 成员做路径/链接安全校验（拒绝绝对路径、`..`、
   反斜杠、符号/硬链接），再解包到 `.devenv-state/gen-txn.*`（gitignored，同文件
-  系统），校验清单、文件集合精确相等与全部哈希；再以原子 `rename` 提交。**lockgen 成功之前**的任何失败（传输/解包校验、
-  补丁前置条件、落盘、lockgen 构建）都回滚新生成目录、Dockerfile 与 lockfile；
+  系统），校验清单、文件集合精确相等与全部哈希；再以原子 `rename` 提交。补丁
+  只允许**整行追加**：宿主按清单声明的 `addedLines` 核对旧/新文件的整行出现次数，
+  去掉新增行后必须与快照锚点逐字节一致（非预期修改 → exit 4）。任何失败都回滚
+  本次新文件（含新建空目录）与补丁备份；package/app 另回滚 Dockerfile 与 lockfile。
   **lockgen 成功之后**的锁文件审查或供应链门禁失败则保留现场供审查（不自动
   接受、也不回滚——与「非预期 diff 停止并请求审查」一致）。目标目录已存在、
-  同 `@ne/<name>` 包名已在 `packages/`/`apps/` 占用、或 Dockerfile 已注入同名
-  COPY 行 → exit 4，且不写入任何文件（幂等保护）。
+  同 `@ne/<name>` 包名已在 `packages/`/`apps/` 占用、模块/契约锚点已注入同名行、
+  或 Dockerfile 已注入同名 COPY 行 → exit 4，且不写入任何文件（幂等保护）。
 - **workspace 清单联动**：`devenv/workspace.Dockerfile` 的 lockgen-base 与 deps
   两靶各有一个 `# @gen:pkg-copy` 标记；生成器要求恰好两处命中并各追加一行
   `COPY <packages|apps>/<name>/package.json ...`，否则拒绝。落盘后采集新快照并触发
@@ -259,12 +267,33 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
   （去掉该 importer 后规范化比对新旧锁文件必须一致）；其它任何差异 → exit 4，
   停止并要求审查，生成物与新锁文件**保留**（不自动接受、不回滚），修正生成器/
   依赖后重新 gen。
+- **nest-module 契约联动（#67）**：`devenv gen nest-module <name> --http|--internal
+  --spec <仓库相对路径>`。`--spec` 是必要业务信息（非空 `fields`；可选
+  `description`/`basePath`），字段支持 string/integer/number/boolean 与
+  minLength/maxLength/minimum/maximum/optional；缺失、空 fields、被 gitignore
+  忽略或路径不安全 → exit 2，生成前停止（不产生部分写入）。
+  - HTTP：在 `packages/contracts/src/<name>.ts` 生成路由常量、请求/响应 zod
+    schema 与端点清单；`apps/api/src/<name>/` 生成 module/controller/service 及
+    集成测试（真实 HTTP 装配：请求校验 → service → 响应校验 → #66 OpenAPI
+    完整性检查）。controller 用 `@Body({ schema, pipes: [ZodValidationPipe] })`
+    做请求校验、`ApiContractResponse` 做响应校验；契约文件经
+    `packages/contracts/src/api-registry.ts` 的 `// @gen:endpoint-import` /
+    `// @gen:endpoint-spread` 整行锚点进入 `API_CONTRACT_ENDPOINTS`。
+  - internal：只生成 module/service/单测，不生成 controller、契约文件或 OpenAPI
+    登记（Spec §5：internal kind 不强制 HTTP 契约）。
+  - 两种 variant 都经 `apps/api/src/app.module.ts` 的 `// @gen:module-import` /
+    `// @gen:module-entry` 整行锚点自动注册；锚点缺失或已注入同名行 → exit 4。
+  - 不新增 workspace 包（无 package.json/lockfile 变化）→ 不触发 lockgen；
+    仍执行静态供应链门禁。示例 service 是可直接调用/测试的内存实现，接入真实
+    持久化时替换（契约、校验、文档与测试是生成物的稳定部分）。
 - **生成物开箱质量**：package 模板（`packages/<name>`）与 app 模板（`apps/<name>`，
   含 `start` 入口脚本、`@ne/tsconfig/node.json` 与 `@types/node`）均含
   build/typecheck/test/test:unit 脚本与 `@ne/tsconfig`/catalog devDependencies；
+  nest-module 生成物直接复用 `@ne/api` 的 Nest/zod/契约依赖（无需改依赖清单）。
   闭环验收为 `devenv verify`（lint + typecheck + test:unit）及 `test` 全绿、
-  普通构建 frozen install 成功。生成器执行与 build 读取源码/锁文件互斥（`gen-<wt>`），
-  lockgen 与其它 worktree 互斥（机器级）。
+  普通构建 frozen install 成功；HTTP 生成物另经 `node apps/api/dist/scripts/
+  emit-openapi.js` 导出并强制 #66 完整性检查。生成器执行与 build 读取源码/锁文件
+  互斥（`gen-<wt>`），lockgen 与其它 worktree 互斥（机器级）。
 - **下载证据与基准**：`DEVENV_PNPM_EVIDENCE=1`（只接受空/0/1，拼写错误 exit 2）
   构建时，deps 层以 pnpm ndjson 结构化事件摘要写入镜像
   `/workspace/.devenv/pnpm-install.json`；`devenv gen evidence` 从绑定镜像读取

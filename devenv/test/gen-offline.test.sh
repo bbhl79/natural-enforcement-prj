@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================================
-# 脚手架生成离线测试（#64）——不访问真实引擎（docker 全部 mock）
+# 脚手架生成离线测试（#64 package / #65 app / #67 nest-module）——
+# 不访问真实引擎（docker 全部 mock）
 #
 # 覆盖（Spec-工程基座 §5 脚手架；命令面唯一验收面）：
 #   1. 来源可核：报告宿主来源路径 + 生成器子树哈希 + 整集内容哈希；容器侧重算
@@ -13,6 +14,9 @@
 #   5. 锁关系：gen 持 per-worktree gen-<wt> 源码锁（冲突 exit 6）；build 取得
 #      同一把锁（gen 与 build 互斥）。
 #   6. 无烘焙副本：.dockerignore 排除 devenv/gen（容器入口另有运行时断言）。
+#   7. nest-module（#67）：HTTP 生成契约/模块/集成测试并整行锚点登记
+#      app.module.ts + api-registry.ts；internal 只生成 module/service；
+#      缺业务信息/空 fields 明确停止；补丁只允许整行追加；不触发 lockgen。
 # ============================================================================
 set -Eeuo pipefail
 
@@ -29,7 +33,13 @@ MOCKBIN=""
 OUT=""
 RC=0
 
-cleanup() { rm -rf "$SANDBOX" "$SANDBOX-out" "$SANDBOX-mockbin" 2>/dev/null || true; }
+cleanup() {
+  if [[ "${KEEP_SANDBOX:-}" == "1" ]]; then
+    printf 'KEEP_SANDBOX: %s（输出：%s）\n' "$SANDBOX" "$OUT"
+    return 0
+  fi
+  rm -rf "$SANDBOX" "$SANDBOX-out" "$SANDBOX-mockbin" 2>/dev/null || true
+}
 trap cleanup EXIT
 
 # ---------------------------------------------------------------------------
@@ -43,9 +53,29 @@ setup() {
   cp -r "$REPO_ROOT/devenv" "$SANDBOX/devenv"
   cp "$REPO_ROOT/.gitignore" "$SANDBOX/.gitignore"
   cp "$REPO_ROOT/.dockerignore" "$SANDBOX/.dockerignore"
-  mkdir -p "$SANDBOX/apps/api" "$SANDBOX/apps/web" \
-           "$SANDBOX/packages/contracts" "$SANDBOX/packages/tsconfig"
+  mkdir -p "$SANDBOX/apps/api/src" "$SANDBOX/apps/web" \
+           "$SANDBOX/packages/contracts/src" "$SANDBOX/packages/tsconfig"
   cp "$REPO_ROOT/packages/tsconfig/package.json" "$SANDBOX/packages/tsconfig/package.json"
+  # nest-module 整行锚点夹具（与仓库真实文件同形；mock 生成器在此追加模块/契约）
+  cat > "$SANDBOX/apps/api/src/app.module.ts" <<'TS'
+import { Module } from '@nestjs/common'
+// @gen:module-import
+
+@Module({
+  imports: [
+    // @gen:module-entry
+  ],
+})
+export class AppModule {}
+TS
+  cat > "$SANDBOX/packages/contracts/src/api-registry.ts" <<'TS'
+import type { ApiContractEndpoint } from './api-contract.js'
+// @gen:endpoint-import
+
+export const API_CONTRACT_ENDPOINTS: readonly ApiContractEndpoint[] = [
+  // @gen:endpoint-spread
+]
+TS
 
   cat > "$SANDBOX/pnpm-workspace.yaml" <<'YAML'
 packages:
@@ -150,7 +180,9 @@ reset_repo() {
   git -C "$SANDBOX" clean -fdq
   rm -rf "$SANDBOX/.devenv-state" "$DEVENV_LOCK_ROOT"
   rm -f "$MOCK_NEW_LOCKFILE"
-  unset MOCK_LOCKGEN_FAIL MOCK_TAMPER_SET MOCK_OUTPUT_TRAVERSAL MOCK_OUTPUT_CROSS_DIR MOCK_EVIDENCE 2>/dev/null || true
+  unset MOCK_LOCKGEN_FAIL MOCK_TAMPER_SET MOCK_OUTPUT_TRAVERSAL MOCK_OUTPUT_CROSS_DIR MOCK_EVIDENCE \
+        MOCK_PATCH_TAMPER MOCK_INTERNAL_EMITS_CONTRACTS MOCK_MISSING_REQUIRED \
+        MOCK_SPEC_TAMPER MOCK_NEST_CONTRACT_ROGUE 2>/dev/null || true
   export DEVENV_LOCK_TIMEOUT=""
 }
 
@@ -227,12 +259,45 @@ done | sha256sum | awk '{print $1}')"
   || { echo "mock: set hash mismatch expected=$NE_GEN_SET_SHA256 actual=$actual" >&2; exit 4; }
 
 kind="${NE_GEN_KIND:?}"; name="${NE_GEN_NAME:?}"
+variant="${NE_GEN_VARIANT:-}"; spec_rel="${NE_GEN_SPEC_REL:-}"
 out="$work/out"
+mkdir -p "$out"
+target_root=""
+gen_files=()
+patch_paths=()
+patch_added=()
+
+pascal="$(printf '%s' "$name" | awk -F- '{ for (i = 1; i <= NF; i++) printf "%s%s", toupper(substr($i, 1, 1)), substr($i, 2) }')"
+upper="$(printf '%s' "$name" | tr '[:lower:]-' '[:upper:]_')"
+
+insert_after_marker() { # <file> <marker> <lines-file>
+  local file="$1" marker="$2" lines="$3"
+  local tmp="$file.mocktmp.$$"
+  awk -v marker="$marker" '
+    NR==FNR { extra[++n] = $0; next }
+    { print; s = $0; sub(/^[[:space:]]+/, "", s)
+      if (s == marker) { for (i = 1; i <= n; i++) print extra[i]; hits++ } }
+    END { exit(hits == 1 ? 0 : 1) }
+  ' "$lines" "$file" > "$tmp" || { rm -f "$tmp"; echo "mock: marker count != 1: $marker" >&2; exit 4; }
+  mv "$tmp" "$file"
+}
+
+insert_after_prefix() { # <file> <prefix> <line>（Dockerfile 锚点带尾注，按行首前缀命中恰好两处）
+  local file="$1" prefix="$2" line="$3"
+  local tmp="$file.mocktmp.$$"
+  awk -v prefix="$prefix" -v line="$line" '
+    { print; if (index($0, prefix) == 1) { print line; hits++ } }
+    END { exit(hits == 2 ? 0 : 1) }
+  ' "$file" > "$tmp" || { rm -f "$tmp"; echo "mock: prefix marker count != 2: $prefix" >&2; exit 4; }
+  mv "$tmp" "$file"
+}
+
 case "$kind" in
-  package)
-    target_root="packages"
-    mkdir -p "$out/packages/$name/src" "$out/devenv"
-    cat > "$out/packages/$name/package.json" <<JSON
+  package|app)
+    if [[ "$kind" == "package" ]]; then target_root="packages"; else target_root="apps"; fi
+    mkdir -p "$out/$target_root/$name/src" "$out/devenv"
+    if [[ "$kind" == "package" ]]; then
+      cat > "$out/packages/$name/package.json" <<JSON
 {
   "name": "@ne/$name",
   "version": "0.0.0",
@@ -251,13 +316,11 @@ case "$kind" in
   }
 }
 JSON
-    printf 'export const generated = 1\n' > "$out/packages/$name/src/index.ts"
-    printf 'export const spec = 2\n' > "$out/packages/$name/src/index.spec.ts"
-    ;;
-  app)
-    target_root="apps"
-    mkdir -p "$out/apps/$name/src" "$out/devenv"
-    cat > "$out/apps/$name/package.json" <<JSON
+      printf 'export function hello(t: string): string { return t }\n' > "$out/packages/$name/src/hello.ts"
+      printf 'export { hello } from "./hello.js"\n' > "$out/packages/$name/src/index.ts"
+      printf 'export const spec = 2\n' > "$out/packages/$name/src/hello.spec.ts"
+    else
+      cat > "$out/apps/$name/package.json" <<JSON
 {
   "name": "@ne/$name",
   "version": "0.0.0",
@@ -278,31 +341,119 @@ JSON
   }
 }
 JSON
-    printf 'export function hello(t: string): string { return t }\n' > "$out/apps/$name/src/hello.ts"
-    printf 'import { hello } from "./hello.js"\nconsole.log(hello("app"))\n' > "$out/apps/$name/src/main.ts"
-    printf 'export const spec = 2\n' > "$out/apps/$name/src/hello.spec.ts"
+      printf 'export function hello(t: string): string { return t }\n' > "$out/apps/$name/src/hello.ts"
+      printf 'import { hello } from "./hello.js"\nconsole.log(hello("app"))\n' > "$out/apps/$name/src/main.ts"
+      printf 'export const spec = 2\n' > "$out/apps/$name/src/hello.spec.ts"
+    fi
+    while IFS= read -r f; do gen_files+=("$f"); done \
+      < <(cd "$out" && find "$target_root" -type f | LC_ALL=C sort)
+    cp "$work/devenv/workspace.Dockerfile" "$out/devenv/workspace.Dockerfile"
+    copyline="COPY $target_root/$name/package.json $target_root/$name/package.json"
+    insert_after_prefix "$out/devenv/workspace.Dockerfile" '# @gen:pkg-copy' "$copyline"
+    patch_paths+=("devenv/workspace.Dockerfile")
+    patch_added+=("$(jq -nc --arg l "$copyline" '[$l, $l]')")
+    ;;
+  nest-module)
+    case "$variant" in
+      http|internal) ;;
+      *) echo "mock: bad nest-module variant $variant" >&2; exit 2 ;;
+    esac
+    [[ -n "$spec_rel" && -f "$work/$spec_rel" ]] \
+      || { echo "mock: spec missing $spec_rel" >&2; exit 2; }
+    spec_sha="$(sha256sum "$work/$spec_rel" | awk '{print $1}')"
+    [[ "${MOCK_SPEC_TAMPER:-}" != "1" ]] || spec_sha="$(printf '%064d' 0)"
+    root="apps/api/src/$name"
+    mkdir -p "$out/$root"
+    printf 'export const generatedModule = 1\n' > "$out/$root/$name.module.ts"
+    printf 'export const generatedService = 1\n' > "$out/$root/$name.service.ts"
+    if [[ "$variant" == "http" ]]; then
+      printf 'export const generatedController = 1\n' > "$out/$root/$name.controller.ts"
+      printf 'export const generatedControllerSpec = 1\n' > "$out/$root/$name.controller.spec.ts"
+      mkdir -p "$out/packages/contracts/src"
+      printf 'export const generatedContract = 1\n' > "$out/packages/contracts/src/$name.ts"
+      printf 'export const generatedContractSpec = 1\n' > "$out/packages/contracts/src/$name.spec.ts"
+    else
+      printf 'export const generatedServiceSpec = 1\n' > "$out/$root/$name.service.spec.ts"
+    fi
+    if [[ "$variant" == "internal" && "${MOCK_INTERNAL_EMITS_CONTRACTS:-}" == "1" ]]; then
+      mkdir -p "$out/packages/contracts/src"
+      printf 'export const illegalContract = 1\n' > "$out/packages/contracts/src/$name.ts"
+    fi
+    if [[ "${MOCK_NEST_CONTRACT_ROGUE:-}" == "1" ]]; then
+      mkdir -p "$out/packages/contracts/src"
+      printf 'export const rogue = 1\n' > "$out/packages/contracts/src/rogue.ts"
+    fi
+    if [[ "${MOCK_MISSING_REQUIRED:-}" == "1" ]]; then
+      rm -f "$out/$root/$name.module.ts"
+    fi
+    while IFS= read -r f; do gen_files+=("$f"); done \
+      < <(cd "$out" && find apps/api/src packages/contracts/src -type f 2>/dev/null | LC_ALL=C sort)
+
+    # app.module.ts：import 与 imports 数组各按整行锚点插入一行
+    mkdir -p "$out/apps/api/src"
+    cp "$work/apps/api/src/app.module.ts" "$out/apps/api/src/app.module.ts"
+    printf 'import { %sModule } from '\''./%s/%s.module.js'\''\n' "$pascal" "$name" "$name" > "$work/l1"
+    printf '    %sModule,\n' "$pascal" > "$work/l2"
+    insert_after_marker "$out/apps/api/src/app.module.ts" '// @gen:module-import' "$work/l1"
+    insert_after_marker "$out/apps/api/src/app.module.ts" '// @gen:module-entry' "$work/l2"
+    patch_paths+=("apps/api/src/app.module.ts")
+    patch_added+=("$(jq -nc \
+      --arg a "import { ${pascal}Module } from './${name}/${name}.module.js'" \
+      --arg b "    ${pascal}Module," '[ $a, $b ]')")
+
+    if [[ "$variant" == "http" ]]; then
+      mkdir -p "$out/packages/contracts/src"
+      cp "$work/packages/contracts/src/api-registry.ts" "$out/packages/contracts/src/api-registry.ts"
+      printf 'export * from '\''./%s.js'\''\nimport { %s_ENDPOINTS } from '\''./%s.js'\''\n' \
+        "$name" "$upper" "$name" > "$work/l3"
+      printf '  ...%s_ENDPOINTS,\n' "$upper" > "$work/l4"
+      insert_after_marker "$out/packages/contracts/src/api-registry.ts" '// @gen:endpoint-import' "$work/l3"
+      insert_after_marker "$out/packages/contracts/src/api-registry.ts" '// @gen:endpoint-spread' "$work/l4"
+      patch_paths+=("packages/contracts/src/api-registry.ts")
+      patch_added+=("$(jq -nc \
+        --arg a "export * from './${name}.js'" \
+        --arg b "import { ${upper}_ENDPOINTS } from './${name}.js'" \
+        --arg c "  ...${upper}_ENDPOINTS," '[ $a, $b, $c ]')")
+    fi
+
+    if [[ "${MOCK_PATCH_TAMPER:-}" == "1" ]]; then
+      # 非整行追加：篡改一行既有内容（宿主必须拒绝，禁止顺带修改）
+      awk '{ if ($0 == "import { Module } from '\''@nestjs/common'\''") print "import { Module as MovedModule } from '\''@nestjs/common'\''"; else print }' \
+        "$out/apps/api/src/app.module.ts" > "$out/apps/api/src/app.module.ts.tmp"
+      mv "$out/apps/api/src/app.module.ts.tmp" "$out/apps/api/src/app.module.ts"
+    fi
     ;;
   *)
     echo "mock: unsupported kind $kind" >&2; exit 2
     ;;
 esac
-awk -v line="COPY $target_root/$name/package.json $target_root/$name/package.json" \
-  '{ print; if ($0 ~ /^# @gen:pkg-copy/) print line }' \
-  devenv/workspace.Dockerfile > "$out/devenv/workspace.Dockerfile"
 
 manifest="$out/.ne-gen-manifest.json"
-sep=""
-{
-  printf '{"kind":"%s","name":"%s","manifestVersion":1,"files":[' "$kind" "$name"
-  while IFS= read -r f; do
-    h="$(sha256sum "$out/$f" | awk '{print $1}')"
-    printf '%s{"path":"%s","sha256":"%s","mode":"644"}' "$sep" "$f" "$h"
-    sep=","
-  done < <(cd "$out" && find "$target_root" -type f | LC_ALL=C sort)
-  printf '],"patches":[{"path":"devenv/workspace.Dockerfile","baseSha256":"%s","sha256":"%s"}]}\n' \
-    "$(sha256sum devenv/workspace.Dockerfile | awk '{print $1}')" \
-    "$(sha256sum "$out/devenv/workspace.Dockerfile" | awk '{print $1}')"
-} > "$manifest"
+files_json="$(
+  for f in "${gen_files[@]}"; do
+    jq -nc --arg p "$f" --arg h "$(sha256sum "$out/$f" | awk '{print $1}')" \
+      '{path:$p,sha256:$h,mode:"644"}'
+  done | jq -sc .
+)"
+patches_json="$(
+  for ((i = 0; i < ${#patch_paths[@]}; i++)); do
+    p="${patch_paths[$i]}"
+    jq -nc --arg p "$p" \
+      --arg b "$(sha256sum "$work/$p" | awk '{print $1}')" \
+      --arg h "$(sha256sum "$out/$p" | awk '{print $1}')" \
+      --argjson a "${patch_added[$i]}" \
+      '{path:$p,baseSha256:$b,sha256:$h,addedLines:$a}'
+  done | jq -sc .
+)"
+if [[ "$kind" == "nest-module" ]]; then
+  spec_json="$(jq -nc --arg p "$spec_rel" --arg h "$spec_sha" '{path:$p,sha256:$h}')"
+else
+  spec_json="null"
+fi
+jq -n --arg kind "$kind" --arg name "$name" --arg variant "$variant" \
+  --argjson spec "$spec_json" --argjson files "$files_json" --argjson patches "$patches_json" \
+  '{kind:$kind,name:$name,variant:$variant,manifestVersion:2,spec:$spec,files:$files,patches:$patches}' \
+  > "$manifest"
 
 if [[ "${MOCK_OUTPUT_TRAVERSAL:-}" == "1" ]]; then
   # 清单声明的路径越界（实际文件在包外；宿主必须在落盘前拒绝）
@@ -694,6 +845,210 @@ expect_rc "T22 跨目录包名冲突拒绝 exit 4" 4 t22
 expect_grep "T22 报告包名冲突" "包名冲突：packages/contracts/package.json 已占用 @ne/contracts" t22
 [[ ! -e "$SANDBOX/apps/contracts" ]] \
   && pass "T22 未创建目标 app 目录" || fail "T22" "拒绝后仍创建了 apps/contracts"
+
+# ---------------------------------------------------------------------------
+# T23 gen nest-module --http 成功：路由/schema/集成测试文件 + 契约注册表 +
+#   app.module 整行锚点；不新增 workspace 包 → 不触发 lockgen（锁/Dockerfile 不变）
+# ---------------------------------------------------------------------------
+reset_repo
+lock_before="$(sha256sum "$SANDBOX/pnpm-lock.yaml" | awk '{print $1}')"
+dockerfile_before="$(sha256sum "$SANDBOX/devenv/workspace.Dockerfile" | awk '{print $1}')"
+run t23 gen_json gen nest-module inspection-record --http --spec devenv/test/fixtures/nest-module-http.json
+expect_rc "T23 gen nest-module --http 成功" 0 t23
+if jq -e . "$OUT/t23.out" >/dev/null 2>&1; then
+  pass "T23 stdout 全为可解析 JSON（tar 未混入结果流）"
+else
+  fail "T23" "stdout 非纯 JSONL：$(head -c 200 "$OUT/t23.out")"
+fi
+if jq -se 'any(.[]; .command == "gen" and .status == "ok" and .kind == "nest-module" and .variant == "http" and .patches == "2" and .lockgen == "not-required")' "$OUT/t23.out" >/dev/null; then
+  pass "T23 终值含 kind=nest-module/variant=http/patches=2/lockgen=not-required"
+else
+  fail "T23" "终值不符：$(tail -1 "$OUT/t23.out")"
+fi
+for f in module controller service controller.spec; do
+  [[ -f "$SANDBOX/apps/api/src/inspection-record/inspection-record.$f.ts" ]] \
+    && pass "T23 生成 $f 文件" || fail "T23" "缺 $f 文件"
+done
+[[ -f "$SANDBOX/packages/contracts/src/inspection-record.ts" \
+   && -f "$SANDBOX/packages/contracts/src/inspection-record.spec.ts" ]] \
+  && pass "T23 生成契约文件（schema + 契约测试）" || fail "T23" "缺契约文件"
+grep -qxF "import { InspectionRecordModule } from './inspection-record/inspection-record.module.js'" \
+  "$SANDBOX/apps/api/src/app.module.ts" \
+  && pass "T23 app.module.ts 整行追加 import" || fail "T23" "app.module.ts 缺 import"
+grep -qxF '    InspectionRecordModule,' "$SANDBOX/apps/api/src/app.module.ts" \
+  && pass "T23 app.module.ts 整行追加 imports 条目" || fail "T23" "app.module.ts 缺 imports 条目"
+grep -qxF "export * from './inspection-record.js'" "$SANDBOX/packages/contracts/src/api-registry.ts" \
+  && grep -qxF "import { INSPECTION_RECORD_ENDPOINTS } from './inspection-record.js'" "$SANDBOX/packages/contracts/src/api-registry.ts" \
+  && grep -qxF '  ...INSPECTION_RECORD_ENDPOINTS,' "$SANDBOX/packages/contracts/src/api-registry.ts" \
+  && pass "T23 api-registry.ts 整行登记生成契约" || fail "T23" "api-registry.ts 未登记"
+[[ "$(sha256sum "$SANDBOX/pnpm-lock.yaml" | awk '{print $1}')" == "$lock_before" ]] \
+  && pass "T23 nest-module 不触发 lockgen（lockfile 未变）" || fail "T23" "lockfile 被改动"
+[[ "$(sha256sum "$SANDBOX/devenv/workspace.Dockerfile" | awk '{print $1}')" == "$dockerfile_before" ]] \
+  && pass "T23 nest-module 不补 workspace.Dockerfile" || fail "T23" "Dockerfile 被改动"
+
+# ---------------------------------------------------------------------------
+# T24 缺少必要业务信息（--spec 缺失）→ exit 2，无任何写入
+# ---------------------------------------------------------------------------
+reset_repo
+run t24 gen_json gen nest-module missing-spec --http
+expect_rc "T24 缺 spec exit 2" 2 t24
+expect_grep "T24 明确提示缺少必要业务信息" "缺少必要业务信息" t24
+[[ -z "$(git -C "$SANDBOX" status --porcelain)" ]] \
+  && pass "T24 无部分写入" || fail "T24" "出现文件改动：$(git -C "$SANDBOX" status --porcelain)"
+
+# ---------------------------------------------------------------------------
+# T25 spec.fields 为空 → exit 2，无任何写入（拒绝假完整骨架）
+# ---------------------------------------------------------------------------
+reset_repo
+printf '{"fields":{}}\n' > "$SANDBOX/empty-fields.json"
+run t25 gen_json gen nest-module empty-fields --internal --spec empty-fields.json
+expect_rc "T25 空 fields exit 2" 2 t25
+expect_grep "T25 明确提示 fields 必须非空" "fields 必须是非空对象" t25
+[[ ! -e "$SANDBOX/apps/api/src/empty-fields" ]] \
+  && pass "T25 未创建目标目录" || fail "T25" "目标目录被创建"
+
+# ---------------------------------------------------------------------------
+# T26 gen nest-module --internal 成功：仅 module/service/spec，无 HTTP 契约；
+#   app.module 整行登记；不触发 lockgen
+# ---------------------------------------------------------------------------
+reset_repo
+registry_before="$(sha256sum "$SANDBOX/packages/contracts/src/api-registry.ts" | awk '{print $1}')"
+lock_before="$(sha256sum "$SANDBOX/pnpm-lock.yaml" | awk '{print $1}')"
+dockerfile_before="$(sha256sum "$SANDBOX/devenv/workspace.Dockerfile" | awk '{print $1}')"
+run t26 gen_json gen nest-module inspection-stats --internal --spec devenv/test/fixtures/nest-module-internal.json
+expect_rc "T26 gen nest-module --internal 成功" 0 t26
+jq -se 'any(.[]; .command == "gen" and .status == "ok" and .kind == "nest-module" and .variant == "internal" and .patches == "1" and .lockgen == "not-required")' "$OUT/t26.out" >/dev/null \
+  && pass "T26 终值含 variant=internal/patches=1/lockgen=not-required" \
+  || fail "T26" "终值不符：$(tail -1 "$OUT/t26.out")"
+[[ -f "$SANDBOX/apps/api/src/inspection-stats/inspection-stats.module.ts" \
+   && -f "$SANDBOX/apps/api/src/inspection-stats/inspection-stats.service.ts" \
+   && -f "$SANDBOX/apps/api/src/inspection-stats/inspection-stats.service.spec.ts" ]] \
+  && pass "T26 生成 internal module/service/测试" || fail "T26" "internal 生成物缺失"
+[[ ! -e "$SANDBOX/apps/api/src/inspection-stats/inspection-stats.controller.ts" \
+   && ! -e "$SANDBOX/packages/contracts/src/inspection-stats.ts" ]] \
+  && pass "T26 internal 不生成 HTTP 契约/controller" || fail "T26" "internal 出现 HTTP 契约"
+[[ "$(sha256sum "$SANDBOX/packages/contracts/src/api-registry.ts" | awk '{print $1}')" == "$registry_before" ]] \
+  && pass "T26 internal 不改契约注册表" || fail "T26" "api-registry.ts 被改动"
+grep -qxF "import { InspectionStatsModule } from './inspection-stats/inspection-stats.module.js'" \
+  "$SANDBOX/apps/api/src/app.module.ts" \
+  && grep -qxF '    InspectionStatsModule,' "$SANDBOX/apps/api/src/app.module.ts" \
+  && pass "T26 app.module.ts 整行登记 internal 模块" || fail "T26" "app.module.ts 未登记"
+[[ "$(sha256sum "$SANDBOX/pnpm-lock.yaml" | awk '{print $1}')" == "$lock_before" \
+   && "$(sha256sum "$SANDBOX/devenv/workspace.Dockerfile" | awk '{print $1}')" == "$dockerfile_before" ]] \
+  && pass "T26 不触发 lockgen（lockfile/Dockerfile 未变）" || fail "T26" "lockgen 被触发"
+
+# ---------------------------------------------------------------------------
+# T27 重复生成 nest-module → exit 4，既有文件与锚点无部分写入
+# ---------------------------------------------------------------------------
+printf 'sentinel\n' > "$SANDBOX/apps/api/src/inspection-stats/sentinel.txt"
+appmod_before="$(sha256sum "$SANDBOX/apps/api/src/app.module.ts" | awk '{print $1}')"
+lock_before="$(sha256sum "$SANDBOX/pnpm-lock.yaml" | awk '{print $1}')"
+run t27 gen_json gen nest-module inspection-stats --internal --spec devenv/test/fixtures/nest-module-internal.json
+expect_rc "T27 重复生成拒绝 exit 4" 4 t27
+expect_grep "T27 报告目标已存在" "目标已存在：apps/api/src/inspection-stats/" t27
+[[ -f "$SANDBOX/apps/api/src/inspection-stats/sentinel.txt" ]] \
+  && pass "T27 既有文件未变（无部分写入）" || fail "T27" "既有文件被改动"
+[[ "$(sha256sum "$SANDBOX/apps/api/src/app.module.ts" | awk '{print $1}')" == "$appmod_before" \
+   && "$(sha256sum "$SANDBOX/pnpm-lock.yaml" | awk '{print $1}')" == "$lock_before" ]] \
+  && pass "T27 app.module/lockfile 未变" || fail "T27" "app.module 或 lockfile 被改动"
+
+# ---------------------------------------------------------------------------
+# T28 锚点已注入（app.module 已有同名 import）→ exit 4，不创建目标
+# ---------------------------------------------------------------------------
+reset_repo
+awk -v line="import { GhostHttpModule } from './ghost-http/ghost-http.module.js'" \
+  '{ print; if ($0 == "// @gen:module-import") print line }' \
+  "$SANDBOX/apps/api/src/app.module.ts" > "$SANDBOX/apps/api/src/app.module.ts.tmp"
+mv "$SANDBOX/apps/api/src/app.module.ts.tmp" "$SANDBOX/apps/api/src/app.module.ts"
+run t28 gen_json gen nest-module ghost-http --http --spec devenv/test/fixtures/nest-module-http.json
+expect_rc "T28 锚点已注入拒绝 exit 4" 4 t28
+expect_grep "T28 报告模块已注入" "已注入过 GhostHttpModule" t28
+[[ ! -e "$SANDBOX/apps/api/src/ghost-http" ]] \
+  && pass "T28 未创建目标目录" || fail "T28" "目标目录被创建"
+
+# ---------------------------------------------------------------------------
+# T29 补丁夹带非整行修改 → 宿主拒绝，零写入
+# ---------------------------------------------------------------------------
+reset_repo
+export MOCK_PATCH_TAMPER=1
+run t29 gen_json gen nest-module tamper-http --http --spec devenv/test/fixtures/nest-module-http.json
+expect_rc "T29 非整行补丁 exit 4" 4 t29
+expect_grep "T29 报告非预期修改" "非预期修改" t29
+[[ ! -e "$SANDBOX/apps/api/src/tamper-http" ]] \
+  && pass "T29 未写入任何文件" || fail "T29" "出现目标目录"
+unset MOCK_PATCH_TAMPER
+
+# ---------------------------------------------------------------------------
+# T30 internal 生成器偷偷写 HTTP 契约 → 路径越界拒绝，零写入
+# ---------------------------------------------------------------------------
+reset_repo
+export MOCK_INTERNAL_EMITS_CONTRACTS=1
+run t30 gen_json gen nest-module leak-internal --internal --spec devenv/test/fixtures/nest-module-internal.json
+expect_rc "T30 internal 契约越界 exit 4" 4 t30
+expect_grep "T30 报告路径越界" "生成物路径越界" t30
+[[ ! -e "$SANDBOX/apps/api/src/leak-internal" \
+   && ! -e "$SANDBOX/packages/contracts/src/leak-internal.ts" ]] \
+  && pass "T30 未写入任何文件" || fail "T30" "出现越界文件"
+unset MOCK_INTERNAL_EMITS_CONTRACTS
+
+# ---------------------------------------------------------------------------
+# T31 HTTP 生成物缺必需文件（controller 等）→ 宿主拒绝，零写入
+# ---------------------------------------------------------------------------
+reset_repo
+export MOCK_MISSING_REQUIRED=1
+run t31 gen_json gen nest-module missing-required --http --spec devenv/test/fixtures/nest-module-http.json
+expect_rc "T31 缺必需文件 exit 4" 4 t31
+expect_grep "T31 报告缺必需文件" "缺少必需文件" t31
+[[ ! -e "$SANDBOX/apps/api/src/missing-required" ]] \
+  && pass "T31 未写入任何文件" || fail "T31" "出现目标目录"
+unset MOCK_MISSING_REQUIRED
+
+# ---------------------------------------------------------------------------
+# T32 spec 被 .gitignore 忽略（不会进入快照）→ exit 2，明确提示
+# ---------------------------------------------------------------------------
+reset_repo
+mkdir -p "$SANDBOX/.artifacts"
+printf '{"fields":{"x":{"type":"string"}}}\n' > "$SANDBOX/.artifacts/spec.json"
+run t32 gen_json gen nest-module ignored-spec --http --spec .artifacts/spec.json
+expect_rc "T32 被忽略的 spec exit 2" 2 t32
+expect_grep "T32 报告 spec 不会进入快照" "被 .gitignore 忽略" t32
+[[ ! -e "$SANDBOX/apps/api/src/ignored-spec" ]] \
+  && pass "T32 未创建目标目录" || fail "T32" "目标目录被创建"
+
+# ---------------------------------------------------------------------------
+# T33 生成器报告的 spec 哈希与输入快照不一致 → 宿主拒绝，零写入
+# ---------------------------------------------------------------------------
+reset_repo
+export MOCK_SPEC_TAMPER=1
+run t33 gen_json gen nest-module spec-tamper --http --spec devenv/test/fixtures/nest-module-http.json
+expect_rc "T33 spec 哈希不符 exit 4" 4 t33
+expect_grep "T33 报告 spec 哈希不一致" "spec 内容哈希与输入快照不一致" t33
+[[ ! -e "$SANDBOX/apps/api/src/spec-tamper" ]] \
+  && pass "T33 未写入任何文件" || fail "T33" "出现目标目录"
+unset MOCK_SPEC_TAMPER
+
+# ---------------------------------------------------------------------------
+# T34 HTTP 生成器写到契约允许名单外（rogue.ts）→ 路径越界拒绝，零写入
+# ---------------------------------------------------------------------------
+reset_repo
+export MOCK_NEST_CONTRACT_ROGUE=1
+run t34 gen_json gen nest-module rogue-contract --http --spec devenv/test/fixtures/nest-module-http.json
+expect_rc "T34 契约路径越界 exit 4" 4 t34
+expect_grep "T34 报告路径越界" "生成物路径越界" t34
+[[ ! -e "$SANDBOX/apps/api/src/rogue-contract" \
+   && ! -e "$SANDBOX/packages/contracts/src/rogue.ts" ]] \
+  && pass "T34 未写入任何文件" || fail "T34" "出现越界文件"
+unset MOCK_NEST_CONTRACT_ROGUE
+
+# ---------------------------------------------------------------------------
+# T35 nest-module 未指定 --http/--internal → exit 2，明确提示
+# ---------------------------------------------------------------------------
+reset_repo
+run t35 gen_json gen nest-module no-variant --spec devenv/test/fixtures/nest-module-http.json
+expect_rc "T35 缺 variant exit 2" 2 t35
+expect_grep "T35 明确提示需要 --http|--internal" "只接受一个 --http|--internal" t35
+[[ ! -e "$SANDBOX/apps/api/src/no-variant" ]] \
+  && pass "T35 未创建目标目录" || fail "T35" "目标目录被创建"
 
 # ---------------------------------------------------------------------------
 # 汇总

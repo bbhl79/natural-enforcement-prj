@@ -1,16 +1,17 @@
 // 契约 schema 行为单元测试（可缓存、零基础设施）
 import { describe, expect, it } from 'vitest'
 import {
-  API_CONTRACT_ENDPOINTS,
   CreateEnforcementPointResultSchema,
   CreateEnforcementPointSchema,
+  ENFORCEMENT_POINT_ENDPOINTS,
   ENFORCEMENT_POINT_ROUTES,
   HEALTH_ROUTES,
   HealthResultSchema,
   NearbyQuerySchema,
   NearbyResultSchema,
-  ValidationErrorSchema,
 } from './enforcement-point.js'
+import { ValidationErrorSchema } from './http-errors.js'
+import { API_CONTRACT_ENDPOINTS } from './api-registry.js'
 
 describe('CreateEnforcementPointSchema', () => {
   it('接受合法点位', () => {
@@ -109,17 +110,28 @@ describe('ValidationErrorSchema 与 API_CONTRACT_ENDPOINTS', () => {
   })
 
   it('端点契约清单覆盖全部公开路由并声明请求体/参数/响应 schema', () => {
-    const keys = API_CONTRACT_ENDPOINTS.map((e) => `${e.method.toUpperCase()} ${e.path}`)
+    const keys = ENFORCEMENT_POINT_ENDPOINTS.map((e) => `${e.method.toUpperCase()} ${e.path}`)
     expect(keys).toEqual([
       `POST ${ENFORCEMENT_POINT_ROUTES.base}`,
       `GET ${ENFORCEMENT_POINT_ROUTES.nearby}`,
       `GET ${HEALTH_ROUTES.base}`,
     ])
-    const createEp = API_CONTRACT_ENDPOINTS.find(
+    const createEp = ENFORCEMENT_POINT_ENDPOINTS.find(
       (e) => e.method === 'post' && e.path === ENFORCEMENT_POINT_ROUTES.base,
     )
     expect(createEp?.requestBody).toBe(CreateEnforcementPointSchema)
     expect(createEp?.responses[201]).toBe(CreateEnforcementPointResultSchema)
     expect(createEp?.responses[400]).toBe(ValidationErrorSchema)
+  })
+
+  it('注册表 API_CONTRACT_ENDPOINTS 包含全部手写端点（生成契约经同一注册表扩展）', () => {
+    const keys = API_CONTRACT_ENDPOINTS.map((e) => `${e.method.toUpperCase()} ${e.path}`)
+    expect(keys).toEqual(
+      expect.arrayContaining([
+        `POST ${ENFORCEMENT_POINT_ROUTES.base}`,
+        `GET ${ENFORCEMENT_POINT_ROUTES.nearby}`,
+        `GET ${HEALTH_ROUTES.base}`,
+      ]),
+    )
   })
 })
