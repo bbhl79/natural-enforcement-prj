@@ -24,7 +24,15 @@ GEN_SET_SHA256=""
 GEN_SOURCE_FILES=""
 GEN_TXN_ACTIVE=0
 GEN_TXN_DIR=""
-GEN_TXN_NAME=""
+GEN_TXN_TARGET=""
+
+gen_target_dir() { # <kind> → packages | apps
+  case "$1" in
+    package) printf 'packages' ;;
+    app)     printf 'apps' ;;
+    *)       die 2 "内部错误：未知 kind ${1}" ;;
+  esac
+}
 
 # 生成器集合内容集哈希：容器与宿主使用同一算法（排序后的 "sha256␠␠path" 清单再 sha256）。
 # 宿主直接从 git 快照树的对象库取 blob（不经文件系统物化——macOS 的 AppleDouble/
@@ -53,16 +61,20 @@ gen_source_verify() { # <tree>
     || die 4 "生成器集合为空（${REPO_ROOT}/devenv/gen）"
 }
 
-# 宿主预检（幂等保护）：目标不存在、补丁未注入。全部在生成/写入前执行。
+# 宿主预检（幂等保护）：目标不存在、同包名未占用、补丁未注入。全部在生成/写入前执行。
 gen_host_preflight() { # <kind> <name>
-  local kind="$1" name="$2" copyline
-  case "$kind" in
-    package)
-      [[ ! -e "$REPO_ROOT/packages/$name" ]] \
-        || die 4 "目标已存在：packages/${name}/（幂等保护，未写入任何文件）。先删除该目录再重试"
-      copyline="COPY packages/${name}/package.json packages/${name}/package.json"
-      ;;
-  esac
+  local kind="$1" name="$2" dir other_dir copyline pkg_name
+  dir="$(gen_target_dir "$kind")"
+  [[ ! -e "$REPO_ROOT/$dir/$name" ]] \
+    || die 4 "目标已存在：${dir}/${name}/（幂等保护，未写入任何文件）。先删除该目录再重试"
+  other_dir="apps"
+  [[ "$dir" == "apps" ]] && other_dir="packages"
+  if [[ -f "$REPO_ROOT/$other_dir/$name/package.json" ]]; then
+    pkg_name="$(jq -r '.name // ""' "$REPO_ROOT/$other_dir/$name/package.json" 2>/dev/null || true)"
+    [[ "$pkg_name" != "@ne/$name" ]] \
+      || die 4 "包名冲突：${other_dir}/${name}/package.json 已占用 @ne/${name}（幂等保护，未写入任何文件）"
+  fi
+  copyline="COPY ${dir}/${name}/package.json ${dir}/${name}/package.json"
   if grep -qxF -- "$copyline" "$REPO_ROOT/devenv/workspace.Dockerfile" 2>/dev/null; then
     die 4 "workspace.Dockerfile 已注入过 ${name} 的 manifest COPY 行（幂等保护，未写入任何文件）"
   fi
@@ -100,7 +112,7 @@ gen_run_container() { # <workdir> <kind> <name> <tree>
   local work="$1" kind="$2" name="$3" tree="$4" rc=0
   local -a anchors=()
   case "$kind" in
-    package) anchors=("devenv/gen" "devenv/workspace.Dockerfile") ;;
+    package|app) anchors=("devenv/gen" "devenv/workspace.Dockerfile") ;;
     *) die 2 "内部错误：未知 kind ${kind}" ;;
   esac
   # 从快照树直接归档：只含 git 记录的文件，不受宿主文件系统 xattr/AppleDouble 影响
@@ -152,9 +164,11 @@ gen_stage_output() { # <workdir> <stage> <kind> <name> <tree>
     die 4 "生成物清单结构不符（未写入任何文件）：$(jq -c . "$manifest" 2>/dev/null | head -c 400)"
   fi
   # 每个新文件必须位于 kind 对应的目标目录，且哈希匹配（传输/生成完整性）
+  local dir
+  dir="$(gen_target_dir "$kind")"
   while IFS=$'\t' read -r p s; do
-    [[ "$p" == "packages/${name}/"* ]] \
-      || die 4 "生成物路径越界：${p}（package 只允许 packages/${name}/ 下；未写入任何文件）"
+    [[ "$p" == "${dir}/${name}/"* ]] \
+      || die 4 "生成物路径越界：${p}（${kind} 只允许 ${dir}/${name}/ 下；未写入任何文件）"
     [[ -f "$stage/$p" && ! -L "$stage/$p" ]] \
       || die 4 "生成物缺失或为符号链接：${p}（未写入任何文件）"
     actual="$(sha256sum "$stage/$p" | awk '{print $1}')"
@@ -181,7 +195,7 @@ gen_stage_output() { # <workdir> <stage> <kind> <name> <tree>
   # 禁止符号链接（解包后整体检查）
   [[ -z "$(find "$stage" -type l -print)" ]] || die 4 "生成物包含符号链接（拒绝；未写入任何文件）"
   # 补丁必须只是「两靶各追加一行 COPY」——不接受生成器顺带改别的行
-  local copyline="COPY packages/${name}/package.json packages/${name}/package.json"
+  local copyline="COPY ${dir}/${name}/package.json ${dir}/${name}/package.json"
   local old_file="$work/snapshot-workspace.Dockerfile" new_file="$stage/devenv/workspace.Dockerfile"
   local oldc newc
   git -C "$REPO_ROOT" cat-file blob "${tree}:devenv/workspace.Dockerfile" > "$old_file" 2>/dev/null \
@@ -195,14 +209,15 @@ gen_stage_output() { # <workdir> <stage> <kind> <name> <tree>
 }
 
 # 事务式落盘：暂存目录位于仓库内（同一文件系统），rename 原子；失败回滚。
-gen_apply_transaction() { # <stage> <txn> <name> <tree>
-  local stage="$1" txn="$2" name="$3" tree="$4"
+gen_apply_transaction() { # <stage> <txn> <kind> <name> <tree>
+  local stage="$1" txn="$2" kind="$3" name="$4" tree="$5" dir
+  dir="$(gen_target_dir "$kind")"
   local backup="$txn/backup/workspace.Dockerfile"
-  mkdir -p "$txn/backup" "$REPO_ROOT/packages"
+  mkdir -p "$txn/backup" "$REPO_ROOT/$dir"
   # 再次对活工作树做权威预检（生成期间可能被并发修改；快照一致性只覆盖输入）
-  [[ ! -e "$REPO_ROOT/packages/$name" ]] \
-    || die 4 "目标在生成期间出现：packages/${name}/（未写入任何文件）"
-  local copyline="COPY packages/${name}/package.json packages/${name}/package.json"
+  [[ ! -e "$REPO_ROOT/$dir/$name" ]] \
+    || die 4 "目标在生成期间出现：${dir}/${name}/（未写入任何文件）"
+  local copyline="COPY ${dir}/${name}/package.json ${dir}/${name}/package.json"
   ! grep -qxF -- "$copyline" "$REPO_ROOT/devenv/workspace.Dockerfile" \
     || die 4 "workspace.Dockerfile 在生成期间已被注入 ${name}（未写入任何文件）"
   # 活锚点必须仍等于本次输入快照（否则放弃，不覆盖并发修改）
@@ -213,30 +228,30 @@ gen_apply_transaction() { # <stage> <txn> <name> <tree>
   cp -p "$REPO_ROOT/devenv/workspace.Dockerfile" "$backup" || die 4 "补丁基准备份失败（未写入任何文件）"
   GEN_TXN_ACTIVE=1
   GEN_TXN_DIR="$txn"
-  GEN_TXN_NAME="$name"
-  if ! mv "$stage/packages/$name" "$REPO_ROOT/packages/$name"; then
+  GEN_TXN_TARGET="${dir}/${name}"
+  if ! mv "$stage/$dir/$name" "$REPO_ROOT/$dir/$name"; then
     GEN_TXN_ACTIVE=0
-    die 4 "新包落盘失败（未写入任何文件）"
+    die 4 "新生成目录落盘失败：${dir}/${name}（未写入任何文件）"
   fi
   if ! mv "$stage/devenv/workspace.Dockerfile" "$REPO_ROOT/devenv/workspace.Dockerfile"; then
-    rm -rf "$REPO_ROOT/packages/$name"
+    rm -rf "$REPO_ROOT/$dir/$name"
     GEN_TXN_ACTIVE=0
-    die 4 "workspace.Dockerfile 补丁落盘失败（已回滚新包，未产生部分写入）"
+    die 4 "workspace.Dockerfile 补丁落盘失败（已回滚 ${dir}/${name}，未产生部分写入）"
   fi
 }
 
 gen_txn_rollback() {
   (( GEN_TXN_ACTIVE )) || return 0
   GEN_TXN_ACTIVE=0
-  warn "gen 失败：回滚本次生成（新包目录 + workspace.Dockerfile + pnpm-lock.yaml）"
+  warn "gen 失败：回滚本次生成（${GEN_TXN_TARGET:-目标目录} + workspace.Dockerfile + pnpm-lock.yaml）"
   if [[ -n "$GEN_TXN_DIR" && -f "$GEN_TXN_DIR/backup/workspace.Dockerfile" ]]; then
     cp -p "$GEN_TXN_DIR/backup/workspace.Dockerfile" "$REPO_ROOT/devenv/workspace.Dockerfile" 2>/dev/null || true
   fi
   if [[ -n "$GEN_TXN_DIR" && -f "$GEN_TXN_DIR/pnpm-lock.old.yaml" ]]; then
     cp -p "$GEN_TXN_DIR/pnpm-lock.old.yaml" "$REPO_ROOT/pnpm-lock.yaml" 2>/dev/null || true
   fi
-  local name="${GEN_TXN_NAME:-}"
-  [[ -n "$name" ]] && rm -rf "$REPO_ROOT/packages/$name" 2>/dev/null || true
+  local target="${GEN_TXN_TARGET:-}"
+  [[ -n "$target" ]] && rm -rf "$REPO_ROOT/$target" 2>/dev/null || true
   return 0
 }
 

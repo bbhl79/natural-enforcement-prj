@@ -60,6 +60,7 @@ allowBuilds:
   prisma@7.10.1: true
 
 catalog:
+  "@types/node": "26.6.6"
   typescript: "6.0.3"
   vitest: "5.1.1"
 YAML
@@ -85,6 +86,9 @@ lockfileVersion: '9.0'
 
 catalogs:
   default:
+    '@types/node':
+      specifier: 26.6.6
+      version: 26.6.6
     typescript:
       specifier: 6.0.3
       version: 6.0.3
@@ -146,7 +150,7 @@ reset_repo() {
   git -C "$SANDBOX" clean -fdq
   rm -rf "$SANDBOX/.devenv-state" "$DEVENV_LOCK_ROOT"
   rm -f "$MOCK_NEW_LOCKFILE"
-  unset MOCK_LOCKGEN_FAIL MOCK_TAMPER_SET MOCK_OUTPUT_TRAVERSAL MOCK_EVIDENCE 2>/dev/null || true
+  unset MOCK_LOCKGEN_FAIL MOCK_TAMPER_SET MOCK_OUTPUT_TRAVERSAL MOCK_OUTPUT_CROSS_DIR MOCK_EVIDENCE 2>/dev/null || true
   export DEVENV_LOCK_TIMEOUT=""
 }
 
@@ -223,10 +227,12 @@ done | sha256sum | awk '{print $1}')"
   || { echo "mock: set hash mismatch expected=$NE_GEN_SET_SHA256 actual=$actual" >&2; exit 4; }
 
 kind="${NE_GEN_KIND:?}"; name="${NE_GEN_NAME:?}"
-[[ "$kind" == "package" ]] || { echo "mock: unsupported kind" >&2; exit 2; }
 out="$work/out"
-mkdir -p "$out/packages/$name/src" "$out/devenv"
-cat > "$out/packages/$name/package.json" <<JSON
+case "$kind" in
+  package)
+    target_root="packages"
+    mkdir -p "$out/packages/$name/src" "$out/devenv"
+    cat > "$out/packages/$name/package.json" <<JSON
 {
   "name": "@ne/$name",
   "version": "0.0.0",
@@ -245,21 +251,54 @@ cat > "$out/packages/$name/package.json" <<JSON
   }
 }
 JSON
-printf 'export const generated = 1\n' > "$out/packages/$name/src/index.ts"
-printf 'export const spec = 2\n' > "$out/packages/$name/src/index.spec.ts"
-awk -v line="COPY packages/$name/package.json packages/$name/package.json" \
+    printf 'export const generated = 1\n' > "$out/packages/$name/src/index.ts"
+    printf 'export const spec = 2\n' > "$out/packages/$name/src/index.spec.ts"
+    ;;
+  app)
+    target_root="apps"
+    mkdir -p "$out/apps/$name/src" "$out/devenv"
+    cat > "$out/apps/$name/package.json" <<JSON
+{
+  "name": "@ne/$name",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run src"
+  },
+  "devDependencies": {
+    "@ne/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
+JSON
+    printf 'export function hello(t: string): string { return t }\n' > "$out/apps/$name/src/hello.ts"
+    printf 'import { hello } from "./hello.js"\nconsole.log(hello("app"))\n' > "$out/apps/$name/src/main.ts"
+    printf 'export const spec = 2\n' > "$out/apps/$name/src/hello.spec.ts"
+    ;;
+  *)
+    echo "mock: unsupported kind $kind" >&2; exit 2
+    ;;
+esac
+awk -v line="COPY $target_root/$name/package.json $target_root/$name/package.json" \
   '{ print; if ($0 ~ /^# @gen:pkg-copy/) print line }' \
   devenv/workspace.Dockerfile > "$out/devenv/workspace.Dockerfile"
 
 manifest="$out/.ne-gen-manifest.json"
 sep=""
 {
-  printf '{"kind":"package","name":"%s","manifestVersion":1,"files":[' "$name"
+  printf '{"kind":"%s","name":"%s","manifestVersion":1,"files":[' "$kind" "$name"
   while IFS= read -r f; do
     h="$(sha256sum "$out/$f" | awk '{print $1}')"
     printf '%s{"path":"%s","sha256":"%s","mode":"644"}' "$sep" "$f" "$h"
     sep=","
-  done < <(cd "$out" && find packages -type f | LC_ALL=C sort)
+  done < <(cd "$out" && find "$target_root" -type f | LC_ALL=C sort)
   printf '],"patches":[{"path":"devenv/workspace.Dockerfile","baseSha256":"%s","sha256":"%s"}]}\n' \
     "$(sha256sum devenv/workspace.Dockerfile | awk '{print $1}')" \
     "$(sha256sum "$out/devenv/workspace.Dockerfile" | awk '{print $1}')"
@@ -268,6 +307,14 @@ sep=""
 if [[ "${MOCK_OUTPUT_TRAVERSAL:-}" == "1" ]]; then
   # 清单声明的路径越界（实际文件在包外；宿主必须在落盘前拒绝）
   jq '.files[0].path = "../evil"' "$manifest" > "$manifest.tmp" && mv "$manifest.tmp" "$manifest"
+fi
+if [[ "${MOCK_OUTPUT_CROSS_DIR:-}" == "1" ]]; then
+  # app 生成器越界写到 packages/<name>/（宿主必须按 kind 路径范围拒绝）
+  mkdir -p "$out/packages/$name"
+  printf 'x\n' > "$out/packages/$name/rogue.txt"
+  h="$(sha256sum "$out/packages/$name/rogue.txt" | awk '{print $1}')"
+  jq --arg p "packages/$name/rogue.txt" --arg h "$h" \
+    '.files += [{"path":$p,"sha256":$h,"mode":"644"}]' "$manifest" > "$manifest.tmp" && mv "$manifest.tmp" "$manifest"
 fi
 tar -cf - -C "$out" .
 EOF
@@ -283,6 +330,27 @@ make_new_lockfile() { # <name> <out>
       '@ne/tsconfig':
         specifier: workspace:*
         version: link:../tsconfig
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 5.1.1
+YAML
+}
+
+make_new_app_lockfile() { # <name> <out>
+  cp "$OUT/base-lock.yaml" "$2"
+  cat >> "$2" <<YAML
+
+  apps/$1:
+    devDependencies:
+      '@ne/tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/tsconfig
+      '@types/node':
+        specifier: 'catalog:'
+        version: 26.6.6
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
@@ -518,6 +586,114 @@ cp "$OUT/theta-lock.yaml" "$OUT/theta-bad.yaml"
 sed -i.bak 's/version: 5.1.1/version: 5.1.0/' "$OUT/theta-bad.yaml" && rm -f "$OUT/theta-bad.yaml.bak"
 gen_lockfile_diff_expected "$OUT/base-lock.yaml" "$OUT/theta-bad.yaml" packages/theta-pkg 2>/dev/null \
   && fail "T15" "非预期 diff 被判为预期" || pass "T15 其它变化判为非预期 diff"
+
+# ---------------------------------------------------------------------------
+# T16 gen app 正常路径：来源可核 + 文件通道隔离 + workspace.Dockerfile 两靶补丁 + lockfile 预期 diff
+# ---------------------------------------------------------------------------
+reset_repo
+make_new_app_lockfile worker-demo "$MOCK_NEW_LOCKFILE"
+run t16 gen_json gen app worker-demo
+expect_rc "T16 gen app 成功" 0 t16
+if jq -e . "$OUT/t16.out" >/dev/null 2>&1; then
+  pass "T16 stdout 全为可解析 JSON（tar 未混入结果流）"
+else
+  fail "T16" "stdout 非纯 JSONL：$(head -c 200 "$OUT/t16.out")"
+fi
+jq -se 'any(.[]; .event == "gen.source" and (.path | endswith("/devenv/gen")))' "$OUT/t16.out" >/dev/null \
+  && pass "T16 报告宿主来源路径" || fail "T16" "缺 gen.source 事件"
+jq -se 'any(.[]; .event == "gen.source" and (.treeHash | length == 40) and (.setHash | length == 64) and (.files | tonumber > 0))' "$OUT/t16.out" >/dev/null \
+  && pass "T16 报告生成器子树哈希 + 整集哈希 + 文件数" || fail "T16" "gen.source 字段不完整"
+jq -se 'any(.[]; .command == "gen" and .status == "ok" and .kind == "app" and .name == "worker-demo" and .importer == "apps/worker-demo" and .lockgen == "ok" and .lockfileDiff == "expected")' "$OUT/t16.out" >/dev/null \
+  && pass "T16 终值含 kind=app/name/importer/lockgen=ok/lockfileDiff=expected" || fail "T16" "终值事件缺失：$(tail -1 "$OUT/t16.out")"
+[[ -f "$SANDBOX/apps/worker-demo/package.json" && -f "$SANDBOX/apps/worker-demo/src/main.ts" && -f "$SANDBOX/apps/worker-demo/src/hello.spec.ts" ]] \
+  && pass "T16 新 app 已落盘" || fail "T16" "新 app 文件未落盘"
+[[ "$(grep -cFx 'COPY apps/worker-demo/package.json apps/worker-demo/package.json' "$SANDBOX/devenv/workspace.Dockerfile")" == "2" ]] \
+  && pass "T16 workspace.Dockerfile 两靶各追加一行 COPY" || fail "T16" "Dockerfile COPY 数量不等于 2"
+grep -q '^  apps/worker-demo:' "$SANDBOX/pnpm-lock.yaml" \
+  && pass "T16 lockfile 新增 apps/worker-demo importer" || fail "T16" "lockfile 未含新 app importer"
+
+# ---------------------------------------------------------------------------
+# T17 gen app 幂等拒绝：目标已存在 → exit 4，无部分写入
+# ---------------------------------------------------------------------------
+df_before="$(sha256sum "$SANDBOX/devenv/workspace.Dockerfile" | awk '{print $1}')"
+lf_before="$(sha256sum "$SANDBOX/pnpm-lock.yaml" | awk '{print $1}')"
+printf 'sentinel\n' > "$SANDBOX/apps/worker-demo/src/sentinel.txt"
+run t17 gen_json gen app worker-demo
+expect_rc "T17 重复 gen app 拒绝 exit 4" 4 t17
+expect_grep "T17 报告目标已存在" "目标已存在：apps/worker-demo/" t17
+[[ -f "$SANDBOX/apps/worker-demo/src/sentinel.txt" ]] \
+  && pass "T17 新 app 内容未变（无部分写入）" || fail "T17" "已有文件被改动"
+[[ "$(sha256sum "$SANDBOX/devenv/workspace.Dockerfile" | awk '{print $1}')" == "$df_before" ]] \
+  && pass "T17 Dockerfile 未变" || fail "T17" "Dockerfile 被改动"
+[[ "$(sha256sum "$SANDBOX/pnpm-lock.yaml" | awk '{print $1}')" == "$lf_before" ]] \
+  && pass "T17 lockfile 未变" || fail "T17" "lockfile 被改动"
+
+# ---------------------------------------------------------------------------
+# T18 gen app 锚点已注入拒绝：Dockerfile 已有 COPY 行 → exit 4，不创建目录
+# ---------------------------------------------------------------------------
+reset_repo
+awk '{ print; if ($0 ~ /^# @gen:pkg-copy/) print "COPY apps/ghost-app/package.json apps/ghost-app/package.json" }' \
+  "$SANDBOX/devenv/workspace.Dockerfile" > "$SANDBOX/devenv/workspace.Dockerfile.tmp"
+mv "$SANDBOX/devenv/workspace.Dockerfile.tmp" "$SANDBOX/devenv/workspace.Dockerfile"
+make_new_app_lockfile ghost-app "$MOCK_NEW_LOCKFILE"
+run t18 gen_json gen app ghost-app
+expect_rc "T18 app 补丁已注入拒绝 exit 4" 4 t18
+expect_grep "T18 报告补丁已注入" "workspace.Dockerfile 已注入过 ghost-app" t18
+[[ ! -e "$SANDBOX/apps/ghost-app" ]] \
+  && pass "T18 未创建目标 app 目录" || fail "T18" "拒绝后仍创建了 apps/ghost-app"
+
+# ---------------------------------------------------------------------------
+# T19 gen app 非预期 lockfile diff → exit 4，停止并保留现场供审查
+# ---------------------------------------------------------------------------
+reset_repo
+make_new_app_lockfile rogue-app "$MOCK_NEW_LOCKFILE"
+sed -i.bak 's/version: 5.1.1/version: 5.1.2/' "$MOCK_NEW_LOCKFILE" && rm -f "$MOCK_NEW_LOCKFILE.bak"
+run t19 gen_json gen app rogue-app
+expect_rc "T19 app 非预期 lockfile diff exit 4" 4 t19
+expect_grep "T19 报告非预期 diff 并要求审查" "非预期 lockfile diff" t19
+[[ -d "$SANDBOX/apps/rogue-app" ]] \
+  && pass "T19 生成 app 保留供审查" || fail "T19" "现场未保留"
+grep -q 'version: 5.1.2' "$SANDBOX/pnpm-lock.yaml" \
+  && pass "T19 新 lockfile 保留供审查" || fail "T19" "lockfile 未保留"
+
+# ---------------------------------------------------------------------------
+# T20 gen app lockgen 失败 → 回滚 apps/<name> / Dockerfile / lockfile
+# ---------------------------------------------------------------------------
+reset_repo
+export MOCK_LOCKGEN_FAIL=1
+run t20 gen_json gen app rollback-app
+expect_rc "T20 app lockgen 失败 exit 4" 4 t20
+[[ ! -e "$SANDBOX/apps/rollback-app" ]] \
+  && pass "T20 新 app 已回滚" || fail "T20" "apps/rollback-app 残留"
+cmp -s "$OUT/base-dockerfile" "$SANDBOX/devenv/workspace.Dockerfile" \
+  && pass "T20 Dockerfile 已回滚" || fail "T20" "Dockerfile 未回滚"
+cmp -s "$OUT/base-lock.yaml" "$SANDBOX/pnpm-lock.yaml" \
+  && pass "T20 lockfile 已回滚" || fail "T20" "lockfile 未回滚"
+
+# ---------------------------------------------------------------------------
+# T21 gen app 跨目录输出越界（输出 packages/<name>/...）→ exit 4，零写入
+# ---------------------------------------------------------------------------
+reset_repo
+export MOCK_OUTPUT_CROSS_DIR=1
+make_new_app_lockfile cross-app "$MOCK_NEW_LOCKFILE"
+run t21 gen_json gen app cross-app
+expect_rc "T21 app 跨目录越界 exit 4" 4 t21
+expect_grep "T21 报告路径越界" "生成物路径越界" t21
+[[ ! -e "$SANDBOX/apps/cross-app" && ! -e "$SANDBOX/packages/cross-app" ]] \
+  && pass "T21 未写入任何文件" || fail "T21" "越界检查后仍有文件写入"
+cmp -s "$OUT/base-dockerfile" "$SANDBOX/devenv/workspace.Dockerfile" \
+  && pass "T21 Dockerfile 未改动" || fail "T21" "Dockerfile 被改动"
+
+# ---------------------------------------------------------------------------
+# T22 gen app 跨目录包名冲突：packages/<name> 已占用 @ne/<name> → 预检即拒 exit 4
+# ---------------------------------------------------------------------------
+reset_repo
+make_new_app_lockfile contracts "$MOCK_NEW_LOCKFILE"
+run t22 gen_json gen app contracts
+expect_rc "T22 跨目录包名冲突拒绝 exit 4" 4 t22
+expect_grep "T22 报告包名冲突" "包名冲突：packages/contracts/package.json 已占用 @ne/contracts" t22
+[[ ! -e "$SANDBOX/apps/contracts" ]] \
+  && pass "T22 未创建目标 app 目录" || fail "T22" "拒绝后仍创建了 apps/contracts"
 
 # ---------------------------------------------------------------------------
 # 汇总
