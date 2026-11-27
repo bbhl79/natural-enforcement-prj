@@ -173,7 +173,7 @@ run() {
   set -e
 }
 
-expect_rc() { [[ "$RC" == "$2" ]] && pass "$1" || fail "$1" "期望退出码 $2，实际 $RC（stderr: $(tail -1 "$OUT/$3.err" 2>/dev/null)）"; }
+expect_rc() { [[ "$RC" == "$2" ]] && pass "$1" || fail "$1" "期望退出码 $2，实际 ${RC}（stderr: $(tail -1 "$OUT/$3.err" 2>/dev/null)）"; }
 sha() { printf '%s' "$1" | sha256sum | awk '{print $1}'; }
 no_gh_called() { [[ -z "$(ls -A "$MOCK_GH_LOG_DIR")" ]] && pass "$1" || fail "$1" "gh 被执行了"; }
 no_curl_called() { [[ ! -f "$MOCK_CURL_COUNTER" ]] && pass "$1" || fail "$1" "curl 被调用了"; }
@@ -350,7 +350,7 @@ git -C "$SANDBOX" remote set-url --push origin "https://github.com/bbhl79/natura
 # T14 拒绝把 URL 当 remote 参数
 reset_mocks
 run t14 "$DEVENV" git-push "https://github.com/bbhl79/natural-enforcement-prj.git" main
-[[ "$RC" != 0 ]] && pass "T14 URL 参数拒绝（rc=$RC）" || fail "T14" "URL 参数被接受"
+[[ "$RC" != 0 ]] && pass "T14 URL 参数拒绝（rc=${RC}）" || fail "T14" "URL 参数被接受"
 [[ ! -f "$MOCK_GIT_LOG" ]] && pass "T14 未执行 push" || fail "T14" "push 被执行"
 
 # T15 启动时注入的旧 token 不被沿用（每次重新换取）
@@ -421,7 +421,7 @@ echo "oops token=FAKETOKEN_LEAKED_123" > "$SANDBOX/scan-leak/b.log"
 set +e
 ev_scan_paths "FAKETOKEN_LEAKED_123" "$SANDBOX/scan-leak" >/dev/null 2>&1; rc=$?
 set -e
-[[ "$rc" == 1 ]] && pass "T20 活 token 精确值检出" || fail "T20" "rc=$rc（期望 1）"
+[[ "$rc" == 1 ]] && pass "T20 活 token 精确值检出" || fail "T20" "rc=${rc}（期望 1）"
 
 # T21 installation token 通用形态（ghs_ 前缀）检出；字面量拼接构造，本文件不含可命中串
 fake_tok="gh""s_$(printf 'F%.0s' {1..30})"
@@ -429,7 +429,7 @@ echo "leaked: $fake_tok" > "$SANDBOX/scan-leak/c.log"
 set +e
 ev_scan_paths "-" "$SANDBOX/scan-leak" >/dev/null 2>&1; rc=$?
 set -e
-[[ "$rc" == 1 ]] && pass "T21 ghs_ 形态检出" || fail "T21" "rc=$rc（期望 1）"
+[[ "$rc" == 1 ]] && pass "T21 ghs_ 形态检出" || fail "T21" "rc=${rc}（期望 1）"
 grep -q "LEAK: installation token" "$SANDBOX/evidence/evidence.log" \
   && pass "T21 命中写入证据日志" || fail "T21" "证据日志缺命中记录"
 
@@ -438,13 +438,13 @@ echo "-----BEGIN RSA PRIVATE"" KEY-----" > "$SANDBOX/scan-leak/d.pem"
 set +e
 ev_scan_paths "-" "$SANDBOX/scan-leak" >/dev/null 2>&1; rc=$?
 set -e
-[[ "$rc" == 1 ]] && pass "T22 PEM 标记检出" || fail "T22" "rc=$rc（期望 1）"
+[[ "$rc" == 1 ]] && pass "T22 PEM 标记检出" || fail "T22" "rc=${rc}（期望 1）"
 
 # T23 干净目录通过；活 token 不在其中也通过
 set +e
 ev_scan_paths "FAKETOKEN_LEAKED_123" "$SANDBOX/scan-clean" >/dev/null 2>&1; rc=$?
 set -e
-[[ "$rc" == 0 ]] && pass "T23 干净目录扫描通过" || fail "T23" "rc=$rc（期望 0）"
+[[ "$rc" == 0 ]] && pass "T23 干净目录扫描通过" || fail "T23" "rc=${rc}（期望 0）"
 
 # T24 ev_ancestry：进程链写入证据日志（验收项 j 的会话宿主证据）
 ev_ancestry >/dev/null 2>&1
@@ -456,7 +456,7 @@ grep -q 'ancestry (from pid' "$SANDBOX/evidence/evidence.log" \
 set +e
 ev_scan_paths "-" "$SANDBOX/no-such-dir" >/dev/null 2>&1; rc=$?
 set -e
-[[ "$rc" == 2 ]] && pass "T25 缺失路径扫描失败（rc=2，fail-closed）" || fail "T25" "rc=$rc（期望 2）"
+[[ "$rc" == 2 ]] && pass "T25 缺失路径扫描失败（rc=2，fail-closed）" || fail "T25" "rc=${rc}（期望 2）"
 grep -q 'SCAN-ERROR' "$SANDBOX/evidence/evidence.log" \
   && pass "T25 扫描失败写入 SCAN-ERROR" || fail "T25" "缺 SCAN-ERROR 记录"
 
@@ -466,7 +466,7 @@ set +e
 ev_scan_paths "-" "$SANDBOX/scan-noperm" >/dev/null 2>&1; rc=$?
 set -e
 chmod 755 "$SANDBOX/scan-noperm"
-[[ "$rc" == 2 ]] && pass "T26 不可读目录扫描失败（rc=2，fail-closed）" || fail "T26" "rc=$rc（期望 2）"
+[[ "$rc" == 2 ]] && pass "T26 不可读目录扫描失败（rc=2，fail-closed）" || fail "T26" "rc=${rc}（期望 2）"
 
 # T27 ev_run 以 %q 记录命令：含空格参数边界可还原
 set +e

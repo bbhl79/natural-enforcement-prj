@@ -47,7 +47,7 @@ gha_load_config() {
   command -v jq >/dev/null 2>&1 || { gha_die 20 "缺少 jq"; return; }
   command -v openssl >/dev/null 2>&1 || { gha_die 20 "缺少 openssl"; return; }
   [[ -f "$decl" ]] || { gha_die 20 "仓库身份声明缺失：$decl"; return; }
-  [[ -f "$authz" ]] || { gha_die 20 "本机授权文件缺失：$authz（仓库外配置，见 docs/agents/github-app-auth.md）"; return; }
+  [[ -f "$authz" ]] || { gha_die 20 "本机授权文件缺失：${authz}（仓库外配置，见 docs/agents/github-app-auth.md）"; return; }
 
   local d_app_id d_slug a_app_id a_slug a_key
   d_app_id=$(jq -r '.app_id // empty' "$decl")
@@ -148,7 +148,7 @@ gha_cmd_gh() {
     prev="$a"
   done
   if [[ -n "$repo_arg" && "$repo_arg" != "$GHA_REPO" ]]; then
-    gha_die 23 "拒绝操作未授权仓库：$repo_arg（允许：$GHA_REPO）"; return
+    gha_die 23 "拒绝操作未授权仓库：${repo_arg}（允许：${GHA_REPO}）"; return
   fi
 
   local token
@@ -174,18 +174,18 @@ gha_cmd_git_push() {
   # 只接受 https://github.com/ 形式；SSH 形式一律拒绝，避免回退个人 SSH 密钥。
   local url target
   url=$(git -C "$REPO_ROOT" remote get-url --push "$remote" 2>/dev/null) || {
-    gha_die 23 "remote 不存在或不可读：$remote（本入口只接受已配置的 remote 名，不接受 URL）"; return; }
+    gha_die 23 "remote 不存在或不可读：${remote}（本入口只接受已配置的 remote 名，不接受 URL）"; return; }
   case "$url" in
     https://github.com/*) ;;
     git@github.com:*|ssh://*)
-      gha_die 23 "push URL 为 SSH 形式（$url，含 insteadOf/pushInsteadOf 改写后结果），本入口只允许 HTTPS，拒绝回退个人 SSH 密钥；请改用 HTTPS remote"; return ;;
+      gha_die 23 "push URL 为 SSH 形式（${url}，含 insteadOf/pushInsteadOf 改写后结果），本入口只允许 HTTPS，拒绝回退个人 SSH 密钥；请改用 HTTPS remote"; return ;;
     *)
       gha_die 23 "push URL 非 https://github.com 形式：$url"; return ;;
   esac
   target=$(gha_normalize_repo "$url") || {
     gha_die 23 "push URL 无法解析为 github.com 仓库：$url"; return; }
   [[ "$target" == "$GHA_REPO" ]] || {
-    gha_die 23 "push 目标 $target 未授权（允许：$GHA_REPO）"; return; }
+    gha_die 23 "push 目标 $target 未授权（允许：${GHA_REPO}）"; return; }
 
   local token
   token=$(gha_mint_token) || return

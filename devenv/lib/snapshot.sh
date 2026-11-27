@@ -30,7 +30,7 @@ snapshot_tree_once() { # 单次树计算：打印当前工作树的 git 树哈�
     tree="$(GIT_INDEX_FILE="$tmp_index" git -C "$REPO_ROOT" write-tree)" || rc=$?
   fi
   rm -f "$tmp_index"
-  (( rc == 0 )) || die 4 "快照采集失败（git add -A / write-tree 退出码 $rc）"
+  (( rc == 0 )) || die 4 "快照采集失败（git add -A / write-tree 退出码 ${rc}）"
   printf '%s\n' "$tree"
 }
 
@@ -84,7 +84,7 @@ snapshot_capture_once() { # 一致 → 打印树哈希 rc 0；窗口内写入/�
   git -C "$REPO_ROOT" ls-files -c -o --exclude-standard -z > "$list_tmp" || rc=$?
   if (( rc != 0 )); then
     rm -f "$list_tmp"
-    die 4 "快照采集失败（git ls-files 枚举退出码 $rc——非 git 仓库或索引损坏）"
+    die 4 "快照采集失败（git ls-files 枚举退出码 ${rc}——非 git 仓库或索引损坏）"
   fi
   local -a files=()
   local f
@@ -127,22 +127,22 @@ snapshot_capture_once() { # 一致 → 打印树哈希 rc 0；窗口内写入/�
   fi
   rc=0
   m1="$(GIT_INDEX_FILE="$idx" git -C "$REPO_ROOT" ls-files -s)" || rc=$?
-  if (( rc != 0 )); then rm -f "$idx"; die 4 "快照采集失败（读取索引清单退出码 $rc）"; fi
+  if (( rc != 0 )); then rm -f "$idx"; die 4 "快照采集失败（读取索引清单退出码 ${rc}）"; fi
 
   # 第二遍全量重读（内容双读：抓 mtime 恢复型等长覆写——stat 盲区）
   rc=0
   GIT_INDEX_FILE="$idx" git -C "$REPO_ROOT" read-tree --empty || rc=$?
-  if (( rc != 0 )); then rm -f "$idx"; die 4 "快照采集失败（索引重置退出码 $rc）"; fi
+  if (( rc != 0 )); then rm -f "$idx"; die 4 "快照采集失败（索引重置退出码 ${rc}）"; fi
   rc=0
   GIT_INDEX_FILE="$idx" git -C "$REPO_ROOT" add -A || rc=$?
   if (( rc != 0 )); then rm -f "$idx"; return 1; fi
   rc=0
   m2="$(GIT_INDEX_FILE="$idx" git -C "$REPO_ROOT" ls-files -s)" || rc=$?
-  if (( rc != 0 )); then rm -f "$idx"; die 4 "快照采集失败（读取索引清单退出码 $rc）"; fi
+  if (( rc != 0 )); then rm -f "$idx"; die 4 "快照采集失败（读取索引清单退出码 ${rc}）"; fi
   rc=0
   tree="$(GIT_INDEX_FILE="$idx" git -C "$REPO_ROOT" write-tree)" || rc=$?
   rm -f "$idx"
-  (( rc == 0 )) || die 4 "快照采集失败（write-tree 退出码 $rc）"
+  (( rc == 0 )) || die 4 "快照采集失败（write-tree 退出码 ${rc}）"
 
   # 端点 stat 括号 + 文件清单复核
   rc=0
@@ -153,7 +153,7 @@ snapshot_capture_once() { # 一致 → 打印树哈希 rc 0；窗口内写入/�
   fi
   rc=0
   list_sha2="$(git -C "$REPO_ROOT" ls-files -c -o --exclude-standard -z | sha256sum | awk '{print $1}')" || rc=$?
-  (( rc == 0 )) || die 4 "快照采集失败（git ls-files 复核退出码 $rc）"
+  (( rc == 0 )) || die 4 "快照采集失败（git ls-files 复核退出码 ${rc}）"
 
   if [[ "$m1" != "$m2" || "$stats1" != "$stats2" || "$list_sha1" != "$list_sha2" ]]; then
     return 1

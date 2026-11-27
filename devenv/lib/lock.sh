@@ -216,7 +216,7 @@ lock_acquire() {
   while true; do
     if ! _lock_gate_try "$gate"; then
       if (( waited >= timeout )); then
-        die 6 "独占锁 [$name] 等待锁门超时（${timeout}s）。锁门目录：$gate。修复：确认持有进程已死后重跑（失效锁自动清理）"
+        die 6 "独占锁 [$name] 等待锁门超时（${timeout}s）。锁门目录：${gate}。修复：确认持有进程已死后重跑（失效锁自动清理）"
       fi
       sleep 1; waited=$((waited + 1)); continue
     fi
@@ -229,7 +229,7 @@ lock_acquire() {
       holder="$(cat "$dir/owner" 2>/dev/null || true)"
       _lock_gate_release "$gate"
       if (( waited >= timeout )); then
-        die 6 "独占锁 [$name] 被占用（持有者 pid/启动时间：${holder:-未知}），等待 ${timeout}s 超时。锁目录：$dir。修复：等待持有者结束，或确认其已死后重跑（失效锁自动清理）"
+        die 6 "独占锁 [$name] 被占用（持有者 pid/启动时间：${holder:-未知}），等待 ${timeout}s 超时。锁目录：${dir}。修复：等待持有者结束，或确认其已死后重跑（失效锁自动清理）"
       fi
       sleep 1; waited=$((waited + 1)); continue
     fi
@@ -260,7 +260,7 @@ lock_acquire() {
     fi
     _lock_gate_release "$gate"
     if (( waited >= timeout )); then
-      die 6 "独占锁 [$name] 取得失败（并发竞态），等待 ${timeout}s 超时。锁目录：$dir。修复：重跑命令（本次未产生半状态）"
+      die 6 "独占锁 [$name] 取得失败（并发竞态），等待 ${timeout}s 超时。锁目录：${dir}。修复：重跑命令（本次未产生半状态）"
     fi
     sleep 1; waited=$((waited + 1))
   done
@@ -283,7 +283,7 @@ lease_acquire() {
   while true; do
     if ! _lock_gate_try "$gate"; then
       if (( waited >= timeout )); then
-        die 6 "共享租约 [$name] 等待锁门超时（${timeout}s）。锁门目录：$gate。修复：确认持有进程已死后重跑（失效锁自动清理）"
+        die 6 "共享租约 [$name] 等待锁门超时（${timeout}s）。锁门目录：${gate}。修复：确认持有进程已死后重跑（失效锁自动清理）"
       fi
       sleep 1; waited=$((waited + 1)); continue
     fi
@@ -320,7 +320,7 @@ lease_acquire() {
     fi
     _lock_gate_release "$gate"
     if (( waited >= timeout )); then
-      die 6 "共享租约 [$name] 创建持有者槽失败（并发竞态），等待 ${timeout}s 超时。租约目录：$base。修复：重跑命令（本次未产生半状态）"
+      die 6 "共享租约 [$name] 创建持有者槽失败（并发竞态），等待 ${timeout}s 超时。租约目录：${base}。修复：重跑命令（本次未产生半状态）"
     fi
     sleep 1; waited=$((waited + 1))
   done

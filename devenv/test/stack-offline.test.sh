@@ -77,7 +77,7 @@ run() { # run <name> <cmd...>；记录 RC 与输出
   set -e
 }
 
-expect_rc() { [[ "$RC" == "$2" ]] && pass "$1" || fail "$1" "期望退出码 $2，实际 $RC（stderr: $(tail -1 "$OUT/$3.err" 2>/dev/null)）"; }
+expect_rc() { [[ "$RC" == "$2" ]] && pass "$1" || fail "$1" "期望退出码 $2，实际 ${RC}（stderr: $(tail -1 "$OUT/$3.err" 2>/dev/null)）"; }
 
 setup
 trap 'rm -rf "$SANDBOX"' EXIT
@@ -207,7 +207,7 @@ set +e
 rc=$?
 set -e
 kill "$SLEEP_PID" 2>/dev/null; wait "$SLEEP_PID" 2>/dev/null || true
-[[ "$rc" == 6 ]] && pass "T15 存活持有者锁不被误清（exit 6）" || fail "T15" "rc=$rc（期望 6）"
+[[ "$rc" == 6 ]] && pass "T15 存活持有者锁不被误清（exit 6）" || fail "T15" "rc=${rc}（期望 6）"
 [[ -d "$SANDBOX/locks/live.lock" ]] && pass "T15 锁目录仍在（未误清）" || fail "T15" "锁目录被误清"
 rm -rf "$SANDBOX/locks/live.lock"
 
@@ -286,7 +286,7 @@ set +e
 ( lock_acquire live-lease 2 ) 2>/dev/null
 rc=$?
 set -e
-[[ "$rc" == 6 ]] && pass "T20 存活租约不被误清（排他锁 exit 6）" || fail "T20" "rc=$rc（期望 6）"
+[[ "$rc" == 6 ]] && pass "T20 存活租约不被误清（排他锁 exit 6）" || fail "T20" "rc=${rc}（期望 6）"
 [[ -d "$DEVENV_LOCK_ROOT/live-lease.lease/$LEASE_HOLDER.0" ]] \
   && pass "T20 存活租约槽仍在" || fail "T20" "租约槽被误清"
 kill -9 "$LEASE_HOLDER" 2>/dev/null; wait "$LEASE_HOLDER" 2>/dev/null || true
@@ -303,7 +303,7 @@ set +e
 ( lock_acquire killed 2 ) 2>/dev/null
 rc=$?
 set -e
-[[ "$rc" == 6 ]] && pass "T21 kill 前排他锁互斥（exit 6）" || fail "T21" "rc=$rc（期望 6）"
+[[ "$rc" == 6 ]] && pass "T21 kill 前排他锁互斥（exit 6）" || fail "T21" "rc=${rc}（期望 6）"
 kill -9 "$LOCK_HOLDER" 2>/dev/null; wait "$LOCK_HOLDER" 2>/dev/null || true
 ( trap 'lock_release_all' EXIT; lock_acquire killed 3 ) \
   && pass "T21 kill 持锁进程后失效锁被清理、后续可取得" \
@@ -331,7 +331,7 @@ rc=$?
 set -e
 wait "$EMPTY_WRITER" 2>/dev/null || true
 [[ "$rc" == 6 ]] && pass "T23 空 owner 宽限后识别活锁（exit 6）" \
-  || fail "T23" "rc=$rc（期望 6；空 owner 被误判失效）"
+  || fail "T23" "rc=${rc}（期望 6；空 owner 被误判失效）"
 [[ -d "$DEVENV_LOCK_ROOT/empty.lock" ]] && pass "T23 活锁未被误删" || fail "T23" "活锁目录被误删"
 rm -rf "$DEVENV_LOCK_ROOT/empty.lock"
 

@@ -99,7 +99,7 @@ engine_resolve() {
 engine_probe() {
   local vjson
   if ! vjson="$(docker version --format '{{json .}}' 2>/dev/null)"; then
-    ENGINE_ERROR="引擎端点连接失败：$ENGINE_ENDPOINT（来源：$ENGINE_SOURCE）。修复：确认引擎已启动，或显式设置 DEVENV_DOCKER_HOST 指向可用端点"
+    ENGINE_ERROR="引擎端点连接失败：${ENGINE_ENDPOINT}（来源：${ENGINE_SOURCE}）。修复：确认引擎已启动，或显式设置 DEVENV_DOCKER_HOST 指向可用端点"
     return 1
   fi
   ENGINE_VERSION="$(printf '%s' "$vjson" | jq -r '.Server.Version // empty')"
@@ -130,14 +130,14 @@ engine_check_matrix() {
       ENGINE_ERROR="引擎不在支持矩阵内：Docker Engine（moby）在非 CI 上下文未验证、不声称支持（CI 托管上下文除外）。开发机请使用 Podman Engine（见 Spec-工程基座 支持环境矩阵）"
       return 1 ;;
     *)
-      ENGINE_ERROR="引擎不在支持矩阵内：身份未识别（version=$ENGINE_VERSION）。支持：Podman Engine（开发机）/ Docker Engine（CI）"
+      ENGINE_ERROR="引擎不在支持矩阵内：身份未识别（version=${ENGINE_VERSION}）。支持：Podman Engine（开发机）/ Docker Engine（CI）"
       return 1 ;;
   esac
 }
 
 # 报告实际端点 + 引擎身份/版本/架构（stderr 人类行 + --json 时 JSONL 事件）。
 engine_report() {
-  note "engine: $ENGINE_IDENTITY $ENGINE_VERSION ($ENGINE_OS/$ENGINE_ARCH) @ $ENGINE_ENDPOINT（来源：$ENGINE_SOURCE）"
+  note "engine: $ENGINE_IDENTITY $ENGINE_VERSION ($ENGINE_OS/$ENGINE_ARCH) @ ${ENGINE_ENDPOINT}（来源：${ENGINE_SOURCE}）"
   ev engine identity="$ENGINE_IDENTITY" version="$ENGINE_VERSION" os="$ENGINE_OS" arch="$ENGINE_ARCH" endpoint="$ENGINE_ENDPOINT" source="$ENGINE_SOURCE"
 }
 

@@ -76,7 +76,7 @@ db_credentials_ensure() {
   f="$dir/db-credentials.env"
   if [[ -f "$f" ]]; then
     pw="$(awk -F= '/^DB_PASSWORD=/{print $2}' "$f" | tail -1)"
-    [[ "$pw" =~ ^[0-9a-f]{32}$ ]] || die 3 "数据库凭据文件损坏（DB_PASSWORD 应为 32 hex）：$f。修复：删除该文件后重跑（将生成新口令；旧数据卷若已按旧口令初始化，需 devenv down --volumes 重建）"
+    [[ "$pw" =~ ^[0-9a-f]{32}$ ]] || die 3 "数据库凭据文件损坏（DB_PASSWORD 应为 32 hex）：${f}。修复：删除该文件后重跑（将生成新口令；旧数据卷若已按旧口令初始化，需 devenv down --volumes 重建）"
     DB_PASSWORD_EFFECTIVE="$pw"
     DB_CREDENTIALS_ORIGIN="stored"
   else
@@ -95,7 +95,7 @@ db_credentials_ensure() {
 }
 
 require_lock_file() {
-  [[ -f "$IMAGES_LOCK" ]] || die 3 "镜像锁文件缺失：$IMAGES_LOCK（devenv/images.lock 是版本唯一事实源）"
+  [[ -f "$IMAGES_LOCK" ]] || die 3 "镜像锁文件缺失：${IMAGES_LOCK}（devenv/images.lock 是版本唯一事实源）"
 }
 
 # 加载镜像锁并计算生效 DB 镜像（DEVENV_DB_IMAGE 覆盖优先，来源必须可报告）。
@@ -109,10 +109,10 @@ images_load() {
   if [[ -n "${DEVENV_DB_IMAGE:-}" ]]; then
     # 可配置输入校验：repo:tag 或 repo:tag@sha256:<64hex>（拒绝裸 latest 以外的无标签引用）
     if [[ ! "$DEVENV_DB_IMAGE" =~ ^[a-z0-9]+([._/-][a-z0-9]+)*:[A-Za-z0-9._-]+(@sha256:[0-9a-f]{64})?$ ]]; then
-      die 2 "DEVENV_DB_IMAGE 格式非法：$DEVENV_DB_IMAGE（期望 repo:tag 或 repo:tag@sha256:<64hex>）"
+      die 2 "DEVENV_DB_IMAGE 格式非法：${DEVENV_DB_IMAGE}（期望 repo:tag 或 repo:tag@sha256:<64hex>）"
     fi
     DB_IMAGE_EFFECTIVE="$DEVENV_DB_IMAGE"
-    DB_IMAGE_SOURCE="DEVENV_DB_IMAGE（显式覆盖，锁定值：$DB_IMAGE）"
+    DB_IMAGE_SOURCE="DEVENV_DB_IMAGE（显式覆盖，锁定值：${DB_IMAGE}）"
   else
     DB_IMAGE_EFFECTIVE="$DB_IMAGE"
     DB_IMAGE_SOURCE="images.lock"
@@ -153,7 +153,7 @@ run_step() { # run_step <步骤描述> <cmd...>
   "$@" >&2 || rc=$?
   if (( rc )); then
     final failed 4 step="$desc" taskRc="$rc"
-    die 4 "$desc 失败（退出码 $rc，完整输出见上方 stderr）"
+    die 4 "$desc 失败（退出码 ${rc}，完整输出见上方 stderr）"
   fi
 }
 
@@ -164,7 +164,7 @@ run_step_out() { # run_step_out <步骤描述> <cmd...>：同 run_step，stdout 
   RUN_STEP_OUT="$("$@")" || rc=$?
   if (( rc )); then
     final failed 4 step="$desc" taskRc="$rc"
-    die 4 "$desc 失败（退出码 $rc，完整输出见上方 stderr）"
+    die 4 "$desc 失败（退出码 ${rc}，完整输出见上方 stderr）"
   fi
 }
 
@@ -200,7 +200,7 @@ tools_input_hash() { # <tree>
 # "镜像 tag per-worktree" 在采纳路径落空。失败显式报错（exit 4），不静默跳过。
 register_local_image_tag() { # <imageId> <tag>
   local id="$1" tag="$2"
-  [[ "$id" =~ ^sha256:[0-9a-f]{64}$ ]] || die 4 "内部错误：登记本地 tag 的 image ID 非法（id=$id tag=$tag）"
+  [[ "$id" =~ ^sha256:[0-9a-f]{64}$ ]] || die 4 "内部错误：登记本地 tag 的 image ID 非法（id=$id tag=${tag}）"
   run_step "登记 per-worktree 镜像 tag（$tag → ${id:0:19}…）" docker tag "$id" "$tag"
 }
 
@@ -232,7 +232,7 @@ ensure_tools_image() { # <tree>
   [[ "$img_id" == sha256:* ]] || img_id="sha256:$img_id"  # podman 兼容层 -q 输出无前缀 64hex，归一
   if [[ ! "$img_id" =~ ^sha256:[0-9a-f]{64}$ ]]; then
     snapshot_discard "$dir"
-    die 4 "tools 镜像构建未返回不可变标识（输出：$img_id）"
+    die 4 "tools 镜像构建未返回不可变标识（输出：${img_id}）"
   fi
   TOOLS_IMAGE_EFFECTIVE="$img_id"
   snapshot_state_write_tools "$h" "$img_id"
@@ -269,7 +269,7 @@ build_workspace_from_snapshot() { # <tree> [已物化目录]
   [[ "$img_id" == sha256:* ]] || img_id="sha256:$img_id"
   if [[ ! "$img_id" =~ ^sha256:[0-9a-f]{64}$ ]]; then
     (( own_dir )) && snapshot_discard "$dir"
-    die 4 "workspace 镜像构建未返回不可变标识（输出：$img_id）"
+    die 4 "workspace 镜像构建未返回不可变标识（输出：${img_id}）"
   fi
   snapshot_state_write "$s" "$img_id"
   WS_IMAGE_EFFECTIVE="$img_id"
@@ -312,7 +312,7 @@ svc_container_id() { # <svc> [--all]
   local -a extra=()
   [[ "${2:-}" == "--all" ]] && extra=(-a)
   local c
-  c="$(docker ps "${extra[@]}" --filter "label=com.docker.compose.project=$PROJECT_NAME" \
+  c="$(docker ps ${extra[@]+"${extra[@]}"} --filter "label=com.docker.compose.project=$PROJECT_NAME" \
       --filter "label=com.docker.compose.service=$svc" --format '{{.ID}}')"
   printf '%s' "${c%%$'\n'*}"
 }
@@ -325,7 +325,7 @@ verify_svc_image() { # $1=svc
   [[ -n "$c" ]] || die 4 "启动核对失败：服务 [$svc] 无运行中容器"
   img="$(docker inspect "$c" --format '{{.Image}}')"
   if [[ "$img" != "$WS_IMAGE_EFFECTIVE" ]]; then
-    die 4 "启动核对失败：[$svc] 运行镜像 $img ≠ 本次构建产物 $WS_IMAGE_EFFECTIVE（不可变绑定被破坏。排查：devenv build 后重试 devenv up）"
+    die 4 "启动核对失败：[$svc] 运行镜像 $img ≠ 本次构建产物 ${WS_IMAGE_EFFECTIVE}（不可变绑定被破坏。排查：devenv build 后重试 devenv up）"
   fi
   ev image.verified service="$svc" imageId="$img"
 }
@@ -364,7 +364,7 @@ web_bind_failure_diagnose() { # <显式端口，空=自动>；确认占用时 di
   holders="$(docker ps --format '{{.Names}} (project={{.Label "com.docker.compose.project"}}) {{.Ports}}' 2>/dev/null \
     | grep -F ":$port->" || true)"
   if [[ -n "$holders" ]]; then
-    die 3 "服务 [web] 绑定失败：宿主端口 $port 已被容器占用。占用者：$holders。修复：占用者是本 worktree 残留 → devenv web --down 后重试；属其它 worktree → 省略 --port 让引擎自动分配（devenv web），或换 devenv web --port <其它端口>"
+    die 3 "服务 [web] 绑定失败：宿主端口 $port 已被容器占用。占用者：${holders}。修复：占用者是本 worktree 残留 → devenv web --down 后重试；属其它 worktree → 省略 --port 让引擎自动分配（devenv web），或换 devenv web --port <其它端口>"
   fi
   if port_in_use "$port"; then
     die 3 "服务 [web] 绑定失败：宿主端口 $port 被非容器进程占用（无容器发布该端口，但 127.0.0.1:$port 可连接）。修复：省略 --port 让引擎自动分配（devenv web），或 devenv web --port <空闲端口>"
