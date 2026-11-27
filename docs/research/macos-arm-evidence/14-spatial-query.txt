@@ -1,0 +1,29 @@
+date: 2026-11-27T03:01:44Z
+command: ./devenv/devenv exec db -- sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -h 127.0.0.1 -U ne -d natural_enforcement_dev -c ...'
+note: TCP + in-container password; kartoza uses peer auth on the unix socket (runbook command needs -h 127.0.0.1)
+
+=== row count (seeded table) ===
+[devenv] engine: podman 6.1.4 (linux/arm64) @ unix:///Users/hulei815/.local/share/containers/podman/machine/podman.sock（来源：DEVENV_DOCKER_HOST（显式覆盖））
+ count 
+-------
+     5
+(1 row)
+
+=== EXPLAIN (ANALYZE) ST_DWithin + KNN ===
+[devenv] engine: podman 6.1.4 (linux/arm64) @ unix:///Users/hulei815/.local/share/containers/podman/machine/podman.sock（来源：DEVENV_DOCKER_HOST（显式覆盖））
+                                                                          QUERY PLAN                                                                           
+---------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=0.26..27.02 rows=1 width=12) (actual time=4.614..4.615 rows=1.00 loops=1)
+   Buffers: shared hit=378 read=36
+   ->  Index Scan using "EnforcementPoint_location_idx" on "EnforcementPoint"  (cost=0.26..27.02 rows=1 width=12) (actual time=4.613..4.613 rows=1.00 loops=1)
+         Index Cond: (location && _st_expand('0101000020E6100000FE43FAEDEB505C40E2E995B20C213740'::geography, '2000'::double precision))
+         Order By: (location <-> '0101000020E6100000FE43FAEDEB505C40E2E995B20C213740'::geography)
+         Filter: st_dwithin(location, '0101000020E6100000FE43FAEDEB505C40E2E995B20C213740'::geography, '2000'::double precision, true)
+         Index Searches: 1
+         Buffers: shared hit=378 read=36
+ Planning:
+   Buffers: shared hit=190 read=16
+ Planning Time: 7.253 ms
+ Execution Time: 4.646 ms
+(12 rows)
+

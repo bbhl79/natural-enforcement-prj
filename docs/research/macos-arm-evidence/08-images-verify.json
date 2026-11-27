@@ -1,0 +1,2 @@
+{"event":"engine","identity":"podman","version":"6.1.4","os":"linux","arch":"arm64","endpoint":"unix:///Users/hulei815/.local/share/containers/podman/machine/podman.sock","source":"DEVENV_DOCKER_HOST（显式覆盖）"}
+{"service":"db","result":"ok","digest":"sha256:5fa6f8e228a7496d544df3ab580cad9df1686b1f47d02c97f02056ecdc744739"}

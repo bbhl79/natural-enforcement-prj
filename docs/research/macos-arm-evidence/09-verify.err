@@ -1,0 +1,62 @@
+[devenv] engine: podman 6.1.4 (linux/arm64) @ unix:///Users/hulei815/.local/share/containers/podman/machine/podman.sock（来源：DEVENV_DOCKER_HOST（显式覆盖））
+DEPRECATED: The legacy builder is deprecated and will be removed in a future release.
+            Install the buildx component to build images with BuildKit:
+            https://docs.docker.com/go/buildx/
+
+ Container natural-enforcement-7c25da02-tools-run-f60afe0a0340 Creating 
+ Container natural-enforcement-7c25da02-tools-run-f60afe0a0340 Created 
+ Container natural-enforcement-7c25da02-tools-run-38176ecad23a Creating 
+ Container natural-enforcement-7c25da02-tools-run-38176ecad23a Created 
+Scope: 4 of 5 workspace projects
+packages/contracts typecheck$ tsc -p tsconfig.json --noEmit
+packages/contracts typecheck: Done
+apps/api typecheck$ tsc -p tsconfig.json --noEmit
+apps/web typecheck$ tsc -p tsconfig.json --noEmit
+apps/api typecheck: Done
+apps/web typecheck: Done
+ Container natural-enforcement-7c25da02-tools-run-c92a39f52492 Creating 
+ Container natural-enforcement-7c25da02-tools-run-c92a39f52492 Created 
+Scope: 4 of 5 workspace projects
+packages/contracts test:unit$ vitest run src
+packages/contracts test:unit: 
+packages/contracts test:unit:  RUN  v5.1.1 /workspace/packages/contracts
+packages/contracts test:unit: 
+packages/contracts test:unit:  ✓ src/contracts.spec.ts (10 tests) 99ms
+packages/contracts test:unit: 
+packages/contracts test:unit:  Test Files  1 passed (1)
+packages/contracts test:unit:       Tests  10 passed (10)
+packages/contracts test:unit:    Start at  02:56:01
+packages/contracts test:unit:    Duration  2.05s (import 48%, transform 35%, tests 12%, worker 4%)
+packages/contracts test:unit: 
+packages/contracts test:unit: Done
+apps/web test:unit$ vitest run
+apps/api test:unit$ vitest run src
+apps/api test:unit: 
+apps/api test:unit:  RUN  v5.1.1 /workspace/apps/api
+apps/api test:unit: 
+apps/web test:unit: 
+apps/web test:unit:  RUN  v5.1.1 /workspace/apps/web
+apps/web test:unit: 
+apps/api test:unit:  ✓ src/util/geo.spec.ts (3 tests) 37ms
+apps/api test:unit: 
+apps/api test:unit:  Test Files  1 passed (1)
+apps/api test:unit:       Tests  3 passed (3)
+apps/api test:unit:    Start at  02:56:06
+apps/api test:unit:    Duration  1.99s (transform 63%, import 21%, worker 9%, tests 8%)
+apps/api test:unit: 
+apps/api test:unit: Done
+apps/web test:unit:  ✓ test/format.spec.ts (3 tests) 29ms
+apps/web test:unit:  ✓ test/api-contract.spec.ts (4 tests) 76ms
+apps/web test:unit:  ✓ test/validate.spec.ts (2 tests) 49ms
+apps/web test:unit:  ✓ test/nearby-table.spec.tsx (2 tests) 2699ms
+apps/web test:unit:    ✓ NearbyTable（纯展示组件） (2)
+apps/web test:unit:      ✓ 渲染点位名称与格式化距离 2102ms
+apps/web test:unit:      ✓ 无距离数据（异常态）渲染占位符 586ms
+apps/web test:unit: 
+apps/web test:unit:  Test Files  4 passed (4)
+apps/web test:unit:       Tests  11 passed (11)
+apps/web test:unit:    Start at  02:56:06
+apps/web test:unit:    Duration  13.57s (environment 51%, import 22%, tests 11%, setup 10%, transform 5%)
+apps/web test:unit: 
+apps/web test:unit: Done
+[devenv] verify 全绿（lint + typecheck + test:unit）

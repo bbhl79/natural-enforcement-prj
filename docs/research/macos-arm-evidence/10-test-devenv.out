@@ -1,0 +1,200 @@
+沙箱：/tmp/devenv-stack-offline.2pESRE
+PASS: T1 覆盖后端点可用 doctor 通过
+PASS: T1 报告覆盖关系
+PASS: T1 使用覆盖端点
+PASS: T2 DOCKER_HOST 生效 doctor 通过
+PASS: T2 报告环境变量来源
+PASS: T3 端点连接失败 exit 3
+PASS: T3 报告失败端点
+PASS: T3 未偷换下一个候选
+PASS: T4 moby 非 CI 拒绝 exit 3
+PASS: T4 报告矩阵拒绝
+PASS: T5 moby + CI 通过
+PASS: T6 未识别引擎 exit 3
+PASS: T7 podman doctor --json 通过
+PASS: T7 JSON 可解析且引擎检查 ok
+PASS: T7 JSONL 含 engine 事件（身份/版本/架构/端点）
+PASS: T8 进度不混入结果流
+PASS: T8 进度走 stderr
+PASS: T9 未知子命令 exit 2
+PASS: T10 锁文件缺失 exit 3
+PASS: T11 DB 镜像覆盖 doctor 通过
+PASS: T11 报告 DB 镜像覆盖来源
+PASS: T12 DB 镜像覆盖格式非法 exit 2
+PASS: T13 持锁期间第二个取得 exit 6
+PASS: T13 退出后锁释放
+PASS: T14 失效锁清理后可取得
+PASS: T15 存活持有者锁不被误清（exit 6）
+PASS: T15 锁目录仍在（未误清）
+PASS: T16 共享租约可并行持有（2 持有者）
+PASS: T16 租约退出后槽位清理
+PASS: T17 活跃租约阻塞排他锁（exit 6）
+PASS: T17 租约释放后排他锁可取得
+PASS: T18 排他锁阻塞共享租约（exit 6）
+PASS: T18 排他锁释放后租约可取得
+PASS: T19 失效租约清理后可取得排他锁
+PASS: T19 失效租约槽被清理
+PASS: T20 存活租约不被误清（排他锁 exit 6）
+PASS: T20 存活租约槽仍在
+PASS: T20 kill 租约持有者后失效租约被清理、排他锁可取得
+PASS: T21 kill 前排他锁互斥（exit 6）
+PASS: T21 kill 持锁进程后失效锁被清理、后续可取得
+PASS: T22 读者登记时清理失效租约槽并可取得
+PASS: T22 失效租约槽被读者路径清理
+PASS: T23 空 owner 宽限后识别活锁（exit 6）
+PASS: T23 活锁未被误删
+------------------------------------------------------------
+命令面离线测试完成：44 通过，0 失败
+沙箱：/tmp/devenv-snapshot-offline.RnbBMd
+PASS: S1 采集返回 git 树哈希
+PASS: S1 稳定工作树采集一致
+PASS: S1 快照==独立参照树（git add -A）
+PASS: S2 修改被快照覆盖
+PASS: S3 新增（未跟踪）文件进入快照
+PASS: S4 删除被快照覆盖
+PASS: S5 gitignored 内容不进入快照
+PASS: S6 持续写入明确拒绝 exit 4
+PASS: S6 拒绝原因入 stderr
+PASS: S7 重试后稳定即接受
+PASS: S8 物化目录含构建输入（Dockerfile/锁文件/manifest）
+PASS: S8 物化 mtime 归一到固定纪元
+PASS: S8 物化不含 .git/gitignored
+PASS: S8b 物化目录登记 EXIT 清理（当前 shell）
+PASS: S8b snapshot_cleanup 清理物化目录
+PASS: S9 构建输入清单含 Dockerfile/锁文件 blob 哈希
+PASS: S9 清单动态覆盖各包 package.json
+PASS: S10 快照一致跳过重构并绑定不可变 ID
+PASS: S11 快照不符重建并绑定新不可变 ID
+PASS: S11 重建携带快照/基础镜像 label 且 tools 未重建
+PASS: S11 状态文件记录新快照哈希
+PASS: S11b 带前缀构建输出归一为同一不可变 ID
+PASS: S12 无状态文件触发重建
+PASS: S13 镜像丢失触发重建（不提前退出）
+PASS: S13b 引擎故障明确报错 exit 3（不吞）
+PASS: S13c 引擎恢复后新鲜度命中
+PASS: S14 compose 注入 EFFECTIVE 不可变 ID
+PASS: S14 无 EFFECTIVE 回退状态 ID
+PASS: S14 无状态兜底可变 tag（仅 down/ps 等场景）
+PASS: S15 启动核对一致通过
+PASS: S15 启动核对不符 exit 4
+PASS: S16 build 快照构建 tools+workspace（无 lockgen）
+PASS: S16 状态记录构建快照哈希
+PASS: S16b tools 构建上下文与 NODE_IMAGE 取自快照
+PASS: S16c workspace 经 build-arg 绑定 tools 不可变 ID（可核对链路）
+PASS: S17 无 lockfile 走 lockgen-fresh 并导出后重建
+PASS: S17 lockgen 后状态记录新快照（含导出 lockfile）
+PASS: S17b lockgen 绑定 tools ID 且重新采集后不重复建 tools
+PASS: S18 --lockgen 有 lockfile 走增量 lockgen 靶
+PASS: S19a 真实入口：无状态重建成功
+PASS: S19b 真实入口：状态镜像不存在重建成功
+PASS: S19c 真实入口：label 不符重建成功
+PASS: S19d 真实入口：构建失败 exit 4 且不写成功状态
+PASS: S20 tools 输入变更后消费命令自动重建并绑定新 tools ID
+PASS: S21 tools wt 标签被覆盖后消费不重建（状态绑定仍新鲜）
+PASS: S21 workspace 重建绑定状态 tools ID（非被覆盖的标签）
+PASS: S22 旧版状态（无 tools 字段）重建 tools 并补齐状态
+PASS: S23 交替更新：已读文件被改检出重试，最终接受完整当前状态
+PASS: S23 从未存在组合 (a-v1,b-v2) 未被接受
+PASS: S24 空格仓库+空格/通配文件名采集正确
+PASS: S24 空格文件名窗口内修改被检测并重试，接受完整新状态
+PASS: S25 mtime 恢复型等长覆写交错被内容双读检出（重试后接受完整状态）
+PASS: S25 从未存在组合 (G1,F2) 未被接受
+PASS: S26a 枚举失败 die 4 且无树输出
+PASS: S26b 读取失败 die 4 且无树输出
+PASS: S26c stat 瞬态失败重试后拒绝 exit 4
+PASS: S26d stat 硬错误传播 exit 3（不重试）
+PASS: S27 真实入口+空格文件名全链路成功
+------------------------------------------------------------
+快照与不可变绑定离线测试完成：58 通过，0 失败
+沙箱：/tmp/devenv-isolation-offline.T9ck48
+PASS: I1a 项目名 = natural-enforcement-<8hex>
+PASS: I1a 身份推导确定性（同输入同名）
+PASS: I1b 不同 worktree → 不同项目名
+PASS: I1c 镜像 tag per-worktree（wt-<suffix>）
+PASS: I1d 默认身份 = git 目录哈希
+PASS: I1e 非 git 上下文回退路径哈希（不 die）
+PASS: I2 compose 调用成功
+PASS: I2 compose 注入 per-worktree 项目名（-p natural-enforcement-7c25da02）
+PASS: I2 首调用生成随机口令（32 hex）
+PASS: I2 凭据持久化到 .devenv-state
+PASS: I2 凭据文件权限 600
+PASS: I2 文件记录同口令
+PASS: I3 二次调用口令稳定
+PASS: I3 不同 worktree 口令独立
+PASS: I7 新鲜度命中登记 tools/workspace per-worktree tag（无构建纯采纳）
+PASS: I8 tag 登记失败显式 exit 4（不静默跳过）
+PASS: I8 失败步骤与原因入 stderr
+PASS: I4 per-worktree stack 锁互不阻塞（B 取得 exit 0）
+PASS: I4 同 worktree 活跃锁仍互斥（alpha exit 6）
+PASS: I4b build --lockgen 成功
+PASS: I4b lockgen 段持机器级锁（跨 worktree 互斥）
+PASS: I5 down 成功
+PASS: I5 down 携带 per-worktree 项目名
+PASS: I5 不再使用共享项目名
+PASS: I5 --remove-orphans 保留（仅本 worktree 项目范围）
+PASS: I6 doctor 通过
+PASS: I6 doctor JSON 含 worktree 检查项
+PASS: I6 检查 detail 报告 per-worktree 项目名
+PASS: I6b 遗留共享项目容器存在时 doctor 仍 exit 0（warn 不失败）
+PASS: I6b 遗留共享项目 → warn 检查项
+PASS: I9 test:unit 容器命令为 pnpm（宿主函数 run_gate 不再进容器）
+PASS: I10 租约 per-worktree：beta 排他锁不被 alpha 租约阻塞
+PASS: I10 alpha 排他锁被本 worktree 租约阻塞（exit 6）
+PASS: I11 prefetch 成功
+PASS: I11 两个镜像 pull 全程持机器级 prefetch 锁
+PASS: I11 prefetch 退出后机器级锁释放
+PASS: I11b 机器级 prefetch 锁跨 worktree 冲突 exit 6
+PASS: I11b 错误消息指出 prefetch 锁与修复线索
+PASS: I12 test:unit 成功
+PASS: I12 test:unit 容器命令执行期间持共享栈使用租约
+PASS: I12 test:unit 退出后租约释放
+PASS: I13 排他锁在场时 verify exit 6
+PASS: I13 冲突时未执行任何 compose 步骤（不产生半状态）
+PASS: I13 错误消息说明租约与排他锁冲突
+PASS: I14 活跃租约时 down exit 6
+PASS: I14 down 冲突时未执行 compose down
+PASS: I14 错误消息列出活跃租约持有者
+PASS: I14 活跃租约时 migrate exit 6
+PASS: I15 web --down 持栈锁（冲突 exit 6）
+PASS: I15 web --down 冲突时未触 compose
+PASS: I15 web --down 无冲突成功
+PASS: I15 web --down 执行 compose profile web rm
+PASS: W1 自动分配 web 成功
+PASS: W1 注入裸容器端口（WEB_PORT_SPEC=4173，引擎分配）
+PASS: W1 终值含回读实际端口与 url
+PASS: W1 stdout 全为 JSONL（进度/子进程输出不污染结果流）
+PASS: W2 显式端口 web 成功
+PASS: W2 注入固定发布（WEB_PORT_SPEC=8080:4173）
+PASS: W2 终值回读显式端口
+PASS: W2b --port 非数字 exit 2
+PASS: W2c --port 超范围 exit 2
+PASS: W3 容器占用冲突 exit 3
+PASS: W3 错误含服务/端口/占用者/修复命令
+PASS: W4 无占用者时通用失败 exit 4
+PASS: W4 通用失败消息不谎报占用
+PASS: W5 非容器进程占用 exit 3
+PASS: W5 错误区分非容器占用者
+PASS: P1 exec --json 成功
+PASS: P1 stdout 全为 JSONL
+PASS: P1 终值元数据完整
+PASS: P1 子进程 stdout 不混入结果流
+PASS: P1 原始流走 stderr 独立通道
+PASS: P2 子进程退出码原样传播（7）
+PASS: P2 终值报告失败与子进程码
+PASS: P2 子进程两路原始流均走 stderr
+PASS: P3 非 --json 原始流保持 stdout 通道
+PASS: P3 非 --json 无终值包装
+PASS: P4 logs --json 成功
+PASS: P4 stdout 全 JSON 且无原始日志
+PASS: P4 logs 终值元数据完整
+PASS: P4 原始日志走 stderr
+PASS: P5 shell --json 成功
+PASS: P5 shell 终值元数据完整
+PASS: S1 status --json 成功
+PASS: S1 status 终值含 web 实际端口
+PASS: S1 人读 status 报告 web 地址
+PASS: S2 status --json 成功（web 未运行）
+PASS: S2 web 未运行时如实报告 none
+PASS: C1 compose 仅 web 发布宿主端口（调试零端口不变量）
+------------------------------------------------------------
+per-worktree 隔离离线测试完成：89 通过，0 失败
