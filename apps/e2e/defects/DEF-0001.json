@@ -1,0 +1,210 @@
+{
+  "schemaVersion": 1,
+  "id": "DEF-0001",
+  "title": "点位名称纯空白被接受入库（契约 nonblank 规则缺席）",
+  "summary": "POST /enforcement-points 接受 name=\" \"（纯空白，#107 收缩后最小反例）并入库，返回 201 + 数字 id。契约 nameSchema 只有 min(1)/max(200)/regex 排除 U+0000，无 trim/nonblank；对照证据展示名 validateOriginalName 有纯空白拒绝——两模块口径不一致。原型 lineage：PROTO/apps/e2e/defects/DEF-0002.json 同类 spec 债务（原型内 status=retired，reason 记「是否收紧留 SPEC 决策」），dev 至今未收紧，本记录是该缺陷在 dev 的首条入库事实源。发现由 #107 缺口探针 GAP-PT-NAME-01（E2E_CHARTER_GAPS=1）产出结构化反例，#109 report 实测门禁（external-state，3 轮独立键空间）登记。是否收紧契约属业务决策，不在 e2e 票顺手改。",
+  "status": "reported",
+  "layer": "api",
+  "discoveredAt": "2026-11-28T16:01:50Z",
+  "discoveredBy": "hulei815-agent",
+  "charter": "point-input-safety（创建点位输入空间全量安全；原型 DEF-0002 同类 spec 债务：纯空白点名可入库）",
+  "suspectedArea": "packages/contracts/src/enforcement-point.ts（nameSchema：缺 trim/nonblank 约束）",
+  "severity": "low",
+  "evidence": [
+    {
+      "type": "json-report",
+      "uri": ".artifacts/e2e/exp109-c1eed7bc-gaps/results.json"
+    },
+    {
+      "type": "trace",
+      "uri": ".artifacts/e2e/exp109-c1eed7bc-gaps/test-results"
+    },
+    {
+      "type": "json-report",
+      "uri": ".artifacts/e2e/rpt109-c1eed7bc-ws-a1/replay.json"
+    },
+    {
+      "type": "log",
+      "uri": ".artifacts/e2e/rpt109-c1eed7bc-ws-a1/logs/api.log"
+    },
+    {
+      "type": "json-report",
+      "uri": ".artifacts/e2e/rpt109-c1eed7bc-ws-a2/replay.json"
+    },
+    {
+      "type": "log",
+      "uri": ".artifacts/e2e/rpt109-c1eed7bc-ws-a2/logs/api.log"
+    },
+    {
+      "type": "json-report",
+      "uri": ".artifacts/e2e/rpt109-c1eed7bc-ws-a3/replay.json"
+    },
+    {
+      "type": "log",
+      "uri": ".artifacts/e2e/rpt109-c1eed7bc-ws-a3/logs/api.log"
+    }
+  ],
+  "sanitized": true,
+  "engine": "fast-check",
+  "reproducibility": {
+    "kind": "external-state",
+    "seed": "1590727704",
+    "path": "0:0",
+    "replayPath": "apps/e2e/replay/DEF-0001.mjs",
+    "replayCommand": "node apps/e2e/replay/DEF-0001.mjs",
+    "counterexample": {
+      "property": "P0/GAP-PT-NAME-01/point-name-nonblank",
+      "request": {
+        "method": "POST",
+        "path": "/enforcement-points",
+        "body": {
+          "name": " ",
+          "lat": 23.1291,
+          "lng": 113.2644
+        }
+      },
+      "input": [
+        " "
+      ]
+    },
+    "gate": {
+      "attempts": 3,
+      "keySpaces": [
+        "rpt109-c1eed7bc-ws-a1",
+        "rpt109-c1eed7bc-ws-a2",
+        "rpt109-c1eed7bc-ws-a3"
+      ],
+      "allFailed": true,
+      "signatureMatched": true,
+      "rounds": [
+        {
+          "attempt": 1,
+          "runId": "rpt109-c1eed7bc-ws-a1",
+          "keySpace": {
+            "database": "e2e_rpt109_c1eed7bc_ws_a1",
+            "bucket": "e2e-rpt109-c1eed7bc-ws-a1",
+            "queue": "e2e-rpt109-c1eed7bc-ws-a1-evidence-processing"
+          },
+          "precondition": "空库（DROP DATABASE WITH FORCE + CREATE）→ prisma migrate deploy 至最新 → 空 bucket → 空队列键空间；无种子数据",
+          "scriptExitCode": 0,
+          "verdict": "reproduced",
+          "signature": {
+            "errorClass": "assertion",
+            "assertionId": "post-enforcement-points.whitespace-name",
+            "semanticMarkers": [
+              {
+                "key": "body.id",
+                "value": "number"
+              },
+              {
+                "key": "http.status.actual",
+                "value": "201"
+              },
+              {
+                "key": "http.status.expected",
+                "value": "400"
+              }
+            ]
+          },
+          "comparison": {
+            "matched": true,
+            "reason": "matched",
+            "differences": []
+          }
+        },
+        {
+          "attempt": 2,
+          "runId": "rpt109-c1eed7bc-ws-a2",
+          "keySpace": {
+            "database": "e2e_rpt109_c1eed7bc_ws_a2",
+            "bucket": "e2e-rpt109-c1eed7bc-ws-a2",
+            "queue": "e2e-rpt109-c1eed7bc-ws-a2-evidence-processing"
+          },
+          "precondition": "空库（DROP DATABASE WITH FORCE + CREATE）→ prisma migrate deploy 至最新 → 空 bucket → 空队列键空间；无种子数据",
+          "scriptExitCode": 0,
+          "verdict": "reproduced",
+          "signature": {
+            "errorClass": "assertion",
+            "assertionId": "post-enforcement-points.whitespace-name",
+            "semanticMarkers": [
+              {
+                "key": "body.id",
+                "value": "number"
+              },
+              {
+                "key": "http.status.actual",
+                "value": "201"
+              },
+              {
+                "key": "http.status.expected",
+                "value": "400"
+              }
+            ]
+          },
+          "comparison": {
+            "matched": true,
+            "reason": "matched",
+            "differences": []
+          }
+        },
+        {
+          "attempt": 3,
+          "runId": "rpt109-c1eed7bc-ws-a3",
+          "keySpace": {
+            "database": "e2e_rpt109_c1eed7bc_ws_a3",
+            "bucket": "e2e-rpt109-c1eed7bc-ws-a3",
+            "queue": "e2e-rpt109-c1eed7bc-ws-a3-evidence-processing"
+          },
+          "precondition": "空库（DROP DATABASE WITH FORCE + CREATE）→ prisma migrate deploy 至最新 → 空 bucket → 空队列键空间；无种子数据",
+          "scriptExitCode": 0,
+          "verdict": "reproduced",
+          "signature": {
+            "errorClass": "assertion",
+            "assertionId": "post-enforcement-points.whitespace-name",
+            "semanticMarkers": [
+              {
+                "key": "body.id",
+                "value": "number"
+              },
+              {
+                "key": "http.status.actual",
+                "value": "201"
+              },
+              {
+                "key": "http.status.expected",
+                "value": "400"
+              }
+            ]
+          },
+          "comparison": {
+            "matched": true,
+            "reason": "matched",
+            "differences": []
+          }
+        }
+      ],
+      "precondition": "每轮：空库（DROP DATABASE WITH FORCE + CREATE）→ prisma migrate deploy 至最新 → 空 bucket → 空队列键空间，无种子数据；固定纯空白名（#107 收缩后最小反例：单个空格 U+0020，seed=1590727704）在该轮库内不存在，故 name 唯一约束不撞（同库重复重放会 409 伪装成未复现）",
+      "baselineSignature": {
+        "errorClass": "assertion",
+        "assertionId": "post-enforcement-points.whitespace-name",
+        "semanticMarkers": [
+          {
+            "key": "body.id",
+            "value": "number"
+          },
+          {
+            "key": "http.status.actual",
+            "value": "201"
+          },
+          {
+            "key": "http.status.expected",
+            "value": "400"
+          }
+        ]
+      },
+      "compareReason": "matched",
+      "measuredAt": "2026-11-28T16:01:50Z",
+      "scriptSha256": "00d78624b77b01ea73ae99ed61158fcbcc5f69c291180fa0d17d2b7abd1628eb"
+    }
+  }
+}
