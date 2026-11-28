@@ -319,8 +319,14 @@ const objectFieldLines = (fields, indent) =>
     .join('\n')
 
 function safeComment(text) {
-  // U+2028/U+2029 是合法 JSON 字符但会被 JS 当作行终止符；进入 // 注释前一并替换。
-  return text.replace(/[\r\n  ]/g, ' ').replace(/\*\//g, '* /')
+  // U+2028/U+2029 是合法 JSON 字符，但会被 JS 当作行终止符：进入 // 注释会截断注释、
+  // 让生成物无法编译。按码点替换，源码里既不写这两个字符、也不写 \u 转义（裸字符会
+  // 截断正则字面量；转义文本又可能被编辑工具链改写成裸字符——#67 实测踩过）。
+  let out = text
+  for (const code of [0x0a, 0x0d, 0x2028, 0x2029]) {
+    out = out.split(String.fromCharCode(code)).join(' ')
+  }
+  return out.split('*/').join('* /')
 }
 
 const specHint = (spec, basePath) =>

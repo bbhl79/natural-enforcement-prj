@@ -1,5 +1,5 @@
 {
-  "description": "巡查记录（devenv gen nest-module --http 示例）",
+  "description": "巡查记录\u2028（devenv gen nest-module --http 示例）\u2029回归输入：描述含行终止符，不得截断生成物注释",
   "basePath": "/inspection-records",
   "fields": {
     "title": { "type": "string", "minLength": 1, "maxLength": 200 },
