@@ -64,20 +64,24 @@ cleanup() {
 }
 trap cleanup EXIT
 
-run() { # run <label> <cmd...>：捕获 stdout/stderr/exitcode
+run() { # run <label> <cmd...>：捕获 stdout/stderr/exitcode；恒返回 0（判定由断言做，
+  # 期望非零的步骤不会被 set -e 提前中止——原型坑同口径：先捕获 rc 再判定）
   local label="$1"; shift
   local rc=0
   printf '%q ' "$@" > "$ART/$label.cmd"
   "$@" > "$ART/$label.out" 2> "$ART/$label.err" || rc=$?
   printf '%s\n' "$rc" > "$ART/$label.exitcode"
   printf '[%s] rc=%s cmd=%s\n' "$(date -u +%H:%M:%S)" "$rc" "$(cat "$ART/$label.cmd")" >> "$ART/evidence.log"
-  return "$rc"
+  return 0
 }
+
+rc_of() { cat "$ART/$1.exitcode"; }
 
 last_json() { jq -s -e '.[-1] | '"$2" "$ART/$1.out" >/dev/null 2>&1; }
 
 echo "== A 命令面（真实 tools 容器 + 真实决策引擎）"
-run doctor "$DEVENV" doctor || { echo "doctor 未通过，见 $ART/doctor.err" >&2; exit 1; }
+run doctor "$DEVENV" doctor
+if [[ "$(rc_of doctor)" != 0 ]]; then echo "doctor 未通过，见 $ART/doctor.err" >&2; exit 1; fi
 
 # 夹具记录（临时，不入仓库；标题明示非真实缺陷）
 mkdir -p "$E2E_DIR/defects" "$E2E_DIR/replay"
@@ -181,7 +185,8 @@ run a8 "$DEVENV" --json e2e defect list
 cp -p "$ART/fixture-record.bak" "$E2E_DIR/defects/$FIX_ID.json"
 
 echo "== B op 协议 V 载荷（真实 per-run 栈 + 真实执行器；宿主桥接缝）"
-run b0 "$DEVENV" up || { echo "devenv up 失败，见 $ART/b0.err" >&2; exit 1; }
+run b0 "$DEVENV" up
+if [[ "$(rc_of b0)" != 0 ]]; then echo "devenv up 失败，见 $ART/b0.err" >&2; exit 1; fi
 
 # 起真实 per-run 隔离栈（复用 #70 编排原语），在 run 内驱动 V 载荷
 B_RC=0
