@@ -161,7 +161,9 @@ e2e_ops_apply() { # <opsfile> → 0 已应用 / 非 0 拒绝码（原因入 E2E_
     IFS=$'\t' read -r _t status code msg <<<"$endline"
     if [[ "$status" != "ok" ]]; then
       E2E_LIFECYCLE_REFUSAL="${msg:-生命周期引擎拒绝（无消息）}"
-      return "${code:-8}"
+      # 引擎声明 error 却给 0 码属协议异常：不得静默判成功，按前置条件不合法收口
+      if [[ ! "$code" =~ ^[0-9]+$ ]] || (( code == 0 )); then code=8; fi
+      return "$code"
     fi
   fi
 
@@ -298,7 +300,8 @@ e2e_lifecycle_query() { # <args...> → 0 数据已入全局 / 非 0 拒绝码
       local _t status code msg
       IFS=$'\t' read -r _t status code msg <<<"$endline"
       E2E_LIFECYCLE_REFUSAL="${msg:-生命周期引擎拒绝（无消息）}"
-      return "${code:-$rc}"
+      if [[ ! "$code" =~ ^[0-9]+$ ]] || (( code == 0 )); then code="$rc"; fi
+      return "$code"
     fi
     E2E_LIFECYCLE_REFUSAL="生命周期 CLI 异常退出（exit ${rc}，无 END 行——容器/构建问题？）"
     return 4
