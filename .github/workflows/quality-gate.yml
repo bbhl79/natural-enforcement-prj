@@ -35,9 +35,11 @@ jobs:
           sed -n '1,3p' /etc/os-release
           printf '| 段 | 用时 | rc |\n|---|---|---|\n' >> "$GITHUB_STEP_SUMMARY"
           t0=$(date +%s)
-          ./devenv/devenv doctor
+          rc=0
+          ./devenv/devenv doctor || rc=$?
           t1=$(date +%s)
-          printf '| doctor | %ds | 0 |\n' "$((t1 - t0))" >> "$GITHUB_STEP_SUMMARY"
+          printf '| doctor | %ds | %d |\n' "$((t1 - t0))" "$rc" >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
 
       - name: verify（无服务质量门：lint + typecheck + test:unit）
         run: |
@@ -97,6 +99,7 @@ jobs:
         with:
           name: ci-evidence-${{ github.run_id }}-${{ github.run_attempt }}
           path: .artifacts/ci-evidence/
+          include-hidden-files: true  # 路径在隐藏目录 .artifacts/ 下（v4 默认排除隐藏路径）
           retention-days: 30
           if-no-files-found: warn
 
