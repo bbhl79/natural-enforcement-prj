@@ -586,6 +586,18 @@ compose 健康检查读 Redis 心跳（证明已进入消费循环），不发�
 不要未经判读就改测试栈**；不是把测试栈当故障直接修。
 基础前置（基础设施未起、镜像构建失败、健康超时）仍按 3/4/5 报错。
 
+**P0 属性探索（#107）**：fast-check 属性引擎在探索轨道内运行
+（`apps/e2e/tests/explore/properties/`，不新增轨道），失败语义不变（exit 4 = 发现，
+retries 0，不掩盖）。属性命名口径 `P0/<RULE-ID>/<slug>`（规则标识 EV-STATE/EV-NAME/
+EV-BYTES/PT-GEO/PT-BOUND/PT-NAME；`charter` 字段为探索任务书联动预留位，认领机制归
+#114）。属性违规时结构化反例以附件进入 `results.json` 该用例 `results[].attachments[]`
+（`name=property-finding`，`body=base64(JSON)`：property/rule/charter/seed/counterexample/
+counterexamplePath/numRuns/numShrinks[/request]），report（#109）可机械提取 seed+反例
+登记与重放；绿跑时每个属性用例另带 `property-run` 摘要附件（seed/numRuns）。
+`E2E_FORCE_FINDING=1` 同时触发故意反例属性夹具（properties/harness-selfcheck）；
+`E2E_CHARTER_GAPS=1` 启用非默认「规则缺席」缺口探针（charter 发现素材，编码缺席规则，
+不参与默认绿跑；本票不修 api 规则）。
+
 **并行演练入口**：`E2E_PARALLEL_GROUP=<组标记> E2E_PARALLEL_SOAK_MS=<毫秒> devenv explore --run-id ...`
 把共享组标记与等待窗口传入执行器；两个 run 用同组标记并行运行，隔离 charter 会在
 等待窗口内反复读本 run 数据面并断言同组其它 run 的数据不出现（默认 0 = 单 run 不等待）。
