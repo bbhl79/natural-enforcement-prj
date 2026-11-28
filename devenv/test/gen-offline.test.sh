@@ -22,6 +22,9 @@ set -Eeuo pipefail
 
 TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$TEST_DIR/../.." && pwd)"
+# T15 起 REPO_ROOT 会被重指向沙箱（gen.sh 的 git 辅助依赖它）；真实仓库根另存，
+# 供「沙箱夹具与真实锚点同形」类断言使用。
+REAL_REPO_ROOT="$REPO_ROOT"
 
 FAILURES=0
 PASS_COUNT=0
@@ -75,6 +78,16 @@ import type { ApiContractEndpoint } from './api-contract.js'
 export const API_CONTRACT_ENDPOINTS: readonly ApiContractEndpoint[] = [
   // @gen:endpoint-spread
 ]
+TS
+  # 既有契约路由字面量：gen_spec_validate 据此预检 basePath 冲突（与真实 enforcement-point.ts 同形）
+  cat > "$SANDBOX/packages/contracts/src/enforcement-point.ts" <<'TS'
+export const ENFORCEMENT_POINT_ROUTES = {
+  base: '/enforcement-points',
+  nearby: '/enforcement-points/nearby',
+} as const
+export const HEALTH_ROUTES = {
+  base: '/health',
+} as const
 TS
 
   cat > "$SANDBOX/pnpm-workspace.yaml" <<'YAML'
@@ -182,7 +195,7 @@ reset_repo() {
   rm -f "$MOCK_NEW_LOCKFILE"
   unset MOCK_LOCKGEN_FAIL MOCK_TAMPER_SET MOCK_OUTPUT_TRAVERSAL MOCK_OUTPUT_CROSS_DIR MOCK_EVIDENCE \
         MOCK_PATCH_TAMPER MOCK_INTERNAL_EMITS_CONTRACTS MOCK_MISSING_REQUIRED \
-        MOCK_SPEC_TAMPER MOCK_NEST_CONTRACT_ROGUE 2>/dev/null || true
+        MOCK_SPEC_TAMPER MOCK_NEST_CONTRACT_ROGUE MOCK_GEN_EXIT 2>/dev/null || true
   export DEVENV_LOCK_TIMEOUT=""
 }
 
@@ -260,6 +273,11 @@ done | sha256sum | awk '{print $1}')"
 
 kind="${NE_GEN_KIND:?}"; name="${NE_GEN_NAME:?}"
 variant="${NE_GEN_VARIANT:-}"; spec_rel="${NE_GEN_SPEC_REL:-}"
+# 模拟生成器自身的输入/用法错误（真实生成器对非法 spec 以退出码 2 退出）
+if [[ -n "${MOCK_GEN_EXIT:-}" ]]; then
+  echo "[gen] ERROR: mock 生成器按要求以 ${MOCK_GEN_EXIT} 退出" >&2
+  exit "$MOCK_GEN_EXIT"
+fi
 out="$work/out"
 mkdir -p "$out"
 target_root=""
@@ -1049,6 +1067,103 @@ expect_rc "T35 缺 variant exit 2" 2 t35
 expect_grep "T35 明确提示需要 --http|--internal" "只接受一个 --http|--internal" t35
 [[ ! -e "$SANDBOX/apps/api/src/no-variant" ]] \
   && pass "T35 未创建目标目录" || fail "T35" "目标目录被创建"
+
+# ---------------------------------------------------------------------------
+# T36 生成器自身报告输入错误（退出码 2，如字段类型非法）→ devenv 透传 exit 2
+#   （不得误报成任务失败 4）；生成器其它非零退出仍是 4；均零写入
+# ---------------------------------------------------------------------------
+reset_repo
+export MOCK_GEN_EXIT=2
+run t36 gen_json gen nest-module bad-field --http --spec devenv/test/fixtures/nest-module-bad-type.json
+expect_rc "T36 生成器输入错误透传 exit 2" 2 t36
+expect_grep "T36 明确提示缺少必要业务信息或 spec 非法" "缺少必要业务信息或 spec 非法" t36
+jq -se 'any(.[]; .command == "gen" and .status == "failed" and .exitCode == 2)' "$OUT/t36.out" >/dev/null \
+  && pass "T36 终值 exitCode=2" || fail "T36" "终值不符：$(tail -1 "$OUT/t36.out")"
+[[ -z "$(git -C "$SANDBOX" status --porcelain)" ]] \
+  && pass "T36 无部分写入" || fail "T36" "出现文件改动：$(git -C "$SANDBOX" status --porcelain)"
+export MOCK_GEN_EXIT=1
+run t36b gen_json gen nest-module bad-field --http --spec devenv/test/fixtures/nest-module-http.json
+expect_rc "T36b 生成器其它非零退出仍为 exit 4" 4 t36b
+[[ -z "$(git -C "$SANDBOX" status --porcelain)" ]] \
+  && pass "T36b 无部分写入" || fail "T36b" "出现文件改动"
+unset MOCK_GEN_EXIT
+
+# ---------------------------------------------------------------------------
+# T37 basePath 与既有契约路由冲突（OpenAPI 重复 operation，#66 完整性检查必败）
+#   → 生成前 exit 2；默认 basePath（/<name>）冲突同样拒绝；internal 不受影响
+# ---------------------------------------------------------------------------
+reset_repo
+run t37 gen_json gen nest-module conflict-http --http --spec devenv/test/fixtures/nest-module-conflict.json
+expect_rc "T37 显式 basePath 冲突 exit 2" 2 t37
+expect_grep "T37 报告与已有契约路由冲突" "与已有契约路由冲突：/health" t37
+run t37b gen_json gen nest-module health --http --spec devenv/test/fixtures/nest-module-internal.json
+expect_rc "T37b 默认 basePath（/<name>）冲突 exit 2" 2 t37b
+expect_grep "T37b 报告与已有契约路由冲突" "与已有契约路由冲突：/health" t37b
+[[ -z "$(git -C "$SANDBOX" status --porcelain)" ]] \
+  && pass "T37 冲突拒绝无部分写入" || fail "T37" "出现文件改动"
+run t37c gen_json gen nest-module conflict-int --internal --spec devenv/test/fixtures/nest-module-conflict.json
+expect_rc "T37c internal 不生成路由，basePath 冲突不适用" 0 t37c
+
+# ---------------------------------------------------------------------------
+# T38 生成的契约路由也进入冲突预检：同一 basePath 不能被两个 HTTP 模块重复使用
+# ---------------------------------------------------------------------------
+reset_repo
+run t38a gen_json gen nest-module first-http --http --spec devenv/test/fixtures/nest-module-http.json
+expect_rc "T38 首个 HTTP 模块生成成功" 0 t38a
+# mock 生成器产出的契约文件不含真实路由字面量：补一行以模拟真实生成物的 ROUTES 常量
+printf "export const FIRST_HTTP_ROUTES = { base: '/inspection-records' } as const\n" \
+  >> "$SANDBOX/packages/contracts/src/first-http.ts"
+run t38b gen_json gen nest-module second-http --http --spec devenv/test/fixtures/nest-module-http.json
+expect_rc "T38 同 basePath 的第二个 HTTP 模块被拒 exit 2" 2 t38b
+expect_grep "T38 报告与已有契约路由冲突" "与已有契约路由冲突：/inspection-records" t38b
+[[ ! -e "$SANDBOX/apps/api/src/second-http" ]] \
+  && pass "T38 未创建第二个模块目录" || fail "T38" "第二个模块目录被创建"
+# 同名重复生成仍按幂等语义 exit 4「目标已存在」：模块自身契约里的路由不算冲突
+run t38c gen_json gen nest-module first-http --http --spec devenv/test/fixtures/nest-module-http.json
+expect_rc "T38 同名重复生成仍为 exit 4（自身契约路由不算冲突）" 4 t38c
+expect_grep "T38 报告目标已存在" "目标已存在" t38c
+
+# ---------------------------------------------------------------------------
+# T39 spec 路径加固：. 段、符号链接均 exit 2
+# ---------------------------------------------------------------------------
+reset_repo
+run t39a gen_json gen nest-module dot-seg --http --spec ./devenv/test/fixtures/nest-module-http.json
+expect_rc "T39 spec 含 . 段 exit 2" 2 t39a
+expect_grep "T39 报告 . 段" "不得包含 . 段" t39a
+ln -s devenv/test/fixtures/nest-module-http.json "$SANDBOX/spec-link.json"
+run t39b gen_json gen nest-module sym-link --http --spec spec-link.json
+expect_rc "T39 spec 为符号链接 exit 2" 2 t39b
+expect_grep "T39 报告符号链接" "不得为符号链接" t39b
+rm -f "$SANDBOX/spec-link.json"
+
+# ---------------------------------------------------------------------------
+# T40 沙箱夹具与真实锚点同形：真实仓库的四个整行锚点各恰好一处
+#   （夹具手写副本不会悄悄偏离真实 app.module.ts / api-registry.ts）
+# ---------------------------------------------------------------------------
+count_anchor() { # <file> <整行锚点>
+  awk -v m="$2" '{ s = $0; sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s); if (s == m) c++ } END { print c + 0 }' "$1"
+}
+for pair in \
+  "apps/api/src/app.module.ts|// @gen:module-import" \
+  "apps/api/src/app.module.ts|// @gen:module-entry" \
+  "packages/contracts/src/api-registry.ts|// @gen:endpoint-import" \
+  "packages/contracts/src/api-registry.ts|// @gen:endpoint-spread"; do
+  f="${pair%%|*}"; marker="${pair#*|}"
+  [[ "$(count_anchor "$REAL_REPO_ROOT/$f" "$marker")" == "1" ]] \
+    && pass "T40 真实仓库 $f 含恰好一处整行锚点 $marker" \
+    || fail "T40" "真实仓库 $f 的锚点 $marker 不是恰好一处"
+done
+# 沙箱 enforcement-point.ts 夹具覆盖真实同名手写契约文件中的全部路由字面量
+# （只比对该手写文件：后续生成的模块契约会自然新增路由，不应使本断言失效）
+route_literals() { # <file>
+  grep -hoE "'/[a-z0-9][a-z0-9/_-]*'" "$1" | tr -d "'" | LC_ALL=C sort -u
+}
+missing_routes="$(comm -23 \
+  <(route_literals "$REAL_REPO_ROOT/packages/contracts/src/enforcement-point.ts") \
+  <(route_literals "$SANDBOX/packages/contracts/src/enforcement-point.ts"))"
+[[ -z "$missing_routes" ]] \
+  && pass "T40 沙箱 enforcement-point.ts 夹具覆盖真实手写契约的全部路由字面量" \
+  || fail "T40" "沙箱夹具缺少真实路由：${missing_routes}"
 
 # ---------------------------------------------------------------------------
 # 汇总

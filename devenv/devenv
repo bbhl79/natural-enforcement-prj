@@ -614,7 +614,7 @@ cmd_gen() {
     nest-module)
       [[ "$variant" == "http" || "$variant" == "internal" ]] \
         || die 2 "gen nest-module 需要且只接受一个 --http|--internal（HTTP 契约联动 / 内部服务）"
-      gen_spec_validate "$spec"
+      gen_spec_validate "$spec" "$name" "$variant"
       ;;
     page)
       die 2 "gen page 尚未实现（归 #68）" ;;

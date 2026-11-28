@@ -28,7 +28,6 @@ GEN_TXN_ACTIVE=0
 GEN_TXN_DIR=""
 GEN_TXN_TARGET=""
 GEN_TXN_NEW_FILES=()
-GEN_TXN_PATCHES=()
 
 gen_target_dir() { # <kind> → packages | apps（仅 package/app 有 workspace importer）
   case "$1" in
@@ -47,22 +46,21 @@ gen_kind_root() { # <kind> <name> → 新生成物根目录（相对仓库）
   esac
 }
 
-gen_pascal() { # kebab-case → PascalCase
-  local part out=""
-  local IFS='-'
-  for part in $1; do out+="${part^}"; done
-  printf '%s' "$out"
+gen_pascal() { # kebab-case → PascalCase（awk 实现：macOS bash 3.2 不支持 ${var^}）
+  printf '%s' "$1" | awk -F- '{ for (i = 1; i <= NF; i++) printf "%s%s", toupper(substr($i, 1, 1)), substr($i, 2) }'
 }
 
 gen_upper() { # kebab-case → UPPER_SNAKE
   printf '%s' "$1" | tr '[:lower:]-' '[:upper:]_'
 }
 
-# 整行锚点判定（允许行首缩进；用于 TS 锚点/已注入行，COPY 行仍用精确匹配）。
-gen_has_line() { # <file> <trimmed line>
+# 整行锚点判定（文件行与期望行都去首尾空白；用于 TS 锚点/已注入行，
+# COPY 行仍用精确匹配）。
+gen_has_line() { # <file> <line>
   awk -v want="$2" '
+    BEGIN { w = want; sub(/^[[:space:]]+/, "", w); sub(/[[:space:]]+$/, "", w) }
     { s = $0; sub(/^[[:space:]]+/, "", s); sub(/[[:space:]]+$/, "", s)
-      if (s == want) { found = 1; exit } }
+      if (s == w) { found = 1; exit } }
     END { exit(found ? 0 : 1) }
   ' "$1"
 }
@@ -116,8 +114,8 @@ gen_required_files() { # <kind> <name> <variant>
 # nest-module spec 宿主预检（业务信息缺失/非法 → exit 2，生成前停止）。
 # 深层字段类型校验由容器内生成器执行；宿主先拒绝路径不安全、被 gitignore
 # （不会进入快照）或明显缺 fields 的输入。
-gen_spec_validate() { # <specRel>
-  local spec="$1" abs
+gen_spec_validate() { # <specRel> <name> <variant>
+  local spec="$1" name="$2" variant="$3" abs base existing
   [[ -n "$spec" ]] \
     || die 2 "缺少必要业务信息：nest-module 需要 --spec <仓库相对路径>（JSON：fields 非空）"
   abs="$REPO_ROOT/$spec"
@@ -140,6 +138,20 @@ gen_spec_validate() { # <specRel>
     || die 2 "spec.description 必须是字符串：$spec"
   jq -e '((has("basePath") | not) or (.basePath | type == "string"))' "$abs" >/dev/null 2>&1 \
     || die 2 "spec.basePath 必须是字符串：$spec"
+  # HTTP 契约联动：basePath 与「其它模块」现有契约路由冲突时，OpenAPI 会出现重复
+  # operation（#66 完整性检查必失败）。在生成前按契约源码中的路由字面量做冲突预检。
+  # 排除本模块自己的契约文件：同名重复生成应由 gen_host_preflight 以 exit 4
+  # 「目标已存在」拒绝（幂等语义），而不是在此被误报成路由冲突。
+  if [[ "$variant" == "http" ]]; then
+    base="$(jq -r '.basePath // ""' "$abs")"
+    [[ -n "$base" ]] || base="/$name"
+    existing="$(grep -rhoE --include='*.ts' --exclude='*.spec.ts' --exclude="$name.ts" \
+      "'/[a-z0-9][a-z0-9/_-]*'" "$REPO_ROOT/packages/contracts/src" 2>/dev/null \
+      | tr -d "'" | LC_ALL=C sort -u || true)"
+    if printf '%s\n' "$existing" | grep -qxF -- "$base"; then
+      die 2 "spec.basePath 与已有契约路由冲突：${base}（OpenAPI 不允许重复 operation；请更换 basePath）"
+    fi
+  fi
 }
 
 # 生成器集合内容集哈希：容器与宿主使用同一算法（排序后的 "sha256␠␠path" 清单再 sha256）。
@@ -286,7 +298,14 @@ gen_run_container() { # <workdir> <kind> <name> <variant> <specRel> <tree>
     --entrypoint sh "$TOOLS_IMAGE_EFFECTIVE" -c "$(gen_container_script)" \
     < "$work/input.tar" > "$work/output.tar" || rc=$?
   if (( rc != 0 )); then
-    final failed 4 step="gen container" taskRc="$rc" hint="生成器在容器内失败；未写入任何文件"
+    # 生成器退出码 2 = 输入/用法错误（如 spec 字段类型非法）；沿用用法错误
+    # 退出码 2，避免把「缺少必要业务信息」误报成任务失败 4。其余一律 4。
+    local code=4
+    (( rc == 2 )) && code=2
+    final failed "$code" step="gen container" taskRc="$rc" hint="生成器输入/执行失败；未写入任何文件"
+    if (( code == 2 )); then
+      die 2 "生成器输入失败（容器退出码 2；缺少必要业务信息或 spec 非法；完整输出见上方 stderr；未写入任何文件）"
+    fi
     die 4 "生成器执行失败（容器退出码 ${rc}，完整输出见上方 stderr；未写入任何文件）"
   fi
   [[ -s "$work/output.tar" ]] || die 4 "生成器未输出 tar 流（未写入任何文件）"
@@ -473,7 +492,6 @@ gen_apply_transaction() { # <stage> <txn> <kind> <name> <variant> <tree>
   GEN_TXN_DIR="$txn"
   GEN_TXN_TARGET="$(gen_kind_root "$kind" "$name")"
   GEN_TXN_NEW_FILES=()
-  GEN_TXN_PATCHES=()
 
   while IFS= read -r p; do
     dest="$REPO_ROOT/$p"
@@ -487,7 +505,6 @@ gen_apply_transaction() { # <stage> <txn> <kind> <name> <variant> <tree>
   while IFS= read -r p; do
     mv "$stage/$p" "$REPO_ROOT/$p" \
       || die 4 "补丁落盘失败：${p}（已回滚，未产生部分写入）"
-    GEN_TXN_PATCHES+=("$p")
   done < <(jq -r '.patches[].path' "$manifest")
 }
 
@@ -516,14 +533,12 @@ gen_txn_rollback() {
     cp -p "$GEN_TXN_DIR/pnpm-lock.old.yaml" "$REPO_ROOT/pnpm-lock.yaml" 2>/dev/null || true
   fi
   GEN_TXN_NEW_FILES=()
-  GEN_TXN_PATCHES=()
   return 0
 }
 
 gen_txn_commit() {
   GEN_TXN_ACTIVE=0
   GEN_TXN_NEW_FILES=()
-  GEN_TXN_PATCHES=()
   return 0
 }
 

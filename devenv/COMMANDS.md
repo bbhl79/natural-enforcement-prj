@@ -55,7 +55,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 码 | 含义 | 典型修复 |
 |---|---|---|
 | 0 | 成功 | — |
-| 2 | 用法错误（未知子命令/缺参数/非法覆盖格式） | 按 Usage 与 COMMANDS.md |
+| 2 | 用法错误（未知子命令/缺参数/非法覆盖格式；`gen nest-module` 缺必要业务信息、spec 非法或 basePath 与既有契约路由冲突——含容器内生成器拒绝的字段类型/约束错误，其退出码 2 原样透传，不降级为 4） | 按 Usage 与 COMMANDS.md；spec 问题按错误消息修正 `--spec` 文件 |
 | 3 | 环境未就绪（引擎不在矩阵、端点解析失败、服务未起、锁文件缺失、web 显式端口被占用） | 按错误内嵌修复命令（多为 `devenv up`/`devenv build`；端口占用时报占用者并给替代命令） |
 | 4 | 任务失败（test/lint/typecheck/build/verify 非零；拉取失败；快照采集期工作树持续变化——明确拒绝，不出混合内容） | 看 stderr 完整输出；采集拒绝时暂停文件修改后重试 |
 | 5 | 超时（健康等待/镜像拉取） | `devenv logs <svc>` 排查；prefetch 重跑续跑 |
@@ -190,9 +190,9 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
   （基础镜像拉取）。
 - **复合过程整体持锁**：build/up/down/restart/web 的"检查新鲜度 → 构建 →
   启动/停止"从入口到退出持同一把排他锁（单步锁保护不了全过程）；`gen package` /
-  `gen app` / `gen nest-module`
-  从采集货源到 lockgen 结束持 `gen-<wt>`（build 在栈锁之后也取同一把，二者互斥），
-  进程被 kill 留下的失效锁由下一次取得识别并清理，不永久阻塞环境。
+  `gen app` 从采集货源到 lockgen 结束持 `gen-<wt>`；`gen nest-module` 从采集货源
+  到落盘结束持同一把（不触发 lockgen）。build 在栈锁之后也取同一把（gen/build
+  互斥），进程被 kill 留下的失效锁由下一次取得识别并清理，不永久阻塞环境。
 
 | 命令 | 持有锁/租约 | 互斥对象 |
 |---|---|---|
@@ -271,7 +271,10 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
   --spec <仓库相对路径>`。`--spec` 是必要业务信息（非空 `fields`；可选
   `description`/`basePath`），字段支持 string/integer/number/boolean 与
   minLength/maxLength/minimum/maximum/optional；缺失、空 fields、被 gitignore
-  忽略或路径不安全 → exit 2，生成前停止（不产生部分写入）。
+  忽略、路径不安全（`..`/`.` 段、符号链接）、字段类型/约束非法，或 HTTP 的
+  basePath 与既有契约路由冲突（OpenAPI 会出现重复 operation；预检扫描
+  `packages/contracts/src` 的路由字面量，排除本模块自己的契约文件）→ exit 2，
+  生成前停止（不产生部分写入）。同名模块/契约文件已存在仍是 exit 4（幂等拒绝）。
   - HTTP：在 `packages/contracts/src/<name>.ts` 生成路由常量、请求/响应 zod
     schema 与端点清单；`apps/api/src/<name>/` 生成 module/controller/service 及
     集成测试（真实 HTTP 装配：请求校验 → service → 响应校验 → #66 OpenAPI
@@ -294,6 +297,14 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
   普通构建 frozen install 成功；HTTP 生成物另经 `node apps/api/dist/scripts/
   emit-openapi.js` 导出并强制 #66 完整性检查。生成器执行与 build 读取源码/锁文件
   互斥（`gen-<wt>`），lockgen 与其它 worktree 互斥（机器级）。
+- **nest-module 真实引擎冒烟（#67 AC5）**：`devenv/test/gen-nest-module-smoke.sh
+  [--timeout S]` 在真实引擎上对 HTTP 与 internal 各走 gen → 清单/整行锚点核对 →
+  verify → test → [HTTP] OpenAPI 导出与端点断言 → 重复生成拒绝（exit 4）→ 复原
+  基线，另跑 5 条反例（缺 `--spec`/空 fields/字段类型非法/basePath 冲突/缺 variant，
+  均期望 exit 2）。每步校验工作树签名（临时索引 `add -A` + `write-tree`，与 #58
+  快照同口径）证明「无部分写入」与「基线完整复原」；任一不符即失败，不默认通过。
+  原始证据与 SUMMARY.md 写入 `.artifacts/67-gen-nest-module/`（记录 HEAD 与工作树
+  是否干净，脏树证据不绑定单一 commit）。
 - **下载证据与基准**：`DEVENV_PNPM_EVIDENCE=1`（只接受空/0/1，拼写错误 exit 2）
   构建时，deps 层以 pnpm ndjson 结构化事件摘要写入镜像
   `/workspace/.devenv/pnpm-install.json`；`devenv gen evidence` 从绑定镜像读取

@@ -312,8 +312,15 @@ const sampleObject = (fields) => {
 
 const sampleLiteral = (sample) => JSON.stringify(sample, null, 2)
 
+// zod 对象字段行（请求 schema 与响应 DTO 共用同一形状/缩进）
+const objectFieldLines = (fields, indent) =>
+  Object.entries(fields)
+    .map(([fieldName, def]) => `${indent}${fieldName}: ${zodExpr(def)},`)
+    .join('\n')
+
 function safeComment(text) {
-  return text.replace(/\r?\n/g, ' ').replace(/\*\//g, '* /')
+  // U+2028/U+2029 是合法 JSON 字符但会被 JS 当作行终止符；进入 // 注释前一并替换。
+  return text.replace(/[\r\n  ]/g, ' ').replace(/\*\//g, '* /')
 }
 
 const specHint = (spec, basePath) =>
@@ -323,12 +330,7 @@ const specHint = (spec, basePath) =>
 // nest-module 模板：HTTP 契约联动 / internal 仅服务（不强制 HTTP 契约）
 // ---------------------------------------------------------------------------
 function contractFile({ spec, basePath, fields }) {
-  const fieldLines = Object.entries(fields)
-    .map(([fieldName, def]) => `    ${fieldName}: ${zodExpr(def)},`)
-    .join('\n')
-  const dtoLines = Object.entries(fields)
-    .map(([fieldName, def]) => `    ${fieldName}: ${zodExpr(def)},`)
-    .join('\n')
+  const fieldLines = objectFieldLines(fields, '    ')
   return `// ${specHint(spec, basePath)}：传输契约（devenv gen nest-module --http 生成；#67）
 // 路由常量、请求/响应 schema 与端点清单同源；端点经 api-registry.ts 的整行锚点
 // 自动进入 API_CONTRACT_ENDPOINTS（#66 OpenAPI 完整性检查据此核对）。
@@ -359,7 +361,7 @@ export type Create${pascal}Result = z.infer<typeof Create${pascal}ResultSchema>
 export const ${pascal}DtoSchema = z
   .object({
     id: z.number().int(),
-${dtoLines}
+${fieldLines}
     createdAt: z.string(),
   })
   .strict()

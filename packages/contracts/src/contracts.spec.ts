@@ -91,7 +91,7 @@ describe('NearbyResultSchema', () => {
   })
 })
 
-describe('ValidationErrorSchema 与 API_CONTRACT_ENDPOINTS', () => {
+describe('ValidationErrorSchema 与手写端点清单', () => {
   it('解析 400 校验错误载荷并拒绝缺 message', () => {
     expect(
       ValidationErrorSchema.parse({
