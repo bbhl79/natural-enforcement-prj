@@ -1,0 +1,12 @@
+{
+  "title": "巡查工单",
+  "description": "广州市自然资源执法巡查工单（devenv gen page 闭环夹具）",
+  "basePath": "/smoke-pages",
+  "fields": {
+    "title": { "type": "string", "minLength": 1, "maxLength": 200, "label": "巡查标题" },
+    "severity": { "type": "integer", "minimum": 1, "maximum": 5, "label": "严重等级" },
+    "areaSqm": { "type": "number", "minimum": 0, "maximum": 100000, "label": "涉及面积(㎡)" },
+    "urgent": { "type": "boolean", "label": "是否加急" },
+    "remark": { "type": "string", "maxLength": 500, "optional": true, "label": "补充备注('单'/\"双\"/${tpl})" }
+  }
+}

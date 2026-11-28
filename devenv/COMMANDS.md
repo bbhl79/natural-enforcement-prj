@@ -30,7 +30,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | ESLint（运行期持共享栈使用租约） | `devenv lint` | 0 或 3/4/6 |
 | tsc --noEmit（运行期持共享栈使用租约） | `devenv typecheck` | 0 或 3/4/6 |
 | 聚合质量门：lint + typecheck + test:unit（本地与 CI 同一入口；运行期持共享栈使用租约） | `devenv verify` | 0 或 3/4/6 |
-| 从当前工作树生成器生成新 workspace 包/应用或契约完整的 Nest 模块：package/app 自动补 workspace.Dockerfile 两靶 manifest 并触发机器级 lockgen；nest-module `--http` 生成契约/schema/校验/集成测试并整行锚点登记 OpenAPI 清单，`--internal` 仅生成 module/service（不强制 HTTP 契约）；来源路径+子树哈希+整集哈希可核；目标已存在/锚点已注入即拒绝，全有或全无；缺业务信息 exit 2；非预期 lockfile diff 停止并保留现场 | `devenv gen <package\|app> <kebab-case 名>` 或 `devenv gen nest-module <kebab-case 名> --http\|--internal --spec <仓库相对路径>` | 0 或 2/3/4/6 |
+| 从当前工作树生成器生成新 workspace 包/应用、契约完整的 Nest 模块或自动注册页面：package/app 自动补 workspace.Dockerfile 两靶 manifest 并触发机器级 lockgen；nest-module `--http` 生成契约/schema/校验/集成测试并整行锚点登记 OpenAPI 清单，`--internal` 仅生成 module/service（不强制 HTTP 契约）；page 经 RTK Query + `validated` 消费既有 HTTP 契约并整行锚点注册到 `App.tsx`，表单使用 React `useId`（多 React 根带根级前缀）；来源路径+子树哈希+整集哈希可核；目标已存在/锚点已注入即拒绝，全有或全无；缺业务信息或契约 exit 2；非预期 lockfile diff 停止并保留现场 | `devenv gen <package\|app> <kebab-case 名>`、`devenv gen nest-module <kebab-case 名> --http\|--internal --spec <仓库相对路径>` 或 `devenv gen page <kebab-case 名> --spec <仓库相对路径> [--contract <契约名>]` | 0 或 2/3/4/6 |
 | 读取当前绑定 workspace 镜像内的 pnpm 下载证据（构建须 `DEVENV_PNPM_EVIDENCE=1`；证据缺失/流不完整 exit 4，不默认通过） | `devenv gen evidence` | 0 或 3/4 |
 | 应用全部 pending 迁移（prisma migrate deploy；与活跃租约互斥） | `devenv migrate` | 0 或 3/4/6 |
 | 生成空迁移待编辑（prisma migrate dev --create-only；与活跃租约互斥） | `devenv migrate:create --name N` | 0 或 2/3/4/6 |
@@ -55,7 +55,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 码 | 含义 | 典型修复 |
 |---|---|---|
 | 0 | 成功 | — |
-| 2 | 用法错误（未知子命令/缺参数/非法覆盖格式；`gen nest-module` 缺必要业务信息、spec 非法或 basePath 与既有契约路由冲突——含容器内生成器拒绝的字段类型/约束错误，其退出码 2 原样透传，不降级为 4） | 按 Usage 与 COMMANDS.md；spec 问题按错误消息修正 `--spec` 文件 |
+| 2 | 用法错误（未知子命令/缺参数/非法覆盖格式；`gen nest-module` / `gen page` 缺必要业务信息、spec 非法、basePath 与既有契约路由冲突，或 `gen page` 缺少/不兼容 create/list HTTP 契约——含容器内生成器拒绝的字段类型/约束/字段不匹配错误，其退出码 2 原样透传，不降级为 4） | 按 Usage 与 COMMANDS.md；spec/契约问题按错误消息修正 `--spec` 或先生成 HTTP 契约 |
 | 3 | 环境未就绪（引擎不在矩阵、端点解析失败、服务未起、锁文件缺失、web 显式端口被占用） | 按错误内嵌修复命令（多为 `devenv up`/`devenv build`；端口占用时报占用者并给替代命令） |
 | 4 | 任务失败（test/lint/typecheck/build/verify 非零；拉取失败；快照采集期工作树持续变化——明确拒绝，不出混合内容） | 看 stderr 完整输出；采集拒绝时暂停文件修改后重试 |
 | 5 | 超时（健康等待/镜像拉取） | `devenv logs <svc>` 排查；prefetch 重跑续跑 |
@@ -74,11 +74,12 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
    `{"event":"gate.completed",...}` 等），终值事件
    `{"command":"<cmd>","status":"ok|failed","exitCode":N,...}`；短命令为单 JSON。
    人类可读进度一律走 stderr，子进程原始输出捕获分流，**不得混入结果流**。
-   `gen package` / `gen app` / `gen nest-module` 的 JSONL 含 `{"event":"gen.source",...}`
+   `gen package` / `gen app` / `gen nest-module` / `gen page` 的 JSONL 含 `{"event":"gen.source",...}`
    （宿主来源路径/子树哈希/整集哈希/文件数/快照）、`{"event":"gen.applied",...}`
    （落盘文件数与补丁数）；package/app 另有 `{"event":"gen.lockfile","result":"expected",...}`。
    nest-module 的终值另含 `variant=http|internal`、`spec=<路径>`、`patches=<补丁数>`、
-   `lockgen=not-required`（不新增 workspace 包/依赖）。生成器容器的 stdout tar
+   `lockgen=not-required`（不新增 workspace 包/依赖）；page 的终值含 `contract=<契约名>`、
+   `spec=<路径>`、`patches=1`、`lockgen=not-required`。生成器容器的 stdout tar
    由 devenv 内部捕获到事务目录（**不经 devenv 的 stdout**），与结果流严格分离；
    `--json` 的 stdout 只有 JSONL。`gen evidence` 是短命令：非 `--json` 时 stdout
    为单行紧凑证据 JSON，`--json` 时为 engine 事件 + 同一证据 JSON（JSONL）。
@@ -190,14 +191,14 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
   （基础镜像拉取）。
 - **复合过程整体持锁**：build/up/down/restart/web 的"检查新鲜度 → 构建 →
   启动/停止"从入口到退出持同一把排他锁（单步锁保护不了全过程）；`gen package` /
-  `gen app` 从采集货源到 lockgen 结束持 `gen-<wt>`；`gen nest-module` 从采集货源
+  `gen app` 从采集货源到 lockgen 结束持 `gen-<wt>`；`gen nest-module` / `gen page` 从采集货源
   到落盘结束持同一把（不触发 lockgen）。build 在栈锁之后也取同一把（gen/build
   互斥），进程被 kill 留下的失效锁由下一次取得识别并清理，不永久阻塞环境。
 
 | 命令 | 持有锁/租约 | 互斥对象 |
 |---|---|---|
 | build / up / down / restart / web（up 与 --down 路径）/ supply-chain --container | stack-<wt>（排他，per-worktree）；build 另取 gen-<wt> | 本 worktree 内彼此两两互斥；有活跃共享租约时等待，超时 exit 6。web 端口分配不持锁：省略 --port 时引擎原子分配（#62），跨 worktree 无端口互斥 |
-| gen package / gen app / gen nest-module | gen-<wt>（排他，per-worktree）；package/app 触发时另取 lockgen（机器级） | 与其它 gen、与 build 互斥（build 也取得 gen-<wt>，保证生成期源码/锁文件不被并发**构建**读取）；lockgen 跨 worktree 互斥；冲突等待或 exit 6。nest-module 不新增 workspace 包，不触发 lockgen。其余只读消费命令不取 gen 锁，靠快照采集的 stat 括号/双读检出混合状态并明确拒绝（exit 4），不与 gen 串行。gen 不做栈变更，不取栈使用租约 |
+| gen package / gen app / gen nest-module / gen page | gen-<wt>（排他，per-worktree）；package/app 触发时另取 lockgen（机器级） | 与其它 gen、与 build 互斥（build 也取得 gen-<wt>，保证生成期源码/锁文件不被并发**构建**读取）；lockgen 跨 worktree 互斥；冲突等待或 exit 6。nest-module/page 不新增 workspace 包，不触发 lockgen。其余只读消费命令不取 gen 锁，靠快照采集的 stat 括号/双读检出混合状态并明确拒绝（exit 4），不与 gen 串行。gen 不做栈变更，不取栈使用租约 |
 | migrate / migrate:create | stack-<wt> + migrate-<wt>（排他，按此顺序取得） | 本 worktree 内互斥；与活跃共享租约互斥（等待/exit 6）；与其它 worktree 互不阻塞 |
 | test / test:unit / verify / lint / typecheck / seed（运行期） | stack-<wt> 共享租约（per-worktree） | 多个租约可并行；与上述排他命令双向互斥（读者遇排他锁等待/exit 6） |
 | prefetch | prefetch（机器级） | 跨 worktree 互斥（基础镜像拉取）；冲突等待或 exit 6（重跑续跑） |
@@ -235,14 +236,15 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
 > 的命令（prefetch/build/up/images/status/doctor 等）在锁文件缺失或
 > `DEVENV_DB_IMAGE` 格式非法时可退出 2（用法错误），上表不逐行重复。
 
-## 脚手架生成（#64 package / #65 app / #67 nest-module，Spec-工程基座 §5）
+## 脚手架生成（#64 package / #65 app / #67 nest-module / #68 page，Spec-工程基座 §5）
 
 - **来源可核，无烘焙 fallback**：生成器 = 当前工作树的完整 `devenv/gen/` 集合，
   经固定快照（#58）采集；报告宿主来源路径、git 子树哈希（`treeHash`）与整集内容
   哈希（`setHash`）。输入经 **stdin tar** 进入一次性容器（`--network none
   --read-only`），容器侧重算整集哈希并与宿主比对——不一致即退出 4，未执行生成。
   nest-module 的业务 spec 与锚点文件（`apps/api/src/app.module.ts`、
-  `packages/contracts/src/api-registry.ts`）同经该 tar 传入，不读镜像内烘焙副本。
+  `packages/contracts/src/api-registry.ts`），以及 page 的业务 spec、契约文件与
+  `apps/web/src/App.tsx` 同经该 tar 传入，不读镜像内烘焙副本。
   `.dockerignore` 排除 `devenv/gen`，容器入口另断言 `/workspace/devenv/gen`
   不存在：镜像内没有可静默 fallback 的生成器副本。
 - **文件通道隔离**：生成器容器的 stdout tar 由 devenv 内部捕获到事务目录，不经
@@ -297,6 +299,34 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
   普通构建 frozen install 成功；HTTP 生成物另经 `node apps/api/dist/scripts/
   emit-openapi.js` 导出并强制 #66 完整性检查。生成器执行与 build 读取源码/锁文件
   互斥（`gen-<wt>`），lockgen 与其它 worktree 互斥（机器级）。
+- **page 自动注册与表单实例唯一（#68）**：`devenv gen page <name> --spec <仓库相对路径>
+  [--contract <kebab-case 契约名>]`。`--spec` 复用 nest-module 的字段模型（新增可选顶层
+  `title` 与字段级 `label`；字段 label 须唯一），`--contract` 默认与 `<name>` 同名，
+  必须指向 `@ne/contracts` 中已导出的 create/list HTTP 契约（如 `#67 gen nest-module --http`
+  生成物）；缺失 spec、空 fields、缺失契约、契约不含 create/list 导出或 spec 字段与契约
+  不符 → exit 2，生成前停止（零写入）。同名页面目录或 `App.tsx` 已注入同名 key/import → exit 4。
+  - 生成物落 `apps/web/src/pages/<name>/`（`<name>.api.ts`、`<Pascal>Form.tsx`、
+    `<Pascal>Page.tsx`、`<Pascal>Page.spec.tsx`），按 `apps/web/src/App.tsx` 的
+    `// @gen:page-import` / `// @gen:page-item` 整行锚点自动注册为标签页；不新增
+    workspace 包/依赖 → 不触发 lockgen，仍执行静态供应链门禁。
+  - 契约与代理同源：`<name>.api.ts` 经 `neApi.enhanceEndpoints({ addTagTypes }).injectEndpoints`
+    消费 `@ne/contracts` 路由常量与推断类型，响应全部经 `validated(...)` 统一校验封装；
+    `apps/web/vite.config.ts` 的 `apiProxy` 直接从 `API_CONTRACT_ENDPOINTS` 派生并配置
+    `preview.allowedHosts: ['web', 'localhost']`，生成页面通过 `devenv web` 即可立即调用真实 API。
+  - 表单实例唯一与多 React 根：`apps/web/src/lib/root.tsx`（`createWebRoot`）为
+    `createRoot` 统一传入 `identifierPrefix`（主入口默认 `ne-web-`，省略时自动分配递增前缀）；
+    `<Pascal>Form` 与既有 `CreatePointForm` / `NearbyPanel` 均使用 React `useId` 作为 Ant Design
+    `<Form name={formId}>`。生成的 `<Pascal>Page.spec.tsx` 与基线 `apps/web/test/form-uniqueness.spec.tsx`
+    在真实渲染 DOM 上断言双相同 Form 与多 React 根的 DOM id 唯一、根级前缀生效及 `<label for>` 关联。
+  - `eslint-plugin-react` 最小正确性规则面（13 条 error 规则）在根级 `eslint.config.js`
+    flat config 下生效（显式 `settings.react.version: '19.3'` 兼容 ESLint 10）。
+- **page 真实引擎冒烟（#68 AC1–AC5）**：`devenv/test/gen-page-smoke.sh [--timeout S]`
+  在真实引擎上依次验证：① `eslint-plugin-react` 13 条规则反例探针；② `gen nest-module --http`
+  + `gen page`（同名与 `--contract` 异名）→ 整行锚点核对 → `verify` → `up` + `web` → `test`
+  → 真实栈 UI 旅程（`VITE_LIVE_WEB_URL=http://web:4173` 下挂载真实 `<App />` 自动注册标签，
+  表单提交经 `vite preview` proxy 到真实 NestJS API 并回显在表格）→ 宿主 `curl` 独立核对
+  实时 API 状态；③ 重复生成拒绝（exit 4）与容器/宿主反例（exit 2）；④ 全程工作树签名核对
+  无部分写入与基线复原。原始证据与 `SUMMARY.md` 写入 `.artifacts/68-gen-page/`。
 - **nest-module 真实引擎冒烟（#67 AC5）**：`devenv/test/gen-nest-module-smoke.sh
   [--timeout S]` 在真实引擎上对 HTTP 与 internal 各走 gen → 清单/整行锚点核对 →
   verify → test → [HTTP] OpenAPI 导出与端点断言 → 重复生成拒绝（exit 4）→ 复原

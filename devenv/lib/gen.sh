@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 # ============================================================================
-# devenv 脚手架生成库（#64 / #65 / #67；被 devenv/devenv source，不直接执行）
+# devenv 脚手架生成库（#64 / #65 / #67 / #68；被 devenv/devenv source，不直接执行）
 #
 # Spec-工程基座 §5「脚手架」落地：
 #   - 生成器来源 = **本次调用当前工作树的完整 `devenv/gen/` 集合**。命令先在
@@ -16,6 +16,9 @@
 #   - nest-module（#67）：HTTP kind 生成 @ne/contracts 契约文件并整行锚点登记到
 #     api-registry（OpenAPI 完整性检查清单）；internal kind 不生成 HTTP 契约。
 #     二者均按整行锚点登记 app.module.ts；不新增 workspace 包，因此不触发 lockgen。
+#   - page（#68）：生成消费 @ne/contracts（RTK Query + validated 统一封装）与
+#     React useId 实例唯一表单的页面及组件测试，按整行锚点自动注册到 App.tsx；
+#     不新增 workspace 包，因此不触发 lockgen。
 #   - 锁关系（#61 一致）：gen 持 per-worktree `gen-<wt>` 源码锁；build 同时持
 #     `gen-<wt>`（两者互斥）；package/app 触发 lockgen 取机器级 `lockgen` 锁。
 # ============================================================================
@@ -42,6 +45,7 @@ gen_kind_root() { # <kind> <name> → 新生成物根目录（相对仓库）
     package) printf 'packages/%s' "$2" ;;
     app)     printf 'apps/%s' "$2" ;;
     nest-module) printf 'apps/api/src/%s' "$2" ;;
+    page)    printf 'apps/web/src/pages/%s' "$2" ;;
     *)       die 2 "内部错误：未知 kind ${1}" ;;
   esac
 }
@@ -75,6 +79,9 @@ gen_expected_patch_paths() { # <kind> <variant>
         printf '%s\n' 'packages/contracts/src/api-registry.ts'
       fi
       ;;
+    page)
+      printf '%s\n' 'apps/web/src/App.tsx'
+      ;;
     *) die 2 "内部错误：未知 kind ${1}" ;;
   esac
   return 0
@@ -82,6 +89,7 @@ gen_expected_patch_paths() { # <kind> <variant>
 
 # 生成物必须包含的文件（防止 HTTP 生成契约缺失却谎报成功；internal 不得生成 HTTP 契约）。
 gen_required_files() { # <kind> <name> <variant>
+  local pascal
   case "$1" in
     package)
       printf '%s\n' "packages/$2/package.json" "packages/$2/src/index.ts" "packages/$2/src/hello.spec.ts"
@@ -107,17 +115,26 @@ gen_required_files() { # <kind> <name> <variant>
         *) die 2 "内部错误：未知 nest-module variant ${3}" ;;
       esac
       ;;
+    page)
+      pascal="$(gen_pascal "$2")"
+      printf '%s\n' \
+        "apps/web/src/pages/$2/$2.api.ts" \
+        "apps/web/src/pages/$2/${pascal}Form.tsx" \
+        "apps/web/src/pages/$2/${pascal}Page.tsx" \
+        "apps/web/src/pages/$2/${pascal}Page.spec.tsx"
+      ;;
     *) die 2 "内部错误：未知 kind ${1}" ;;
   esac
 }
 
-# nest-module spec 宿主预检（业务信息缺失/非法 → exit 2，生成前停止）。
+# nest-module / page spec 宿主预检（业务信息缺失/非法 → exit 2，生成前停止）。
 # 深层字段类型校验由容器内生成器执行；宿主先拒绝路径不安全、被 gitignore
 # （不会进入快照）或明显缺 fields 的输入。
-gen_spec_validate() { # <specRel> <name> <variant>
-  local spec="$1" name="$2" variant="$3" abs base existing
+gen_spec_validate() { # <specRel> <name> <mode: http|internal|page>
+  local spec="$1" name="$2" mode="$3" abs base existing label_kind="nest-module"
+  [[ "$mode" == "page" ]] && label_kind="page"
   [[ -n "$spec" ]] \
-    || die 2 "缺少必要业务信息：nest-module 需要 --spec <仓库相对路径>（JSON：fields 非空）"
+    || die 2 "缺少必要业务信息：${label_kind} 需要 --spec <仓库相对路径>（JSON：fields 非空）"
   abs="$REPO_ROOT/$spec"
   [[ "$spec" =~ ^[A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*$ ]] \
     || die 2 "spec 路径须为简单的仓库相对路径（字母数字/._- 与 /，无空格与 ../）：$spec"
@@ -136,13 +153,15 @@ gen_spec_validate() { # <specRel> <name> <variant>
     || die 2 "缺少必要业务信息：spec.fields 必须是非空对象（否则拒绝生成假完整骨架）：$spec"
   jq -e '((has("description") | not) or (.description | type == "string"))' "$abs" >/dev/null 2>&1 \
     || die 2 "spec.description 必须是字符串：$spec"
+  jq -e '((has("title") | not) or (.title | type == "string"))' "$abs" >/dev/null 2>&1 \
+    || die 2 "spec.title 必须是字符串：$spec"
   jq -e '((has("basePath") | not) or (.basePath | type == "string"))' "$abs" >/dev/null 2>&1 \
     || die 2 "spec.basePath 必须是字符串：$spec"
   # HTTP 契约联动：basePath 与「其它模块」现有契约路由冲突时，OpenAPI 会出现重复
   # operation（#66 完整性检查必失败）。在生成前按契约源码中的路由字面量做冲突预检。
   # 排除本模块自己的契约文件：同名重复生成应由 gen_host_preflight 以 exit 4
   # 「目标已存在」拒绝（幂等语义），而不是在此被误报成路由冲突。
-  if [[ "$variant" == "http" ]]; then
+  if [[ "$mode" == "http" ]]; then
     base="$(jq -r '.basePath // ""' "$abs")"
     [[ -n "$base" ]] || base="/$name"
     existing="$(grep -rhoE --include='*.ts' --exclude='*.spec.ts' --exclude="$name.ts" \
@@ -151,6 +170,37 @@ gen_spec_validate() { # <specRel> <name> <variant>
     if printf '%s\n' "$existing" | grep -qxF -- "$base"; then
       die 2 "spec.basePath 与已有契约路由冲突：${base}（OpenAPI 不允许重复 operation；请更换 basePath）"
     fi
+  fi
+}
+
+# page 契约预检：page 必须消费 @ne/contracts 中具备 create/list 端点的既有 HTTP 契约
+# （如 #67 `gen nest-module --http` 生成物）；缺失或形状不符 → exit 2，生成前停止。
+gen_page_contract_validate() { # <contract> <specRel>
+  local contract="$1" spec="$2" rel abs c_pascal c_upper sym reexport
+  [[ "$contract" =~ ^[a-z][a-z0-9]*(-[a-z0-9]+)*$ ]] \
+    || die 2 "--contract 须为 kebab-case（小写字母数字+连字符）：${contract}"
+  rel="packages/contracts/src/${contract}.ts"
+  abs="$REPO_ROOT/$rel"
+  [[ -f "$abs" && ! -L "$abs" ]] \
+    || die 2 "缺少契约模块：${rel} 不存在（page 须消费 @ne/contracts 契约；请先执行 devenv gen nest-module ${contract} --http --spec ${spec}，或用 --contract 指定已有 HTTP 契约）"
+  if git -C "$REPO_ROOT" check-ignore -q -- "$rel" 2>/dev/null; then
+    die 2 "契约文件被 .gitignore 忽略，不会进入生成器输入快照：${rel}"
+  fi
+  c_pascal="$(gen_pascal "$contract")"
+  c_upper="$(gen_upper "$contract")"
+  for sym in \
+    "export const ${c_upper}_ROUTES" \
+    "export const Create${c_pascal}Schema" \
+    "export const Create${c_pascal}ResultSchema" \
+    "export const ${c_pascal}DtoSchema" \
+    "export const ${c_pascal}ListResultSchema"; do
+    grep -qF -- "$sym" "$abs" \
+      || die 2 "契约 ${rel} 缺少 create/list 导出（${sym}）；page 只能消费带 create/list 端点的 HTTP 契约"
+  done
+  reexport="export * from './${contract}.js'"
+  if ! gen_has_line "$REPO_ROOT/packages/contracts/src/api-registry.ts" "$reexport" \
+    && ! gen_has_line "$REPO_ROOT/packages/contracts/src/index.ts" "$reexport"; then
+    die 2 "契约 ${rel} 未从 @ne/contracts 导出（缺少 ${reexport}）"
   fi
 }
 
@@ -243,6 +293,22 @@ gen_host_preflight() { # <kind> <name> <variant>
           || die 4 "api-registry.ts 缺少整行锚点 // @gen:endpoint-spread（未写入任何文件）"
       fi
       ;;
+    page)
+      local app_tsx="$REPO_ROOT/apps/web/src/App.tsx"
+      [[ ! -e "$REPO_ROOT/apps/web/src/pages/$name" ]] \
+        || die 4 "目标已存在：apps/web/src/pages/${name}/（幂等保护，未写入任何文件）。先删除该目录再重试"
+      [[ -f "$app_tsx" ]] \
+        || die 4 "锚点文件缺失：apps/web/src/App.tsx（无法自动注册页面；未写入任何文件）"
+      pascal="$(gen_pascal "$name")"
+      import_line="import ${pascal}Page from './pages/${name}/${pascal}Page.js'"
+      if gen_has_line "$app_tsx" "$import_line" || grep -qF -- "key: '${name}'," "$app_tsx"; then
+        die 4 "App.tsx 已注入过 ${pascal}Page（幂等保护，未写入任何文件）"
+      fi
+      gen_has_line "$app_tsx" '// @gen:page-import' \
+        || die 4 "App.tsx 缺少整行锚点 // @gen:page-import（未写入任何文件）"
+      gen_has_line "$app_tsx" '// @gen:page-item' \
+        || die 4 "App.tsx 缺少整行锚点 // @gen:page-item（未写入任何文件）"
+      ;;
     *) die 2 "内部错误：未知 kind ${kind}" ;;
   esac
 }
@@ -273,10 +339,10 @@ SH
 }
 
 # 在无网络、只读根、仅 /tmp tmpfs 的一次性容器里运行当前工作树生成器。
-# stdin = 输入 tar（git 快照树中的 devenv/gen + 锚点 + nest-module spec，无文件系统
-# 元数据）；stdout = 生成物 tar（与结果流完全隔离）。
-gen_run_container() { # <workdir> <kind> <name> <variant> <specRel> <tree>
-  local work="$1" kind="$2" name="$3" variant="$4" spec="$5" tree="$6" rc=0
+# stdin = 输入 tar（git 快照树中的 devenv/gen + 锚点 + nest-module/page spec 与契约，
+# 无文件系统元数据）；stdout = 生成物 tar（与结果流完全隔离）。
+gen_run_container() { # <workdir> <kind> <name> <variant> <specRel> <tree> [contract]
+  local work="$1" kind="$2" name="$3" variant="$4" spec="$5" tree="$6" contract="${7:-}" rc=0
   local -a anchors=()
   case "$kind" in
     package|app) anchors=("devenv/gen" "devenv/workspace.Dockerfile") ;;
@@ -284,6 +350,16 @@ gen_run_container() { # <workdir> <kind> <name> <variant> <specRel> <tree>
       anchors=("devenv/gen" "apps/api/src/app.module.ts")
       [[ "$variant" == "http" ]] && anchors+=("packages/contracts/src/api-registry.ts")
       [[ -n "$spec" ]] && anchors+=("$spec")
+      ;;
+    page)
+      anchors=(
+        "devenv/gen"
+        "apps/web/src/App.tsx"
+        "packages/contracts/src/${contract}.ts"
+        "packages/contracts/src/api-registry.ts"
+        "packages/contracts/src/index.ts"
+        "$spec"
+      )
       ;;
     *) die 2 "内部错误：未知 kind ${kind}" ;;
   esac
@@ -294,7 +370,8 @@ gen_run_container() { # <workdir> <kind> <name> <variant> <specRel> <tree>
   docker run --rm -i --network none --read-only --tmpfs /tmp:rw,size=128m \
     -e "NE_GEN_SET_SHA256=$GEN_SET_SHA256" \
     -e "NE_GEN_KIND=$kind" -e "NE_GEN_NAME=$name" \
-    -e "NE_GEN_VARIANT=$variant" -e "NE_GEN_SPEC_REL=$spec" \
+    -e "NE_GEN_VARIANT=$variant" -e "NE_GEN_CONTRACT=$contract" \
+    -e "NE_GEN_SPEC_REL=$spec" \
     --entrypoint sh "$TOOLS_IMAGE_EFFECTIVE" -c "$(gen_container_script)" \
     < "$work/input.tar" > "$work/output.tar" || rc=$?
   if (( rc != 0 )); then
@@ -313,7 +390,8 @@ gen_run_container() { # <workdir> <kind> <name> <variant> <specRel> <tree>
 }
 
 # 生成物新文件路径范围：package/app 只允许自己的根目录；nest-module 允许模块
-# 目录 + HTTP 契约两个文件（internal 不得写 packages/contracts）。
+# 目录 + HTTP 契约两个文件（internal 不得写 packages/contracts）；page 只允许
+# 自己的页面目录 apps/web/src/pages/<name>/。
 gen_file_path_allowed() { # <kind> <name> <variant> <path>
   local kind="$1" name="$2" variant="$3" p="$4"
   case "$kind" in
@@ -329,13 +407,16 @@ gen_file_path_allowed() { # <kind> <name> <variant> <path>
         *) return 1 ;;
       esac
       ;;
+    page)
+      [[ "$p" == "apps/web/src/pages/${name}/"* ]]
+      ;;
     *) return 1 ;;
   esac
 }
 
 # 校验生成物 tar 的清单/哈希/路径，解包到仓库内暂存目录（同一文件系统，rename 原子）。
-gen_stage_output() { # <workdir> <stage> <kind> <name> <variant> <specRel> <tree>
-  local work="$1" stage="$2" kind="$3" name="$4" variant="$5" spec="$6" tree="$7"
+gen_stage_output() { # <workdir> <stage> <kind> <name> <variant> <specRel> <tree> [contract]
+  local work="$1" stage="$2" kind="$3" name="$4" variant="$5" spec="$6" tree="$7" contract="${8:-}"
   local manifest="$stage/$GEN_MANIFEST_NAME"
   local bad p s actual members unsafe links line oldc newc
   mkdir -p "$stage"
@@ -357,13 +438,14 @@ gen_stage_output() { # <workdir> <stage> <kind> <name> <variant> <specRel> <tree
   bad="$(jq -r '.files[]?.path, .patches[]?.path' "$manifest" 2>/dev/null | awk '
     $0=="" || /^\// || /(^|\/)\.\.(\/|$)/ || /\\/ { print }' || true)"
   [[ -z "$bad" ]] || die 4 "生成物清单含非法路径（未写入任何文件）：${bad}"
-  # 清单结构：kind/name/variant 匹配；files/patches 非空；nest-module 必带 spec 哈希
-  if ! jq -e --arg k "$kind" --arg n "$name" --arg v "$variant" '
+  # 清单结构：kind/name/variant/contract 匹配；files/patches 非空；nest-module/page 必带 spec 哈希
+  if ! jq -e --arg k "$kind" --arg n "$name" --arg v "$variant" --arg c "$contract" '
       .manifestVersion == 2 and .kind == $k and .name == $n
       and ((.variant // "") == $v)
+      and ((.contract // "") == $c)
       and (.files | type == "array" and length > 0)
       and (.patches | type == "array" and length > 0)
-      and (if $k == "nest-module" then
+      and (if ($k == "nest-module" or $k == "page") then
              (.spec | type == "object")
              and (.spec.path | type == "string")
              and (.spec.sha256 | type == "string" and test("^[0-9a-f]{64}$"))
@@ -396,8 +478,8 @@ gen_stage_output() { # <workdir> <stage> <kind> <name> <variant> <specRel> <tree
         "$manifest" >/dev/null 2>&1 \
       || die 4 "internal kind 不得生成 HTTP 契约文件（packages/contracts/*；未写入任何文件）"
   fi
-  # nest-module：spec 路径与内容哈希必须绑定本次输入快照（缺业务信息不得蒙混）
-  if [[ "$kind" == "nest-module" ]]; then
+  # nest-module / page：spec 路径与内容哈希必须绑定本次输入快照（缺业务信息不得蒙混）
+  if [[ "$kind" == "nest-module" || "$kind" == "page" ]]; then
     local mpath msha actual_sha
     mpath="$(jq -r '.spec.path' "$manifest")"
     msha="$(jq -r '.spec.sha256' "$manifest")"
