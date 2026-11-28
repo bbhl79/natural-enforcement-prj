@@ -65,6 +65,9 @@ catalog:
   "@aws-sdk/s3-request-presigner": "3.1173.0"
   # 测试 / lint
   vitest: "5.1.1"
+  # e2e 执行器（#70）：npm 包与 devenv/images.lock 的 PLAYWRIGHT_IMAGE tag 严格同版本
+  # （供应链静态门禁交叉核对，升级必须同 PR 改两处并跑 e2e 全量演练）。
+  "@playwright/test": "1.65.1"
   eslint: "10.15.0"
   "@eslint/js": "10.0.1"
   typescript-eslint: "8.73.0"

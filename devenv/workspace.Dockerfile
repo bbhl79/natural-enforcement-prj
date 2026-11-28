@@ -27,6 +27,7 @@ WORKDIR /workspace
 COPY pnpm-workspace.yaml package.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
+COPY apps/e2e/package.json apps/e2e/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 # @gen:pkg-copy（devenv gen package/app 在此行后追加两靶共用的 manifest COPY；
 # 生成器要求本标记恰好两处——lockgen-base 与 deps 各一）
@@ -57,6 +58,7 @@ WORKDIR /workspace
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY apps/api/package.json apps/api/package.json
 COPY apps/web/package.json apps/web/package.json
+COPY apps/e2e/package.json apps/e2e/package.json
 COPY packages/contracts/package.json packages/contracts/package.json
 # @gen:pkg-copy（与 lockgen-base 靶同源：生成器在此追加同一行，保证 lockfile
 # 解析与 frozen install 的 manifest 集合一致）

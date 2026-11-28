@@ -50,8 +50,8 @@ printf 'node_modules/\n.devenv-state/\n' > "$MINI/.gitignore"
 printf '{"name":"mini","private":true}\n' > "$MINI/package.json"
 # 供应链静态门禁输入（#63）：doctor/build 预检要求 catalog 精确 pin、
 # minimumReleaseAge 定值 + strict、allowBuilds 版本化键，且锁文件与声明一致。
-printf 'lockfileVersion: "9.0"\ncatalogs:\n  default:\n    mini-probe:\n      specifier: 1.2.3\n      version: 1.2.3\nimporters:\n  .: {}\n' > "$MINI/pnpm-lock.yaml"
-printf 'packages: []\nminimumReleaseAge: 1440\nminimumReleaseAgeStrict: true\nallowBuilds:\n  mini-probe@1.2.3: true\ncatalog:\n  mini-probe: "1.2.3"\n' > "$MINI/pnpm-workspace.yaml"
+printf 'lockfileVersion: "9.0"\ncatalogs:\n  default:\n    mini-probe:\n      specifier: 1.2.3\n      version: 1.2.3\n    "@playwright/test":\n      specifier: 1.65.1\n      version: 1.65.1\nimporters:\n  .: {}\n' > "$MINI/pnpm-lock.yaml"
+printf 'packages: []\nminimumReleaseAge: 1440\nminimumReleaseAgeStrict: true\nallowBuilds:\n  mini-probe@1.2.3: true\ncatalog:\n  mini-probe: "1.2.3"\n  "@playwright/test": "1.65.1"\n' > "$MINI/pnpm-workspace.yaml"
 printf '{"name":"@ne/api"}\n' > "$MINI/apps/api/package.json"
 printf '{"name":"@ne/web"}\n' > "$MINI/apps/web/package.json"
 printf '{"name":"@ne/contracts"}\n' > "$MINI/packages/contracts/package.json"
@@ -546,8 +546,8 @@ rm -rf "$DEVENV_LOCK_ROOT/stack-$A_SUFFIX.lease"
 rm -f "$MOCK_DOCKER_STATE/prefetch-lock-check.txt"
 run i11 env MOCK_ASSERT_PREFETCH_LOCK=1 DEVENV_STATE_DIR="$SANDBOX/state-pf" "$DEVENV" prefetch
 [[ "$RC" == 0 ]] && pass "I11 prefetch 成功" || fail "I11" "rc=$RC err=$(tail -3 "$SANDBOX/i11.err")"
-[[ "$(grep -c 'prefetch-lock-held' "$MOCK_DOCKER_STATE/prefetch-lock-check.txt" 2>/dev/null || true)" == 2 ]] \
-  && pass "I11 两个镜像 pull 全程持机器级 prefetch 锁" \
+[[ "$(grep -c 'prefetch-lock-held' "$MOCK_DOCKER_STATE/prefetch-lock-check.txt" 2>/dev/null || true)" == 5 ]] \
+  && pass "I11 五个上游镜像 pull 全程持机器级 prefetch 锁" \
   || fail "I11" "锁未在场：$(cat "$MOCK_DOCKER_STATE/prefetch-lock-check.txt" 2>/dev/null)"
 [[ ! -d "$DEVENV_LOCK_ROOT/prefetch.lock" ]] \
   && pass "I11 prefetch 退出后机器级锁释放" || fail "I11" "锁目录残留"

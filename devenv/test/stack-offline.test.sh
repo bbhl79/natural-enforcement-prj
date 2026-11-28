@@ -40,10 +40,11 @@ setup() {
   # 输入，否则门禁会以「缺 pnpm-workspace.yaml」失败，掩盖引擎用例本身。
   cp "$REPO_ROOT/pnpm-workspace.yaml" "$REPO_ROOT/pnpm-lock.yaml" \
      "$REPO_ROOT/package.json" "$SANDBOX/"
-  mkdir -p "$SANDBOX/apps/api" "$SANDBOX/apps/web" \
+  mkdir -p "$SANDBOX/apps/api" "$SANDBOX/apps/web" "$SANDBOX/apps/e2e" \
            "$SANDBOX/packages/contracts" "$SANDBOX/packages/tsconfig"
   cp "$REPO_ROOT/apps/api/package.json" "$SANDBOX/apps/api/package.json"
   cp "$REPO_ROOT/apps/web/package.json" "$SANDBOX/apps/web/package.json"
+  cp "$REPO_ROOT/apps/e2e/package.json" "$SANDBOX/apps/e2e/package.json"
   cp "$REPO_ROOT/packages/contracts/package.json" "$SANDBOX/packages/contracts/package.json"
   cp "$REPO_ROOT/packages/tsconfig/package.json" "$SANDBOX/packages/tsconfig/package.json"
 

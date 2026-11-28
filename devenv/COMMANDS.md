@@ -39,6 +39,10 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 人读/机读总览（容器+锁+租约+镜像+web 实际端口；web 未运行如实报 none） | `devenv status` | 0 或 3 |
 | 查看镜像锁与生效 DB 镜像 / 校验运行态 digest 漂移 | `devenv images [--verify]` | 0 或 1/2/3 |
 | 供应链门禁：catalog 精确 pin / allowBuilds 版本化 / 冷却期 / 锁文件漂移 / 镜像锁类型静态核对；`--container` 追加核对待审批构建脚本与包内 agent skills（默认拒绝） | `devenv supply-chain [--container]` | 0 或 2/3/4/6 |
+| 构建 e2e 执行器镜像（官方 Playwright 基座 + 项目运行时；Playwright npm 包与镜像 tag 严格同版本，版本不符即停止；幂等，命中复用） | `devenv e2e build` | 0 或 3/4/6 |
+| e2e 运行登记册（run id / status / live / 数据库 / bucket / 队列；只读） | `devenv e2e runs` | 0 或 3/4 |
+| 观察 per-run 容器日志（透传原始流；api\|worker\|web，默认 api） | `devenv e2e logs --run-id ID [svc] [-f] [--tail N]` | 0 或 2/3 或子进程码 |
+| 探索轨道：共享基础设施容器 + 每 run 独立数据库/bucket/队列键空间；per-run API/worker 绑定本 run 资源；运行期持共享栈使用租约；产物导出宿主 `.artifacts/e2e/<run-id>/`；探索发现=产出（exit 4，不提示误修测试栈） | `devenv explore [--run-id ID]` | 0 或 2/3/4/5/6 |
 
 ### GitHub App 认证入口（不触引擎；详见 docs/agents/github-app-auth.md）
 
@@ -123,7 +127,10 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
 ## 镜像引用与可配置 DB 镜像
 
 - `devenv/images.lock` 是上游镜像 **tag + digest 双层锁**的唯一事实源
-  （`NODE_IMAGE` / `DB_IMAGE` / `DB_IMAGE_MACOS` / `REDIS_IMAGE` / `RUSTFS_IMAGE`）；升级只改锁文件，一律走 PR + 验证。
+  （`NODE_IMAGE` / `DB_IMAGE` / `DB_IMAGE_MACOS` / `REDIS_IMAGE` / `RUSTFS_IMAGE` /
+  `PLAYWRIGHT_IMAGE`）；升级只改锁文件，一律走 PR + 验证。`PLAYWRIGHT_IMAGE`
+  的 tag 版本必须与 `pnpm-workspace.yaml` catalog 的 `@playwright/test` 严格一致
+  （静态门禁交叉核对；不一致即停止构建）。
 - **digest 类型必须与镜像形态一致**（#63）：
   - 多架构镜像锁 **manifest-list digest**（跨架构成立）→ `*_KIND=manifest-list`；
   - 单架构镜像锁**该平台 digest** → `*_KIND=single-arch` 且声明
@@ -200,15 +207,17 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
 | build / up / down / restart / web（up 与 --down 路径）/ supply-chain --container | stack-<wt>（排他，per-worktree）；build 另取 gen-<wt> | 本 worktree 内彼此两两互斥；有活跃共享租约时等待，超时 exit 6。web 端口分配不持锁：省略 --port 时引擎原子分配（#62），跨 worktree 无端口互斥 |
 | gen package / gen app / gen nest-module / gen page | gen-<wt>（排他，per-worktree）；package/app 触发时另取 lockgen（机器级） | 与其它 gen、与 build 互斥（build 也取得 gen-<wt>，保证生成期源码/锁文件不被并发**构建**读取）；lockgen 跨 worktree 互斥；冲突等待或 exit 6。nest-module/page 不新增 workspace 包，不触发 lockgen。其余只读消费命令不取 gen 锁，靠快照采集的 stat 括号/双读检出混合状态并明确拒绝（exit 4），不与 gen 串行。gen 不做栈变更，不取栈使用租约 |
 | migrate / migrate:create | stack-<wt> + migrate-<wt>（排他，按此顺序取得） | 本 worktree 内互斥；与活跃共享租约互斥（等待/exit 6）；与其它 worktree 互不阻塞 |
-| test / test:unit / verify / lint / typecheck / seed（运行期） | stack-<wt> 共享租约（per-worktree） | 多个租约可并行；与上述排他命令双向互斥（读者遇排他锁等待/exit 6） |
+| test / test:unit / verify / lint / typecheck / seed / explore（运行期） | stack-<wt> 共享租约（per-worktree） | 多个租约可并行；与上述排他命令双向互斥（读者遇排他锁等待/exit 6）。explore 从起 per-run 资源到回收全程持租约，`down`/`migrate` 等不会中途拆掉 run 的共享基础设施 |
 | prefetch | prefetch（机器级） | 跨 worktree 互斥（基础镜像拉取）；冲突等待或 exit 6（重跑续跑） |
+| e2e build / explore 的执行器镜像构建 | e2e-image-<wt>（排他，per-worktree；仅构建/核对窗口） | 与其它 e2e 执行器镜像构建互斥（状态文件/可变 tag 读改写串行化）；不取栈锁/租约，无锁序环；冲突等待/exit 6 |
+| explore 启动/运行所有权 | e2e-owner-<wt>-<runid>（排他，per-run-id，创建资源前取得 → 回收结束释放）；e2e-admit-<wt>（短临界区） | 同 run id 的第二个进程在启动窗口等待/exit 6，绝不进入清理路径破坏对方尚未启动的资源；admission 锁串行化「取得所有权 → 计数 → 登记」，并发计数含启动中预留名额；锁名与容器 worktree 标签含 worktree 后缀，跨 worktree 同名显式 run id 互不误判 |
 | build / gen 触发的 lockgen | lockgen（机器级） | 跨 worktree 互斥（共享标签/容器清理）；冲突等待或 exit 6（重跑即续） |
-| 只读（ps/logs/status/images/doctor/gen evidence） | 无 | 任意并发（gen evidence 只读绑定镜像内的证据文件，不重建、不触栈） |
+| 只读（ps/logs/status/images/doctor/gen evidence/e2e runs/e2e logs） | 无 | 任意并发（gen evidence 只读绑定镜像内的证据文件，不重建、不触栈；e2e logs 只读容器日志） |
 | exec / shell（透传调试） | 无 | 交互时长无界，不持租约；需要稳定环境时先结束调试再拆栈 |
 
 ### 栈使用租约（#61）
 
-- **语义**：读者（test/test:unit/verify/lint/typecheck/seed）在运行期持
+- **语义**：读者（test/test:unit/verify/lint/typecheck/seed/explore）在运行期持
   `stack-<wt>.lease/<pid>.<epoch>.<rand>/owner`（共享，可并行）；写者
   （build/up/down/restart/web/migrate*）持 `stack-<wt>.lock`（排他）。
   "启动不被打断 ≠ 测试不被打断"：测试运行期间 `down`/`restart`/`migrate`/
@@ -497,3 +506,59 @@ compose 健康检查读 Redis 心跳（证明已进入消费循环），不发�
   容器内以 `EVIDENCE_UI_BASE_URL=http://web:4173` 渲染真实 `EvidencePanel`，经
   preview proxy 完成 选择 unicode 文件 → 上传 → worker ready → 同源下载字节一致 →
   UI 展示；结束按记录 id 自清理。
+
+## e2e 隔离并行 run（#70）
+
+**目标**：两条（或多条）e2e run 共享基础设施容器，但数据环境与后台处理完全隔离；
+被测 API/worker 自身绑定本 run 资源，而不是只给测试脚本换名字。
+
+**拓扑与数据级隔离**：
+
+- 基础设施共享：`db` / `redis` / `rustfs` 由 dev 栈提供（`devenv up` 后，
+  基础设施容器跨 run 共享）。`explore` 运行期持 **共享栈使用租约**（#61）——
+  `down`/`restart`/`migrate` 等排他意图等待或 exit 6，不会中途拆栈/迁移。
+- 每 run 独立数据环境（命名按各存储系统规则分别净化，超长截断 + 短哈希保唯一）：
+  - 数据库：`e2e_<run-id>`（`[A-Za-z0-9_]`，≤63 字节；`DROP ... WITH (FORCE)`
+    幂等重建 + `prisma migrate deploy`）；
+  - bucket：`e2e-<run-id>`（小写字母数字+连字符，3–63，首尾字母数字）；
+  - 队列键空间：`e2e-<run-id>-evidence-processing`（BullMQ 6 队列名禁 `:`，
+    前缀用 `-`；worker 只消费本 run 队列名）。
+- **服务绑定**：per-run 的 `api` / `worker` / `web` 容器经 `devenv/compose.e2e.yaml`
+  启动（独立 compose 项目 `<worktree-project>-e2e-<run-id>` + per-run external
+  网络），启动时注入本 run 的 `DATABASE_URL` / `S3_BUCKET` / `EVIDENCE_QUEUE_NAME`；
+  基础设施容器以别名 `db`/`redis`/`rustfs` 接入该网络，不复制基础设施。
+- **连接池与并发上限**：per-run API/worker 注入 `DATABASE_POOL_MAX`（默认 2/进程），
+  满足"池 × 并发 < max_connections"；`E2E_MAX_CONCURRENT_RUNS`（默认 4）为硬上限，
+  计数 = 本 worktree 存活的活动所有权锁（**含已登记但尚未起容器的启动预留**），
+  超限在启动窗口拒绝（exit 6）。两个参数均可用同名环境变量显式覆盖。
+- 零宿主端口保持：浏览器/执行器都在容器内网访问本 run 的 `web`/`api`。
+
+**执行器镜像**：
+
+- `devenv/e2e.Dockerfile` 基于 `images.lock` 的 `PLAYWRIGHT_IMAGE`（tag+digest，
+  manifest-list）；`devenv e2e build` 从固定输入快照构建并登记不可变 image ID
+  （`workspace-image.env` 的 `E2E_*` 字段），命中快照/版本时复用。
+- **版本严格一致**：`PLAYWRIGHT_IMAGE` tag 版本必须等于 catalog 的
+  `@playwright/test`（静态门禁交叉核对）；构建期再核对实际安装版本（不一致即停止）。
+- 运行参数：`--init` + `ipc: host`（Chromium /dev/shm）+ 官方镜像浏览器。
+
+**产物与登记册**：
+
+- 执行器产物（Playwright JSON/HTML/trace/video）落 per-run 命名卷，运行结束经
+  `docker cp` 导出宿主 `.artifacts/e2e/<run-id>/`；`run.json` 记录本 run 的
+  数据库/bucket/队列、per-run 容器清单、workspace/执行器/Playwright 镜像绑定与统计。
+- `.devenv-state/e2e-runs/<run-id>.json` 是运行登记册（status/live/资源坐标），
+  `devenv e2e runs` 可读；异常退出标记 `aborted`。
+- 回收：只清理带 e2e 前缀且属于本 run 命名空间的资源（库/桶/队列键空间）；
+  开发库与开发 bucket 永不进入候选集（`delete-bucket` 脚本再次强制 `e2e-` 前缀）。
+
+**探索语义**：`devenv explore` 的测试失败按**产出/任务失败**处理（退出码 4 +
+产物路径 + 日志），提示**先读证据判读是「探索发现」还是「环境/服务绑定故障」，
+不要未经判读就改测试栈**；不是把测试栈当故障直接修。
+基础前置（基础设施未起、镜像构建失败、健康超时）仍按 3/4/5 报错。
+
+**并行演练入口**：`E2E_PARALLEL_GROUP=<组标记> E2E_PARALLEL_SOAK_MS=<毫秒> devenv explore --run-id ...`
+把共享组标记与等待窗口传入执行器；两个 run 用同组标记并行运行，隔离 charter 会在
+等待窗口内反复读本 run 数据面并断言同组其它 run 的数据不出现（默认 0 = 单 run 不等待）。
+失败语义验收钩子：`E2E_FORCE_FINDING=1 devenv explore --run-id ...` 让自检用例故意
+失败，用于复现「失败=产出/任务失败 + 先判读再动手」的报告与产物路径。

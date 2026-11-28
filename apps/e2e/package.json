@@ -1,0 +1,20 @@
+{
+  "name": "@ne/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "e2e 执行器（#70）：Playwright runner，黑盒经 API/UI 验证每 run 数据隔离与服务绑定；生命周期命令面归 Spec-e2e 后续票",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "catalog:",
+    "@ne/contracts": "workspace:*",
+    "@playwright/test": "catalog:"
+  },
+  "devDependencies": {
+    "@ne/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}

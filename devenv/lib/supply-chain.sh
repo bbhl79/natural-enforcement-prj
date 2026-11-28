@@ -172,10 +172,10 @@ sc_is_digest_ref() {
 }
 
 # 镜像锁（Spec §2：多架构锁 manifest-list，单架构锁平台摘要；Mac 路线登记）。
-sc_check_images_lock() { # <images.lock>
-  local f="$1"
+sc_check_images_lock() { # <images.lock> [playwrightCatalogVersion]
+  local f="$1" pw_catalog="${2:-}"
   if [[ ! -f "$f" ]]; then sc_fail "缺 devenv/images.lock（上游镜像 tag+digest 唯一事实源）"; return 1; fi
-  local node db dbkind dbplat mac mackind nkind redis redis_kind rustfs rustfs_kind
+  local node db dbkind dbplat mac mackind nkind redis redis_kind rustfs rustfs_kind pw pw_kind
   node="$(sc_lock_value "$f" NODE_IMAGE)"
   db="$(sc_lock_value "$f" DB_IMAGE)"
   mac="$(sc_lock_value "$f" DB_IMAGE_MACOS)"
@@ -187,6 +187,8 @@ sc_check_images_lock() { # <images.lock>
   redis_kind="$(sc_lock_value "$f" REDIS_IMAGE_KIND)"
   rustfs="$(sc_lock_value "$f" RUSTFS_IMAGE)"
   rustfs_kind="$(sc_lock_value "$f" RUSTFS_IMAGE_KIND)"
+  pw="$(sc_lock_value "$f" PLAYWRIGHT_IMAGE)"
+  pw_kind="$(sc_lock_value "$f" PLAYWRIGHT_IMAGE_KIND)"
 
   [[ -n "$node" ]] || sc_fail "images.lock 缺 NODE_IMAGE"
   [[ -n "$db" ]] || sc_fail "images.lock 缺 DB_IMAGE"
@@ -223,6 +225,25 @@ sc_check_images_lock() { # <images.lock>
   else
     sc_is_digest_ref "$rustfs" || sc_fail "RUSTFS_IMAGE 必须是 repo:tag@sha256:<64hex>：${rustfs}"
     [[ "$rustfs_kind" == "manifest-list" ]] || sc_fail "RUSTFS_IMAGE_KIND 必须为 manifest-list：${rustfs_kind:-缺}"
+  fi
+  # e2e 执行器基座（#70）：tag+manifest-list digest；tag 版本必须与 catalog 的
+  # @playwright/test 严格一致（npm 包与镜像版本同源，升级同 PR 改两处）。
+  if [[ -z "$pw" ]]; then
+    sc_fail "images.lock 缺 PLAYWRIGHT_IMAGE（#70 e2e 执行器基座，tag+manifest-list digest）"
+  else
+    sc_is_digest_ref "$pw" || sc_fail "PLAYWRIGHT_IMAGE 必须是 repo:tag@sha256:<64hex>：${pw}"
+    [[ "$pw_kind" == "manifest-list" ]] || sc_fail "PLAYWRIGHT_IMAGE_KIND 必须为 manifest-list：${pw_kind:-缺}"
+    local pw_tag="${pw%%@*}" pw_ver="${pw%%@*}"
+    pw_ver="${pw_ver##*:}"
+    pw_ver="${pw_ver#v}"
+    pw_ver="${pw_ver%%-*}"
+    if [[ ! "$pw_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+      sc_fail "PLAYWRIGHT_IMAGE tag 版本不可解析（期望 vX.Y.Z[-distro]）：${pw_tag}"
+    elif [[ -z "$pw_catalog" ]]; then
+      sc_fail "catalog 缺 @playwright/test（e2e 执行器版本唯一事实源；镜像 tag 版本=${pw_ver}）"
+    elif [[ "$pw_ver" != "$pw_catalog" ]]; then
+      sc_fail "Playwright 版本不一致：PLAYWRIGHT_IMAGE tag=${pw_ver}，catalog @playwright/test=${pw_catalog}（必须严格同版本）"
+    fi
   fi
   return 0
 }
@@ -408,8 +429,11 @@ supply_chain_static_check() {
     done < "$tmp/manifest-specs.tsv"
   fi
 
-  # 7) 上游镜像锁：tag+digest 双层锁、多架构/单架构类型、macOS 路线登记
-  sc_check_images_lock "$root/devenv/images.lock"
+  # 7) 上游镜像锁：tag+digest 双层锁、多架构/单架构类型、macOS 路线登记、
+  #    e2e 执行器 Playwright 版本与 catalog 严格一致（#70）
+  local pw_catalog=""
+  pw_catalog="$(awk -F'\t' '$1=="@playwright/test"{print $2; exit}' "$tmp/catalog.tsv" 2>/dev/null || true)"
+  sc_check_images_lock "$root/devenv/images.lock" "$pw_catalog"
 
   rm -rf "$tmp"
   sc_has_errors && return 1 || return 0

@@ -49,10 +49,14 @@ PROJECT_NAME="natural-enforcement-$WT_SUFFIX"
 # 本地构建镜像 tag per-worktree（归属可辨；运行正确性仍靠不可变 image ID 绑定，#58）
 TOOLS_IMAGE="natural-enforcement/tools:wt-$WT_SUFFIX"
 WS_IMAGE="natural-enforcement/workspace:wt-$WT_SUFFIX"
+E2E_IMAGE="natural-enforcement/e2e:wt-$WT_SUFFIX"   # e2e 执行器（#70；官方 Playwright 基座 + 项目运行时）
 WS_IMAGE_EFFECTIVE=""     # 本次新鲜度核对/构建绑定的 workspace 不可变镜像标识（image ID）
 TOOLS_IMAGE_EFFECTIVE=""  # 本次新鲜度核对/构建绑定的 tools 不可变镜像标识（image ID）
+E2E_IMAGE_EFFECTIVE=""    # 本次绑定的 e2e 执行器不可变镜像标识（image ID；#70）
+ENSURE_SNAPSHOT_HASH=""   # ensure_fresh_workspace 本次采集/使用的快照树哈希（#70 e2e 复用）
 IMAGES_LOCK="$REPO_ROOT/devenv/images.lock"
 COMPOSE_FILE="$REPO_ROOT/devenv/compose.yaml"
+E2E_COMPOSE_FILE="$REPO_ROOT/devenv/compose.e2e.yaml"
 
 IMAGES_LOADED=0
 DB_IMAGE_EFFECTIVE=""
@@ -62,6 +66,8 @@ DB_IMAGE_PLATFORM_EFFECTIVE=""
 NODE_IMAGE_KIND=""
 DB_IMAGE_MACOS=""
 DB_IMAGE_MACOS_KIND=""
+PLAYWRIGHT_IMAGE_KIND=""
+PLAYWRIGHT_VERSION=""
 
 # --- per-worktree 数据库凭据（#59）--------------------------------------------
 # 首调用生成每 worktree 随机口令（openssl rand -hex 16 → 32 hex，URI 安全），
@@ -188,6 +194,20 @@ images_load() {
     || die 3 "RUSTFS_IMAGE 必须是 repo:tag@sha256:<64hex>：${RUSTFS_IMAGE}"
   [[ "${RUSTFS_IMAGE_KIND:-}" == "manifest-list" ]] \
     || die 3 "images.lock 缺 RUSTFS_IMAGE_KIND=manifest-list（多架构镜像锁 manifest-list digest）"
+  # e2e 执行器基座（#70）：官方 Playwright 镜像多架构 → manifest-list digest；
+  # tag 内的版本号必须可解析（与 catalog @playwright/test 的严格一致由静态门禁交叉核对）。
+  [[ -n "${PLAYWRIGHT_IMAGE:-}" ]] || die 3 "images.lock 缺 PLAYWRIGHT_IMAGE 行（e2e 执行器基座）"
+  images_valid_ref "$PLAYWRIGHT_IMAGE" \
+    || die 3 "PLAYWRIGHT_IMAGE 必须是 repo:tag@sha256:<64hex>（tag+digest 双层锁）：${PLAYWRIGHT_IMAGE}"
+  [[ "${PLAYWRIGHT_IMAGE_KIND:-}" == "manifest-list" ]] \
+    || die 3 "images.lock 缺 PLAYWRIGHT_IMAGE_KIND=manifest-list（多架构镜像锁 manifest-list digest）"
+  local _pw_tag _pw_ver
+  _pw_tag="${PLAYWRIGHT_IMAGE%%@*}"
+  _pw_ver="${_pw_tag##*:}"
+  _pw_ver="${_pw_ver#v}"
+  [[ "$_pw_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9][A-Za-z0-9.-]*)?$ ]] \
+    || die 3 "PLAYWRIGHT_IMAGE tag 版本不可解析（期望 vX.Y.Z[-distro]）：${_pw_tag}"
+  PLAYWRIGHT_VERSION="${_pw_ver%%-*}"
   if [[ -n "${DEVENV_DB_IMAGE:-}" ]]; then
     # 可配置输入校验：repo:tag 或 repo:tag@sha256:<64hex>（拒绝裸 latest 以外的无标签引用）
     if [[ ! "$DEVENV_DB_IMAGE" =~ ^[a-z0-9]+([._/-][a-z0-9]+)*:[A-Za-z0-9._-]+(@sha256:[0-9a-f]{64})?$ ]]; then
@@ -394,6 +414,7 @@ ensure_fresh_workspace() {
   ev step.started target="workspace image freshness"
   local s
   s="$(snapshot_capture)"  # stat 括号采集；窗口内有写入 → 重试/明确拒绝（die 4）
+  ENSURE_SNAPSHOT_HASH="$s"  # e2e 执行器镜像复用同一快照（#70）
   ev snapshot.captured hash="$s"
   ensure_tools_image "$s"
   snapshot_state_load

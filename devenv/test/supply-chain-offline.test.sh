@@ -50,6 +50,7 @@ allowBuilds:
 catalog:
   typescript: "6.0.3"
   zod: "4.6.7"
+  "@playwright/test": "1.65.1"
 YAML
   cat > "$dir/package.json" <<'JSON'
 {
@@ -95,6 +96,9 @@ catalogs:
     zod:
       specifier: 4.6.7
       version: 4.6.7
+    '@playwright/test':
+      specifier: 1.65.1
+      version: 1.65.1
 
 importers:
 
@@ -137,6 +141,12 @@ DB_IMAGE_KIND=single-arch
 DB_IMAGE_PLATFORM=linux/amd64
 DB_IMAGE_MACOS=kartoza/postgis:18.6-3.6.4@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 DB_IMAGE_MACOS_KIND=manifest-list
+REDIS_IMAGE=redis:8.2.11-alpine@sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd
+REDIS_IMAGE_KIND=manifest-list
+RUSTFS_IMAGE=rustfs/rustfs:1.0.6@sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+RUSTFS_IMAGE_KIND=manifest-list
+PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.65.1-noble@sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
+PLAYWRIGHT_IMAGE_KIND=manifest-list
 LOCK
   printf '%s' "$dir"
 }
@@ -338,6 +348,28 @@ sed -i.bak 's/^DB_IMAGE_MACOS_KIND=manifest-list/DB_IMAGE_MACOS_KIND=single-arch
 rm -f "$F/devenv/images.lock.bak"
 run_sc "$F"
 expect_rc "SC21 macOS 多架构条目类型不符被拒" 4 "$F"
+
+# e2e 执行器基座（#70）：PLAYWRIGHT_IMAGE 必填、manifest-list、tag 版本与 catalog 严格一致
+F=$(new_fixture playwright-missing)
+sed -i.bak '/^PLAYWRIGHT_IMAGE/d; /^PLAYWRIGHT_IMAGE_KIND/d' "$F/devenv/images.lock"
+rm -f "$F/devenv/images.lock.bak"
+run_sc "$F"
+expect_rc "SC21b 缺 PLAYWRIGHT_IMAGE 被拒" 4 "$F"
+grep -q 'PLAYWRIGHT_IMAGE' "$F/err" && pass "SC21b 报错指明 PLAYWRIGHT_IMAGE" || fail "SC21b" "stderr 未指明：$(cat "$F/err")"
+
+F=$(new_fixture playwright-version-drift)
+sed -i.bak 's|^PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.65.1-noble@|PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.64.0-noble@|' "$F/devenv/images.lock"
+rm -f "$F/devenv/images.lock.bak"
+run_sc "$F"
+expect_rc "SC21c Playwright 镜像 tag 与 catalog 版本不一致被拒" 4 "$F"
+grep -q 'Playwright 版本不一致' "$F/err" && pass "SC21c 报错说明版本必须严格一致" || fail "SC21c" "stderr 未说明：$(cat "$F/err")"
+
+F=$(new_fixture playwright-kind)
+sed -i.bak 's/^PLAYWRIGHT_IMAGE_KIND=manifest-list/PLAYWRIGHT_IMAGE_KIND=single-arch/' "$F/devenv/images.lock"
+rm -f "$F/devenv/images.lock.bak"
+run_sc "$F"
+expect_rc "SC21d PLAYWRIGHT_IMAGE 必须 manifest-list" 4 "$F"
+grep -q 'PLAYWRIGHT_IMAGE_KIND' "$F/err" && pass "SC21d 报错指明 kind" || fail "SC21d" "stderr 未指明：$(cat "$F/err")"
 
 # ---------------------------------------------------------------------------
 # 4b. images --verify：运行态 digest 漂移与 tools 基座 label（mock docker）
