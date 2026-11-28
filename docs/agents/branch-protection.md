@@ -87,9 +87,12 @@ harness：`./devenv/devenv test:branch-protection <阶段>`；证据目录
    直推 dev 拒 + 无批准合入拒 + bypass 尝试拒；dev HEAD 前后不动）。
 8. **指挥者（项 f）**：Web 编辑器直接编辑 dev 上文件提交（应被拒）→ 记入
    human-actions.md。
-9. **指挥者**：批准交付 PR → **`g --pr N`**（agent 推新提交 → 断言旧批准
-   DISMISSED → App 合入被拒）→ **指挥者重新批准** → 正常合入（项 g 完整链）。
-   或者：批准后先 `g`，再由指挥者以绕过方式合入（项 d 在 dev 的自然复现）。
+9. **指挥者**：批准交付 PR → **`g --pr N`**（agent 推**改变内容的真实提交** →
+   断言旧批准 DISMISSED → App 合入被拒）→ **指挥者重新批准** → 正常合入（项 g
+   完整链）；或批准后先 `g`，再由指挥者以**绕过**方式合入（0 批准、检查绿——
+   项 d 在 dev 的自然复现）。
+   **实测坑**：dismiss-stale 只对「可评审推送」（改变 PR diff）生效——空提交
+   （`--allow-empty`）**不**触发批准失效；g 的探针提交必须含真实内容变更。
 10. **指挥者（项 i，管理员读）**：读取 rule-suites 存入
     `.artifacts/73-branch-protection/rule-suites-admin.txt`——在本人登录态终端
     运行 `gh api 'repos/bbhl79/natural-enforcement-prj/rulesets/rule-suites?rule_suite_result=bypass&time_period=month'`

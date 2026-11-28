@@ -591,8 +591,14 @@ stage_g() {
   local dev_before
   dev_before=$(remote_ref_sha dev) || { fail "项 g" "读 dev HEAD 失败（fail closed）"; exit 1; }
 
-  # 推新提交到 PR 分支（App 身份；本仓库当前分支即 PR head）
-  git -C "$REPO_ROOT" commit -q --allow-empty -m "test: #73 项 g——批准后新推送（触发旧批准失效）"
+  # 推新提交到 PR 分支（App 身份；本仓库当前分支即 PR head）。
+  # 必须是改变内容的真实提交：GitHub dismiss-stale 只对「可评审推送」（改变 PR
+  # diff）生效——空提交（--allow-empty）不触发批准失效（#73 实测：空提交后批准
+  # 仍 APPROVED，导致 App 合入合法成功）。探针改动为向已 source 的 lib 追加一行
+  # 标记注释（运行中进程已加载函数，磁盘追加不影响本次执行）。
+  printf '\n# g-probe %s（#73 项 g 新推送探针，触发 dismiss-stale）\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$REPO_ROOT/devenv/lib/branch-protection.sh"
+  git -C "$REPO_ROOT" add devenv/lib/branch-protection.sh
+  git -C "$REPO_ROOT" commit -q -m "test: #73 项 g——批准后新推送（真实内容变更，触发旧批准失效）"
   local nsha; nsha=$(git -C "$REPO_ROOT" rev-parse HEAD)
   rc=0
   ev_run g-push "$DEVENV" git-push origin "HEAD:refs/heads/$branch" || rc=$?
