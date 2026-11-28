@@ -19,6 +19,7 @@
 //     完整消息文本）与确认记录（ADR §4：确认者/时间/证据快照/令牌六元组）。
 //     二者在 schema 中留位：expected-fail 毕业的签名必填性由校验器判定（#116），
 //     确认记录由两段式落账写入（#111）。
+import { FailureSignatureSchema, type FailureSignature } from '../signature/model.js'
 import { z } from 'zod'
 
 export const DEFECT_SCHEMA_VERSION = 1
@@ -115,13 +116,13 @@ export const EvidenceSchema = z.strictObject({
 })
 export type Evidence = z.infer<typeof EvidenceSchema>
 
-/** 失败签名（ADR §5）：错误类别 + 断言标识 + 关键语义标记；不绑定完整消息文本 */
-export const FailureSignatureSchema = z.strictObject({
-  errorClass: z.enum(['assertion', 'infrastructure', 'locator']),
-  assertionId: z.string().min(1), // 哪条断言 / 哪个测试步骤
-  semanticMarkers: z.array(z.string().min(1)), // 如预期响应状态码（断言弱化因标记不符而红）
-})
-export type FailureSignature = z.infer<typeof FailureSignatureSchema>
+/**
+ * 失败签名（ADR §5）：错误类别 + 断言标识 + 关键语义标记；不绑定完整消息文本。
+ * 形状权威在 `signature/model.ts`（#108 定型：语义标记为 {key,value} 结构，错误类别
+ * 含证据不足档 unknown）——提取器/比对原语与入库记录共用同一形态，此处再导出保持
+ * 「schema 归 defect/schema.ts」的既有引用面。
+ */
+export { FailureSignatureSchema, type FailureSignature }
 
 /** 确认令牌六元组（ADR §4）：绑定具体一次 verify 运行 + 其证据 + 被测版本 */
 export const ConfirmationTokenSchema = z.strictObject({

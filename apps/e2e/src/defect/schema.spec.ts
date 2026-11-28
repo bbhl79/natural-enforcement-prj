@@ -52,8 +52,12 @@ const graduation = {
   verifiedRun: { expect: 'fail', outcome: 'fail', at: '2026-11-28T02:59:00Z', runId: 'ver-1' },
   failureSignature: {
     errorClass: 'assertion',
-    assertionId: '契约内输入不应引发服务器错误',
-    semanticMarkers: ['status<500'],
+    assertionId: 'tests/repro/def-0001.spec.ts#DEF-0001 点位名称接受 NUL#a1',
+    semanticMarkers: [
+      { key: 'matcher', value: 'toBeLessThan' },
+      { key: 'expected', value: '< 500' },
+      { key: 'actual', value: '500' },
+    ],
   },
   confirmation: {
     at: '2026-11-28T03:00:00Z',
@@ -160,7 +164,7 @@ describe('缺陷报告 schema（Spec-e2e §4 全字段）', () => {
     const r = DefectRecordSchema.safeParse(graduated)
     expect(r.success).toBe(true)
     if (r.success && r.data.graduation) {
-      expect(r.data.graduation.failureSignature?.assertionId).toBe('契约内输入不应引发服务器错误')
+      expect(r.data.graduation.failureSignature?.assertionId).toBe('tests/repro/def-0001.spec.ts#DEF-0001 点位名称接受 NUL#a1')
       expect(r.data.graduation.confirmation?.token.executorImageDigest).toBe('sha256:dd')
     }
     for (const key of ['verifyRunId', 'evidenceHash', 'sourceTreeHash', 'appImageDigest', 'executorImageDigest', 'migrationVersion']) {

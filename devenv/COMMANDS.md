@@ -44,6 +44,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 缺陷记录查询（事实源 `apps/e2e/defects/<ID>.json`，经 stdin tar 只读进容器由纯决策引擎解析；show 输出摘要 + 证据 URI，list 输出清单；`--json` 终值含 `defect`/`defects`；未知 ID 或记录 schema 不符 exit 10，零落盘） | `devenv e2e defect show <DEF-NNNN>`、`devenv e2e defect list` | 0 或 2/3/4/10 |
 | DEF-NNNN 取号（本地 max+1，不填洞；`--remote` 经 `devenv gh` 叠读远端 `defects/` 已有编号取 max(本地,远端)+1，best-effort：远端不可用只 WARN 并回退本地；`--remote-ref` 覆盖远端 ref，默认 `dev`，亦可用 `DEVENV_E2E_NUMBER_REMOTE_REF`） | `devenv e2e defect next-id [--remote] [--remote-ref REF]` | 0 或 2/3/4/10 |
 | 重建缺陷注册表（派生缓存 `apps/e2e/.registry.json`，不入库；**始终重建**，与事实源漂移仅 WARN 不硬门禁；持生命周期写锁 `e2e-lifecycle-<wt>`，写盘经 op 协议宿主侧原子应用） | `devenv e2e registry rebuild` | 0 或 2/3/4/6/10 |
+| 重放已登记缺陷（诊断与修复确认共用同一命令）：起隔离栈真跑记录内 `replayCommand`，复用 #70 per-run 机制（命名/准入/所有权锁/登记册/回收）+ #61 共享栈租约；**每轮 attempt 独立 run id → 独立库/bucket/队列键空间**（replay 写数据，同库重复 attempt 撞唯一约束会伪装成未复现）；`--attempts N` 多轮经失败签名比对判「同一断言处因同一原因失败」；**只读事实源**（门禁回填归 #109、修复确认归 #111）。0=复现、4=未复现（含「环境漂移或已修复？」语义反转提示）或多轮签名不一致、3=基础设施错误、10=缺陷不存在/非法记录/复现脚本缺失 | `devenv e2e replay <DEF-NNNN> [--attempts N] [--run-id BASE]` | 0 或 2/3/4/5/6/10 |
 | 观察 per-run 容器日志（透传原始流；api\|worker\|web，默认 api） | `devenv e2e logs --run-id ID [svc] [-f] [--tail N]` | 0 或 2/3 或子进程码 |
 | 探索轨道：共享基础设施容器 + 每 run 独立数据库/bucket/队列键空间；per-run API/worker 绑定本 run 资源；运行期持共享栈使用租约；产物导出宿主 `.artifacts/e2e/<run-id>/`；探索发现=产出（exit 4，不提示误修测试栈） | `devenv explore [--run-id ID]` | 0 或 2/3/4/5/6 |
 
@@ -62,15 +63,15 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 码 | 含义 | 典型修复 |
 |---|---|---|
 | 0 | 成功 | — |
-| 2 | 用法错误（未知子命令/缺参数/非法覆盖格式；`gen nest-module` / `gen page` 缺必要业务信息、spec 非法、basePath 与既有契约路由冲突，或 `gen page` 缺少/不兼容 create/list HTTP 契约——含容器内生成器拒绝的字段类型/约束/字段不匹配错误，其退出码 2 原样透传，不降级为 4；e2e 生命周期用法错误：`e2e defect` 缺动作、`e2e defect show` 缺 ID 或 ID 非 `DEF-NNNN` 形态、未知 defect/registry 动作、`next-id --remote-max` 非整数、尚未实现的子命令（report/graduate/replay/retire/renumber 等归后续票）） | 按 Usage 与 COMMANDS.md；spec/契约问题按错误消息修正 `--spec` 或先生成 HTTP 契约 |
-| 3 | 环境未就绪（引擎不在矩阵、端点解析失败、服务未起、锁文件缺失、web 显式端口被占用；V 校验载荷无 per-run 隔离栈可用） | 按错误内嵌修复命令（多为 `devenv up`/`devenv build`；端口占用时报占用者并给替代命令） |
-| 4 | 任务失败（test/lint/typecheck/build/verify 非零；拉取失败；快照采集期工作树持续变化——明确拒绝，不出混合内容；生命周期 CLI 无 END 行的异常退出（容器/构建问题，子进程码入终值 `taskRc`）；op 路径越界/载荷非 base64/应用中途失败——工作区全量还原） | 看 stderr 完整输出；采集拒绝时暂停文件修改后重试 |
+| 2 | 用法错误（未知子命令/缺参数/非法覆盖格式；`gen nest-module` / `gen page` 缺必要业务信息、spec 非法、basePath 与既有契约路由冲突，或 `gen page` 缺少/不兼容 create/list HTTP 契约——含容器内生成器拒绝的字段类型/约束/字段不匹配错误，其退出码 2 原样透传，不降级为 4；e2e 生命周期用法错误：`e2e defect` 缺动作、`e2e defect show` 缺 ID 或 ID 非 `DEF-NNNN` 形态、未知 defect/registry 动作、`next-id --remote-max` 非整数、`e2e replay` 缺 ID/ID 形态非法/`--attempts` 非正整数/`--run-id` 追加 `-a<k>` 后超 40 字符/多余参数、签名引擎 `--source` 非 replay\|playwright 或载荷 JSON 非法、尚未实现的子命令（report/graduate/retire/renumber 等归后续票）） | 按 Usage 与 COMMANDS.md；spec/契约问题按错误消息修正 `--spec` 或先生成 HTTP 契约 |
+| 3 | 环境未就绪（引擎不在矩阵、端点解析失败、服务未起、锁文件缺失、web 显式端口被占用；V 校验载荷无 per-run 隔离栈可用；**replay 基础设施错误**——脚本 exit 2 或签名 errorClass=infrastructure：连接失败/超时/服务不健康，**不是「未复现」**） | 按错误内嵌修复命令（多为 `devenv up`/`devenv build`；端口占用时报占用者并给替代命令）；replay 基础设施错误先按证据（logs/ 与 run.json）修运行环境再重放 |
+| 4 | 任务失败（test/lint/typecheck/build/verify 非零；拉取失败；快照采集期工作树持续变化——明确拒绝，不出混合内容；生命周期 CLI 无 END 行的异常退出（容器/构建问题，子进程码入终值 `taskRc`）；op 路径越界/载荷非 base64/应用中途失败——工作区全量还原；**replay 未复现**——含「环境漂移或已修复？」语义反转提示；**replay 多轮失败签名不一致或缺失**——不是同一断言处因同一原因失败；replay 已复现但产物导出失败） | 看 stderr 完整输出；采集拒绝时暂停文件修改后重试；replay 未复现先判读是环境漂移还是已修复（修复确认走 #111 confirm-fix），签名不一致核对各轮 `replay.json` 的 signature 与脚本约定标记 |
 | 5 | 超时（健康等待/镜像拉取） | `devenv logs <svc>` 排查；prefetch 重跑续跑 |
 | 6 | 独占锁或栈使用租约冲突（另一会话持锁 / 测试运行中；含生命周期写锁 `e2e-lifecycle-<wt>`） | 等待或确认持有者已死（失效锁与失效租约会自动清理）；错误消息列出持有者与修复线索 |
 | 7 | 生命周期校验失败（索引/注解/编号/diff 级；**由 #116 登记**，本表留位） | 见 #116 |
 | 8 | 状态转移/前置条件不合法（重复毕业/门禁未过/退役后毕业；**由 #109/#116 登记**，本表留位） | 见 #109/#116 |
 | 9 | 毕业校验运行判定不符（op 协议 V 载荷：expect=fail 却通过 / expect=pass 却失败）——**工作区零落盘**（全有或全无） | 读 stderr 拒绝原因与 `verdict` 事件（did-not-fail/still-failing）；核对缺陷是否已修或环境漂移，重跑校验运行 |
-| 10 | 缺陷不存在或 schema 不符（未知 `DEF-NNNN`、记录 JSON 解析失败、zod 判别联合校验失败、ID 形态非法） | 核对 `apps/e2e/defects/` 下记录；按 stderr 给出的字段路径修正记录（schema 见 `apps/e2e/src/defect/schema.ts`） |
+| 10 | 缺陷不存在或 schema 不符（未知 `DEF-NNNN`、记录 JSON 解析失败、zod 判别联合校验失败、ID 形态非法；**replay 复现脚本缺失** `apps/e2e/replay/<ID>.mjs`、`replayCommand` 含 tab/换行——脚本随记录入库是长期重建依据，事实源完整性同档拒绝） | 核对 `apps/e2e/defects/` 下记录与 `apps/e2e/replay/` 下脚本；按 stderr 给出的字段路径修正记录（schema 见 `apps/e2e/src/defect/schema.ts`） |
 | 20 | 配置/授权不符（认证入口） | 核对 `devenv/github-app.json` 与本机授权 |
 | 21 | 私钥缺失/权限/JWT 签名失败（认证入口） | 检查私钥路径与权限 |
 | 22 | installation token 换取失败（认证入口） | 检查网络与 App 安装状态 |
@@ -247,6 +248,7 @@ exit 3，compose v2 由 doctor `compose-plugin` 检查项校验）；裸 Linux +
 | e2e build / explore 的执行器镜像构建 | e2e-image-<wt>（排他，per-worktree；仅构建/核对窗口） | 与其它 e2e 执行器镜像构建互斥（状态文件/可变 tag 读改写串行化）；不取栈锁/租约，无锁序环；冲突等待/exit 6 |
 | e2e 生命周期写命令（#106：e2e registry rebuild；后续 report/graduate/confirm-fix/retire/renumber） | e2e-lifecycle-<wt>（排他，per-worktree，**mkdir 目录锁**，从取锁到 op 应用结束持同一把） | 本 worktree 内生命周期写命令彼此互斥（校验与写入之间无间隙）；与栈锁/租约正交（决策命令不做栈变更），无锁序环；跨 worktree 互不阻塞（合入时校验兜底：撞号 renumber/索引一致性/diff 级）；冲突等待 60s 或 exit 6。V 校验载荷所在的 per-run 运行另持 stack-<wt> 共享租约与 run 所有权锁 |
 | explore 启动/运行所有权 | e2e-owner-<wt>-<runid>（排他，per-run-id，创建资源前取得 → 回收结束释放）；e2e-admit-<wt>（短临界区） | 同 run id 的第二个进程在启动窗口等待/exit 6，绝不进入清理路径破坏对方尚未启动的资源；admission 锁串行化「取得所有权 → 计数 → 登记」，并发计数含启动中预留名额；锁名与容器 worktree 标签含 worktree 后缀，跨 worktree 同名显式 run id 互不误判 |
+| e2e replay（#108，运行期；每轮 attempt 一个独立 run） | stack-<wt> 共享租约（从起 per-run 资源到最后一轮回收全程）；每轮 e2e-owner-<wt>-<runid> + e2e-admit-<wt>（与 explore 同一准入/所有权机制）；e2e-image-<wt>（仅镜像构建/核对窗口） | 与 explore 同口径：多个 run 可并行（受 `E2E_MAX_CONCURRENT_RUNS` 硬上限，含启动预留），与 down/restart/migrate 等排他意图双向互斥（等待/exit 6）；同 run id 第二个进程启动窗口即拒，绝不进入清理路径；**不取生命周期写锁 `e2e-lifecycle-<wt>`**——replay 只读事实源（门禁回填归 #109 report、修复确认归 #111 confirm-fix），与生命周期写命令无互斥；轮次间串行（上一轮回收结束才起下一轮键空间） |
 | build / gen 触发的 lockgen | lockgen（机器级） | 跨 worktree 互斥（共享标签/容器清理）；冲突等待或 exit 6（重跑即续） |
 | 只读（ps/logs/status/images/doctor/gen evidence/e2e runs/e2e logs/e2e defect show·list·next-id） | 无 | 任意并发（gen evidence 只读绑定镜像内的证据文件，不重建、不触栈；e2e logs 只读容器日志；e2e defect 查询只读事实源，经 stdin tar 进容器，零落盘） |
 | exec / shell（透传调试） | 无 | 交互时长无界，不持租约；需要稳定环境时先结束调试再拆栈 |
@@ -662,3 +664,97 @@ counterexamplePath/numRuns/numShrinks[/request]），report（#109）可机械�
 **并发**：写命令持 per-worktree `e2e-lifecycle-<wt>`（mkdir 目录锁，**非 flock**）
 从取锁到应用结束；查询只读不取锁。跨 worktree 并发由合入时校验兜底（撞号 renumber、
 索引一致性、diff 级）。详见并发语义表。
+
+## e2e replay 重放与失败签名原语（#108）
+
+**命令语义（Spec-e2e §4）**：`devenv e2e replay <ID>` 是**诊断与修复确认共用**的
+重放命令——任何时点可用，起隔离栈真跑记录内 `replayCommand`：
+
+- **exit 0 = 复现**（全部轮次脚本 exit 0）；
+- **exit 4 = 未复现** + 语义反转提示「环境漂移或已修复？」（修复后重放语义自动反转；
+  修复确认摘注解走 #111 `confirm-fix`，记录与脚本永不删除）；
+- **exit 4 = 多轮失败签名不一致或缺失**（各轮都复现但不是「同一断言处因同一原因失败」）；
+- **exit 3 = 基础设施错误**（脚本 exit 2 或签名 `errorClass=infrastructure`）——
+  环境故障**不是**「未复现」，先按证据修运行环境；
+- **exit 10 = 缺陷不存在 / 记录 schema 不符 / 复现脚本缺失**（计划阶段即拒，零资源创建）。
+
+**per-run 编排复用（不复活原型单项目 compose/profile）**：`e2e_derive_names` →
+`lease_acquire stack-<wt>` → `require_services db redis rustfs` → `ensure_fresh_workspace`
+→ `e2e_build_image` → 每轮 `e2e_admission_begin`（所有权 + 并发上限）→ `e2e_connect_infra`
+→ `e2e_db_purge` + `e2e_migrate` → `e2e_stack_start` → 执行器内跑脚本 → 签名提取 →
+产物导出 + `run.json` → `e2e_teardown` → 登记册终态 → 释放所有权锁。
+
+**每轮独立键空间（强制）**：run id = `<base>-a<k>`（base 默认 `rep-<wt>-<epoch>-<rand>`，
+可 `--run-id` 覆盖；追加后缀后仍须 ≤40 字符）。replay **会写数据**：同库重复 attempt
+撞 `name` 唯一约束（409）会伪装成「未复现」，故每轮独立库/bucket/队列 + 幂等
+`DROP FORCE` 重建 + `migrate deploy`，保证「每次从明确前置状态开始」（Spec-e2e §5）。
+
+**轮次预算**：默认 1 轮（诊断/修复确认）；`--attempts N` 显式多轮。门禁下限由
+`replay-plan` 按被测路径输出（`pure`=1 / `external-state`=3），**门禁实测与回填归
+#109 report**，本命令只读事实源、不改记录。
+
+### replayCommand 约定（脚本随记录入库，长期重建依据）
+
+- **零第三方依赖**：只用 node 内建（`fetch`/`process`），`node apps/e2e/replay/<ID>.mjs`；
+  执行器注入 `E2E_API_BASE_URL=http://api:3000`（per-run 服务绑定）。
+- **退出码**：`0` = 复现（缺陷在场）；`1` = 未复现（语义反转）；`2` = 基础设施错误
+  （连接失败/超时/服务不健康，路径根本没被行使）。
+- **失败输出约定（签名可机械提取）**：无论复现与否，在 stdout 打**一行**
+
+  ```
+  NE-E2E-SIGNATURE {"schemaVersion":1,"assertionId":"<稳定断言标识>","errorClass":"assertion|infrastructure|locator|unknown","outcome":"reproduced|not-reproduced|unknown","semanticMarkers":[{"key":"<语义维度>","value":"<规范化取值>"}]}
+  ```
+
+  - `assertionId`：脚本作者选定的**稳定结构标识**（如 `post-enforcement-points.whitespace-name`），
+    不含消息措辞、不含行号；
+  - `semanticMarkers`：只放**关键语义维度**（`http.status.expected` / `http.status.actual` /
+    `body.id` / `error.code` …），**不放完整响应体或错误消息文本**；
+  - 复现时标记承载缺陷的语义取值（供门禁逐轮比对）；未复现时承载**实际观测值**
+    （比对不符即语义反转）；基础设施档 `outcome` 可为 `unknown`；
+  - 多条标记取**最后一条**（脚本终态）；无标记 → 签名为 `null`（**不编造**），
+    单轮仍按退出码判定，多轮则无法机器判「同一原因」→ exit 4。
+
+### 失败签名模型与比对原语（#109 门禁 / #112 CI 共用）
+
+签名 = **错误类别 + 断言标识 + 关键语义标记**，**不绑定完整消息文本**
+（`apps/e2e/src/signature/`，纯函数库、零基础设施；入库形态见
+`apps/e2e/src/defect/schema.ts` 的 `graduation.failureSignature`）：
+
+```json
+{"errorClass":"assertion","assertionId":"tests/repro/def-0001.spec.ts#DEF-0001 NUL 名引发 500#a1","semanticMarkers":[{"key":"actual","value":"500"},{"key":"expected","value":"< 500"},{"key":"matcher","value":"toBeLessThan"}]}
+```
+
+- **错误类别**（Spec-e2e §7「只把有证据支持的分类当确定事实」）：
+  `infrastructure`（连接失败/超时/服务不健康）→ 判定引擎直接红；
+  `locator`（找不到元素/多命中）→ 红 + 标明「需人判断是 UI 改版还是缺陷」；
+  `assertion`（expect 结构可解析）→ 普通断言失败；
+  `unknown`（证据不足以分类，如测试自身 throw 的自由文本）→ **保守档，不得据此判绿**。
+- **断言标识**：Playwright 来源 = `file#describe路径 > 测试标题#断言序号`（取最后一次
+  失败 result，重试终态为准）；replay 来源 = 脚本自述的稳定标识。两来源各自命名空间，
+  比对在**同来源内**进行（门禁比 replay 轮次，CI 比毕业 verify-run 证据与本次结果）。
+- **语义标记**：`{key,value}` 结构，按 key→value **集合**比对（书写顺序无关，
+  `canonicalizeSignature` 规范化）。Playwright 来源取 `matcher` 链与 `Expected:`/`Received:`
+  结构化取值（**先剥 ANSI 颜色码**——JSON reporter 的 message 带码，真实证据实证），
+  自定义消息措辞一律丢弃。
+- **语义敏感性**：合法重构改错误消息措辞 → 三要素不变 → 仍判同一失败（不红）；
+  断言弱化（预期状态码 500→400）→ `expected` 标记不符 → 红。
+- **比对原语**：`compareSignatures(a,b)` → `{matched,reason,differences[]}`；
+  `compareSignatureSet(baseline,candidates)` → `{allMatched,reason,results[]}`。
+  任一侧签名缺失 → 不匹配（无证据不得当同一失败）；零轮次 → `allMatched=false`。
+  判定矩阵（绿/红/待判断）归判定引擎（#112），本原语只回答「是否同一失败」。
+- **引擎入口**（容器内 `node apps/e2e/dist/main.js`，载荷走 **stdin**，不是 #106 的树
+  tar 通道）：`signature extract --source replay|playwright`、`signature compare`
+  （stdin `{baseline,candidates}`）；结果恒为**单行紧凑 JSON** 数据行 + `END` 终值。
+  宿主桥 `devenv/lib/e2e-replay.sh` 复用 #106 的 END/数据行解析与「先捕获 rc 再判协议」
+  收口（无 END = 容器/构建问题 → 4，子进程码不外逸枚举）。
+
+**产物**：每轮 `.artifacts/e2e/<run-id>/`（`replay.out` 脚本 stdout = 签名载荷、
+`replay.err`、`replay.json` 本轮判定/退出码/签名、`run.json` 运行清单、`logs/` 服务日志）
++ 运行登记册 `.devenv-state/e2e-runs/<run-id>.json`（`track=replay`）。
+`run.json.playwrightExitCode` 字段名沿用既有清单形状，对 `track=replay` 承载的是
+**replayCommand 退出码**（权威逐轮记录在 `replay.json.scriptExitCode`）。
+
+**输出协议**：长命令 JSONL（`step.started/completed target="e2e database"|"replay"`、
+`replay.signatures`）+ 终值单行 JSON（`command/subcommand/status/exitCode/defectId/
+replayCommand/kind/gateMinAttempts/attempts/reproduced/signatureMatched/compareReason/
+hint/runs[]`）。脚本原始输出与人类诊断走 **stderr**，结果流纯 JSONL。

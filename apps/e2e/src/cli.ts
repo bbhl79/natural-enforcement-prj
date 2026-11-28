@@ -6,17 +6,25 @@
 // 退出码：0 成功 | 2 用法 | 10 缺陷不存在或 schema 不符（7/8/9 由后续票的引擎判定）。
 // 后续票（#108 replay / #109 report / #110 graduate / #116 retire·renumber·verify）
 // 在本骨架上追加子命令；未知子命令一律用法错误 2。
-import type { DefectRecord } from './defect/schema.js'
+import { readFileSync } from 'node:fs'
+import { minGateAttempts, type DefectRecord } from './defect/schema.js'
 import { nextDefectId, type NextDefectId } from './numbering.js'
 import { emit, end, human, type OpSink } from './ops.js'
 import { REGISTRY_FILE, rebuildRegistry, registryDrifted } from './registry.js'
-import { loadTree, type DefectTree } from './tree.js'
+import { compareSignatureSet } from './signature/compare.js'
+import { extractPlaywrightSignatures, extractReplaySignature } from './signature/extract.js'
+import { FailureSignatureSchema, type FailureSignature } from './signature/model.js'
+import { loadTree, replayRel, type DefectTree } from './tree.js'
 
 const USAGE = `用法：cli [--root DIR] [--json] <子命令>…
   defect list                 缺陷清单（事实源 apps/e2e/defects/*.json）
   defect show <DEF-NNNN>      缺陷摘要 + 证据 URI
   next-id [--remote-max N]    DEF-NNNN 取号（本地 max+1，可叠读远端已有编号）
-  registry rebuild            重建注册表（派生缓存，始终重建；漂移仅 WARN）`
+  registry rebuild            重建注册表（派生缓存，始终重建；漂移仅 WARN）
+  replay-plan <DEF-NNNN>      重放计划（CMD/KIND/ATTEMPTS/SCRIPT/TITLE 数据行）
+  signature extract --source <replay|playwright>
+                              失败签名提取（载荷走 stdin；结果单行 JSON）
+  signature compare           多轮签名比对（stdin {baseline,candidates}；#109/#112 共用）`
 
 function usage(sink: OpSink): number {
   human(sink, USAGE)
@@ -53,7 +61,7 @@ function showHuman(sink: OpSink, r: DefectRecord): void {
     out(`  毕业：${r.graduation.mode} → ${r.graduation.specPath}（verifiedRun ${r.graduation.verifiedRun.expect}=${r.graduation.verifiedRun.outcome}）`)
     if (r.graduation.failureSignature) {
       const s = r.graduation.failureSignature
-      out(`  失败签名：${s.errorClass}｜${s.assertionId}｜${s.semanticMarkers.join(',')}`)
+      out(`  失败签名：${s.errorClass}｜${s.assertionId}｜${s.semanticMarkers.map((m) => `${m.key}=${m.value}`).join(',')}`)
     }
     if (r.graduation.confirmation) {
       out(`  确认：${r.graduation.confirmation.at} by ${r.graduation.confirmation.by}（令牌 verifyRun=${r.graduation.confirmation.token.verifyRunId}）`)
@@ -141,10 +149,121 @@ function cmdRegistry(args: string[], root: string, _json: boolean, sink: OpSink)
 }
 
 /**
+ * 重放计划（#108）：宿主据此在 per-run 隔离栈内执行记录内 replayCommand。
+ * 只读事实源——不改记录（门禁回填归 #109 report，修复确认归 #111 confirm-fix）。
+ * 数据行：CMD（容器内可执行命令）/ KIND（被测路径分类）/ ATTEMPTS（门禁下限）/
+ * SCRIPT（脚本仓库相对路径）/ TITLE。未知 ID、非法记录、脚本缺失、协议字段含
+ * tab/换行一律 exit 10（事实源完整性）。
+ */
+function cmdReplayPlan(args: string[], root: string, sink: OpSink): number {
+  const id = args[0]
+  if (id === undefined || args.length !== 1) return usage(sink)
+  if (!/^DEF-\d{4}$/.test(id)) return end(sink, 'error', 10, `ID 格式应为 DEF-NNNN：${id}`)
+  const tree = loadTree(root)
+  const bad = tree.parseErrors.find((e) => e.file === `defects/${id}.json`)
+  if (bad) return end(sink, 'error', 10, `${bad.file}: ${bad.error}`)
+  const loaded = tree.defects.get(id)
+  if (!loaded) return end(sink, 'error', 10, `缺陷不存在：${id}（defects/ 下无对应 JSON）`)
+  const r = loaded.record
+  const script = replayRel(id)
+  if (!tree.replayScripts.has(`${id}.mjs`)) {
+    return end(sink, 'error', 10, `复现脚本缺失：apps/e2e/${script}（脚本随记录入库，是长期重建依据）`)
+  }
+  const cmd = r.reproducibility.replayCommand
+  if (/[\t\r\n]/.test(cmd)) {
+    return end(sink, 'error', 10, `replayCommand 含 tab/换行（行协议不可被注入截断）：${id}`)
+  }
+  const out = (s: string): void => sink.protocol(s)
+  out(`CMD\t${cmd}`)
+  out(`KIND\t${r.reproducibility.kind}`)
+  out(`ATTEMPTS\t${minGateAttempts(r.reproducibility.kind)}`)
+  out(`SCRIPT\t${script}`)
+  out(`TITLE\t${r.title.replace(/[\t\r\n]+/g, ' ')}`)
+  return end(sink, 'ok', 0, `重放计划已输出（${id}）`)
+}
+
+/** stdin 读取边界（可注入以便零基础设施单测）：签名命令的载荷走 stdin，不走树 tar */
+export type StdinReader = () => string
+
+function readProcessStdin(): string {
+  // fd 0 同步读（宿主以管道喂载荷，compose run -T 不分配 TTY）
+  return readFileSync(0, 'utf8')
+}
+
+/**
+ * 签名原语的引擎入口（#108）：提取覆盖两个来源（replay 脚本失败输出约定 /
+ * Playwright 结果 JSON），比对判定「同一断言处因同一原因失败」。结果恒为**单行
+ * 紧凑 JSON** 数据行（JSONL 结果流不被多行文档破坏），供 #109 门禁与 #112 CI
+ * 判定共用同一份实现（本地与 CI 同一判定器）。
+ */
+function cmdSignature(args: string[], sink: OpSink, readStdin: StdinReader): number {
+  const action = args[0]
+  if (action === 'extract') {
+    let source = ''
+    for (let i = 1; i < args.length; i++) {
+      if (args[i] !== '--source') return usage(sink)
+      const v = args[i + 1]
+      if (v === undefined) return usage(sink)
+      source = v
+      i++
+    }
+    if (source !== 'replay' && source !== 'playwright') {
+      return end(sink, 'error', 2, `--source 需为 replay|playwright（当前：${source || '缺'}）`)
+    }
+    const payload = readStdin()
+    if (source === 'replay') {
+      const r = extractReplaySignature(payload)
+      sink.protocol(JSON.stringify({ schemaVersion: 1, source, ...r }))
+      return end(sink, 'ok', 0, `replay 签名提取：found=${r.found}`)
+    }
+    let report: unknown
+    try {
+      report = JSON.parse(payload)
+    } catch (e) {
+      return end(sink, 'error', 2, `Playwright 结果 JSON 解析失败：${String(e instanceof Error ? e.message : e)}`)
+    }
+    const r = extractPlaywrightSignatures(report)
+    if (r.error !== undefined) return end(sink, 'error', 2, r.error)
+    sink.protocol(JSON.stringify({ schemaVersion: 1, source, failures: r.failures, stats: r.stats }))
+    return end(sink, 'ok', 0, `Playwright 签名提取：${r.failures.length} 条失败断言`)
+  }
+  if (action === 'compare') {
+    if (args.length !== 1) return usage(sink)
+    let raw: unknown
+    try {
+      raw = JSON.parse(readStdin())
+    } catch (e) {
+      return end(sink, 'error', 2, `比对载荷 JSON 解析失败：${String(e instanceof Error ? e.message : e)}`)
+    }
+    const obj = raw as { baseline?: unknown; candidates?: unknown }
+    const parseSig = (v: unknown): FailureSignature | null | undefined => {
+      if (v === null || v === undefined) return null
+      const p = FailureSignatureSchema.safeParse(v)
+      return p.success ? p.data : undefined
+    }
+    const baseline = parseSig(obj?.baseline)
+    if (baseline === undefined || !Array.isArray(obj?.candidates)) {
+      return end(sink, 'error', 2, '比对载荷需为 {baseline:签名|null, candidates:[签名|null,…]}')
+    }
+    const candidates: (FailureSignature | null)[] = []
+    for (const c of obj.candidates) {
+      const s = parseSig(c)
+      if (s === undefined) return end(sink, 'error', 2, 'candidates 含非法签名（三要素/错误类别/标记形态不符）')
+      candidates.push(s)
+    }
+    const r = compareSignatureSet(baseline, candidates)
+    sink.protocol(JSON.stringify({ schemaVersion: 1, ...r }))
+    return end(sink, 'ok', 0, `签名比对：allMatched=${r.allMatched}（${candidates.length} 轮）`)
+  }
+  return usage(sink)
+}
+
+/**
  * 决策引擎入口（可单测）：argv → 退出码；输出全部经 sink（协议/人类两通道）。
  * 全局旗标 --root DIR（宿主树解包目录）与 --json 位置无关。
+ * readStdin 可注入（签名命令的载荷通道）；缺省同步读进程 stdin。
  */
-export function runCli(argv: string[], sink: OpSink): number {
+export function runCli(argv: string[], sink: OpSink, readStdin: StdinReader = readProcessStdin): number {
   let root = '.'
   let json = false
   const args: string[] = []
@@ -169,6 +288,10 @@ export function runCli(argv: string[], sink: OpSink): number {
       return cmdNextId(args.slice(1), root, json, sink)
     case 'registry':
       return cmdRegistry(args.slice(1), root, json, sink)
+    case 'replay-plan':
+      return cmdReplayPlan(args.slice(1), root, sink)
+    case 'signature':
+      return cmdSignature(args.slice(1), sink, readStdin)
     default:
       return usage(sink)
   }

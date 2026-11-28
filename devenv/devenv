@@ -46,6 +46,8 @@ source "$REPO_ROOT/devenv/lib/gen.sh"
 source "$REPO_ROOT/devenv/lib/e2e.sh"
 # shellcheck source=lib/e2e-lifecycle.sh
 source "$REPO_ROOT/devenv/lib/e2e-lifecycle.sh"
+# shellcheck source=lib/e2e-replay.sh
+source "$REPO_ROOT/devenv/lib/e2e-replay.sh"
 # shellcheck source=lib/github-app-auth.sh
 source "$REPO_ROOT/devenv/lib/github-app-auth.sh"
 
@@ -99,6 +101,10 @@ devenv — 工程基座唯一入口（命令面权威文档：devenv/COMMANDS.md
   e2e defect next-id [--remote] [--remote-ref REF]
                             DEF-NNNN 取号（本地 max+1；--remote 经 devenv gh 叠读远端已有编号，best-effort）
   e2e registry rebuild      重建缺陷注册表（派生缓存，不入库；始终重建，漂移仅 WARN 不硬门禁）
+  e2e replay <ID> [--attempts N] [--run-id BASE]
+                            重放已登记缺陷：起隔离栈真跑记录内 replayCommand（每轮独立
+                            库/bucket/队列键空间）；0=复现、4=未复现（语义反转提示）、
+                            3=基础设施错误、10=缺陷不存在；多轮经失败签名比对判同一失败
   e2e logs --run-id ID [svc] [-f] [--tail N]
                             观察 per-run 容器日志（透传原始流；api|worker|web，默认 api）
   explore [--run-id ID]     探索轨道：共享基础设施 + 每 run 独立库/bucket/队列键空间；
