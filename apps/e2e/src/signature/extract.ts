@@ -214,13 +214,6 @@ export function classifyErrorMessage(rawMessage: string): Classified {
   return { errorClass: 'unknown', markers }
 }
 
-interface RawSuite {
-  title?: unknown
-  file?: unknown
-  specs?: unknown
-  suites?: unknown
-}
-
 function asRecord(v: unknown): Record<string, unknown> | null {
   return typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null
 }
