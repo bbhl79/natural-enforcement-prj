@@ -146,7 +146,7 @@ export const GateSchema = z.strictObject({
   attempts: z.number().int().min(0), // 报告期可为 0 占位；登记后 ≥ minGateAttempts(kind)
   keySpaces: z.array(z.string().min(1)), // 每轮独立键空间（run id）
   allFailed: z.boolean(), // 每轮都在同一断言处因同一原因失败
-  signatureMatched: z.boolean().optional(), // 逐轮失败签名比对结果（#109 回填）
+  signatureMatched: z.boolean().nullable().optional(), // 逐轮比对结果；单轮无从跨轮比对 → null（#109）
   rounds: z.array(GateRoundSchema).optional(), // 逐轮实测证据（#109）
   precondition: z.string().min(1).optional(), // 前置状态**声明**（每轮从此状态开始）
   baselineSignature: FailureSignatureSchema.nullable().optional(), // 比对基线（首轮签名）

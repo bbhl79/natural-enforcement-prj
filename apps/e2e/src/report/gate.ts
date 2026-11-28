@@ -13,13 +13,15 @@
 // 本模块是**纯函数**：输入是重放轮次结果（宿主实测；单测以 mock 轮次注入），
 // 零基础设施、零副作用。判定与登记落盘分离——落盘经 op 协议由 devenv 原子应用。
 import {
+  GateKeySpaceSchema,
   minGateAttempts,
   type GateRound,
   type GateKeySpace,
   type ReproducibilityKind,
 } from '../defect/schema.js'
 import { compareSignatureSet } from '../signature/compare.js'
-import type { FailureSignature } from '../signature/model.js'
+import { FailureSignatureSchema, type FailureSignature } from '../signature/model.js'
+import { z } from 'zod'
 
 /** 一轮实测结果（宿主在 per-run 隔离栈内跑 replayCommand 后采集） */
 export interface GateRoundInput {
@@ -30,6 +32,16 @@ export interface GateRoundInput {
   scriptExitCode: number // 0=复现 / 1=未复现 / 2=基础设施错误
   signature: FailureSignature | null // 约定哨兵行提取；无标记 → null（不编造）
 }
+
+/** 宿主实测轮次的校验口径（report register 载荷；非法形态 → 用法错误 2） */
+export const GateRoundInputSchema = z.strictObject({
+  attempt: z.number().int().min(1),
+  runId: z.string().min(1),
+  keySpace: GateKeySpaceSchema.optional(),
+  precondition: z.string().min(1).optional(),
+  scriptExitCode: z.number().int(),
+  signature: FailureSignatureSchema.nullable(),
+})
 
 export type GateReason =
   | 'passed'
