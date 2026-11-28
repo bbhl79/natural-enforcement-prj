@@ -1,0 +1,120 @@
+# 同构本地与 CI 基础质量门（#71；Spec-工程基座 §6 质量门与 CI）
+#
+# 硬约束：本文件内一切项目操作经 ./devenv/devenv 唯一入口——直接调用 compose
+# 会被 doctor 的 ci-workflows 静态门禁拒绝（doctor 是首步，即自检）。
+#
+# 顺序（先快后慢）：doctor（CI 矩阵条目校验 + 实际运行时报告）→ verify（无服务，
+# lint + typecheck + test:unit，本地与 CI 同一入口同一校验器）→ up → test（集成）
+# → 取证 → 拆栈。本票不含 e2e/复现轨道接入（归 Spec-e2e 体系后续票）。
+#
+# 失败/取消分层（如实，不写绝对保证）：
+#   - 普通失败：先取证（!cancelled() 覆盖）再拆栈；
+#   - 取消（cancelled）：拆栈尽力收尾（always()），不保证清理完成；
+#   - 运行器强制终止（含 30min 超时被杀）：无保证，临时资源随 VM 消亡。
+name: quality-gate
+
+on:
+  pull_request:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-24.04  # 固定（升级须重新验收；doctor 每次运行记录实际系统版本）
+    timeout-minutes: 30    # 执行段预算（Spec：中位数 ≤ 30 分钟；超时即强制终止）
+    steps:
+      - name: 检出源码
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: doctor（CI 矩阵条目校验 + 报告实际运行时；含 workflow 静态门禁自检）
+        run: |
+          head -n 3 /etc/os-release  # 记录实际系统版本（升级须重新验收）
+          printf '| 段 | 用时 | rc |\n|---|---|---|\n' >> "$GITHUB_STEP_SUMMARY"
+          t0=$(date +%s)
+          rc=0
+          ./devenv/devenv doctor || rc=$?
+          t1=$(date +%s)
+          printf '| doctor | %ds | %d |\n' "$((t1 - t0))" "$rc" >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+
+      - name: verify（无服务质量门：lint + typecheck + test:unit）
+        run: |
+          t0=$(date +%s)
+          rc=0
+          ./devenv/devenv verify || rc=$?
+          t1=$(date +%s)
+          printf '| verify | %ds | %d |\n' "$((t1 - t0))" "$rc" >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+
+      - name: up（起栈至真实健康终态：db/redis/rustfs + 迁移 + api/worker）
+        run: |
+          t0=$(date +%s)
+          rc=0
+          ./devenv/devenv up || rc=$?
+          t1=$(date +%s)
+          printf '| up | %ds | %d |\n' "$((t1 - t0))" "$rc" >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+
+      - name: test（单元 + 集成测试，连真实 PostGIS/Redis/rustfs）
+        run: |
+          t0=$(date +%s)
+          rc=0
+          ./devenv/devenv test || rc=$?
+          t1=$(date +%s)
+          printf '| test | %ds | %d |\n' "$((t1 - t0))" "$rc" >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+
+      - name: 取证（诊断材料；普通失败路径先取证再拆栈）
+        if: ${{ !cancelled() }}
+        continue-on-error: true  # 取证失败不得掩盖原始失败/不得把绿跑变红
+        run: |
+          set +e
+          t0=$(date +%s)
+          # 证据区与 e2e run 产物同规：per-run 目录（AGENTS.md 证据区约定；
+          # 机器不灭目录即灭——runner 一次生命周期内落盘，upload 后留档）
+          E=".artifacts/ci/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "$E"
+          {
+            echo "run_id=${GITHUB_RUN_ID} attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "sha=${GITHUB_SHA} ref=${GITHUB_REF} event=${GITHUB_EVENT_NAME}"
+            date -u '+captured_at=%Y-%m-%dT%H:%M:%SZ'
+            head -n 3 /etc/os-release
+          } > "$E/context.txt"
+          ./devenv/devenv --json ps -a > "$E/ps.jsonl" 2> "$E/ps.progress"
+          echo "rc=$? ps" >> "$E/capture.rc"
+          ./devenv/devenv --json status > "$E/status.jsonl" 2> "$E/status.progress"
+          echo "rc=$? status" >> "$E/capture.rc"
+          # 不带服务名 = 全部服务日志（带前缀；服务拓扑演进不漏采）
+          ./devenv/devenv logs --tail 500 > "$E/logs-all.txt" 2>&1
+          echo "rc=$? logs-all" >> "$E/capture.rc"
+          ./devenv/devenv doctor > "$E/doctor.txt" 2>&1
+          echo "rc=$? doctor" >> "$E/capture.rc"
+          t1=$(date +%s)
+          printf '| 取证 | %ds | 0 |\n' "$((t1 - t0))" >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+
+      - name: 上传取证材料
+        if: ${{ !cancelled() }}
+        continue-on-error: true  # artifact 服务瞬断/限流不得把绿跑判红（质量结论归 verify/test；失败以注释可见）
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ci-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .artifacts/ci/
+          include-hidden-files: true  # 路径在隐藏目录 .artifacts/ 下（v4 默认排除隐藏路径）
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: 拆栈（尽力收尾；取消/强制终止不写绝对保证）
+        if: ${{ always() }}
+        continue-on-error: true  # 尽力收尾：拆栈失败不把质量门判红（质量结论归 verify/test），以失败注释可见
+        run: |
+          t0=$(date +%s)
+          rc=0
+          ./devenv/devenv down || rc=$?
+          t1=$(date +%s)
+          printf '| 拆栈 | %ds | %d |\n' "$((t1 - t0))" "$rc" >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"

@@ -36,6 +36,9 @@ source "$REPO_ROOT/devenv/lib/snapshot.sh"
 source "$REPO_ROOT/devenv/lib/stack.sh"
 # shellcheck source=lib/supply-chain.sh
 source "$REPO_ROOT/devenv/lib/supply-chain.sh"
+
+# shellcheck source=lib/ci.sh
+source "$REPO_ROOT/devenv/lib/ci.sh"
 # shellcheck source=lib/gen.sh
 source "$REPO_ROOT/devenv/lib/gen.sh"
 # shellcheck source=lib/e2e.sh
@@ -51,7 +54,7 @@ devenv — 工程基座唯一入口（命令面权威文档：devenv/COMMANDS.md
 用法：devenv [--json] <子命令> [参数]
 
 工程栈（一切构建/启停/观察/执行的唯一入口；禁止直接操作 compose）：
-  doctor                    一键体检（端点/引擎/矩阵/锁文件/worktree 身份与凭据状态/镜像/服务）；退出码=可开工与否
+  doctor                    一键体检（端点/引擎/矩阵/锁文件/worktree 身份与凭据状态/供应链门禁/CI workflow 静态门禁/镜像/服务）；退出码=可开工与否
   prefetch                  预取镜像锁中的上游镜像（分阶段、有进度/超时、可中断续跑；机器级拉取锁）
   build [--lockgen]         固定快照构建（tools + install + turbo build；幂等；--lockgen 强制重生成 lockfile）
   up                        启动 db/api 并等待真实健康终态（幂等）
@@ -102,7 +105,8 @@ GitHub App 认证入口（身份：GitHub App，非个人账号）：
 测试：
   test:auth                 认证入口离线测试（不访问 GitHub）
   test:auth:integration     认证入口真实集成测试（默认只读；写操作需显式旗标）
-  test:devenv               命令面离线测试（引擎解析/锁与栈使用租约/输出协议/快照与不可变绑定/per-worktree 隔离/供应链门禁/脚手架生成，mock docker）
+  test:devenv               命令面离线测试（引擎解析/锁与栈使用租约/输出协议/快照与不可变绑定/per-worktree 隔离/
+                            供应链门禁/CI workflow 静态门禁/脚手架生成/e2e 隔离编排，mock docker）
 
 退出码：0 成功 | 2 用法 | 3 环境未就绪 | 4 任务失败 | 5 超时 | 6 锁冲突 | 20–23 认证入口
 EOF
@@ -171,6 +175,19 @@ cmd_doctor() {
     local sc_msg="" sc_e
     for sc_e in ${SC_ERRORS[@]+"${SC_ERRORS[@]}"}; do sc_msg="${sc_msg}${sc_e}；"; done
     chk supply-chain fail "$(sc_error_count) 项：${sc_msg}"
+  fi
+
+  # CI workflow 静态门禁（#71）：直接调用 compose 即拒绝——CI 的项目操作必须经
+  # devenv 唯一入口（本地与 CI 同一校验器）。诚实口径：静态反例拦截 ≠ 阻止
+  # 人工在终端绕过 devenv（Spec §6 同款声明，不声称已阻止）。
+  if ci_workflow_scan "$REPO_ROOT"; then
+    if (( CI_WF_SCANNED > 0 )); then
+      chk ci-workflows ok "${CI_WF_SCANNED} 个 workflow 无直接 compose 调用（CI 项目操作经 devenv 唯一入口）"
+    else
+      chk ci-workflows ok "无 workflow 文件（本仓库尚未声明 CI workflow）"
+    fi
+  else
+    chk ci-workflows fail "$(ci_workflow_error_summary)。修复：CI 中一切项目操作改经 ./devenv/devenv（唯一入口，见 devenv/COMMANDS.md）"
   fi
 
   # worktree 身份与 per-worktree 隔离状态（#59）：不触引擎，纯状态报告
@@ -342,10 +359,11 @@ regen_lockfile() { # $1=快照物化目录；lockgen 靶生成 lockfile 后 dock
   docker rmi -f ne-lockgen:tmp >/dev/null 2>&1 || true
   # 首引导（快照内无 lockfile）走 lockgen-fresh 全量解析；有 lockfile 走增量解析（#54 §六.2）
   [[ -f "$dir/pnpm-lock.yaml" ]] || target="lockgen-fresh"
-  # 基础镜像经 build-arg 绑定本次 tools 不可变 ID（不依赖 per-worktree 可变标签 wt-<suffix>）
+  # 基础镜像经 build-arg 绑定 tools 内容寻址别名 tag（tag 名内嵌 tools 自身 ID，
+  # 不可变语义与 ID 等价，#71：BuildKit 不支持 FROM 裸 image ID，见 stack.sh）
   run_step "lockgen 镜像构建" \
     docker build -q -f "$dir/devenv/workspace.Dockerfile" --target "$target" -t ne-lockgen:tmp \
-      --build-arg "TOOLS_IMAGE=$TOOLS_IMAGE_EFFECTIVE" "$dir"
+      --build-arg "TOOLS_IMAGE=$(tools_immutable_ref)" "$dir"
   local cid
   cid="$(docker create ne-lockgen:tmp)"
   run_step "lockfile 导出" docker cp "$cid":/workspace/pnpm-lock.yaml "$REPO_ROOT/pnpm-lock.yaml"
@@ -1040,7 +1058,7 @@ case "$CMD" in
   git-push)               gha_cmd_git_push "$@" ;;
   test:auth)              bash "$REPO_ROOT/devenv/test/offline.test.sh" ;;
   test:auth:integration)  bash "$REPO_ROOT/devenv/test/integration.test.sh" "$@" ;;
-  test:devenv)            bash "$REPO_ROOT/devenv/test/stack-offline.test.sh" && bash "$REPO_ROOT/devenv/test/snapshot-offline.test.sh" && bash "$REPO_ROOT/devenv/test/isolation-offline.test.sh" && bash "$REPO_ROOT/devenv/test/supply-chain-offline.test.sh" && bash "$REPO_ROOT/devenv/test/gen-offline.test.sh" && bash "$REPO_ROOT/devenv/test/e2e-offline.test.sh" ;;
+  test:devenv)            bash "$REPO_ROOT/devenv/test/stack-offline.test.sh" && bash "$REPO_ROOT/devenv/test/snapshot-offline.test.sh" && bash "$REPO_ROOT/devenv/test/isolation-offline.test.sh" && bash "$REPO_ROOT/devenv/test/supply-chain-offline.test.sh" && bash "$REPO_ROOT/devenv/test/ci-offline.test.sh" && bash "$REPO_ROOT/devenv/test/gen-offline.test.sh" && bash "$REPO_ROOT/devenv/test/e2e-offline.test.sh" ;;
   help)                   usage; exit 0 ;;
   # 供应链静态门禁：不触引擎，可在任意平台/无引擎时执行
   supply-chain)           cmd_supply_chain "$@" ;;
