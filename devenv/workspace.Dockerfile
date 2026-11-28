@@ -16,9 +16,11 @@
 # cache id（--build-arg PNPM_STORE_CACHE_ID=<新 id>）。
 
 # 基础镜像经 build-arg 注入不可变标识（#58：固定快照 → tools 不可变 ID →
-# workspace 不可变 ID；不依赖 per-worktree 可变标签 wt-<suffix>，#59）。默认值
-# 是不存在 tag 的显式失败占位——devenv 构建必传 --build-arg TOOLS_IMAGE=<不可变 ID>，
-# 手工/调试构建若忘传会在 FROM 处明确报错，而非静默引用旧产物。
+# workspace 不可变 ID；不依赖 per-worktree 可变标签 wt-<suffix>，#59）。devenv
+# 构建传内容寻址别名 tag natural-enforcement/tools:imm-<64hex>（tag 名内嵌
+# tools 自身 ID，不可变语义与 ID 等价；#71：BuildKit 不支持 FROM 裸 ID）。
+# 默认值是不存在 tag 的显式失败占位——手工/调试构建若忘传会在 FROM 处明确
+# 报错，而非静默引用旧产物。
 ARG TOOLS_IMAGE=natural-enforcement/tools:wt-arg-missing
 
 # lockgen 公共靶：manifest 层（lockfile 可选——首引导无 lockfile 走 lockgen-fresh）

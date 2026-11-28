@@ -471,8 +471,9 @@ exit 3，compose v2 由 doctor `compose-plugin` 检查项校验）；裸 Linux +
   tools 输入哈希（tools.Dockerfile blob + 快照内 NODE_IMAGE）↔ tools image ID、
   快照哈希 ↔ workspace image ID 均记入状态文件
   `.devenv-state/workspace-image.env`（gitignored，每 worktree 私有）；workspace
-  与 lockgen 构建经 `--build-arg TOOLS_IMAGE=<不可变 ID>` 绑定基础镜像（不依赖
-  可被覆盖的 tools:local 标签）；workspace 镜像 label `devenv.base.image` 记录
+  与 lockgen 构建经 `--build-arg TOOLS_IMAGE=<内容寻址别名 tag>` 绑定基础镜像
+  （`natural-enforcement/tools:imm-<64hex>`——tag 名内嵌 tools 镜像自身 ID，
+  不可变语义与 ID 等价；#71：BuildKit 不支持 FROM 裸 ID，见 lib/stack.sh）；workspace 镜像 label `devenv.base.image` 记录
   其基础镜像 ID（可核对）。image ID 取自 `docker build -q` 输出（免 tag 二次解析
   竞态；podman 兼容层输出无前缀 64hex，已归一）；compose 注入 image ID 而非可变
   tag；up/web 启动后核对运行容器 `.Image` == 本次绑定 ID——同 worktree 可变 tag

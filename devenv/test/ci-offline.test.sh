@@ -117,14 +117,16 @@ check_detail() { # check_detail <用例名> <check 名> → detail 文本（stdo
 }
 
 # 夹具 workflow：合法（项目操作全经 ./devenv/devenv）
-wf_valid() { # <dir>
+wf_valid() { # <dir>（含空行——空行不进分词循环，macOS bash 3.2 空数组防卫）
   mkdir -p "$1/.github/workflows"
   cat > "$1/.github/workflows/quality-gate.yml" <<'YAML'
 name: quality-gate
+
 on: [push]
 jobs:
   quality-gate:
     runs-on: ubuntu-24.04
+
     steps:
       - run: ./devenv/devenv doctor
       - run: ./devenv/devenv verify
@@ -218,24 +220,45 @@ wf_with_violation "$SANDBOX" 'podman --remote compose ps'
 run_doctor ciw6e
 expect_rc "CIW6e podman --remote compose 被拒" 3 ciw6e
 
-# CIW7 注释行不误报（# docker compose ... 是说明文字，不是调用）
+# CIW7 注释/name 展示字段不误报（说明文字不是调用：整行注释、行内注释、
+# 顶层与步骤级 name 字段提及 docker compose 均放行）
 rm -f "$SANDBOX/.github/workflows/bad.yml"
 mkdir -p "$SANDBOX/.github/workflows"
 cat > "$SANDBOX/.github/workflows/commented.yml" <<'YAML'
-name: commented
+name: verify docker and compose guard
 on: [push]
 jobs:
   ok:
+    name: check docker and compose
     runs-on: ubuntu-24.04
     steps:
       # 禁止直接 docker compose up——必须经 ./devenv/devenv up
-      - run: ./devenv/devenv up
+      - run: ./devenv/devenv up  # tail comment mentions docker compose
 YAML
 run_doctor ciw7
-expect_rc "CIW7 注释中的 compose 字样不误报" 0 ciw7
+expect_rc "CIW7 注释与 name 字段中的 compose 字样不误报" 0 ciw7
+
+# CIW7b 引号包裹 / shell 分隔符紧贴形态（词元分词含引号与分隔符边界）被拒
+rm -f "$SANDBOX/.github/workflows/commented.yml"
+cat > "$SANDBOX/.github/workflows/quoted.yml" <<'YAML'
+name: quoted
+on: [push]
+jobs:
+  bad:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: "docker compose up -d db"
+      - run: 'docker-compose logs api'
+      - run: ./x;docker compose ps
+      - run: echo $(docker compose ps)
+YAML
+run_doctor ciw7b
+expect_rc "CIW7b 引号包裹的 docker compose 被拒" 3 ciw7b
+doctor_count="$(check_detail ciw7b ci-workflows | grep -oE '^[0-9]+')"
+[[ "$doctor_count" == "4" ]]   && pass "CIW7b 四种引号/分隔符形态全部计为违规"   || fail "CIW7b" "违规计数不符（期望 4，实际 ${doctor_count}）：$(check_detail ciw7b ci-workflows)"
 
 # CIW8 多处违规：报错含数量（不只报第一处）
-rm -f "$SANDBOX/.github/workflows/commented.yml"
+rm -f "$SANDBOX/.github/workflows/commented.yml" "$SANDBOX/.github/workflows/quoted.yml"
 cat > "$SANDBOX/.github/workflows/multi.yml" <<'YAML'
 name: multi
 on: [push]
