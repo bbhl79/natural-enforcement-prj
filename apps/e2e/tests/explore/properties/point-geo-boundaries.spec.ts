@@ -37,9 +37,9 @@ const numericStringArb = fc.oneof(
   fc.constantFrom('', 'abc', '1e2', ' 1 ', '0x10', 'Infinity', '-Infinity', '1.5', '90', '-90', '180', '-180', '1', '100000', '0', '100001'),
 )
 
-test('PT-BOUND-01 nearby query 边界：接受 ⇔ 界内（coerce 语义独立 oracle）', async (_fixtures, testInfo) => {
+test('PT-BOUND-01 nearby query 边界：接受 ⇔ 界内（coerce 语义独立 oracle）', async () => {
   await runProperty(
-    testInfo,
+    test.info(),
     BOUND_REF,
     fc.asyncProperty(numericStringArb, numericStringArb, numericStringArb, async (latS, lngS, rS) => {
       // 独立 oracle：JS Number 语义 + 闭区间判定（不经被测 schema 计算期望）
@@ -57,9 +57,9 @@ test('PT-BOUND-01 nearby query 边界：接受 ⇔ 界内（coerce 语义独立 
   )
 })
 
-test('PT-BOUND-01 创建点位坐标边界：lat∈[-90,90] ∧ lng∈[-180,180] 闭区间', async (_fixtures, testInfo) => {
+test('PT-BOUND-01 创建点位坐标边界：lat∈[-90,90] ∧ lng∈[-180,180] 闭区间', async () => {
   await runProperty(
-    testInfo,
+    test.info(),
     { ...BOUND_REF, property: 'P0/PT-BOUND-01/create-coordinate-boundaries' },
     fc.asyncProperty(
       fc.double({ min: -1000, max: 1000, noNaN: true, noDefaultInfinity: true }),
@@ -101,7 +101,7 @@ async function nearby(
 
 test('PT-GEO-01 nearby 半径米语义：r<d 不命中 / r≥d 命中 + 升序 + center 回显', async ({ request }, testInfo) => {
   await runProperty(
-    testInfo,
+    test.info(),
     GEO_REF,
     fc.asyncProperty(
       fc.double({ min: 0, max: 360, noNaN: true, noDefaultInfinity: true }),

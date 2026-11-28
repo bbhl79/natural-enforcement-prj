@@ -32,9 +32,9 @@ const REJECTION_REF = {
   charter: 'evidence-byte-provenance',
 } as const
 
-test('EV-NAME-01 展示名 unicode 无损往返（encode→decode 恒等 + wire 可见 ASCII）', async (_fixtures, testInfo) => {
+test('EV-NAME-01 展示名 unicode 无损往返（encode→decode 恒等 + wire 可见 ASCII）', async () => {
   await runProperty(
-    testInfo,
+    test.info(),
     ROUNDTRIP_REF,
     fc.asyncProperty(safeDisplayNameArb, async (name) => {
       const validated = validateOriginalName(name)
@@ -68,9 +68,9 @@ const REJECTION_CASES: ReadonlyArray<{ name: string; reason: OriginalNameDecodeF
   { name: '\t\n', reason: 'forbidden_character' },
 ]
 
-test('EV-NAME-02 非法展示名拒绝稳定性（reason 稳定 + wire 边界先拒）', async (_fixtures, testInfo) => {
+test('EV-NAME-02 非法展示名拒绝稳定性（reason 稳定 + wire 边界先拒）', async () => {
   await runProperty(
-    testInfo,
+    test.info(),
     REJECTION_REF,
     fc.asyncProperty(
       fc.oneof(
