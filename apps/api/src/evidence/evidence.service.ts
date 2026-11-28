@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto'
 import {
   decodeOriginalName,
   EVIDENCE_CONTENT_TYPE,
-  EVIDENCE_ROUTES,
+  evidenceContentPath,
   MAX_EVIDENCE_BYTES,
   ORIGINAL_NAME_HEADER,
   POINT_ID_HEADER,
@@ -126,6 +126,8 @@ export class EvidenceService {
     } catch (err) {
       this.logger.error(`证据入队失败（record=${row.id}）：${err instanceof Error ? err.message : String(err)}`)
       await this.repo.markFailed(row.id, EVIDENCE_PROCESSING_FAILED_MESSAGE).catch(() => undefined)
+      // 入队失败即无消费者：删除已写对象，避免孤儿（记录保留 failed 供观察）
+      await this.storage.delete(objectKey).catch(() => undefined)
       throw new ServiceUnavailableException('证据处理队列暂不可用')
     }
 
@@ -184,9 +186,9 @@ function toDto(row: EvidenceRecordRow): EvidenceRecordDto {
     contentType: row.contentType,
     bytes: row.bytes,
     sha256: row.sha256,
-    status: row.status as EvidenceRecordDto['status'],
+    status: row.status,
     error: row.error,
     createdAt: row.createdAt.toISOString(),
-    contentPath: EVIDENCE_ROUTES.content.replace(':id', encodeURIComponent(row.id)),
+    contentPath: evidenceContentPath(row.id),
   }
 }

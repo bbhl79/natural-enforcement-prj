@@ -1,6 +1,6 @@
 // 集成：#69 同源文件证据往返（真实 PostGIS + Redis + rustfs）。
 // 覆盖：unicode 文件名、恶意/解码失败/长度限制、后台 worker 回写、同源下载字节一致、
-// 服务间 presigned（GET/PUT）与浏览器响应不泄漏内部存储地址。
+// 服务间 presigned（worker 经 presigned GET）与浏览器响应不泄漏内部存储地址。
 //
 // worker 在测试进程内以独立 Nest 上下文启动（与生产同一 WorkerModule），并使用
 // 随机队列名隔离——运行中的 compose worker 不会消费本测试任务（#70 键空间隔离预演）。
@@ -164,12 +164,10 @@ describe('同源文件证据往返（上传 → 后台 worker → 同源下载�
     expect(ready.sha256).toBe(sha256(payload))
   })
 
-  it('服务间 presigned GET/PUT 可用；公开端点清单不含 presigned 路由', async () => {
+  it('服务间 presigned GET 可用；公开端点清单不含 presigned 路由', async () => {
     const storage = ctx.app!.get(StorageService)
     const getKey = `evidence-test/${runId}/presign-get`
-    const putKey = `evidence-test/${runId}/presign-put`
     extraObjectKeys.add(getKey)
-    extraObjectKeys.add(putKey)
 
     const direct = new Uint8Array(randomBytes(4096))
     await storage.put(getKey, direct, EVIDENCE_CONTENT_TYPE)
@@ -178,12 +176,6 @@ describe('同源文件证据往返（上传 → 后台 worker → 同源下载�
     const got = await fetch(getUrl)
     expect(got.status).toBe(200)
     expect(sha256(new Uint8Array(await got.arrayBuffer()))).toBe(sha256(direct))
-
-    const viaPresigned = new Uint8Array(randomBytes(2048))
-    const putUrl = await storage.presignPut(putKey, 60)
-    const putRes = await fetch(putUrl, { method: 'PUT', body: viaPresigned })
-    expect(putRes.status).toBe(200)
-    expect(sha256(await storage.get(putKey))).toBe(sha256(viaPresigned))
 
     // 公开契约没有 presigned/内部 URL 端点
     expect(Object.values(EVIDENCE_ROUTES).some((p) => p.includes('url') || p.includes('presign'))).toBe(

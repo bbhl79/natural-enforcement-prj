@@ -16,7 +16,13 @@ export class EvidenceQueueService implements OnModuleDestroy {
 
   private getQueue(): Queue {
     if (this.queue) return this.queue
-    this.connection = new Redis(redisUrl(), { maxRetriesPerRequest: null })
+    // 生产者要求快速失败：Redis 不可用时让 enqueue 尽快 reject（服务层转 503），
+    // 而不是无限重连挂住上传请求。`maxRetriesPerRequest: null` 只用于 worker 的
+    // 长连接消费语义。
+    this.connection = new Redis(redisUrl(), {
+      maxRetriesPerRequest: 1,
+      connectTimeout: 2_000,
+    })
     this.connection.on('error', (err: Error) => {
       this.logger.error(`队列连接错误：${err.message}`)
     })

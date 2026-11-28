@@ -8,8 +8,10 @@ import {
   EVIDENCE_CONTENT_TYPE,
   EVIDENCE_ENDPOINTS,
   EVIDENCE_ROUTES,
+  EvidenceContentResponseHeadersSchema,
   EvidenceRecordDtoSchema,
   evidenceContentPath,
+  evidenceRecordPath,
   MAX_EVIDENCE_BYTES,
   MAX_ORIGINAL_NAME_CODE_POINTS,
   MAX_ORIGINAL_NAME_WIRE_LENGTH,
@@ -137,10 +139,19 @@ describe('Content-Disposition 与同源路径', () => {
   })
 
   it('下载路径是同源相对路径（绝不携带内部存储地址）', () => {
-    const path = evidenceContentPath('0b6c1f60-1f1e-4c55-9a70-1b8e3a7e9d21')
-    expect(path).toBe('/evidence/0b6c1f60-1f1e-4c55-9a70-1b8e3a7e9d21/content')
-    expect(path).not.toMatch(/^[a-z]+:\/\//i)
-    expect(path).not.toContain('rustfs')
+    const id = '0b6c1f60-1f1e-4c55-9a70-1b8e3a7e9d21'
+    const contentPath = evidenceContentPath(id)
+    expect(contentPath).toBe(`/evidence/${id}/content`)
+    expect(contentPath).not.toMatch(/^[a-z]+:\/\//i)
+    expect(contentPath).not.toContain('rustfs')
+    expect(evidenceRecordPath(id)).toBe(`/evidence/${id}`)
+  })
+
+  it('下载响应头 Content-Disposition 进入契约（与运行时设置同源）', () => {
+    expect(EvidenceContentResponseHeadersSchema.parse({
+      'content-disposition': contentDispositionHeader('a.txt'),
+    })).toMatchObject({ 'content-disposition': expect.stringContaining('filename*=UTF-8') })
+    expect(EvidenceContentResponseHeadersSchema.safeParse({}).success).toBe(false)
   })
 })
 
@@ -193,6 +204,7 @@ describe('HTTP 契约 schema', () => {
     const response = download.responses[200]
     expect(isMediaType(response)).toBe(true)
     if (isMediaType(response)) expect(response.contentType).toBe(EVIDENCE_CONTENT_TYPE)
+    expect(download.responseHeaders?.[200]).toBe(EvidenceContentResponseHeadersSchema)
   })
 
   it('上传字节上限是正数且 body parser 上限联动', () => {

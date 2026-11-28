@@ -29,6 +29,8 @@ export interface ApiContractEndpoint {
   readonly headers?: z.ZodObject
   /** 路径参数契约（OpenAPI in: path 参数；#69 证据记录 id） */
   readonly pathParams?: z.ZodObject
+  /** 响应头契约（按状态码；OpenAPI response.headers，如 Content-Disposition） */
+  readonly responseHeaders?: Readonly<Record<number, z.ZodObject>>
   readonly responses: Readonly<Record<number, ApiContractResponseBody>>
 }
 

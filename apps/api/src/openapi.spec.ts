@@ -176,8 +176,13 @@ describe('OpenAPI 文件证据端点（#69：非 JSON 媒体类型 / header / pa
     const content = ctx.doc!.paths[openApiPath(EVIDENCE_ROUTES.content)]?.get
     expect(content).toBeDefined()
     const download = content!.responses?.['200'] as {
+      headers?: Record<string, { required?: boolean; schema?: unknown }>
       content?: Record<string, { schema?: unknown }>
     }
+    expect(download.headers?.['content-disposition']).toMatchObject({
+      required: true,
+      schema: { type: 'string' },
+    })
     expect(Object.keys(download.content ?? {})).toEqual([EVIDENCE_CONTENT_TYPE])
     expect(download.content?.[EVIDENCE_CONTENT_TYPE]?.schema).toEqual({
       type: 'string',
@@ -288,6 +293,16 @@ describe('verifyOpenApiCompleteness（自动检查正反测试）', () => {
     const result = verifyOpenApiCompleteness(doc)
     expect(result.ok).toBe(false)
     expect(result.errors.some((e) => e.includes('路径参数 id'))).toBe(true)
+  })
+
+  it('反例：证据下载缺失 Content-Disposition 响应头契约时检出', () => {
+    const doc = cloneDoc()
+    const op = doc.paths[openApiPath(EVIDENCE_ROUTES.content)]!.get as OperationObject
+    const response = op.responses!['200'] as { headers?: Record<string, unknown> }
+    delete response.headers
+    const result = verifyOpenApiCompleteness(doc)
+    expect(result.ok).toBe(false)
+    expect(result.errors.some((e) => e.includes('响应头 content-disposition'))).toBe(true)
   })
 })
 

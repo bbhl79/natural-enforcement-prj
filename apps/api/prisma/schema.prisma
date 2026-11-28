@@ -28,7 +28,7 @@ model EnforcementPoint {
 
 // 证据文件记录（#69）：bucket/objectKey 只服务端可见；originalName 仅展示元数据。
 model EvidenceRecord {
-  id           String           @id @default(cuid())
+  id           String           @id
   pointId      Int?
   point        EnforcementPoint? @relation(fields: [pointId], references: [id])
   bucket       String

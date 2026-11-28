@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { Injectable, Logger, type OnApplicationBootstrap, type OnModuleDestroy } from '@nestjs/common'
 import { Worker, type Job } from 'bullmq'
 import { Redis } from 'ioredis'
-import { PrismaService } from '../prisma/prisma.service.js'
+import { EvidenceRepo } from '../evidence/evidence.repo.js'
 import { StorageService } from '../storage/storage.service.js'
 import {
   EVIDENCE_PROCESSING_FAILED_MESSAGE,
@@ -28,7 +28,7 @@ export class EvidenceWorkerService implements OnApplicationBootstrap, OnModuleDe
   private heartbeat?: NodeJS.Timeout
 
   constructor(
-    private readonly prisma: PrismaService,
+    private readonly repo: EvidenceRepo,
     private readonly storage: StorageService,
   ) {}
 
@@ -71,7 +71,7 @@ export class EvidenceWorkerService implements OnApplicationBootstrap, OnModuleDe
 
   private async process(job: Job<unknown>): Promise<void> {
     const { recordId } = parseProcessEvidenceJob(job.data)
-    const record = await this.prisma.evidenceRecord.findUnique({ where: { id: recordId } })
+    const record = await this.repo.findById(recordId)
     if (!record) throw new Error(`证据记录不存在：${recordId}`)
 
     try {
@@ -81,19 +81,11 @@ export class EvidenceWorkerService implements OnApplicationBootstrap, OnModuleDe
       if (!res.ok) throw new Error(`presigned GET 失败（HTTP ${res.status}）`)
       const bytes = new Uint8Array(await res.arrayBuffer())
       const sha256 = createHash('sha256').update(bytes).digest('hex')
-      await this.prisma.evidenceRecord.update({
-        where: { id: recordId },
-        data: { status: 'ready', bytes: bytes.byteLength, sha256, error: null },
-      })
+      await this.repo.markReady(recordId, bytes.byteLength, sha256)
     } catch (err) {
       // 完整异常只进服务端日志；浏览器可见的 error 字段保持通用文案（不含内部地址）
       this.logger.warn(`证据处理失败（record=${recordId}）：${err instanceof Error ? err.message : String(err)}`)
-      await this.prisma.evidenceRecord
-        .update({
-          where: { id: recordId },
-          data: { status: 'failed', error: EVIDENCE_PROCESSING_FAILED_MESSAGE },
-        })
-        .catch(() => undefined)
+      await this.repo.markFailed(recordId, EVIDENCE_PROCESSING_FAILED_MESSAGE).catch(() => undefined)
       throw err
     }
   }

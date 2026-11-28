@@ -11,8 +11,8 @@ import {
 import {
   CreateEnforcementPointResultSchema,
   ENFORCEMENT_POINT_ROUTES,
-  EVIDENCE_ROUTES,
   EvidenceRecordDtoSchema,
+  evidenceRecordPath,
   HEALTH_ROUTES,
   HealthResultSchema,
   NearbyResultSchema,
@@ -84,7 +84,7 @@ export const neApi = createApi({
 
     // 同源读取处理状态（pending → ready/failed）；浏览器不接触内部存储地址
     getEvidence: b.query<EvidenceRecordDto, string>({
-      query: (id) => `${EVIDENCE_ROUTES.base}/${id}`,
+      query: (id) => evidenceRecordPath(id),
       transformResponse: validated(EvidenceRecordDtoSchema),
       providesTags: ['Evidence'],
     }),

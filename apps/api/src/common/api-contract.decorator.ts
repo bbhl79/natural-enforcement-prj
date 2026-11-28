@@ -9,13 +9,27 @@ import {
   ApiResponse,
   type SchemaObject,
 } from '@nestjs/swagger'
-import { z, type ZodObject, type ZodType } from 'zod'
+import type { ZodObject, ZodType } from 'zod'
+import { openApiSchemaOf } from './openapi-schema.js'
 
-/** 由 zod schema 派生 OpenAPI 3.0 JSON Schema（去 $schema；与完整性检查同一派生） */
-export function openApiSchemaOf(schema: ZodType, io: 'input' | 'output' = 'input'): SchemaObject {
-  const raw = z.toJSONSchema(schema, { target: 'openapi-3.0', io }) as Record<string, unknown>
-  delete raw['$schema']
-  return raw as SchemaObject
+/** 由 zod schema 派生 OpenAPI 3.0 JSON Schema（与完整性检查同一实现） */
+export function openApiSchemaOfContract(
+  schema: ZodType,
+  io: 'input' | 'output' = 'input',
+): SchemaObject {
+  return openApiSchemaOf(schema, io) as SchemaObject
+}
+
+function responseHeadersOf(schema: ZodObject): Record<string, { required: boolean; schema: SchemaObject }> {
+  const json = openApiSchemaOf(schema, 'output')
+  const properties = (json.properties ?? {}) as Record<string, SchemaObject>
+  const required = new Set(Array.isArray(json.required) ? (json.required as string[]) : [])
+  return Object.fromEntries(
+    Object.entries(properties).map(([name, propSchema]) => [
+      name,
+      { required: required.has(name), schema: propSchema },
+    ]),
+  )
 }
 
 export function ApiContractResponse(options: {
@@ -39,13 +53,15 @@ export function ApiContractMediaResponse(options: {
   description: string
   contentType: string
   schema: ZodType
+  responseHeaders?: ZodObject
 }): MethodDecorator {
   return ApiResponse({
     status: options.status,
     description: options.description,
     content: {
-      [options.contentType]: { schema: openApiSchemaOf(options.schema, 'output') },
+      [options.contentType]: { schema: openApiSchemaOfContract(options.schema, 'output') },
     },
+    ...(options.responseHeaders ? { headers: responseHeadersOf(options.responseHeaders) } : {}),
   })
 }
 
@@ -60,7 +76,7 @@ export function ApiContractMediaBody(options: {
     ApiBody({
       required: true,
       description: options.description,
-      schema: openApiSchemaOf(options.schema, 'input'),
+      schema: openApiSchemaOfContract(options.schema, 'input'),
     }),
   )
 }

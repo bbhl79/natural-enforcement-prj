@@ -110,16 +110,6 @@ export class StorageService {
     )
   }
 
-  /** 服务间上传 URL（集成测试与后续服务间直传使用；不对外暴露） */
-  async presignPut(key: string, ttlSeconds = 300): Promise<string> {
-    await this.ensureBucket()
-    return getSignedUrl(
-      this.getClient(),
-      new PutObjectCommand({ Bucket: this.bucket, Key: key }),
-      { expiresIn: ttlSeconds },
-    )
-  }
-
   /** 清理/回滚用；对象不存在不视为失败 */
   async delete(key: string): Promise<void> {
     await this.ensureBucket()

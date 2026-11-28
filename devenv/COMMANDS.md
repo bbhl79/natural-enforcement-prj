@@ -389,15 +389,17 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
   监听者经 TCP 探测区分），exit 3 且错误含服务/端口/占用者/内嵌修复命令。
   实际端口一律经 `docker port` 回读（不预测），进 `--json` 终值与 `status`
   （`web_port`/`web_url`，按本 worktree 项目标签过滤；未运行如实报 none）。
-- **对象存储凭据（前置声明）**：#56 最小栈暂无 rustfs/对象存储服务，"数据库/对象存储
-  凭据独立"中对象存储半条当前为空集；服务回归时必须复刻 db_credentials_ensure
-  模式（每 worktree 生成 + .devenv-state 持久化 + compose 同源注入），归该服务
-  的实施票并与 #75 回收核对衔接。
+- **对象存储凭据 per-worktree（#69 已落地）**：`openssl rand` 生成 S3 access key
+  （16-32 位小写字母数字）与 secret（32 hex），持久化
+  `.devenv-state/storage-credentials.env`（0600，gitignored，per-worktree 私有）；
+  rustfs `RUSTFS_ACCESS_KEY/SECRET_KEY` 与 api/worker/tools 的 `S3_ACCESS_KEY/SECRET_KEY`
+  同源注入。凭据文件损坏（格式不符）→ exit 3 并内嵌修复命令；凭据随 worktree 状态
+  保留，换凭据需 `down --volumes` 重建 rustfs 数据卷。
 
 ## 架构不变量（Spec-工程基座 硬不变量，本命令面执行）
 
 - **无 bind 烘焙镜像**：源码经 `devenv/workspace.Dockerfile` COPY 进镜像；compose
-  只挂命名卷（pgdata、turbo-cache）；零宿主端口（web 唯一显式例外，profile 隔离
+  只挂命名卷（pgdata、rustfs-data、turbo-cache）；零宿主端口（web 唯一显式例外，profile 隔离
   opt-in，端口默认引擎运行时分配、实际端口回读入 status——#62）。调试访问一律经
   `devenv exec/shell/logs`，不开放调试端口（API/数据库等调试同此入口）。
 - **宿主工具链零安装**：node/pnpm/prisma 只在容器内执行；源码消费型命令
@@ -476,7 +478,7 @@ compose 健康检查读 Redis 心跳（证明已进入消费循环），不发�
   穿越名、控制字符/双向控制符/纯空白一律 400；**文件名只作展示元数据，对象键只由
   服务端生成的记录 id 构成**（`evidence/<id>`）。
 - 浏览器响应（上传/记录/下载）不含 bucket、对象键、presigned URL 或内部存储地址；
-  记录 DTO 只给同源相对路径 `contentPath`。presigned GET/PUT 仅服务间使用：worker
+  记录 DTO 只给同源相对路径 `contentPath`。presigned GET 仅服务间使用：worker
   经 presigned GET 读取对象并回写 sha256/字节数，失败的浏览器可见文案固定且不含
   内部地址（完整异常只进服务端日志）。
 - 后台处理：`POST /evidence` 建 pending 记录并投递 BullMQ；worker 回写

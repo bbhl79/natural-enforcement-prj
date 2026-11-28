@@ -9,10 +9,10 @@ import {
 } from '@nestjs/common'
 import { ApiBadRequestResponse, ApiResponse, ApiTags } from '@nestjs/swagger'
 import {
-  BinaryBodySchema,
   contentDispositionHeader,
-  EVIDENCE_CONTENT_TYPE,
   EVIDENCE_ROUTES,
+  EvidenceContentResponseHeadersSchema,
+  EvidenceFileMediaContract,
   EvidenceRecordDtoSchema,
   EvidenceUploadHeadersSchema,
   HttpErrorSchema,
@@ -42,8 +42,7 @@ export class EvidenceController {
   @ApiContractHeaders(EvidenceUploadHeadersSchema)
   @ApiContractMediaBody({
     description: '证据原始字节（文件名见 x-original-name 头）',
-    contentType: EVIDENCE_CONTENT_TYPE,
-    schema: BinaryBodySchema,
+    ...EvidenceFileMediaContract,
   })
   @ApiContractResponse({
     status: 201,
@@ -82,8 +81,8 @@ export class EvidenceController {
   @ApiContractMediaResponse({
     status: 200,
     description: '证据原始字节（application/octet-stream）',
-    contentType: EVIDENCE_CONTENT_TYPE,
-    schema: BinaryBodySchema,
+    ...EvidenceFileMediaContract,
+    responseHeaders: EvidenceContentResponseHeadersSchema,
   })
   @ApiResponse({ status: 404, description: '证据记录不存在', standardSchema: HttpErrorSchema })
   @ApiResponse({ status: 503, description: '对象存储暂不可用', standardSchema: HttpErrorSchema })

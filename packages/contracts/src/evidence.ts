@@ -65,7 +65,7 @@ export type OriginalNameDecodeFailureReason =
   | 'forbidden_character'
   | 'invalid'
 
-export type OriginalNameDecodeResult =
+export type OriginalNameValidationResult =
   | { readonly ok: true; readonly name: string }
   | {
       readonly ok: false
@@ -73,9 +73,8 @@ export type OriginalNameDecodeResult =
       readonly message: string
     }
 
-export type OriginalNameValidationResult =
-  | { readonly ok: true; readonly name: string }
-  | { readonly ok: false; readonly reason: OriginalNameDecodeFailureReason; readonly message: string }
+/** 解码与编码前校验共享同一结果形状（失败原因可映射为稳定错误码） */
+export type OriginalNameDecodeResult = OriginalNameValidationResult
 
 function fail(reason: OriginalNameDecodeFailureReason, message: string): OriginalNameValidationResult {
   return { ok: false, reason, message }
@@ -137,6 +136,11 @@ export function contentDispositionHeader(name: string): string {
   return `attachment; filename="evidence.bin"; filename*=UTF-8''${encoded}`
 }
 
+/** 同源记录详情路径（相对路径；id 经 URI 编码） */
+export function evidenceRecordPath(id: string): string {
+  return EVIDENCE_ROUTES.detail.replace(':id', encodeURIComponent(id))
+}
+
 /** 同源下载路径（相对路径，永远不携带内部存储地址） */
 export function evidenceContentPath(id: string): string {
   return EVIDENCE_ROUTES.content.replace(':id', encodeURIComponent(id))
@@ -166,15 +170,18 @@ export const EvidenceIdParamsSchema = z.object({ id: z.string() }).strict()
 /** OpenAPI 二进制 schema（zod 唯一事实源；运行时不会把字节交给 zod 校验） */
 export const BinaryBodySchema = z.string().meta({ format: 'binary' })
 
-export const UploadEvidenceBodyContract = {
+/** 证据文件统一媒体类型契约（上传请求体与下载响应体同源，避免两份字面量漂移） */
+export const EvidenceFileMediaContract = {
   contentType: EVIDENCE_CONTENT_TYPE,
   schema: BinaryBodySchema,
 } as const
 
-export const DownloadEvidenceBodyContract = {
-  contentType: EVIDENCE_CONTENT_TYPE,
-  schema: BinaryBodySchema,
-} as const
+/** 下载响应头：同名 Content-Disposition（RFC 5987 文件名）也进入契约/OpenAPI */
+export const EvidenceContentResponseHeadersSchema = z
+  .object({
+    'content-disposition': z.string(),
+  })
+  .strict()
 
 export const EvidenceRecordDtoSchema = z
   .object({
@@ -197,7 +204,7 @@ export const EVIDENCE_ENDPOINTS: readonly ApiContractEndpoint[] = [
   {
     method: 'post',
     path: EVIDENCE_ROUTES.base,
-    requestBody: UploadEvidenceBodyContract,
+    requestBody: EvidenceFileMediaContract,
     headers: EvidenceUploadHeadersSchema,
     responses: {
       201: EvidenceRecordDtoSchema,
@@ -220,8 +227,9 @@ export const EVIDENCE_ENDPOINTS: readonly ApiContractEndpoint[] = [
     method: 'get',
     path: EVIDENCE_ROUTES.content,
     pathParams: EvidenceIdParamsSchema,
+    responseHeaders: { 200: EvidenceContentResponseHeadersSchema },
     responses: {
-      200: DownloadEvidenceBodyContract,
+      200: EvidenceFileMediaContract,
       404: HttpErrorSchema,
       503: HttpErrorSchema,
     },

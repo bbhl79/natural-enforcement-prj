@@ -1,4 +1,5 @@
-# compose 拓扑（#56 最小空间数据开发栈 + #59 per-worktree 隔离）：db + api + tools + web。
+# compose 拓扑（#56 最小空间数据开发栈 + #59 per-worktree 隔离 + #69 文件证据）：
+# db + redis + rustfs + api + worker + tools + web。
 # 人类/agent 禁止直接操作本文件对应的 compose 命令（硬不变量 2：devenv 唯一入口）。
 # 镜像引用一律经变量注入，事实源：devenv/images.lock（tag+digest 双层锁）；
 # DB 镜像经 devenv 注入生效值（DEVENV_DB_IMAGE 可覆盖，见 COMMANDS.md）。

@@ -22,6 +22,7 @@ import {
   type ApiContractResponseBody,
   type HttpMethod,
 } from '@ne/contracts'
+import { openApiSchemaOf } from './common/openapi-schema.js'
 
 const HTTP_METHODS: readonly HttpMethod[] = ['get', 'post', 'put', 'patch', 'delete']
 
@@ -46,10 +47,7 @@ export function expectedOpenApiSchema(
   schema: z.ZodType,
   io: 'input' | 'output',
 ): Record<string, unknown> {
-  const raw = z.toJSONSchema(schema, { target: 'openapi-3.0', io }) as Record<string, unknown>
-  const rest = { ...raw }
-  delete rest['$schema']
-  return rest
+  return openApiSchemaOf(schema, io)
 }
 
 interface ResolvedMedia {
@@ -223,6 +221,32 @@ export function verifyOpenApiCompleteness(
         errors.push(`${label}: 缺少 ${statusStr} 响应 ${expected.contentType} schema`)
       } else if (!isDeepStrictEqual(actualSchema, expected.schema)) {
         errors.push(`${label}: ${statusStr} 响应 schema 与 zod 契约不一致`)
+      }
+
+      // 响应头契约（如 Content-Disposition）：声明项必须存在且 schema/required 一致
+      const headerContract = ep.responseHeaders?.[Number(statusStr)]
+      if (headerContract) {
+        const expectedHeaders = expectedParams(headerContract)
+        const actualHeaders =
+          (op.responses?.[statusStr] as
+            | { headers?: Record<string, { required?: boolean; schema?: unknown }> }
+            | undefined)?.headers ?? {}
+        const byName = new Map(
+          Object.entries(actualHeaders).map(([name, header]) => [name.toLowerCase(), header]),
+        )
+        for (const [name, exp] of expectedHeaders) {
+          const actual = byName.get(name.toLowerCase())
+          if (!actual) {
+            errors.push(`${label}: 缺少 ${statusStr} 响应头 ${name}`)
+            continue
+          }
+          if (Boolean(actual.required) !== exp.required) {
+            errors.push(`${label}: ${statusStr} 响应头 ${name} 的 required 与契约不一致`)
+          }
+          if (!isDeepStrictEqual(actual.schema, exp.schema)) {
+            errors.push(`${label}: ${statusStr} 响应头 ${name} 的 schema 与 zod 契约不一致`)
+          }
+        }
       }
     }
   }
