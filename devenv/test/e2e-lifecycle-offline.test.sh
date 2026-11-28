@@ -924,6 +924,10 @@ run_cmd r7a "$DEVENV" --json e2e replay DEF-0002 --run-id rep-r7a
   && pass "R7 无标记单轮：退出码仍是判定权威，signature=null（不编造）" || fail "R7a" "rc=$RC out=$(tail -1 "$SANDBOX/r7a.out")"
 run_cmd r7b "$DEVENV" --json e2e replay DEF-0002 --attempts 2 --run-id rep-r7b
 [[ "$RC" == 4 ]] && pass "R7 无标记多轮：无法机器判同一原因 → exit 4" || fail "R7b" "rc=$RC（期望 4）"
+jq -e '(.baseline == null) and (.candidates | length == 1) and (.candidates[0] == null)' \
+  "$STATE/compare-payload.json" >/dev/null 2>&1 \
+  && pass "R7 无标记轮次仍逐轮送比对（candidates 长度=轮次-1，null 不被 // 折叠）" \
+  || fail "R7payload" "比对载荷不符：$(cat "$STATE/compare-payload.json" 2>/dev/null)"
 export MOCK_REPLAY_OUTPUT="$SIG_LINE"
 
 # R8 复现脚本缺失 → exit 10（脚本随记录入库是长期重建依据）

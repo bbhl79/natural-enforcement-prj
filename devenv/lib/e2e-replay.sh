@@ -233,7 +233,7 @@ cmd_e2e_replay() { # e2e replay <DEF-NNNN> [--attempts N] [--run-id BASE]
   if (( attempts > 1 )); then
     local cmp_payload cmp_rc=0
     cmp_payload="$(mktemp)" || die 4 "无法创建签名比对载荷临时文件"
-    printf '%s' "$rounds" | jq -c '{baseline:(.[0].signature // null),candidates:[.[1:][].signature // null]}' > "$cmp_payload"
+    printf '%s' "$rounds" | jq -c '{baseline:(.[0].signature // null),candidates:[.[1:][] | (.signature // null)]}' > "$cmp_payload"
     e2e_signature_query "$cmp_payload" signature compare || cmp_rc=$?
     rm -f "$cmp_payload"
     if (( cmp_rc != 0 )); then
