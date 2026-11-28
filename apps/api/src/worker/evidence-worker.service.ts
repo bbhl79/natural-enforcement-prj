@@ -13,11 +13,13 @@ import {
   workerHeartbeatKey,
 } from '../queue/evidence-queue.constants.js'
 import { parseProcessEvidenceJob } from '../queue/payload.js'
+import { isFinalAttempt } from './attempts.js'
 
 /**
  * 后台证据 worker（独立进程；#69）：
  * 上传入队 → 本服务取对象（经服务间 presigned GET，真实 HTTP）→ 计算 sha256/字节数
- * → 回写 ready；失败回写 failed（浏览器可见原因固定、不含内部地址）。
+ * → 回写 ready；**重试期间保持 pending，仅 BullMQ 最后一次尝试失败才写 failed**
+ * （浏览器可见原因固定、不含内部地址；避免 failed→ready 时 UI 停在 failed）。
  * worker 通过 Redis 心跳让 compose 健康检查可判定「已进入消费循环」。
  */
 @Injectable()
@@ -45,9 +47,6 @@ export class EvidenceWorkerService implements OnApplicationBootstrap, OnModuleDe
     this.worker.on('error', (err: Error) => {
       this.logger.error(`worker 错误：${err.message}`)
     })
-    this.worker.on('failed', (job, err) => {
-      this.logger.warn(`任务失败（job=${job?.id ?? '?'}）：${err.message}`)
-    })
 
     await this.beat(queueName)
     this.heartbeat = setInterval(() => {
@@ -70,11 +69,14 @@ export class EvidenceWorkerService implements OnApplicationBootstrap, OnModuleDe
   }
 
   private async process(job: Job<unknown>): Promise<void> {
-    const { recordId } = parseProcessEvidenceJob(job.data)
-    const record = await this.repo.findById(recordId)
-    if (!record) throw new Error(`证据记录不存在：${recordId}`)
-
+    const attempts = job.opts.attempts
+    const attemptNumber = job.attemptsMade + 1
+    let recordId: string | undefined
     try {
+      recordId = parseProcessEvidenceJob(job.data).recordId
+      const record = await this.repo.findById(recordId)
+      if (!record) throw new Error(`证据记录不存在：${recordId}`)
+
       // 服务间 presigned GET：worker 不直接使用裸 bucket/key 访问（#69 AC）
       const url = await this.storage.presignGet(record.objectKey, 60)
       const res = await fetch(url, { signal: AbortSignal.timeout(15_000) })
@@ -83,9 +85,20 @@ export class EvidenceWorkerService implements OnApplicationBootstrap, OnModuleDe
       const sha256 = createHash('sha256').update(bytes).digest('hex')
       await this.repo.markReady(recordId, bytes.byteLength, sha256)
     } catch (err) {
-      // 完整异常只进服务端日志；浏览器可见的 error 字段保持通用文案（不含内部地址）
-      this.logger.warn(`证据处理失败（record=${recordId}）：${err instanceof Error ? err.message : String(err)}`)
-      await this.repo.markFailed(recordId, EVIDENCE_PROCESSING_FAILED_MESSAGE).catch(() => undefined)
+      const final = isFinalAttempt(attemptNumber, attempts)
+      // 重试期间不写最终失败态：BullMQ 会继续重试，状态保持 pending（前端继续轮询）。
+      // 只有当前就是最后一次尝试才在抛出前同步写 failed（避免 fire-and-forget 丢失）。
+      // 完整异常只进服务端日志；浏览器可见的 error 字段保持通用文案（不含内部地址）。
+      this.logger.warn(
+        `证据处理失败（record=${recordId ?? '?'}，attempt ${attemptNumber}/${attempts ?? 1}，final=${final}）：${err instanceof Error ? err.message : String(err)}`,
+      )
+      if (final && recordId) {
+        await this.repo.markFailed(recordId, EVIDENCE_PROCESSING_FAILED_MESSAGE).catch((markErr: unknown) => {
+          this.logger.error(
+            `写入 failed 状态失败（record=${recordId}）：${markErr instanceof Error ? markErr.message : String(markErr)}`,
+          )
+        })
+      }
       throw err
     }
   }

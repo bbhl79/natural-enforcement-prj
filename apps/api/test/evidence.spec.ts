@@ -5,7 +5,7 @@
 // worker 在测试进程内以独立 Nest 上下文启动（与生产同一 WorkerModule），并使用
 // 随机队列名隔离——运行中的 compose worker 不会消费本测试任务（#70 键空间隔离预演）。
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { INestApplication, INestApplicationContext } from '@nestjs/common'
 import { NestFactory } from '@nestjs/core'
 import {
@@ -23,6 +23,7 @@ import {
 import { createApp } from '../src/bootstrap.js'
 import { EnforcementPointRepo } from '../src/enforcement-point/enforcement-point.repo.js'
 import { EvidenceRepo } from '../src/evidence/evidence.repo.js'
+import { EVIDENCE_PROCESSING_FAILED_MESSAGE } from '../src/queue/evidence-queue.constants.js'
 import { StorageService } from '../src/storage/storage.service.js'
 import { WorkerModule } from '../src/worker/worker.module.js'
 
@@ -163,6 +164,60 @@ describe('同源文件证据往返（上传 → 后台 worker → 同源下载�
     expect(ready.status).toBe('ready')
     expect(ready.sha256).toBe(sha256(payload))
   })
+
+  it('重试期间保持 pending，后续尝试成功 → 最终 ready（不复现 failed→ready 卡死）', async () => {
+    const storage = ctx.worker!.get(StorageService)
+    const original = storage.presignGet.bind(storage)
+    let calls = 0
+    const spy = vi.spyOn(storage, 'presignGet').mockImplementation(async (key, ttl) => {
+      calls += 1
+      if (calls === 1) throw new Error('transient presign failure')
+      return original(key, ttl)
+    })
+    try {
+      const payload = new Uint8Array(randomBytes(2048))
+      const uploaded = await uploadName(`retry-${runId}.bin`, payload)
+      expect(uploaded.status).toBe(201)
+      const record = await parseRecord(uploaded)
+
+      const observed: string[] = []
+      let final: EvidenceRecordDto | undefined
+      const deadline = Date.now() + 20_000
+      for (;;) {
+        const res = await jfetch(`${EVIDENCE_ROUTES.base}/${record.id}`)
+        final = EvidenceRecordDtoSchema.parse(await res.json())
+        observed.push(final.status)
+        if (final.status !== 'pending') break
+        if (Date.now() > deadline) throw new Error('等待重试处理超时（20s）')
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+
+      expect(calls).toBeGreaterThanOrEqual(2) // 首次失败 + 重试成功
+      expect(observed).not.toContain('failed') // 重试期间绝不广播最终失败
+      expect(final!.status).toBe('ready')
+      expect(final!.sha256).toBe(sha256(payload))
+    } finally {
+      spy.mockRestore()
+    }
+  }, 30_000)
+
+  it('仅最后一次尝试失败才写 failed；错误文案固定且不含内部存储地址', async () => {
+    const storage = ctx.worker!.get(StorageService)
+    const spy = vi
+      .spyOn(storage, 'presignGet')
+      .mockRejectedValue(new Error('storage down at http://rustfs:9000/private'))
+    try {
+      const uploaded = await uploadName(`permanent-failure-${runId}.bin`, new Uint8Array([1, 2, 3]))
+      expect(uploaded.status).toBe(201)
+      const record = await parseRecord(uploaded)
+      const final = await waitForTerminal(record.id, 20_000)
+      expect(final.status).toBe('failed')
+      expect(final.error).toBe(EVIDENCE_PROCESSING_FAILED_MESSAGE)
+      expect(JSON.stringify(final)).not.toContain('rustfs')
+    } finally {
+      spy.mockRestore()
+    }
+  }, 30_000)
 
   it('服务间 presigned GET 可用；公开端点清单不含 presigned 路由', async () => {
     const storage = ctx.app!.get(StorageService)

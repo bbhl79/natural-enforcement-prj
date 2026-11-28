@@ -482,7 +482,9 @@ compose 健康检查读 Redis 心跳（证明已进入消费循环），不发�
   经 presigned GET 读取对象并回写 sha256/字节数，失败的浏览器可见文案固定且不含
   内部地址（完整异常只进服务端日志）。
 - 后台处理：`POST /evidence` 建 pending 记录并投递 BullMQ；worker 回写
-  `ready`（sha256/bytes）或 `failed`。队列名可用 `EVIDENCE_QUEUE_NAME` 注入
+  `ready`（sha256/bytes）。**重试期间状态保持 `pending`**（前端继续轮询），
+  仅 BullMQ 最后一次尝试失败才写 `failed`——避免“首次失败、重试成功”造成
+  `failed → ready` 而 UI 停在 failed。队列名可用 `EVIDENCE_QUEUE_NAME` 注入
   （#70 每 run 键空间的前置能力）。
 
 **证据与验证入口**：
