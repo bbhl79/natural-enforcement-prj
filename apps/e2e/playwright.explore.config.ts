@@ -1,5 +1,7 @@
 // 探索轨道配置（#70）：tests/explore 专用，不进常规 CI；失败是产出（证据 → 缺陷报告），
 // 不重试不掩盖；录屏/trace/JSON/HTML 报告全部按 run 导出到宿主证据目录。
+// P0 属性探索引擎（#107）在 tests/explore/properties/ 内运行（同一轨道、同一失败语义）；
+// 违规的结构化反例经 property-finding 附件进入 results.json（口径见 devenv/COMMANDS.md）。
 import { defineConfig } from '@playwright/test'
 
 const ARTIFACTS = process.env.E2E_ARTIFACTS_DIR ?? './.artifacts-run'
