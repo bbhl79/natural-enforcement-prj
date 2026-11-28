@@ -68,6 +68,7 @@ export const CounterexampleRequestSchema = z.strictObject({
   path: z.string().min(1),
   headers: z.record(z.string(), z.string()).optional(),
   body: z.unknown().optional(),
+  bodyBase64: z.string().min(1).optional(), // 二进制载荷（证据上传类反例；#109 增量，optional 向后兼容）
 })
 export type CounterexampleRequest = z.infer<typeof CounterexampleRequestSchema>
 
