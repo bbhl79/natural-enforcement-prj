@@ -565,7 +565,7 @@ cmd_e2e_logs() { # 观察 per-run 容器日志（透传；JSON 时原始流走 s
 
 cmd_e2e() {
   local sub="${1:-}"
-  [[ -n "$sub" ]] || die 2 "用法：e2e <build|runs|logs|defect|registry> ..."
+  [[ -n "$sub" ]] || die 2 "用法：e2e <build|runs|logs|defect|registry|replay> ..."
   shift
   case "$sub" in
     build) cmd_e2e_build "$@" ;;
@@ -574,6 +574,8 @@ cmd_e2e() {
     # 生命周期命令面（#106；决策引擎宿主桥在 lib/e2e-lifecycle.sh）
     defect)   cmd_e2e_defect "$@" ;;
     registry) cmd_e2e_registry "$@" ;;
-    *) die 2 "未知 e2e 子命令：${sub}（当前：build | runs | logs | defect | registry）" ;;
+    # 重放（#108；per-run 编排 + 签名原语桥在 lib/e2e-replay.sh）
+    replay)   cmd_e2e_replay "$@" ;;
+    *) die 2 "未知 e2e 子命令：${sub}（当前：build | runs | logs | defect | registry | replay）" ;;
   esac
 }

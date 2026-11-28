@@ -203,6 +203,84 @@ case "$sub" in
     printf 'W\treplay/DEF-0001.mjs/child.json\t%s\n' "$(b64 'x')"
     printf 'END\tok\t0\t两项\n'
     exit 0 ;;
+  replay-plan)
+    # #108：重放计划（真实引擎由 apps/e2e vitest 覆盖；此处复刻协议字节格式）
+    id="${args[1]:-}"
+    if [[ -z "$id" ]]; then printf 'END\terror\t2\t用法错误：replay-plan <ID>\n'; exit 2; fi
+    f="$ROOT/defects/$id.json"
+    if [[ ! -f "$f" ]]; then
+      printf 'END\terror\t10\t缺陷不存在：%s（defects/ 下无对应 JSON）\n' "$id"; exit 10
+    fi
+    if ! jq -e . "$f" >/dev/null 2>&1; then
+      printf 'END\terror\t10\tschema 不符：defects/%s.json\n' "$id"; exit 10
+    fi
+    if [[ ! -f "$ROOT/replay/$id.mjs" ]]; then
+      printf 'END\terror\t10\t复现脚本缺失：apps/e2e/replay/%s.mjs（脚本随记录入库，是长期重建依据）\n' "$id"; exit 10
+    fi
+    kind="$(jq -r '.reproducibility.kind' "$f")"
+    att=1; [[ "$kind" == "external-state" ]] && att=3
+    printf 'CMD\t%s\n' "$(jq -r '.reproducibility.replayCommand' "$f")"
+    printf 'KIND\t%s\n' "$kind"
+    printf 'ATTEMPTS\t%s\n' "$att"
+    printf 'SCRIPT\treplay/%s.mjs\n' "$id"
+    printf 'TITLE\t%s\n' "$(jq -r '.title' "$f")"
+    printf 'END\tok\t0\t重放计划已输出（%s）\n' "$id"
+    exit 0 ;;
+  signature)
+    # #108：签名引擎（载荷走 stdin，不是树 tar）。提取/比对真实逻辑由 apps/e2e
+    # vitest 覆盖；此处只复刻协议字节格式 + 记录宿主送来的载荷（编排接缝断言）。
+    action="${args[1]:-}"
+    payload="$(cat)"
+    printf '%s' "$payload" > "$MOCK_DOCKER_STATE/signature-payload.txt"
+    if [[ "$action" == "extract" ]]; then
+      src=""
+      i=1
+      while (( i < ${#args[@]} )); do
+        if [[ "${args[$i]}" == "--source" ]]; then src="${args[$((i+1))]:-}"; fi
+        i=$((i+1))
+      done
+      if [[ "$src" != "replay" && "$src" != "playwright" ]]; then
+        printf 'END\terror\t2\t--source 需为 replay|playwright\n'; exit 2
+      fi
+      if [[ "$src" == "replay" ]]; then
+        line="$(printf '%s\n' "$payload" | grep '^NE-E2E-SIGNATURE ' | tail -1 || true)"
+        if [[ -n "$line" ]]; then
+          body="${line#NE-E2E-SIGNATURE }"
+          sig="$(printf '%s' "$body" | jq -c '{errorClass,assertionId,semanticMarkers:(.semanticMarkers|sort_by(.key))}')"
+          outcome="$(printf '%s' "$body" | jq -r '.outcome // "unknown"')"
+          printf '{"schemaVersion":1,"source":"replay","found":true,"signature":%s,"outcome":"%s"}\n' "$sig" "$outcome"
+        else
+          printf '{"schemaVersion":1,"source":"replay","found":false,"signature":null,"outcome":"unknown"}\n'
+        fi
+        printf 'END\tok\t0\treplay 签名提取\n'
+        exit 0
+      fi
+      if ! printf '%s' "$payload" | jq -e '.suites' >/dev/null 2>&1; then
+        printf 'END\terror\t2\tPlaywright 结果 JSON 非法（缺 suites 数组）\n'; exit 2
+      fi
+      printf '{"schemaVersion":1,"source":"playwright","failures":[],"stats":null}\n'
+      printf 'END\tok\t0\tPlaywright 签名提取\n'
+      exit 0
+    fi
+    if [[ "$action" == "compare" ]]; then
+      if ! printf '%s' "$payload" | jq -e '.candidates' >/dev/null 2>&1; then
+        printf 'END\terror\t2\t比对载荷需为 {baseline,candidates}\n'; exit 2
+      fi
+      printf '%s' "$payload" > "$MOCK_DOCKER_STATE/compare-payload.json"
+      am="${MOCK_SIG_ALL_MATCHED:-true}"
+      reason="matched"; [[ "$am" == "true" ]] || reason="semantic-markers-differ"
+      # 复刻原语契约：基线或任一轮签名缺失 → 不得判同一失败（无证据不判通过）
+      if printf '%s' "$payload" | jq -e '(.baseline == null) or (.candidates | any(. == null))' >/dev/null 2>&1; then
+        am="false"; reason="missing-signature"
+      fi
+      n="$(printf '%s' "$payload" | jq '.candidates | length')"
+      results="$(printf '%s' "$payload" | jq -c --arg am "$am" --arg reason "$reason" \
+        '[.candidates | to_entries[] | {index:.key,matched:($am=="true"),reason:(if $am=="true" then "matched" else $reason end),differences:[]}]')"
+      printf '{"schemaVersion":1,"allMatched":%s,"reason":"%s","results":%s}\n' "$am" "$reason" "$results"
+      printf 'END\tok\t0\t签名比对：allMatched=%s（%s 轮）\n' "$am" "$n"
+      exit 0
+    fi
+    printf 'END\terror\t2\t未知 signature 动作：%s\n' "$action"; exit 2 ;;
   *)
     printf 'END\terror\t2\t未知子命令：%s\n' "$sub"; exit 2 ;;
 esac
@@ -233,11 +311,6 @@ case "$cmd" in
     done
     sub="${1:-}"
     if [[ "$sub" == "run" && "$joined" == *"dist/main.js"* ]]; then
-      # 宿主树 stdin tar 只读进容器：解包到 $STATE/in-<n>（读取通道证据）
-      n=$(( $(cat "$STATE/in-count" 2>/dev/null || printf '0') + 1 ))
-      printf '%s\n' "$n" > "$STATE/in-count"
-      mkdir -p "$STATE/in-$n"
-      tar -xf - -C "$STATE/in-$n"
       printf '%s\n' "$*" >> "$STATE/cli-args.log"
       while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -248,7 +321,34 @@ case "$cmd" in
           *) shift ;;
         esac
       done
+      if [[ "$*" == *signature* ]]; then
+        # #108 签名引擎：stdin 是**载荷**（不是树 tar），原样透传（通道不混用）
+        exec bash "$MOCK_CLI" "$@"
+      fi
+      # 宿主树 stdin tar 只读进容器：解包到 $STATE/in-<n>（读取通道证据）
+      n=$(( $(cat "$STATE/in-count" 2>/dev/null || printf '0') + 1 ))
+      printf '%s\n' "$n" > "$STATE/in-count"
+      mkdir -p "$STATE/in-$n"
+      tar -xf - -C "$STATE/in-$n"
       exec bash "$MOCK_CLI" --root "$STATE/in-$n" "$@"
+    fi
+    if [[ "$sub" == "run" && "$joined" == *"apps/e2e/replay/"* ]]; then
+      # #108：执行器内真跑 replayCommand（每轮独立 run；stdout 是签名载荷通道）
+      n=$(( $(cat "$STATE/replay-count" 2>/dev/null || printf '0') + 1 ))
+      printf '%s\n' "$n" > "$STATE/replay-count"
+      printf 'replay round %s project=%s\n' "$n" "$project" >> "$STATE/replay.log"
+      if [[ "${MOCK_ASSERT_LEASE:-}" == "1" ]]; then
+        if compgen -G "$DEVENV_LOCK_ROOT/stack-$MOCK_STACK_SUFFIX.lease/*/owner" >/dev/null; then
+          printf 'lease-held\n' >> "$STATE/lease-check.txt"
+        else
+          printf 'lease-MISSING\n' >> "$STATE/lease-check.txt"
+        fi
+      fi
+      out="${MOCK_REPLAY_OUTPUT:-}"; rc="${MOCK_REPLAY_RC:-0}"
+      if [[ -f "$STATE/replay-round-$n.out" ]]; then out="$(cat "$STATE/replay-round-$n.out")"; fi
+      if [[ -f "$STATE/replay-round-$n.rc" ]]; then rc="$(cat "$STATE/replay-round-$n.rc")"; fi
+      if [[ -n "$out" ]]; then printf '%s\n' "$out"; fi
+      exit "$rc"
     fi
     if [[ "$sub" == "run" && "$joined" == *"playwright.verify.config.ts"* ]]; then
       n=$(( $(cat "$STATE/verify-count" 2>/dev/null || printf '0') + 1 ))
@@ -363,6 +463,11 @@ case "$cmd" in
       create) : > "$STATE/net-$1" ;;
       rm) rm -f "$STATE/net-$1" ;;
     esac ;;
+  create) printf 'cid-artifacts\n' ;;
+  cp)
+    dest="${!#}"
+    mkdir -p "$dest"
+    printf 'mock artifacts\n' > "$dest/exported.txt" ;;
   pull|rm|rmi|logs) exit 0 ;;
   *) exit 0 ;;
 esac
@@ -710,6 +815,146 @@ if [[ "$RC" == 0 ]] && last_json "$SANDBOX/l16n.out" '.id == "DEF-0001"'; then
 else
   fail "L16n" "rc=$RC out=$(tail -1 "$SANDBOX/l16n.out")"
 fi
+
+# ---------------------------------------------------------------------------
+# R 段（#108）：e2e replay 重放编排——起隔离栈真跑 replayCommand，每轮独立键空间，
+# 失败签名提取/比对经同一决策引擎；0=复现 / 4=未复现（语义反转）/ 3=基础设施 / 10=未知 ID
+# ---------------------------------------------------------------------------
+SIG_LINE='NE-E2E-SIGNATURE {"schemaVersion":1,"assertionId":"post-enforcement-points.whitespace-name","errorClass":"assertion","outcome":"reproduced","semanticMarkers":[{"key":"http.status.expected","value":"201"},{"key":"http.status.actual","value":"201"}]}'
+REPLAY_BASE_FP="$(tree_fingerprint)"
+
+# R1 复现：exit 0 + 终值 reproduced/signature + 登记册 track=replay + 回收 + 事实源零改动
+export MOCK_REPLAY_RC=0 MOCK_REPLAY_OUTPUT="$SIG_LINE" MOCK_ASSERT_LEASE=1
+run_cmd r1 "$DEVENV" --json e2e replay DEF-0002 --run-id rep-r1
+if [[ "$RC" == 0 ]] && last_json "$SANDBOX/r1.out" \
+  '.command == "e2e" and .subcommand == "replay" and .status == "ok" and .exitCode == 0 and .reproduced == true and .defectId == "DEF-0002" and (.runs | length == 1) and (.runs[0].signature.errorClass == "assertion")'; then
+  pass "R1 replay 复现 → exit 0 + 终值 reproduced=true + 本轮签名（机器可解析）"
+else
+  fail "R1" "rc=$RC out=$(tail -2 "$SANDBOX/r1.out") err=$(tail -6 "$SANDBOX/r1.err")"
+fi
+last_json "$SANDBOX/r1.out" '.signatureMatched == null and .attempts == 1' \
+  && pass "R1 单轮无从比对 → signatureMatched=null（不是 true，无证据不判同一失败）" \
+  || fail "R1sig" "终值不符：$(tail -1 "$SANDBOX/r1.out")"
+[[ "$(jq -r '.track' "$MINI/.devenv-state/e2e-runs/rep-r1-a1.json" 2>/dev/null)" == "replay" ]] \
+  && pass "R1 复用 #70 运行登记册（track=replay，每轮独立 run id）" || fail "R1reg" "登记册缺 track=replay"
+grep -q "compose -p natural-enforcement-$MOCK_STACK_SUFFIX-e2e-rep-r1-a1 .*down" "$STATE/calls.log" \
+  && pass "R1 轮次结束回收 per-run 资源（compose down）" || fail "R1down" "未见 down：$(grep -c down "$STATE/calls.log")"
+[[ -z "$(find "$DEVENV_LOCK_ROOT" -maxdepth 1 -name 'e2e-owner-*-rep-r1-a1.lock' -type d 2>/dev/null)" ]] \
+  && pass "R1 回收结束后释放 run 所有权锁" || fail "R1lock" "所有权锁残留"
+grep -q 'lease-held' "$STATE/lease-check.txt" 2>/dev/null && ! grep -q 'lease-MISSING' "$STATE/lease-check.txt" \
+  && pass "R1 重放窗口全程持共享栈使用租约（down/migrate 不会中途拆栈）" || fail "R1lease" "租约未在重放窗口持有"
+[[ "$(tree_fingerprint)" == "$REPLAY_BASE_FP" ]] \
+  && pass "R1 replay 只读事实源（缺陷记录/脚本零改动；门禁回填归 #109）" || fail "R1ro" "replay 改动了事实源树"
+[[ -f "$SANDBOX/artifacts/rep-r1-a1/replay.json" && -f "$SANDBOX/artifacts/rep-r1-a1/run.json" ]] \
+  && pass "R1 每轮证据落盘（replay.json 含签名 + run.json 运行清单）" || fail "R1art" "产物缺失"
+jq -e '.verdict == "reproduced" and .scriptExitCode == 0 and .signature.assertionId == "post-enforcement-points.whitespace-name"' \
+  "$SANDBOX/artifacts/rep-r1-a1/replay.json" >/dev/null 2>&1 \
+  && pass "R1 replay.json 记录本轮判定/退出码/签名（归因起点）" || fail "R1json" "replay.json 不符：$(cat "$SANDBOX/artifacts/rep-r1-a1/replay.json" 2>/dev/null)"
+if grep -qv '^{' "$SANDBOX/r1.out"; then
+  fail "R1jsonl" "结果流混入非 JSON 行：$(grep -v '^{' "$SANDBOX/r1.out" | head -2)"
+else
+  pass "R1 长命令结果流纯 JSONL（脚本原始输出/诊断走 stderr）"
+fi
+grep -q 'NE-E2E-SIGNATURE' "$SANDBOX/r1.err" \
+  && pass "R1 脚本原始输出分流 stderr（人可读诊断不污染结果流）" || fail "R1stderr" "stderr 缺脚本输出"
+unset MOCK_ASSERT_LEASE
+
+# R2 未复现 → exit 4 + 语义反转提示（诊断与修复确认共用同一命令）
+export MOCK_REPLAY_RC=1
+run_cmd r2 "$DEVENV" --json e2e replay DEF-0002 --run-id rep-r2
+[[ "$RC" == 4 ]] && pass "R2 未复现 → exit 4" || fail "R2" "rc=$RC（期望 4）err=$(tail -4 "$SANDBOX/r2.err")"
+grep -q '环境漂移或已修复' "$SANDBOX/r2.err" \
+  && pass "R2 语义反转提示「环境漂移或已修复？」透出 stderr" || fail "R2hint" "缺提示：$(tail -3 "$SANDBOX/r2.err")"
+last_json "$SANDBOX/r2.out" '.status == "failed" and .exitCode == 4 and .reproduced == false and (.hint | contains("环境漂移或已修复"))' \
+  && pass "R2 终值 failed/4 + reproduced=false + hint（机器可消费）" || fail "R2final" "终值不符：$(tail -1 "$SANDBOX/r2.out")"
+has_event "$SANDBOX/r2.out" "step.completed" ' and .verdict == "not-reproduced"' \
+  && pass "R2 verdict=not-reproduced 事件留痕" || fail "R2ev" "缺 verdict 事件"
+
+# R3 未知 ID → exit 10，且零资源创建（不起栈、不建网络/库）
+CALLS_BEFORE="$(wc -l < "$STATE/calls.log")"
+run_cmd r3 "$DEVENV" --json e2e replay DEF-9999
+[[ "$RC" == 10 ]] && pass "R3 未知 ID → exit 10" || fail "R3" "rc=$RC（期望 10）"
+last_json "$SANDBOX/r3.out" '.status == "failed" and .exitCode == 10' \
+  && pass "R3 终值 failed/10 + 拒绝原因" || fail "R3final" "终值不符：$(tail -1 "$SANDBOX/r3.out")"
+if tail -n +"$((CALLS_BEFORE + 1))" "$STATE/calls.log" | grep -q 'network create\|compose.*up -d'; then
+  fail "R3zero" "未知 ID 仍创建了 run 资源"
+else
+  pass "R3 未知 ID 零资源创建（计划阶段即拒，不起栈）"
+fi
+
+# R4 基础设施错误（脚本 exit 2）→ exit 3，**不是**「未复现」
+export MOCK_REPLAY_RC=2
+run_cmd r4 "$DEVENV" --json e2e replay DEF-0002 --run-id rep-r4
+[[ "$RC" == 3 ]] && pass "R4 基础设施错误 → exit 3（环境未就绪，与未复现区分）" || fail "R4" "rc=$RC（期望 3）err=$(tail -4 "$SANDBOX/r4.err")"
+last_json "$SANDBOX/r4.out" '.exitCode == 3 and (.runs[0].verdict == "infrastructure")' \
+  && pass "R4 终值 verdict=infrastructure（两档错误类别可机器消费）" || fail "R4final" "终值不符：$(tail -1 "$SANDBOX/r4.out")"
+grep -q '不是「未复现」' "$SANDBOX/r4.err" \
+  && pass "R4 提示明确区分环境故障与语义反转" || fail "R4hint" "缺区分提示"
+
+# R5 多轮：每轮独立键空间（独立 run id/库名），签名比对经同一原语 → exit 0
+export MOCK_REPLAY_RC=0 MOCK_SIG_ALL_MATCHED=true
+run_cmd r5 "$DEVENV" --json e2e replay DEF-0002 --attempts 3 --run-id rep-r5
+if [[ "$RC" == 0 ]] && last_json "$SANDBOX/r5.out" '.attempts == 3 and .reproduced == true and .signatureMatched == true and (.runs | length == 3)'; then
+  pass "R5 --attempts 3 → 三轮全复现 + 签名比对 allMatched → exit 0"
+else
+  fail "R5" "rc=$RC out=$(tail -2 "$SANDBOX/r5.out") err=$(tail -6 "$SANDBOX/r5.err")"
+fi
+DBS="$(jq -r '.database' "$MINI/.devenv-state/e2e-runs/rep-r5-a1.json" "$MINI/.devenv-state/e2e-runs/rep-r5-a2.json" "$MINI/.devenv-state/e2e-runs/rep-r5-a3.json" 2>/dev/null | sort -u | wc -l)"
+[[ "$DBS" == 3 ]] && pass "R5 每轮独立数据库键空间（replay 写数据，同库重复 attempt 会撞唯一约束）" || fail "R5db" "独立库数=$DBS（期望 3）"
+[[ "$(grep -c 'DROP DATABASE' "$STATE/calls.log")" -ge 3 ]] \
+  && pass "R5 每轮从明确前置状态开始（幂等 DROP FORCE 重建 + migrate）" || fail "R5purge" "未见逐轮建库"
+jq -e '(.baseline.assertionId == "post-enforcement-points.whitespace-name") and (.candidates | length == 2)' \
+  "$STATE/compare-payload.json" >/dev/null 2>&1 \
+  && pass "R5 比对载荷 = 首轮基线 + 其余轮次（同一原语，#109/#112 共用）" || fail "R5cmp" "载荷不符：$(cat "$STATE/compare-payload.json" 2>/dev/null)"
+has_event "$SANDBOX/r5.out" "replay.signatures" ' and .allMatched == "true"' \
+  && pass "R5 签名比对结果事件留痕（attempts/allMatched/reason）" || fail "R5ev" "缺 replay.signatures 事件"
+
+# R6 多轮签名不一致 → exit 4（不是同一断言同一原因，不得判稳定复现）
+export MOCK_SIG_ALL_MATCHED=false
+run_cmd r6 "$DEVENV" --json e2e replay DEF-0002 --attempts 3 --run-id rep-r6
+[[ "$RC" == 4 ]] && pass "R6 多轮签名不一致 → exit 4" || fail "R6" "rc=$RC（期望 4）err=$(tail -4 "$SANDBOX/r6.err")"
+last_json "$SANDBOX/r6.out" '.reproduced == true and .signatureMatched == false and (.hint | contains("同一断言"))' \
+  && pass "R6 终值区分「各轮都复现」与「签名不一致」（hint 指向约定标记）" || fail "R6final" "终值不符：$(tail -1 "$SANDBOX/r6.out")"
+unset MOCK_SIG_ALL_MATCHED
+
+# R7 无约定标记：单轮仍按退出码判复现；多轮无从比对 → exit 4（不编造签名）
+export MOCK_REPLAY_OUTPUT='脚本只打了普通日志'
+run_cmd r7a "$DEVENV" --json e2e replay DEF-0002 --run-id rep-r7a
+[[ "$RC" == 0 ]] && last_json "$SANDBOX/r7a.out" '.reproduced == true and .runs[0].signature == null' \
+  && pass "R7 无标记单轮：退出码仍是判定权威，signature=null（不编造）" || fail "R7a" "rc=$RC out=$(tail -1 "$SANDBOX/r7a.out")"
+run_cmd r7b "$DEVENV" --json e2e replay DEF-0002 --attempts 2 --run-id rep-r7b
+[[ "$RC" == 4 ]] && pass "R7 无标记多轮：无法机器判同一原因 → exit 4" || fail "R7b" "rc=$RC（期望 4）"
+export MOCK_REPLAY_OUTPUT="$SIG_LINE"
+
+# R8 复现脚本缺失 → exit 10（脚本随记录入库是长期重建依据）
+mv "$E2E_DIR/replay/DEF-0002.mjs" "$SANDBOX/DEF-0002.mjs.bak"
+run_cmd r8 "$DEVENV" --json e2e replay DEF-0002
+[[ "$RC" == 10 ]] && grep -q '复现脚本缺失' "$SANDBOX/r8.err" \
+  && pass "R8 复现脚本缺失 → exit 10 + 原因透出" || fail "R8" "rc=$RC err=$(tail -3 "$SANDBOX/r8.err")"
+mv "$SANDBOX/DEF-0002.mjs.bak" "$E2E_DIR/replay/DEF-0002.mjs"
+
+# R9 用法错误 exit 2（缺 ID / ID 形态 / --attempts 非正整数 / 未知参数 / run-id 过长）
+run_cmd r9a "$DEVENV" e2e replay
+[[ "$RC" == 2 ]] && pass "R9 缺 ID exit 2" || fail "R9a" "rc=$RC"
+run_cmd r9b "$DEVENV" e2e replay DEF-1
+[[ "$RC" == 2 ]] && pass "R9 ID 形态非法 exit 2" || fail "R9b" "rc=$RC"
+run_cmd r9c "$DEVENV" e2e replay DEF-0002 --attempts 0
+[[ "$RC" == 2 ]] && pass "R9 --attempts 0 exit 2" || fail "R9c" "rc=$RC"
+run_cmd r9d "$DEVENV" e2e replay DEF-0002 --bogus
+[[ "$RC" == 2 ]] && pass "R9 未知参数 exit 2" || fail "R9d" "rc=$RC"
+run_cmd r9e "$DEVENV" e2e replay DEF-0002 --run-id "$(printf 'r%.0s' $(seq 1 40))"
+[[ "$RC" == 2 ]] && pass "R9 --run-id 过长（追加 -a<k> 超上限）exit 2" || fail "R9e" "rc=$RC"
+run_cmd r9f "$DEVENV" e2e replay DEF-0002 DEF-0001
+[[ "$RC" == 2 ]] && pass "R9 多余参数 exit 2" || fail "R9f" "rc=$RC"
+
+# R10 逐轮 verdict/登记册状态与退出码一致（失败轮登记 failed，不掩盖）
+[[ "$(jq -r '.status' "$MINI/.devenv-state/e2e-runs/rep-r2-a1.json" 2>/dev/null)" == "failed" ]] \
+  && pass "R10 未复现轮登记册 status=failed exitCode=4（观测面不掩盖）" || fail "R10" "登记册不符：$(cat "$MINI/.devenv-state/e2e-runs/rep-r2-a1.json" 2>/dev/null)"
+[[ "$(jq -r '.exitCode' "$MINI/.devenv-state/e2e-runs/rep-r4-a1.json" 2>/dev/null)" == "3" ]] \
+  && pass "R10 基础设施轮登记册 exitCode=3" || fail "R10b" "登记册不符"
+[[ "$(tree_fingerprint)" == "$REPLAY_BASE_FP" ]] \
+  && pass "R10 全段结束后事实源树仍与基线一致（replay 全程只读）" || fail "R10ro" "事实源被改动"
+unset MOCK_REPLAY_RC MOCK_REPLAY_OUTPUT
 
 # ---------------------------------------------------------------------------
 echo "------------------------------------------------------------"
