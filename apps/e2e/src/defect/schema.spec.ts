@@ -188,7 +188,9 @@ describe('缺陷报告 schema（Spec-e2e §4 全字段）', () => {
   })
 
   it('fixImmediate 毕业无失败签名也合法（生来绿）；确认记录留位两段式', () => {
-    const { failureSignature: _sig, confirmation: _conf, ...rest } = graduation
+    const rest: Record<string, unknown> = { ...graduation }
+    delete rest.failureSignature
+    delete rest.confirmation
     const r = DefectRecordSchema.safeParse(record({
       status: 'fixed',
       graduation: { ...rest, mode: 'fixImmediate', verifiedRun: { expect: 'pass', outcome: 'pass', at: '2026-11-28T03:00:00Z' } },

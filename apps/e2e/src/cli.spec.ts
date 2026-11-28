@@ -137,9 +137,16 @@ describe('生命周期 CLI：查询命令', () => {
     put(root, 'defects/DEF-0001.json', '{"schemaVersion":1,')
     const show = run(root, ['defect', 'show', 'DEF-0001'])
     expect(show.code).toBe(10)
-    expect(endLine(show.protocol)[3]).toContain('schema')
+    expect(endLine(show.protocol)[3]).toContain('defects/DEF-0001.json')
+    expect(endLine(show.protocol)[3]).toContain('JSON 解析失败')
     const list = run(root, ['defect', 'list'])
     expect(list.code).toBe(10)
+    // schema 不符（JSON 合法但字段缺失）同样 exit 10，且给出可定位字段
+    const root3 = tempTree()
+    put(root3, 'defects/DEF-0001.json', JSON.stringify({ schemaVersion: 1, id: 'DEF-0001', severity: 'blocker' }))
+    const bad = run(root3, ['defect', 'show', 'DEF-0001'])
+    expect(bad.code).toBe(10)
+    expect(endLine(bad.protocol)[3]).toContain('schema 不符')
     // 其它记录损坏不阻断对完好记录的查询
     const root2 = tempTree()
     put(root2, 'defects/DEF-0001.json', record('DEF-0001'))
