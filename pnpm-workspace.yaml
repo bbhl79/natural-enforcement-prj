@@ -65,6 +65,10 @@ catalog:
   "@aws-sdk/s3-request-presigner": "3.1173.0"
   # 测试 / lint
   vitest: "5.1.1"
+  # P0 属性探索引擎（#107）：原型实证版本（prototype/e2e-dualtrack pin 4.10.3，零 allowBuilds）；
+  # 加入时经 registry 复核：无 install/preinstall/postinstall 脚本，发布时间满足 1440min 冷却。
+  # 在 Playwright 探索轨道内以 fc.check/fc.asyncProperty 运行（非 @fast-check/vitest）。
+  fast-check: "4.10.3"
   # e2e 执行器（#70）：npm 包与 devenv/images.lock 的 PLAYWRIGHT_IMAGE tag 严格同版本
   # （供应链静态门禁交叉核对，升级必须同 PR 改两处并跑 e2e 全量演练）。
   "@playwright/test": "1.65.1"
