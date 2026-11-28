@@ -107,12 +107,22 @@ done
 # 真实非管理员读取不含 bypass_actors——夹具由 --admin-view 控制保留与否。
 # ---------------------------------------------------------------------------
 live_of() { # live_of <saved-file> <id> [admin-view] → stdout live JSON
+  # 管理员视角的 current_user_can_bypass 须真实：保存配置含绕过者的层（审批层）
+  # 对名单内管理员返回 pull_request（GitHub 实测口径——此前硬编码 never 掩盖了
+  # 管理员强校验的假漂移）；无绕过者层（基础层）任何身份为 never。
   local f="$1" id="$2" admin="${3:-}"
-  local keep='.'
-  [[ "$admin" == "admin-view" ]] || keep='del(.bypass_actors)'
+  # admin 视角按文档口径物化该字段（空名单 → []；对规则集写权限者返回）；
+  # 非管理员视角一律剥离（实测：匿名/App/CI 均不可见）
+  local keep='del(.bypass_actors)'
+  [[ "$admin" == "admin-view" ]] && keep='.bypass_actors = ((.bypass_actors // []))'
+  local cub="never"
+  if [[ "$admin" == "admin-view" ]] && jq -e '(.bypass_actors // []) | length > 0' "$f" >/dev/null 2>&1; then
+    cub="pull_request"
+  fi
+  # 程序串经 bash 双引号插值（沿用原实现）：$cub 需带引号成为 jq 字符串字面量
   jq --argjson id "$id" "$keep | . + {id: $id, node_id: \"RRS_x\", source_type: \"Repository\",
          source: \"bbhl79/natural-enforcement-prj\", enforcement: .enforcement,
-         current_user_can_bypass: \"never\", _links: {self: {href: \"x\"}, html: {href: \"x\"}},
+         current_user_can_bypass: \"$cub\", _links: {self: {href: \"x\"}, html: {href: \"x\"}},
          created_at: \"2026-11-28T00:00:00Z\", updated_at: \"2026-11-28T00:00:00Z\"}
     | .rules = (.rules | reverse)
   " "$f"
@@ -158,12 +168,14 @@ run_case bp1c BP_FIXTURE_DIR="$FIX" BP_GITHUB_TOKEN=stub-token
 # ---------------------------------------------------------------------------
 # 3. 绕过名单可见性分层（BP4 系——评审整改核心）
 # ---------------------------------------------------------------------------
-# BP4：公开面读取（非管理员真实形态）缺失 bypass_actors → 不判漂移 + NOTE 提示（不死锁 CI）
+# BP4：公开面读取（非管理员真实形态）缺失 bypass_actors → 不判漂移 + NOTE 提示（不死锁 CI）；
+# 两层（含保存侧为 [] 的 base）各记一条 NOTE——不静默漏检
 write_public_fixtures
 run_case bp4 BP_FIXTURE_DIR="$FIX"
-[[ "$(cat "$OUT/bp4.rc")" == "0" ]] && grep -q "bypass_actors 对当前读取身份不可见" "$OUT/bp4.err" \
-  && pass "BP4 公开面读取缺失 bypass_actors → 跳过该字段（exit 0，不死锁 CI）+ NOTE 不谎报已核对" \
-  || fail "BP4" "rc=$(cat "$OUT/bp4.rc")：$(head -5 "$OUT/bp4.err")"
+note_count=$(grep -c "bypass_actors 对当前读取身份不可见" "$OUT/bp4.err" || true)
+[[ "$(cat "$OUT/bp4.rc")" == "0" && "$note_count" == "2" ]] \
+  && pass "BP4 公开面读取缺失 bypass_actors → 跳过该字段（exit 0，不死锁 CI），两层各记 NOTE（${note_count} 项——不谎报已核对）" \
+  || fail "BP4" "rc=$(cat "$OUT/bp4.rc") notes=$note_count：$(head -5 "$OUT/bp4.err")"
 
 # BP4b：管理员强校验（--require-bypass-actors）缺失 bypass_actors → fail closed 判漂移
 run_case bp4b BP_FIXTURE_DIR="$FIX" BP_GITHUB_TOKEN=stub-admin BP_REQUIRE_BYPASS_ACTORS=1
@@ -185,6 +197,37 @@ run_case bp4d BP_FIXTURE_DIR="$FIX" BP_GITHUB_TOKEN=stub-admin
 [[ "$(cat "$OUT/bp4d.rc")" == "1" ]] && grep -q "绕过名单不一致" "$OUT/bp4d.err" \
   && pass "BP4d bypass_actors 可见且不符（always ≠ pull_request）→ 漂移（点名绕过模式被改动）" \
   || fail "BP4d" "rc=$(cat "$OUT/bp4d.rc")：$(head -5 "$OUT/bp4d.err")"
+
+# BP4e：CLI --require-bypass-actors + 真实管理员夹具（base=never、approval=pull_request）
+# → exit 0（管理员本人即在名单中，GitHub 如实返回 pull_request——不得判假漂移）
+write_match_fixtures
+rc=0
+PATH="$SANDBOX/stubbin:$PATH" env BP_FIXTURE_DIR="$FIX" BP_GITHUB_TOKEN=stub-admin \
+  "$DEVENV" branch-protection --require-bypass-actors > "$OUT/bp4e.out" 2> "$OUT/bp4e.err" || rc=$?
+[[ "$rc" == "0" ]] \
+  && pass "BP4e CLI --require-bypass-actors + 真实管理员视角（approval current_user_can_bypass=pull_request）→ exit 0（不假漂移）" \
+  || fail "BP4e" "rc=$rc：$(head -5 "$OUT/bp4e.err")"
+
+# BP4f：仅 base 缺失 bypass_actors（approval 字段在）——公开面两层的 NOTE 数=2；
+# 强校验模式即使 approval 字段存在，base 缺失仍 fail closed（可见性先于内容比对）
+write_match_fixtures
+jq 'del(.bypass_actors)' "$FIX/ruleset-101.json" > "$FIX/x" && mv "$FIX/x" "$FIX/ruleset-101.json"
+run_case bp4f BP_FIXTURE_DIR="$FIX"
+note_count=$(grep -c "bypass_actors 对当前读取身份不可见" "$OUT/bp4f.err" || true)
+[[ "$(cat "$OUT/bp4f.rc")" == "0" && "$note_count" == "1" ]] \
+  && pass "BP4f 仅 base 缺失 bypass_actors（approval 字段在且严格比对）：公开面 base 记 NOTE（${note_count} 项——保存侧为 [] 也记，不静默漏检）→ exit 0" \
+  || fail "BP4f" "rc=$(cat "$OUT/bp4f.rc") notes=$note_count：$(head -5 "$OUT/bp4f.err")"
+run_case bp4f2 BP_FIXTURE_DIR="$FIX" BP_GITHUB_TOKEN=stub-admin BP_REQUIRE_BYPASS_ACTORS=1
+[[ "$(cat "$OUT/bp4f2.rc")" == "1" ]] && grep -q "管理员强校验" "$OUT/bp4f2.err" \
+  && pass "BP4f2 强校验模式下仅 base 缺失 bypass_actors（approval 字段在）→ 仍 fail closed（exit 1）" \
+  || fail "BP4f2" "rc=$(cat "$OUT/bp4f2.rc")：$(head -5 "$OUT/bp4f2.err")"
+
+# BP4g：公开面模式不得打印管理员强校验字样（mode_note 回归——CI 日志曾误印）
+write_public_fixtures
+run_case bp4g BP_FIXTURE_DIR="$FIX"
+[[ "$(cat "$OUT/bp4g.rc")" == "0" ]] && ! grep -q "管理员强校验" "$OUT/bp4g.err" \
+  && pass "BP4g 公开面（默认）模式输出不含「管理员强校验绕过名单」（mode_note 回归守卫）" \
+  || fail "BP4g" "rc=$(cat "$OUT/bp4g.rc")：$(head -5 "$OUT/bp4g.err")"
 
 # ---------------------------------------------------------------------------
 # 4. 漂移检出（BP2–BP5）

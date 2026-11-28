@@ -51,6 +51,8 @@ source "$REPO_ROOT/devenv/lib/github-app-auth.sh"
 source "$REPO_ROOT/devenv/lib/branch-protection.sh"
 # shellcheck source=lib-evidence.sh
 source "$TEST_DIR/lib-evidence.sh"
+# shellcheck source=../lib/output.sh
+source "$REPO_ROOT/devenv/lib/output.sh"   # lib/branch-protection.sh 的 warn 兜底（进程内调用）
 
 STAGE="${1:-status}"; shift || true
 PR_ARG=""
@@ -110,28 +112,34 @@ expect_reject() { # expect_reject <描述> <rc> <errfile>
     fail "$desc" "拒绝源于认证入口（rc=$rc，20–23）——非规则拒绝，不能作反例证据"
     return 1
   fi
-  if ! grep -qiE 'rejected|not mergeable|HTTP 40[0-9]|protected|ruleset' "$errf" 2>/dev/null; then
-    fail "$desc" "rc=$rc 但拒绝特征不明确（stderr 无 rejected/not mergeable/HTTP 4xx 标记）——见 $(basename "$errf")，不判通过"
+  if ! grep -qiE 'rejected|not mergeable|HTTP 40[35]|HTTP 422|protected|ruleset|rule violation|GH0[0-9]{2}' "$errf" 2>/dev/null; then
+    fail "$desc" "rc=$rc 但拒绝特征不明确（stderr 无 rejected/not mergeable/规则类 HTTP 4xx 标记）——见 $(basename "$errf")，不判通过"
     return 1
   fi
-  reason=$(grep -oE '(remote rejected[^)]*\)|not mergeable[^\"]*|HTTP [0-9]+[^)]*\)' "$errf" 2>/dev/null | head -1)
-  [[ -z "$reason" ]] && reason=$(grep -o 'HTTP [0-9]*' "$errf" 2>/dev/null | head -1)
+  # grep 无匹配 rc=1 / head 截断 SIGPIPE，pipefail 下都会中止脚本——一律 || true；
+  # 模式统一忽略大小写（与上方特征判定一致，避免大小写差异导致崩溃或漏摘）
+  reason=$(grep -ioE '(remote rejected[^)]*\)|not mergeable[^\"]*|HTTP [0-9]+[^)]*\))' "$errf" 2>/dev/null | head -1 || true)
+  [[ -z "$reason" ]] && reason=$(grep -io 'http [0-9]*' "$errf" 2>/dev/null | head -1 || true)
+  [[ -z "$reason" ]] && reason=$(grep -io 'rejected[^\"]*' "$errf" 2>/dev/null | head -1 || true)
   pass "$desc：被拒（rc=$rc；${reason:-特征见 $(basename "$errf")}）"
   return 0
 }
 
 # ---------------------------------------------------------------------------
 # merge-async bypass 尝试（异步接口：202 受理 → 轮询终态）
-# 返回：0=被拒（终态 failed）| 1=竟成功 | 2=无法判定（端点不可用/轮询超时/态异常）
+# 返回：0=被拒 | 1=竟成功 | 2=无法判定（认证失败/端点不可用/轮询超时/态异常）。
+# 拒绝路径写入 BP_MERGE_ASYNC_MODE（async-failed / sync-rejected），供调用方
+# 如实描述（「异步终态 failed」与「请求时拒绝」不同）。
 # ---------------------------------------------------------------------------
 attempt_bypass_merge_async() { # <pr> <label>
   local pr="$1" lbl="$2" rc=0 body status uuid t0
+  BP_MERGE_ASYNC_MODE=""
   ev_run "$lbl-put" "$DEVENV" gh api --method PUT "repos/$GHA_REPO/pulls/$pr/merge-async" \
     -F merge_method=squash -F merge_action=direct_merge -F bypass_rules=true || rc=$?
   if [[ $rc == 0 ]]; then
     body=$(cat "$EV_DIR/$lbl-put.out" 2>/dev/null || printf '{}')
-    status=$(jq -r '.status // empty' <<< "$body" 2>/dev/null)
-    uuid=$(jq -r '.details.uuid // empty' <<< "$body" 2>/dev/null)
+    status=$(jq -r '.status // empty' <<< "$body" 2>/dev/null || true)
+    uuid=$(jq -r '.details.uuid // empty' <<< "$body" 2>/dev/null || true)
     if [[ "$status" == "merged" ]]; then return 1; fi
     if [[ "$status" != "pending" || -z "$uuid" ]]; then return 2; fi
     t0=$(date +%s)
@@ -141,21 +149,26 @@ attempt_bypass_merge_async() { # <pr> <label>
       rc=0
       ev_run "$lbl-poll" "$DEVENV" gh api "repos/$GHA_REPO/pulls/$pr/merge-async/$uuid" || rc=$?
       [[ $rc != 0 ]] && continue
-      status=$(jq -r '.status // empty' < "$EV_DIR/$lbl-poll.out" 2>/dev/null)
-      [[ "$status" == "pending" || "$status" == "enqueued" || -z "$status" ]] && continue
+      status=$(jq -r '.status // empty' < "$EV_DIR/$lbl-poll.out" 2>/dev/null || true)
+      # pending 仍在跑；enqueued 是 merge-queue 终态（本仓库未配 merge queue，
+      # 出现即态异常）；空态继续轮询
+      [[ -z "$status" || "$status" == "pending" ]] && continue
       break
     done
     case "$status" in
       merged) return 1 ;;
-      failed) return 0 ;;
+      failed) BP_MERGE_ASYNC_MODE="async-failed"; return 0 ;;
       *) return 2 ;;
     esac
   fi
-  # 同步报错分类：403/405=请求时拒绝（PASS 方向）；404/其他=无法判定（认证码 20–23 由调用方 expect_reject 语义处理，此处如实 2）
+  # 同步报错分类：先排除认证入口失败（20–23——如 token 换取失败 rc=22，即使
+  # stderr 残留 HTTP 403 也不得判 PASS）；403/405=请求时拒绝（PASS 方向）；
+  # 404/其他=无法判定
+  if [[ $rc -ge 20 && $rc -le 23 ]]; then return 2; fi
   local http
-  http=$(grep -o 'HTTP [0-9]*' "$EV_DIR/$lbl-put.err" 2>/dev/null | head -1)
+  http=$(grep -o 'HTTP [0-9]*' "$EV_DIR/$lbl-put.err" 2>/dev/null | head -1 || true)
   case "$http" in
-    "HTTP 403"|"HTTP 405") return 0 ;;
+    "HTTP 403"|"HTTP 405") BP_MERGE_ASYNC_MODE="sync-rejected"; return 0 ;;
     *) return 2 ;;
   esac
 }
@@ -347,7 +360,11 @@ stage_verify_config() {
   else
     fail "verify-config" "证据 dump 的规则集列表读取失败（rc=$rc2）"
   fi
-  human_next "配置差异修复（UI 逐字段对齐 devenv/rulesets/*.json）后重跑 verify-config；确认旧 protect-dev 已删除。绕过名单的强校验（可选但建议）：BP_GITHUB_TOKEN=<管理员令牌> ./devenv/devenv branch-protection --require-bypass-actors（缺失 bypass_actors 即 fail closed）"
+  if [[ "$FAILURES" == 0 ]]; then
+    human_next "verify-config 全绿。绕过名单的强校验（可选但建议）：BP_GITHUB_TOKEN=<管理员令牌> ./devenv/devenv branch-protection --require-bypass-actors（缺失 bypass_actors 即 fail closed）。下一步：./devenv/devenv test:branch-protection negatives"
+  else
+    human_next "配置差异修复（UI 逐字段对齐 devenv/rulesets/*.json）后重跑 verify-config；确认旧 protect-dev 已删除。绕过名单的强校验（可选但建议）：BP_GITHUB_TOKEN=<管理员令牌> ./devenv/devenv branch-protection --require-bypass-actors（缺失 bypass_actors 即 fail closed）"
+  fi
   [[ "$FAILURES" == 0 ]]
 }
 
@@ -433,8 +450,7 @@ stage_negatives() {
   local psha; psha=$(git -C "$tmp/repo" rev-parse HEAD)
   local rc=0
   ev_run push-a-test "$tmp/repo/devenv/devenv" git-push origin "$psha:refs/heads/$TEST_BRANCH" || rc=$?
-  expect_reject "项 a'：App 直推 $TEST_BRANCH" "$rc" "$EV_DIR/push-a-test.err" \
-    || fail "项 a'" "直推测试分支未被规则拦截（见上）"
+  expect_reject "项 a'：App 直推 $TEST_BRANCH" "$rc" "$EV_DIR/push-a-test.err" || true
   rm -rf "$tmp"
   local tb_after
   tb_after=$(remote_ref_sha "$TEST_BRANCH") || tb_after=""
@@ -445,22 +461,20 @@ stage_negatives() {
   # b'：红探针 PR（检查红 + 无批准）App 合入 → 应拒（两层均不满足）
   rc=0
   ev_run merge-b-red "$DEVENV" gh pr merge "$rpr" --squash || rc=$?
-  expect_reject "项 b'：App 对检查红且无批准的 PR #$rpr 合入" "$rc" "$EV_DIR/merge-b-red.err" \
-    || fail "项 b'" "红探针 PR 未被规则拦截（竟可合入？——规则失效）"
+  expect_reject "项 b'：App 对检查红且无批准的 PR #$rpr 合入" "$rc" "$EV_DIR/merge-b-red.err" || true
 
   # c'：绿探针 PR（检查绿 + 无批准）App 带 bypass_rules=true 异步合入 → 终态 failed
   local br=0
   attempt_bypass_merge_async "$gpr" "c-async" && br=0 || br=$?
   case "$br" in
-    0) pass "项 c'：App 以 bypass_rules=true 尝试合入绿探针 PR #$gpr，异步终态 failed（被拒——App 不在绕过名单）" ;;
+    0) pass "项 c'：App 以 bypass_rules=true 尝试合入绿探针 PR #$gpr 被拒（$([[ "${BP_MERGE_ASYNC_MODE:-}" == "sync-rejected" ]] && echo '请求时拒绝' || echo '异步终态 failed')——App 不在绕过名单）" ;;
     1) fail "项 c'" "App bypass 竟成功——绕过名单配错（App 不得在名单）" ;;
-    *) fail "项 c'" "无法判定（端点不可用/轮询超时/态异常——见 c-async-* 证据）；以 c'' 同步拒绝为有效反例" ;;
+    *) fail "项 c'" "无法判定（认证失败/端点不可用/轮询超时/态异常——见 c-async-* 证据）；以 c'' 同步拒绝为有效反例" ;;
   esac
   # c''：同 PR 普通合入（无 bypass）→ 应拒（审批层）
   rc=0
   ev_run merge-c-plain "$DEVENV" gh pr merge "$gpr" --squash || rc=$?
-  expect_reject "项 c''：App 普通合入（无批准）绿探针 PR #$gpr" "$rc" "$EV_DIR/merge-c-plain.err" \
-    || fail "项 c''" "无批准竟可合入"
+  expect_reject "项 c''：App 普通合入（无批准）绿探针 PR #$gpr" "$rc" "$EV_DIR/merge-c-plain.err" || true
 
   tb_after=$(remote_ref_sha "$TEST_BRANCH") || tb_after=""
   [[ -n "$tb_after" && "$tb_before" == "$tb_after" ]] \
@@ -515,22 +529,20 @@ stage_negatives_dev() {
   local psha; psha=$(git -C "$tmp/repo" rev-parse HEAD)
   rc=0
   ev_run push-a-dev "$tmp/repo/devenv/devenv" git-push origin "$psha:refs/heads/dev" || rc=$?
-  expect_reject "项 a：App 直推 dev" "$rc" "$EV_DIR/push-a-dev.err" \
-    || fail "项 a" "直推 dev 未被规则拦截"
+  expect_reject "项 a：App 直推 dev" "$rc" "$EV_DIR/push-a-dev.err" || true
   rm -rf "$tmp"
 
   # c：交付 PR（无批准）bypass_rules=true 异步合入 → 终态 failed
   local br=0
   attempt_bypass_merge_async "$pr" "c-async-dev" && br=0 || br=$?
   case "$br" in
-    0) pass "项 c(dev)：App 以 bypass_rules=true 尝试合入 PR #$pr，异步终态 failed（被拒）" ;;
+    0) pass "项 c(dev)：App 以 bypass_rules=true 尝试合入 PR #$pr 被拒（$([[ "${BP_MERGE_ASYNC_MODE:-}" == "sync-rejected" ]] && echo '请求时拒绝' || echo '异步终态 failed')）" ;;
     1) fail "项 c(dev)" "App bypass 竟成功——绕过名单含 App（配置错误）" ;;
-    *) fail "项 c(dev)" "无法判定（见 c-async-dev-* 证据）；以 b(dev) 同步拒绝为有效反例" ;;
+    *) fail "项 c(dev)" "无法判定（认证失败/端点不可用/超时——见 c-async-dev-* 证据）；以 b(dev) 同步拒绝为有效反例" ;;
   esac
   rc=0
   ev_run merge-b-dev "$DEVENV" gh pr merge "$pr" --squash || rc=$?
-  expect_reject "项 b(dev)：App 无批准合入 PR #$pr" "$rc" "$EV_DIR/merge-b-dev.err" \
-    || fail "项 b(dev)" "无批准竟可合入 PR #$pr"
+  expect_reject "项 b(dev)：App 无批准合入 PR #$pr" "$rc" "$EV_DIR/merge-b-dev.err" || true
 
   local dev_after
   dev_after=$(remote_ref_sha dev) || dev_after=""
@@ -567,10 +579,11 @@ stage_g() {
   rc=0
   ev_run g-reviews0 "$DEVENV" gh api "repos/$GHA_REPO/pulls/$pr/reviews" \
     --jq '[.[] | select(.state == "APPROVED") | {id, user: .user.login}]' || rc=$?
+  [[ $rc == 0 ]] || { fail "项 g 前置" "PR #$pr 评审读取失败（rc=$rc）——不判「无批准」，先修读取再跑"; exit 1; }
   local approved_json approved_ids approvers
-  approved_json=$(cat "$EV_DIR/g-reviews0.out")
-  approved_ids=$(jq -c '[.[].id]' <<< "$approved_json")
-  approvers=$(jq -r 'map(.user) | join(",")' <<< "$approved_json")
+  approved_json=$(cat "$EV_DIR/g-reviews0.out" 2>/dev/null || printf '[]')
+  approved_ids=$(jq -c '[.[].id]' <<< "$approved_json" 2>/dev/null || printf '[]')
+  approvers=$(jq -r 'map(.user) | join(",")' <<< "$approved_json" 2>/dev/null || true)
   [[ "$approvers" != "" && "$approvers" != "null" ]] \
     || { fail "项 g 前置" "PR #$pr 无批准（先由指挥者批准再跑 g）"; exit 1; }
   pass "项 g 前置：PR #$pr 已有批准（$approvers；评审 ID $approved_ids）"
@@ -612,8 +625,7 @@ stage_g() {
   # App 合入尝试 → 应拒（须重新批准）
   rc=0
   ev_run g-merge "$DEVENV" gh pr merge "$pr" --squash || rc=$?
-  expect_reject "项 g：批准失效后 App 合入 PR #$pr" "$rc" "$EV_DIR/g-merge.err" \
-    || fail "项 g" "批准失效后竟可合入——dismiss_stale 配置失效"
+  expect_reject "项 g：批准失效后 App 合入 PR #$pr" "$rc" "$EV_DIR/g-merge.err" || true
 
   local dev_after
   dev_after=$(remote_ref_sha dev) || dev_after=""
@@ -675,13 +687,16 @@ stage_probe_audit() {
     info "PR #$pr 未合入（e' 拒绝面：未合入 + 检查红 即拒绝证据；人工面见 human-actions.md）"
   fi
 
-  # rule-suites（审计面）：App 无 Administration 读权限——如实记录
+  # rule-suites（审计面）：App 无 Administration 读权限——如实记录。
+  # 拒绝须为权限性拒绝（HTTP 403/404）；认证入口失败（20–23）不冒充「边界被拒」。
   rc=0
   ev_run pa-rulesuites "$DEVENV" gh api "repos/$GHA_REPO/rulesets/rule-suites?time_period=month" || rc=$?
-  if [[ $rc != 0 ]]; then
-    pass "项 i（边界）：rule-suites 端点对 App 拒绝（$(grep -o 'HTTP [0-9]*' "$EV_DIR/pa-rulesuites.err" | head -1)——App 无 Administration 读权限，规范刻意如此；管理员读取归指挥者）"
-  else
+  if [[ $rc == 0 ]]; then
     info "项 i：rule-suites 对 App 可读（意外——如实记录内容）：$(head -c 400 "$EV_DIR/pa-rulesuites.out")"
+  elif [[ $rc -ge 20 && $rc -le 23 ]]; then
+    fail "项 i（边界）" "rule-suites 读取失败源于认证入口（rc=$rc，20–23）——不是权限边界证据，不判通过"
+  else
+    pass "项 i（边界）：rule-suites 端点对 App 拒绝（$(grep -o 'HTTP [0-9]*' "$EV_DIR/pa-rulesuites.err" 2>/dev/null | head -1 || true)——App 无 Administration 读权限，规范刻意如此；管理员读取归指挥者）"
   fi
 
   human_next "项 i（人类管理员步骤，读操作）：以指挥者本人身份读取 rule-suites 并保存到 $EVIDENCE_DIR/rule-suites-admin.txt——在本人登录态终端运行：gh api 'repos/$GHA_REPO/rulesets/rule-suites?rule_suite_result=bypass&time_period=month'（管理员读取为指挥者本人权限，非 agent 路径；或 Settings→Rules 的 insights 视图截图）。同时把 d'/e'/f' 的 UI 实况（按钮形态/拒绝提示原文）记入 $EVIDENCE_DIR/human-actions.md——验收只对已确认字段下结论，不预设审计位置/内容/保留期，不声称能区分冒用"

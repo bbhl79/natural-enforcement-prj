@@ -1054,7 +1054,7 @@ cmd_images() {
 # 分支保护两层规则集漂移核对（#73；不触引擎；只读 GitHub）
 # ---------------------------------------------------------------------------
 cmd_branch_protection() {
-  local require_bypass=0
+  local require_bypass=0 mode_note=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --verify) shift ;;  # 兼容同义旗标（核对即默认行为）
@@ -1065,11 +1065,11 @@ cmd_branch_protection() {
   if [[ $require_bypass == 1 && -z "${BP_GITHUB_TOKEN:-${GITHUB_TOKEN:-}}" ]]; then
     die 2 "--require-bypass-actors 需要管理员读取凭据：BP_GITHUB_TOKEN=<管理员令牌>（bypass_actors 仅对规则集写权限者可见）"
   fi
-  local names=${BP_DURABLE_RULESETS[@]+"${BP_DURABLE_RULESETS[@]}"}
+  [[ $require_bypass == 1 ]] && mode_note="，管理员强校验绕过名单"
   BP_FINDINGS=(); BP_NOTES=()
   [[ $require_bypass == 1 ]] && export BP_REQUIRE_BYPASS_ACTORS=1
-  note "核对 dev 分支保护两层规则集（${names[*]}）：保存配置 devenv/rulesets/ ↔ GitHub 实时（只读${require_bypass:+，管理员强校验绕过名单}）"
-  ev bp.start scope=dev rulesets="${names[*]}" require_bypass="$require_bypass"
+  note "核对 dev 分支保护两层规则集（${BP_DURABLE_RULESETS[*]}）：保存配置 devenv/rulesets/ ↔ GitHub 实时（只读${mode_note}）"
+  ev bp.start scope=dev rulesets="${BP_DURABLE_RULESETS[*]}" require_bypass="$require_bypass"
   local rc=0
   bp_check_drift ${BP_DURABLE_RULESETS[@]+"${BP_DURABLE_RULESETS[@]}"} || rc=$?
   unset BP_REQUIRE_BYPASS_ACTORS 2>/dev/null || true

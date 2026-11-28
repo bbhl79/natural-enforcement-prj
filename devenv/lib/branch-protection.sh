@@ -109,7 +109,7 @@ bp_ruleset_covers_ref() { # <ruleset-json> <full-ref> <bare-name> → 0 覆盖 |
 
 # bp_compare_ruleset <label> <saved-file> <live-json>：
 #   核心字段（name/target/enforcement/条件/规则）严格比对；bypass_actors 按
-#   可见性/模式处理（见文件头）。rc：0 一致 | 1 漂移 | 3 无法核对（保存侧失效）。
+#   可见性优先于内容处理（见文件头）。rc：0 一致 | 1 漂移 | 3 无法核对（保存/实时侧失效）。
 bp_compare_ruleset() {
   local label="$1" saved_file="$2" live_json="$3"
   local saved_norm live_norm
@@ -122,8 +122,8 @@ bp_compare_ruleset() {
     return 3
   fi
 
-  # 核心字段（不含 bypass_actors）逐段比对
   local rc=0 s l field
+  # 核心字段（不含 bypass_actors）逐段比对
   for field in name target enforcement include exclude; do
     s=$(jq -r --arg f "$field" 'getpath([$f]) | tojson' <<< "$saved_norm")
     l=$(jq -r --arg f "$field" 'getpath([$f]) | tojson' <<< "$live_norm")
@@ -134,24 +134,25 @@ bp_compare_ruleset() {
     bp_add_finding "$label：规则集内容不一致——保存值：$s / 实际值：$l（含规则类型差异与参数差异）"
     rc=1
   fi
-  [[ $rc == 1 ]] && return 1
 
-  # bypass_actors：可见性与模式分层处理
-  s=$(jq -r '.bypass_actors | tojson' <<< "$saved_norm"); l=$(jq -r '.bypass_actors | tojson' <<< "$live_norm")
-  if [[ "$s" == "$l" ]]; then
-    return 0
-  fi
+  # bypass_actors：可见性判断先于内容比对（字段缺失 ≠ 空名单——保存侧为 []
+  # 时同样按缺失处理：公开面记 NOTE 未核对；强校验 fail closed）
+  s=$(jq -r '.bypass_actors | tojson' <<< "$saved_norm")
   if ! printf '%s' "$live_json" | jq -e 'has("bypass_actors")' >/dev/null 2>&1; then
-    # 响应不含该字段：对规则集写权限者才可见（实测口径）
     if [[ "${BP_REQUIRE_BYPASS_ACTORS:-0}" == "1" ]]; then
       bp_add_finding "$label：管理员强校验模式下实际响应不含 bypass_actors（保存配置预期 $s）——fail closed 判漂移；确认读取凭据具备 Administration"
-      return 1
+      rc=1
+    else
+      bp_add_note "$label：bypass_actors 对当前读取身份不可见——该字段未核对（非管理员面）。绕过名单靠指挥者管理员核对（--require-bypass-actors）+ App current_user_can_bypass=never + 行为验收覆盖"
     fi
-    bp_add_note "$label：bypass_actors 对当前读取身份不可见——该字段未核对（非管理员面）。绕过名单靠指挥者管理员核对（--require-bypass-actors）+ App current_user_can_bypass=never + 行为验收覆盖"
-    return 0
+  else
+    l=$(jq -r '.bypass_actors | tojson' <<< "$live_norm")
+    if [[ "$s" != "$l" ]]; then
+      bp_add_finding "$label：绕过名单不一致（保存=$s 实际=$l）"
+      rc=1
+    fi
   fi
-  bp_add_finding "$label：绕过名单不一致（保存=$s 实际=$l）"
-  return 1
+  return "$rc"
 }
 
 # bp_check_drift <ruleset-names...>：主核对。fetch 实时 → 比对保存 →
@@ -202,15 +203,21 @@ bp_check_drift() {
     if [[ -n "$found" ]]; then
       local crc=0
       bp_compare_ruleset "规则集 $live_name" "$BP_RULESETS_DIR/$live_name.json" "$live_json" || crc=$?
-      # 读取身份的绕过权断言（公开面间接覆盖）：current_user_can_bypass 存在且非 never
-      local cub
-      cub=$(jq -r '.current_user_can_bypass // ""' <<< "$live_json")
-      if [[ -n "$cub" && "$cub" != "never" ]]; then
-        bp_add_finding "规则集 $live_name：当前读取身份 current_user_can_bypass=$cub（预期 never——读取身份不得持有绕过权；App 在绕过名单属配置错误）"
-        crc=1
-      fi
       [[ $crc == 1 ]] && rc_drift=1
       [[ $crc == 3 ]] && rc=3
+      # current_user_can_bypass 断言（身份/层区分，避免管理员视角假漂移）：
+      #   保存侧无绕过者（基础层）——任何读取身份不得非 never；
+      #   保存侧含绕过者（审批层）——仅非管理员视图（响应无 bypass_actors）时
+      #   断言 never（管理员本人恰在名单中，GitHub 会如实返回 pull_request/always；
+      #   该视图已直接逐字段比对名单本身，断言无必要）。
+      local saved_bypass_n=0 cub has_field=0
+      saved_bypass_n=$(jq -r '(.bypass_actors // []) | length' "$BP_RULESETS_DIR/$live_name.json" 2>/dev/null || printf '0')
+      printf '%s' "$live_json" | jq -e 'has("bypass_actors")' >/dev/null 2>&1 && has_field=1
+      cub=$(jq -r '.current_user_can_bypass // ""' <<< "$live_json" 2>/dev/null || true)
+      if [[ -n "$cub" && "$cub" != "never" && ( "$saved_bypass_n" == "0" || "$has_field" == "0" ) ]]; then
+        bp_add_finding "规则集 $live_name：当前读取身份 current_user_can_bypass=$cub（该层保存配置无绕过者，或读取身份本应不可见名单——读取身份不得持有绕过权；App 在绕过名单属配置错误）"
+        rc_drift=1
+      fi
     else
       local crc2
       bp_ruleset_covers_ref "$live_json" "refs/heads/$default_branch" "$default_branch" && crc2=0 || crc2=$?
