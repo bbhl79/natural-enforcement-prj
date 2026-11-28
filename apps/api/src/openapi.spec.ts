@@ -8,11 +8,16 @@ import type { OpenAPIObject, OperationObject } from '@nestjs/swagger'
 import {
   CreateEnforcementPointResultSchema,
   ENFORCEMENT_POINT_ROUTES,
+  EVIDENCE_CONTENT_TYPE,
+  EVIDENCE_ROUTES,
+  EvidenceUploadHeadersSchema,
   HEALTH_ROUTES,
+  ORIGINAL_NAME_HEADER,
+  POINT_ID_HEADER,
 } from '@ne/contracts'
 import { createApp } from './bootstrap.js'
 import { ApiContractResponse } from './common/api-contract.decorator.js'
-import { buildOpenApiDocument, verifyOpenApiCompleteness } from './openapi.js'
+import { buildOpenApiDocument, expectedOpenApiSchema, openApiPath, verifyOpenApiCompleteness } from './openapi.js'
 
 const ctx: { app?: INestApplication; doc?: OpenAPIObject } = {}
 
@@ -119,6 +124,68 @@ describe('OpenAPI 契约派生（zod 唯一事实源）', () => {
   })
 })
 
+describe('OpenAPI 文件证据端点（#69：非 JSON 媒体类型 / header / path 参数）', () => {
+  it('POST /evidence：requestBody 为 application/octet-stream binary，且 x-original-name/x-point-id 进入 header 参数', () => {
+    const op = ctx.doc!.paths[EVIDENCE_ROUTES.base]?.post
+    expect(op).toBeDefined()
+
+    const reqBody = op!.requestBody as {
+      required?: boolean
+      content?: Record<string, { schema?: unknown }>
+    }
+    expect(reqBody?.required).toBe(true)
+    expect(Object.keys(reqBody?.content ?? {})).toEqual([EVIDENCE_CONTENT_TYPE])
+    expect(reqBody?.content?.[EVIDENCE_CONTENT_TYPE]?.schema).toEqual({
+      type: 'string',
+      format: 'binary',
+    })
+
+    const headerParams = ((op!.parameters ?? []) as Array<{
+      name: string
+      in: string
+      required?: boolean
+      schema?: unknown
+    }>).filter((p) => p.in === 'header')
+    const byName = Object.fromEntries(headerParams.map((p) => [p.name, p]))
+    expect(byName[ORIGINAL_NAME_HEADER]).toMatchObject({
+      in: 'header',
+      required: true,
+      schema: expectedOpenApiSchema(EvidenceUploadHeadersSchema.shape[ORIGINAL_NAME_HEADER]!, 'input'),
+    })
+    expect(byName[POINT_ID_HEADER]).toMatchObject({ in: 'header', required: false })
+  })
+
+  it('GET /evidence/:id 与 /content：路径参数 + JSON DTO 响应 + 二进制下载响应', () => {
+    const detail = ctx.doc!.paths[openApiPath(EVIDENCE_ROUTES.detail)]?.get
+    expect(detail).toBeDefined()
+    const pathParams = ((detail!.parameters ?? []) as Array<{
+      name: string
+      in: string
+      required?: boolean
+      schema?: unknown
+    }>).filter((p) => p.in === 'path')
+    expect(pathParams).toEqual([
+      expect.objectContaining({ name: 'id', in: 'path', required: true, schema: { type: 'string' } }),
+    ])
+    expect(jsonSchemaOf(detail!.responses?.['200'])).toMatchObject({ type: 'object' })
+    expect(jsonSchemaOf(detail!.responses?.['404'])).toMatchObject({
+      type: 'object',
+      required: ['message'],
+    })
+
+    const content = ctx.doc!.paths[openApiPath(EVIDENCE_ROUTES.content)]?.get
+    expect(content).toBeDefined()
+    const download = content!.responses?.['200'] as {
+      content?: Record<string, { schema?: unknown }>
+    }
+    expect(Object.keys(download.content ?? {})).toEqual([EVIDENCE_CONTENT_TYPE])
+    expect(download.content?.[EVIDENCE_CONTENT_TYPE]?.schema).toEqual({
+      type: 'string',
+      format: 'binary',
+    })
+  })
+})
+
 describe('verifyOpenApiCompleteness（自动检查正反测试）', () => {
   it('正例：当前装配产出的 OpenAPI 通过完整性检查', () => {
     expect(verifyOpenApiCompleteness(ctx.doc!)).toEqual({ ok: true, errors: [] })
@@ -175,6 +242,52 @@ describe('verifyOpenApiCompleteness（自动检查正反测试）', () => {
     const result = verifyOpenApiCompleteness(doc)
     expect(result.ok).toBe(false)
     expect(result.errors.some((e) => e.includes('DELETE /undocumented'))).toBe(true)
+  })
+
+  it('反例：证据上传 requestBody 媒体类型漂移/丢失时检出', () => {
+    const doc = cloneDoc()
+    const op = doc.paths[EVIDENCE_ROUTES.base]!.post as OperationObject
+    op.requestBody = {
+      required: true,
+      content: { 'application/json': { schema: { type: 'string', format: 'binary' } } },
+    }
+    const result = verifyOpenApiCompleteness(doc)
+    expect(result.ok).toBe(false)
+    expect(result.errors.some((e) => e.includes(EVIDENCE_CONTENT_TYPE))).toBe(true)
+  })
+
+  it('反例：证据上传缺失 x-original-name header 参数时检出', () => {
+    const doc = cloneDoc()
+    const op = doc.paths[EVIDENCE_ROUTES.base]!.post as OperationObject
+    op.parameters = (op.parameters ?? []).filter(
+      (p) => !('name' in p) || p.name !== ORIGINAL_NAME_HEADER,
+    )
+    const result = verifyOpenApiCompleteness(doc)
+    expect(result.ok).toBe(false)
+    expect(result.errors.some((e) => e.includes(ORIGINAL_NAME_HEADER))).toBe(true)
+  })
+
+  it('反例：证据下载响应被标成 JSON 时检出', () => {
+    const doc = cloneDoc()
+    const op = doc.paths[openApiPath(EVIDENCE_ROUTES.content)]!.get as OperationObject
+    op.responses!['200'] = {
+      description: 'drift',
+      content: { 'application/json': { schema: { type: 'string' } } },
+    }
+    const result = verifyOpenApiCompleteness(doc)
+    expect(result.ok).toBe(false)
+    expect(result.errors.some((e) => e.includes('200') && e.includes(EVIDENCE_CONTENT_TYPE))).toBe(
+      true,
+    )
+  })
+
+  it('反例：证据详情路径参数丢失时检出', () => {
+    const doc = cloneDoc()
+    const op = doc.paths[openApiPath(EVIDENCE_ROUTES.detail)]!.get as OperationObject
+    op.parameters = (op.parameters ?? []).filter((p) => !('in' in p) || p.in !== 'path')
+    const result = verifyOpenApiCompleteness(doc)
+    expect(result.ok).toBe(false)
+    expect(result.errors.some((e) => e.includes('路径参数 id'))).toBe(true)
   })
 })
 

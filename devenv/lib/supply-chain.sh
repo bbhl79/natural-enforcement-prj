@@ -175,7 +175,7 @@ sc_is_digest_ref() {
 sc_check_images_lock() { # <images.lock>
   local f="$1"
   if [[ ! -f "$f" ]]; then sc_fail "缺 devenv/images.lock（上游镜像 tag+digest 唯一事实源）"; return 1; fi
-  local node db dbkind dbplat mac mackind nkind
+  local node db dbkind dbplat mac mackind nkind redis redis_kind rustfs rustfs_kind
   node="$(sc_lock_value "$f" NODE_IMAGE)"
   db="$(sc_lock_value "$f" DB_IMAGE)"
   mac="$(sc_lock_value "$f" DB_IMAGE_MACOS)"
@@ -183,6 +183,10 @@ sc_check_images_lock() { # <images.lock>
   dbkind="$(sc_lock_value "$f" DB_IMAGE_KIND)"
   dbplat="$(sc_lock_value "$f" DB_IMAGE_PLATFORM)"
   mackind="$(sc_lock_value "$f" DB_IMAGE_MACOS_KIND)"
+  redis="$(sc_lock_value "$f" REDIS_IMAGE)"
+  redis_kind="$(sc_lock_value "$f" REDIS_IMAGE_KIND)"
+  rustfs="$(sc_lock_value "$f" RUSTFS_IMAGE)"
+  rustfs_kind="$(sc_lock_value "$f" RUSTFS_IMAGE_KIND)"
 
   [[ -n "$node" ]] || sc_fail "images.lock 缺 NODE_IMAGE"
   [[ -n "$db" ]] || sc_fail "images.lock 缺 DB_IMAGE"
@@ -206,6 +210,19 @@ sc_check_images_lock() { # <images.lock>
   else
     sc_is_digest_ref "$mac" || sc_fail "DB_IMAGE_MACOS 必须是 repo:tag@sha256:<64hex>：${mac}"
     [[ "$mackind" == "manifest-list" ]] || sc_fail "DB_IMAGE_MACOS_KIND 必须为 manifest-list（kartoza multiarch）：${mackind:-缺}"
+  fi
+  # 队列/对象存储（#69）：多架构上游镜像，锁 manifest-list digest
+  if [[ -z "$redis" ]]; then
+    sc_fail "images.lock 缺 REDIS_IMAGE（#69 队列基座，tag+manifest-list digest）"
+  else
+    sc_is_digest_ref "$redis" || sc_fail "REDIS_IMAGE 必须是 repo:tag@sha256:<64hex>：${redis}"
+    [[ "$redis_kind" == "manifest-list" ]] || sc_fail "REDIS_IMAGE_KIND 必须为 manifest-list：${redis_kind:-缺}"
+  fi
+  if [[ -z "$rustfs" ]]; then
+    sc_fail "images.lock 缺 RUSTFS_IMAGE（#69 对象存储基座，tag+manifest-list digest）"
+  else
+    sc_is_digest_ref "$rustfs" || sc_fail "RUSTFS_IMAGE 必须是 repo:tag@sha256:<64hex>：${rustfs}"
+    [[ "$rustfs_kind" == "manifest-list" ]] || sc_fail "RUSTFS_IMAGE_KIND 必须为 manifest-list：${rustfs_kind:-缺}"
   fi
   return 0
 }

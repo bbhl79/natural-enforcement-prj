@@ -27,6 +27,13 @@ DB_IMAGE=postgis/postgis:18-3.6@sha256:530bb81ad6c5993ae870ea66095d9dc758ef58660
 DB_IMAGE_KIND=single-arch
 DB_IMAGE_PLATFORM=linux/amd64
 
+# 队列与对象存储（#69）：两者均为多架构镜像（Spec 支持环境节登记），
+# 锁 manifest-list digest；仅容器内网，无宿主端口。
+REDIS_IMAGE=redis:8.2.11-alpine@sha256:a18fce2f705d9782ccf6968f8dd94fa04566ff97e10a8d322ad72645243e4c0c
+REDIS_IMAGE_KIND=manifest-list
+RUSTFS_IMAGE=rustfs/rustfs:1.0.6@sha256:0dff1515b3c52b5ce8c5df2263420c7f93ae1c5d07cca79e19e57cff86b84c85
+RUSTFS_IMAGE_KIND=manifest-list
+
 # macOS ARM 路线（#53 Mac 实测选定；manifest-list digest，2026-11-27 本机 podman 实查）
 DB_IMAGE_MACOS=kartoza/postgis:18.6-3.6.4@sha256:5fa6f8e228a7496d544df3ab580cad9df1686b1f47d02c97f02056ecdc744739
 DB_IMAGE_MACOS_KIND=manifest-list

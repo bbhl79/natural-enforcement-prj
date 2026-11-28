@@ -23,4 +23,24 @@ model EnforcementPoint {
   name      String                       @unique
   location  Unsupported("geography(Point,4326)")?
   createdAt DateTime                     @default(now())
+  evidenceRecords EvidenceRecord[]
+}
+
+// 证据文件记录（#69）：bucket/objectKey 只服务端可见；originalName 仅展示元数据。
+model EvidenceRecord {
+  id           String           @id @default(cuid())
+  pointId      Int?
+  point        EnforcementPoint? @relation(fields: [pointId], references: [id])
+  bucket       String
+  objectKey    String
+  originalName String
+  contentType  String
+  bytes        Int?
+  sha256       String?
+  status       String           @default("pending") // pending | ready | failed
+  error        String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([status])
 }

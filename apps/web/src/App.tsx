@@ -4,6 +4,7 @@ import type { TabsProps } from 'antd'
 import type { NearbyQueryDto } from '@ne/contracts'
 import { useHealthQuery } from './api.js'
 import NearbyPanel from './components/NearbyPanel.js'
+import EvidencePanel from './components/EvidencePanel.js'
 // @gen:page-import
 
 // 默认查询：广州市中心（市政府一带），半径 8km 覆盖全部种子点位
@@ -22,6 +23,7 @@ export default function App() {
 
   const items: NonNullable<TabsProps['items']> = [
     { key: 'points', label: '执法点位', children: <NearbyPanel query={query} onQueryChange={setQuery} /> },
+    { key: 'evidence', label: '证据文件', children: <EvidencePanel /> },
     // @gen:page-item
   ]
 

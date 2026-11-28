@@ -8,9 +8,11 @@
 // 因此生成端点无需事后手工补注册表，OpenAPI 文档与运行时共享同一契约。
 import type { ApiContractEndpoint } from './api-contract.js'
 import { ENFORCEMENT_POINT_ENDPOINTS } from './enforcement-point.js'
+import { EVIDENCE_ENDPOINTS } from './evidence.js'
 // @gen:endpoint-import
 
 export const API_CONTRACT_ENDPOINTS: readonly ApiContractEndpoint[] = [
   ...ENFORCEMENT_POINT_ENDPOINTS,
+  ...EVIDENCE_ENDPOINTS,
   // @gen:endpoint-spread
 ]

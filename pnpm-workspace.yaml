@@ -23,6 +23,10 @@ allowBuilds:
   prisma@7.10.1: true
   "@prisma/engines@7.10.1": true
   "@scarf/scarf@1.4.0": false    # prisma 的遥测上报器：显式拒绝执行
+  # bullmq → msgpackr 的可选原生加速器（#69）：install 脚本仅调用
+  # node-gyp-build-optional-packages 解析预构建平台包（@msgpackr-extract/* 3.0.7），
+  # 不在安装期编译或联网；无预构建时 msgpackr 自动回退 JS 实现。
+  msgpackr-extract@3.0.7: true
   # 前端栈零新增（原型 #12 实测）：vite 8 转 rolldown（无 esbuild），rolldown/
   # @tailwindcss/oxide/lightningcss 全走 napi 预构建 optional deps，不带 postinstall。
 
@@ -54,6 +58,11 @@ catalog:
   prisma: "7.10.1"
   "@prisma/client": "7.10.1"
   "@prisma/adapter-pg": "7.10.1"
+  # 队列 / 对象存储（#69；沿用原型 #11 已验证解析集：bullmq 6 / ioredis 6 / AWS SDK v3）
+  bullmq: "6.7.8"
+  ioredis: "6.0.0"
+  "@aws-sdk/client-s3": "3.1173.0"
+  "@aws-sdk/s3-request-presigner": "3.1173.0"
   # 测试 / lint
   vitest: "5.1.1"
   eslint: "10.15.0"
