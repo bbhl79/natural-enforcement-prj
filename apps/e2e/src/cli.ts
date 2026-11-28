@@ -53,7 +53,7 @@ function showHuman(sink: OpSink, r: DefectRecord): void {
     out(`  毕业：${r.graduation.mode} → ${r.graduation.specPath}（verifiedRun ${r.graduation.verifiedRun.expect}=${r.graduation.verifiedRun.outcome}）`)
     if (r.graduation.failureSignature) {
       const s = r.graduation.failureSignature
-      out(`  失败签名：${s.errorClass}｜${s.assertionId}｜${s.semanticMarkers.join(',')}`)
+      out(`  失败签名：${s.errorClass}｜${s.assertionId}｜${s.semanticMarkers.map((m) => `${m.key}=${m.value}`).join(',')}`)
     }
     if (r.graduation.confirmation) {
       out(`  确认：${r.graduation.confirmation.at} by ${r.graduation.confirmation.by}（令牌 verifyRun=${r.graduation.confirmation.token.verifyRunId}）`)
