@@ -90,3 +90,227 @@ export function extractReplaySignature(output: string): ReplayExtraction {
     outcome: marker.outcome ?? 'unknown',
   }
 }
+// ---------------------------------------------------------------------------
+// 来源二：Playwright 结果 JSON
+// ---------------------------------------------------------------------------
+
+/** 一条失败断言的提取结果（envelope 带用例状态，判定权归 #112 判定引擎） */
+export interface PlaywrightFailure {
+  file: string
+  titlePath: string[] // describe 路径 + 测试标题（不含文件级 suite 标题）
+  assertionId: string // 结构身份：file#titlePath#断言序号（不含行号、不含消息措辞）
+  testStatus: string // unexpected | expected | flaky | skipped（Playwright 原样）
+  expectedStatus: string // passed | failed | skipped（expected-fail 注解用例为 failed）
+  retry: number
+  signature: FailureSignature
+}
+
+export interface PlaywrightStats {
+  expected: number
+  unexpected: number
+  flaky: number
+  skipped: number
+}
+
+export interface PlaywrightExtraction {
+  failures: PlaywrightFailure[]
+  stats: PlaywrightStats | null
+  error?: string
+}
+
+/** JSON reporter 的 error.message 带 ANSI 颜色码（真实证据实证）——解析前必须剥码 */
+const ESC = String.fromCharCode(27)
+const ANSI_RE = new RegExp(`${ESC}\\[[0-9;?]*[A-Za-z]`, 'g')
+
+function stripAnsi(s: string): string {
+  return s.replace(ANSI_RE, '')
+}
+
+/** 连接级故障码（基础设施档）：只认结构化的错误码/固定故障短语，不认 HTTP 状态响应
+ *  （5xx 响应本身可能是被测缺陷，不是环境故障——不得据此判基础设施错误）。 */
+const INFRA_CODE_RES: [RegExp, string][] = [
+  [/net::(ERR_[A-Z_]+)/, '$1'],
+  [/\b(ECONNREFUSED|ECONNRESET|ECONNABORTED|EHOSTUNREACH|ENOTFOUND|EPIPE|EAI_AGAIN|ETIMEDOUT|EPROTO|ERR_SOCKET_CONNECTION_TIMEOUT)\b/, '$1'],
+  [/socket hang up/, 'SOCKET_HANG_UP'],
+  [/fetch failed/, 'FETCH_FAILED'],
+  [/Target page, context or browser has been closed|browser has been closed/, 'TARGET_CLOSED'],
+]
+
+/** 超时档（基础设施）：必须在**定位档之后**判——`locator.click: Timeout` 是元素
+ *  找不到（定位失败），不是环境超时；只有页面级/测试级超时才归基础设施。 */
+const INFRA_TIMEOUT_RE = /page\.goto: Timeout|Navigation timeout|Test timeout of \d+ms exceeded|Timeout \d+ms exceeded/
+
+/** 定位失败证据（元素找不到/多命中）：UI 缺陷本身可能表现为元素缺失，不得一律归环境 */
+const LOCATOR_RE = /\blocator\.[a-zA-Z]+:|strict mode violation:|waiting for (?:getBy|locator)|element\(s\) not found|resolved to \d+ elements/
+const LOCATOR_EXPECT_RE = /expect\(locator\)\.\w+\(/
+const LOCATOR_TARGET_RES: RegExp[] = [
+  /waiting for (getBy\w+\([^\n]*\)|locator\([^\n]*\))/,
+  /Locator:\s*([^\n]+)/,
+  /strict mode violation:\s*([^\n]+?)\s+resolved to/,
+]
+
+/** expect 结构（普通断言失败档）：matcher 链 + Expected/Received 单行取值 */
+const MATCHER_RE = /expect\([^)]*\)\.((?:\w+\.)*\w+)\(/
+const EXPECTED_RE = /^Expected:[ \t]*(.+)$/m
+const RECEIVED_RE = /^Received:[ \t]*(.+)$/m
+const ERROR_NAME_RE = /^([A-Za-z_$][\w$]*):/
+
+interface Classified {
+  errorClass: FailureSignature['errorClass']
+  markers: { key: string; value: string }[]
+}
+
+/**
+ * 错误类别判定（Spec-e2e §7 两档 + 普通断言失败 + 证据不足档）。
+ * 顺序即证据优先级：连接级故障码 → 定位失败 → 超时 → expect 结构 → unknown。
+ * `locator.click: Timeout` 先命中定位档（元素找不到），不被通用超时吞成基础设施。
+ */
+export function classifyErrorMessage(rawMessage: string): Classified {
+  const message = stripAnsi(rawMessage)
+  const markers: { key: string; value: string }[] = []
+
+  for (const [re, code] of INFRA_CODE_RES) {
+    const m = re.exec(message)
+    if (m) {
+      const value = code === '$1' ? (m[1] ?? code) : code
+      return { errorClass: 'infrastructure', markers: [{ key: 'error.code', value }] }
+    }
+  }
+
+  const locatorExpect = LOCATOR_EXPECT_RE.exec(message)
+  const locatorMissing = /Timeout|element\(s\) not found|not found|not visible/.test(message)
+  if (LOCATOR_RE.test(message) || (locatorExpect && locatorMissing)) {
+    for (const re of LOCATOR_TARGET_RES) {
+      const m = re.exec(message)
+      if (m?.[1]) {
+        markers.push({ key: 'locator', value: m[1].trim() })
+        break
+      }
+    }
+    const action = /\blocator\.([a-zA-Z]+):/.exec(message) ?? locatorExpect
+    if (action?.[1]) markers.push({ key: 'locator.action', value: action[1] })
+    return { errorClass: 'locator', markers }
+  }
+
+  // 定位档之后才判超时：页面级/测试级超时 = 基础设施档
+  if (INFRA_TIMEOUT_RE.test(message)) {
+    return { errorClass: 'infrastructure', markers: [{ key: 'error.code', value: 'TIMEOUT' }] }
+  }
+
+  const matcher = MATCHER_RE.exec(message)
+  if (matcher?.[1]) {
+    markers.push({ key: 'matcher', value: matcher[1] })
+    const expected = EXPECTED_RE.exec(message)
+    const received = RECEIVED_RE.exec(message)
+    if (expected?.[1]) markers.push({ key: 'expected', value: expected[1].trim() })
+    if (received?.[1]) markers.push({ key: 'actual', value: received[1].trim() })
+    return { errorClass: 'assertion', markers }
+  }
+
+  // 证据不足以分类（如测试自身 throw 的自由文本）：unknown 档，不伪装成确定分类。
+  // 只取错误名这一结构证据（Error / TypeError …），不取消息文本。
+  const name = ERROR_NAME_RE.exec(message)
+  markers.push({ key: 'error.name', value: name?.[1] ?? 'Error' })
+  return { errorClass: 'unknown', markers }
+}
+
+interface RawSuite {
+  title?: unknown
+  file?: unknown
+  specs?: unknown
+  suites?: unknown
+}
+
+function asRecord(v: unknown): Record<string, unknown> | null {
+  return typeof v === 'object' && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null
+}
+
+function str(v: unknown): string {
+  return typeof v === 'string' ? v : ''
+}
+
+/**
+ * 从 Playwright 结果 JSON 提取全部失败断言的签名。
+ * 遍历 suites（含 describe 嵌套）→ specs → tests → 最后一次失败 result 的 errors；
+ * 每条 error 一个签名（断言序号 a1/a2…）。通过/跳过的用例不产生签名。
+ * 报告非法 → failures=[] + error（不编造）。
+ */
+export function extractPlaywrightSignatures(report: unknown): PlaywrightExtraction {
+  const root = asRecord(report)
+  if (!root || !Array.isArray(root.suites)) {
+    return { failures: [], stats: null, error: 'Playwright 结果 JSON 非法（缺 suites 数组）' }
+  }
+  const failures: PlaywrightFailure[] = []
+
+  const walkSuites = (suites: unknown[], titlePath: string[], fileHint: string): void => {
+    for (const s of suites) {
+      const suite = asRecord(s)
+      if (!suite) continue
+      // 文件级 suite 的 title 就是文件名（不进 titlePath，避免与 file 重复）
+      const isFileSuite = typeof suite.file === 'string'
+      const file = isFileSuite ? str(suite.file) : fileHint
+      const nextPath = isFileSuite || str(suite.title) === '' ? titlePath : [...titlePath, str(suite.title)]
+      if (Array.isArray(suite.specs)) {
+        for (const sp of suite.specs) {
+          const spec = asRecord(sp)
+          if (!spec) continue
+          const specFile = str(spec.file) || file
+          const specTitle = str(spec.title)
+          if (!Array.isArray(spec.tests)) continue
+          for (const t of spec.tests) {
+            const test = asRecord(t)
+            if (!test || !Array.isArray(test.results)) continue
+            const testStatus = str(test.status)
+            if (testStatus === 'skipped') continue
+            // 取最后一次失败结果（重试后终态才是判定依据）
+            let last: Record<string, unknown> | null = null
+            for (const r of test.results) {
+              const res = asRecord(r)
+              if (!res) continue
+              const st = str(res.status)
+              if (st === 'failed' || st === 'timedOut' || st === 'interrupted') last = res
+            }
+            if (!last) continue
+            const errors = Array.isArray(last.errors) && last.errors.length > 0
+              ? last.errors
+              : last.error !== undefined ? [last.error] : []
+            const retry = typeof last.retry === 'number' ? last.retry : 0
+            errors.forEach((e, i) => {
+              const err = asRecord(e)
+              const message = str(err?.message)
+              if (message === '') return
+              const c = classifyErrorMessage(message)
+              const path = [...nextPath, specTitle]
+              failures.push({
+                file: specFile,
+                titlePath: path,
+                assertionId: `${specFile}#${path.join(' > ')}#a${i + 1}`,
+                testStatus,
+                expectedStatus: str(test.expectedStatus),
+                retry,
+                signature: canonicalizeSignature({
+                  errorClass: c.errorClass,
+                  assertionId: `${specFile}#${path.join(' > ')}#a${i + 1}`,
+                  semanticMarkers: c.markers,
+                }),
+              })
+            })
+          }
+        }
+      }
+      if (Array.isArray(suite.suites)) walkSuites(suite.suites, nextPath, file)
+    }
+  }
+  walkSuites(root.suites, [], '')
+
+  const statsRaw = asRecord(root.stats)
+  const stats: PlaywrightStats | null = statsRaw
+    ? {
+        expected: typeof statsRaw.expected === 'number' ? statsRaw.expected : 0,
+        unexpected: typeof statsRaw.unexpected === 'number' ? statsRaw.unexpected : 0,
+        flaky: typeof statsRaw.flaky === 'number' ? statsRaw.flaky : 0,
+        skipped: typeof statsRaw.skipped === 'number' ? statsRaw.skipped : 0,
+      }
+    : null
+  return { failures, stats }
+}
