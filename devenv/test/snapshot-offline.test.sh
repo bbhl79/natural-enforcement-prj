@@ -202,6 +202,12 @@ write_image() {
     > "$MOCK_DOCKER_STATE/images/$1"
 }
 
+# tools 内容寻址别名 tag（#71：BuildKit 不支持 FROM 裸 image ID——CI 实测
+# run 46143043691 按拉取 docker.io/library/sha256:… 拒绝）：ID → 期望的构建 FROM 引用
+IMM_REF() { # IMM_REF <imageId> → natural-enforcement/tools:imm-<64hex>
+  printf 'natural-enforcement/tools:imm-%s' "${1#sha256:}"
+}
+
 # ---------------------------------------------------------------------------
 # 1. 快照采集语义
 # ---------------------------------------------------------------------------
@@ -333,7 +339,7 @@ snapshot_state_store "0000000000000000000000000000000000000000" "$WS_IMG" "$TH" 
 : > "$MOCK_DOCKER_STATE/calls.log"
 runsub s11 ensure_and_echo
 NEW_IMG="$(awk -F= '/^EFFECTIVE=/{print $2}' "$SANDBOX/s11.out")"
-EXPECTED_NEW="sha256:$(printf '%s|%s|%s|%s' "$WS_IMAGE" "$H" "" "TOOLS_IMAGE=$TOOLS_IMG;" | sha256sum | awk '{print $1}')"
+EXPECTED_NEW="sha256:$(printf '%s|%s|%s|%s' "$WS_IMAGE" "$H" "" "TOOLS_IMAGE=$(IMM_REF "$TOOLS_IMG");" | sha256sum | awk '{print $1}')"
 if [[ "$RC" == 0 && "$NEW_IMG" == "$EXPECTED_NEW" && "$NEW_IMG" != "$WS_IMG" ]]; then
   pass "S11 快照不符重建并绑定新不可变 ID"
 else
@@ -341,7 +347,8 @@ else
 fi
 if grep -q -- "--label devenv.snapshot.hash=$H" "$MOCK_DOCKER_STATE/calls.log" \
   && grep -q -- "--label devenv.base.image=$TOOLS_IMG" "$MOCK_DOCKER_STATE/calls.log" \
-  && grep -q -- "--build-arg TOOLS_IMAGE=$TOOLS_IMG" "$MOCK_DOCKER_STATE/calls.log" \
+  && grep -q -- "--build-arg TOOLS_IMAGE=$(IMM_REF "$TOOLS_IMG")" "$MOCK_DOCKER_STATE/calls.log" \
+  && grep -q -- "docker tag $TOOLS_IMG $(IMM_REF "$TOOLS_IMG")" "$MOCK_DOCKER_STATE/calls.log" \
   && ! grep -qE '\-f [^ ]*devenv/tools\.Dockerfile' "$MOCK_DOCKER_STATE/calls.log"; then
   pass "S11 重建携带快照/基础镜像 label 且 tools 未重建"
 else
@@ -449,14 +456,23 @@ if [[ "$TOOLS_LINE" == *"ne-snapshot."* && "$TOOLS_LINE" != *"$MINI "* && "$TOOL
 else
   fail "S16b" "tools 构建未用快照输入：$TOOLS_LINE"
 fi
-# S16c 不可变绑定链：workspace 构建经 build-arg 绑定 tools 不可变 ID + base.image label
+# S16c 不可变绑定链：workspace 构建经 build-arg 绑定 tools（内容寻址别名 tag，
+# 不可变语义与 ID 等价）+ base.image label 记录 ID + 状态记录 ID；FROM 引用须为
+# name:tag 形态（#71：BuildKit 把 FROM 裸 image ID 当 registry 引用拉取，CI 实测
+# run 46143043691）
 TOOLS_ID="$(cat "$TOOLS_TAG_FILE")"
 WS_LINE="$(grep 'workspace.Dockerfile' "$MOCK_DOCKER_STATE/calls.log")"
-if [[ "$WS_LINE" == *"--build-arg TOOLS_IMAGE=$TOOLS_ID"* && "$WS_LINE" == *"--label devenv.base.image=$TOOLS_ID"* ]] \
-  && grep -q "TOOLS_IMAGE_ID=$TOOLS_ID" "$BT"; then
-  pass "S16c workspace 经 build-arg 绑定 tools 不可变 ID（可核对链路）"
+if [[ "$WS_LINE" == *"--build-arg TOOLS_IMAGE=$(IMM_REF "$TOOLS_ID")"* && "$WS_LINE" == *"--label devenv.base.image=$TOOLS_ID"* ]] \
+  && grep -q "TOOLS_IMAGE_ID=$TOOLS_ID" "$BT" \
+  && grep -q -- "docker tag $TOOLS_ID $(IMM_REF "$TOOLS_ID")" "$MOCK_DOCKER_STATE/calls.log"; then
+  pass "S16c workspace 经 build-arg 绑定 tools 内容寻址别名 tag（可核对链路）"
 else
   fail "S16c" "绑定链断裂：$WS_LINE"
+fi
+if [[ "$WS_LINE" != *"--build-arg TOOLS_IMAGE=$TOOLS_ID"* ]]; then
+  pass "S16c-d FROM 引用非裸 image ID（BuildKit 兼容回归守卫）"
+else
+  fail "S16c-d" "build-arg 传了裸 image ID——CI BuildKit 会当 registry 引用拉取：$WS_LINE"
 fi
 
 # S17 lockfile 缺席：lockgen-fresh 全量解析 → 导出 → 重新采集 → workspace 构建
@@ -476,11 +492,11 @@ if grep -q "SNAPSHOT_HASH=$(expected_tree)" "$DEVENV_STATE_DIR/workspace-image.e
 else
   fail "S17" "状态哈希未随 lockgen 更新"
 fi
-# S17b lockgen 构建同样绑定 tools 不可变 ID；重新采集后 tools 输入未变 → 不重复建 tools
+# S17b lockgen 构建同样绑定 tools（内容寻址别名 tag）；重新采集后 tools 输入未变 → 不重复建 tools
 LOCKGEN_LINE="$(grep 'lockgen-fresh' "$LOG")"
-if [[ "$LOCKGEN_LINE" == *"--build-arg TOOLS_IMAGE=$(cat "$TOOLS_TAG_FILE")"* ]] \
+if [[ "$LOCKGEN_LINE" == *"--build-arg TOOLS_IMAGE=$(IMM_REF "$(cat "$TOOLS_TAG_FILE")")"* ]] \
   && [[ "$(grep -cE '\-f [^ ]*devenv\/tools\.Dockerfile' "$LOG")" == "0" ]]; then
-  pass "S17b lockgen 绑定 tools ID 且重新采集后不重复建 tools"
+  pass "S17b lockgen 绑定 tools 别名 tag 且重新采集后不重复建 tools"
 else
   fail "S17b" "lockgen 绑定/重检不符：$LOG"
 fi
@@ -546,7 +562,7 @@ run s20 "$DEVENV" test:unit
 NEW_TOOLS_ID="$(cat "$TOOLS_TAG_FILE")"
 WS_LINE="$(grep 'workspace.Dockerfile' "$MOCK_DOCKER_STATE/calls.log")"
 if [[ "$RC" == 0 ]] && grep -qE '\-f [^ ]*devenv/tools\.Dockerfile' "$MOCK_DOCKER_STATE/calls.log" \
-  && [[ "$WS_LINE" == *"--build-arg TOOLS_IMAGE=$NEW_TOOLS_ID"* ]] \
+  && [[ "$WS_LINE" == *"--build-arg TOOLS_IMAGE=$(IMM_REF "$NEW_TOOLS_ID")"* ]] \
   && grep -q "TOOLS_IMAGE_ID=$NEW_TOOLS_ID" "$DEVENV_STATE_DIR/workspace-image.env"; then
   pass "S20 tools 输入变更后消费命令自动重建并绑定新 tools ID"
 else
@@ -568,7 +584,8 @@ printf '\n' >> "$MINI/package.json"  # 使 workspace 失鲜，tools 仍新鲜（
 : > "$MOCK_DOCKER_STATE/calls.log"
 run s21b "$DEVENV" test:unit
 WS_LINE="$(grep 'workspace.Dockerfile' "$MOCK_DOCKER_STATE/calls.log")"
-if [[ "$RC" == 0 ]] && [[ "$WS_LINE" == *"--build-arg TOOLS_IMAGE=$NEW_TOOLS_ID"* && "$WS_LINE" != *"$OTHER_ID"* ]]; then
+if [[ "$RC" == 0 ]] && [[ "$WS_LINE" == *"--build-arg TOOLS_IMAGE=$(IMM_REF "$NEW_TOOLS_ID")"* \
+  && "$WS_LINE" != *"--build-arg TOOLS_IMAGE=$(IMM_REF "$OTHER_ID")"* ]]; then
   pass "S21 workspace 重建绑定状态 tools ID（非被覆盖的标签）"
 else
   fail "S21b" "rc=$RC log=$(cat "$MOCK_DOCKER_STATE/calls.log")"

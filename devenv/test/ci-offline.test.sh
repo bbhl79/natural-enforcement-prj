@@ -168,7 +168,7 @@ run_doctor ciw2
 expect_rc "CIW2 合法 workflow 通过" 0 ciw2
 has_check ciw2 ci-workflows ok \
   && pass "CIW2 ci-workflows ok" || fail "CIW2" "JSON 缺 ci-workflows ok：$(cat "$OUT/ciw2.out")"
-check_detail ciw2 ci-workflows | grep -q '1' \
+check_detail ciw2 ci-workflows | grep -q '^1 个 workflow' \
   && pass "CIW2 ok 项报告扫描文件数" || fail "CIW2" "ok 详情未报告扫描数：$(check_detail ciw2 ci-workflows)"
 
 # CIW3 docker compose 插件形态违规 → 拒绝（exit 3）并指明文件+行号
@@ -177,8 +177,8 @@ run_doctor ciw3
 expect_rc "CIW3 docker compose 直接调用被拒（doctor exit 3）" 3 ciw3
 has_check ciw3 ci-workflows fail \
   && pass "CIW3 ci-workflows fail" || fail "CIW3" "JSON 缺 ci-workflows fail：$(cat "$OUT/ciw3.out")"
-check_detail ciw3 ci-workflows | grep -q 'bad.yml' \
-  && pass "CIW3 报错指明违规文件" || fail "CIW3" "未指明文件：$(check_detail ciw3 ci-workflows)"
+check_detail ciw3 ci-workflows | grep -q 'bad.yml:7:' \
+  && pass "CIW3 报错指明违规文件与行号（bad.yml:7）" || fail "CIW3" "未指明文件:行号：$(check_detail ciw3 ci-workflows)"
 check_detail ciw3 ci-workflows | grep -q 'docker compose' \
   && pass "CIW3 报错含违规内容" || fail "CIW3" "未含违规行内容：$(check_detail ciw3 ci-workflows)"
 # 人类可读模式：失败检查行走 stderr，给出「经 devenv 唯一入口」修复指引
@@ -208,6 +208,15 @@ expect_rc "CIW6b 路径限定形 docker compose 被拒" 3 ciw6b
 wf_with_violation "$SANDBOX" '/usr/local/bin/docker-compose ps'
 run_doctor ciw6c
 expect_rc "CIW6c 路径限定形 docker-compose 被拒" 3 ciw6c
+
+# CIW6d/e 全局选项不遮蔽判定（#71 评审整改）：docker -H/--context、podman --remote
+# 与 compose 之间隔任意全局选项/参数同样违规
+wf_with_violation "$SANDBOX" 'docker -H unix:///var/run/docker.sock compose up -d'
+run_doctor ciw6d
+expect_rc "CIW6d 带全局选项的 docker compose 被拒" 3 ciw6d
+wf_with_violation "$SANDBOX" 'podman --remote compose ps'
+run_doctor ciw6e
+expect_rc "CIW6e podman --remote compose 被拒" 3 ciw6e
 
 # CIW7 注释行不误报（# docker compose ... 是说明文字，不是调用）
 rm -f "$SANDBOX/.github/workflows/bad.yml"
@@ -240,7 +249,7 @@ jobs:
 YAML
 run_doctor ciw8
 expect_rc "CIW8 多处违规仍拒绝" 3 ciw8
-check_detail ciw8 ci-workflows | grep -q '3' \
+check_detail ciw8 ci-workflows | grep -q '^3 处直接 compose 调用' \
   && pass "CIW8 报错报告违规总数" || fail "CIW8" "未报告总数：$(check_detail ciw8 ci-workflows)"
 
 # ---------------------------------------------------------------------------
@@ -251,8 +260,9 @@ if [[ -d "$REPO_ROOT/.github/workflows" ]]; then
   cp -r "$REPO_ROOT/.github" "$SANDBOX/.github"
   run_doctor ciw9
   expect_rc "CIW9 真实仓库 workflow 通过静态门禁（自检）" 0 ciw9
-  check_detail ciw9 ci-workflows | grep -q "$(ls "$REPO_ROOT/.github/workflows" | wc -l | tr -d ' ')" \
-    && pass "CIW9 扫描到全部真实 workflow 文件" || fail "CIW9" "扫描数不符：$(check_detail ciw9 ci-workflows)"
+  real_wf_count="$(find "$REPO_ROOT/.github/workflows" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) | wc -l | tr -d ' ')"
+  check_detail ciw9 ci-workflows | grep -q "^${real_wf_count} 个 workflow" \
+    && pass "CIW9 扫描到全部真实 workflow 文件（find 同口径计数）" || fail "CIW9" "扫描数不符：$(check_detail ciw9 ci-workflows)"
 else
   fail "CIW9" "本仓库应有 .github/workflows（quality-gate.yml 已随 #71 落库）"
 fi

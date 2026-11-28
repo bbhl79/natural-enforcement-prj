@@ -320,6 +320,24 @@ register_local_image_tag() { # <imageId> <tag>
   run_step "登记 per-worktree 镜像 tag（$tag → ${id:0:19}…）" docker tag "$id" "$tag"
 }
 
+# tools 内容寻址别名 tag（#71 CI 实测补丁，GHA run 46143043691）：BuildKit（CI
+# moby 的 docker build）不支持 FROM <本地镜像 ID>——按 registry 引用解析去拉
+# docker.io/library/sha256:…（pull 拒绝）；podman/buildah 按本地 ID 解析，开发机
+# 无感。修复不回退到可复用的 wt-<suffix> 可变 tag（#58 评审口径）：别名 tag 名
+# 内嵌该镜像自身的 image ID（imm-<64hex>）——不同内容必不同 tag、永不复用也
+# 永不改指，不可变语义与 ID 等价，且 BuildKit/buildah 都能按 name:tag 解析本地
+# 镜像。wt-<suffix> tag（归属可辨，#75 回收）与 imm-<ID> 别名（构建 FROM 解析）
+# 职责分离，互不复用。
+tools_immutable_ref() {
+  [[ "${TOOLS_IMAGE_EFFECTIVE:-}" =~ ^sha256:[0-9a-f]{64}$ ]] \
+    || die 4 "内部错误：tools 内容寻址别名 tag 需要 image ID（当前：${TOOLS_IMAGE_EFFECTIVE:-空}）"
+  printf 'natural-enforcement/tools:imm-%s' "${TOOLS_IMAGE_EFFECTIVE#sha256:}"
+}
+ensure_tools_immutable_tag() { # 幂等挂别名 tag（同镜像同 tag 的 docker tag 为 no-op 成功）
+  run_step "登记 tools 内容寻址别名 tag（$(tools_immutable_ref)）" \
+    docker tag "$TOOLS_IMAGE_EFFECTIVE" "$(tools_immutable_ref)"
+}
+
 # tools 基础镜像新鲜度核对/重建（#58 评审修复：tools 纳入快照与不可变绑定）。
 # 命中 → TOOLS_IMAGE_EFFECTIVE=状态 ID；未命中（无状态/镜像丢失/输入哈希不符）→
 # 从快照物化目录重建并记录。NODE_IMAGE 取自快照内 images.lock，不读活工作树。
@@ -332,6 +350,7 @@ ensure_tools_image() { # <tree>
   if [[ -n "$STATE_TOOLS_IMAGE_ID" && "$STATE_TOOLS_INPUT_HASH" == "$h" && "$labeled" == "$h" ]]; then
     TOOLS_IMAGE_EFFECTIVE="$STATE_TOOLS_IMAGE_ID"
     register_local_image_tag "$STATE_TOOLS_IMAGE_ID" "$TOOLS_IMAGE"
+    ensure_tools_immutable_tag
     ev tools.fresh imageId="$STATE_TOOLS_IMAGE_ID" inputHash="$h"
     return 0
   fi
@@ -351,6 +370,7 @@ ensure_tools_image() { # <tree>
     die 4 "tools 镜像构建未返回不可变标识（输出：${img_id}）"
   fi
   TOOLS_IMAGE_EFFECTIVE="$img_id"
+  ensure_tools_immutable_tag  # 内容寻址别名 tag：workspace/lockgen 构建的 FROM 解析（见函数注释）
   snapshot_state_write_tools "$h" "$img_id"
   ev tools.built imageId="$img_id" inputHash="$h"
   ev step.completed target="tools base image"
@@ -359,10 +379,13 @@ ensure_tools_image() { # <tree>
 }
 
 # 从固定快照构建 workspace 镜像并记录不可变绑定（#58）。
-# 基础镜像经 --build-arg TOOLS_IMAGE=<不可变 ID> 传入（不依赖 per-worktree 可变
-# 标签 wt-<suffix>）；镜像 label 记录快照哈希 + 构建输入清单 + 基础镜像 ID（可核对链路：
-# 固定快照 → tools 不可变 ID → workspace 不可变 ID）；构建返回的 image ID
-# （docker build -q 输出，免 tag 二次解析竞态）写入状态文件。
+# 基础镜像经 --build-arg TOOLS_IMAGE=<内容寻址别名 tag> 传入（tools_immutable_ref：
+# tag 名内嵌 tools 镜像自身 ID，不可变语义与 ID 等价；不依赖可复用的 wt-<suffix>
+# 可变 tag——#58 评审口径；不用裸 image ID——BuildKit 把 FROM <ID> 当 registry
+# 引用拉取，CI 实测 run 46143043691，#71 修复）；镜像 label 记录快照哈希 +
+# 构建输入清单 + 基础镜像 ID（可核对链路：固定快照 → tools 不可变 ID →
+# workspace 不可变 ID）；构建返回的 image ID（docker build -q 输出，免 tag 二次
+# 解析竞态）写入状态文件。
 build_workspace_from_snapshot() { # <tree> [已物化目录]
   local s="$1" dir="${2:-}" own_dir=0
   [[ -n "$TOOLS_IMAGE_EFFECTIVE" ]] || die 4 "内部错误：构建 workspace 前未绑定 tools 镜像（ensure_tools_image 未运行）"
@@ -386,7 +409,7 @@ build_workspace_from_snapshot() { # <tree> [已物化目录]
       --label "devenv.snapshot.hash=$s" \
       --label "devenv.snapshot.inputs=$(snapshot_inputs_manifest "$s")" \
       --label "devenv.base.image=$TOOLS_IMAGE_EFFECTIVE" \
-      --build-arg "TOOLS_IMAGE=$TOOLS_IMAGE_EFFECTIVE" \
+      --build-arg "TOOLS_IMAGE=$(tools_immutable_ref)" \
       ${evidence_args[@]+"${evidence_args[@]}"} \
       -f "$dir/devenv/workspace.Dockerfile" "$dir"
   # docker build -q 输出即本次构建的不可变标识（免 tag 二次解析竞态）；

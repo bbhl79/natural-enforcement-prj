@@ -11,8 +11,9 @@
 #   - 诚实口径（Spec §6 同款声明）：这是 workflow 文件内的静态反例拦截，
 #     不是阻止——人可在终端手动绕过 devenv，不声称已阻止。
 #
-# 实现口径：逐行正则扫描（跳过整行注释）。不做 YAML 语义解析——静态门禁
-# 只需捕获「写进 run 步骤的 compose 调用」反例，不声称语法级完备。
+# 实现口径：逐行分词扫描（跳过整行注释；词元精确匹配——全局选项不遮蔽
+# docker/podman 与 compose 的先后关系）。不做 YAML 语义解析——静态门禁只需
+# 捕获「写进 run 步骤的 compose 调用」反例，不声称语法级完备。
 # ============================================================================
 
 CI_WF_ERRORS=()
@@ -23,19 +24,23 @@ ci_workflow_reset() { CI_WF_ERRORS=(); CI_WF_SCANNED=0; }
 # ci_workflow_scan <repo_root>
 #   → rc 0 无违规（CI_WF_SCANNED=扫描的 workflow 文件数）
 #   → rc 1 有违规（CI_WF_ERRORS=「相对路径:行号: 违规行」数组）
+#
+# 词元扫描（#71 评审整改：正则形态漏报带全局选项的调用）：一行内出现独立词
+# docker/podman 且其后出现独立词 compose（无论中间隔多少全局选项/参数——
+# docker -H … compose up / docker --context default compose ps / podman
+# --remote compose up 同样违规），或独立词 docker-compose/podman-compose。
+# 实现口径：整行注释跳过；按空白分词、词元精确匹配（docker/compose 为完整
+# 词，compose.yml、docker/compose-action 等复合词不命中）；fail-closed——
+# 复合词里嵌 compose 的边缘写法宁可放过（诚实漏报，不声称语法级完备），
+# 不引入更宽的误报面。
 ci_workflow_scan() {
   local root="$1"
   local wf_dir="$root/.github/workflows"
   ci_workflow_reset
   [[ -d "$wf_dir" ]] || return 0
-  # 插件形态：docker compose / podman compose。边界字符集不含 alnum/_/-/. 但
-  # 含 `/`——路径限定形（/usr/bin/docker compose）同样违规；`-` 留在词内是
-  # 为了 docker-compose 整词匹配（见下）。
-  local re_plugin='(^|[^[:alnum:]._-])(docker|podman)[[:space:]]+compose([[:space:]]|$)'
-  # 独立命令形态：docker-compose / podman-compose
-  local re_legacy='(^|[^[:alnum:]._-])(docker|podman)-compose([^[:alnum:]._-]|$)'
-  local f line trimmed lineno
   # 不用 mapfile（macOS 宿主 bash 3.2）；find -print0 + while-read -d '' 收集
+  local f line trimmed lineno tok engine_seen
+  local -a toks
   while IFS= read -r -d '' f; do
     CI_WF_SCANNED=$((CI_WF_SCANNED + 1))
     lineno=0
@@ -43,9 +48,23 @@ ci_workflow_scan() {
       lineno=$((lineno + 1))
       trimmed="${line#"${line%%[![:space:]]*}"}"
       [[ "$trimmed" == \#* ]] && continue  # 整行注释不误报
-      if [[ "$trimmed" =~ $re_plugin || "$trimmed" =~ $re_legacy ]]; then
-        CI_WF_ERRORS+=("${f#"$root"/}:${lineno}: ${trimmed}")
-      fi
+      # read -a 分词不做 glob 展开（for $var 展开会）；复合词不等于完整词元
+      read -r -a toks <<< "$trimmed"
+      engine_seen=0
+      for tok in "${toks[@]}"; do
+        case "$tok" in
+          # 精确词元 + 路径限定形（*/docker 命中 /usr/bin/docker——评审边界含 /）
+          docker|podman|*/docker|*/podman) engine_seen=1 ;;
+          compose)
+            if (( engine_seen )); then
+              CI_WF_ERRORS+=("${f#"$root"/}:${lineno}: ${trimmed}")
+              break
+            fi ;;
+          docker-compose|podman-compose|*/docker-compose|*/podman-compose)
+            CI_WF_ERRORS+=("${f#"$root"/}:${lineno}: ${trimmed}")
+            break ;;
+        esac
+      done
     done < "$f"
   done < <(find "$wf_dir" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -print0)
   (( ${#CI_WF_ERRORS[@]} == 0 )) && return 0

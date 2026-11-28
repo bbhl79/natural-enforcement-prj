@@ -105,7 +105,8 @@ GitHub App 认证入口（身份：GitHub App，非个人账号）：
 测试：
   test:auth                 认证入口离线测试（不访问 GitHub）
   test:auth:integration     认证入口真实集成测试（默认只读；写操作需显式旗标）
-  test:devenv               命令面离线测试（引擎解析/锁与栈使用租约/输出协议/快照与不可变绑定/per-worktree 隔离/供应链门禁/CI workflow 静态门禁，mock docker）
+  test:devenv               命令面离线测试（引擎解析/锁与栈使用租约/输出协议/快照与不可变绑定/per-worktree 隔离/
+                            供应链门禁/CI workflow 静态门禁/脚手架生成/e2e 隔离编排，mock docker）
 
 退出码：0 成功 | 2 用法 | 3 环境未就绪 | 4 任务失败 | 5 超时 | 6 锁冲突 | 20–23 认证入口
 EOF
@@ -358,10 +359,11 @@ regen_lockfile() { # $1=快照物化目录；lockgen 靶生成 lockfile 后 dock
   docker rmi -f ne-lockgen:tmp >/dev/null 2>&1 || true
   # 首引导（快照内无 lockfile）走 lockgen-fresh 全量解析；有 lockfile 走增量解析（#54 §六.2）
   [[ -f "$dir/pnpm-lock.yaml" ]] || target="lockgen-fresh"
-  # 基础镜像经 build-arg 绑定本次 tools 不可变 ID（不依赖 per-worktree 可变标签 wt-<suffix>）
+  # 基础镜像经 build-arg 绑定 tools 内容寻址别名 tag（tag 名内嵌 tools 自身 ID，
+  # 不可变语义与 ID 等价，#71：BuildKit 不支持 FROM 裸 image ID，见 stack.sh）
   run_step "lockgen 镜像构建" \
     docker build -q -f "$dir/devenv/workspace.Dockerfile" --target "$target" -t ne-lockgen:tmp \
-      --build-arg "TOOLS_IMAGE=$TOOLS_IMAGE_EFFECTIVE" "$dir"
+      --build-arg "TOOLS_IMAGE=$(tools_immutable_ref)" "$dir"
   local cid
   cid="$(docker create ne-lockgen:tmp)"
   run_step "lockfile 导出" docker cp "$cid":/workspace/pnpm-lock.yaml "$REPO_ROOT/pnpm-lock.yaml"

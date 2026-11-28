@@ -99,6 +99,7 @@ jobs:
 
       - name: 上传取证材料
         if: ${{ !cancelled() }}
+        continue-on-error: true  # artifact 服务瞬断/限流不得把绿跑判红（质量结论归 verify/test；失败以注释可见）
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ci-evidence-${{ github.run_id }}-${{ github.run_attempt }}
