@@ -157,6 +157,27 @@ gen_spec_validate() { # <specRel> <name> <mode: http|internal|page>
     || die 2 "spec.title 必须是字符串：$spec"
   jq -e '((has("basePath") | not) or (.basePath | type == "string"))' "$abs" >/dev/null 2>&1 \
     || die 2 "spec.basePath 必须是字符串：$spec"
+  # 表单 label 必须在规范化空白（换行/制表/NBSP/U+2028/U+2029 折叠为空格）之后唯一：
+  # 否则「相同 标签」与「相同\n标签」通过查重，生成后却是同一个可见标签（#68 review）。
+  if [[ "$mode" == "page" ]]; then
+    local dup_labels
+    dup_labels="$(jq -r '
+      def norm:
+        explode
+        | map(if . == 9 or . == 10 or . == 11 or . == 12 or . == 13 or . == 32 or . == 160 or . == 8232 or . == 8233 then 32 else . end)
+        | implode
+        | gsub(" +"; " ")
+        | sub("^ "; "")
+        | sub(" $"; "");
+      [.fields | to_entries[] | (.value.label // .key)]
+      | map(norm)
+      | group_by(.)
+      | map(select(length > 1) | .[0])
+      | join("、")
+    ' "$abs")" || die 2 "spec.fields label 规范化失败：$spec"
+    [[ -z "$dup_labels" ]] \
+      || die 2 "spec.fields 含重复 label（规范化空白后）：${dup_labels}（表单标签须唯一以确保可访问性与测试定位）"
+  fi
   # HTTP 契约联动：basePath 与「其它模块」现有契约路由冲突时，OpenAPI 会出现重复
   # operation（#66 完整性检查必失败）。在生成前按契约源码中的路由字面量做冲突预检。
   # 排除本模块自己的契约文件：同名重复生成应由 gen_host_preflight 以 exit 4
@@ -176,7 +197,8 @@ gen_spec_validate() { # <specRel> <name> <mode: http|internal|page>
 # page 契约预检：page 必须消费 @ne/contracts 中具备 create/list 端点的既有 HTTP 契约
 # （如 #67 `gen nest-module --http` 生成物）；缺失或形状不符 → exit 2，生成前停止。
 gen_page_contract_validate() { # <contract> <specRel>
-  local contract="$1" spec="$2" rel abs c_pascal c_upper sym reexport
+  local contract="$1" spec="$2" rel abs c_pascal c_upper sym reexport registry
+  local endpoints_import endpoints_spread
   [[ "$contract" =~ ^[a-z][a-z0-9]*(-[a-z0-9]+)*$ ]] \
     || die 2 "--contract 须为 kebab-case（小写字母数字+连字符）：${contract}"
   rel="packages/contracts/src/${contract}.ts"
@@ -198,7 +220,19 @@ gen_page_contract_validate() { # <contract> <specRel>
       || die 2 "契约 ${rel} 缺少 create/list 导出（${sym}）；page 只能消费带 create/list 端点的 HTTP 契约"
   done
   reexport="export * from './${contract}.js'"
-  if ! gen_has_line "$REPO_ROOT/packages/contracts/src/api-registry.ts" "$reexport" \
+  registry="$REPO_ROOT/packages/contracts/src/api-registry.ts"
+  [[ -f "$registry" && ! -L "$registry" ]] \
+    || die 2 "缺少契约注册表：packages/contracts/src/api-registry.ts（page 的 vite 代理由 API_CONTRACT_ENDPOINTS 派生）"
+  # 页面运行期经同源 vite preview 代理访问 API，代理路由直接取自 API_CONTRACT_ENDPOINTS。
+  # 契约仅从 index.ts 再导出、未登记端点时，页面能过类型检查但真实请求没有代理路由
+  # （#68 review 实测）。生成前要求端点已整行导入并展开进 API_CONTRACT_ENDPOINTS。
+  endpoints_import="import { ${c_upper}_ENDPOINTS } from './${contract}.js'"
+  endpoints_spread="...${c_upper}_ENDPOINTS,"
+  gen_has_line "$registry" "$endpoints_import" \
+    || die 2 "契约 ${rel} 未将 ${c_upper}_ENDPOINTS 导入 API_CONTRACT_ENDPOINTS（缺少整行：${endpoints_import}）"
+  gen_has_line "$registry" "$endpoints_spread" \
+    || die 2 "契约 ${rel} 的端点未加入 API_CONTRACT_ENDPOINTS（缺少整行：${endpoints_spread}）；page 的 vite 代理由端点清单派生，未登记则真实 API 不可达"
+  if ! gen_has_line "$registry" "$reexport" \
     && ! gen_has_line "$REPO_ROOT/packages/contracts/src/index.ts" "$reexport"; then
     die 2 "契约 ${rel} 未从 @ne/contracts 导出（缺少 ${reexport}）"
   fi

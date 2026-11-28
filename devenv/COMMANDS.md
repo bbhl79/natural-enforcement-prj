@@ -301,10 +301,15 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
   互斥（`gen-<wt>`），lockgen 与其它 worktree 互斥（机器级）。
 - **page 自动注册与表单实例唯一（#68）**：`devenv gen page <name> --spec <仓库相对路径>
   [--contract <kebab-case 契约名>]`。`--spec` 复用 nest-module 的字段模型（新增可选顶层
-  `title` 与字段级 `label`；字段 label 须唯一），`--contract` 默认与 `<name>` 同名，
-  必须指向 `@ne/contracts` 中已导出的 create/list HTTP 契约（如 `#67 gen nest-module --http`
-  生成物）；缺失 spec、空 fields、缺失契约、契约不含 create/list 导出或 spec 字段与契约
-  不符 → exit 2，生成前停止（零写入）。同名页面目录或 `App.tsx` 已注入同名 key/import → exit 4。
+  `title` 与字段级 `label`），`--contract` 默认与 `<name>` 同名，必须指向 `@ne/contracts`
+  中已导出、且**已登记到 `API_CONTRACT_ENDPOINTS`** 的 create/list HTTP 契约（如
+  `#67 gen nest-module --http` 生成物；`api-registry.ts` 需有整行
+  `import { <UPPER>_ENDPOINTS } from './<contract>.js'` 与 `...<UPPER>_ENDPOINTS,`）。
+  仅从 `index.ts` 再导出而未登记端点 → exit 2：vite preview 代理由端点清单派生，未登记时
+  页面能过类型检查但真实 API 无代理路由。缺失 spec、空 fields、缺失/不兼容契约、spec 字段
+  与契约（字段集合与 zod 表达式）不符、或 label **规范化空白（换行/制表/NBSP/U+2028/U+2029
+  折叠为空格）后重名** → exit 2，生成前停止（零写入）。同名页面目录或 `App.tsx` 已注入
+  同名 key/import → exit 4。
   - 生成物落 `apps/web/src/pages/<name>/`（`<name>.api.ts`、`<Pascal>Form.tsx`、
     `<Pascal>Page.tsx`、`<Pascal>Page.spec.tsx`），按 `apps/web/src/App.tsx` 的
     `// @gen:page-import` / `// @gen:page-item` 整行锚点自动注册为标签页；不新增
@@ -313,6 +318,9 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
     消费 `@ne/contracts` 路由常量与推断类型，响应全部经 `validated(...)` 统一校验封装；
     `apps/web/vite.config.ts` 的 `apiProxy` 直接从 `API_CONTRACT_ENDPOINTS` 派生并配置
     `preview.allowedHosts: ['web', 'localhost']`，生成页面通过 `devenv web` 即可立即调用真实 API。
+  - UI 规则与 zod 语义一致：字符串未声明 `minLength`（或 `minLength: 0`，含 `maxLength: 0`
+    的空串契约）时不加 `required`，未触碰的输入序列化为 `''` 而非 `undefined`；仅当必填且
+    `minLength > 0` 才加 `required`。可选字符串的长度规则对空值放行（空值由 payload 构建器省略）。
   - 表单实例唯一与多 React 根：`apps/web/src/lib/root.tsx`（`createWebRoot`）为
     `createRoot` 统一传入 `identifierPrefix`（主入口默认 `ne-web-`，省略时自动分配递增前缀）；
     `<Pascal>Form` 与既有 `CreatePointForm` / `NearbyPanel` 均使用 React `useId` 作为 Ant Design
@@ -325,8 +333,10 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
   + `gen page`（同名与 `--contract` 异名）→ 整行锚点核对 → `verify` → `up` + `web` → `test`
   → 真实栈 UI 旅程（`VITE_LIVE_WEB_URL=http://web:4173` 下挂载真实 `<App />` 自动注册标签，
   表单提交经 `vite preview` proxy 到真实 NestJS API 并回显在表格）→ 宿主 `curl` 独立核对
-  实时 API 状态；③ 重复生成拒绝（exit 4）与容器/宿主反例（exit 2）；④ 全程工作树签名核对
-  无部分写入与基线复原。原始证据与 `SUMMARY.md` 写入 `.artifacts/68-gen-page/`。
+  实时 API 状态；③ 未登记端点契约（仅 `index.ts` 导出）拒绝 exit 2、`maxLength: 0` 空串字段
+  不与 `required` 冲突（生成物源码 + 提交回显双重断言）、规范化后重复 label 拒绝 exit 2；
+  ④ 重复生成拒绝（exit 4）与其它容器/宿主反例（exit 2）；⑤ 全程工作树签名核对无部分写入
+  与基线复原。原始证据与 `SUMMARY.md` 写入 `.artifacts/68-gen-page/`。
 - **nest-module 真实引擎冒烟（#67 AC5）**：`devenv/test/gen-nest-module-smoke.sh
   [--timeout S]` 在真实引擎上对 HTTP 与 internal 各走 gen → 清单/整行锚点核对 →
   verify → test → [HTTP] OpenAPI 导出与端点断言 → 重复生成拒绝（exit 4）→ 复原

@@ -1,0 +1,9 @@
+{
+  "title": "重复标签反例",
+  "description": "三个 label 仅在空白/换行/U+2028 上不同，规范化后重名，必须拒绝",
+  "fields": {
+    "firstValue": { "type": "string", "label": "相同 标签" },
+    "secondValue": { "type": "string", "label": "相同\n标签" },
+    "thirdValue": { "type": "string", "label": "相同 标签" }
+  }
+}

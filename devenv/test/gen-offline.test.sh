@@ -1245,7 +1245,7 @@ done
 # T42–T53：gen page（#68）—— 自动注册 App.tsx / 契约强校验 / --contract /
 #   全有或全无 / 整行锚点 / 真实仓库锚点一致
 # ---------------------------------------------------------------------------
-seed_page_contract() { # <kebab-name>
+seed_page_contract() { # <kebab-name>（契约 + 端点登记，满足 page 代理前置）
   local cname="$1" cpascal cupper
   cpascal="$(printf '%s' "$cname" | awk -F- '{ for (i = 1; i <= NF; i++) printf "%s%s", toupper(substr($i, 1, 1)), substr($i, 2) }')"
   cupper="$(printf '%s' "$cname" | tr '[:lower:]-' '[:upper:]_')"
@@ -1255,11 +1255,32 @@ export const Create${cpascal}Schema = {}
 export const Create${cpascal}ResultSchema = {}
 export const ${cpascal}DtoSchema = {}
 export const ${cpascal}ListResultSchema = {}
+export const ${cupper}_ENDPOINTS = [] as const
 TS
   awk -v line="export * from './${cname}.js'" \
-    '{ print; if ($0 == "// @gen:endpoint-import") print line }' \
+    -v imp="import { ${cupper}_ENDPOINTS } from './${cname}.js'" \
+    '{ print; if ($0 == "// @gen:endpoint-import") { print line; print imp } }' \
     "$SANDBOX/packages/contracts/src/api-registry.ts" > "$SANDBOX/packages/contracts/src/api-registry.ts.tmp"
   mv "$SANDBOX/packages/contracts/src/api-registry.ts.tmp" "$SANDBOX/packages/contracts/src/api-registry.ts"
+  awk -v line="  ...${cupper}_ENDPOINTS," \
+    '{ print; s = $0; sub(/^[[:space:]]+/, "", s); if (s == "// @gen:endpoint-spread") print line }' \
+    "$SANDBOX/packages/contracts/src/api-registry.ts" > "$SANDBOX/packages/contracts/src/api-registry.ts.tmp"
+  mv "$SANDBOX/packages/contracts/src/api-registry.ts.tmp" "$SANDBOX/packages/contracts/src/api-registry.ts"
+}
+
+seed_page_contract_index_only() { # <kebab-name>（仅 index.ts 再导出，未登记端点）
+  local cname="$1" cpascal cupper
+  cpascal="$(printf '%s' "$cname" | awk -F- '{ for (i = 1; i <= NF; i++) printf "%s%s", toupper(substr($i, 1, 1)), substr($i, 2) }')"
+  cupper="$(printf '%s' "$cname" | tr '[:lower:]-' '[:upper:]_')"
+  cat > "$SANDBOX/packages/contracts/src/${cname}.ts" <<TS
+export const ${cupper}_ROUTES = { base: '/${cname}', create: '/${cname}', list: '/${cname}' } as const
+export const Create${cpascal}Schema = {}
+export const Create${cpascal}ResultSchema = {}
+export const ${cpascal}DtoSchema = {}
+export const ${cpascal}ListResultSchema = {}
+export const ${cupper}_ENDPOINTS = [] as const
+TS
+  printf "export * from './%s.js'\n" "$cname" >> "$SANDBOX/packages/contracts/src/index.ts"
 }
 
 # T42 gen page 正常路径（同名契约）：4 个新文件 + App.tsx 整行锚点 + 不触发 lockgen
@@ -1404,6 +1425,43 @@ for pair in \
     && pass "T53 真实仓库 $f 含恰好一处整行锚点 $marker" \
     || fail "T53" "真实仓库 $f 的锚点 $marker 不是恰好一处"
 done
+
+# ---------------------------------------------------------------------------
+# T54 label 规范化后重名（"相同 标签" / "相同\n标签" / "相同 标签"）→ exit 2
+#   （查重必须在空白规范化之后：否则生成物出现同可见标签，getByLabelText 歧义）
+# ---------------------------------------------------------------------------
+reset_repo
+run t54 gen_json gen page dup-labels --spec devenv/test/fixtures/page-duplicate-label.json
+expect_rc "T54 规范化后重复 label exit 2" 2 t54
+expect_grep "T54 报告规范化后重复 label" "重复 label（规范化空白后）" t54
+[[ ! -e "$SANDBOX/apps/web/src/pages/dup-labels" ]] \
+  && pass "T54 未创建目标目录" || fail "T54" "目标目录被创建"
+
+# ---------------------------------------------------------------------------
+# T55 契约仅从 index.ts 再导出、未登记 API_CONTRACT_ENDPOINTS → exit 2
+#   （vite preview 代理由端点清单派生；未登记则页面能过类型检查但真实 API 不可达）
+# ---------------------------------------------------------------------------
+reset_repo
+seed_page_contract_index_only index-only-contract
+run t55 gen_json gen page index-only-page --contract index-only-contract --spec devenv/test/fixtures/page-smoke.json
+expect_rc "T55 未登记端点的契约 exit 2" 2 t55
+expect_grep "T55 报告未导入 API_CONTRACT_ENDPOINTS" "未将 INDEX_ONLY_CONTRACT_ENDPOINTS 导入 API_CONTRACT_ENDPOINTS" t55
+[[ ! -e "$SANDBOX/apps/web/src/pages/index-only-page" ]] \
+  && pass "T55 未创建目标目录" || fail "T55" "目标目录被创建"
+
+# ---------------------------------------------------------------------------
+# T56 已导入端点但未展开进 API_CONTRACT_ENDPOINTS → exit 2
+# ---------------------------------------------------------------------------
+reset_repo
+seed_page_contract missing-spread
+grep -vFx '  ...MISSING_SPREAD_ENDPOINTS,' "$SANDBOX/packages/contracts/src/api-registry.ts" \
+  > "$SANDBOX/packages/contracts/src/api-registry.ts.tmp"
+mv "$SANDBOX/packages/contracts/src/api-registry.ts.tmp" "$SANDBOX/packages/contracts/src/api-registry.ts"
+run t56 gen_json gen page missing-spread-page --contract missing-spread --spec devenv/test/fixtures/page-smoke.json
+expect_rc "T56 未展开端点 exit 2" 2 t56
+expect_grep "T56 报告端点未加入 API_CONTRACT_ENDPOINTS" "未加入 API_CONTRACT_ENDPOINTS" t56
+[[ ! -e "$SANDBOX/apps/web/src/pages/missing-spread-page" ]] \
+  && pass "T56 未创建目标目录" || fail "T56" "目标目录被创建"
 
 # ---------------------------------------------------------------------------
 # 汇总

@@ -214,10 +214,14 @@ function validateField(fieldName, def) {
     failSpec(`字段 ${fieldName}.optional 必须是布尔值`)
   }
   if (def.label !== undefined) {
-    if (typeof def.label !== 'string' || def.label.trim().length === 0) {
+    if (typeof def.label !== 'string') {
       failSpec(`字段 ${fieldName}.label 必须是非空字符串`)
     }
-    if (def.label.trim().length > 80) {
+    const normalized = normalizeLabel(def.label)
+    if (normalized.length === 0) {
+      failSpec(`字段 ${fieldName}.label 必须是非空字符串`)
+    }
+    if (normalized.length > 80) {
       failSpec(`字段 ${fieldName}.label 过长（≤80 字符）`)
     }
   }
@@ -289,9 +293,12 @@ function loadSpec() {
   const seenLabels = new Set()
   for (const [fieldName, def] of Object.entries(spec.fields)) {
     validateField(fieldName, def)
-    const resolvedLabel = (def.label ?? fieldName).trim()
+    if (kind !== 'page') continue
+    const resolvedLabel = normalizeLabel(def.label ?? fieldName)
     if (seenLabels.has(resolvedLabel)) {
-      failSpec(`spec.fields 含重复 label：${resolvedLabel}（表单标签须唯一以确保可访问性与测试定位）`)
+      failSpec(
+        `spec.fields 含重复 label（规范化空白后）：${resolvedLabel}（表单标签须唯一以确保可访问性与测试定位）`,
+      )
     }
     seenLabels.add(resolvedLabel)
   }
@@ -368,6 +375,19 @@ function sanitizeLineText(text) {
     out = out.split(String.fromCharCode(code)).join(' ')
   }
   return out.trim()
+}
+
+// label 规范化：空白（含换行、制表、NBSP、U+2028/U+2029）折叠为单个空格再 trim。
+// 重复 label 必须在规范化之后判定——否则「相同 标签」与「相同\n标签」会通过查重，
+// 生成后却变成同一个可见标签，getByLabelText 产生歧义（#68 review 实测）。
+const LABEL_WHITESPACE_CODES = [0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20, 0xa0, 0x2028, 0x2029]
+
+function normalizeLabel(text) {
+  let out = text
+  for (const code of LABEL_WHITESPACE_CODES) {
+    out = out.split(String.fromCharCode(code)).join(' ')
+  }
+  return out.replace(/ +/g, ' ').trim()
 }
 
 // 生成 TS/TSX 字符串字面量（JSON.stringify 自动转义双引号、反斜杠与控制字符；
@@ -786,23 +806,36 @@ function verifyPageContract(contract, fields) {
       )
     }
   }
-  const registryText = fs.existsSync(src('packages/contracts/src/api-registry.ts'))
-    ? fs.readFileSync(src('packages/contracts/src/api-registry.ts'), 'utf8')
-    : ''
+  const registryRel = 'packages/contracts/src/api-registry.ts'
+  const registryAbs = src(registryRel)
+  if (!fs.existsSync(registryAbs)) {
+    failSpec(`缺少契约注册表：${registryRel}（page 的 vite 代理由 API_CONTRACT_ENDPOINTS 派生）`)
+  }
+  const registryText = fs.readFileSync(registryAbs, 'utf8')
   const indexText = fs.existsSync(src('packages/contracts/src/index.ts'))
     ? fs.readFileSync(src('packages/contracts/src/index.ts'), 'utf8')
     : ''
   const reexportLine = `export * from './${contract}.js'`
-  if (!hasLine(registryText, reexportLine) && !hasLine(indexText, reexportLine)) {
+  if (!hasTrimmedLine(registryText, reexportLine) && !hasTrimmedLine(indexText, reexportLine)) {
     failSpec(`契约 ${contractRel} 未从 @ne/contracts 导出（缺少 ${reexportLine}）`)
+  }
+  // page 运行期经同源 vite preview 代理访问 API，代理路由直接取自 API_CONTRACT_ENDPOINTS。
+  // 契约仅从 index.ts 再导出、未登记端点时，页面虽能通过类型检查，真实请求却没有代理
+  // 路由（#68 review 实测）。因此要求契约端点已整行导入并展开进 API_CONTRACT_ENDPOINTS。
+  const endpointsImport = `import { ${contractUpper}_ENDPOINTS } from './${contract}.js'`
+  const endpointsSpread = `...${contractUpper}_ENDPOINTS,`
+  if (!hasTrimmedLine(registryText, endpointsImport) || !hasTrimmedLine(registryText, endpointsSpread)) {
+    failSpec(
+      `契约 ${contractRel} 未登记到 API_CONTRACT_ENDPOINTS（${registryRel} 需含整行 ${endpointsImport} 与 ${endpointsSpread}）；page 的 vite 代理由端点清单派生，未登记则真实 API 不可达`,
+    )
   }
   return { contractPascal, contractUpper }
 }
 
 function pageFiles({ spec, contract, contractPascal, contractUpper, fields }) {
   const entries = Object.entries(fields)
-  const rawLabel = (fieldName, def) => sanitizeLineText(def.label ?? fieldName)
-  const rawCardTitle = sanitizeLineText(spec.title ?? spec.description ?? pascal)
+  const rawLabel = (fieldName, def) => normalizeLabel(def.label ?? fieldName)
+  const rawCardTitle = normalizeLabel(spec.title ?? spec.description ?? pascal)
   const hint = safeComment(spec.description ?? `${name}（消费 @ne/contracts ${contract}）`)
 
   const hasString = entries.some(([, def]) => def.type === 'string')
@@ -835,7 +868,9 @@ function pageFiles({ spec, contract, contractPascal, contractUpper, fields }) {
       if (def.type === 'string') {
         return def.optional
           ? `    if (typeof raw.${fieldName} === 'string' && raw.${fieldName}.length > 0) payload.${fieldName} = raw.${fieldName}`
-          : `    payload.${fieldName} = raw.${fieldName}`
+          : // 契约 z.string()（无 minLength / minLength=0，如 maxLength:0）接受空串但拒绝
+            // undefined；未触碰的输入框不得被序列化成 undefined（#68 review 实测）。
+            `    payload.${fieldName} = typeof raw.${fieldName} === 'string' ? raw.${fieldName} : ''`
       }
       if (def.type === 'boolean') {
         return def.optional
@@ -856,15 +891,29 @@ function pageFiles({ spec, contract, contractPascal, contractUpper, fields }) {
         return `      <Form.Item name="${fieldName}" label={${labelExpr}} valuePropName="checked">\n        <Switch />\n      </Form.Item>`
       }
       const rules = []
+      // UI 规则必须与 zod 语义一致：字符串未声明 minLength（或 minLength=0）时
+      // z.string() 接受空串，Ant Design 的 required 却把空串当缺失——加了就永远无法提交
+      // （maxLength: 0 的合法契约即典型；#68 review 实测）。仅当必填且 minLength>0 才加
+      // required；可选字段的空值由 payload 构建器省略，长度规则对空值放行。
       if (!def.optional) {
-        rules.push(
-          def.type === 'string'
-            ? `{ required: true, message: ${jsStr(`请输入${label}`)} }`
-            : `{ required: true, type: 'number', message: ${jsStr(`请输入${label}`)} }`,
-        )
+        if (def.type !== 'string' || (def.minLength ?? 0) > 0) {
+          rules.push(
+            def.type === 'string'
+              ? `{ required: true, message: ${jsStr(`请输入${label}`)} }`
+              : `{ required: true, type: 'number', message: ${jsStr(`请输入${label}`)} }`,
+          )
+        }
       }
       if (def.type === 'string') {
-        if (def.minLength !== undefined) rules.push(`{ min: ${def.minLength}, message: ${jsStr(`至少 ${def.minLength} 个字符`)} }`)
+        if (def.minLength !== undefined && def.minLength > 0) {
+          if (def.optional) {
+            rules.push(
+              `{ validator: (_, value) => (value === undefined || value === '' || String(value).length >= ${def.minLength} ? Promise.resolve() : Promise.reject(new Error(${jsStr(`至少 ${def.minLength} 个字符`)}))) }`,
+            )
+          } else {
+            rules.push(`{ min: ${def.minLength}, message: ${jsStr(`至少 ${def.minLength} 个字符`)} }`)
+          }
+        }
         if (def.maxLength !== undefined) rules.push(`{ max: ${def.maxLength}, message: ${jsStr(`最多 ${def.maxLength} 个字符`)} }`)
       } else {
         if (def.minimum !== undefined) rules.push(`{ type: 'number', min: ${def.minimum}, message: ${jsStr(`最小为 ${def.minimum}`)} }`)
@@ -1326,6 +1375,12 @@ function linesOf(text) {
 
 function hasLine(text, line) {
   return linesOf(text).includes(line)
+}
+
+// 去首尾空白后判定整行（与宿主 gen_has_line 同口径：契约注册表允许不同缩进）。
+function hasTrimmedLine(text, line) {
+  const want = line.trim()
+  return linesOf(text).some((candidate) => candidate.trim() === want)
 }
 
 // 整行锚点插入：marker 为独立行（允许前置缩进；prefix 模式供注释带尾注的锚点）。

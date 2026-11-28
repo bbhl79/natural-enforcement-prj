@@ -28,8 +28,11 @@ FIX="devenv/test/fixtures"
 ART="$REPO_ROOT/.artifacts/68-gen-page"
 PAGE_NAME="smoke-page"
 ALIAS_NAME="smoke-page-alias"
+UNREG_CONTRACT="smoke-unregistered"
+UNREG_PAGE="smoke-unregistered-page"
 APPMOD="apps/api/src/app.module.ts"
 REGISTRY="packages/contracts/src/api-registry.ts"
+INDEXTS="packages/contracts/src/index.ts"
 APPTSX="apps/web/src/App.tsx"
 TIMEOUT_SECS=1800
 TIMEOUT_BIN=""
@@ -64,7 +67,9 @@ for p in \
   "packages/contracts/src/$PAGE_NAME.ts" \
   "packages/contracts/src/$PAGE_NAME.spec.ts" \
   "apps/web/src/pages/$PAGE_NAME" \
-  "apps/web/src/pages/$ALIAS_NAME"; do
+  "apps/web/src/pages/$ALIAS_NAME" \
+  "packages/contracts/src/$UNREG_CONTRACT.ts" \
+  "apps/web/src/pages/$UNREG_PAGE"; do
   [[ ! -e "$REPO_ROOT/$p" ]] \
     || { echo "ERROR: 目标已存在 $p（拒绝开始，避免复原时误删既有内容）" >&2; exit 4; }
 done
@@ -147,9 +152,12 @@ restore_baseline() {
     "$REPO_ROOT/packages/contracts/src/$PAGE_NAME.ts" \
     "$REPO_ROOT/packages/contracts/src/$PAGE_NAME.spec.ts" \
     "$REPO_ROOT/apps/web/src/pages/$PAGE_NAME" \
-    "$REPO_ROOT/apps/web/src/pages/$ALIAS_NAME"
+    "$REPO_ROOT/apps/web/src/pages/$ALIAS_NAME" \
+    "$REPO_ROOT/packages/contracts/src/$UNREG_CONTRACT.ts" \
+    "$REPO_ROOT/apps/web/src/pages/$UNREG_PAGE"
   cp -p "$ART/baseline/app.module.ts" "$REPO_ROOT/$APPMOD"
   cp -p "$ART/baseline/api-registry.ts" "$REPO_ROOT/$REGISTRY"
+  cp -p "$ART/baseline/index.ts" "$REPO_ROOT/$INDEXTS"
   cp -p "$ART/baseline/App.tsx" "$REPO_ROOT/$APPTSX"
 }
 
@@ -189,6 +197,7 @@ fi
 
 cp -p "$REPO_ROOT/$APPMOD" "$ART/baseline/app.module.ts"
 cp -p "$REPO_ROOT/$REGISTRY" "$ART/baseline/api-registry.ts"
+cp -p "$REPO_ROOT/$INDEXTS" "$ART/baseline/index.ts"
 cp -p "$REPO_ROOT/$APPTSX" "$ART/baseline/App.tsx"
 BASELINE_READY=1
 trap cleanup EXIT
@@ -259,6 +268,17 @@ for f in \
   [[ -f "$REPO_ROOT/$f" ]] && check ok "存在 $f" "file" || check fail "缺少 $f" "未生成"
 done
 
+# 回归：maxLength:0 的合法空串字段不得生成 required 规则（否则任何输入都无法提交）；
+# 空白/换行/U+2028 标签已在输入侧规范化（生成测试用 getByLabelText 直接验证）。
+FORM_FILE="$REPO_ROOT/apps/web/src/pages/$PAGE_NAME/SmokePageForm.tsx"
+if grep -q 'name="emptyCode"' "$FORM_FILE" \
+  && grep -q 'name="emptyCode".*max: 0' "$FORM_FILE" \
+  && ! grep -q 'name="emptyCode".*required: true' "$FORM_FILE"; then
+  check ok "maxLength:0 空串字段不与 required 冲突" "生成规则仅 max: 0"
+else
+  check fail "maxLength:0 空串字段 UI 规则" "生成物含 required 或缺少 max: 0（见 $FORM_FILE）"
+fi
+
 if [[ "$(count_line "$REPO_ROOT/$APPTSX" "import SmokePagePage from './pages/$PAGE_NAME/SmokePagePage.js'")" == "1" ]] \
   && [[ "$(count_line "$REPO_ROOT/$APPTSX" "{ key: '$PAGE_NAME', label: \"巡查工单\", children: <SmokePagePage /> },")" == "1" ]]; then
   check ok "App.tsx 整行锚点自动注册" "import=1 item=1"
@@ -281,6 +301,39 @@ if [[ "$(count_line "$REPO_ROOT/$APPTSX" "import SmokePageAliasPage from './page
 else
   check fail "App.tsx 多页面累加注册" "缺少 SmokePageAliasPage import"
 fi
+
+# 反例：契约仅从 index.ts 再导出、未登记 API_CONTRACT_ENDPOINTS → gen page 必须 exit 2。
+# vite preview 代理由端点清单派生；放行会生成「能过类型检查但真实 API 无代理路由」的页面。
+idx_sig="$(tree_sig)"
+cat > "$REPO_ROOT/packages/contracts/src/$UNREG_CONTRACT.ts" <<'TS'
+export const SMOKE_UNREGISTERED_ROUTES = {
+  base: '/smoke-unregistered',
+  create: '/smoke-unregistered',
+  list: '/smoke-unregistered',
+} as const
+export const CreateSmokeUnregisteredSchema = {}
+export const CreateSmokeUnregisteredResultSchema = {}
+export const SmokeUnregisteredDtoSchema = {}
+export const SmokeUnregisteredListResultSchema = {}
+export const SMOKE_UNREGISTERED_ENDPOINTS = [] as const
+TS
+printf "export * from './%s.js'\n" "$UNREG_CONTRACT" >> "$REPO_ROOT/$INDEXTS"
+run_case "$ART/journey" unregistered-contract "$DEVENV" --json gen page "$UNREG_PAGE" \
+  --contract "$UNREG_CONTRACT" --spec "$FIX/page-smoke.json"
+expect_rc "未登记端点的契约（仅 index.ts 导出）拒绝 exit 2" 2 "$LAST_RC" "$ART/journey/unregistered-contract.err"
+if grep -q "未将 SMOKE_UNREGISTERED_ENDPOINTS 导入 API_CONTRACT_ENDPOINTS" "$ART/journey/unregistered-contract.err"; then
+  check ok "报告端点未登记（vite 代理无路由风险）" "API_CONTRACT_ENDPOINTS 前置校验"
+else
+  check fail "未登记端点错误消息" "未命中 API_CONTRACT_ENDPOINTS 提示（见 $ART/journey/unregistered-contract.err）"
+fi
+[[ ! -e "$REPO_ROOT/apps/web/src/pages/$UNREG_PAGE" ]] \
+  && check ok "未登记端点拒绝零写入" "目标目录不存在" \
+  || check fail "未登记端点拒绝零写入" "目标目录被创建"
+rm -f "$REPO_ROOT/packages/contracts/src/$UNREG_CONTRACT.ts"
+cp -p "$ART/baseline/index.ts" "$REPO_ROOT/$INDEXTS"
+[[ "$(tree_sig)" == "$idx_sig" ]] \
+  && check ok "未登记端点反例后基线复原" "签名不变" \
+  || check fail "未登记端点反例后基线复原" "工作树签名变化"
 
 # verify（lint 含 eslint-plugin-react + typecheck + test:unit 含双 Form 与多根测试）
 run_case "$ART/journey" verify "$DEVENV" --json verify
@@ -390,6 +443,14 @@ run_neg empty-fields      "空 fields"                  gen page neg-empty-field
 run_neg missing-contract  "缺对应 HTTP 契约"            gen page neg-no-contract --spec "$FIX/page-smoke.json"
 run_neg bad-contract      "不兼容契约(enforcement-point)" gen page neg-bad-contract --contract enforcement-point --spec "$FIX/page-smoke.json"
 run_neg wrong-flag        "误传 --http 旗标"            gen page neg-wrong-flag --http --spec "$FIX/page-smoke.json"
+
+# 反例：label 仅在空白/换行/U+2028 上不同，规范化后重名 → exit 2（否则生成同可见标签）
+run_neg duplicate-label   "规范化后重复 label"          gen page neg-dup-label --spec "$FIX/page-duplicate-label.json"
+if grep -q "重复 label（规范化空白后）" "$ART/negative/duplicate-label.err"; then
+  check ok "重复 label 报告规范化空白后查重" "含换行/U+2028 标签被拒绝"
+else
+  check fail "重复 label 错误消息" "未命中规范化查重提示（见 $ART/negative/duplicate-label.err）"
+fi
 
 # ---------------------------------------------------------------------------
 # 收尾与摘要
