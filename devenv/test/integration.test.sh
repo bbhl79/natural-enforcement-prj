@@ -69,7 +69,9 @@ EV_K="未覆盖（需 --sustained）"
 EV_L="未覆盖（需 --key-outage）"
 EV_M="未覆盖"
 
-EXPECTED_PERMISSIONS="actions:read checks:read contents:write issues:write metadata:read pull_requests:write security_events:read statuses:read"
+# #71 为推 workflow 文件向 App 增加 workflows:write（实测权限面）；Administration
+# 仍不授予（spec 安全基线：规则集配置/审计面归指挥者管理员身份）。
+EXPECTED_PERMISSIONS="actions:read checks:read contents:write issues:write metadata:read pull_requests:write security_events:read statuses:read workflows:write"
 
 # ---------------------------------------------------------------------------
 # 只读部分

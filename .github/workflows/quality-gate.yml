@@ -3,9 +3,11 @@
 # 硬约束：本文件内一切项目操作经 ./devenv/devenv 唯一入口——直接调用 compose
 # 会被 doctor 的 ci-workflows 静态门禁拒绝（doctor 是首步，即自检）。
 #
-# 顺序（先快后慢）：doctor（CI 矩阵条目校验 + 实际运行时报告）→ verify（无服务，
-# lint + typecheck + test:unit，本地与 CI 同一入口同一校验器）→ up → test（集成）
-# → 取证 → 拆栈。本票不含 e2e/复现轨道接入（归 Spec-e2e 体系后续票）。
+# 顺序（先快后慢）：doctor（CI 矩阵条目校验 + 实际运行时报告）→ 分支保护漂移
+# 核对（dev 两层规则集 vs 保存配置，#73 自锁闭环：削弱保护即本检查红、合入被
+# 必需检查挡住）→ verify（无服务，lint + typecheck + test:unit，本地与 CI 同一
+# 入口同一校验器）→ up → test（集成）→ 取证 → 拆栈。本票不含 e2e/复现轨道接入
+# （归 Spec-e2e 体系后续票）。
 #
 # 失败/取消分层（如实，不写绝对保证）：
 #   - 普通失败：先取证（!cancelled() 覆盖）再拆栈；
@@ -39,6 +41,23 @@ jobs:
           ./devenv/devenv doctor || rc=$?
           t1=$(date +%s)
           printf '| doctor | %ds | %d |\n' "$((t1 - t0))" "$rc" >> "$GITHUB_STEP_SUMMARY"
+          exit "$rc"
+
+      - name: 分支保护漂移核对（dev 两层规则集 ↔ 保存配置；只读）
+        # github.token 只作读限额余量（公开仓库该端点匿名亦可读）。核对覆盖
+        # 公开可见面（rules/参数/enforcement/条件/额外覆盖 dev 的规则集），漂移或
+        # 无法核查即红（fail closed）——保护配置削弱会使必需检查变红、合入被挡。
+        # bypass_actors 仅对规则集写权限者可见（实测口径）：CI 读取身份不可见时
+        # 跳过该字段并显式 NOTE（不死锁）；绕过名单靠管理员强校验
+        # （--require-bypass-actors）+ App current_user_can_bypass=never + 行为验收。
+        env:
+          BP_GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          t0=$(date +%s)
+          rc=0
+          ./devenv/devenv branch-protection || rc=$?
+          t1=$(date +%s)
+          printf '| 分支保护漂移核对 | %ds | %d |\n' "$((t1 - t0))" "$rc" >> "$GITHUB_STEP_SUMMARY"
           exit "$rc"
 
       - name: verify（无服务质量门：lint + typecheck + test:unit）

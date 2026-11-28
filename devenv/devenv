@@ -45,6 +45,8 @@ source "$REPO_ROOT/devenv/lib/gen.sh"
 source "$REPO_ROOT/devenv/lib/e2e.sh"
 # shellcheck source=lib/github-app-auth.sh
 source "$REPO_ROOT/devenv/lib/github-app-auth.sh"
+# shellcheck source=lib/branch-protection.sh
+source "$REPO_ROOT/devenv/lib/branch-protection.sh"
 
 trap 'e2e_cleanup_on_exit; gen_txn_rollback; lease_release_all; lock_release_all; snapshot_cleanup' EXIT
 
@@ -102,11 +104,19 @@ GitHub App 认证入口（身份：GitHub App，非个人账号）：
   git-push <remote> <refspec...>
                             以 App 身份经 HTTPS 推送（只接受已配置 remote 名；目标必须授权）
 
+分支保护（不触引擎；详见 docs/agents/branch-protection.md）：
+  branch-protection [--require-bypass-actors]
+                            dev 两层规则集漂移核对（保存配置 ↔ GitHub 实时；匿名只读，
+                            BP_GITHUB_TOKEN/GITHUB_TOKEN 存在时优先；漂移或无法核查即非零；
+                            --require-bypass-actors 为管理员强校验绕过名单，须管理员令牌）
+
 测试：
   test:auth                 认证入口离线测试（不访问 GitHub）
   test:auth:integration     认证入口真实集成测试（默认只读；写操作需显式旗标）
+  test:branch-protection    分支保护受控验收 harness（真实 GitHub，App 身份；分阶段，
+                            需与指挥者 UI 操作交错；详见 docs/agents/branch-protection.md）
   test:devenv               命令面离线测试（引擎解析/锁与栈使用租约/输出协议/快照与不可变绑定/per-worktree 隔离/
-                            供应链门禁/CI workflow 静态门禁/脚手架生成/e2e 隔离编排，mock docker）
+                            供应链门禁/CI workflow 静态门禁/分支保护漂移核对/脚手架生成/e2e 隔离编排，mock docker）
 
 退出码：0 成功 | 2 用法 | 3 环境未就绪 | 4 任务失败 | 5 超时 | 6 锁冲突 | 20–23 认证入口
 EOF
@@ -1041,6 +1051,52 @@ cmd_images() {
 }
 
 # ---------------------------------------------------------------------------
+# 分支保护两层规则集漂移核对（#73；不触引擎；只读 GitHub）
+# ---------------------------------------------------------------------------
+cmd_branch_protection() {
+  local require_bypass=0 mode_note=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --verify) shift ;;  # 兼容同义旗标（核对即默认行为）
+      --require-bypass-actors) require_bypass=1; shift ;;
+      *) die 2 "branch-protection 不接受参数：$1（可用：--require-bypass-actors）" ;;
+    esac
+  done
+  if [[ $require_bypass == 1 && -z "${BP_GITHUB_TOKEN:-${GITHUB_TOKEN:-}}" ]]; then
+    die 2 "--require-bypass-actors 需要管理员读取凭据：BP_GITHUB_TOKEN=<管理员令牌>（bypass_actors 仅对规则集写权限者可见）"
+  fi
+  [[ $require_bypass == 1 ]] && mode_note="，管理员强校验绕过名单"
+  BP_FINDINGS=(); BP_NOTES=()
+  [[ $require_bypass == 1 ]] && export BP_REQUIRE_BYPASS_ACTORS=1
+  note "核对 dev 分支保护两层规则集（${BP_DURABLE_RULESETS[*]}）：保存配置 devenv/rulesets/ ↔ GitHub 实时（只读${mode_note}）"
+  ev bp.start scope=dev rulesets="${BP_DURABLE_RULESETS[*]}" require_bypass="$require_bypass"
+  local rc=0
+  bp_check_drift ${BP_DURABLE_RULESETS[@]+"${BP_DURABLE_RULESETS[@]}"} || rc=$?
+  unset BP_REQUIRE_BYPASS_ACTORS 2>/dev/null || true
+  local f n=0
+  for f in ${BP_FINDINGS[@]+"${BP_FINDINGS[@]}"}; do
+    warn "$f"
+    ev bp.finding text="$f"
+    n=$((n + 1))
+  done
+  local m=0
+  for f in ${BP_NOTES[@]+"${BP_NOTES[@]}"}; do
+    note "$f"
+    ev bp.note text="$f"
+    m=$((m + 1))
+  done
+  case "$rc" in
+    0) note "一致：远端规则集与保存配置逐字段相同（绕过名单 ${m} 项未核对面见 NOTE），且无额外规则集覆盖 dev"
+        final ok 0 findings=0 notes="$m" ;;
+    1) warn "漂移：$n 项发现（见上；修复：按 docs/agents/branch-protection.md 同步 UI 与保存配置）"
+        final failed 1 findings="$n" notes="$m" ;;
+    *) warn "无法核查（fetch/解析失败，fail closed，不判一致）：$n 项发现"
+        final failed "$rc" findings="$n" notes="$m" ;;
+  esac
+  exit "$rc"
+}
+
+# ---------------------------------------------------------------------------
 # 入口
 # ---------------------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
@@ -1056,9 +1112,11 @@ case "$CMD" in
   # GitHub App 认证入口（不触引擎，保持既有行为与退出码 20–23）
   gh)                     gha_cmd_gh "$@" ;;
   git-push)               gha_cmd_git_push "$@" ;;
+  branch-protection)      cmd_branch_protection "$@" ;;
   test:auth)              bash "$REPO_ROOT/devenv/test/offline.test.sh" ;;
   test:auth:integration)  bash "$REPO_ROOT/devenv/test/integration.test.sh" "$@" ;;
-  test:devenv)            bash "$REPO_ROOT/devenv/test/stack-offline.test.sh" && bash "$REPO_ROOT/devenv/test/snapshot-offline.test.sh" && bash "$REPO_ROOT/devenv/test/isolation-offline.test.sh" && bash "$REPO_ROOT/devenv/test/supply-chain-offline.test.sh" && bash "$REPO_ROOT/devenv/test/ci-offline.test.sh" && bash "$REPO_ROOT/devenv/test/gen-offline.test.sh" && bash "$REPO_ROOT/devenv/test/e2e-offline.test.sh" ;;
+  test:branch-protection) bash "$REPO_ROOT/devenv/test/branch-protection-acceptance.sh" "$@" ;;
+  test:devenv)            bash "$REPO_ROOT/devenv/test/stack-offline.test.sh" && bash "$REPO_ROOT/devenv/test/snapshot-offline.test.sh" && bash "$REPO_ROOT/devenv/test/isolation-offline.test.sh" && bash "$REPO_ROOT/devenv/test/supply-chain-offline.test.sh" && bash "$REPO_ROOT/devenv/test/ci-offline.test.sh" && bash "$REPO_ROOT/devenv/test/branch-protection-offline.test.sh" && bash "$REPO_ROOT/devenv/test/gen-offline.test.sh" && bash "$REPO_ROOT/devenv/test/e2e-offline.test.sh" ;;
   help)                   usage; exit 0 ;;
   # 供应链静态门禁：不触引擎，可在任意平台/无引擎时执行
   supply-chain)           cmd_supply_chain "$@" ;;
