@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# 脚手架生成离线测试（#64 package / #65 app / #67 nest-module）——
+# 脚手架生成离线测试（#64 package / #65 app / #67 nest-module / #68 page）——
 # 不访问真实引擎（docker 全部 mock）
 #
 # 覆盖（Spec-工程基座 §5 脚手架；命令面唯一验收面）：
@@ -17,6 +17,8 @@
 #   7. nest-module（#67）：HTTP 生成契约/模块/集成测试并整行锚点登记
 #      app.module.ts + api-registry.ts；internal 只生成 module/service；
 #      缺业务信息/空 fields 明确停止；补丁只允许整行追加；不触发 lockgen。
+#   8. page（#68）：生成 4 个页面/表单/API/测试文件并整行锚点登记 App.tsx；
+#      强校验契约存在且为 create/list HTTP 契约；支持 --contract；不触发 lockgen。
 # ============================================================================
 set -Eeuo pipefail
 
@@ -56,9 +58,26 @@ setup() {
   cp -r "$REPO_ROOT/devenv" "$SANDBOX/devenv"
   cp "$REPO_ROOT/.gitignore" "$SANDBOX/.gitignore"
   cp "$REPO_ROOT/.dockerignore" "$SANDBOX/.dockerignore"
-  mkdir -p "$SANDBOX/apps/api/src" "$SANDBOX/apps/web" \
+  mkdir -p "$SANDBOX/apps/api/src" "$SANDBOX/apps/web/src" \
            "$SANDBOX/packages/contracts/src" "$SANDBOX/packages/tsconfig"
   cp "$REPO_ROOT/packages/tsconfig/package.json" "$SANDBOX/packages/tsconfig/package.json"
+  # page 整行锚点夹具（与仓库真实 App.tsx 同形）
+  cat > "$SANDBOX/apps/web/src/App.tsx" <<'TSX'
+import { Tabs } from 'antd'
+// @gen:page-import
+
+export default function App() {
+  const items = [
+    { key: 'points', label: '执法点位', children: null },
+    // @gen:page-item
+  ]
+  return <Tabs items={items} />
+}
+TSX
+  cat > "$SANDBOX/packages/contracts/src/index.ts" <<'TS'
+export * from './api-registry.js'
+export * from './enforcement-point.js'
+TS
   # nest-module 整行锚点夹具（与仓库真实文件同形；mock 生成器在此追加模块/契约）
   cat > "$SANDBOX/apps/api/src/app.module.ts" <<'TS'
 import { Module } from '@nestjs/common'
@@ -195,7 +214,7 @@ reset_repo() {
   rm -f "$MOCK_NEW_LOCKFILE"
   unset MOCK_LOCKGEN_FAIL MOCK_TAMPER_SET MOCK_OUTPUT_TRAVERSAL MOCK_OUTPUT_CROSS_DIR MOCK_EVIDENCE \
         MOCK_PATCH_TAMPER MOCK_INTERNAL_EMITS_CONTRACTS MOCK_MISSING_REQUIRED \
-        MOCK_SPEC_TAMPER MOCK_NEST_CONTRACT_ROGUE MOCK_GEN_EXIT 2>/dev/null || true
+        MOCK_SPEC_TAMPER MOCK_NEST_CONTRACT_ROGUE MOCK_GEN_EXIT MOCK_PAGE_OUTSIDE_DIR 2>/dev/null || true
   export DEVENV_LOCK_TIMEOUT=""
 }
 
@@ -272,7 +291,7 @@ done | sha256sum | awk '{print $1}')"
   || { echo "mock: set hash mismatch expected=$NE_GEN_SET_SHA256 actual=$actual" >&2; exit 4; }
 
 kind="${NE_GEN_KIND:?}"; name="${NE_GEN_NAME:?}"
-variant="${NE_GEN_VARIANT:-}"; spec_rel="${NE_GEN_SPEC_REL:-}"
+variant="${NE_GEN_VARIANT:-}"; contract="${NE_GEN_CONTRACT:-}"; spec_rel="${NE_GEN_SPEC_REL:-}"
 # 模拟生成器自身的输入/用法错误（真实生成器对非法 spec 以退出码 2 退出）
 if [[ -n "${MOCK_GEN_EXIT:-}" ]]; then
   echo "[gen] ERROR: mock 生成器按要求以 ${MOCK_GEN_EXIT} 退出" >&2
@@ -441,6 +460,46 @@ JSON
       mv "$out/apps/api/src/app.module.ts.tmp" "$out/apps/api/src/app.module.ts"
     fi
     ;;
+  page)
+    [[ -n "$spec_rel" && -f "$work/$spec_rel" ]] \
+      || { echo "mock: spec missing $spec_rel" >&2; exit 2; }
+    [[ -n "$contract" && -f "$work/packages/contracts/src/$contract.ts" ]] \
+      || { echo "mock: contract missing $contract" >&2; exit 2; }
+    spec_sha="$(sha256sum "$work/$spec_rel" | awk '{print $1}')"
+    [[ "${MOCK_SPEC_TAMPER:-}" != "1" ]] || spec_sha="$(printf '%064d' 0)"
+    root="apps/web/src/pages/$name"
+    mkdir -p "$out/$root"
+    printf 'export const generatedPageApi = 1\n' > "$out/$root/$name.api.ts"
+    printf 'export default function Form() { return null }\n' > "$out/$root/${pascal}Form.tsx"
+    printf 'export default function Page() { return null }\n' > "$out/$root/${pascal}Page.tsx"
+    printf 'export const generatedPageSpec = 1\n' > "$out/$root/${pascal}Page.spec.tsx"
+    if [[ "${MOCK_PAGE_OUTSIDE_DIR:-}" == "1" ]]; then
+      mkdir -p "$out/apps/web/src/other"
+      printf 'export const rogue = 1\n' > "$out/apps/web/src/other/evil.ts"
+    fi
+    if [[ "${MOCK_MISSING_REQUIRED:-}" == "1" ]]; then
+      rm -f "$out/$root/${pascal}Form.tsx"
+    fi
+    while IFS= read -r f; do gen_files+=("$f"); done \
+      < <(cd "$out" && find apps/web/src -type f 2>/dev/null | LC_ALL=C sort)
+
+    mkdir -p "$out/apps/web/src"
+    cp "$work/apps/web/src/App.tsx" "$out/apps/web/src/App.tsx"
+    printf 'import %sPage from '\''./pages/%s/%sPage.js'\''\n' "$pascal" "$name" "$pascal" > "$work/p1"
+    printf '    { key: '\''%s'\'', label: '\''%s'\'', children: <%sPage /> },\n' "$name" "$pascal" "$pascal" > "$work/p2"
+    insert_after_marker "$out/apps/web/src/App.tsx" '// @gen:page-import' "$work/p1"
+    insert_after_marker "$out/apps/web/src/App.tsx" '// @gen:page-item' "$work/p2"
+    patch_paths+=("apps/web/src/App.tsx")
+    patch_added+=("$(jq -nc \
+      --arg a "import ${pascal}Page from './pages/${name}/${pascal}Page.js'" \
+      --arg b "    { key: '${name}', label: '${pascal}', children: <${pascal}Page /> }," '[ $a, $b ]')")
+
+    if [[ "${MOCK_PATCH_TAMPER:-}" == "1" ]]; then
+      awk '{ if ($0 == "import { Tabs } from '\''antd'\''") print "import { Tabs as T } from '\''antd'\''"; else print }' \
+        "$out/apps/web/src/App.tsx" > "$out/apps/web/src/App.tsx.tmp"
+      mv "$out/apps/web/src/App.tsx.tmp" "$out/apps/web/src/App.tsx"
+    fi
+    ;;
   *)
     echo "mock: unsupported kind $kind" >&2; exit 2
     ;;
@@ -463,14 +522,14 @@ patches_json="$(
       '{path:$p,baseSha256:$b,sha256:$h,addedLines:$a}'
   done | jq -sc .
 )"
-if [[ "$kind" == "nest-module" ]]; then
+if [[ "$kind" == "nest-module" || "$kind" == "page" ]]; then
   spec_json="$(jq -nc --arg p "$spec_rel" --arg h "$spec_sha" '{path:$p,sha256:$h}')"
 else
   spec_json="null"
 fi
-jq -n --arg kind "$kind" --arg name "$name" --arg variant "$variant" \
+jq -n --arg kind "$kind" --arg name "$name" --arg variant "$variant" --arg contract "$contract" \
   --argjson spec "$spec_json" --argjson files "$files_json" --argjson patches "$patches_json" \
-  '{kind:$kind,name:$name,variant:$variant,manifestVersion:2,spec:$spec,files:$files,patches:$patches}' \
+  '{kind:$kind,name:$name,variant:$variant,contract:$contract,manifestVersion:2,spec:$spec,files:$files,patches:$patches}' \
   > "$manifest"
 
 if [[ "${MOCK_OUTPUT_TRAVERSAL:-}" == "1" ]]; then
@@ -1181,6 +1240,228 @@ done
 [[ -z "$bad_sources" ]] \
   && pass "T41 devenv/gen 源码无裸 U+2028/U+2029" \
   || fail "T41" "含裸行终止符：${bad_sources}"
+
+# ---------------------------------------------------------------------------
+# T42–T53：gen page（#68）—— 自动注册 App.tsx / 契约强校验 / --contract /
+#   全有或全无 / 整行锚点 / 真实仓库锚点一致
+# ---------------------------------------------------------------------------
+seed_page_contract() { # <kebab-name>（契约 + 端点登记，满足 page 代理前置）
+  local cname="$1" cpascal cupper
+  cpascal="$(printf '%s' "$cname" | awk -F- '{ for (i = 1; i <= NF; i++) printf "%s%s", toupper(substr($i, 1, 1)), substr($i, 2) }')"
+  cupper="$(printf '%s' "$cname" | tr '[:lower:]-' '[:upper:]_')"
+  cat > "$SANDBOX/packages/contracts/src/${cname}.ts" <<TS
+export const ${cupper}_ROUTES = { base: '/${cname}', create: '/${cname}', list: '/${cname}' } as const
+export const Create${cpascal}Schema = {}
+export const Create${cpascal}ResultSchema = {}
+export const ${cpascal}DtoSchema = {}
+export const ${cpascal}ListResultSchema = {}
+export const ${cupper}_ENDPOINTS = [] as const
+TS
+  awk -v line="export * from './${cname}.js'" \
+    -v imp="import { ${cupper}_ENDPOINTS } from './${cname}.js'" \
+    '{ print; if ($0 == "// @gen:endpoint-import") { print line; print imp } }' \
+    "$SANDBOX/packages/contracts/src/api-registry.ts" > "$SANDBOX/packages/contracts/src/api-registry.ts.tmp"
+  mv "$SANDBOX/packages/contracts/src/api-registry.ts.tmp" "$SANDBOX/packages/contracts/src/api-registry.ts"
+  awk -v line="  ...${cupper}_ENDPOINTS," \
+    '{ print; s = $0; sub(/^[[:space:]]+/, "", s); if (s == "// @gen:endpoint-spread") print line }' \
+    "$SANDBOX/packages/contracts/src/api-registry.ts" > "$SANDBOX/packages/contracts/src/api-registry.ts.tmp"
+  mv "$SANDBOX/packages/contracts/src/api-registry.ts.tmp" "$SANDBOX/packages/contracts/src/api-registry.ts"
+}
+
+seed_page_contract_index_only() { # <kebab-name>（仅 index.ts 再导出，未登记端点）
+  local cname="$1" cpascal cupper
+  cpascal="$(printf '%s' "$cname" | awk -F- '{ for (i = 1; i <= NF; i++) printf "%s%s", toupper(substr($i, 1, 1)), substr($i, 2) }')"
+  cupper="$(printf '%s' "$cname" | tr '[:lower:]-' '[:upper:]_')"
+  cat > "$SANDBOX/packages/contracts/src/${cname}.ts" <<TS
+export const ${cupper}_ROUTES = { base: '/${cname}', create: '/${cname}', list: '/${cname}' } as const
+export const Create${cpascal}Schema = {}
+export const Create${cpascal}ResultSchema = {}
+export const ${cpascal}DtoSchema = {}
+export const ${cpascal}ListResultSchema = {}
+export const ${cupper}_ENDPOINTS = [] as const
+TS
+  printf "export * from './%s.js'\n" "$cname" >> "$SANDBOX/packages/contracts/src/index.ts"
+}
+
+# T42 gen page 正常路径（同名契约）：4 个新文件 + App.tsx 整行锚点 + 不触发 lockgen
+reset_repo
+seed_page_contract smoke-page
+lock_before="$(sha256sum "$SANDBOX/pnpm-lock.yaml" | awk '{print $1}')"
+dockerfile_before="$(sha256sum "$SANDBOX/devenv/workspace.Dockerfile" | awk '{print $1}')"
+run t42 gen_json gen page smoke-page --spec devenv/test/fixtures/page-smoke.json
+expect_rc "T42 gen page 成功" 0 t42
+if jq -e . "$OUT/t42.out" >/dev/null 2>&1; then
+  pass "T42 stdout 全为可解析 JSON（tar 未混入结果流）"
+else
+  fail "T42" "stdout 非纯 JSONL：$(head -c 200 "$OUT/t42.out")"
+fi
+if jq -se 'any(.[]; .command == "gen" and .status == "ok" and .kind == "page" and .name == "smoke-page" and .contract == "smoke-page" and .patches == "1" and .lockgen == "not-required")' "$OUT/t42.out" >/dev/null; then
+  pass "T42 终值含 kind=page/contract=smoke-page/patches=1/lockgen=not-required"
+else
+  fail "T42" "终值不符：$(tail -1 "$OUT/t42.out")"
+fi
+for f in smoke-page.api.ts SmokePageForm.tsx SmokePagePage.tsx SmokePagePage.spec.tsx; do
+  [[ -f "$SANDBOX/apps/web/src/pages/smoke-page/$f" ]] \
+    && pass "T42 生成 $f" || fail "T42" "缺 $f"
+done
+grep -qxF "import SmokePagePage from './pages/smoke-page/SmokePagePage.js'" "$SANDBOX/apps/web/src/App.tsx" \
+  && grep -qxF "    { key: 'smoke-page', label: 'SmokePage', children: <SmokePagePage /> }," "$SANDBOX/apps/web/src/App.tsx" \
+  && pass "T42 App.tsx 整行登记生成页面" || fail "T42" "App.tsx 未登记"
+[[ "$(sha256sum "$SANDBOX/pnpm-lock.yaml" | awk '{print $1}')" == "$lock_before" \
+   && "$(sha256sum "$SANDBOX/devenv/workspace.Dockerfile" | awk '{print $1}')" == "$dockerfile_before" ]] \
+  && pass "T42 gen page 不触发 lockgen（lockfile/Dockerfile 未变）" || fail "T42" "lockgen 被触发"
+
+# T43 --contract 显式指定异名契约
+reset_repo
+seed_page_contract inspection-record
+run t43 gen_json gen page inspection-board --contract inspection-record --spec devenv/test/fixtures/nest-module-http.json
+expect_rc "T43 gen page --contract 异名契约成功" 0 t43
+jq -se 'any(.[]; .command == "gen" and .status == "ok" and .kind == "page" and .name == "inspection-board" and .contract == "inspection-record")' "$OUT/t43.out" >/dev/null \
+  && pass "T43 终值绑定 contract=inspection-record" || fail "T43" "终值不符：$(tail -1 "$OUT/t43.out")"
+[[ -f "$SANDBOX/apps/web/src/pages/inspection-board/InspectionBoardPage.tsx" ]] \
+  && grep -qxF "import InspectionBoardPage from './pages/inspection-board/InspectionBoardPage.js'" "$SANDBOX/apps/web/src/App.tsx" \
+  && pass "T43 生成异名页面并登记 App.tsx" || fail "T43" "生成文件或注册缺失"
+
+# T44 重复 gen page → exit 4，零部分写入
+printf 'sentinel\n' > "$SANDBOX/apps/web/src/pages/inspection-board/sentinel.txt"
+app_before="$(sha256sum "$SANDBOX/apps/web/src/App.tsx" | awk '{print $1}')"
+run t44 gen_json gen page inspection-board --contract inspection-record --spec devenv/test/fixtures/nest-module-http.json
+expect_rc "T44 重复 gen page 拒绝 exit 4" 4 t44
+expect_grep "T44 报告目标已存在" "目标已存在：apps/web/src/pages/inspection-board/" t44
+[[ -f "$SANDBOX/apps/web/src/pages/inspection-board/sentinel.txt" \
+   && "$(sha256sum "$SANDBOX/apps/web/src/App.tsx" | awk '{print $1}')" == "$app_before" ]] \
+  && pass "T44 既有文件与 App.tsx 未变（无部分写入）" || fail "T44" "文件被改动"
+
+# T45 App.tsx 已注入同名页面 key → exit 4，不创建页面目录
+reset_repo
+seed_page_contract ghost-page
+awk '{ print; if ($0 ~ /\/\/ @gen:page-item/) print "    { key: '\''ghost-page'\'', label: '\''Ghost'\'', children: null }," }' \
+  "$SANDBOX/apps/web/src/App.tsx" > "$SANDBOX/apps/web/src/App.tsx.tmp"
+mv "$SANDBOX/apps/web/src/App.tsx.tmp" "$SANDBOX/apps/web/src/App.tsx"
+run t45 gen_json gen page ghost-page --spec devenv/test/fixtures/page-smoke.json
+expect_rc "T45 App.tsx 已注入拒绝 exit 4" 4 t45
+expect_grep "T45 报告 App.tsx 已注入" "App.tsx 已注入过 GhostPage" t45
+[[ ! -e "$SANDBOX/apps/web/src/pages/ghost-page" ]] \
+  && pass "T45 未创建目标目录" || fail "T45" "目标目录被创建"
+
+# T46 缺 --spec / 空 fields → exit 2，零写入
+reset_repo
+seed_page_contract missing-spec-page
+run t46a gen_json gen page missing-spec-page
+expect_rc "T46a page 缺 --spec exit 2" 2 t46a
+expect_grep "T46a 提示缺少必要业务信息" "缺少必要业务信息" t46a
+printf '{"fields":{}}\n' > "$SANDBOX/empty-page.json"
+run t46b gen_json gen page missing-spec-page --spec empty-page.json
+expect_rc "T46b page 空 fields exit 2" 2 t46b
+expect_grep "T46b 提示 fields 非空" "fields 必须是非空对象" t46b
+[[ ! -e "$SANDBOX/apps/web/src/pages/missing-spec-page" ]] \
+  && pass "T46 缺业务信息零写入" || fail "T46" "创建了目标目录"
+
+# T47 缺失对应契约模块 → exit 2，给出生成指引，零写入
+reset_repo
+run t47 gen_json gen page no-contract --spec devenv/test/fixtures/page-smoke.json
+expect_rc "T47 缺失契约 exit 2" 2 t47
+expect_grep "T47 提示先生成 HTTP 契约" "缺少契约模块：packages/contracts/src/no-contract.ts 不存在" t47
+[[ ! -e "$SANDBOX/apps/web/src/pages/no-contract" ]] \
+  && pass "T47 未创建目标目录" || fail "T47" "创建了目标目录"
+
+# T48 契约不具备 create/list 导出（如 enforcement-point）→ exit 2，零写入
+reset_repo
+run t48 gen_json gen page bad-contract --contract enforcement-point --spec devenv/test/fixtures/page-smoke.json
+expect_rc "T48 不兼容契约 exit 2" 2 t48
+expect_grep "T48 报告缺少 create/list 导出" "缺少 create/list 导出" t48
+[[ ! -e "$SANDBOX/apps/web/src/pages/bad-contract" ]] \
+  && pass "T48 未创建目标目录" || fail "T48" "创建了目标目录"
+
+# T49 旗标误用（page 传 --http / nest-module 传 --contract / package 传 --contract）→ exit 2
+reset_repo
+seed_page_contract flag-check
+run t49a gen_json gen page flag-check --http --spec devenv/test/fixtures/page-smoke.json
+expect_rc "T49a page 拒 --http exit 2" 2 t49a
+run t49b gen_json gen nest-module flag-check --http --contract foo --spec devenv/test/fixtures/page-smoke.json
+expect_rc "T49b nest-module 拒 --contract exit 2" 2 t49b
+run t49c gen_json gen package flag-pkg --contract foo
+expect_rc "T49c package 拒 --contract exit 2" 2 t49c
+
+# T50 page 生成物路径越界（写出 apps/web/src/pages/<name>/ 之外）→ exit 4，零写入
+reset_repo
+seed_page_contract out-of-bounds
+export MOCK_PAGE_OUTSIDE_DIR=1
+run t50 gen_json gen page out-of-bounds --spec devenv/test/fixtures/page-smoke.json
+expect_rc "T50 page 路径越界 exit 4" 4 t50
+expect_grep "T50 报告路径越界" "生成物路径越界" t50
+[[ ! -e "$SANDBOX/apps/web/src/pages/out-of-bounds" && ! -e "$SANDBOX/apps/web/src/other/evil.ts" ]] \
+  && pass "T50 未写入任何文件" || fail "T50" "出现越界写入"
+unset MOCK_PAGE_OUTSIDE_DIR
+
+# T51 page 补丁夹带非整行修改 → exit 4，零写入
+reset_repo
+seed_page_contract tamper-page
+export MOCK_PATCH_TAMPER=1
+run t51 gen_json gen page tamper-page --spec devenv/test/fixtures/page-smoke.json
+expect_rc "T51 page 非整行补丁 exit 4" 4 t51
+expect_grep "T51 报告非预期修改" "非预期修改" t51
+[[ ! -e "$SANDBOX/apps/web/src/pages/tamper-page" ]] \
+  && pass "T51 未写入任何文件" || fail "T51" "创建了目标目录"
+unset MOCK_PATCH_TAMPER
+
+# T52 page 生成物缺必需文件（Form）→ exit 4，零写入
+reset_repo
+seed_page_contract missing-form
+export MOCK_MISSING_REQUIRED=1
+run t52 gen_json gen page missing-form --spec devenv/test/fixtures/page-smoke.json
+expect_rc "T52 page 缺必需文件 exit 4" 4 t52
+expect_grep "T52 报告缺少必需文件" "缺少必需文件" t52
+[[ ! -e "$SANDBOX/apps/web/src/pages/missing-form" ]] \
+  && pass "T52 未写入任何文件" || fail "T52" "创建了目标目录"
+unset MOCK_MISSING_REQUIRED
+
+# T53 真实仓库 apps/web/src/App.tsx 含恰好一处整行锚点 // @gen:page-import 与 // @gen:page-item
+for pair in \
+  "apps/web/src/App.tsx|// @gen:page-import" \
+  "apps/web/src/App.tsx|// @gen:page-item"; do
+  f="${pair%%|*}"; marker="${pair#*|}"
+  [[ "$(count_anchor "$REAL_REPO_ROOT/$f" "$marker")" == "1" ]] \
+    && pass "T53 真实仓库 $f 含恰好一处整行锚点 $marker" \
+    || fail "T53" "真实仓库 $f 的锚点 $marker 不是恰好一处"
+done
+
+# ---------------------------------------------------------------------------
+# T54 label 规范化后重名（"相同 标签" / "相同\n标签" / "相同 标签"）→ exit 2
+#   （查重必须在空白规范化之后：否则生成物出现同可见标签，getByLabelText 歧义）
+# ---------------------------------------------------------------------------
+reset_repo
+run t54 gen_json gen page dup-labels --spec devenv/test/fixtures/page-duplicate-label.json
+expect_rc "T54 规范化后重复 label exit 2" 2 t54
+expect_grep "T54 报告规范化后重复 label" "重复 label（规范化空白后）" t54
+[[ ! -e "$SANDBOX/apps/web/src/pages/dup-labels" ]] \
+  && pass "T54 未创建目标目录" || fail "T54" "目标目录被创建"
+
+# ---------------------------------------------------------------------------
+# T55 契约仅从 index.ts 再导出、未登记 API_CONTRACT_ENDPOINTS → exit 2
+#   （vite preview 代理由端点清单派生；未登记则页面能过类型检查但真实 API 不可达）
+# ---------------------------------------------------------------------------
+reset_repo
+seed_page_contract_index_only index-only-contract
+run t55 gen_json gen page index-only-page --contract index-only-contract --spec devenv/test/fixtures/page-smoke.json
+expect_rc "T55 未登记端点的契约 exit 2" 2 t55
+expect_grep "T55 报告未导入 API_CONTRACT_ENDPOINTS" "未将 INDEX_ONLY_CONTRACT_ENDPOINTS 导入 API_CONTRACT_ENDPOINTS" t55
+[[ ! -e "$SANDBOX/apps/web/src/pages/index-only-page" ]] \
+  && pass "T55 未创建目标目录" || fail "T55" "目标目录被创建"
+
+# ---------------------------------------------------------------------------
+# T56 已导入端点但未展开进 API_CONTRACT_ENDPOINTS → exit 2
+# ---------------------------------------------------------------------------
+reset_repo
+seed_page_contract missing-spread
+grep -vFx '  ...MISSING_SPREAD_ENDPOINTS,' "$SANDBOX/packages/contracts/src/api-registry.ts" \
+  > "$SANDBOX/packages/contracts/src/api-registry.ts.tmp"
+mv "$SANDBOX/packages/contracts/src/api-registry.ts.tmp" "$SANDBOX/packages/contracts/src/api-registry.ts"
+run t56 gen_json gen page missing-spread-page --contract missing-spread --spec devenv/test/fixtures/page-smoke.json
+expect_rc "T56 未展开端点 exit 2" 2 t56
+expect_grep "T56 报告端点未加入 API_CONTRACT_ENDPOINTS" "未加入 API_CONTRACT_ENDPOINTS" t56
+[[ ! -e "$SANDBOX/apps/web/src/pages/missing-spread-page" ]] \
+  && pass "T56 未创建目标目录" || fail "T56" "目标目录被创建"
 
 # ---------------------------------------------------------------------------
 # 汇总

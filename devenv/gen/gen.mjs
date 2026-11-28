@@ -1,18 +1,21 @@
 #!/usr/bin/env node
 // ============================================================================
-// 脚手架生成器（#64 package / #65 app / #67 nest-module；Spec-工程基座 §5）
+// 脚手架生成器（#64 package / #65 app / #67 nest-module / #68 page；Spec-工程基座 §5）
 //
 // 调用形态（容器内）：
 //   node /tmp/ne-gen/input/devenv/gen/gen.mjs <kind> <kebab-case-name>
 //   环境：NE_GEN_VARIANT=http|internal（nest-module 必填）
-//         NE_GEN_SPEC_REL=<仓库相对路径>（nest-module 必填；随输入 tar 传入）
+//         NE_GEN_CONTRACT=<kebab-case 契约名>（page 必填，默认与 name 同名）
+//         NE_GEN_SPEC_REL=<仓库相对路径>（nest-module / page 必填；随输入 tar 传入）
 //
 // 输入 channel（由 devenv 经 stdin tar 传入，解包到 $NE_GEN_SOURCE）：
 //   - 本次调用当前工作树的完整 `devenv/gen/` 集合（生成器自身，零第三方依赖）；
 //   - 锚点文件（补丁以宿主当前内容为基准，镜像内没有可静默 fallback 的烘焙副本）：
 //       package/app：`devenv/workspace.Dockerfile`；
 //       nest-module：`apps/api/src/app.module.ts`（HTTP 另加
-//       `packages/contracts/src/api-registry.ts`）与业务 spec 文件。
+//       `packages/contracts/src/api-registry.ts`）与业务 spec 文件；
+//       page：`apps/web/src/App.tsx`、契约文件 `packages/contracts/src/<contract>.ts`、
+//       `packages/contracts/src/api-registry.ts`、`packages/contracts/src/index.ts` 与业务 spec 文件。
 //
 // 输出 channel（devenv 侧 tar 回宿主，先解包到暂存目录再原子落盘）：
 //   - 新文件 + 被补丁文件的完整内容；
@@ -29,11 +32,12 @@ import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 
-const KINDS = ['package', 'app', 'nest-module']
+const KINDS = ['package', 'app', 'nest-module', 'page']
 const SOURCE = process.env.NE_GEN_SOURCE || '/tmp/ne-gen/input'
 const OUTPUT = process.env.NE_GEN_OUTPUT || '/tmp/ne-gen/output'
 const MANIFEST_NAME = '.ne-gen-manifest.json'
 const VARIANT = process.env.NE_GEN_VARIANT || ''
+const CONTRACT = process.env.NE_GEN_CONTRACT || ''
 const SPEC_REL = process.env.NE_GEN_SPEC_REL || ''
 
 const note = (m) => process.stderr.write(`[gen] ${m}\n`)
@@ -44,17 +48,24 @@ const die = (m, code = 4) => {
 
 const [, , kind, name] = process.argv
 if (!KINDS.includes(kind)) {
-  const hint = kind === 'page' ? '（page 归 #68）' : ''
-  die(`kind 尚未实现：${kind ?? '(缺)'}${hint}（已交付 package/app/nest-module）`, 2)
+  die(`未知 kind：${kind ?? '(缺)'}（可选：package / app / nest-module / page）`, 2)
 }
 if (!/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(name ?? '')) {
   die(`名称须为 kebab-case（小写字母数字+连字符）：${name ?? '(缺)'}`, 2)
 }
 if (name.length > 64) die(`名称过长（≤64 字符）：${name}`, 2)
 
+const toPascal = (kebab) => kebab.split('-').map((s) => s[0].toUpperCase() + s.slice(1)).join('')
+const toCamel = (kebab) => {
+  const p = toPascal(kebab)
+  return p[0].toLowerCase() + p.slice(1)
+}
+const toUpper = (kebab) => kebab.replace(/-/g, '_').toUpperCase()
+
 const src = (...p) => path.join(SOURCE, ...p)
-const pascal = name.split('-').map((s) => s[0].toUpperCase() + s.slice(1)).join('')
-const upper = name.replace(/-/g, '_').toUpperCase()
+const pascal = toPascal(name)
+const camel = toCamel(name)
+const upper = toUpper(name)
 const sha256 = (buf) => crypto.createHash('sha256').update(buf).digest('hex')
 
 // ---------------------------------------------------------------------------
@@ -186,7 +197,7 @@ function validateField(fieldName, def) {
   if (!['string', 'integer', 'number', 'boolean'].includes(type)) {
     failSpec(`字段 ${fieldName}.type 必须是 string|integer|number|boolean：${String(type)}`)
   }
-  const allowed = new Set(['type', 'optional'])
+  const allowed = new Set(['type', 'optional', 'label'])
   if (type === 'string') {
     allowed.add('minLength')
     allowed.add('maxLength')
@@ -201,6 +212,18 @@ function validateField(fieldName, def) {
   }
   if (def.optional !== undefined && typeof def.optional !== 'boolean') {
     failSpec(`字段 ${fieldName}.optional 必须是布尔值`)
+  }
+  if (def.label !== undefined) {
+    if (typeof def.label !== 'string') {
+      failSpec(`字段 ${fieldName}.label 必须是非空字符串`)
+    }
+    const normalized = normalizeLabel(def.label)
+    if (normalized.length === 0) {
+      failSpec(`字段 ${fieldName}.label 必须是非空字符串`)
+    }
+    if (normalized.length > 80) {
+      failSpec(`字段 ${fieldName}.label 过长（≤80 字符）`)
+    }
   }
   if (type === 'string') {
     for (const key of ['minLength', 'maxLength']) {
@@ -228,7 +251,7 @@ function validateField(fieldName, def) {
 
 function loadSpec() {
   if (!SPEC_REL) {
-    failSpec('nest-module 需要 --spec <仓库相对路径>（JSON：fields 非空，可选 basePath/description）')
+    failSpec(`${kind} 需要 --spec <仓库相对路径>（JSON：fields 非空，可选 title/basePath/description）`)
   }
   const abs = src(SPEC_REL)
   if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
@@ -242,12 +265,18 @@ function loadSpec() {
     failSpec(`spec 不是合法 JSON（${SPEC_REL}）：${e.message}`)
   }
   if (!isPlainObject(spec)) failSpec('spec 顶层必须是 JSON 对象')
-  const allowedTop = new Set(['description', 'basePath', 'fields'])
+  const allowedTop = new Set(['description', 'basePath', 'title', 'fields'])
   for (const key of Object.keys(spec)) {
-    if (!allowedTop.has(key)) failSpec(`spec 顶层含不支持的键 ${key}（允许：description / basePath / fields）`)
+    if (!allowedTop.has(key)) failSpec(`spec 顶层含不支持的键 ${key}（允许：description / basePath / title / fields）`)
   }
   if (spec.description !== undefined && typeof spec.description !== 'string') {
     failSpec('spec.description 必须是字符串')
+  }
+  if (spec.title !== undefined) {
+    if (typeof spec.title !== 'string' || spec.title.trim().length === 0) {
+      failSpec('spec.title 必须是非空字符串')
+    }
+    if (spec.title.trim().length > 40) failSpec('spec.title 过长（≤40 字符）')
   }
   let basePath = `/${name}`
   if (spec.basePath !== undefined) {
@@ -261,7 +290,18 @@ function loadSpec() {
   if (!isPlainObject(spec.fields) || Object.keys(spec.fields).length === 0) {
     failSpec('spec.fields 必须是非空对象（否则无法生成完整请求/响应 schema，拒绝假完整骨架）')
   }
-  for (const [fieldName, def] of Object.entries(spec.fields)) validateField(fieldName, def)
+  const seenLabels = new Set()
+  for (const [fieldName, def] of Object.entries(spec.fields)) {
+    validateField(fieldName, def)
+    if (kind !== 'page') continue
+    const resolvedLabel = normalizeLabel(def.label ?? fieldName)
+    if (seenLabels.has(resolvedLabel)) {
+      failSpec(
+        `spec.fields 含重复 label（规范化空白后）：${resolvedLabel}（表单标签须唯一以确保可访问性与测试定位）`,
+      )
+    }
+    seenLabels.add(resolvedLabel)
+  }
   return { spec, basePath, specSha: sha256(raw) }
 }
 
@@ -328,6 +368,31 @@ function safeComment(text) {
   }
   return out.split('*/').join('* /')
 }
+
+function sanitizeLineText(text) {
+  let out = text
+  for (const code of [0x0a, 0x0d, 0x2028, 0x2029]) {
+    out = out.split(String.fromCharCode(code)).join(' ')
+  }
+  return out.trim()
+}
+
+// label 规范化：空白（含换行、制表、NBSP、U+2028/U+2029）折叠为单个空格再 trim。
+// 重复 label 必须在规范化之后判定——否则「相同 标签」与「相同\n标签」会通过查重，
+// 生成后却变成同一个可见标签，getByLabelText 产生歧义（#68 review 实测）。
+const LABEL_WHITESPACE_CODES = [0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x20, 0xa0, 0x2028, 0x2029]
+
+function normalizeLabel(text) {
+  let out = text
+  for (const code of LABEL_WHITESPACE_CODES) {
+    out = out.split(String.fromCharCode(code)).join(' ')
+  }
+  return out.replace(/ +/g, ' ').trim()
+}
+
+// 生成 TS/TSX 字符串字面量（JSON.stringify 自动转义双引号、反斜杠与控制字符；
+// 配合 JSX 表达式属性 label={...} / title={...}，避免引号/反斜杠/模板字符破坏语法或 DOM 文本）。
+const jsStr = (text) => JSON.stringify(sanitizeLineText(text))
 
 const specHint = (spec, basePath) =>
   safeComment(spec.description ?? `${name}（${basePath}）`)
@@ -662,6 +727,618 @@ describe('${name} internal 服务（生成物）', () => {
 }
 
 // ---------------------------------------------------------------------------
+// page 模板（#68）：自动注册 App.tsx + 消费 @ne/contracts（validated 统一封装）
+// + Form React useId 实例唯一 + 多 React 根前缀组件测试 + 页面→API→回显测试
+// ---------------------------------------------------------------------------
+function verifyPageContract(contract, fields) {
+  if (!/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(contract) || contract.length > 64) {
+    failSpec(`--contract 须为 kebab-case（≤64 字符）：${contract || '(缺)'}`)
+  }
+  const contractRel = `packages/contracts/src/${contract}.ts`
+  const contractAbs = src(contractRel)
+  if (!fs.existsSync(contractAbs) || !fs.statSync(contractAbs).isFile()) {
+    failSpec(
+      `缺少契约模块：${contractRel} 不存在（请先运行 devenv gen nest-module ${contract} --http --spec ${SPEC_REL}，或用 --contract 指定已有 HTTP 契约）`,
+    )
+  }
+  const contractText = fs.readFileSync(contractAbs, 'utf8')
+  const contractPascal = toPascal(contract)
+  const contractUpper = toUpper(contract)
+  const requiredExports = [
+    `export const ${contractUpper}_ROUTES`,
+    `export const Create${contractPascal}Schema`,
+    `export const Create${contractPascal}ResultSchema`,
+    `export const ${contractPascal}DtoSchema`,
+    `export const ${contractPascal}ListResultSchema`,
+  ]
+  for (const sym of requiredExports) {
+    if (!contractText.includes(sym)) {
+      failSpec(
+        `契约 ${contractRel} 缺少 create/list 导出（${sym}）；page 只能消费带 create/list 端点的 HTTP 契约`,
+      )
+    }
+  }
+  const routesBlockRe = new RegExp(
+    `export\\s+const\\s+${contractUpper}_ROUTES\\s*=\\s*\\{([\\s\\S]*?)\\}`,
+  )
+  const routesMatch = routesBlockRe.exec(contractText)
+  if (!routesMatch || !/\bcreate\s*:/.test(routesMatch[1]) || !/\blist\s*:/.test(routesMatch[1])) {
+    failSpec(`契约 ${contractRel} 的 ${contractUpper}_ROUTES 缺少 create/list 路由常量`)
+  }
+  // 精确核对 Create<ContractPascal>Schema 的 z.object({...}) 字段集合与 zod 表达式，
+  // 防止 spec 漏掉契约必填字段、字段类型/可选性漂移，或误命中文件内其它键名。
+  const createSchemaRe = new RegExp(
+    `export\\s+const\\s+Create${contractPascal}Schema\\s*=\\s*z\\s*\\.object\\(\\s*\\{([\\s\\S]*?)\\}\\s*\\)`,
+  )
+  const createSchemaMatch = createSchemaRe.exec(contractText)
+  if (!createSchemaMatch) {
+    failSpec(`契约 ${contractRel} 的 Create${contractPascal}Schema 不是可核对的 z.object({...}) 声明`)
+  }
+  const contractFields = new Map()
+  for (const rawLine of createSchemaMatch[1].split('\n')) {
+    const trimmed = rawLine.trim()
+    if (!trimmed || trimmed.startsWith('//')) continue
+    const m = /^([a-z][A-Za-z0-9]*)\s*:\s*(.+?)\s*,?$/.exec(trimmed)
+    if (!m) {
+      failSpec(`契约 ${contractRel} 的 Create${contractPascal}Schema 含无法解析的字段行：${trimmed}`)
+    }
+    contractFields.set(m[1], m[2].replace(/\s+/g, ''))
+  }
+  if (contractFields.size === 0) {
+    failSpec(`契约 ${contractRel} 的 Create${contractPascal}Schema 字段集合为空`)
+  }
+  for (const [fieldName, def] of Object.entries(fields)) {
+    if (!contractFields.has(fieldName)) {
+      failSpec(`spec 字段 ${fieldName} 未在契约 ${contractRel} 的 Create${contractPascal}Schema 中声明`)
+    }
+    const expectedExpr = zodExpr(def).replace(/\s+/g, '')
+    const actualExpr = contractFields.get(fieldName)
+    if (actualExpr !== expectedExpr) {
+      failSpec(
+        `spec 字段 ${fieldName} 与契约 ${contractRel} 定义不一致（期望 ${expectedExpr}，契约为 ${actualExpr}）`,
+      )
+    }
+  }
+  for (const contractField of contractFields.keys()) {
+    if (!Object.prototype.hasOwnProperty.call(fields, contractField)) {
+      failSpec(
+        `spec 缺少契约 ${contractRel} 中 Create${contractPascal}Schema 已声明的字段：${contractField}`,
+      )
+    }
+  }
+  const registryRel = 'packages/contracts/src/api-registry.ts'
+  const registryAbs = src(registryRel)
+  if (!fs.existsSync(registryAbs)) {
+    failSpec(`缺少契约注册表：${registryRel}（page 的 vite 代理由 API_CONTRACT_ENDPOINTS 派生）`)
+  }
+  const registryText = fs.readFileSync(registryAbs, 'utf8')
+  const indexText = fs.existsSync(src('packages/contracts/src/index.ts'))
+    ? fs.readFileSync(src('packages/contracts/src/index.ts'), 'utf8')
+    : ''
+  const reexportLine = `export * from './${contract}.js'`
+  if (!hasTrimmedLine(registryText, reexportLine) && !hasTrimmedLine(indexText, reexportLine)) {
+    failSpec(`契约 ${contractRel} 未从 @ne/contracts 导出（缺少 ${reexportLine}）`)
+  }
+  // page 运行期经同源 vite preview 代理访问 API，代理路由直接取自 API_CONTRACT_ENDPOINTS。
+  // 契约仅从 index.ts 再导出、未登记端点时，页面虽能通过类型检查，真实请求却没有代理
+  // 路由（#68 review 实测）。因此要求契约端点已整行导入并展开进 API_CONTRACT_ENDPOINTS。
+  const endpointsImport = `import { ${contractUpper}_ENDPOINTS } from './${contract}.js'`
+  const endpointsSpread = `...${contractUpper}_ENDPOINTS,`
+  if (!hasTrimmedLine(registryText, endpointsImport) || !hasTrimmedLine(registryText, endpointsSpread)) {
+    failSpec(
+      `契约 ${contractRel} 未登记到 API_CONTRACT_ENDPOINTS（${registryRel} 需含整行 ${endpointsImport} 与 ${endpointsSpread}）；page 的 vite 代理由端点清单派生，未登记则真实 API 不可达`,
+    )
+  }
+  return { contractPascal, contractUpper }
+}
+
+function pageFiles({ spec, contract, contractPascal, contractUpper, fields }) {
+  const entries = Object.entries(fields)
+  const rawLabel = (fieldName, def) => normalizeLabel(def.label ?? fieldName)
+  const rawCardTitle = normalizeLabel(spec.title ?? spec.description ?? pascal)
+  const hint = safeComment(spec.description ?? `${name}（消费 @ne/contracts ${contract}）`)
+
+  const hasString = entries.some(([, def]) => def.type === 'string')
+  const hasNumber = entries.some(([, def]) => def.type === 'integer' || def.type === 'number')
+  const hasBoolean = entries.some(([, def]) => def.type === 'boolean')
+
+  const antdImports = ['Alert', 'Button', 'Form']
+  if (hasString) antdImports.push('Input')
+  if (hasNumber) antdImports.push('InputNumber')
+  if (hasBoolean) antdImports.push('Switch')
+
+  const requiredBooleans = entries.filter(([, def]) => def.type === 'boolean' && !def.optional)
+  const initialValuesDecl =
+    requiredBooleans.length > 0
+      ? `\nconst INITIAL_VALUES: Partial<FormDraft> = {\n${requiredBooleans
+          .map(([fieldName]) => `  ${fieldName}: false,`)
+          .join('\n')}\n}\n`
+      : ''
+
+  const draftLines = entries
+    .map(([fieldName, def]) => {
+      if (def.type === 'string') return `  ${fieldName}?: string`
+      if (def.type === 'boolean') return `  ${fieldName}?: boolean`
+      return `  ${fieldName}?: number | null`
+    })
+    .join('\n')
+
+  const payloadBuildLines = entries
+    .map(([fieldName, def]) => {
+      if (def.type === 'string') {
+        return def.optional
+          ? `    if (typeof raw.${fieldName} === 'string' && raw.${fieldName}.length > 0) payload.${fieldName} = raw.${fieldName}`
+          : // 契约 z.string()（无 minLength / minLength=0，如 maxLength:0）接受空串但拒绝
+            // undefined；未触碰的输入框不得被序列化成 undefined（#68 review 实测）。
+            `    payload.${fieldName} = typeof raw.${fieldName} === 'string' ? raw.${fieldName} : ''`
+      }
+      if (def.type === 'boolean') {
+        return def.optional
+          ? `    if (typeof raw.${fieldName} === 'boolean') payload.${fieldName} = raw.${fieldName}`
+          : `    payload.${fieldName} = Boolean(raw.${fieldName})`
+      }
+      return def.optional
+        ? `    if (typeof raw.${fieldName} === 'number') payload.${fieldName} = raw.${fieldName}`
+        : `    payload.${fieldName} = raw.${fieldName}`
+    })
+    .join('\n')
+
+  const formItems = entries
+    .map(([fieldName, def]) => {
+      const label = rawLabel(fieldName, def)
+      const labelExpr = jsStr(label)
+      if (def.type === 'boolean') {
+        return `      <Form.Item name="${fieldName}" label={${labelExpr}} valuePropName="checked">\n        <Switch />\n      </Form.Item>`
+      }
+      const rules = []
+      // UI 规则必须与 zod 语义一致：字符串未声明 minLength（或 minLength=0）时
+      // z.string() 接受空串，Ant Design 的 required 却把空串当缺失——加了就永远无法提交
+      // （maxLength: 0 的合法契约即典型；#68 review 实测）。仅当必填且 minLength>0 才加
+      // required；可选字段的空值由 payload 构建器省略，长度规则对空值放行。
+      if (!def.optional) {
+        if (def.type !== 'string' || (def.minLength ?? 0) > 0) {
+          rules.push(
+            def.type === 'string'
+              ? `{ required: true, message: ${jsStr(`请输入${label}`)} }`
+              : `{ required: true, type: 'number', message: ${jsStr(`请输入${label}`)} }`,
+          )
+        }
+      }
+      if (def.type === 'string') {
+        if (def.minLength !== undefined && def.minLength > 0) {
+          if (def.optional) {
+            rules.push(
+              `{ validator: (_, value) => (value === undefined || value === '' || String(value).length >= ${def.minLength} ? Promise.resolve() : Promise.reject(new Error(${jsStr(`至少 ${def.minLength} 个字符`)}))) }`,
+            )
+          } else {
+            rules.push(`{ min: ${def.minLength}, message: ${jsStr(`至少 ${def.minLength} 个字符`)} }`)
+          }
+        }
+        if (def.maxLength !== undefined) rules.push(`{ max: ${def.maxLength}, message: ${jsStr(`最多 ${def.maxLength} 个字符`)} }`)
+      } else {
+        if (def.minimum !== undefined) rules.push(`{ type: 'number', min: ${def.minimum}, message: ${jsStr(`最小为 ${def.minimum}`)} }`)
+        if (def.maximum !== undefined) rules.push(`{ type: 'number', max: ${def.maximum}, message: ${jsStr(`最大为 ${def.maximum}`)} }`)
+      }
+      const rulesAttr = rules.length > 0 ? ` rules={[${rules.join(', ')}]}` : ''
+      if (def.type === 'string') {
+        return `      <Form.Item name="${fieldName}" label={${labelExpr}}${rulesAttr}>\n        <Input />\n      </Form.Item>`
+      }
+      const numProps = []
+      if (def.type === 'integer') {
+        numProps.push('precision={0}', 'step={1}')
+      }
+      if (def.minimum !== undefined) numProps.push(`min={${def.minimum}}`)
+      if (def.maximum !== undefined) numProps.push(`max={${def.maximum}}`)
+      numProps.push("style={{ width: '100%' }}")
+      return `      <Form.Item name="${fieldName}" label={${labelExpr}}${rulesAttr}>\n        <InputNumber ${numProps.join(' ')} />\n      </Form.Item>`
+    })
+    .join('\n')
+
+  const tableColumns = [
+    `  { title: 'ID', dataIndex: 'id', key: 'id', width: 80 },`,
+    ...entries.map(([fieldName, def]) => {
+      const labelExpr = jsStr(rawLabel(fieldName, def))
+      if (def.type === 'boolean') {
+        return `  {\n    title: ${labelExpr},\n    dataIndex: '${fieldName}',\n    key: '${fieldName}',\n    render: (value: boolean | undefined) => (value === undefined ? '—' : value ? '是' : '否'),\n  },`
+      }
+      if (def.optional) {
+        return `  {\n    title: ${labelExpr},\n    dataIndex: '${fieldName}',\n    key: '${fieldName}',\n    render: (value: string | number | undefined) => (value === undefined ? '—' : String(value)),\n  },`
+      }
+      return `  { title: ${labelExpr}, dataIndex: '${fieldName}', key: '${fieldName}' },`
+    }),
+    `  { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt' },`,
+  ].join('\n')
+
+  const sample = sampleObject(fields)
+  const expectedLabelsLiteral = JSON.stringify(entries.map(([fieldName, def]) => rawLabel(fieldName, def)))
+  const fillSteps = entries
+    .map(([fieldName, def]) => {
+      const labelExpr = jsStr(rawLabel(fieldName, def))
+      const val = sample[fieldName]
+      if (def.type === 'boolean') {
+        return val
+          ? `    fireEvent.click(within(form).getByLabelText(${labelExpr}))`
+          : `    // ${fieldName} 示例值为 false（初始态即匹配）`
+      }
+      return `    const input_${fieldName} = within(form).getByLabelText(${labelExpr})\n    fireEvent.change(input_${fieldName}, { target: { value: ${JSON.stringify(String(val))} } })\n    fireEvent.blur(input_${fieldName})`
+    })
+    .join('\n')
+
+  const echoAssertions = entries
+    .map(([fieldName, def], index) => {
+      const val = sample[fieldName]
+      const expectedText = def.type === 'boolean' ? (val ? '是' : '否') : String(val)
+      return `    expect(cells[${index + 1}]).toBe(${JSON.stringify(expectedText)})`
+    })
+    .join('\n')
+
+  return {
+    api: `// ${hint}：前端 RTK Query 端点（devenv gen page 生成；#68）
+// 路由常量 + 推断类型来自 @ne/contracts，响应一律经统一校验封装 validated(...)。
+import {
+  Create${contractPascal}ResultSchema,
+  ${contractUpper}_ROUTES,
+  ${contractPascal}ListResultSchema,
+  type Create${contractPascal}Dto,
+  type Create${contractPascal}Result,
+  type ${contractPascal}ListResult,
+} from '@ne/contracts'
+import { neApi } from '../../api.js'
+import { validated } from '../../lib/validate.js'
+
+const CONTRACT_TAG = '${contractPascal}' as const
+
+// 端点名带 Page 后缀，避免与基础 api.ts 的 createPoint/nearby/health 命名冲突
+export const ${camel}Api = neApi
+  .enhanceEndpoints({ addTagTypes: [CONTRACT_TAG] })
+  .injectEndpoints({
+    endpoints: (b) => ({
+      list${pascal}Page: b.query<${contractPascal}ListResult, void>({
+        query: () => ${contractUpper}_ROUTES.list,
+        transformResponse: validated(${contractPascal}ListResultSchema),
+        providesTags: [CONTRACT_TAG],
+      }),
+      create${pascal}Page: b.mutation<Create${contractPascal}Result, Create${contractPascal}Dto>({
+        query: (body) => ({
+          url: ${contractUpper}_ROUTES.create,
+          method: 'POST',
+          body,
+        }),
+        transformResponse: validated(Create${contractPascal}ResultSchema),
+        invalidatesTags: [CONTRACT_TAG],
+      }),
+    }),
+  })
+
+export const { useList${pascal}PageQuery, useCreate${pascal}PageMutation } = ${camel}Api
+`,
+    form: `// ${hint}：可复用表单组件（devenv gen page 生成；#68）
+// 使用 React useId 为 Ant Design Form 提供实例级唯一 name/id；配合 createWebRoot 的
+// identifierPrefix，在同页重复表单与多 React 根场景下均保证 DOM id 唯一与 label 关联正确。
+import { useId, useState } from 'react'
+import { ${antdImports.join(', ')} } from 'antd'
+import { Create${contractPascal}Schema, type Create${contractPascal}Dto } from '@ne/contracts'
+
+interface FormDraft {
+${draftLines}
+}
+${initialValuesDecl}
+export interface ${pascal}FormProps {
+  /** 返回 false 表示提交失败（保留用户输入）；返回 true/void 表示成功并清空表单 */
+  onSubmit: (values: Create${contractPascal}Dto) => Promise<boolean | void> | boolean | void
+  submitting?: boolean
+}
+
+export default function ${pascal}Form({ onSubmit, submitting = false }: ${pascal}FormProps) {
+  const formId = useId()
+  const [form] = Form.useForm<FormDraft>()
+  const [validationError, setValidationError] = useState<string | null>(null)
+
+  const handleFinish = async (raw: FormDraft): Promise<void> => {
+    setValidationError(null)
+    const payload: Record<string, unknown> = {}
+${payloadBuildLines}
+    const parsed = Create${contractPascal}Schema.safeParse(payload)
+    if (!parsed.success) {
+      setValidationError(parsed.error.issues.map((i) => i.message).join('；'))
+      return
+    }
+    const result = await onSubmit(parsed.data)
+    if (result !== false) {
+      form.resetFields()
+    }
+  }
+
+  return (
+    <Form
+      form={form}
+      name={formId}
+      layout="vertical"${requiredBooleans.length > 0 ? '\n      initialValues={INITIAL_VALUES}' : ''}
+      onFinish={handleFinish}
+    >
+      {validationError && <Alert type="error" showIcon title={validationError} className="mb-4" />}
+${formItems}
+      <Form.Item>
+        <Button type="primary" htmlType="submit" loading={submitting}>
+          提交记录
+        </Button>
+      </Form.Item>
+    </Form>
+  )
+}
+`,
+    page: `// ${hint}：自动注册页面（devenv gen page 生成；#68）
+// 通过 RTK Query + validated(...) 消费 @ne/contracts 契约路由与推断类型，提交后自动刷新列表回显。
+import { useState } from 'react'
+import { Alert, Card, Flex, Table } from 'antd'
+import type { TableProps } from 'antd'
+import type { Create${contractPascal}Dto, ${contractPascal}Dto } from '@ne/contracts'
+import { useCreate${pascal}PageMutation, useList${pascal}PageQuery } from './${name}.api.js'
+import ${pascal}Form from './${pascal}Form.js'
+
+const COLUMNS: NonNullable<TableProps<${contractPascal}Dto>['columns']> = [
+${tableColumns}
+]
+
+function formatApiError(err: unknown): string {
+  if (err instanceof Error) return err.message
+  if (typeof err === 'object' && err !== null) {
+    const rec = err as Record<string, unknown>
+    if (typeof rec.message === 'string' && rec.message.length > 0) return rec.message
+    if ('status' in rec) return \`请求失败（\${String(rec.status)}）：\${JSON.stringify(rec.data ?? rec)}\`
+  }
+  return String(err)
+}
+
+export default function ${pascal}Page() {
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const { data, isFetching, error: listError } = useList${pascal}PageQuery()
+  const [createItem, { isLoading: isCreating }] = useCreate${pascal}PageMutation()
+
+  const handleSubmit = async (values: Create${contractPascal}Dto): Promise<boolean> => {
+    setSubmitError(null)
+    try {
+      await createItem(values).unwrap()
+      return true
+    } catch (err) {
+      setSubmitError(formatApiError(err))
+      return false
+    }
+  }
+
+  const errorMessage = submitError ?? (listError ? formatApiError(listError) : null)
+
+  return (
+    <Flex vertical gap={16}>
+      <Card size="small" title={${jsStr(`${rawCardTitle} · 新增`)}}>
+        <${pascal}Form onSubmit={handleSubmit} submitting={isCreating} />
+      </Card>
+
+      {errorMessage && <Alert type="error" showIcon title={errorMessage} />}
+
+      <Card
+        size="small"
+        data-list-loaded={!isFetching && data !== undefined ? 'true' : 'false'}
+        title={${jsStr(`${rawCardTitle} · 列表（`)} + String(data?.items.length ?? 0) + ' 条）'}
+      >
+        <Table<${contractPascal}Dto>
+          rowKey="id"
+          size="small"
+          pagination={false}
+          loading={isFetching}
+          dataSource={data?.items ?? []}
+          columns={COLUMNS}
+        />
+      </Card>
+    </Flex>
+  )
+}
+`,
+    spec: `// ${hint}：生成页面组件测试（devenv gen page 生成；#68）
+// 覆盖：同页双相同 Form / 多 React 根前缀（真实 DOM id 唯一 + label 关联）+
+// 页面 → API → 数据回显 + 统一响应校验封装失配拒绝。
+import { act } from 'react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
+import {
+  Create${contractPascal}Schema,
+  ${contractUpper}_ROUTES,
+  type ${contractPascal}Dto,
+} from '@ne/contracts'
+import App from '../../App.js'
+import { setApiBaseUrlOverride } from '../../api.js'
+import { createWebRoot, WebProviders, type WebRootHandle } from '../../lib/root.js'
+import { createAppStore } from '../../store.js'
+import { assertFormIdsAndLabels, collectDomIds } from '../../../test/form-assertions.js'
+import ${pascal}Form from './${pascal}Form.js'
+import ${pascal}Page from './${pascal}Page.js'
+
+const LIVE_WEB_URL = (import.meta.env as Record<string, string | undefined>).VITE_LIVE_WEB_URL
+const EXPECTED_LABELS = ${expectedLabelsLiteral} as const
+const SAMPLE_INPUT = ${sampleLiteral(sample)}
+const mountedRoots: Array<{ root: WebRootHandle; host: HTMLDivElement }> = []
+
+afterEach(() => {
+  for (const item of mountedRoots.splice(0)) {
+    act(() => {
+      item.root.unmount()
+    })
+    item.host.remove()
+  }
+  setApiBaseUrlOverride(undefined)
+  window.history.replaceState({}, '', '/')
+  vi.restoreAllMocks()
+  cleanup()
+})
+
+describe('${pascal}Page（生成物）', () => {
+  it('同页渲染两个相同 ${pascal}Form：DOM id 唯一且 label 正确关联各自控件', () => {
+    const { container } = render(
+      <WebProviders store={createAppStore()}>
+        <${pascal}Form onSubmit={vi.fn()} />
+        <${pascal}Form onSubmit={vi.fn()} />
+      </WebProviders>,
+    )
+
+    const forms = Array.from(container.querySelectorAll<HTMLFormElement>('form'))
+    expect(forms).toHaveLength(2)
+    assertFormIdsAndLabels(forms, EXPECTED_LABELS)
+  })
+
+  it('多 React 根（identifierPrefix）：跨根 DOM id 带根级前缀且全局唯一、无串扰', () => {
+    const hostA = document.createElement('div')
+    const hostB = document.createElement('div')
+    document.body.append(hostA, hostB)
+
+    const rootA = createWebRoot(hostA, { identifierPrefix: 'root-a-', store: createAppStore() })
+    const rootB = createWebRoot(hostB, { identifierPrefix: 'root-b-', store: createAppStore() })
+    mountedRoots.push({ root: rootA, host: hostA }, { root: rootB, host: hostB })
+
+    act(() => {
+      rootA.render(<${pascal}Form onSubmit={vi.fn()} />)
+      rootB.render(<${pascal}Form onSubmit={vi.fn()} />)
+    })
+
+    const formA = hostA.querySelector<HTMLFormElement>('form')!
+    const formB = hostB.querySelector<HTMLFormElement>('form')!
+    expect([formA.id, ...collectDomIds(formA)].every((id) => id.includes('root-a-'))).toBe(true)
+    expect([formB.id, ...collectDomIds(formB)].every((id) => id.includes('root-b-'))).toBe(true)
+    assertFormIdsAndLabels([formA, formB], EXPECTED_LABELS)
+  })
+
+  it('页面 → API → 数据回显：提交表单命中契约路由并经统一校验封装渲染回显', async () => {
+    const items: ${contractPascal}Dto[] = []
+    const posted: unknown[] = []
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const req = input instanceof Request ? input : new Request(String(input), init)
+      const pathname = new URL(req.url).pathname
+      const method = req.method.toUpperCase()
+
+      if (method === 'GET' && pathname === ${contractUpper}_ROUTES.list) {
+        return new Response(JSON.stringify({ items }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      if (method === 'POST' && pathname === ${contractUpper}_ROUTES.create) {
+        const body = Create${contractPascal}Schema.parse(JSON.parse(await req.text()))
+        posted.push(body)
+        const id = items.length + 1
+        items.push({ ...body, id, createdAt: '2026-11-28T00:00:00.000Z' })
+        return new Response(JSON.stringify({ id }), {
+          status: 201,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      return new Response(JSON.stringify({ message: 'Not Found' }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+
+    const { container } = render(
+      <WebProviders store={createAppStore()}>
+        <${pascal}Page />
+      </WebProviders>,
+    )
+
+    const form = container.querySelector<HTMLFormElement>('form')!
+${fillSteps}
+    fireEvent.click(within(form).getByRole('button', { name: '提交记录' }))
+
+    await waitFor(() => {
+      expect(posted).toEqual([SAMPLE_INPUT])
+      expect(container.querySelector('tr[data-row-key="1"]')).not.toBeNull()
+    })
+
+    const row = container.querySelector<HTMLElement>('tr[data-row-key="1"]')!
+    const cells = Array.from(row.querySelectorAll('td')).map((td) => td.textContent)
+    expect(cells[0]).toBe('1')
+${echoAssertions}
+  })
+
+  it('统一响应校验封装（validated）：响应契约失配即刻暴露错误而非静默渲染', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => {
+      return new Response(JSON.stringify({ items: 'not-an-array' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+
+    const { container } = render(
+      <WebProviders store={createAppStore()}>
+        <${pascal}Page />
+      </WebProviders>,
+    )
+
+    await waitFor(() => {
+      expect(container.querySelector('[role="alert"]')).not.toBeNull()
+    })
+    expect(container.querySelector('tr[data-row-key]')).toBeNull()
+  })
+
+  it.skipIf(!LIVE_WEB_URL)(
+    '真实栈 UI 旅程（App 自动注册标签 → web proxy → 真实 API → 数据回显）',
+    async () => {
+      setApiBaseUrlOverride(LIVE_WEB_URL)
+      window.history.replaceState({}, '', '/?tab=${name}')
+      const host = document.createElement('div')
+      document.body.append(host)
+      const root = createWebRoot(host, {
+        identifierPrefix: 'live-journey-',
+        store: createAppStore(),
+      })
+      mountedRoots.push({ root, host })
+
+      act(() => {
+        root.render(<App />)
+      })
+
+      // 等待 /health 与初始列表 GET 均落定，避免非空库场景下读取 beforeMaxId 竞态
+      await waitFor(
+        () => {
+          expect(within(host).getByText('api 在线')).toBeInTheDocument()
+          expect(host.querySelector('[data-list-loaded="true"]')).not.toBeNull()
+          expect(host.querySelector('form')).not.toBeNull()
+        },
+        { timeout: 10_000 },
+      )
+
+      const form = host.querySelector<HTMLFormElement>('form')!
+      expect(form.id).toContain('live-journey-')
+      const beforeMaxId = Math.max(
+        0,
+        ...Array.from(host.querySelectorAll<HTMLElement>('tr[data-row-key]')).map((r) =>
+          Number(r.dataset.rowKey ?? 0),
+        ),
+      )
+${fillSteps}
+      fireEvent.click(within(form).getByRole('button', { name: '提交记录' }))
+
+      await waitFor(
+        () => {
+          const rows = Array.from(host.querySelectorAll<HTMLElement>('tr[data-row-key]'))
+          expect(rows.some((r) => Number(r.dataset.rowKey ?? 0) > beforeMaxId)).toBe(true)
+        },
+        { timeout: 10_000 },
+      )
+
+      const createdRow = Array.from(host.querySelectorAll<HTMLElement>('tr[data-row-key]')).find(
+        (r) => Number(r.dataset.rowKey ?? 0) > beforeMaxId,
+      )!
+      const cells = Array.from(createdRow.querySelectorAll('td')).map((td) => td.textContent)
+      expect(Number(cells[0])).toBeGreaterThan(beforeMaxId)
+${echoAssertions}
+    },
+    15_000,
+  )
+})
+`,
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 装配：新文件 Map + 锚点补丁（全部在内存中完成，校验通过后才写盘）
 // ---------------------------------------------------------------------------
 const KIND_SPEC = {
@@ -685,8 +1362,10 @@ const KIND_SPEC = {
 const files = new Map()
 /** @type {Array<{file: string, apply: (src: string) => {text: string, addedLines: string[]}}>} */
 const patches = []
-/** nest-module 的 spec 内容哈希（写入 manifest，供宿主与输入快照比对） */
+/** nest-module / page 的 spec 内容哈希（写入 manifest，供宿主与输入快照比对） */
 let specSha = ''
+/** page 消费的契约模块名（写入 manifest，供宿主核对） */
+let effectiveContract = ''
 
 const put = (rel, content, mode = 0o644) => files.set(rel, { content, mode })
 
@@ -696,6 +1375,12 @@ function linesOf(text) {
 
 function hasLine(text, line) {
   return linesOf(text).includes(line)
+}
+
+// 去首尾空白后判定整行（与宿主 gen_has_line 同口径：契约注册表允许不同缩进）。
+function hasTrimmedLine(text, line) {
+  const want = line.trim()
+  return linesOf(text).some((candidate) => candidate.trim() === want)
 }
 
 // 整行锚点插入：marker 为独立行（允许前置缩进；prefix 模式供注释带尾注的锚点）。
@@ -724,7 +1409,7 @@ function requireSingleMarker(text, marker, lines, opts = {}) {
 }
 
 if (kind === 'package' || kind === 'app') {
-  if (VARIANT || SPEC_REL) die('package/app 不接受 --http/--internal/--spec', 2)
+  if (VARIANT || SPEC_REL || CONTRACT) die('package/app 不接受 --http/--internal/--spec/--contract', 2)
   const spec = KIND_SPEC[kind]
   const base = `${spec.targetRoot}/${name}`
 
@@ -761,10 +1446,11 @@ if (kind === 'package' || kind === 'app') {
       return { text: out.join('\n'), addedLines: [copyLine, copyLine] }
     },
   })
-} else {
+} else if (kind === 'nest-module') {
   // -------------------------------------------------------------------------
   // nest-module：HTTP 生成完整契约联动；internal 只生成 module/service
   // -------------------------------------------------------------------------
+  if (CONTRACT) die('nest-module 不接受 --contract（仅 page 使用）', 2)
   if (VARIANT !== 'http' && VARIANT !== 'internal') {
     die(`nest-module 需要且只接受一个 --http|--internal（实际：${VARIANT || '(缺)'}）`, 2)
   }
@@ -820,6 +1506,39 @@ if (kind === 'package' || kind === 'app') {
       },
     })
   }
+} else {
+  // -------------------------------------------------------------------------
+  // page：消费 @ne/contracts（RTK Query + validated）+ useId 表单 + 自动注册 App.tsx
+  // -------------------------------------------------------------------------
+  if (VARIANT) die('page 不接受 --http/--internal（仅 nest-module 使用）', 2)
+  const loaded = loadSpec()
+  specSha = loaded.specSha
+  const spec = loaded.spec
+  const fields = spec.fields
+  effectiveContract = CONTRACT || name
+  const { contractPascal, contractUpper } = verifyPageContract(effectiveContract, fields)
+
+  const root = `apps/web/src/pages/${name}`
+  const tpl = pageFiles({ spec, contract: effectiveContract, contractPascal, contractUpper, fields })
+  put(`${root}/${name}.api.ts`, tpl.api)
+  put(`${root}/${pascal}Form.tsx`, tpl.form)
+  put(`${root}/${pascal}Page.tsx`, tpl.page)
+  put(`${root}/${pascal}Page.spec.tsx`, tpl.spec)
+
+  const tabLabelExpr = jsStr(spec.title ?? pascal)
+  const importLine = `import ${pascal}Page from './pages/${name}/${pascal}Page.js'`
+  const itemLine = `    { key: '${name}', label: ${tabLabelExpr}, children: <${pascal}Page /> },`
+  patches.push({
+    file: 'apps/web/src/App.tsx',
+    apply: (text) => {
+      if (hasLine(text, importLine) || text.includes(`key: '${name}',`)) {
+        die(`App.tsx 已注入过 ${pascal}Page（幂等保护，未写入任何文件）`)
+      }
+      let next = requireSingleMarker(text, '// @gen:page-import', [importLine])
+      next = requireSingleMarker(next, '// @gen:page-item', [itemLine])
+      return { text: next, addedLines: [importLine, itemLine] }
+    },
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -832,7 +1551,11 @@ for (const rel of files.keys()) {
 }
 // 目标目录也必须不存在（避免只检查文件漏掉空目录/遗留文件）
 const targetRoots =
-  kind === 'nest-module' ? [`apps/api/src/${name}`] : [`${KIND_SPEC[kind].targetRoot}/${name}`]
+  kind === 'nest-module'
+    ? [`apps/api/src/${name}`]
+    : kind === 'page'
+      ? [`apps/web/src/pages/${name}`]
+      : [`${KIND_SPEC[kind].targetRoot}/${name}`]
 for (const root of targetRoots) {
   if (fs.existsSync(src(root))) {
     die(`目标已存在：${root}/（幂等保护，未写入任何文件；先删除再生成）`)
@@ -865,8 +1588,9 @@ const manifest = {
   kind,
   name,
   variant: kind === 'nest-module' ? VARIANT : '',
+  contract: kind === 'page' ? effectiveContract : '',
   manifestVersion: 2,
-  spec: kind === 'nest-module' ? { path: SPEC_REL, sha256: specSha } : null,
+  spec: kind === 'nest-module' || kind === 'page' ? { path: SPEC_REL, sha256: specSha } : null,
   files: [],
   patches: [],
 }

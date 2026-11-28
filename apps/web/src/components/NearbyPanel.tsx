@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { Alert, Button, Card, Flex, Form, InputNumber, Spin } from 'antd'
 import type { NearbyQueryDto } from '@ne/contracts'
 import { useNearbyQuery } from '../api.js'
@@ -15,6 +15,7 @@ export default function NearbyPanel({
   query: NearbyQueryDto
   onQueryChange: (q: NearbyQueryDto) => void
 }) {
+  const formId = useId()
   const [form] = Form.useForm<FormValues>()
   const [draft, setDraft] = useState<FormValues>(query)
   const { data, isFetching, error } = useNearbyQuery(query)
@@ -24,6 +25,7 @@ export default function NearbyPanel({
       <Card size="small" title="附近点位查询（PostGIS ST_DWithin，距离由 ST_Distance 排序）">
         <Form
           form={form}
+          name={formId}
           layout="inline"
           initialValues={draft}
           onValuesChange={(_, v) => setDraft(v)}

@@ -62,6 +62,10 @@ devenv — 工程基座唯一入口（命令面权威文档：devenv/COMMANDS.md
                             生成契约完整的 Nest 模块（#67）：--http 生成路由常量/请求响应 schema/
                             请求与响应校验/集成测试并登记 OpenAPI 契约；--internal 仅生成 module/
                             service（不强制 HTTP 契约）；缺业务信息即停止，无部分写入
+  gen page <name> --spec <路径> [--contract <契约名>]
+                            生成自动注册且表单实例唯一的页面（#68）：经 RTK Query + validated 统一
+                            响应校验封装消费 @ne/contracts（默认同名契约，可用 --contract 指定）；
+                            表单用 React useId（多 React 根带根级前缀），附双 Form/多根/UI 旅程测试
   gen evidence              读取绑定 workspace 镜像内的 pnpm 下载证据（需 DEVENV_PNPM_EVIDENCE=1 构建；缺失即 exit 4）
   ps [-a]                   容器状态（含发布端口；--json 输出 JSONL）
   logs [svc] [-f] [--tail N] 跟随日志（透传原始流；--json 时原始流走 stderr，stdout 仅终值元数据）
@@ -578,7 +582,7 @@ cmd_gen() {
     cmd_gen_evidence
     return 0
   fi
-  local kind="" name="" variant="" spec=""
+  local kind="" name="" variant="" spec="" contract=""
   while [[ $# -gt 0 ]]; do
     case "$1" in
       -h|--help) usage; exit 0 ;;
@@ -592,33 +596,44 @@ cmd_gen() {
         [[ -n "${2:-}" ]] || die 2 "--spec 需要值（仓库相对路径）"
         [[ -z "$spec" ]] || die 2 "--spec 只能出现一次"
         spec="$2"; shift 2 ;;
-      -*) die 2 "未知参数：$1（用法：gen <package|app|nest-module> <kebab-case 名>）" ;;
+      --contract)
+        [[ -n "${2:-}" ]] || die 2 "--contract 需要值（kebab-case 契约名）"
+        [[ -z "$contract" ]] || die 2 "--contract 只能出现一次"
+        contract="$2"; shift 2 ;;
+      -*) die 2 "未知参数：$1（用法：gen <package|app|nest-module|page> <kebab-case 名>）" ;;
       *)
         if [[ -z "$kind" ]]; then kind="$1"
         elif [[ -z "$name" ]]; then name="$1"
-        else die 2 "多余参数：$1（用法：gen <package|app|nest-module> <kebab-case 名>）"; fi
+        else die 2 "多余参数：$1（用法：gen <package|app|nest-module|page> <kebab-case 名>）"; fi
         shift ;;
     esac
   done
   [[ -n "$kind" && -n "$name" ]] \
-    || die 2 "用法：gen <package|app|nest-module> <kebab-case 名>（nest-module 另需 --http|--internal --spec <路径>）"
+    || die 2 "用法：gen <package|app|nest-module|page> <kebab-case 名>（nest-module 需 --http|--internal --spec <路径>；page 需 --spec <路径> [--contract <契约名>]）"
   [[ "$name" =~ ^[a-z][a-z0-9]*(-[a-z0-9]+)*$ ]] \
     || die 2 "名称须为 kebab-case（小写字母数字+连字符）：${name}"
   case "$kind" in
     package|app)
-      [[ -z "$variant" && -z "$spec" ]] \
-        || die 2 "gen ${kind} 不接受 --http/--internal/--spec（仅 nest-module 需要）"
+      [[ -z "$variant" && -z "$spec" && -z "$contract" ]] \
+        || die 2 "gen ${kind} 不接受 --http/--internal/--spec/--contract"
       [[ -f "$REPO_ROOT/pnpm-lock.yaml" ]] \
         || die 4 "缺 pnpm-lock.yaml 基线：先用 devenv build --lockgen 建立锁文件基线并审查后重试（gen 需要可比较的旧锁文件）"
       ;;
     nest-module)
+      [[ -z "$contract" ]] \
+        || die 2 "gen nest-module 不接受 --contract（仅 page 使用）"
       [[ "$variant" == "http" || "$variant" == "internal" ]] \
         || die 2 "gen nest-module 需要且只接受一个 --http|--internal（HTTP 契约联动 / 内部服务）"
       gen_spec_validate "$spec" "$name" "$variant"
       ;;
     page)
-      die 2 "gen page 尚未实现（归 #68）" ;;
-    *) die 2 "未知 kind：${kind}（当前可选：package | app | nest-module）" ;;
+      [[ -z "$variant" ]] \
+        || die 2 "gen page 不接受 --http/--internal（仅 nest-module 使用）"
+      [[ -n "$contract" ]] || contract="$name"
+      gen_spec_validate "$spec" "$name" "page"
+      gen_page_contract_validate "$contract" "$spec"
+      ;;
+    *) die 2 "未知 kind：${kind}（当前可选：package | app | nest-module | page）" ;;
   esac
 
   # 源码锁（per-worktree）：与其它 gen、与 build 互斥（build 取得同一把）
@@ -636,9 +651,13 @@ cmd_gen() {
   ev gen.source path="$REPO_ROOT/devenv/gen" treeHash="$GEN_SOURCE_TREE" \
     setHash="$GEN_SET_SHA256" files="$GEN_SOURCE_FILES" snapshot="$s"
   note "生成器来源：${REPO_ROOT}/devenv/gen（子树哈希 ${GEN_SOURCE_TREE}；集哈希 ${GEN_SET_SHA256}；${GEN_SOURCE_FILES} 个文件）"
-  if [[ "$kind" == "nest-module" ]]; then
+  if [[ "$kind" == "nest-module" || "$kind" == "page" ]]; then
     git -C "$REPO_ROOT" cat-file -e "${s}:${spec}" 2>/dev/null \
       || die 4 "spec 不在本次输入快照：${spec}（工作树在采集期间被修改；未写入任何文件）"
+  fi
+  if [[ "$kind" == "page" ]]; then
+    git -C "$REPO_ROOT" cat-file -e "${s}:packages/contracts/src/${contract}.ts" 2>/dev/null \
+      || die 4 "契约不在本次输入快照：packages/contracts/src/${contract}.ts（工作树在采集期间被修改；未写入任何文件）"
   fi
 
   # 生成器容器基座：tools 不可变镜像（node + tar；镜像内无 devenv/gen 副本）
@@ -651,28 +670,37 @@ cmd_gen() {
     || die 4 "无法创建 gen 事务目录（${DEVENV_STATE_DIR:-$REPO_ROOT/.devenv-state}）"
   SNAPSHOT_TMPDIRS+=("$txn")  # 复用 EXIT 清理
 
-  gen_run_container "$txn" "$kind" "$name" "$variant" "$spec" "$s"
+  gen_run_container "$txn" "$kind" "$name" "$variant" "$spec" "$s" "$contract"
   local stage="$txn/stage" applied_files applied_patches
-  gen_stage_output "$txn" "$stage" "$kind" "$name" "$variant" "$spec" "$s"
+  gen_stage_output "$txn" "$stage" "$kind" "$name" "$variant" "$spec" "$s" "$contract"
   gen_apply_transaction "$stage" "$txn" "$kind" "$name" "$variant" "$s"
   applied_files="$(jq '.files | length' "$stage/$GEN_MANIFEST_NAME")"
   applied_patches="$(jq '.patches | length' "$stage/$GEN_MANIFEST_NAME")"
   ev gen.applied files="$applied_files" patches="$applied_patches"
 
-  # nest-module：不新增 workspace 包/依赖 → 不触发 lockgen；仍做静态供应链门禁。
-  if [[ "$kind" == "nest-module" ]]; then
+  # nest-module / page：不新增 workspace 包/依赖 → 不触发 lockgen；仍做静态供应链门禁。
+  if [[ "$kind" == "nest-module" || "$kind" == "page" ]]; then
     if ! supply_chain_static_check "$REPO_ROOT" 0; then
       sc_print_report
       final failed 4 step="supply-chain" errors="$(sc_error_count)" hint="docs/agents/supply-chain.md"
-      die 4 "gen nest-module 后供应链门禁未通过（$(sc_error_count) 项）；已回滚生成物"
+      die 4 "gen ${kind} 后供应链门禁未通过（$(sc_error_count) 项）；已回滚生成物"
     fi
     gen_txn_commit
-    note "gen nest-module 完成：${variant}（无需 lockgen：未新增 workspace 包/依赖）"
-    note "下一步：devenv verify（lint + typecheck + test:unit）"
-    final ok 0 kind="$kind" name="$name" variant="$variant" spec="$spec" \
-      sourcePath="$REPO_ROOT/devenv/gen" treeHash="$GEN_SOURCE_TREE" setHash="$GEN_SET_SHA256" \
-      files="$GEN_SOURCE_FILES" patches="$applied_patches" lockgen="not-required" \
-      duration="$(( $(date +%s) - t0 ))s"
+    if [[ "$kind" == "nest-module" ]]; then
+      note "gen nest-module 完成：${variant}（无需 lockgen：未新增 workspace 包/依赖）"
+      note "下一步：devenv verify（lint + typecheck + test:unit）"
+      final ok 0 kind="$kind" name="$name" variant="$variant" spec="$spec" \
+        sourcePath="$REPO_ROOT/devenv/gen" treeHash="$GEN_SOURCE_TREE" setHash="$GEN_SET_SHA256" \
+        files="$GEN_SOURCE_FILES" patches="$applied_patches" lockgen="not-required" \
+        duration="$(( $(date +%s) - t0 ))s"
+    else
+      note "gen page 完成：apps/web/src/pages/${name}/（契约 ${contract}；无需 lockgen：未新增 workspace 包/依赖）"
+      note "下一步：devenv verify（lint + typecheck + test:unit）与 devenv web 联调"
+      final ok 0 kind="$kind" name="$name" contract="$contract" spec="$spec" \
+        sourcePath="$REPO_ROOT/devenv/gen" treeHash="$GEN_SOURCE_TREE" setHash="$GEN_SET_SHA256" \
+        files="$GEN_SOURCE_FILES" patches="$applied_patches" lockgen="not-required" \
+        duration="$(( $(date +%s) - t0 ))s"
+    fi
     return 0
   fi
 

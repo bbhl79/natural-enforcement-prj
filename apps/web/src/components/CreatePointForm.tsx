@@ -1,9 +1,11 @@
+import { useId } from 'react'
 import { Button, Card, Form, Input, InputNumber, App as AntApp } from 'antd'
 import { useCreatePointMutation } from '../api.js'
 
 type FormValues = { name: string; lat: number; lng: number }
 
 export default function CreatePointForm() {
+  const formId = useId()
   const [form] = Form.useForm<FormValues>()
   const { message } = AntApp.useApp()
   const [createPoint, { isLoading }] = useCreatePointMutation()
@@ -12,6 +14,7 @@ export default function CreatePointForm() {
     <Card size="small" title="新建执法点位（写路径：POST → 真实插入，nearby 自动重查）">
       <Form
         form={form}
+        name={formId}
         layout="inline"
         onFinish={async (v) => {
           const r = await createPoint(v).unwrap()
