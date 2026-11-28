@@ -4,7 +4,7 @@
 // **重放轮次结果是 mock 的**（宿主实测后注入）：门禁判定与登记落盘意图在此被
 // 独立验证——任一轮不符/unknown/infrastructure → exit 8 且**零 op**（不登记）。
 import { createHash } from 'node:crypto'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -178,6 +178,25 @@ describe('report-register：门禁不过 → exit 8 零登记', () => {
     expect(r.ops).toEqual([])
     expect(r.end).toMatch(/字节不符/)
   })
+
+  it('缺明确前置状态声明 → exit 8，零 op（每轮须从明确前置状态开始）', () => {
+    const root = tempTree()
+    const payload = JSON.parse(registerPayload([mockRound(1), mockRound(2), mockRound(3)]))
+    delete payload.finding.reproducibility.precondition
+    const r = run(root, ['report', 'register'], JSON.stringify(payload))
+    expect(r.code).toBe(8)
+    expect(r.ops).toEqual([])
+  })
+
+  it('编号已被占用（另一会话已登记）→ exit 8，零 op', () => {
+    const root = tempTree()
+    mkdirSync(join(root, 'defects'), { recursive: true })
+    writeFileSync(join(root, 'defects/DEF-0001.json'), '{"id":"DEF-0001"}', 'utf8')
+    const r = run(root, ['report', 'register'], registerPayload([mockRound(1), mockRound(2), mockRound(3)]))
+    expect(r.code).toBe(8)
+    expect(r.ops).toEqual([])
+    expect(r.end).toMatch(/编号已被占用/)
+  })
 })
 
 describe('report-register：过门禁 → 登记产物完整', () => {
@@ -223,5 +242,49 @@ describe('report-register：过门禁 → 登记产物完整', () => {
     expect(text).not.toBeNull()
     const parsed = parseDefectJson(text ?? '')
     expect(parsed.ok).toBe(true)
+  })
+
+  it('并发缺陷：触发顺序与时序声明随记录入库（第三方可独立复验）', () => {
+    const root = tempTree()
+    const payload = JSON.parse(registerPayload([mockRound(1), mockRound(2), mockRound(3)]))
+    const concurrency = {
+      triggerOrder: ['先上传证据', '再重复入队同一 recordId'],
+      timing: '两操作间隔 <50ms（worker 尚未 markReady）',
+      preservedBy: '脚本按序 await，不省略等待；soakMs 打进签名语义标记',
+    }
+    payload.finding.reproducibility.concurrency = concurrency
+    const r = run(root, ['report', 'register'], JSON.stringify(payload))
+    expect(r.code).toBe(0)
+    const rec = writtenRecord(r.ops, 'defects/DEF-0001.json')
+    expect(rec?.reproducibility.concurrency).toEqual(concurrency)
+  })
+})
+
+describe('report plan：只读取号 + 门禁下限 + 脚本字节（零落盘）', () => {
+  it('空树取号 DEF-0001，external-state 下限 3，脚本字节 base64 输出', () => {
+    const root = tempTree()
+    const r = run(root, ['report', 'plan'], JSON.stringify({ finding: finding(), remoteMax: 0 }))
+    expect(r.code).toBe(0)
+    expect(r.ops).toEqual([]) // plan 零落盘
+    const lines = Object.fromEntries(r.data.map((l) => [l.split('\t')[0], l.split('\t')[1]]))
+    expect(lines['ID']).toBe('DEF-0001')
+    expect(lines['KIND']).toBe('external-state')
+    expect(lines['ATTEMPTS']).toBe('3')
+    expect(lines['CMD']).toBe('node apps/e2e/replay/DEF-0001.mjs')
+    expect(Buffer.from(lines['SCRIPT_B64'] ?? '', 'base64').toString('utf8')).toBe(SCRIPT)
+  })
+
+  it('远端编号叠读：max(本地, 远端)+1', () => {
+    const root = tempTree()
+    const r = run(root, ['report', 'plan'], JSON.stringify({ finding: finding(), remoteMax: 7 }))
+    expect(r.code).toBe(0)
+    expect(r.data.some((l) => l === 'ID\tDEF-0008')).toBe(true)
+  })
+
+  it('pure 路径下限 1（按被测路径分类）', () => {
+    const root = tempTree()
+    const r = run(root, ['report', 'plan'], JSON.stringify({ finding: finding('pure'), remoteMax: 0 }))
+    expect(r.code).toBe(0)
+    expect(r.data.some((l) => l === 'ATTEMPTS\t1')).toBe(true)
   })
 })
