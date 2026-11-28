@@ -26,9 +26,12 @@
 # ============================================================================
 BP_API="${BP_API:-https://api.github.com}"
 BP_RULESETS_DIR="${BP_RULESETS_DIR:-$REPO_ROOT/devenv/rulesets}"
-# 持久（durable）规则集 = dev 两层，进 CI 常驻核对；其余保存文件（验收期
-# transient 测试分支对）只在受控验收 harness 中核对，不进日常门禁。
-BP_DURABLE_RULESETS=(protect-dev-base protect-dev-approval)
+# 持久（durable）规则集 = dev 两层 + archive 标签保护层（#74），进 CI 常驻核对；
+# 其余保存文件（验收期 transient 测试分支对）只在受控验收 harness 中核对，不进日常门禁。
+BP_DURABLE_RULESETS=(protect-dev-base protect-dev-approval protect-archive-tags)
+# archive 标签保护代表性 ref（额外 tag 规则集覆盖面判定用；模式 refs/tags/archive/* 命中）
+BP_ARCHIVE_PROBE_REF="refs/tags/archive/probe"
+BP_ARCHIVE_PROBE_BARE="archive/probe"
 
 # 发现（漂移）与提示（未核对/非阻断）双桶；BP_ECHO_FINDINGS=1 时同步 echo 到
 # stdout（命令替换子进程捕获用——env 前缀只作用于子进程，不影响进程内调用方
@@ -175,17 +178,17 @@ bp_check_drift() {
     return 3
   fi
   local ids
-  if ! ids=$(jq -r '[.[] | select(.target == "branch")] | .[] | "\(.id) \(.name)"' <<< "$list" 2>/dev/null); then
+  if ! ids=$(jq -r '[.[] | select(.target == "branch" or .target == "tag")] | .[] | "\(.id) \(.target) \(.name)"' <<< "$list" 2>/dev/null); then
     bp_add_finding "规则集列表解析失败——fail closed，不判一致"
     return 3
   fi
-  [[ -n "$ids" ]] || warn "远端无任何 branch 目标规则集"
+  [[ -n "$ids" ]] || warn "远端无任何 branch/tag 目标规则集"
 
-  local rc=0 rc_drift=0 line id live_name live_json found
+  local rc=0 rc_drift=0 line id live_target live_name live_json found
   local seen_names=$'\n'   # 换行分隔（规则集名可含空格，不可用空格分隔）
   while IFS= read -r line; do
     [[ -z "$line" ]] && continue
-    id="${line%% *}"; live_name="${line#* }"
+    id="${line%% *}"; live_target="${line#* }"; live_name="${live_target#* }"; live_target="${live_target%% *}"
     seen_names="$seen_names$live_name"$'\n'   # 列表已见即记（读取失败不产生假「未见于远端」）
     if ! live_json=$(bp_api_get "/repos/$repo/rulesets/$id"); then
       bp_add_finding "无法读取规则集 $live_name（id=$id）——fail closed，不判一致"
@@ -222,14 +225,32 @@ bp_check_drift() {
         fi
       fi
     else
-      local crc2
-      bp_ruleset_covers_ref "$live_json" "refs/heads/$default_branch" "$default_branch" && crc2=0 || crc2=$?
-      if [[ $crc2 == 2 ]]; then
-        bp_add_finding "规则集 $live_name（id=$id）条件解析失败——fail closed，不判一致"
-        rc=3
-      elif [[ $crc2 == 0 ]]; then
-        bp_add_finding "额外规则集 $live_name 覆盖默认分支 $default_branch（不在保存配置中）——若为受控验收 transient 规则集请确认目标；否则为配置漂移"
-        rc_drift=1
+      # 额外规则集（不在本次核对名单）：已知 durable 配置只是未被本调用方请求，
+      # 跳过覆盖面判定（如 #73 harness 只核对 dev 两层时不请求 archive 层）；
+      # 其余按 target 判定是否覆盖受保护命名空间（dev 分支 / archive/* 标签）。
+      local is_durable=0 d
+      for d in ${BP_DURABLE_RULESETS[@]+"${BP_DURABLE_RULESETS[@]}"}; do
+        [[ "$d" == "$live_name" ]] && is_durable=1 && break
+      done
+      if [[ $is_durable == 0 ]]; then
+        local crc2=1 probe_ref probe_bare
+        if [[ "$live_target" == "tag" ]]; then
+          probe_ref="$BP_ARCHIVE_PROBE_REF"; probe_bare="$BP_ARCHIVE_PROBE_BARE"
+        else
+          probe_ref="refs/heads/$default_branch"; probe_bare="$default_branch"
+        fi
+        bp_ruleset_covers_ref "$live_json" "$probe_ref" "$probe_bare" && crc2=0 || crc2=$?
+        if [[ $crc2 == 2 ]]; then
+          bp_add_finding "规则集 $live_name（id=$id）条件解析失败——fail closed，不判一致"
+          rc=3
+        elif [[ $crc2 == 0 ]]; then
+          if [[ "$live_target" == "tag" ]]; then
+            bp_add_finding "额外 tag 规则集 $live_name 覆盖 archive/* 命名空间（不在保存配置中）——可能削弱原型归档保护，配置漂移"
+          else
+            bp_add_finding "额外规则集 $live_name 覆盖默认分支 $default_branch（不在保存配置中）——若为受控验收 transient 规则集请确认目标；否则为配置漂移"
+          fi
+          rc_drift=1
+        fi
       fi
     fi
   done <<< "$ids"
@@ -243,6 +264,53 @@ bp_check_drift() {
   [[ $rc == 3 ]] && return 3
   [[ $rc_drift == 1 ]] && return 1
   return 0
+}
+
+# bp_check_repo_settings：合入后自动删除头分支设置核对（#74 AC1 远端）。
+#   delete_branch_on_merge=true 是「远端 PR 分支合入后自动删除」的仓库级开关，
+#   需管理员（Administration）开启——App 无此权限，由指挥者在 Web UI 勾选。
+#   可见性（实测，与 bypass_actors 同口径）：匿名 GET /repos **不返回**该字段，
+#   带 push 权限的令牌（App installation token / CI github.token）才返回。据此拆分：
+#     - 公开面（字段缺失）：记 NOTE 跳过（不谎报已核对，也不死锁匿名本地核对）；
+#     - 管理员强校验（BP_REQUIRE_BYPASS_ACTORS=1）字段缺失：fail closed 判漂移；
+#     - 字段存在：严格核对 true（开启）/ false（漂移）。
+#   rc：0 开启或公开面跳过 | 1 关闭/强校验缺失（漂移）| 3 无法核查（fetch/解析失败）。
+bp_check_repo_settings() {
+  local repo json setting
+  repo=$(bp_repo) || return 3
+  if ! json=$(bp_api_get "/repos/$repo"); then
+    bp_add_finding "无法读取仓库设置（GET /repos/$repo 失败）——fail closed，不判一致"
+    return 3
+  fi
+  if ! printf '%s' "$json" | jq -e 'type == "object"' >/dev/null 2>&1; then
+    bp_add_finding "仓库设置响应非 JSON 对象——fail closed，不判一致"
+    return 3
+  fi
+  if ! printf '%s' "$json" | jq -e 'has("delete_branch_on_merge")' >/dev/null 2>&1; then
+    if [[ "${BP_REQUIRE_BYPASS_ACTORS:-0}" == "1" ]]; then
+      bp_add_finding "管理员强校验模式下仓库设置不含 delete_branch_on_merge——fail closed 判漂移；确认读取凭据具备 push 权限"
+      return 1
+    fi
+    bp_add_note "delete_branch_on_merge 对当前读取身份不可见（匿名/contents:read 不返回该字段，含 CI github.token）——自动删除设置未核对；闭环 = harness verify-config（App 身份带 push 权限）+ 指挥者管理员核对（--require-bypass-actors / BP_GITHUB_TOKEN=<管理员令牌>）。不为读单个管理员开关把 CI 质量门提权到写仓库"
+    return 0
+  fi
+  # false 是合法值（关闭）——字段存在时直接 tostring，不用 `// empty`（会吞 false）
+  setting=$(jq -r '.delete_branch_on_merge | tostring' <<< "$json" 2>/dev/null) \
+    || { bp_add_finding "delete_branch_on_merge 字段解析失败——无法核对（fail closed）"; return 3; }
+  if [[ "$setting" != "true" ]]; then
+    bp_add_finding "合入后自动删除头分支未开启（delete_branch_on_merge=$setting，期望 true）——远端 PR 分支合入后不会自动删除（修复：指挥者 Settings → General → Pull Requests 勾选 Automatically delete head branches）"
+    return 1
+  fi
+  return 0
+}
+
+# bp_merge_rc <rc1> <rc2> → stdout 合并退出码（优先级 3 无法核查 > 1 漂移 > 0）。
+# 漂移核对与仓库设置核对共用，避免两处重复同一优先级逻辑。
+bp_merge_rc() {
+  local a="$1" b="$2"
+  if [[ "$a" == 3 || "$b" == 3 ]]; then printf '3'
+  elif [[ "$a" == 1 || "$b" == 1 ]]; then printf '1'
+  else printf '0'; fi
 }
 
 # g-probe 2026-11-28T14:50:49Z（#73 项 g 新推送探针，触发 dismiss-stale）

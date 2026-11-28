@@ -129,17 +129,19 @@ live_of() { # live_of <saved-file> <id> [admin-view] → stdout live JSON
 }
 
 write_match_fixtures() { # 一致场景（管理员视角读取：bypass_actors 可见）
-  printf '{"default_branch": "dev", "full_name": "bbhl79/natural-enforcement-prj"}' > "$FIX/repo.json"
+  printf '{"default_branch": "dev", "full_name": "bbhl79/natural-enforcement-prj", "delete_branch_on_merge": true}' > "$FIX/repo.json"
   live_of "$rs_dir/protect-dev-base.json" 101 admin-view > "$FIX/ruleset-101.json"
   live_of "$rs_dir/protect-dev-approval.json" 102 admin-view > "$FIX/ruleset-102.json"
-  printf '[{"id":101,"name":"protect-dev-base","target":"branch","enforcement":"active"},{"id":102,"name":"protect-dev-approval","target":"branch","enforcement":"active"}]' > "$FIX/rulesets-list.json"
+  live_of "$rs_dir/protect-archive-tags.json" 201 admin-view > "$FIX/ruleset-201.json"   # #74 archive 标签保护层
+  printf '[{"id":101,"name":"protect-dev-base","target":"branch","enforcement":"active"},{"id":102,"name":"protect-dev-approval","target":"branch","enforcement":"active"},{"id":201,"name":"protect-archive-tags","target":"tag","enforcement":"active"}]' > "$FIX/rulesets-list.json"
 }
 
 write_public_fixtures() { # 一致场景（公开面读取：bypass_actors 不可见——非管理员真实形态）
-  printf '{"default_branch": "dev", "full_name": "bbhl79/natural-enforcement-prj"}' > "$FIX/repo.json"
+  printf '{"default_branch": "dev", "full_name": "bbhl79/natural-enforcement-prj", "delete_branch_on_merge": true}' > "$FIX/repo.json"
   live_of "$rs_dir/protect-dev-base.json" 101 > "$FIX/ruleset-101.json"
   live_of "$rs_dir/protect-dev-approval.json" 102 > "$FIX/ruleset-102.json"
-  printf '[{"id":101,"name":"protect-dev-base","target":"branch","enforcement":"active"},{"id":102,"name":"protect-dev-approval","target":"branch","enforcement":"active"}]' > "$FIX/rulesets-list.json"
+  live_of "$rs_dir/protect-archive-tags.json" 201 > "$FIX/ruleset-201.json"   # #74 archive 标签保护层
+  printf '[{"id":101,"name":"protect-dev-base","target":"branch","enforcement":"active"},{"id":102,"name":"protect-dev-approval","target":"branch","enforcement":"active"},{"id":201,"name":"protect-archive-tags","target":"tag","enforcement":"active"}]' > "$FIX/rulesets-list.json"
 }
 
 # ---------------------------------------------------------------------------
@@ -169,12 +171,12 @@ run_case bp1c BP_FIXTURE_DIR="$FIX" BP_GITHUB_TOKEN=stub-token
 # 3. 绕过名单可见性分层（BP4 系——评审整改核心）
 # ---------------------------------------------------------------------------
 # BP4：公开面读取（非管理员真实形态）缺失 bypass_actors → 不判漂移 + NOTE 提示（不死锁 CI）；
-# 两层（含保存侧为 [] 的 base）各记一条 NOTE——不静默漏检
+# 三层（dev 两层 + archive 标签层，含保存侧为 [] 的 base/archive）各记一条 NOTE——不静默漏检
 write_public_fixtures
 run_case bp4 BP_FIXTURE_DIR="$FIX"
 note_count=$(grep -c "bypass_actors 对当前读取身份不可见" "$OUT/bp4.err" || true)
-[[ "$(cat "$OUT/bp4.rc")" == "0" && "$note_count" == "2" ]] \
-  && pass "BP4 公开面读取缺失 bypass_actors → 跳过该字段（exit 0，不死锁 CI），两层各记 NOTE（${note_count} 项——不谎报已核对）" \
+[[ "$(cat "$OUT/bp4.rc")" == "0" && "$note_count" == "3" ]] \
+  && pass "BP4 公开面读取缺失 bypass_actors → 跳过该字段（exit 0，不死锁 CI），三层各记 NOTE（${note_count} 项——不谎报已核对）" \
   || fail "BP4" "rc=$(cat "$OUT/bp4.rc") notes=$note_count：$(head -5 "$OUT/bp4.err")"
 
 # BP4b：管理员强校验（--require-bypass-actors）缺失 bypass_actors → fail closed 判漂移
@@ -302,7 +304,7 @@ run_case bp6d BP_FIXTURE_DIR="$FIX"
 write_match_fixtures
 live_of "$rs_dir/protect-bp73-test-base.json" 103 admin-view > "$FIX/ruleset-103.json"
 live_of "$rs_dir/protect-bp73-test-approval.json" 104 admin-view > "$FIX/ruleset-104.json"
-printf '[{"id":101,"name":"protect-dev-base","target":"branch","enforcement":"active"},{"id":102,"name":"protect-dev-approval","target":"branch","enforcement":"active"},{"id":103,"name":"protect-bp73-test-base","target":"branch","enforcement":"active"},{"id":104,"name":"protect-bp73-test-approval","target":"branch","enforcement":"active"}]' > "$FIX/rulesets-list.json"
+printf '[{"id":101,"name":"protect-dev-base","target":"branch","enforcement":"active"},{"id":102,"name":"protect-dev-approval","target":"branch","enforcement":"active"},{"id":201,"name":"protect-archive-tags","target":"tag","enforcement":"active"},{"id":103,"name":"protect-bp73-test-base","target":"branch","enforcement":"active"},{"id":104,"name":"protect-bp73-test-approval","target":"branch","enforcement":"active"}]' > "$FIX/rulesets-list.json"
 run_case bp7a BP_FIXTURE_DIR="$FIX"
 [[ "$(cat "$OUT/bp7a.rc")" == "0" ]] \
   && pass "BP7a 验收期 transient 测试分支规则集存在且不指向 dev → 常驻核对不误报（exit 0）" \

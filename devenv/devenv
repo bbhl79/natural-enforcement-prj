@@ -47,6 +47,8 @@ source "$REPO_ROOT/devenv/lib/e2e.sh"
 source "$REPO_ROOT/devenv/lib/github-app-auth.sh"
 # shellcheck source=lib/branch-protection.sh
 source "$REPO_ROOT/devenv/lib/branch-protection.sh"
+# shellcheck source=lib/branch-cleanup.sh
+source "$REPO_ROOT/devenv/lib/branch-cleanup.sh"
 
 trap 'e2e_cleanup_on_exit; gen_txn_rollback; lease_release_all; lock_release_all; snapshot_cleanup' EXIT
 
@@ -104,19 +106,27 @@ GitHub App 认证入口（身份：GitHub App，非个人账号）：
   git-push <remote> <refspec...>
                             以 App 身份经 HTTPS 推送（只接受已配置 remote 名；目标必须授权）
 
-分支保护（不触引擎；详见 docs/agents/branch-protection.md）：
+分支保护与清理（不触引擎；详见 docs/agents/branch-protection.md、docs/agents/branch-cleanup.md）：
   branch-protection [--require-bypass-actors]
-                            dev 两层规则集漂移核对（保存配置 ↔ GitHub 实时；匿名只读，
+                            Git 保护配置漂移核对（dev 两层规则集 + archive 标签规则集 +
+                            合入后自动删除设置；保存配置 ↔ GitHub 实时；匿名只读，
                             BP_GITHUB_TOKEN/GITHUB_TOKEN 存在时优先；漂移或无法核查即非零；
                             --require-bypass-actors 为管理员强校验绕过名单，须管理员令牌）
+  branch-cleanup <branch> [--apply]
+                            PR 合入后清理本地分支与其 worktree（窄用途，非通用 worktree 管理器）：
+                            双重判断 = PR 已 squash 合入 且 本地无未保存内容；未提交文件/
+                            未推送提交/合入后本地新增提交分别拒绝并列出原因；prototype/* 豁免；
+                            无强制删除路径；默认 dry-run，--apply 才删除（详见 branch-cleanup.md）
 
 测试：
   test:auth                 认证入口离线测试（不访问 GitHub）
   test:auth:integration     认证入口真实集成测试（默认只读；写操作需显式旗标）
   test:branch-protection    分支保护受控验收 harness（真实 GitHub，App 身份；分阶段，
                             需与指挥者 UI 操作交错；详见 docs/agents/branch-protection.md）
+  test:branch-cleanup       分支清理与归档保护受控验收 harness（真实 GitHub，App 身份；分阶段，
+                            需与指挥者 UI 操作交错；记录提交哈希；详见 docs/agents/branch-cleanup.md）
   test:devenv               命令面离线测试（引擎解析/锁与栈使用租约/输出协议/快照与不可变绑定/per-worktree 隔离/
-                            供应链门禁/CI workflow 静态门禁/分支保护漂移核对/脚手架生成/e2e 隔离编排，mock docker）
+                            供应链门禁/CI workflow 静态门禁/分支保护漂移核对/分支清理与归档/脚手架生成/e2e 隔离编排，mock docker）
 
 退出码：0 成功 | 2 用法 | 3 环境未就绪 | 4 任务失败 | 5 超时 | 6 锁冲突 | 20–23 认证入口
 EOF
@@ -1068,11 +1078,14 @@ cmd_branch_protection() {
   [[ $require_bypass == 1 ]] && mode_note="，管理员强校验绕过名单"
   BP_FINDINGS=(); BP_NOTES=()
   [[ $require_bypass == 1 ]] && export BP_REQUIRE_BYPASS_ACTORS=1
-  note "核对 dev 分支保护两层规则集（${BP_DURABLE_RULESETS[*]}）：保存配置 devenv/rulesets/ ↔ GitHub 实时（只读${mode_note}）"
-  ev bp.start scope=dev rulesets="${BP_DURABLE_RULESETS[*]}" require_bypass="$require_bypass"
-  local rc=0
+  note "核对 Git 保护配置（${BP_DURABLE_RULESETS[*]} + 合入后自动删除设置）：保存配置 devenv/rulesets/ ↔ GitHub 实时（只读${mode_note}）"
+  ev bp.start scope=dev+archive+auto-delete rulesets="${BP_DURABLE_RULESETS[*]}" require_bypass="$require_bypass"
+  local rc=0 rc_settings=0
   bp_check_drift ${BP_DURABLE_RULESETS[@]+"${BP_DURABLE_RULESETS[@]}"} || rc=$?
+  bp_check_repo_settings || rc_settings=$?
   unset BP_REQUIRE_BYPASS_ACTORS 2>/dev/null || true
+  # 优先级合并：3（无法核查）> 1（漂移）> 0
+  rc=$(bp_merge_rc "$rc" "$rc_settings")
   local f n=0
   for f in ${BP_FINDINGS[@]+"${BP_FINDINGS[@]}"}; do
     warn "$f"
@@ -1086,14 +1099,84 @@ cmd_branch_protection() {
     m=$((m + 1))
   done
   case "$rc" in
-    0) note "一致：远端规则集与保存配置逐字段相同（绕过名单 ${m} 项未核对面见 NOTE），且无额外规则集覆盖 dev"
+    0) note "一致：远端规则集与保存配置逐字段相同，且无额外规则集覆盖 dev/archive（${m} 项公开面不可见字段——绕过名单/自动删除设置——未核对见 NOTE，不谎报）"
         final ok 0 findings=0 notes="$m" ;;
-    1) warn "漂移：$n 项发现（见上；修复：按 docs/agents/branch-protection.md 同步 UI 与保存配置）"
+    1) warn "漂移：$n 项发现（见上；修复：按 docs/agents/branch-protection.md 与 docs/agents/branch-cleanup.md 同步 UI 与保存配置）"
         final failed 1 findings="$n" notes="$m" ;;
     *) warn "无法核查（fetch/解析失败，fail closed，不判一致）：$n 项发现"
         final failed "$rc" findings="$n" notes="$m" ;;
   esac
   exit "$rc"
+}
+
+# ---------------------------------------------------------------------------
+# 分支清理（#74；不触引擎；窄用途「PR 合入后清理」，无强制删除路径）
+# ---------------------------------------------------------------------------
+# bc_fail_apply <rc> <原因>：--apply 路径失败的统一收尾（die 会跳过 final，
+# 破坏 --json 终值协议——ev bc.start 已发 stdout，故必须补发 final failed）。
+bc_fail_apply() {
+  local rc="$1"; shift
+  warn "$*"
+  final failed "$rc" branch="${branch:-}" reasons=1 pr="${BC_PR_NUMBER:-}" merged_head="${BC_MERGED_HEAD:-}"
+  exit "$rc"
+}
+
+cmd_branch_cleanup() {
+  local branch="" apply=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --apply) apply=1; shift ;;
+      --force|-f|-F|-D) die 2 "branch-cleanup 不存在强制删除路径（$1 被拒绝）：发现未保存工作一律拒绝并列出原因" ;;
+      -*) die 2 "branch-cleanup 未知旗标：$1（可用：--apply）" ;;
+      *) [[ -z "$branch" ]] || die 2 "branch-cleanup 只接受一个分支参数（多余：$1）"; branch="$1"; shift ;;
+    esac
+  done
+  [[ -n "$branch" ]] || die 2 "branch-cleanup 需要分支参数：devenv branch-cleanup <branch> [--apply]"
+  bc_branch_exists "$branch" || die 2 "本地分支不存在：$branch"
+
+  ev bc.start branch="$branch" apply="$apply"
+  local rc=0
+  bc_judge "$branch" || rc=$?
+  local r n=0
+  for r in ${BC_REASONS[@]+"${BC_REASONS[@]}"}; do
+    warn "$r"; ev bc.reason text="$r"; n=$((n + 1))
+  done
+
+  if [[ $rc != 0 ]]; then
+    case "$rc" in
+      3) warn "无法判定（fail closed，不删除）：$n 项原因" ;;
+      6) warn "目标 worktree 持有活跃栈锁/租约（exit 6，绝不强拆）：$n 项原因" ;;
+      *) warn "拒绝清理分支 $branch：$n 项原因（见上；不存在强制删除路径）" ;;
+    esac
+    final failed "$rc" branch="$branch" reasons="$n" pr="${BC_PR_NUMBER:-}" merged_head="${BC_MERGED_HEAD:-}"
+    exit "$rc"
+  fi
+
+  # 判定通过：dry-run 报告 / --apply 删除（worktree + 分支）
+  local wt_note="${BC_WORKTREE:-无}"
+  if [[ $apply == 0 ]]; then
+    note "可安全清理（dry-run，未删除）：分支 $branch（worktree=$wt_note；PR #${BC_PR_NUMBER:-?} 已合入；合入 head=$BC_MERGED_HEAD；squash 提交=${BC_MERGE_COMMIT:-?}）。加 --apply 执行删除。"
+    final ok 0 branch="$branch" action=dry-run worktree="$wt_note" pr="${BC_PR_NUMBER:-}" \
+      merged_head="$BC_MERGED_HEAD" merge_commit="${BC_MERGE_COMMIT:-}" reasons=0
+    exit 0
+  fi
+  # 关闭判定→删除 TOCTOU：删除前复核 busy（网络窗口内可能有运行取得锁/租约）
+  # 与 tip 仍为判定基准 BC_TIP（并发改动即拒绝）；git 输出分流 stderr，不污染 --json 结果流。
+  if [[ -n "$BC_WORKTREE" ]] && bc_worktree_busy "$BC_WORKTREE"; then
+    bc_fail_apply 6 "目标 worktree $BC_WORKTREE 在判定后取得活跃栈锁/租约——拒绝清理，绝不强拆"
+  fi
+  local now_tip
+  now_tip=$(git -C "$REPO_ROOT" rev-parse --verify "refs/heads/$branch" 2>/dev/null) || now_tip=""
+  [[ "$now_tip" == "$BC_TIP" ]] || bc_fail_apply 4 "分支 $branch 在判定后被修改（tip ${now_tip:-?} ≠ 判定基准 $BC_TIP）——拒绝删除，请重新判定"
+  if [[ -n "$BC_WORKTREE" ]]; then
+    git -C "$REPO_ROOT" worktree remove "$BC_WORKTREE" 1>&2 || bc_fail_apply 4 "worktree 移除失败：$BC_WORKTREE（判定已通过但删除失败，现场保留）"
+  fi
+  # 原子 compare-and-delete：仅当 ref 仍等于判定基准 BC_TIP 时删除（并发新增提交即失败，不强删）
+  git -C "$REPO_ROOT" update-ref -d "refs/heads/$branch" "$BC_TIP" 1>&2 || bc_fail_apply 4 "分支删除失败：$branch（ref 已变动或删除失败，现场保留）"
+  note "已清理：分支 $branch（worktree=$wt_note 已移除；PR #${BC_PR_NUMBER:-?} 合入 head=$BC_MERGED_HEAD；squash 提交=${BC_MERGE_COMMIT:-?}）"
+  final ok 0 branch="$branch" action=cleaned worktree="$wt_note" pr="${BC_PR_NUMBER:-}" \
+    merged_head="$BC_MERGED_HEAD" merge_commit="${BC_MERGE_COMMIT:-}" reasons=0
+  exit 0
 }
 
 # ---------------------------------------------------------------------------
@@ -1113,10 +1196,12 @@ case "$CMD" in
   gh)                     gha_cmd_gh "$@" ;;
   git-push)               gha_cmd_git_push "$@" ;;
   branch-protection)      cmd_branch_protection "$@" ;;
+  branch-cleanup)         cmd_branch_cleanup "$@" ;;
   test:auth)              bash "$REPO_ROOT/devenv/test/offline.test.sh" ;;
   test:auth:integration)  bash "$REPO_ROOT/devenv/test/integration.test.sh" "$@" ;;
   test:branch-protection) bash "$REPO_ROOT/devenv/test/branch-protection-acceptance.sh" "$@" ;;
-  test:devenv)            bash "$REPO_ROOT/devenv/test/stack-offline.test.sh" && bash "$REPO_ROOT/devenv/test/snapshot-offline.test.sh" && bash "$REPO_ROOT/devenv/test/isolation-offline.test.sh" && bash "$REPO_ROOT/devenv/test/supply-chain-offline.test.sh" && bash "$REPO_ROOT/devenv/test/ci-offline.test.sh" && bash "$REPO_ROOT/devenv/test/branch-protection-offline.test.sh" && bash "$REPO_ROOT/devenv/test/gen-offline.test.sh" && bash "$REPO_ROOT/devenv/test/e2e-offline.test.sh" ;;
+  test:branch-cleanup)    bash "$REPO_ROOT/devenv/test/branch-cleanup-acceptance.sh" "$@" ;;
+  test:devenv)            bash "$REPO_ROOT/devenv/test/stack-offline.test.sh" && bash "$REPO_ROOT/devenv/test/snapshot-offline.test.sh" && bash "$REPO_ROOT/devenv/test/isolation-offline.test.sh" && bash "$REPO_ROOT/devenv/test/supply-chain-offline.test.sh" && bash "$REPO_ROOT/devenv/test/ci-offline.test.sh" && bash "$REPO_ROOT/devenv/test/branch-protection-offline.test.sh" && bash "$REPO_ROOT/devenv/test/branch-cleanup-offline.test.sh" && bash "$REPO_ROOT/devenv/test/gen-offline.test.sh" && bash "$REPO_ROOT/devenv/test/e2e-offline.test.sh" ;;
   help)                   usage; exit 0 ;;
   # 供应链静态门禁：不触引擎，可在任意平台/无引擎时执行
   supply-chain)           cmd_supply_chain "$@" ;;

@@ -52,15 +52,46 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 以 App 身份 HTTPS 推送 | `devenv git-push <remote> <refspec...>` | 0 或 2/20/21/22/23 或 git 自身退出码 |
 | 认证入口离线测试（不访问 GitHub） | `devenv test:auth` | 0 或 1 |
 | 认证入口真实集成测试（默认只读；写操作需显式旗标） | `devenv test:auth:integration [旗标]` | 0 或 1 或 2 |
-| 命令面离线测试（引擎解析/锁与栈使用租约/输出协议/快照与不可变绑定/per-worktree 隔离/供应链门禁/CI workflow 静态门禁/分支保护漂移核对/脚手架生成/e2e 隔离编排，mock docker） | `devenv test:devenv` | 0 或 1 |
+| 命令面离线测试（引擎解析/锁与栈使用租约/输出协议/快照与不可变绑定/per-worktree 隔离/供应链门禁/CI workflow 静态门禁/分支保护漂移核对/分支清理与归档/脚手架生成/e2e 隔离编排，mock docker） | `devenv test:devenv` | 0 或 1 |
 
-### 分支保护两层规则集（#73；不触引擎；详见 docs/agents/branch-protection.md）
+### 分支保护与清理（#73/#74；不触引擎；详见 docs/agents/branch-protection.md、docs/agents/branch-cleanup.md）
 
 | Action | Command | 期望退出码 |
 |---|---|---|
-| dev 两层规则集漂移核对（保存配置 `devenv/rulesets/` ↔ GitHub 实时，逐字段；匿名只读，`BP_GITHUB_TOKEN`/`GITHUB_TOKEN` 存在时优先；覆盖公开可见面，`bypass_actors` 不可见时跳过并 NOTE；漂移/无法核查 fail closed；CI quality-gate 常驻步骤） | `devenv branch-protection` | 0 或 1（漂移）或 3（无法核查） |
-| 同上但管理员强校验绕过名单（响应缺失 `bypass_actors` 即判漂移；须 `BP_GITHUB_TOKEN=<管理员令牌>`，否则用法错误） | `devenv branch-protection --require-bypass-actors` | 0 或 1 或 2 或 3 |
-| 受控验收 harness（真实 GitHub，App 身份，分阶段与指挥者 UI 操作交错；阶段：status/prepare/verify-config/negatives/negatives-dev/g/probe-audit/cleanup-test/summary；证据 `.artifacts/73-branch-protection/`） | `devenv test:branch-protection [阶段] [--pr N] [--evidence-dir PATH]` | 0 或 1 或 2 |
+| Git 保护配置漂移核对（dev 两层规则集 + archive 标签规则集 + 合入后自动删除设置；保存配置 `devenv/rulesets/` ↔ GitHub 实时，逐字段；匿名只读，`BP_GITHUB_TOKEN`/`GITHUB_TOKEN` 存在时优先；覆盖公开可见面，`bypass_actors`/`delete_branch_on_merge` 不可见时跳过并 NOTE；额外 tag 规则集覆盖 archive/* 判漂移；漂移/无法核查 fail closed；CI quality-gate 常驻步骤） | `devenv branch-protection` | 0 或 1（漂移）或 3（无法核查） |
+| 同上但管理员强校验绕过名单（响应缺失 `bypass_actors`/`delete_branch_on_merge` 即判漂移；须 `BP_GITHUB_TOKEN=<管理员令牌>`，否则用法错误） | `devenv branch-protection --require-bypass-actors` | 0 或 1 或 2 或 3 |
+| PR 合入后清理本地分支与其 worktree（窄用途，非通用 worktree 管理器；双重判断 = PR 已 squash 合入 且 本地无未保存内容；未提交文件/未推送提交/合入后本地新增提交分别拒绝并列出原因；prototype/* 豁免、dev/main/当前检出恒拒；目标 worktree 持活跃栈锁/租约即拒（绝不强拆）；无强制删除路径；默认 dry-run，`--apply` 才删除（原子 compare-and-delete，判定后并发改动即拒）；PR 查询失败 fail closed） | `devenv branch-cleanup <branch> [--apply]` | 0 或 2（用法）或 3（无法判定）或 4（拒绝）或 6（活跃锁/租约） |
+| 分支保护受控验收 harness（真实 GitHub，App 身份，分阶段与指挥者 UI 操作交错；阶段：status/prepare/verify-config/negatives/negatives-dev/g/probe-audit/cleanup-test/summary；证据 `.artifacts/73-branch-protection/`） | `devenv test:branch-protection [阶段] [--pr N] [--evidence-dir PATH]` | 0 或 1 或 2 |
+| 分支清理与归档保护受控验收 harness（真实 GitHub，App 身份，分阶段与指挥者 UI 操作交错；阶段：status/prepare/verify-config/negatives/cleanup-positive/cleanup-test/summary；记录提交哈希；archive 反例前置断言保护 active；证据 `.artifacts/74-branch-cleanup/`） | `devenv test:branch-cleanup [阶段] [--evidence-dir PATH]` | 0 或 1 或 2 |
+
+#### 分支清理双重判断与归档保护（#74，Spec-工程基座 §7 / 验收清单项 11）
+
+- **双重判断**：squash 合入判定 = 远端 PR 已合入（`merged_at` 非空）**且**本地无未推送
+  内容。squash 后原分支提交非 dev 祖先，故以 PR 的 `head.sha` 为合入基准，
+  `git rev-list <head>..<branch>` 非空即「合入后本地新增提交」拒绝；worktree
+  `git status --porcelain` 非空即「未提交文件」拒绝；无合入 PR 且本地有远端不存在
+  的提交即「未推送提交」拒绝。原因逐条列出（`--json` 终值含 `reasons` 计数）。
+- **无强制路径**：`--force` 即 exit 2；判定通过后内部 `git worktree remove` +
+  `git update-ref -d refs/heads/<branch> <判定基准tip>`（原子 compare-and-delete，
+  git `-d` 不识别 squash 故不用 `branch -d`；ref 在判定后变动即删除失败，不强删）。
+  默认 dry-run，`--apply` 才删除。`prototype/*` 豁免、`dev`/`main`/当前检出分支恒拒（exit 4）。
+- **并发语义**：branch-cleanup 不触引擎/运行栈，不持栈锁；但清理是写者——目标
+  worktree 持活跃 `stack-<wt>` 排他锁或共享租约（gitignored `.devenv-state` 对
+  `git status` 不可见，独立按锁/租约持有者存活判定）即拒绝（exit 6，绝不强拆）。
+  删除前再核 tip 仍为判定基准，关闭判定→删除 TOCTOU。
+- **fail closed**：PR 查询失败 / 合入 head 不在本地对象库 → exit 3，不删除。
+- **archive 标签保护**：`devenv/rulesets/protect-archive-tags.json`（`target: tag`、
+  `include: refs/tags/archive/*`、`update`+`deletion`、无绕过；禁更新/删除允许创建），
+  durable 进 CI 常驻核对。归档以标签 + 提交哈希定位，保证源码可追溯，**不承诺**
+  旧环境永远可重建。**创建归档标签**（允许，无 creation 规则）：`git tag
+  archive/<名> <提交哈希>` 后 `devenv git-push origin archive/<名>`（App 身份）；
+  创建后不可更新/删除（受保护），验收记录写入该提交哈希。
+- **自动删除**：`delete_branch_on_merge=true`（指挥者管理员开启，App 无 Administration）；
+  匿名/`contents:read` 令牌读不到该字段（公开面 NOTE 跳过）；生效闭环 = harness
+  `verify-config`（App 身份）+ 指挥者管理员核对——CI 不授写权限读此开关（评审裁决）。
+- **离线反例**：`devenv/test/branch-cleanup-offline.test.sh`（真实 git 沙箱 + mock
+  GitHub，`devenv test:devenv` 组成部分）覆盖三类拒绝反例、prototype 豁免、无强制
+  路径、dry-run/--apply 落盘、fail-closed、archive 规则集与自动删除漂移核对。
 
 ## 退出码枚举（总表归 Spec-工程基座；7–10 e2e 专用码段由 Spec-e2e 登记）
 
@@ -248,7 +279,8 @@ exit 3，compose v2 由 doctor `compose-plugin` 检查项校验）；裸 Linux +
 | e2e build / explore 的执行器镜像构建 | e2e-image-<wt>（排他，per-worktree；仅构建/核对窗口） | 与其它 e2e 执行器镜像构建互斥（状态文件/可变 tag 读改写串行化）；不取栈锁/租约，无锁序环；冲突等待/exit 6 |
 | explore 启动/运行所有权 | e2e-owner-<wt>-<runid>（排他，per-run-id，创建资源前取得 → 回收结束释放）；e2e-admit-<wt>（短临界区） | 同 run id 的第二个进程在启动窗口等待/exit 6，绝不进入清理路径破坏对方尚未启动的资源；admission 锁串行化「取得所有权 → 计数 → 登记」，并发计数含启动中预留名额；锁名与容器 worktree 标签含 worktree 后缀，跨 worktree 同名显式 run id 互不误判 |
 | build / gen 触发的 lockgen | lockgen（机器级） | 跨 worktree 互斥（共享标签/容器清理）；冲突等待或 exit 6（重跑即续） |
-| 只读（ps/logs/status/images/doctor/gen evidence/e2e runs/e2e logs） | 无 | 任意并发（gen evidence 只读绑定镜像内的证据文件，不重建、不触栈；e2e logs 只读容器日志） |
+| 只读（ps/logs/status/images/doctor/gen evidence/e2e runs/e2e logs/branch-protection） | 无 | 任意并发（gen evidence 只读绑定镜像内的证据文件，不重建、不触栈；e2e logs 只读容器日志；branch-protection 只读 GitHub） |
+| branch-cleanup（本地 git 写：删 worktree/分支） | 无（不持栈锁） | 不触引擎/运行栈；但目标 worktree 持活跃 stack-<wt> 锁/租约即拒（exit 6，绝不强拆）；删除前再核 tip + 原子 compare-and-delete 关闭判定→删除 TOCTOU；与同分支并发写互斥由原子删除兜底 |
 | exec / shell（透传调试） | 无 | 交互时长无界，不持租约；需要稳定环境时先结束调试再拆栈 |
 
 ### 栈使用租约（#61）
