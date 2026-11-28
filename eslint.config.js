@@ -17,6 +17,32 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    // 零第三方依赖复现脚本（apps/e2e/replay/<DEF-NNNN>.mjs，#109 起随缺陷记录入库）：
+    // 裸 node ESM，只用内建能力（fetch/process/console/Buffer…）。它们是 JS 而非 TS，
+    // 不经 tseslint 关闭 no-undef，故显式声明 node 全局——保留 no-undef 对拼写错误的
+    // 检查力，同时不误报内建能力。约定见 apps/e2e/replay/README.md。
+    files: ['apps/e2e/replay/**/*.mjs'],
+    languageOptions: {
+      sourceType: 'module',
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        fetch: 'readonly',
+        Buffer: 'readonly',
+        URL: 'readonly',
+        URLSearchParams: 'readonly',
+        TextEncoder: 'readonly',
+        TextDecoder: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+        AbortController: 'readonly',
+        structuredClone: 'readonly',
+      },
+    },
+  },
+  {
     // React 规则（flat config 显式挂载：hooks + eslint-plugin-react 最小正确性规则面，#68；
     // 不启用与 TS 6 strict 重复或纯风格类的 prop-types / unescaped-entities 等规则）。
     files: ['apps/web/**/*.{ts,tsx}'],

@@ -179,19 +179,32 @@ describe('report-register：门禁不过 → exit 8 零登记', () => {
     expect(r.end).toMatch(/字节不符/)
   })
 
-  it('缺明确前置状态声明 → exit 8，零 op（每轮须从明确前置状态开始）', () => {
+  it('前置状态声明为空白 → exit 8，零 op（每轮须从明确前置状态开始）', () => {
+    const root = tempTree()
+    const payload = JSON.parse(registerPayload([mockRound(1), mockRound(2), mockRound(3)]))
+    payload.finding.reproducibility.precondition = '   '
+    const r = run(root, ['report', 'register'], JSON.stringify(payload))
+    expect(r.code).toBe(8)
+    expect(r.ops).toEqual([])
+    expect(r.end).toMatch(/前置状态/)
+  })
+
+  it('前置状态声明字段缺失 → exit 2（输入契约层即拒，零 op）', () => {
     const root = tempTree()
     const payload = JSON.parse(registerPayload([mockRound(1), mockRound(2), mockRound(3)]))
     delete payload.finding.reproducibility.precondition
     const r = run(root, ['report', 'register'], JSON.stringify(payload))
-    expect(r.code).toBe(8)
+    expect(r.code).toBe(2)
     expect(r.ops).toEqual([])
   })
 
   it('编号已被占用（另一会话已登记）→ exit 8，零 op', () => {
     const root = tempTree()
     mkdirSync(join(root, 'defects'), { recursive: true })
-    writeFileSync(join(root, 'defects/DEF-0001.json'), '{"id":"DEF-0001"}', 'utf8')
+    // 事实源必须合法（非法记录归 10，不是编号占用）：取一条 schema 合法的 reported 记录
+    const prior = run(tempTree(), ['report', 'register'], registerPayload([mockRound(1), mockRound(2), mockRound(3)]))
+    const priorJson = writtenJson(prior.ops, 'defects/DEF-0001.json') ?? ''
+    writeFileSync(join(root, 'defects/DEF-0001.json'), priorJson, 'utf8')
     const r = run(root, ['report', 'register'], registerPayload([mockRound(1), mockRound(2), mockRound(3)]))
     expect(r.code).toBe(8)
     expect(r.ops).toEqual([])
