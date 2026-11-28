@@ -4,9 +4,10 @@
 #
 # 覆盖（Spec-工程基座 §6 质量门与 CI）：
 #   1. .github/workflows 静态门禁（doctor ci-workflows 检查项）：直接调用
-#      compose（docker compose / docker-compose / podman compose / podman-compose）
-#      即拒绝并指明文件+行号；注释行不误报；无 workflow 目录时通过（不阻塞
-#      其他使用场景——既有离线测试夹具均无 .github）
+#      compose（docker compose / docker-compose / podman compose / podman-compose，
+#      含路径限定形 /usr/bin/docker compose）即拒绝并指明文件+行号；注释行不
+#      误报；无 workflow 目录时通过（不阻塞其他使用场景——既有离线测试夹具
+#      均无 .github）
 #   2. 真实仓库 workflow 通过静态门禁（夹具复制本仓库 .github——自检）
 #   3. CI 矩阵条目校验补强：moby + GITHUB_ACTIONS=true + amd64 通过；
 #      moby + CI + 非 amd64 架构按 CI 矩阵条目拒绝（exit 3，不特判跳过）
@@ -49,13 +50,8 @@ setup() {
 #!/usr/bin/env bash
 set -euo pipefail
 case "${1:-}" in
-  version)
-    [[ "${MOCK_DOCKER_DOWN:-}" == "1" ]] && exit 1
-    cat "${MOCK_DOCKER_VERSION_JSON:?}"
-    ;;
-  compose)
-    [[ "${2:-}" == "version" ]] && { echo "2.40.3"; exit 0; }
-    exit 0 ;;
+  version) cat "${MOCK_DOCKER_VERSION_JSON:?}";;
+  compose) [[ "${2:-}" == "version" ]] && { echo "2.40.3"; exit 0; }; exit 0;;
   ps)     exit 0 ;;
   image)  exit 1 ;;  # 未构建
   info)   exit 0 ;;
@@ -89,14 +85,16 @@ run() { # run <name> <cmd...>；记录 RC 与输出
   set -e
 }
 
-run_doctor() { # run_doctor <name> [env k=v...]（podman mock 基线）
+# run_doctor <name> [env k=v...]：podman mock 基线 + 按用例覆盖（env 后置
+# 覆盖先置默认——CI 上下文/引擎版本 JSON/架构按需注入）
+run_doctor() {
   local name="$1"; shift
   run "$name" env PATH="$PATH" MOCK_DOCKER_VERSION_JSON="$SANDBOX/version-podman.json" \
     DOCKER_HOST="unix:///mock.sock" DEVENV_LOCK_ROOT="$SANDBOX/locks" \
     DEVENV_STATE_DIR="$SANDBOX/.devenv-state" "$@" "$DEVENV" --json doctor
 }
 
-run_doctor_plain() { # run_doctor_plain <name> [env k=v...]（人类可读模式——stderr 有检查行）
+run_doctor_plain() { # 人类可读模式——stderr 有检查行（含覆盖注入，同 run_doctor）
   local name="$1"; shift
   run "$name" env PATH="$PATH" MOCK_DOCKER_VERSION_JSON="$SANDBOX/version-podman.json" \
     DOCKER_HOST="unix:///mock.sock" DEVENV_LOCK_ROOT="$SANDBOX/locks" \
@@ -104,6 +102,19 @@ run_doctor_plain() { # run_doctor_plain <name> [env k=v...]（人类可读模式
 }
 
 expect_rc() { [[ "$RC" == "$2" ]] && pass "$1" || fail "$1" "期望退出码 $2，实际 ${RC}（stderr: $(tail -2 "$OUT/$3.err" 2>/dev/null)）"; }
+
+# doctor --json 的 stdout = JSONL 事件流 + 终值 JSON；先取终值再断言，避免事件行
+# 触发 jq「Cannot iterate over null」噪音掩盖真实回归
+doctor_final() { # doctor_final <用例名> → 终值 JSON（stdout）
+  jq -s "[.[] | select(.command == \"doctor\")][0]" "$OUT/$1.out"
+}
+has_check() { # has_check <用例名> <check 名> <result> → 匹配非空 exit 0
+  doctor_final "$1" | jq -e --arg c "$2" --arg r "$3" \
+    '.checks[] | select(.check == $c and .result == $r)' >/dev/null
+}
+check_detail() { # check_detail <用例名> <check 名> → detail 文本（stdout）
+  doctor_final "$1" | jq -r --arg c "$2" '[.checks[] | select(.check == $c) | .detail][0]'
+}
 
 # 夹具 workflow：合法（项目操作全经 ./devenv/devenv）
 wf_valid() { # <dir>
@@ -147,7 +158,7 @@ echo "沙箱：$SANDBOX"
 # CIW1 无 .github 目录 → 通过（不阻塞无 workflow 的使用场景）
 run_doctor ciw1
 expect_rc "CIW1 无 workflow 目录时 doctor 通过" 0 ciw1
-jq -e '.checks[] | select(.check == "ci-workflows" and .result == "ok")' "$OUT/ciw1.out" >/dev/null 2>&1 \
+has_check ciw1 ci-workflows ok \
   && pass "CIW1 doctor 报告 ci-workflows ok（无文件可扫）" \
   || fail "CIW1" "JSON 缺 ci-workflows ok：$(cat "$OUT/ciw1.out")"
 
@@ -155,21 +166,21 @@ jq -e '.checks[] | select(.check == "ci-workflows" and .result == "ok")' "$OUT/c
 wf_valid "$SANDBOX"
 run_doctor ciw2
 expect_rc "CIW2 合法 workflow 通过" 0 ciw2
-jq -e '.checks[] | select(.check == "ci-workflows" and .result == "ok")' "$OUT/ciw2.out" >/dev/null 2>&1 \
+has_check ciw2 ci-workflows ok \
   && pass "CIW2 ci-workflows ok" || fail "CIW2" "JSON 缺 ci-workflows ok：$(cat "$OUT/ciw2.out")"
-jq -r '.checks[] | select(.check == "ci-workflows") | .detail' "$OUT/ciw2.out" | grep -q '1' \
-  && pass "CIW2 ok 项报告扫描文件数" || fail "CIW2" "ok 详情未报告扫描数：$(cat "$OUT/ciw2.out")"
+check_detail ciw2 ci-workflows | grep -q '1' \
+  && pass "CIW2 ok 项报告扫描文件数" || fail "CIW2" "ok 详情未报告扫描数：$(check_detail ciw2 ci-workflows)"
 
 # CIW3 docker compose 插件形态违规 → 拒绝（exit 3）并指明文件+行号
 wf_with_violation "$SANDBOX" 'docker compose up -d db'
 run_doctor ciw3
 expect_rc "CIW3 docker compose 直接调用被拒（doctor exit 3）" 3 ciw3
-jq -e '.checks[] | select(.check == "ci-workflows" and .result == "fail")' "$OUT/ciw3.out" >/dev/null 2>&1 \
+has_check ciw3 ci-workflows fail \
   && pass "CIW3 ci-workflows fail" || fail "CIW3" "JSON 缺 ci-workflows fail：$(cat "$OUT/ciw3.out")"
-jq -r '.checks[] | select(.check == "ci-workflows") | .detail' "$OUT/ciw3.out" | grep -q 'bad.yml' \
-  && pass "CIW3 报错指明违规文件" || fail "CIW3" "未指明文件：$(cat "$OUT/ciw3.out")"
-jq -r '.checks[] | select(.check == "ci-workflows") | .detail' "$OUT/ciw3.out" | grep -q 'docker compose' \
-  && pass "CIW3 报错含违规内容" || fail "CIW3" "未含违规行内容"
+check_detail ciw3 ci-workflows | grep -q 'bad.yml' \
+  && pass "CIW3 报错指明违规文件" || fail "CIW3" "未指明文件：$(check_detail ciw3 ci-workflows)"
+check_detail ciw3 ci-workflows | grep -q 'docker compose' \
+  && pass "CIW3 报错含违规内容" || fail "CIW3" "未含违规行内容：$(check_detail ciw3 ci-workflows)"
 # 人类可读模式：失败检查行走 stderr，给出「经 devenv 唯一入口」修复指引
 run_doctor_plain ciw3b
 grep -q '唯一入口' "$OUT/ciw3b.err" \
@@ -189,6 +200,14 @@ expect_rc "CIW5 podman compose 直接调用被拒" 3 ciw5
 wf_with_violation "$SANDBOX" 'podman-compose build'
 run_doctor ciw6
 expect_rc "CIW6 podman-compose 直接调用被拒" 3 ciw6
+
+# CIW6b 路径限定形（/usr/bin/docker compose）同样违规——边界字符集含 /
+wf_with_violation "$SANDBOX" '/usr/bin/docker compose up -d db'
+run_doctor ciw6b
+expect_rc "CIW6b 路径限定形 docker compose 被拒" 3 ciw6b
+wf_with_violation "$SANDBOX" '/usr/local/bin/docker-compose ps'
+run_doctor ciw6c
+expect_rc "CIW6c 路径限定形 docker-compose 被拒" 3 ciw6c
 
 # CIW7 注释行不误报（# docker compose ... 是说明文字，不是调用）
 rm -f "$SANDBOX/.github/workflows/bad.yml"
@@ -221,8 +240,8 @@ jobs:
 YAML
 run_doctor ciw8
 expect_rc "CIW8 多处违规仍拒绝" 3 ciw8
-jq -r '.checks[] | select(.check == "ci-workflows") | .detail' "$OUT/ciw8.out" | grep -q '3' \
-  && pass "CIW8 报错报告违规总数" || fail "CIW8" "未报告总数：$(cat "$OUT/ciw8.out")"
+check_detail ciw8 ci-workflows | grep -q '3' \
+  && pass "CIW8 报错报告违规总数" || fail "CIW8" "未报告总数：$(check_detail ciw8 ci-workflows)"
 
 # ---------------------------------------------------------------------------
 # 2. 真实仓库 workflow 自检（夹具复制本仓库 .github）
@@ -232,8 +251,8 @@ if [[ -d "$REPO_ROOT/.github/workflows" ]]; then
   cp -r "$REPO_ROOT/.github" "$SANDBOX/.github"
   run_doctor ciw9
   expect_rc "CIW9 真实仓库 workflow 通过静态门禁（自检）" 0 ciw9
-  jq -r '.checks[] | select(.check == "ci-workflows") | .detail' "$OUT/ciw9.out" | grep -q "$(ls "$REPO_ROOT/.github/workflows" | wc -l | tr -d ' ')" \
-    && pass "CIW9 扫描到全部真实 workflow 文件" || fail "CIW9" "扫描数不符：$(cat "$OUT/ciw9.out")"
+  check_detail ciw9 ci-workflows | grep -q "$(ls "$REPO_ROOT/.github/workflows" | wc -l | tr -d ' ')" \
+    && pass "CIW9 扫描到全部真实 workflow 文件" || fail "CIW9" "扫描数不符：$(check_detail ciw9 ci-workflows)"
 else
   fail "CIW9" "本仓库应有 .github/workflows（quality-gate.yml 已随 #71 落库）"
 fi
@@ -244,37 +263,25 @@ fi
 rm -rf "$SANDBOX/.github"
 
 # CIW10 moby + CI 上下文 + amd64 → 通过（CI 矩阵条目命中）
-run ciw10 env PATH="$PATH" MOCK_DOCKER_VERSION_JSON="$SANDBOX/version-moby.json" \
-  DOCKER_HOST="unix:///mock.sock" GITHUB_ACTIONS=true \
-  DEVENV_LOCK_ROOT="$SANDBOX/locks" DEVENV_STATE_DIR="$SANDBOX/.devenv-state" \
-  "$DEVENV" --json doctor
+run_doctor ciw10 GITHUB_ACTIONS=true MOCK_DOCKER_VERSION_JSON="$SANDBOX/version-moby.json"
 expect_rc "CIW10 moby + CI + amd64 通过（CI 矩阵条目）" 0 ciw10
-jq -e '.checks[] | select(.check == "engine-matrix" and .result == "ok")' "$OUT/ciw10.out" >/dev/null 2>&1 \
+has_check ciw10 engine-matrix ok \
   && pass "CIW10 engine-matrix ok（moby CI amd64）" || fail "CIW10" "engine-matrix 不为 ok：$(cat "$OUT/ciw10.out")"
 
 # CIW11 moby + CI 上下文 + arm64 → 拒绝（CI 矩阵条目要求 amd64，不特判跳过）
-run ciw11 env PATH="$PATH" MOCK_DOCKER_VERSION_JSON="$SANDBOX/version-moby-arm64.json" \
-  DOCKER_HOST="unix:///mock.sock" GITHUB_ACTIONS=true \
-  DEVENV_LOCK_ROOT="$SANDBOX/locks" DEVENV_STATE_DIR="$SANDBOX/.devenv-state" \
-  "$DEVENV" --json doctor
+run_doctor ciw11 GITHUB_ACTIONS=true MOCK_DOCKER_VERSION_JSON="$SANDBOX/version-moby-arm64.json"
 expect_rc "CIW11 moby + CI + arm64 拒绝 exit 3" 3 ciw11
-jq -e '.checks[] | select(.check == "engine-matrix" and .result == "fail")' "$OUT/ciw11.out" >/dev/null 2>&1 \
+has_check ciw11 engine-matrix fail \
   && pass "CIW11 engine-matrix fail" || fail "CIW11" "engine-matrix 不为 fail：$(cat "$OUT/ciw11.out")"
-jq -r '.checks[] | select(.check == "engine-matrix") | .detail' "$OUT/ciw11.out" | grep -q 'amd64' \
-  && pass "CIW11 报错指明 CI 矩阵条目要求 amd64" || fail "CIW11" "未指明 amd64：$(cat "$OUT/ciw11.out")"
+check_detail ciw11 engine-matrix | grep -q 'amd64' \
+  && pass "CIW11 报错指明 CI 矩阵条目要求 amd64" || fail "CIW11" "未指明 amd64：$(check_detail ciw11 engine-matrix)"
 # 人类可读模式：stderr 检查行含 amd64 要求（不特判跳过，如实报告实际架构）
-run ciw11b env PATH="$PATH" MOCK_DOCKER_VERSION_JSON="$SANDBOX/version-moby-arm64.json" \
-  DOCKER_HOST="unix:///mock.sock" GITHUB_ACTIONS=true \
-  DEVENV_LOCK_ROOT="$SANDBOX/locks" DEVENV_STATE_DIR="$SANDBOX/.devenv-state" \
-  "$DEVENV" doctor
+run_doctor_plain ciw11b GITHUB_ACTIONS=true MOCK_DOCKER_VERSION_JSON="$SANDBOX/version-moby-arm64.json"
 grep -q 'amd64' "$OUT/ciw11b.err" \
   && pass "CIW11 stderr 人类行含 amd64 要求" || fail "CIW11" "stderr 未含 amd64：$(cat "$OUT/ciw11b.err")"
 
 # CIW12 非 CI 上下文 moby（裸 Linux 开发环境）仍拒绝（既有行为不回归）
-run ciw12 env PATH="$PATH" MOCK_DOCKER_VERSION_JSON="$SANDBOX/version-moby.json" \
-  DOCKER_HOST="unix:///mock.sock" \
-  DEVENV_LOCK_ROOT="$SANDBOX/locks" DEVENV_STATE_DIR="$SANDBOX/.devenv-state" \
-  "$DEVENV" --json doctor
+run_doctor ciw12 MOCK_DOCKER_VERSION_JSON="$SANDBOX/version-moby.json"
 expect_rc "CIW12 moby 非 CI 仍拒绝（不回归）" 3 ciw12
 
 # ---------------------------------------------------------------------------

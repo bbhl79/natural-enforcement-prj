@@ -28,11 +28,12 @@ ci_workflow_scan() {
   local wf_dir="$root/.github/workflows"
   ci_workflow_reset
   [[ -d "$wf_dir" ]] || return 0
-  # 插件形态：docker compose / podman compose（前后需词边界，避免命中
-  # mydocker compose 之类的子串误报）
-  local re_plugin='(^|[^[:alnum:]._/-])(docker|podman)[[:space:]]+compose([[:space:]]|$)'
+  # 插件形态：docker compose / podman compose。边界字符集不含 alnum/_/-/. 但
+  # 含 `/`——路径限定形（/usr/bin/docker compose）同样违规；`-` 留在词内是
+  # 为了 docker-compose 整词匹配（见下）。
+  local re_plugin='(^|[^[:alnum:]._-])(docker|podman)[[:space:]]+compose([[:space:]]|$)'
   # 独立命令形态：docker-compose / podman-compose
-  local re_legacy='(^|[^[:alnum:]._/-])(docker|podman)-compose([^[:alnum:]._/-]|$)'
+  local re_legacy='(^|[^[:alnum:]._-])(docker|podman)-compose([^[:alnum:]._-]|$)'
   local f line trimmed lineno
   # 不用 mapfile（macOS 宿主 bash 3.2）；find -print0 + while-read -d '' 收集
   while IFS= read -r -d '' f; do

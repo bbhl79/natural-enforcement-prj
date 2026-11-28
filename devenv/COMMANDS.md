@@ -203,9 +203,10 @@ exit 3，compose v2 由 doctor `compose-plugin` 检查项校验）；裸 Linux +
   （含取证失败不掩盖原失败：`continue-on-error`），拆栈步骤 `always()`；
   取消（cancelled）拆栈尽力收尾、不保证完成；运行器强制终止（含超时被杀）
   无保证，临时资源随 VM 消亡，不写绝对保证。
-- **取证产物**：`ps -a` / `status` / 各服务 `logs` / `doctor` 输出（全部经
-  devenv 采集）落 `.artifacts/ci-evidence/`，经 upload-artifact 留存（30 天），
-  供普通失败路径的现场诊断与验收归档。
+- **取证产物**：`ps -a` / `status` / 全部服务 `logs`（不带服务名，带前缀、
+  拓扑演进不漏采）/ `doctor` 输出（全部经 devenv 采集）落
+  `.artifacts/ci/<run-id>-<attempt>/`（与 e2e run 产物同规的 per-run 证据区），
+  经 upload-artifact 留存（30 天），供普通失败路径的现场诊断与验收归档。
 - **workflow 静态门禁**（doctor `ci-workflows` 检查项）：`.github/workflows/`
   中直接调用 compose（docker compose / docker-compose / podman compose /
   podman-compose）即拒绝（exit 3），指明文件+行号；本地与 CI 同一校验器。
