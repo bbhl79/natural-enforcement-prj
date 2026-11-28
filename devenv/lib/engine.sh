@@ -125,7 +125,14 @@ engine_check_matrix() {
       return 0 ;;  # 开发机矩阵条目（Windows WSL2 / macOS）
     moby)
       if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-        return 0  # CI 托管上下文条目（Docker Engine + compose v2 + amd64）
+        # CI 托管上下文条目（#71 补强）：Docker Engine/moby + compose v2 + amd64
+        # ——架构不符按 CI 矩阵条目拒绝（compose v2 由 doctor compose-plugin 项
+        # 校验）。固定 ubuntu-24.04 托管运行器应为 amd64；不特判跳过。
+        if [[ "$ENGINE_ARCH" != "amd64" ]]; then
+          ENGINE_ERROR="引擎不在支持矩阵内：CI 矩阵条目要求 amd64（Docker Engine/moby + compose v2 + amd64），实际架构 ${ENGINE_ARCH}。核对 runs-on 固定 ubuntu-24.04 托管运行器（Spec-工程基座 支持环境矩阵）"
+          return 1
+        fi
+        return 0
       fi
       ENGINE_ERROR="引擎不在支持矩阵内：Docker Engine（moby）在非 CI 上下文未验证、不声称支持（CI 托管上下文除外）。开发机请使用 Podman Engine（见 Spec-工程基座 支持环境矩阵）"
       return 1 ;;

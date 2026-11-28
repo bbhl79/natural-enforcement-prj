@@ -14,7 +14,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 
 | Action | Command | 期望退出码 |
 |---|---|---|
-| 一键体检（端点/引擎/矩阵/锁文件/worktree 身份与凭据状态/供应链门禁/镜像/快照状态/服务；退出码=可开工与否） | `devenv doctor` | 0 或 3 |
+| 一键体检（端点/引擎/矩阵/锁文件/worktree 身份与凭据状态/供应链门禁/CI workflow 静态门禁/镜像/快照状态/服务；退出码=可开工与否） | `devenv doctor` | 0 或 3 |
 | 预取镜像锁中的上游镜像（分阶段、有进度/超时、可中断续跑；机器级拉取锁） | `devenv prefetch` | 0 或 3/4/5/6 |
 | 固定快照构建工具镜像 + 安装依赖 + turbo build（幂等；构建前跑供应链静态门禁；记录快照哈希与不可变镜像标识） | `devenv build [--lockgen]` | 0 或 3/4/6 |
 | 启动 db/redis/rustfs → 迁移幂等应用 → api/worker，等待真实健康终态（幂等） | `devenv up` | 0 或 3/4/5/6 |
@@ -52,7 +52,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 以 App 身份 HTTPS 推送 | `devenv git-push <remote> <refspec...>` | 0 或 2/20/21/22/23 或 git 自身退出码 |
 | 认证入口离线测试（不访问 GitHub） | `devenv test:auth` | 0 或 1 |
 | 认证入口真实集成测试（默认只读；写操作需显式旗标） | `devenv test:auth:integration [旗标]` | 0 或 1 或 2 |
-| 命令面离线测试（引擎解析/锁与栈使用租约/输出协议/快照与不可变绑定/per-worktree 隔离/供应链门禁，mock docker） | `devenv test:devenv` | 0 或 1 |
+| 命令面离线测试（引擎解析/锁与栈使用租约/输出协议/快照与不可变绑定/per-worktree 隔离/供应链门禁/CI workflow 静态门禁，mock docker） | `devenv test:devenv` | 0 或 1 |
 
 ## 退出码枚举（总表归 Spec-工程基座；7–10 e2e 专用码段由 Spec-e2e 登记）
 
@@ -120,9 +120,11 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
 `DEVENV_DOCKER_HOST=unix://$HOME/.local/share/containers/podman/machine/podman.sock`。
 
 矩阵校验：Podman Engine（开发机：Windows WSL2 / macOS）与 Docker Engine/moby
-（仅 `GITHUB_ACTIONS=true` 的 CI 托管上下文）在矩阵内；裸 Linux + moby 开发环境
-未验证、不声称支持（exit 3）；未识别引擎 exit 3。doctor 与每条命令报告实际
-端点 + 引擎身份/版本/架构，不特判跳过。
+（仅 `GITHUB_ACTIONS=true` 的 CI 托管上下文）在矩阵内；CI 上下文的 moby 还须
+**amd64**（CI 矩阵条目：Docker Engine/moby + compose v2 + amd64——架构不符
+exit 3，compose v2 由 doctor `compose-plugin` 检查项校验）；裸 Linux + moby
+开发环境未验证、不声称支持（exit 3）；未识别引擎 exit 3。doctor 与每条命令
+报告实际端点 + 引擎身份/版本/架构，不特判跳过。
 
 ## 镜像引用与可配置 DB 镜像
 
@@ -185,6 +187,31 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
 - 依赖包自带的 agent skills **不自动采纳**；只有显式批准的才链接到
   `.claude/skills`。当前 `@reduxjs/toolkit@2.15.0` 携带的 13 个技能已审查并显式
   拒绝（`permissions."@reduxjs/toolkit".skills: false`）。
+
+## CI 同构质量门（#71，Spec-工程基座 §6）
+
+- **同一入口**：本地与 CI 经同一 `devenv verify`（lint + typecheck +
+  test:unit）与同一 `devenv test`（集成，需先 up）——CI 不自带第二套校验器。
+- **workflow**：`.github/workflows/quality-gate.yml`；触发 pull_request /
+  push(dev) / workflow_dispatch；`runs-on` 固定 `ubuntu-24.04`（升级须重新验收，
+  doctor 步骤每次运行记录 `/etc/os-release` 实际系统版本）；执行段预算
+  `timeout-minutes: 30`。
+- **CI 顺序（先快后慢）**：doctor（CI 矩阵条目校验 + 实际运行时报告 + workflow
+  静态门禁自检）→ verify（无服务；首跑内含快照构建）→ up → test（集成）→
+  取证 → 拆栈（down）。本票不含 e2e/复现轨道接入（归 Spec-e2e 体系后续票）。
+- **失败/取消分层（如实）**：普通失败先取证再拆栈——取证步骤 `!cancelled()`
+  （含取证失败不掩盖原失败：`continue-on-error`），拆栈步骤 `always()`；
+  取消（cancelled）拆栈尽力收尾、不保证完成；运行器强制终止（含超时被杀）
+  无保证，临时资源随 VM 消亡，不写绝对保证。
+- **取证产物**：`ps -a` / `status` / 各服务 `logs` / `doctor` 输出（全部经
+  devenv 采集）落 `.artifacts/ci-evidence/`，经 upload-artifact 留存（30 天），
+  供普通失败路径的现场诊断与验收归档。
+- **workflow 静态门禁**（doctor `ci-workflows` 检查项）：`.github/workflows/`
+  中直接调用 compose（docker compose / docker-compose / podman compose /
+  podman-compose）即拒绝（exit 3），指明文件+行号；本地与 CI 同一校验器。
+  离线反例测试：`devenv/test/ci-offline.test.sh`（`devenv test:devenv` 的
+  组成部分）。**诚实口径**：这是 workflow 文件内的静态反例拦截，不阻止人在
+  终端手动绕过 devenv，不声称已阻止（Spec §6 同款声明）。
 
 ## 并发语义（幂等 ≠ 并发安全）
 
