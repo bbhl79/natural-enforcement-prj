@@ -211,64 +211,100 @@ stage_verify_config() {
     fail "verify-config" "rc=$rc（漂移或无法核查）——指挥者须先应用配置（见 human-steps）"
     human_next "按 docs/agents/branch-cleanup.md 应用：开启自动删除 + 创建 protect-archive-tags 规则集；应用后重跑 verify-config"
   fi
-  # App 对 archive 规则集无绕过权断言
+  # App 对 archive 规则集无绕过权断言（读取失败不静默跳过——显式 fail）
   local aid cub rcf=0
   ev_run rs-list "$DEVENV" gh api "repos/$GHA_REPO/rulesets" || rcf=$?
-  aid=$(jq -r '.[] | select(.name == "protect-archive-tags") | .id' "$EV_DIR/rs-list.out" 2>/dev/null || true)
-  if [[ -n "$aid" ]]; then
-    rc=0; ev_run archive-rs "$DEVENV" gh api "repos/$GHA_REPO/rulesets/$aid" || rc=$?
-    if [[ $rc == 0 ]]; then
-      cub=$(jq -r '.current_user_can_bypass // ""' "$EV_DIR/archive-rs.out")
-      [[ "$cub" == "never" ]] && pass "App 对 archive 规则集 current_user_can_bypass=never（无绕过权）" \
-        || fail "archive 绕过权" "current_user_can_bypass=$cub（App 不应有绕过权）"
+  if [[ $rcf != 0 ]]; then
+    fail "verify-config 绕过权断言" "规则集列表读取失败 rc=$rcf——无法断言 current_user_can_bypass"
+  else
+    aid=$(jq -r '.[] | select(.name == "protect-archive-tags") | .id' "$EV_DIR/rs-list.out" 2>/dev/null || true)
+    if [[ -z "$aid" ]]; then
+      fail "verify-config 绕过权断言" "protect-archive-tags 未见于规则集列表——无法断言（须先应用配置）"
+    else
+      rc=0; ev_run archive-rs "$DEVENV" gh api "repos/$GHA_REPO/rulesets/$aid" || rc=$?
+      if [[ $rc != 0 ]]; then
+        fail "verify-config 绕过权断言" "archive 规则集详情读取失败 rc=$rc——无法断言"
+      else
+        cub=$(jq -r '.current_user_can_bypass // ""' "$EV_DIR/archive-rs.out")
+        [[ "$cub" == "never" ]] && pass "App 对 archive 规则集 current_user_can_bypass=never（无绕过权）" \
+          || fail "archive 绕过权" "current_user_can_bypass=$cub（App 不应有绕过权）"
+      fi
     fi
   fi
   [[ "$FAILURES" == 0 ]]
 }
 
 # ---------------------------------------------------------------------------
-# negatives：archive 标签更新/删除尝试应拒（前置：保护已 active）
+# negatives：archive 标签更新/删除尝试应拒（前置：保护已 active 且内容匹配保存配置）
 # ---------------------------------------------------------------------------
 stage_negatives() {
-  # 安全前置：archive 规则集必须 active 且 App 无绕过权，否则不尝试（避免误改真实归档）
-  local rc=0 aid enf cub
-  ev_run rs-list "$DEVENV" gh api "repos/$GHA_REPO/rulesets" || rc=$?
-  [[ $rc == 0 ]] || { fail "negatives" "规则集列表读取失败"; exit 1; }
-  aid=$(jq -r '.[] | select(.name == "protect-archive-tags") | .id' "$EV_DIR/rs-list.out")
+  # 选一个真实 archive 标签做靶（不创建新永久标签）
+  local rc=0 tag
+  ev_run tag-list "$DEVENV" gh api "repos/$GHA_REPO/git/matching-refs/tags/archive/" || rc=$?
+  [[ $rc == 0 ]] || { fail "negatives" "archive 标签列表读取失败 rc=$rc"; exit 1; }
+  tag=$(jq -r '.[0].ref | sub("^refs/tags/"; "")' "$EV_DIR/tag-list.out" 2>/dev/null || true)
+  if [[ -z "$tag" || "$tag" == "null" ]]; then
+    fail "negatives" "无 archive/* 标签可作靶——先创建一个归档标签"
+    exit 1
+  fi
+
+  # 安全前置（全字段，防 UI 误配后误改真实归档）：protect-archive-tags 必须
+  # 存在、active、内容与保存配置逐字段一致（target=tag / update+deletion / 无绕过）、
+  # 条件实际覆盖 refs/tags/$tag、且 App current_user_can_bypass=never——任一不符
+  # fail closed 不尝试（避免双前缀坑/漏勾规则时覆写或永久删除真实归档标签）。
+  local aid enf cub live_json
+  rc=0; ev_run rs-list "$DEVENV" gh api "repos/$GHA_REPO/rulesets" || rc=$?
+  [[ $rc == 0 ]] || { fail "negatives" "规则集列表读取失败 rc=$rc——fail closed 不尝试"; exit 1; }
+  aid=$(jq -r '.[] | select(.name == "protect-archive-tags") | .id' "$EV_DIR/rs-list.out" 2>/dev/null || true)
   if [[ -z "$aid" ]]; then
     fail "negatives" "protect-archive-tags 规则集不存在——不尝试（无保护时尝试会误改真实归档标签）"
     human_next "先创建 protect-archive-tags 规则集（verify-config 通过）再跑 negatives"
     exit 1
   fi
-  ev_run archive-rs "$DEVENV" gh api "repos/$GHA_REPO/rulesets/$aid" || true
-  enf=$(jq -r '.enforcement // ""' "$EV_DIR/archive-rs.out"); cub=$(jq -r '.current_user_can_bypass // ""' "$EV_DIR/archive-rs.out")
-  if [[ "$enf" != "active" || "$cub" != "never" ]]; then
-    fail "negatives" "archive 规则集 enforcement=$enf cub=$cub（须 active 且 App never）——不尝试"
+  rc=0; ev_run archive-rs "$DEVENV" gh api "repos/$GHA_REPO/rulesets/$aid" || rc=$?
+  [[ $rc == 0 ]] || { fail "negatives" "archive 规则集详情读取失败 rc=$rc——fail closed 不尝试"; exit 1; }
+  live_json=$(cat "$EV_DIR/archive-rs.out")
+  enf=$(jq -r '.enforcement // ""' <<< "$live_json"); cub=$(jq -r '.current_user_can_bypass // ""' <<< "$live_json")
+  local prefail="" cf
+  BP_FINDINGS=(); BP_NOTES=()
+  bp_compare_ruleset "protect-archive-tags" "$BP_RULESETS_DIR/protect-archive-tags.json" "$live_json" || prefail="内容与保存配置不一致"
+  for cf in ${BP_FINDINGS[@]+"${BP_FINDINGS[@]}"}; do ev_log_file "前置 FINDING: $cf"; done
+  [[ "$enf" == "active" ]] || prefail="${prefail:+$prefail;}enforcement=$enf（非 active）"
+  [[ "$cub" == "never" ]] || prefail="${prefail:+$prefail;}current_user_can_bypass=$cub（App 应 never）"
+  if [[ -z "$prefail" ]]; then
+    bp_ruleset_covers_ref "$live_json" "refs/tags/$tag" "$tag" || prefail="条件不覆盖 refs/tags/$tag"
+  fi
+  if [[ -n "$prefail" ]]; then
+    fail "negatives 安全前置" "$prefail——fail closed 不尝试（防误改真实归档标签）"
+    human_next "按 docs/agents/branch-cleanup.md 逐字段对齐 protect-archive-tags（target=tag / include=archive/* / update+deletion / 无绕过 / active）后重跑 negatives"
     exit 1
   fi
-  pass "negatives 前置：archive 规则集 active 且 App 无绕过权（尝试被拒即零写入）"
+  pass "negatives 前置：archive 规则集 active + 内容与保存配置一致 + 覆盖 refs/tags/$tag + App 无绕过权（尝试被拒即零写入）"
 
-  # 选一个真实 archive 标签做靶（不创建新永久标签）
-  ev_run tag-list "$DEVENV" gh api "repos/$GHA_REPO/git/matching-refs/tags/archive/" || true
-  local tag; tag=$(jq -r '.[0].ref | sub("^refs/tags/"; "")' "$EV_DIR/tag-list.out" 2>/dev/null || true)
-  if [[ -z "$tag" || "$tag" == "null" ]]; then
-    fail "negatives" "无 archive/* 标签可作靶——先创建一个归档标签"
-    exit 1
-  fi
   local before; before=$(archive_tag_commit "$tag") || { fail "negatives" "无法读取标签 $tag 哈希"; exit 1; }
   info "靶 archive 标签 $tag → 提交哈希 $before（反例前后核对不动）"
   state_set --arg t "$tag" --arg h "$before" '.archive_probe = {tag: $t, commit: $h}'
 
+  # 推送一致性：所推提交须与远端 dev 一致（确保确实是移动标签到新位置），
+  # 且不得等于 $before（否则 no-op rc=0 误当成功/或无关拒绝）。
+  local devsha localdev
+  devsha=$(remote_ref_sha dev) || { fail "negatives" "无法读取远端 dev HEAD"; exit 1; }
+  localdev=$(git -C "$REPO_ROOT" rev-parse refs/heads/dev 2>/dev/null) || { fail "negatives" "本地无 refs/heads/dev"; exit 1; }
+  if [[ "$localdev" != "$devsha" ]]; then
+    fail "negatives" "本地 dev($localdev) ≠ 远端 dev($devsha)——先同步再跑（推送须确实移动标签）"
+    exit 1
+  fi
+  [[ "$devsha" != "$before" ]] || { fail "negatives" "dev HEAD 恰等于靶标签提交——无法构造有效移动探针"; exit 1; }
+
   # 反例 1：更新（强制移动标签到 dev HEAD）应拒
-  local devsha; devsha=$(remote_ref_sha dev)
   rc=0
   ev_run tag-update "$DEVENV" git-push origin "+refs/heads/dev:refs/tags/$tag" || rc=$?
-  expect_reject "项 11 archive 标签更新（移动 $tag → dev ${devsha:0:8}）" "$rc" "$EV_DIR/tag-update.err"
+  expect_reject "项 11 archive 标签更新（移动 $tag → dev ${devsha:0:8}）" "$rc" "$EV_DIR/tag-update.err" || true
 
   # 反例 2：删除标签应拒
   rc=0
   ev_run tag-delete "$DEVENV" git-push origin ":refs/tags/$tag" || rc=$?
-  expect_reject "项 11 archive 标签删除（$tag）" "$rc" "$EV_DIR/tag-delete.err"
+  expect_reject "项 11 archive 标签删除（$tag）" "$rc" "$EV_DIR/tag-delete.err" || true
 
   # 零写入核对：标签仍在且哈希不动
   local after; after=$(archive_tag_commit "$tag") || after=""
@@ -299,13 +335,16 @@ stage_cleanup_positive() {
   pass "探针 PR #$pr 已 squash 合入（merge_commit=$mc head=$head）——以哈希定位"
   state_set --arg mc "$mc" --arg h "$head" '.probe_merged = {merge_commit: $mc, head: $h}'
 
-  # AC1 远端：合入后头分支自动删除（delete_branch_on_merge 生效）
+  # AC1 远端：合入后头分支自动删除（delete_branch_on_merge 生效）——必须确证 HTTP 404：
+  # 任意 rc!=0（网络超时/HTTP 403/500）不作 404 证据，判 fail。
   rc=0
   ev_run probe-ref "$DEVENV" gh api "repos/$GHA_REPO/git/ref/heads/$pb" || rc=$?
-  if [[ $rc != 0 ]]; then
-    pass "AC1 远端：探针分支 $pb 合入后已自动删除（远端 ref 读取 rc=$rc，404）"
+  if [[ $rc == 0 ]]; then
+    fail "AC1 远端自动删除" "探针分支 $pb 远端仍存在（rc=0）——确认 delete_branch_on_merge 已开启（verify-config）"
+  elif grep -q 'HTTP 404' "$EV_DIR/probe-ref.err" 2>/dev/null; then
+    pass "AC1 远端：探针分支 $pb 合入后已自动删除（git/ref/heads 读取 HTTP 404 确证）"
   else
-    fail "AC1 远端自动删除" "探针分支 $pb 远端仍存在——确认 delete_branch_on_merge 已开启（verify-config）"
+    fail "AC1 远端自动删除" "读取 rc=$rc 但非 HTTP 404 确证（err 尾部：$(tail -1 "$EV_DIR/probe-ref.err" 2>/dev/null)）——无法判定自动删除已生效，不判通过"
   fi
 
   # AC1 本地：branch-cleanup 双重判断（真实 PR 状态）→ dry-run 安全 → --apply 清理
@@ -315,10 +354,10 @@ stage_cleanup_positive() {
     || fail "AC1 本地 dry-run" "rc=$rc：$(tail -3 "$EV_DIR/cleanup-dry.err")"
   rc=0
   ev_run cleanup-apply "$DEVENV" branch-cleanup "$pb" --apply || rc=$?
-  if [[ $rc == 0 ]] && ! git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$pb"; then
-    pass "AC1 本地：branch-cleanup $pb --apply 已删除本地分支（worktree=$wt 一并移除）"
+  if [[ $rc == 0 ]] && ! git -C "$REPO_ROOT" show-ref --verify --quiet "refs/heads/$pb" && [[ -z "$wt" || ! -d "$wt" ]]; then
+    pass "AC1 本地：branch-cleanup $pb --apply 已删除本地分支（worktree=$wt 一并移除，实测不存在）"
   else
-    fail "AC1 本地 --apply" "rc=$rc 或分支仍在：$(tail -3 "$EV_DIR/cleanup-apply.err")"
+    fail "AC1 本地 --apply" "rc=$rc 或分支/worktree 残留（wt=$wt）：$(tail -3 "$EV_DIR/cleanup-apply.err")"
   fi
   [[ "$FAILURES" == 0 ]]
 }

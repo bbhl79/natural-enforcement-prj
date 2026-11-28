@@ -56,11 +56,14 @@ Pull Requests → **Automatically delete head branches**）。合入 PR 后 GitH
 删除头分支（同仓库分支；受保护分支与默认分支不删）。
 
 - **需管理员开启**：App 无 Administration 权限（spec 安全基线），由指挥者在 UI 勾选。
-- **可见性（实测，与 `bypass_actors` 同口径）**：匿名 `GET /repos` **不返回**该字段，
-  带 push 权限的令牌（App installation token / CI `github.token`）才返回。
+- **可见性（实测，与 `bypass_actors` 同口径）**：匿名/`contents:read` 令牌的
+  `GET /repos` **不返回**该字段，带 push 权限的令牌（App installation token）才返回。
   `devenv branch-protection` 据此拆分：公开面（字段缺失）记 NOTE 跳过（不死锁
-  匿名本地核对）；管理员强校验（`--require-bypass-actors`）字段缺失即 fail closed；
-  字段存在则严格核对 `true`/`false`。CI 带 `github.token` 常驻核对。
+  匿名/CI 本地核对）；管理员强校验（`--require-bypass-actors`）字段缺失即 fail closed；
+  字段存在则严格核对 `true`/`false`。**CI 不授写权限读此字段**（评审裁决：规则集仅
+  保护 dev，PR 代码持写权限可击穿 prototype 留档——不为读单个管理员开关提权质量门）；
+  自动删除的生效闭环 = `devenv test:branch-cleanup verify-config`（App 身份带 push
+  权限）+ 指挥者管理员核对（`--require-bypass-actors` 或 UI 复核）。
 
 ## archive 标签保护（禁更新/删除，允许创建）
 
@@ -89,8 +92,9 @@ Pull Requests → **Automatically delete head branches**）。合入 PR 后 GitH
   创建后该标签受保护——不可更新（移动）/删除；验收记录同时写入其提交哈希。
   `prototype/*` 分支本身是留档豁免对象（不清理），与 archive 标签共同构成原型追溯。
 - **应用**（指挥者，管理员）：GitHub → Settings → Rules → Rulesets → New ruleset，
-  target 选 tags，字段值 = JSON 文件。应用后 `devenv branch-protection`（App 身份）
-  核对一致；`devenv test:branch-cleanup verify-config` 含自动删除设置核对。
+  target 选 tags，字段值 = JSON 文件。应用后 `devenv branch-protection`（匿名只读即可，
+  `BP_GITHUB_TOKEN=<令牌>` 时可核自动删除设置）核对一致；`devenv test:branch-cleanup
+  verify-config`（App 身份）含自动删除设置与绕过权断言核对。
 
 ## 漂移核对（共用入口）
 

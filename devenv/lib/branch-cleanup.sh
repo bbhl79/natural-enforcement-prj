@@ -45,24 +45,42 @@ bc_worktree_for() {
   return 0
 }
 
-# bc_worktree_busy <worktree-path> → 0 持有活跃栈锁/租约（不可强拆）| 1 空闲。
-# 只读判定（不清理失效槽）：目标 worktree 的 stack-<suffix> 排他锁或共享租约
-# 持有者存活即 busy。gitignored 的 .devenv-state 对 git status 不可见，故须独立
-# 核对锁/租约——清理是写者，绝不强拆活跃运行（Spec §4 栈使用租约语义）。
+# bc_worktree_busy <worktree-path> → 0 持有活跃 per-worktree 锁/租约（不可强拆）| 1 空闲。
+# 只读判定（不清理失效槽）：复用 lock_is_stale（含 owner 写入窗口 1s 宽限——
+# mkdir 后未写 owner 不误判空闲）。覆盖全部 per-worktree 锁族（COMMANDS.md 并发
+# 语义表）：stack/migrate/gen/e2e-image/e2e-admit/e2e-owner-<runid> 排他锁 +
+# stack 共享租约槽——含不持 stack 锁的 gen/e2e 构建。gitignored 的 .devenv-state
+# 对 git status 不可见，故须独立核对锁/租约——清理是写者，绝不强拆活跃运行
+# （Spec §4 栈使用租约语义）。
 bc_worktree_busy() {
-  local wt="$1" id suffix lockdir pid d
+  local wt="$1" id suffix d slot name
   id=$(git -C "$wt" rev-parse --absolute-git-dir 2>/dev/null) || id="$wt"
   suffix=$(printf '%s' "$id" | sha256sum | awk '{print $1}' | cut -c1-8)
-  lockdir="$LOCK_ROOT/stack-$suffix.lock"
-  if [[ -d "$lockdir" ]]; then
-    pid=$(awk '{print $1}' "$lockdir/owner" 2>/dev/null)
-    [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && return 0
-  fi
-  for d in "$LOCK_ROOT/stack-$suffix.lease"/*; do
+  for name in stack migrate gen e2e-image e2e-admit; do
+    d="$LOCK_ROOT/$name-$suffix.lock"
     [[ -d "$d" ]] || continue
-    pid=$(awk '{print $1}' "$d/owner" 2>/dev/null)
-    [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && return 0
+    lock_is_stale "$d" || return 0
   done
+  for d in "$LOCK_ROOT/e2e-owner-$suffix"-*.lock; do
+    [[ -d "$d" ]] || continue
+    lock_is_stale "$d" || return 0
+  done
+  for slot in "$LOCK_ROOT/stack-$suffix.lease"/*; do
+    [[ -d "$slot" ]] || continue
+    lock_is_stale "$slot" || return 0
+  done
+  return 1
+}
+
+# bc_worktree_is_locked <worktree-path> → 0 该 worktree 处于 git worktree lock 状态。
+bc_worktree_is_locked() {
+  local target="$1" cur="" line
+  while IFS= read -r line; do
+    case "$line" in
+      "worktree "*) cur="${line#worktree }" ;;
+      locked*) [[ "$cur" == "$target" ]] && return 0 ;;
+    esac
+  done < <(git -C "$REPO_ROOT" worktree list --porcelain 2>/dev/null)
   return 1
 }
 
@@ -110,7 +128,13 @@ bc_judge() {
   # ① 未提交文件（检出该分支的 worktree 有未保存改动；含未跟踪文件，不含 gitignored）
   BC_WORKTREE=$(bc_worktree_for "$branch")
   if [[ -n "$BC_WORKTREE" ]]; then
-    # 活跃栈锁/租约（gitignored .devenv-state 对 status 不可见）→ 绝不强拆（exit 6）
+    # locked worktree（git worktree lock）：worktree remove 必拒——前置判定，
+    # 保持 dry-run 与 --apply 一致（不拖到 --apply 才报错）
+    if bc_worktree_is_locked "$BC_WORKTREE"; then
+      BC_REASONS+=("目标 worktree $BC_WORKTREE 处于 git worktree lock 状态——拒绝清理（先 git worktree unlock 或确认其用途）")
+      return 4
+    fi
+    # 活跃 per-worktree 锁/租约（gitignored .devenv-state 对 status 不可见）→ 绝不强拆（exit 6）
     if bc_worktree_busy "$BC_WORKTREE"; then
       BC_REASONS+=("目标 worktree $BC_WORKTREE 持有活跃栈锁/租约（测试/构建运行中）——拒绝清理，绝不强拆；等待运行结束后重跑")
       return 6
@@ -149,7 +173,7 @@ bc_judge() {
   fi
   # 合入 head 须在本地对象库（否则无法比对本地新增提交）
   if ! git -C "$REPO_ROOT" cat-file -e "$BC_MERGED_HEAD" 2>/dev/null; then
-    BC_REASONS+=("PR 合入 head $BC_MERGED_HEAD 不在本地对象库——先 fetch 再判定（fail closed）")
+    BC_REASONS+=("PR 合入 head $BC_MERGED_HEAD 不在本地对象库——fail closed；修复：git fetch origin pull/${BC_PR_NUMBER:-<pr>}/head（开启自动删除后远端分支已删，普通 fetch 拉不到合入 head）")
     return 3
   fi
   # ③ PR 合入后本地新增提交（本地 tip 超出合入 head 的提交 = 未推送内容）

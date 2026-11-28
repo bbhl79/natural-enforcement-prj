@@ -291,7 +291,7 @@ bp_check_repo_settings() {
       bp_add_finding "管理员强校验模式下仓库设置不含 delete_branch_on_merge——fail closed 判漂移；确认读取凭据具备 push 权限"
       return 1
     fi
-    bp_add_note "delete_branch_on_merge 对当前读取身份不可见（匿名/无 push 权限）——合入后自动删除设置未核对；CI 带 github.token 核对，本地可用 BP_GITHUB_TOKEN=<令牌> 核对"
+    bp_add_note "delete_branch_on_merge 对当前读取身份不可见（匿名/contents:read 不返回该字段，含 CI github.token）——自动删除设置未核对；闭环 = harness verify-config（App 身份带 push 权限）+ 指挥者管理员核对（--require-bypass-actors / BP_GITHUB_TOKEN=<管理员令牌>）。不为读单个管理员开关把 CI 质量门提权到写仓库"
     return 0
   fi
   # false 是合法值（关闭）——字段存在时直接 tostring，不用 `// empty`（会吞 false）

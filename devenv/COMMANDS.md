@@ -87,7 +87,8 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
   archive/<名> <提交哈希>` 后 `devenv git-push origin archive/<名>`（App 身份）；
   创建后不可更新/删除（受保护），验收记录写入该提交哈希。
 - **自动删除**：`delete_branch_on_merge=true`（指挥者管理员开启，App 无 Administration）；
-  匿名读不到该字段（公开面 NOTE 跳过），CI 带 `github.token` 核对。
+  匿名/`contents:read` 令牌读不到该字段（公开面 NOTE 跳过）；生效闭环 = harness
+  `verify-config`（App 身份）+ 指挥者管理员核对——CI 不授写权限读此开关（评审裁决）。
 - **离线反例**：`devenv/test/branch-cleanup-offline.test.sh`（真实 git 沙箱 + mock
   GitHub，`devenv test:devenv` 组成部分）覆盖三类拒绝反例、prototype 豁免、无强制
   路径、dry-run/--apply 落盘、fail-closed、archive 规则集与自动删除漂移核对。

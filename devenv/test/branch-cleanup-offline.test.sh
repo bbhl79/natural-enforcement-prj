@@ -115,7 +115,7 @@ run_cleanup bc1a
   || fail "BC1a" "rc=$(cat "$OUT/bc1a.rc")：$(head -3 "$OUT/bc1a.err")"
 
 run_cleanup bc1b feat/probe --force
-[[ "$(cat "$OUT/bc1b.rc")" == "2" ]] && grep -qi "强制\|force" "$OUT/bc1b.err" \
+[[ "$(cat "$OUT/bc1b.rc")" == "2" ]] && grep -qiE "强制|force" "$OUT/bc1b.err" \
   && pass "BC1b --force → exit 2（不存在强制删除路径）" \
   || fail "BC1b" "rc=$(cat "$OUT/bc1b.rc")：$(head -3 "$OUT/bc1b.err")"
 
@@ -134,7 +134,7 @@ run_cleanup bc1d no-such-branch
 # ---------------------------------------------------------------------------
 git -C "$SANDBOX" branch prototype/foundation-slice-1 dev
 run_cleanup bc2a prototype/foundation-slice-1
-[[ "$(cat "$OUT/bc2a.rc")" == "4" ]] && grep -qi "豁免\|prototype" "$OUT/bc2a.err" \
+[[ "$(cat "$OUT/bc2a.rc")" == "4" ]] && grep -qiE "豁免|prototype" "$OUT/bc2a.err" \
   && pass "BC2a prototype/* 留档分支豁免 → exit 4 拒绝清理" \
   || fail "BC2a" "rc=$(cat "$OUT/bc2a.rc")：$(head -3 "$OUT/bc2a.err")"
 
@@ -377,6 +377,94 @@ rc=0
        <(grep -v '^{"event"' "$OUT/bc11.out") >/dev/null 2>&1 \
   && pass "BC11 拒绝路径 --json：stdout 仅 JSONL 终值（failed/4），原因走 stderr（不污染结果流）" \
   || fail "BC11" "rc=$rc out=$(cat "$OUT/bc11.out")"
+
+# ---------------------------------------------------------------------------
+# 8. 锁族覆盖 / locked / 短旗标 / exit 6 协议（BC12 系——评审补漏）
+# ---------------------------------------------------------------------------
+# mk_busy_lock <wt> <锁目录相对名>：为 worktree 造一个活跃锁目录（持有者=本测试进程）
+mk_busy_lock() {
+  local wt="$1" rel="$2" wtid suf dir
+  wtid=$(git -C "$wt" rev-parse --absolute-git-dir)
+  suf=$(printf '%s' "$wtid" | sha256sum | awk '{print $1}' | cut -c1-8)
+  dir="$SANDBOX/locks/$(printf '%s' "$rel" | sed "s/SUF/$suf/")"
+  mkdir -p "$dir"
+  printf '%s 0\n' "$$" > "$dir/owner"
+}
+# mk_busy_case <branch-prefix>：建分支+干净 worktree+已合入 PR 夹具
+mk_busy_case() {
+  local name="$1"
+  git -C "$SANDBOX" branch "$name" dev
+  local wt="$SANDBOX/wt-$name"
+  git -C "$SANDBOX" worktree add -q "$wt" "$name"
+  printf 'x\n' > "$wt/x.txt"; git -C "$wt" add -A; git -C "$wt" commit -qm x
+  pr_fixture "$(git -C "$wt" rev-parse HEAD)" true "$(git -C "$SANDBOX" rev-parse dev)"
+  printf '%s' "$wt"
+}
+run_cleanup_lockroot() { # run_cleanup_lockroot <label> <args...>：带 DEVENV_LOCK_ROOT 沙箱锁目录
+  local label="$1"; shift
+  local rc=0
+  ( cd "$SANDBOX" && PATH="$SANDBOX/stubbin:$PATH" BP_FIXTURE_DIR="$FIX" DEVENV_LOCK_ROOT="$SANDBOX/locks" "$DEVENV" branch-cleanup "$@" ) \
+    > "$OUT/$label.out" 2> "$OUT/$label.err" || rc=$?
+  echo "$rc" > "$OUT/$label.rc"
+}
+
+# BC12a 活跃共享租约（.lease 槽）阻塞 → exit 6
+WT=$(mk_busy_case feat-bc12a)
+mk_busy_lock "$WT" "stack-SUF.lease/slot1.1.abc"
+run_cleanup_lockroot bc12a feat-bc12a --apply
+[[ "$(cat "$OUT/bc12a.rc")" == "6" ]] && git -C "$SANDBOX" show-ref --verify --quiet refs/heads/feat-bc12a \
+  && pass "BC12a 活跃 stack 共享租约槽 → exit 6 拒绝（绝不强拆）" \
+  || fail "BC12a" "rc=$(cat "$OUT/bc12a.rc")：$(head -4 "$OUT/bc12a.err")"
+rm -rf "$SANDBOX/locks"; git -C "$SANDBOX" worktree remove --force "$WT" 2>/dev/null || true
+
+# BC12b gen-<suffix> 锁阻塞 → exit 6（gen 不持 stack 锁，单独覆盖）
+WT=$(mk_busy_case feat-bc12b)
+mk_busy_lock "$WT" "gen-SUF.lock"
+run_cleanup_lockroot bc12b feat-bc12b --apply
+[[ "$(cat "$OUT/bc12b.rc")" == "6" ]] && git -C "$SANDBOX" show-ref --verify --quiet refs/heads/feat-bc12b \
+  && pass "BC12b 活跃 gen-<wt> 锁 → exit 6 拒绝（非 stack 锁族也覆盖）" \
+  || fail "BC12b" "rc=$(cat "$OUT/bc12b.rc")：$(head -4 "$OUT/bc12b.err")"
+rm -rf "$SANDBOX/locks"; git -C "$SANDBOX" worktree remove --force "$WT" 2>/dev/null || true
+
+# BC12c e2e-owner-<suffix>-<runid> 锁阻塞 → exit 6
+WT=$(mk_busy_case feat-bc12c)
+mk_busy_lock "$WT" "e2e-owner-SUF-runx.lock"
+run_cleanup_lockroot bc12c feat-bc12c --apply
+[[ "$(cat "$OUT/bc12c.rc")" == "6" ]] \
+  && pass "BC12c 活跃 e2e-owner-<wt>-<runid> 锁 → exit 6 拒绝" \
+  || fail "BC12c" "rc=$(cat "$OUT/bc12c.rc")：$(head -4 "$OUT/bc12c.err")"
+rm -rf "$SANDBOX/locks"; git -C "$SANDBOX" worktree remove --force "$WT" 2>/dev/null || true
+
+# BC12d locked worktree → dry-run 即 exit 4（与 --apply 判定一致，不拖到删除才报错）
+WT=$(mk_busy_case feat-bc12d)
+git -C "$SANDBOX" worktree lock "$WT"
+run_cleanup bc12d feat-bc12d
+[[ "$(cat "$OUT/bc12d.rc")" == "4" ]] && grep -q "lock" "$OUT/bc12d.err" \
+  && pass "BC12d locked worktree → dry-run 即 exit 4 拒绝（判定前后一致）" \
+  || fail "BC12d" "rc=$(cat "$OUT/bc12d.rc")：$(head -4 "$OUT/bc12d.err")"
+git -C "$SANDBOX" worktree unlock "$WT" 2>/dev/null || true
+git -C "$SANDBOX" worktree remove --force "$WT" 2>/dev/null || true
+
+# BC12e 短旗标拒绝：-f/-F/-D → exit 2（不得落入「分支不存在」歧义）
+for flag in -f -F -D; do
+  run_cleanup "bc12e${flag#-}" feat/probe "$flag"
+  [[ "$(cat "$OUT/bc12e${flag#-}.rc")" == "2" ]] && grep -qiE "强制|force" "$OUT/bc12e${flag#-}.err" \
+    && pass "BC12e 短旗标 $flag → exit 2（拒绝强制路径）" \
+    || fail "BC12e $flag" "rc=$(cat "$OUT/bc12e${flag#-}.rc")：$(head -2 "$OUT/bc12e${flag#-}.err")"
+done
+
+# BC12f exit 6 的 --json 终值协议：stdout 仅 JSONL 且终值 exitCode=6
+WT=$(mk_busy_case feat-bc12f)
+mk_busy_lock "$WT" "stack-SUF.lock"
+rc=0
+( cd "$SANDBOX" && PATH="$SANDBOX/stubbin:$PATH" BP_FIXTURE_DIR="$FIX" DEVENV_LOCK_ROOT="$SANDBOX/locks" "$DEVENV" --json branch-cleanup feat-bc12f --apply ) \
+  > "$OUT/bc12f.out" 2> "$OUT/bc12f.err" || rc=$?
+[[ "$rc" == "6" ]] && ! grep -q "WARN" "$OUT/bc12f.out" \
+  && jq -e 'select(.command == "branch-cleanup") | .status == "failed" and .exitCode == 6' \
+       <(grep -v '^{"event"' "$OUT/bc12f.out") >/dev/null 2>&1 \
+  && pass "BC12f exit 6 拒绝 --json：stdout 仅 JSONL 且终值 exitCode=6（协议不破）" \
+  || fail "BC12f" "rc=$rc out=$(cat "$OUT/bc12f.out")"
+rm -rf "$SANDBOX/locks"; git -C "$SANDBOX" worktree remove --force "$WT" 2>/dev/null || true
 
 echo "------------------------------------------------------------"
 echo "分支清理离线测试完成：$PASS_COUNT 通过，$FAILURES 失败"

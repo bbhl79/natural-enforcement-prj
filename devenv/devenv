@@ -1099,9 +1099,9 @@ cmd_branch_protection() {
     m=$((m + 1))
   done
   case "$rc" in
-    0) note "一致：远端规则集与保存配置逐字段相同（绕过名单 ${m} 项未核对面见 NOTE），且无额外规则集覆盖 dev"
+    0) note "一致：远端规则集与保存配置逐字段相同，且无额外规则集覆盖 dev/archive（${m} 项公开面不可见字段——绕过名单/自动删除设置——未核对见 NOTE，不谎报）"
         final ok 0 findings=0 notes="$m" ;;
-    1) warn "漂移：$n 项发现（见上；修复：按 docs/agents/branch-protection.md 同步 UI 与保存配置）"
+    1) warn "漂移：$n 项发现（见上；修复：按 docs/agents/branch-protection.md 与 docs/agents/branch-cleanup.md 同步 UI 与保存配置）"
         final failed 1 findings="$n" notes="$m" ;;
     *) warn "无法核查（fetch/解析失败，fail closed，不判一致）：$n 项发现"
         final failed "$rc" findings="$n" notes="$m" ;;
@@ -1112,13 +1112,22 @@ cmd_branch_protection() {
 # ---------------------------------------------------------------------------
 # 分支清理（#74；不触引擎；窄用途「PR 合入后清理」，无强制删除路径）
 # ---------------------------------------------------------------------------
+# bc_fail_apply <rc> <原因>：--apply 路径失败的统一收尾（die 会跳过 final，
+# 破坏 --json 终值协议——ev bc.start 已发 stdout，故必须补发 final failed）。
+bc_fail_apply() {
+  local rc="$1"; shift
+  warn "$*"
+  final failed "$rc" branch="${branch:-}" reasons=1 pr="${BC_PR_NUMBER:-}" merged_head="${BC_MERGED_HEAD:-}"
+  exit "$rc"
+}
+
 cmd_branch_cleanup() {
   local branch="" apply=0
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --apply) apply=1; shift ;;
-      --force|-f) die 2 "branch-cleanup 不存在强制删除路径（--force 被拒绝）：发现未保存工作一律拒绝并列出原因" ;;
-      --*) die 2 "branch-cleanup 未知旗标：$1（可用：--apply）" ;;
+      --force|-f|-F|-D) die 2 "branch-cleanup 不存在强制删除路径（$1 被拒绝）：发现未保存工作一律拒绝并列出原因" ;;
+      -*) die 2 "branch-cleanup 未知旗标：$1（可用：--apply）" ;;
       *) [[ -z "$branch" ]] || die 2 "branch-cleanup 只接受一个分支参数（多余：$1）"; branch="$1"; shift ;;
     esac
   done
@@ -1151,15 +1160,19 @@ cmd_branch_cleanup() {
       merged_head="$BC_MERGED_HEAD" merge_commit="${BC_MERGE_COMMIT:-}" reasons=0
     exit 0
   fi
-  # 关闭判定→删除 TOCTOU：删除前再核 tip 仍为判定基准 BC_TIP（并发改动即拒绝）
+  # 关闭判定→删除 TOCTOU：删除前复核 busy（网络窗口内可能有运行取得锁/租约）
+  # 与 tip 仍为判定基准 BC_TIP（并发改动即拒绝）；git 输出分流 stderr，不污染 --json 结果流。
+  if [[ -n "$BC_WORKTREE" ]] && bc_worktree_busy "$BC_WORKTREE"; then
+    bc_fail_apply 6 "目标 worktree $BC_WORKTREE 在判定后取得活跃栈锁/租约——拒绝清理，绝不强拆"
+  fi
   local now_tip
   now_tip=$(git -C "$REPO_ROOT" rev-parse --verify "refs/heads/$branch" 2>/dev/null) || now_tip=""
-  [[ "$now_tip" == "$BC_TIP" ]] || die 4 "分支 $branch 在判定后被修改（tip ${now_tip:-?} ≠ 判定基准 $BC_TIP）——拒绝删除，请重新判定"
+  [[ "$now_tip" == "$BC_TIP" ]] || bc_fail_apply 4 "分支 $branch 在判定后被修改（tip ${now_tip:-?} ≠ 判定基准 $BC_TIP）——拒绝删除，请重新判定"
   if [[ -n "$BC_WORKTREE" ]]; then
-    git -C "$REPO_ROOT" worktree remove "$BC_WORKTREE" || die 4 "worktree 移除失败：$BC_WORKTREE（判定已通过但删除失败，现场保留）"
+    git -C "$REPO_ROOT" worktree remove "$BC_WORKTREE" 1>&2 || bc_fail_apply 4 "worktree 移除失败：$BC_WORKTREE（判定已通过但删除失败，现场保留）"
   fi
   # 原子 compare-and-delete：仅当 ref 仍等于判定基准 BC_TIP 时删除（并发新增提交即失败，不强删）
-  git -C "$REPO_ROOT" update-ref -d "refs/heads/$branch" "$BC_TIP" || die 4 "分支删除失败：$branch（ref 已变动或删除失败，现场保留）"
+  git -C "$REPO_ROOT" update-ref -d "refs/heads/$branch" "$BC_TIP" 1>&2 || bc_fail_apply 4 "分支删除失败：$branch（ref 已变动或删除失败，现场保留）"
   note "已清理：分支 $branch（worktree=$wt_note 已移除；PR #${BC_PR_NUMBER:-?} 合入 head=$BC_MERGED_HEAD；squash 提交=${BC_MERGE_COMMIT:-?}）"
   final ok 0 branch="$branch" action=cleaned worktree="$wt_note" pr="${BC_PR_NUMBER:-}" \
     merged_head="$BC_MERGED_HEAD" merge_commit="${BC_MERGE_COMMIT:-}" reasons=0
