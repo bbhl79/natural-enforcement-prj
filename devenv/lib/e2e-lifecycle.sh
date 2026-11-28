@@ -341,7 +341,7 @@ cmd_e2e_defect_show() {
   local data="$E2E_LIFECYCLE_DATA"
   if (( JSON )); then
     printf '%s' "$data" | jq -e . >/dev/null 2>&1 || die 4 "生命周期引擎输出非 JSON（协议通道被污染？）"
-    jq -n --argjson defect "$data" \
+    jq -cn --argjson defect "$data" \
       '{command:"e2e",subcommand:"defect",action:"show",status:"ok",exitCode:0,defect:$defect}'
   else
     printf '%s\n' "$data"
@@ -358,7 +358,7 @@ cmd_e2e_defect_list() {
   local data="$E2E_LIFECYCLE_DATA"
   if (( JSON )); then
     printf '%s' "$data" | jq -e 'type == "array"' >/dev/null 2>&1 || die 4 "生命周期引擎输出非缺陷数组（协议通道被污染？）"
-    jq -n --argjson defects "$data" \
+    jq -cn --argjson defects "$data" \
       '{command:"e2e",subcommand:"defect",action:"list",status:"ok",exitCode:0,defects:$defects}'
   else
     printf '%s\n' "$data"
@@ -392,7 +392,7 @@ cmd_e2e_defect_next_id() { # 取号：本地 max+1；--remote 叠读远端已有
   local data="$E2E_LIFECYCLE_DATA"
   if (( JSON )); then
     printf '%s' "$data" | jq -e '.id' >/dev/null 2>&1 || die 4 "生命周期引擎取号输出非法（协议通道被污染？）"
-    jq -n --argjson r "$data" --arg ref "$ref" --arg rs "$rstatus" \
+    jq -cn --argjson r "$data" --arg ref "$ref" --arg rs "$rstatus" \
       '{command:"e2e",subcommand:"defect",action:"next-id",status:"ok",exitCode:0,
         id:$r.id,localMax:$r.localMax,remoteMax:$r.remoteMax,remoteRef:$ref,remoteStatus:$rs}'
   else

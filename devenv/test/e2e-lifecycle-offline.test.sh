@@ -450,6 +450,8 @@ grep -q 'tar -x -C /tmp/in' "$STATE/calls.log" \
   && pass "L1 容器侧解包到 /tmp/in（无 bind、无宿主写通道）" || fail "L1" "未见 stdin tar 解包命令"
 jq -s -e 'any(.[]; .event == "workspace.fresh" or .event == "workspace.built")' "$SANDBOX/l1.out" >/dev/null 2>&1 \
   && pass "L1 新鲜度事件留在结果流（未被查询数据吞掉）" || fail "L1" "结果流缺 workspace 事件"
+tail -1 "$SANDBOX/l1.out" | jq -e '.command == "e2e" and (.defects | length == 2)' >/dev/null 2>&1 \
+  && pass "L1 终值为单行紧凑 JSON（JSONL 结果流不被多行文档破坏）" || fail "L1" "终值非单行 JSON：$(tail -2 "$SANDBOX/l1.out")"
 
 # ---------------------------------------------------------------------------
 # L2 defect show：摘要 + 证据 URI；人读模式走 stdout
