@@ -53,7 +53,7 @@ test('harness 自检：finding 载荷归因无损（seed/反例/标识 + JSON �
   expect(PROPERTY_FINDING_ATTACHMENT).toBe('property-finding')
 })
 
-test('属性失败语义夹具（E2E_FORCE_FINDING=1 故意反例；验收演练专用）', async ({}, testInfo) => {
+test('属性失败语义夹具（E2E_FORCE_FINDING=1 故意反例；验收演练专用）', async (_fixtures, testInfo) => {
   test.skip(process.env.E2E_FORCE_FINDING !== '1', '仅在验收演练时启用（E2E_FORCE_FINDING=1）')
   const ref = {
     property: 'P0/FORCE-01/intentional-counterexample',

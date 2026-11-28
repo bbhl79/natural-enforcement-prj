@@ -37,7 +37,7 @@ const numericStringArb = fc.oneof(
   fc.constantFrom('', 'abc', '1e2', ' 1 ', '0x10', 'Infinity', '-Infinity', '1.5', '90', '-90', '180', '-180', '1', '100000', '0', '100001'),
 )
 
-test('PT-BOUND-01 nearby query 边界：接受 ⇔ 界内（coerce 语义独立 oracle）', async ({}, testInfo) => {
+test('PT-BOUND-01 nearby query 边界：接受 ⇔ 界内（coerce 语义独立 oracle）', async (_fixtures, testInfo) => {
   await runProperty(
     testInfo,
     BOUND_REF,
@@ -57,7 +57,7 @@ test('PT-BOUND-01 nearby query 边界：接受 ⇔ 界内（coerce 语义独立 
   )
 })
 
-test('PT-BOUND-01 创建点位坐标边界：lat∈[-90,90] ∧ lng∈[-180,180] 闭区间', async ({}, testInfo) => {
+test('PT-BOUND-01 创建点位坐标边界：lat∈[-90,90] ∧ lng∈[-180,180] 闭区间', async (_fixtures, testInfo) => {
   await runProperty(
     testInfo,
     { ...BOUND_REF, property: 'P0/PT-BOUND-01/create-coordinate-boundaries' },
