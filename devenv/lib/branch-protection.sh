@@ -244,3 +244,5 @@ bp_check_drift() {
   [[ $rc_drift == 1 ]] && return 1
   return 0
 }
+
+# g-probe 2026-11-28T14:50:49Z（#73 项 g 新推送探针，触发 dismiss-stale）
