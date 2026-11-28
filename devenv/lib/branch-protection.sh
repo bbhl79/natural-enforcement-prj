@@ -208,15 +208,18 @@ bp_check_drift() {
       # current_user_can_bypass 断言（身份/层区分，避免管理员视角假漂移）：
       #   保存侧无绕过者（基础层）——任何读取身份不得非 never；
       #   保存侧含绕过者（审批层）——仅非管理员视图（响应无 bypass_actors）时
-      #   断言 never（管理员本人恰在名单中，GitHub 会如实返回 pull_request/always；
+      #   断言 never（管理员本人恰在名单中，GitHub 会如实返回 pull_requests_only；
       #   该视图已直接逐字段比对名单本身，断言无必要）。
-      local saved_bypass_n=0 cub has_field=0
-      saved_bypass_n=$(jq -r '(.bypass_actors // []) | length' "$BP_RULESETS_DIR/$live_name.json" 2>/dev/null || printf '0')
-      printf '%s' "$live_json" | jq -e 'has("bypass_actors")' >/dev/null 2>&1 && has_field=1
-      cub=$(jq -r '.current_user_can_bypass // ""' <<< "$live_json" 2>/dev/null || true)
-      if [[ -n "$cub" && "$cub" != "never" && ( "$saved_bypass_n" == "0" || "$has_field" == "0" ) ]]; then
-        bp_add_finding "规则集 $live_name：当前读取身份 current_user_can_bypass=$cub（该层保存配置无绕过者，或读取身份本应不可见名单——读取身份不得持有绕过权；App 在绕过名单属配置错误）"
-        rc_drift=1
+      # crc==3（保存侧失效）时跳过——saved_bypass_n 回退 0 会产生多余发现。
+      if [[ $crc != 3 ]]; then
+        local saved_bypass_n=0 cub has_field=0
+        saved_bypass_n=$(jq -r '(.bypass_actors // []) | length' "$BP_RULESETS_DIR/$live_name.json" 2>/dev/null || printf '0')
+        printf '%s' "$live_json" | jq -e 'has("bypass_actors")' >/dev/null 2>&1 && has_field=1
+        cub=$(jq -r '.current_user_can_bypass // ""' <<< "$live_json" 2>/dev/null || true)
+        if [[ -n "$cub" && "$cub" != "never" && ( "$saved_bypass_n" == "0" || "$has_field" == "0" ) ]]; then
+          bp_add_finding "规则集 $live_name：当前读取身份 current_user_can_bypass=$cub（该层保存配置无绕过者，或读取身份本应不可见名单——读取身份不得持有绕过权；App 在绕过名单属配置错误）"
+          rc_drift=1
+        fi
       fi
     else
       local crc2

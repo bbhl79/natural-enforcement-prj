@@ -117,7 +117,7 @@ live_of() { # live_of <saved-file> <id> [admin-view] → stdout live JSON
   [[ "$admin" == "admin-view" ]] && keep='.bypass_actors = ((.bypass_actors // []))'
   local cub="never"
   if [[ "$admin" == "admin-view" ]] && jq -e '(.bypass_actors // []) | length > 0' "$f" >/dev/null 2>&1; then
-    cub="pull_request"
+    cub="pull_requests_only"
   fi
   # 程序串经 bash 双引号插值（沿用原实现）：$cub 需带引号成为 jq 字符串字面量
   jq --argjson id "$id" "$keep | . + {id: $id, node_id: \"RRS_x\", source_type: \"Repository\",

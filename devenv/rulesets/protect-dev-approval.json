@@ -4,7 +4,9 @@
   "enforcement": "active",
   "conditions": {
     "ref_name": {
-      "include": ["refs/heads/dev"],
+      "include": [
+        "refs/heads/dev"
+      ],
       "exclude": []
     }
   },
@@ -18,8 +20,12 @@
         "require_code_owner_review": false,
         "require_last_push_approval": false,
         "required_review_thread_resolution": false,
-        "require_extra_approval_for_unattributed_changes": true,
-        "allowed_merge_methods": ["merge", "squash", "rebase"]
+        "require_extra_approval_for_unattributed_changes": false,
+        "allowed_merge_methods": [
+          "merge",
+          "squash",
+          "rebase"
+        ]
       }
     }
   ],

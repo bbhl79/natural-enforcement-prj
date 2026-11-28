@@ -35,7 +35,7 @@ Settings → Branches 无 dev 的 classic branch protection 残留（若有则�
 | JSON 字段（`devenv/rulesets/protect-dev-base.json`） | Web UI 位置 |
 |---|---|
 | `name` / `target: branch` / `enforcement: active` | Ruleset name / Targets: branches / Enforcement: Active |
-| `conditions.ref_name.include: ["refs/heads/dev"]` | Target branches: `refs/heads/dev`（不要用 default branch 通配或 All branches） |
+| `conditions.ref_name.include: ["refs/heads/dev"]` | Target branches 的 Include by pattern：**填裸分支名 `dev`**（UI 会自动加 `refs/heads/` 前缀——手填全 ref 会落成 `refs/heads/refs/heads/dev`，不覆盖任何分支；实测坑） |
 | `{type: deletion}` | Rules → Add rule → **Restrict deletions** |
 | `{type: non_fast_forward}` | Rules → **Block force pushes** |
 | `{type: pull_request, parameters…count: 0 …}` | Rules → **Require a pull request before merging**（批准数留 0、不勾任何子项、合并方法三种全允许） |
@@ -48,11 +48,11 @@ Settings → Branches 无 dev 的 classic branch protection 残留（若有则�
 | `required_approving_review_count: 1` | Require a pull request before merging → Approvals: 1 |
 | `dismiss_stale_reviews_on_push: true` | 同上 → 勾选 **Dismiss stale approvals on new commits**（新推送使旧批准失效） |
 | `bypass_actors: [{actor_id: 3615225, actor_type: "User", bypass_mode: "pull_request"}]` | Bypass list → Add bypass → 选 `bbhl79` → 模式选 **Pull requests only**（仅 PR 合入可绕过，不能选 Always） |
-| `require_extra_approval_for_unattributed_changes: true`（沿用旧规则集现状） | Copilot 相关开关（若 UI 不可见则不设置；该参数仅对 Copilot 开的 PR 生效，本仓库无——落盘值以应用后 verify-config 比对为准，不一致时对齐 UI 实际值） |
+| `require_extra_approval_for_unattributed_changes: false`（UI 新建默认值） | 无需找开关——该参数仅对 Copilot 开的 PR 生效（本仓库无），UI 新建落盘即 `false`（实测；旧 `protect-dev` 的 `true` 为历史残留，不沿用） |
 
 测试分支 transient 对（`protect-bp73-test-base` / `protect-bp73-test-approval`）
-内容与 dev 两层完全相同，仅 target branches 换成
-`refs/heads/test/bp-73-acceptance`；**验收完成后删除这两个规则集**。
+内容与 dev 两层完全相同，仅 target branches 的 Include by pattern 换成裸分支名
+`test/bp-73-acceptance`（同样不要手填 `refs/heads/` 前缀）；**验收完成后删除这两个规则集**。
 
 应用后核对（App 身份即可）：
 
