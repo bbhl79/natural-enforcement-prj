@@ -399,6 +399,8 @@ function cmdReport(args: string[], root: string, sink: OpSink, readStdin: StdinR
   }
 
   const verdict = judgeGate(f.reproducibility.kind, roundsParsed.data, f.reproducibility.precondition)
+  // 判定证据走数据线（过与不过都输出）：宿主终值据此回填机器可消费的门禁摘要
+  sink.protocol(`GATE\t${JSON.stringify(verdict)}`)
   if (!verdict.passed) {
     return end(sink, 'error', 8, `门禁未过（${verdict.reason}）：${verdict.message}`)
   }

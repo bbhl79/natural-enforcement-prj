@@ -48,6 +48,8 @@ source "$REPO_ROOT/devenv/lib/e2e.sh"
 source "$REPO_ROOT/devenv/lib/e2e-lifecycle.sh"
 # shellcheck source=lib/e2e-replay.sh
 source "$REPO_ROOT/devenv/lib/e2e-replay.sh"
+# shellcheck source=lib/e2e-report.sh
+source "$REPO_ROOT/devenv/lib/e2e-report.sh"
 # shellcheck source=lib/github-app-auth.sh
 source "$REPO_ROOT/devenv/lib/github-app-auth.sh"
 
@@ -105,6 +107,11 @@ devenv — 工程基座唯一入口（命令面权威文档：devenv/COMMANDS.md
                             重放已登记缺陷：起隔离栈真跑记录内 replayCommand（每轮独立
                             库/bucket/队列键空间）；0=复现、4=未复现（语义反转提示）、
                             3=基础设施错误、10=缺陷不存在；多轮经失败签名比对判同一失败
+  e2e report --finding <file.json> [--from-results <results.json>] [--property NAME]
+             [--attempts N] [--run-id BASE] [--by WHO] [--remote] [--remote-ref REF]
+                            登记探索发现：门禁由命令**实测**（按被测路径 pure 1 轮 /
+                            external-state ≥3 轮，每轮独立键空间 + 明确前置状态 +
+                            逐轮签名比对）；不过 exit 8 零登记；过则记录+脚本原子入库
   e2e logs --run-id ID [svc] [-f] [--tail N]
                             观察 per-run 容器日志（透传原始流；api|worker|web，默认 api）
   explore [--run-id ID]     探索轨道：共享基础设施 + 每 run 独立库/bucket/队列键空间；

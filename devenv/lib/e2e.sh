@@ -565,7 +565,7 @@ cmd_e2e_logs() { # 观察 per-run 容器日志（透传；JSON 时原始流走 s
 
 cmd_e2e() {
   local sub="${1:-}"
-  [[ -n "$sub" ]] || die 2 "用法：e2e <build|runs|logs|defect|registry|replay> ..."
+  [[ -n "$sub" ]] || die 2 "用法：e2e <build|runs|logs|defect|registry|replay|report> ..."
   shift
   case "$sub" in
     build) cmd_e2e_build "$@" ;;
@@ -576,6 +576,8 @@ cmd_e2e() {
     registry) cmd_e2e_registry "$@" ;;
     # 重放（#108；per-run 编排 + 签名原语桥在 lib/e2e-replay.sh）
     replay)   cmd_e2e_replay "$@" ;;
-    *) die 2 "未知 e2e 子命令：${sub}（当前：build | runs | logs | defect | registry | replay）" ;;
+    # 实测复现门禁与登记（#109；编排在 lib/e2e-report.sh）
+    report)   cmd_e2e_report "$@" ;;
+    *) die 2 "未知 e2e 子命令：${sub}（当前：build | runs | logs | defect | registry | replay | report）" ;;
   esac
 }
