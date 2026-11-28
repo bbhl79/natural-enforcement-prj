@@ -246,7 +246,7 @@ test("smoke 夹具：健康端点应 500（故意失败）", async ({ request })
   rc=0
   e2e_ops_apply "$OPS1" || rc=$?
   AFTER="$(sha256sum "$E2E_DIR/$W_PATH" | awk '{print $1}')"
-  printf 'B1 rc=%s before=%s after=%s\n' "$rc" "$BEFORE" "$AFTER"
+  printf 'B1 rc=%s before=%s after=%s\n' "$rc" "$BEFORE" "$AFTER" >&2
   [[ "$rc" == 9 && "$BEFORE" == "$AFTER" ]] || exit 11
 
   # B2 V 判定相符（expect=fail 且真失败）→ 同批 W 落账
@@ -258,7 +258,7 @@ test("smoke 夹具：健康端点应 500（故意失败）", async ({ request })
   } > "$OPS2"
   rc=0
   e2e_ops_apply "$OPS2" || rc=$?
-  printf 'B2 rc=%s applied=%s\n' "$rc" "$(cat "$E2E_DIR/replay/smoke-apply.txt" 2>/dev/null)"
+  printf 'B2 rc=%s applied=%s\n' "$rc" "$(cat "$E2E_DIR/replay/smoke-apply.txt" 2>/dev/null)" >&2
   [[ "$rc" == 0 && -f "$E2E_DIR/replay/smoke-apply.txt" ]] || exit 12
   rm -f "$E2E_DIR/replay/smoke-apply.txt" "$OPS1" "$OPS2"
 
@@ -268,15 +268,15 @@ test("smoke 夹具：健康端点应 500（故意失败）", async ({ request })
   e2e_registry_write ok 0
 ) > "$ART/b1.jsonl" 2> "$ART/b1.err" || B_RC=$?
 printf '%s\n' "$B_RC" > "$ART/b1.exitcode"
-if [[ "$B_RC" == 0 ]] && grep -q 'B1 rc=9' "$ART/b1.jsonl"; then
+if [[ "$B_RC" == 0 ]] && grep -q 'B1 rc=9' "$ART/b1.err"; then
   pass "B1 V expect=fail 却通过（真实执行器真跑）→ exit 9 零落盘"
 else
-  fail "B1" "rc=$B_RC out=$(grep '^B1' "$ART/b1.jsonl" 2>/dev/null) err=$(tail -5 "$ART/b1.err")"
+  fail "B1" "rc=$B_RC out=$(grep '^B1' "$ART/b1.err" 2>/dev/null) err=$(tail -5 "$ART/b1.err")"
 fi
-if grep -q 'B2 rc=0' "$ART/b1.jsonl"; then
+if grep -q 'B2 rc=0' "$ART/b1.err"; then
   pass "B2 V 判定相符（真失败）→ 同批 W 原子落账"
 else
-  fail "B2" "out=$(grep '^B2' "$ART/b1.jsonl" 2>/dev/null) err=$(tail -5 "$ART/b1.err")"
+  fail "B2" "out=$(grep '^B2' "$ART/b1.err" 2>/dev/null) err=$(tail -5 "$ART/b1.err")"
 fi
 jq -s -e 'any(.[]; .event == "step.completed" and .verdict == "did-not-fail")' "$ART/b1.jsonl" >/dev/null 2>&1 \
   && pass "B3 verdict=did-not-fail 事件留痕（拒绝原因可机器消费）" \
@@ -286,6 +286,11 @@ jq -s -e 'any(.[]; .event == "step.completed" and .verdict == "reproduced")' "$A
   || fail "B4" "缺 verdict 事件"
 [[ ! -d "$E2E_DIR/.verify-run" ]] \
   && pass "B5 校验运行后宿主 .verify-run 临时目录清理" || fail "B5" ".verify-run 残留"
+if grep -qv '^{' "$ART/b1.jsonl"; then
+  fail "B6" "b1.jsonl 混入非 JSON 行（诊断必须走 stderr）：$(grep -v '^{' "$ART/b1.jsonl" | head -2)"
+else
+  pass "B6 结果流纯 JSONL（诊断走 stderr，输出协议不被污染）"
+fi
 
 echo "== 收尾：夹具清理与工作树签名核对"
 cleanup
