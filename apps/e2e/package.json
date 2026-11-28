@@ -10,7 +10,8 @@
   "dependencies": {
     "@aws-sdk/client-s3": "catalog:",
     "@ne/contracts": "workspace:*",
-    "@playwright/test": "catalog:"
+    "@playwright/test": "catalog:",
+    "fast-check": "catalog:"
   },
   "devDependencies": {
     "@ne/tsconfig": "workspace:*",
