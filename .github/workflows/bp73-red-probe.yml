@@ -1,0 +1,9 @@
+# #73 受控验收红探针：故意直接调用 compose（#71 静态门禁即拒，CI 必红）。
+# 仅 workflow_dispatch 触发且从不派发；本文件只为让 quality-gate 检查变红。
+name: bp73-red-probe
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    steps:
+      - run: docker compose ps
