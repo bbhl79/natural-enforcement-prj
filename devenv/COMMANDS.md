@@ -210,7 +210,7 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
 | test / test:unit / verify / lint / typecheck / seed / explore（运行期） | stack-<wt> 共享租约（per-worktree） | 多个租约可并行；与上述排他命令双向互斥（读者遇排他锁等待/exit 6）。explore 从起 per-run 资源到回收全程持租约，`down`/`migrate` 等不会中途拆掉 run 的共享基础设施 |
 | prefetch | prefetch（机器级） | 跨 worktree 互斥（基础镜像拉取）；冲突等待或 exit 6（重跑续跑） |
 | e2e build / explore 的执行器镜像构建 | e2e-image-<wt>（排他，per-worktree；仅构建/核对窗口） | 与其它 e2e 执行器镜像构建互斥（状态文件/可变 tag 读改写串行化）；不取栈锁/租约，无锁序环；冲突等待/exit 6 |
-| explore 启动窗口 | e2e-run-<wt>（排他，per-worktree；仅计数+登记窗口） | 并发 run 上限检查与登记串行化；登记后立即释放，不串行化 run 本身 |
+| explore 启动/运行所有权 | e2e-owner-<wt>-<runid>（排他，per-run-id，创建资源前取得 → 回收结束释放）；e2e-admit-<wt>（短临界区） | 同 run id 的第二个进程在启动窗口等待/exit 6，绝不进入清理路径破坏对方尚未启动的资源；admission 锁串行化「取得所有权 → 计数 → 登记」，并发计数含启动中预留名额；锁名与容器 worktree 标签含 worktree 后缀，跨 worktree 同名显式 run id 互不误判 |
 | build / gen 触发的 lockgen | lockgen（机器级） | 跨 worktree 互斥（共享标签/容器清理）；冲突等待或 exit 6（重跑即续） |
 | 只读（ps/logs/status/images/doctor/gen evidence/e2e runs/e2e logs） | 无 | 任意并发（gen evidence 只读绑定镜像内的证据文件，不重建、不触栈；e2e logs 只读容器日志） |
 | exec / shell（透传调试） | 无 | 交互时长无界，不持租约；需要稳定环境时先结束调试再拆栈 |
@@ -529,7 +529,8 @@ compose 健康检查读 Redis 心跳（证明已进入消费循环），不发�
   基础设施容器以别名 `db`/`redis`/`rustfs` 接入该网络，不复制基础设施。
 - **连接池与并发上限**：per-run API/worker 注入 `DATABASE_POOL_MAX`（默认 2/进程），
   满足"池 × 并发 < max_connections"；`E2E_MAX_CONCURRENT_RUNS`（默认 4）为硬上限，
-  超限在登记窗口拒绝（exit 6）。两个参数均可用同名环境变量显式覆盖。
+  计数 = 本 worktree 存活的活动所有权锁（**含已登记但尚未起容器的启动预留**），
+  超限在启动窗口拒绝（exit 6）。两个参数均可用同名环境变量显式覆盖。
 - 零宿主端口保持：浏览器/执行器都在容器内网访问本 run 的 `web`/`api`。
 
 **执行器镜像**：

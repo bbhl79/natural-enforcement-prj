@@ -102,6 +102,7 @@ e2e_compose() {
     E2E_DATABASE_NAME="$E2E_DB_NAME" \
     E2E_QUEUE_NAME="$E2E_QUEUE_NAME" \
     E2E_RUN_ID="$E2E_RUN_ID" \
+    E2E_WORKTREE_SUFFIX="$WT_SUFFIX" \
     E2E_TRACK="$E2E_TRACK" \
     E2E_NETWORK="$E2E_NETWORK" \
     E2E_PARALLEL_GROUP="${E2E_PARALLEL_GROUP:-}" \
@@ -136,10 +137,29 @@ e2e_wait_healthy() { # <svc> <超时秒>
   die 5 "e2e 服务 [$svc] 健康超时（${timeout}s；run=$E2E_RUN_ID）。排查：devenv e2e logs --run-id $E2E_RUN_ID $svc"
 }
 
-e2e_run_live() { # <rid>：该 run 是否还有运行中的容器
+e2e_run_live() { # <rid>：本 worktree 内该 run 是否还有运行中的容器（按 worktree 标签限定）
   local c
-  c="$(docker ps --filter "label=devenv.e2e.run-id=$1" --format '{{.ID}}')"
+  c="$(docker ps --filter "label=devenv.e2e.run-id=$1" \
+      --filter "label=devenv.e2e.worktree=$WT_SUFFIX" --format '{{.ID}}')"
   [[ -n "$c" ]]
+}
+
+# --- run 所有权与启动期准入（#70 评审修复）------------------------------------
+# e2e-owner-<wt>-<runid>：per-run-id 排他所有权锁——在创建任何 run 资源之前取得，
+#   保持到回收结束；同 run id 的第二个进程在启动窗口即被拒绝，绝不能进入清理路径
+#   （否则会拆掉第一个进程尚未 up 的活动资源）。锁名含 worktree 后缀：跨 worktree
+#   的同名显式 run id 互不误判。
+# e2e-admit-<wt>：短临界区锁，串行化「取得所有权 → 计数 → 登记」；计数看本 worktree
+#   的活动所有权锁（含尚未启动容器的预留名额），因此启动窗口也计入并发上限。
+e2e_owner_lock_name() { printf 'e2e-owner-%s-%s' "$WT_SUFFIX" "$E2E_RUN_ID"; }
+
+e2e_ownership_count() { # 本 worktree 存活的所有权锁数（含当前进程已取得的）
+  local dir count=0
+  for dir in "$LOCK_ROOT"/e2e-owner-"$WT_SUFFIX"-*.lock; do
+    [[ -d "$dir" ]] || continue
+    if lock_is_stale "$dir"; then rm -rf "$dir"; else count=$((count + 1)); fi
+  done
+  printf '%s' "$count"
 }
 
 # --- 运行登记册（.devenv-state/e2e-runs/<rid>.json；回收双条件的第二条件）----
@@ -340,26 +360,33 @@ e2e_write_manifest() { # <playwrightRc> <status>
 }
 
 # 并发 run 硬上限（Spec-e2e §11：池 × 并发 < max_connections）：admission 锁把
-# 「计数 → 登记 running」串行化，避免两个启动进程同时通过上限检查；登记后立即
-# 释放该锁，不串行化 run 本身。计数取 live 容器的 label（不依赖 registry 新鲜度）。
+# 「取得所有权 → 计数 → 登记 running」串行化；所有权锁在启动前取得并保持到回收结束，
+# 因此计数含"已登记但尚未起容器"的预留名额（修复启动窗口超发）。
 e2e_admission_begin() {
-  local max="${E2E_MAX_CONCURRENT_RUNS:-4}" ids active
+  local max="${E2E_MAX_CONCURRENT_RUNS:-4}" owner count
   [[ "$max" =~ ^[1-9][0-9]*$ ]] \
     || die 2 "E2E_MAX_CONCURRENT_RUNS 需为正整数（当前：${max}）"
-  lock_acquire "e2e-run-$WT_SUFFIX" 120
-  ids="$(docker ps --filter "label=devenv.e2e.run-id" \
-    --format '{{.Label "devenv.e2e.run-id"}}' 2>/dev/null || true)"
-  active="$(printf '%s\n' "$ids" | sed '/^$/d' | sort -u | wc -l | tr -d ' ')"
-  if (( active >= max )); then
-    lock_release_one "e2e-run-$WT_SUFFIX"
-    die 6 "并发 e2e run 已达上限（${active}/${max}）。修复：等待其它 run 结束，或显式设置 E2E_MAX_CONCURRENT_RUNS（须满足 pool×并发 < max_connections）"
+  lock_acquire "e2e-admit-$WT_SUFFIX" 120
+  owner="$(e2e_owner_lock_name)"
+  # 同 run id 所有权：启动窗口内第二个进程在此等待/exit 6，绝不进入清理路径
+  lock_acquire "$owner" 2
+  if e2e_run_live "$E2E_RUN_ID"; then
+    lock_release_one "$owner"
+    lock_release_one "e2e-admit-$WT_SUFFIX"
+    die 6 "run id [$E2E_RUN_ID] 仍有运行中的容器（上次异常退出残留或另一进程正在启动）。修复：换 --run-id，或确认后清理该 run（参见 .devenv-state/e2e-runs/$E2E_RUN_ID.json）"
+  fi
+  count="$(e2e_ownership_count)"
+  if (( count > max )); then
+    lock_release_one "$owner"
+    lock_release_one "e2e-admit-$WT_SUFFIX"
+    die 6 "并发 e2e run 已达上限（计数 ${count}/${max}，含启动中预留）。修复：等待其它 run 结束，或显式设置 E2E_MAX_CONCURRENT_RUNS（须满足 pool×并发 < max_connections）"
   fi
   E2E_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   # 通过上限后才登记为「活动 run」：上限拒绝不触发回收；登记写入期间异常退出仍由
-  # EXIT trap 按 aborted 收尾。
+  # EXIT trap 按 aborted 收尾。所有权锁保持到本 run 回收结束。
   E2E_ACTIVE_RUN_ID="$E2E_RUN_ID"
   e2e_registry_write running
-  lock_release_one "e2e-run-$WT_SUFFIX"
+  lock_release_one "e2e-admit-$WT_SUFFIX"
 }
 
 # --- 回收（best-effort；失败不掩盖主结果）-------------------------------------
@@ -407,12 +434,9 @@ cmd_explore() { # 探索轨道：失败=产出（exit 4 + 证据路径），不�
   e2e_build_image "$ENSURE_SNAPSHOT_HASH"
 
   e2e_derive_names "$rid" "explore"
-  if e2e_run_live "$rid"; then
-    die 6 "run id [$rid] 仍有运行中的容器（另一进程或上次残留）。修复：换 --run-id，或确认后清理该 run（参见 .devenv-state/e2e-runs/$rid.json）"
-  fi
   E2E_ACTIVE_RUN_ID=""
   mkdir -p "$E2E_RUN_DIR"
-  e2e_admission_begin  # 上限检查（短锁）→ 登记 running + 标记活动 run（拒绝时不留标记）
+  e2e_admission_begin  # 所有权 + 上限（含启动预留）→ 登记 running；拒绝时不留活动标记
   note "e2e 探索 run=${rid}：db=${E2E_DB_NAME} bucket=${E2E_BUCKET} queue=${E2E_QUEUE_NAME}"
   note "基础设施容器共享（db/redis/rustfs），每 run API/worker/web 绑定本 run 资源"
 
@@ -445,6 +469,7 @@ cmd_explore() { # 探索轨道：失败=产出（exit 4 + 证据路径），不�
   if (( test_rc != 0 || export_rc != 0 )); then final_code=4; fi
   e2e_registry_write "$status" "$final_code"
   E2E_ACTIVE_RUN_ID=""
+  lock_release_one "$(e2e_owner_lock_name)"  # 回收结束后才释放 run 所有权
 
   if (( test_rc != 0 )); then
     note "探索轨道失败（退出码 ${test_rc}）—— 按产出处理：先读证据判读是「探索发现」还是「环境/服务绑定故障」，不要未经判读就改测试栈。"

@@ -172,6 +172,7 @@ case "$cmd" in
             label=com.docker.compose.project=*) project="${f#label=com.docker.compose.project=}" ;;
             label=com.docker.compose.service=*) service="${f#label=com.docker.compose.service=}" ;;
             label=devenv.e2e.run-id=*) runid="${f#label=devenv.e2e.run-id=}" ;;
+            label=devenv.e2e.worktree=*) : ;;
             label=devenv.e2e.run-id) allruns=1 ;;
           esac ;;
         --format) fmt="$2"; shift 2 ;;
@@ -341,12 +342,16 @@ fi
 [[ "$EXEC_LINE" == *"run --rm -T e2e"* && "$EXEC_LINE" == *"E2E_TRACK=explore"* ]] \
   && pass "E3 执行器跑探索轨道（per-run 网络内）" \
   || fail "E3" "执行器调用不符：$EXEC_LINE"
+grep -q "label=devenv.e2e.worktree=$MOCK_STACK_SUFFIX" "$STATE/calls.log" \
+  && pass "E3 live 检查按 worktree 标签限定" || fail "E3" "live 检查未带 worktree 过滤"
 grep -q 'lease-held' "$STATE/lease-check.txt" 2>/dev/null \
   && ! grep -q 'lease-MISSING' "$STATE/lease-check.txt" 2>/dev/null \
   && pass "E3 执行器运行窗口内持 #61 共享栈使用租约" \
   || fail "E3" "租约不在场：$(cat "$STATE/lease-check.txt" 2>/dev/null)"
 [[ -z "$(find "$DEVENV_LOCK_ROOT" -maxdepth 4 -path '*.lease/*/owner' -type f 2>/dev/null)" ]] \
   && pass "E3 run 结束后租约释放" || fail "E3" "租约残留"
+[[ -z "$(find "$DEVENV_LOCK_ROOT" -maxdepth 1 -name 'e2e-owner-*.lock' -type d 2>/dev/null)" ]] \
+  && pass "E3 run 结束后所有权锁释放" || fail "E3" "所有权锁残留：$(find "$DEVENV_LOCK_ROOT" -maxdepth 1 -name 'e2e-owner-*.lock' -type d)"
 [[ -f "$RUN_JSON" && -f "$SANDBOX/artifacts/success-a1/results.json" ]] \
   && pass "E3 运行产物导出到宿主证据目录（results.json + run.json）" \
   || fail "E3" "产物缺失：$(find "$SANDBOX/artifacts" -maxdepth 3 -type f 2>/dev/null)"
@@ -387,19 +392,42 @@ grep -q '不要未经判读就改测试栈' "$SANDBOX/e4.err" \
   && pass "E4 run.json 保留 Playwright 退出码（失败归因起点）" || fail "E4" "run.json 退出码不符"
 
 # ---------------------------------------------------------------------------
-# E5 并发 run 硬上限：达上限在登记窗口拒绝（exit 6），不创建资源
+# E5 并发 run 硬上限：启动期预留名额即计入（含尚未起容器的 run），拒绝时零资源
 # ---------------------------------------------------------------------------
+sleep 30 & CAP_HOLDER=$!
+mkdir -p "$DEVENV_LOCK_ROOT/e2e-owner-$MOCK_STACK_SUFFIX-other-a.lock"
+printf '%s %s\n' "$CAP_HOLDER" "$(date +%s)" > "$DEVENV_LOCK_ROOT/e2e-owner-$MOCK_STACK_SUFFIX-other-a.lock/owner"
 : > "$STATE/calls.log"
-run_cmd e5cap env MOCK_ACTIVE_RUN_IDS=other-a,other-b E2E_MAX_CONCURRENT_RUNS=2 \
-  "$DEVENV" explore --run-id capped-a1
-[[ "$RC" == 6 ]] && pass "E5 并发 run 达上限 exit 6" || fail "E5cap" "rc=$RC（期望 6）"
+run_cmd e5cap env E2E_MAX_CONCURRENT_RUNS=1 "$DEVENV" explore --run-id capped-a1
+kill -9 "$CAP_HOLDER" 2>/dev/null; wait "$CAP_HOLDER" 2>/dev/null || true
+rm -rf "$DEVENV_LOCK_ROOT/e2e-owner-$MOCK_STACK_SUFFIX-other-a.lock"
+[[ "$RC" == 6 ]] && pass "E5 启动期预留计入并发上限，达上限 exit 6" || fail "E5cap" "rc=$RC（期望 6）"
 grep -q '并发 e2e run 已达上限' "$SANDBOX/e5cap.err" \
-  && pass "E5 上限拒绝说明并发数与修复线索" || fail "E5cap" "stderr 未说明上限：$(tail -3 "$SANDBOX/e5cap.err")"
+  && pass "E5 上限拒绝说明计数含启动预留与修复线索" || fail "E5cap" "stderr 未说明上限：$(tail -3 "$SANDBOX/e5cap.err")"
 if grep -q 'network create' "$STATE/calls.log" || grep -q 'up -d api worker web' "$STATE/calls.log" \
     || grep -q 'DROP DATABASE' "$STATE/calls.log"; then
   fail "E5cap" "上限拒绝后仍创建了 per-run 资源：$(tail -5 "$STATE/calls.log")"
 else
   pass "E5 上限拒绝未创建 per-run 网络/服务/数据库"
+fi
+
+# ---------------------------------------------------------------------------
+# E5b 同 run id 启动窗口：所有权锁被占用时第二个进程 exit 6，绝不清理对方资源
+# ---------------------------------------------------------------------------
+sleep 30 & SAME_HOLDER=$!
+mkdir -p "$DEVENV_LOCK_ROOT/e2e-owner-$MOCK_STACK_SUFFIX-same-a1.lock"
+printf '%s %s\n' "$SAME_HOLDER" "$(date +%s)" > "$DEVENV_LOCK_ROOT/e2e-owner-$MOCK_STACK_SUFFIX-same-a1.lock/owner"
+: > "$STATE/calls.log"
+run_cmd e5same "$DEVENV" explore --run-id same-a1
+kill -9 "$SAME_HOLDER" 2>/dev/null; wait "$SAME_HOLDER" 2>/dev/null || true
+rm -rf "$DEVENV_LOCK_ROOT/e2e-owner-$MOCK_STACK_SUFFIX-same-a1.lock"
+[[ "$RC" == 6 ]] && pass "E5b 同 run id 所有权被占：第二个进程 exit 6" || fail "E5same" "rc=$RC（期望 6）"
+if grep -q 'network create' "$STATE/calls.log" || grep -q 'compose .* down' "$STATE/calls.log" \
+    || grep -q 'network disconnect' "$STATE/calls.log" || grep -q 'DROP DATABASE' "$STATE/calls.log" \
+    || grep -q 'delete-bucket' "$STATE/calls.log" || grep -q 'compose .* up -d' "$STATE/calls.log"; then
+  fail "E5same" "第二个进程清理/创建了 run 资源：$(tail -8 "$STATE/calls.log")"
+else
+  pass "E5b 第二个进程零资源改动（不拆对方网络/库/桶/队列）"
 fi
 
 # ---------------------------------------------------------------------------
@@ -433,10 +461,20 @@ Q_A="$(awk -F= '/^q_a=/{print $2}' "$SANDBOX/e5.out")"
 E5_BAD_RC=0
 (
   set -Eeuo pipefail
-  REPO_ROOT="$MINI"; source "$REPO_ROOT/devenv/lib/output.sh"; source "$REPO_ROOT/devenv/lib/e2e.sh"
+  REPO_ROOT="$MINI"; WT_SUFFIX="$MOCK_STACK_SUFFIX"; E2E_RUN_ID="abc"
+  source "$REPO_ROOT/devenv/lib/output.sh"; source "$REPO_ROOT/devenv/lib/e2e.sh"
   e2e_run_id_validate 'Bad_ID'
 ) >/dev/null 2>&1 || E5_BAD_RC=$?
 [[ "$E5_BAD_RC" == 2 ]] && pass "E5 非法 run id exit 2" || fail "E5" "非法 run id 未拒绝（rc=$E5_BAD_RC）"
+(
+  set -Eeuo pipefail
+  REPO_ROOT="$MINI"; WT_SUFFIX="$MOCK_STACK_SUFFIX"; E2E_RUN_ID="abc"
+  source "$REPO_ROOT/devenv/lib/output.sh"; source "$REPO_ROOT/devenv/lib/e2e.sh"
+  e2e_owner_lock_name
+) > "$SANDBOX/e5-lock-name.out" 2>/dev/null || true
+[[ "$(cat "$SANDBOX/e5-lock-name.out")" == "e2e-owner-$MOCK_STACK_SUFFIX-abc" ]] \
+  && pass "E5 所有权锁名含 worktree 后缀（跨 worktree 同名 id 不冲突）" \
+  || fail "E5" "所有权锁名不符：$(cat "$SANDBOX/e5-lock-name.out")"
 
 # ---------------------------------------------------------------------------
 # E6 e2e runs 登记册查询（JSON + 人读）

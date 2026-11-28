@@ -27,6 +27,7 @@ x-run-env: &run-env
 
 x-run-labels: &run-labels
   devenv.e2e.run-id: ${E2E_RUN_ID:?devenv 需注入 run id}
+  devenv.e2e.worktree: ${E2E_WORKTREE_SUFFIX:?devenv 需注入 worktree 后缀}
   devenv.e2e.track: ${E2E_TRACK:?devenv 需注入 track}
   devenv.e2e.database: ${E2E_DATABASE_NAME:?devenv 需注入本 run 数据库名}
   devenv.e2e.bucket: ${E2E_S3_BUCKET}
