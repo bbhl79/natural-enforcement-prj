@@ -16,3 +16,9 @@ apps/api/src/generated/
 
 # 快照状态（#58）：快照哈希 ↔ 不可变镜像标识（devenv 维护，每 worktree 私有）
 .devenv-state/
+
+# e2e 生命周期（#106）：注册表是派生缓存（始终重建、漂移仅 WARN），不入库——
+# 完整性锚在入库缺陷记录 apps/e2e/defects/*.json 与 git 历史；.verify-run 是
+# 毕业校验运行的宿主临时目录（tar 注入执行器后即删）。
+apps/e2e/.registry.json
+apps/e2e/.verify-run/
