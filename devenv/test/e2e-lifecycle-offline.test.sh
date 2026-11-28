@@ -281,6 +281,94 @@ case "$sub" in
       exit 0
     fi
     printf 'END\terror\t2\t未知 signature 动作：%s\n' "$action"; exit 2 ;;
+  report)
+    # #109：report 三段式（真实判定由 apps/e2e vitest 覆盖；此处复刻协议字节格式，
+    # 并按宿主送来的**实测轮次**做最小门禁判定，以驱动宿主编排的过/不过两条路径）
+    action="${args[1]:-}"
+    payload="$(cat)"
+    printf '%s' "$payload" > "$MOCK_DOCKER_STATE/report-payload-$action.json"
+    if [[ "$action" == "finding-from-results" ]]; then
+      body="$(printf '%s' "$payload" | jq -r '[.. | objects | select(.name? == "property-finding") | .body][0] // empty')"
+      if [[ -z "$body" ]]; then printf 'END\terror\t2\tresults.json 内无 property-finding 附件\n'; exit 2; fi
+      printf 'FINDING\t%s\n' "$(printf '%s' "$body" | openssl base64 -d -A | jq -c .)"
+      printf 'END\tok\t0\t属性发现已提取\n'
+      exit 0
+    fi
+    if [[ "$action" == "plan" ]]; then
+      localmax=0
+      for f in "$ROOT"/defects/DEF-*.json; do
+        [[ -e "$f" ]] || continue
+        n="$(basename "$f" .json)"; n="${n#DEF-}"; n=$((10#$n))
+        (( n > localmax )) && localmax=$n
+      done
+      remote="$(printf '%s' "$payload" | jq -r '.remoteMax // 0')"
+      max=$localmax; (( remote > max )) && max=$remote
+      id="${MOCK_REPORT_ID:-$(printf 'DEF-%04d' $((max + 1)))}"
+      kind="$(printf '%s' "$payload" | jq -r '.finding.reproducibility.kind')"
+      att=1; [[ "$kind" == "external-state" ]] && att=3
+      printf 'ID\t%s\n' "$id"
+      printf 'KIND\t%s\n' "$kind"
+      printf 'ATTEMPTS\t%s\n' "$att"
+      printf 'CMD\tnode apps/e2e/replay/%s.mjs\n' "$id"
+      printf 'SCRIPT\treplay/%s.mjs\n' "$id"
+      printf 'SCRIPT_B64\t%s\n' "$(b64 "$(printf '%s' "$payload" | jq -r '.finding.reproducibility.replayScript')")"
+      printf 'TITLE\t%s\n' "$(printf '%s' "$payload" | jq -r '.finding.title')"
+      printf 'PRECONDITION\t%s\n' "$(printf '%s' "$payload" | jq -r '.finding.reproducibility.precondition')"
+      printf 'CONCURRENCY\t\n'
+      printf 'END\tok\t0\treport 计划：%s\n' "$id"
+      exit 0
+    fi
+    if [[ "$action" == "register" ]]; then
+      id="$(printf '%s' "$payload" | jq -r '.id')"
+      kind="$(printf '%s' "$payload" | jq -r '.finding.reproducibility.kind')"
+      att=1; [[ "$kind" == "external-state" ]] && att=3
+      n="$(printf '%s' "$payload" | jq '.gate.rounds | length')"
+      reason="passed"; msg="门禁通过"
+      if (( n < att )); then reason="insufficient-rounds"; msg="轮次不足 $n<$att"
+      elif printf '%s' "$payload" | jq -e '.gate.rounds | any(.scriptExitCode != 0)' >/dev/null 2>&1; then
+        reason="round-not-reproduced"; msg="某轮未复现"
+      elif printf '%s' "$payload" | jq -e '.gate.rounds | any(.signature.errorClass == "unknown" or .signature.errorClass == "infrastructure")' >/dev/null 2>&1; then
+        reason="unknown-error-class"; msg="证据不足档/基础设施档永不过门禁"
+      elif printf '%s' "$payload" | jq -e '[.gate.rounds[].signature | tostring] | unique | length > 1' >/dev/null 2>&1; then
+        reason="signature-mismatch"; msg="多轮签名不一致"
+      fi
+      verdict="$(printf '%s' "$payload" | jq -c --arg reason "$reason" --arg msg "$msg" --argjson att "$att" --argjson n "$n" \
+        '{passed:($reason=="passed"),reason:$reason,message:$msg,attempts:$n,minAttempts:$att,
+          keySpaces:[.gate.rounds[].runId],allFailed:($reason=="passed"),
+          signatureMatched:(if $n>1 then ($reason=="passed") else null end),
+          compareReason:(if $n>1 then $reason else "single-round-no-cross-check" end),
+          baselineSignature:(.gate.rounds[0].signature // null),needsHumanJudgment:false,
+          rounds:[.gate.rounds[] | {attempt,runId,keySpace,precondition,scriptExitCode,
+            verdict:(if .scriptExitCode==0 then "reproduced" else "not-reproduced" end),signature,
+            comparison:{matched:($reason=="passed"),reason:$reason,differences:[]}}]}')"
+      printf 'GATE\t%s\n' "$verdict"
+      if [[ "$reason" != "passed" ]]; then
+        printf 'END\terror\t8\t门禁未过（%s）：%s\n' "$reason" "$msg"; exit 8
+      fi
+      if [[ -f "$ROOT/defects/$id.json" ]]; then
+        printf 'END\terror\t8\t编号已被占用：%s\n' "$id"; exit 8
+      fi
+      rec="$(printf '%s' "$payload" | jq -c --arg id "$id" --argjson v "$verdict" \
+        '{schemaVersion:1,id:$id,title:.finding.title,summary:.finding.summary,status:"reported",
+          engine:(.finding.engine // "agent-session"),layer:.finding.layer,
+          discoveredAt:(.finding.discoveredAt // .gate.measuredAt),discoveredBy:(.finding.discoveredBy // "offline"),
+          charter:(.finding.charter // "point-input-safety"),suspectedArea:.finding.suspectedArea,
+          severity:.finding.severity,
+          reproducibility:{kind:.finding.reproducibility.kind,
+            replayPath:("apps/e2e/replay/"+$id+".mjs"),replayCommand:("node apps/e2e/replay/"+$id+".mjs"),
+            gate:{attempts:$v.attempts,keySpaces:$v.keySpaces,allFailed:$v.allFailed,
+              signatureMatched:$v.signatureMatched,rounds:$v.rounds,
+              precondition:.finding.reproducibility.precondition,
+              baselineSignature:$v.baselineSignature,compareReason:$v.compareReason,measuredAt:.gate.measuredAt}},
+          evidence:[.gate.rounds[] | {type:"json-report",uri:(".artifacts/e2e/"+.runId+"/replay.json")}],
+          sanitized:true}')"
+      printf 'W\tdefects/%s.json\t%s\n' "$id" "$(b64 "$rec")"
+      printf 'W\treplay/%s.mjs\t%s\n' "$id" "$(b64 "$(printf '%s' "$payload" | jq -r '.finding.reproducibility.replayScript')")"
+      printf 'W\t.registry.json\t%s\n' "$(b64 '{"defects":[]}')"
+      printf 'END\tok\t0\t已登记 %s（reported）\n' "$id"
+      exit 0
+    fi
+    printf 'END\terror\t2\t未知 report 动作：%s\n' "$action"; exit 2 ;;
   *)
     printf 'END\terror\t2\t未知子命令：%s\n' "$sub"; exit 2 ;;
 esac
@@ -330,6 +418,10 @@ case "$cmd" in
       printf '%s\n' "$n" > "$STATE/in-count"
       mkdir -p "$STATE/in-$n"
       tar -xf - -C "$STATE/in-$n"
+      if [[ "$*" == *report* ]]; then
+        # #109 report：树 tar 内含载荷成员 .report-payload.json（容器内以它为 stdin）
+        exec bash "$MOCK_CLI" --root "$STATE/in-$n" "$@" < "$STATE/in-$n/.report-payload.json"
+      fi
       exec bash "$MOCK_CLI" --root "$STATE/in-$n" "$@"
     fi
     if [[ "$sub" == "run" && "$joined" == *"apps/e2e/replay/"* ]]; then
@@ -959,6 +1051,167 @@ run_cmd r9f "$DEVENV" e2e replay DEF-0002 DEF-0001
 [[ "$(tree_fingerprint)" == "$REPLAY_BASE_FP" ]] \
   && pass "R10 全段结束后事实源树仍与基线一致（replay 全程只读）" || fail "R10ro" "事实源被改动"
 unset MOCK_REPLAY_RC MOCK_REPLAY_OUTPUT
+
+# ---------------------------------------------------------------------------
+# P 段（#109）：e2e report 实测复现门禁与登记编排
+#   接缝 = 命令面（devenv e2e report）；引擎判定真值由 apps/e2e vitest 覆盖，
+#   此处 mock 只复刻协议字节 + 按宿主送来的实测轮次判定，驱动宿主编排两条路径。
+# ---------------------------------------------------------------------------
+REPORT_FINDING="$SANDBOX/finding.json"
+cat > "$REPORT_FINDING" <<'JSON'
+{"schemaVersion":1,"source":"manual","title":"点位名称纯空白被接受入库",
+ "summary":"契约 min(1) 只查长度，纯空白名过校验并入库（201）；原型 DEF-0002 同类 spec 债务",
+ "charter":"point-input-safety","suspectedArea":"packages/contracts/src/enforcement-point.ts",
+ "layer":"api","severity":"low","engine":"agent-session",
+ "discoveredAt":"2026-11-28T12:00:00Z","discoveredBy":"offline",
+ "reproducibility":{"kind":"external-state",
+   "precondition":"每轮：空库（DROP FORCE + CREATE）+ migrate deploy + 空 bucket + 空队列键空间",
+   "replayScript":"// 零第三方依赖复现脚本（夹具）\nprocess.exit(0)\n"},
+ "evidence":[],"sanitized":true}
+JSON
+REPORT_PURE="$SANDBOX/finding-pure.json"
+jq '.reproducibility.kind = "pure"' "$REPORT_FINDING" > "$REPORT_PURE"
+
+# 每例前复位轮次计数与逐轮夹具（mock 按全局计数索引 replay-round-<n>）
+report_reset() {
+  printf '0\n' > "$STATE/replay-count"
+  rm -f "$STATE"/replay-round-*.rc "$STATE"/replay-round-*.out "$STATE/lease-check.txt"
+}
+export MOCK_REPLAY_RC=0 MOCK_REPLAY_OUTPUT="$SIG_LINE" MOCK_ASSERT_LEASE=1
+
+# P1 external-state：3 轮独立键空间全复现 → exit 0 登记（记录 + 脚本 + 登记册关联）
+report_reset
+P1_FP="$(tree_fingerprint)"
+run_cmd p1 "$DEVENV" --json e2e report --finding "$REPORT_FINDING" --run-id rpt-p1
+P1_ID="$(jq -s -r '.[-1].defectId' "$SANDBOX/p1.out" 2>/dev/null || printf '')"
+if [[ "$RC" == 0 ]] && last_json "$SANDBOX/p1.out" \
+  '.command == "e2e" and .subcommand == "report" and .status == "ok" and .exitCode == 0 and .registered == true and .kind == "external-state" and .attempts == 3 and .minAttempts == 3'; then
+  pass "P1 external-state 门禁实测 3 轮 → exit 0 登记（终值 registered=true）"
+else
+  fail "P1" "rc=$RC out=$(tail -2 "$SANDBOX/p1.out") err=$(tail -6 "$SANDBOX/p1.err")"
+fi
+[[ -f "$E2E_DIR/defects/$P1_ID.json" && -f "$E2E_DIR/replay/$P1_ID.mjs" ]] \
+  && pass "P1 登记产物完整：缺陷 JSON（reported）+ replay 脚本同一事务入库" \
+  || fail "P1files" "id=$P1_ID 缺记录或脚本"
+[[ "$(jq -r '.status' "$E2E_DIR/defects/$P1_ID.json" 2>/dev/null)" == "reported" ]] \
+  && pass "P1 记录 status=reported（过门禁登记，非 graduated）" || fail "P1status" "状态不符"
+[[ "$(jq -r '.issue // "absent"' "$E2E_DIR/defects/$P1_ID.json" 2>/dev/null)" == "absent" ]] \
+  && pass "P1 issue 回链位留空（写入归 #114）" || fail "P1issue" "issue 字段被写入"
+P1_DBS="$(jq -r '.database' "$MINI/.devenv-state/e2e-runs"/rpt-p1-a*.json 2>/dev/null | sort -u | wc -l | tr -d ' ')"
+[[ "$P1_DBS" == 3 ]] && pass "P1 每轮独立数据库键空间（3 个不同库名）" || fail "P1db" "独立库数=$P1_DBS（期望 3）"
+P1_ASSOC="$(jq -r '.defectId // "absent"' "$MINI/.devenv-state/e2e-runs/rpt-p1-a1.json" 2>/dev/null)"
+[[ "$P1_ASSOC" == "$P1_ID" ]] \
+  && pass "P1 运行登记册关联 defectId（记录 ↔ run 可互查）" || fail "P1assoc" "defectId=$P1_ASSOC id=$P1_ID"
+[[ "$(jq -r '.track' "$MINI/.devenv-state/e2e-runs/rpt-p1-a1.json" 2>/dev/null)" == "report" ]] \
+  && pass "P1 门禁轮次登记册 track=report（复用 #70 登记册）" || fail "P1track" "track 不符"
+[[ "$(jq -r '.reproducibility.gate.rounds | length' "$E2E_DIR/defects/$P1_ID.json" 2>/dev/null)" == 3 ]] \
+  && pass "P1 gate 证据回填：逐轮 rounds（runId/键空间/签名/比对）" || fail "P1gate" "rounds 缺失"
+[[ "$(jq -r '.reproducibility.gate.precondition' "$E2E_DIR/defects/$P1_ID.json" 2>/dev/null)" == *"空库"* ]] \
+  && pass "P1 gate 证据含明确前置状态声明" || fail "P1pre" "precondition 缺失"
+grep -q 'lease-held' "$STATE/lease-check.txt" 2>/dev/null && ! grep -q 'lease-MISSING' "$STATE/lease-check.txt" 2>/dev/null \
+  && pass "P1 门禁轮次全程持 stack 共享租约（每轮探针均 lease-held）" || fail "P1lease" "租约探针：$(cat "$STATE/lease-check.txt" 2>/dev/null)"
+has_event "$SANDBOX/p1.out" 'step.started' ' and .target == "report gate"' \
+  && pass "P1 JSONL step.started（target=report gate）" || fail "P1ev" "缺事件"
+has_event "$SANDBOX/p1.out" 'step.completed' ' and .target == "report gate round" and .verdict == "reproduced"' \
+  && pass "P1 JSONL 逐轮 verdict=reproduced 事件" || fail "P1ev2" "缺逐轮 verdict"
+has_event "$SANDBOX/p1.out" 'step.completed' ' and .target == "report register" and .verdict == "registered"' \
+  && pass "P1 JSONL 登记 verdict=registered 事件" || fail "P1ev3" "缺登记 verdict"
+
+# P2 某轮未复现（第 2 轮 exit 1）→ 门禁不过 exit 8，**零登记**
+report_reset
+printf '1\n' > "$STATE/replay-round-2.rc"
+P2_FP="$(tree_fingerprint)"
+run_cmd p2 "$DEVENV" --json e2e report --finding "$REPORT_FINDING" --run-id rpt-p2
+[[ "$RC" == 8 ]] && pass "P2 某轮未复现 → exit 8（门禁未过）" || fail "P2" "rc=$RC（期望 8）err=$(tail -4 "$SANDBOX/p2.err")"
+last_json "$SANDBOX/p2.out" '.status == "failed" and .exitCode == 8 and .registered == false and .gate.reason == "round-not-reproduced"' \
+  && pass "P2 终值 registered=false + gate.reason 机器可消费" || fail "P2json" "终值不符：$(tail -1 "$SANDBOX/p2.out")"
+[[ "$(tree_fingerprint)" == "$P2_FP" ]] \
+  && pass "P2 门禁不过零登记（事实源树逐字节不变）" || fail "P2zero" "工作区被改动"
+[[ -z "$(find "$DEVENV_LOCK_ROOT" -maxdepth 1 -name 'e2e-lifecycle-*.lock' -type d 2>/dev/null)" ]] \
+  && pass "P2 失败路径结束后生命周期写锁释放" || fail "P2lock" "写锁残留"
+
+# P3 多轮签名不一致（第 3 轮实际状态码变 400）→ exit 8 零登记
+report_reset
+printf '%s\n' "${SIG_LINE/\"http.status.actual\",\"value\":\"201\"/\"http.status.actual\",\"value\":\"400\"}" > "$STATE/replay-round-3.out"
+P3_FP="$(tree_fingerprint)"
+run_cmd p3 "$DEVENV" --json e2e report --finding "$REPORT_FINDING" --run-id rpt-p3
+[[ "$RC" == 8 ]] && pass "P3 逐轮签名比对不符 → exit 8" || fail "P3" "rc=$RC err=$(tail -4 "$SANDBOX/p3.err")"
+last_json "$SANDBOX/p3.out" '.gate.reason == "signature-mismatch" and .registered == false' \
+  && pass "P3 gate.reason=signature-mismatch（同一断言同一原因不成立）" || fail "P3json" "终值不符"
+[[ "$(tree_fingerprint)" == "$P3_FP" ]] && pass "P3 签名不符零登记" || fail "P3zero" "工作区被改动"
+
+# P4 errorClass=unknown（证据不足档）→ exit 8 零登记（永不过门禁）
+report_reset
+printf '%s\n' "${SIG_LINE/\"errorClass\":\"assertion\"/\"errorClass\":\"unknown\"}" > "$STATE/replay-round-2.out"
+P4_FP="$(tree_fingerprint)"
+run_cmd p4 "$DEVENV" --json e2e report --finding "$REPORT_FINDING" --run-id rpt-p4
+[[ "$RC" == 8 ]] && pass "P4 unknown 档 → exit 8（保守档永不过门禁）" || fail "P4" "rc=$RC err=$(tail -4 "$SANDBOX/p4.err")"
+[[ "$(tree_fingerprint)" == "$P4_FP" ]] && pass "P4 unknown 档零登记" || fail "P4zero" "工作区被改动"
+
+# P5 pure 路径：1 轮即过门禁（按被测路径分类，非按引擎）
+report_reset
+run_cmd p5 "$DEVENV" --json e2e report --finding "$REPORT_PURE" --run-id rpt-p5
+P5_ID="$(jq -s -r '.[-1].defectId' "$SANDBOX/p5.out" 2>/dev/null || printf '')"
+if [[ "$RC" == 0 ]] && last_json "$SANDBOX/p5.out" '.kind == "pure" and .attempts == 1 and .minAttempts == 1 and .registered == true'; then
+  pass "P5 pure 路径 1 轮过门禁 → exit 0 登记"
+else
+  fail "P5" "rc=$RC out=$(tail -1 "$SANDBOX/p5.out") err=$(tail -4 "$SANDBOX/p5.err")"
+fi
+[[ "$(jq -r '.reproducibility.gate.signatureMatched' "$E2E_DIR/defects/$P5_ID.json" 2>/dev/null)" == "null" ]] \
+  && pass "P5 单轮 signatureMatched=null（无从跨轮比对，不自证同一）" || fail "P5sig" "签名比对位不符"
+[[ "$(jq -r '.reproducibility.gate.attempts' "$E2E_DIR/defects/$P5_ID.json" 2>/dev/null)" == 1 ]] \
+  && pass "P5 gate.attempts=1 回填" || fail "P5att" "attempts 不符"
+
+# P6 --attempts 低于被测路径下限 → exit 2（次数是检查预算，不得下调）
+report_reset
+run_cmd p6 "$DEVENV" --json e2e report --finding "$REPORT_FINDING" --attempts 2
+[[ "$RC" == 2 ]] && pass "P6 --attempts 2 < external-state 下限 3 → exit 2" || fail "P6" "rc=$RC（期望 2）"
+report_reset
+run_cmd p6b "$DEVENV" --json e2e report --finding "$REPORT_FINDING" --attempts 5
+[[ "$RC" == 0 ]] && last_json "$SANDBOX/p6b.out" '.attempts == 5' \
+  && pass "P6 --attempts 5 ≥ 下限 → 实测 5 轮（预算可上调）" || fail "P6b" "rc=$RC out=$(tail -1 "$SANDBOX/p6b.out")"
+
+# P7 用法错误 exit 2
+run_cmd p7a "$DEVENV" e2e report
+[[ "$RC" == 2 ]] && pass "P7 缺 --finding → exit 2" || fail "P7a" "rc=$RC"
+run_cmd p7b "$DEVENV" e2e report --finding "$SANDBOX/nonexistent.json"
+[[ "$RC" == 2 ]] && pass "P7 载荷文件不存在 → exit 2" || fail "P7b" "rc=$RC"
+run_cmd p7c "$DEVENV" e2e report --finding "$REPORT_FINDING" --bogus
+[[ "$RC" == 2 ]] && pass "P7 未知参数 → exit 2" || fail "P7c" "rc=$RC"
+
+# P8 --from-results：从 Playwright results.json 提取 #107 属性发现并合并载荷
+report_reset
+PF_JSON='{"schemaVersion":1,"engine":"fast-check","property":"P0/GAP-PT-NAME-01/point-name-nonblank","rule":"GAP-PT-NAME-01","charter":"point-input-safety","seed":123456789,"counterexample":["   "],"counterexamplePath":"0:1:0","numRuns":10,"numShrinks":3,"request":{"method":"post","path":"/enforcement-points","body":{"name":"   ","lat":23.1291,"lng":113.2644}}}'
+PF_B64="$(printf '%s' "$PF_JSON" | openssl base64 -e -A)"
+jq -cn --arg b "$PF_B64" '{suites:[{specs:[{tests:[{results:[{attachments:[{name:"property-finding",body:$b,contentType:"application/json"}]}]}]}]}]}' > "$SANDBOX/results.json"
+run_cmd p8 "$DEVENV" --json e2e report --finding "$REPORT_FINDING" --from-results "$SANDBOX/results.json" --run-id rpt-p8
+[[ "$RC" == 0 ]] && pass "P8 --from-results 提取属性发现并登记 → exit 0" || fail "P8" "rc=$RC err=$(tail -4 "$SANDBOX/p8.err")"
+[[ "$(jq -r '.finding.source' "$STATE/report-payload-plan.json" 2>/dev/null)" == "property-finding" ]] \
+  && pass "P8 载荷 source 定型为 property-finding（provenance 即属性发现）" || fail "P8src" "source 不符"
+[[ "$(jq -r '.finding.finding.property' "$STATE/report-payload-plan.json" 2>/dev/null)" == "P0/GAP-PT-NAME-01/point-name-nonblank" ]] \
+  && pass "P8 属性发现无损进引擎载荷（property/seed/反例）" || fail "P8pf" "finding 未合并"
+
+# P9 登记持生命周期写锁：被占 → exit 6 零落盘
+report_reset
+sleep 30 & P9_HOLDER=$!
+mkdir -p "$DEVENV_LOCK_ROOT/e2e-lifecycle-$MOCK_STACK_SUFFIX.lock"
+printf '%s %s\n' "$P9_HOLDER" "$(date +%s)" > "$DEVENV_LOCK_ROOT/e2e-lifecycle-$MOCK_STACK_SUFFIX.lock/owner"
+P9_FP="$(tree_fingerprint)"
+run_cmd p9 "$DEVENV" --json e2e report --finding "$REPORT_FINDING" --run-id rpt-p9
+kill -9 "$P9_HOLDER" 2>/dev/null; wait "$P9_HOLDER" 2>/dev/null || true
+rm -rf "$DEVENV_LOCK_ROOT/e2e-lifecycle-$MOCK_STACK_SUFFIX.lock"
+[[ "$RC" == 6 ]] && pass "P9 登记阶段生命周期写锁被占 → exit 6" || fail "P9" "rc=$RC（期望 6）err=$(tail -3 "$SANDBOX/p9.err")"
+[[ "$(tree_fingerprint)" == "$P9_FP" ]] && pass "P9 锁冲突零落盘" || fail "P9zero" "锁冲突仍写盘"
+
+# P10 非 JSON 模式：stdout 无终值 JSON（人类摘要走 stderr，输出协议三类）
+report_reset
+run_cmd p10 "$DEVENV" e2e report --finding "$REPORT_PURE" --run-id rpt-p10
+[[ "$RC" == 0 && ! -s "$SANDBOX/p10.out" ]] \
+  && pass "P10 非 --json 模式 stdout 为空（人类摘要走 stderr）" || fail "P10" "rc=$RC stdout=$(head -c 120 "$SANDBOX/p10.out")"
+grep -q '门禁' "$SANDBOX/p10.err" && pass "P10 人类摘要含门禁口径留痕" || fail "P10h" "stderr 缺摘要"
+
+unset MOCK_REPLAY_RC MOCK_REPLAY_OUTPUT MOCK_ASSERT_LEASE
+rm -f "$STATE"/replay-round-*.rc "$STATE"/replay-round-*.out
 
 # ---------------------------------------------------------------------------
 echo "------------------------------------------------------------"

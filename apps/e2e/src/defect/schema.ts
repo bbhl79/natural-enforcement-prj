@@ -68,6 +68,7 @@ export const CounterexampleRequestSchema = z.strictObject({
   path: z.string().min(1),
   headers: z.record(z.string(), z.string()).optional(),
   body: z.unknown().optional(),
+  bodyBase64: z.string().min(1).optional(), // 二进制载荷（证据上传类反例；#109 增量，optional 向后兼容）
 })
 export type CounterexampleRequest = z.infer<typeof CounterexampleRequestSchema>
 
@@ -83,12 +84,76 @@ export const CounterexampleSchema = z
   })
 export type Counterexample = z.infer<typeof CounterexampleSchema>
 
-/** 门禁证据（report 命令实测回填，非自查申报；#109） */
+/**
+ * 并发缺陷的触发条件（#109；Spec-e2e §5「并发缺陷须保留触发时序」）。
+ * replayCommand 必须保留触发操作顺序与时序条件——第三个会话据此独立复验。
+ * 声明即契约：concurrency 在场 ⇒ kind 必为 external-state（并发必然依赖外部状态）。
+ */
+export const ConcurrencySchema = z.strictObject({
+  triggerOrder: z.array(z.string().min(1)).min(1), // 触发操作顺序（逐步，脚本须按此序执行）
+  timing: z.string().min(1), // 时序条件（并发窗口/延迟/soak 时长等可复验描述）
+  preservedBy: z.string().min(1).optional(), // 脚本如何保留该顺序与时序（实现说明）
+})
+export type Concurrency = z.infer<typeof ConcurrencySchema>
+
+/** 一轮实测的键空间坐标（#70 三套净化后的实际资源名；独立性的机器可核对证据） */
+export const GateKeySpaceSchema = z.strictObject({
+  database: z.string().min(1),
+  bucket: z.string().min(1),
+  queue: z.string().min(1),
+})
+export type GateKeySpace = z.infer<typeof GateKeySpaceSchema>
+
+/** 逐轮签名比对结果（形状与 signature/compare.ts 的 SignatureComparison 同构） */
+export const GateComparisonSchema = z.strictObject({
+  matched: z.boolean(),
+  reason: z.string().min(1),
+  differences: z.array(
+    z.strictObject({
+      dimension: z.enum(['errorClass', 'assertionId', 'semanticMarkers']),
+      key: z.string().min(1).optional(),
+      a: z.string().nullable(),
+      b: z.string().nullable(),
+    }),
+  ),
+})
+export type GateComparison = z.infer<typeof GateComparisonSchema>
+
+/**
+ * 单轮门禁证据（#109 实测回填）：run id 关联运行登记册、键空间坐标证独立性、
+ * precondition 记本轮**实际建立**的前置状态、签名与比对结果证同一断言同一原因。
+ */
+export const GateRoundSchema = z.strictObject({
+  attempt: z.number().int().min(1),
+  runId: z.string().min(1), // .devenv-state/e2e-runs/<runId>.json（运行登记册互查）
+  keySpace: GateKeySpaceSchema.optional(),
+  precondition: z.string().min(1).optional(), // 本轮实际建立的前置状态（宿主实测）
+  scriptExitCode: z.number().int(), // 0=复现 / 1=未复现 / 2=基础设施错误
+  verdict: z.enum(['reproduced', 'not-reproduced', 'infrastructure']),
+  signature: FailureSignatureSchema.nullable(), // 无约定标记 → null（不编造）
+  comparison: GateComparisonSchema.optional(), // 与基线（首轮）签名比对
+})
+export type GateRound = z.infer<typeof GateRoundSchema>
+
+/**
+ * 门禁证据（report 命令实测回填，非自查申报；#109）。
+ * 兼容口径：attempts/keySpaces/allFailed 是 #106 既有字段（报告期可 attempts=0
+ * 占位）；rounds/precondition/baselineSignature/measuredAt/compareReason/
+ * scriptSha256/needsHumanJudgment 是 #109 增量，全部 optional —— 既有记录
+ * （含占位门禁）无需迁移即可继续解析。
+ */
 export const GateSchema = z.strictObject({
   attempts: z.number().int().min(0), // 报告期可为 0 占位；登记后 ≥ minGateAttempts(kind)
   keySpaces: z.array(z.string().min(1)), // 每轮独立键空间（run id）
   allFailed: z.boolean(), // 每轮都在同一断言处因同一原因失败
-  signatureMatched: z.boolean().optional(), // 逐轮失败签名比对结果（#109 回填）
+  signatureMatched: z.boolean().nullable().optional(), // 逐轮比对结果；单轮无从跨轮比对 → null（#109）
+  rounds: z.array(GateRoundSchema).optional(), // 逐轮实测证据（#109）
+  precondition: z.string().min(1).optional(), // 前置状态**声明**（每轮从此状态开始）
+  baselineSignature: FailureSignatureSchema.nullable().optional(), // 比对基线（首轮签名）
+  compareReason: z.string().min(1).optional(), // 多轮比对收口原因（compareSignatureSet.reason）
+  measuredAt: z.string().min(1).optional(), // 实测时刻（ISO8601Z）
+  scriptSha256: z.string().min(1).optional(), // 实测所用脚本内容哈希（与入库脚本同一份字节）
+  needsHumanJudgment: z.boolean().optional(), // 任一轮 errorClass=locator → 需人判断（Spec §7）
 })
 export type Gate = z.infer<typeof GateSchema>
 
@@ -100,6 +165,7 @@ export const ReproducibilitySchema = z.strictObject({
   curl: z.string().min(1).optional(), // 契约引擎 curl 重现器
   replayCommand: z.string().min(1), // 零第三方依赖复现脚本（node 内建 fetch）；exit 0 = 复现
   counterexample: z.unknown().optional(), // 非机械引擎的引擎工件位（机械引擎分支必填）
+  concurrency: ConcurrencySchema.optional(), // 并发缺陷触发顺序/时序（#109；在场 ⇒ external-state）
   gate: GateSchema,
 })
 export type Reproducibility = z.infer<typeof ReproducibilitySchema>
