@@ -41,6 +41,9 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 供应链门禁：catalog 精确 pin / allowBuilds 版本化 / 冷却期 / 锁文件漂移 / 镜像锁类型静态核对；`--container` 追加核对待审批构建脚本与包内 agent skills（默认拒绝） | `devenv supply-chain [--container]` | 0 或 2/3/4/6 |
 | 构建 e2e 执行器镜像（官方 Playwright 基座 + 项目运行时；Playwright npm 包与镜像 tag 严格同版本，版本不符即停止；幂等，命中复用） | `devenv e2e build` | 0 或 3/4/6 |
 | e2e 运行登记册（run id / status / live / 数据库 / bucket / 队列；只读） | `devenv e2e runs` | 0 或 3/4 |
+| 缺陷记录查询（事实源 `apps/e2e/defects/<ID>.json`，经 stdin tar 只读进容器由纯决策引擎解析；show 输出摘要 + 证据 URI，list 输出清单；`--json` 终值含 `defect`/`defects`；未知 ID 或记录 schema 不符 exit 10，零落盘） | `devenv e2e defect show <DEF-NNNN>`、`devenv e2e defect list` | 0 或 2/3/4/10 |
+| DEF-NNNN 取号（本地 max+1，不填洞；`--remote` 经 `devenv gh` 叠读远端 `defects/` 已有编号取 max(本地,远端)+1，best-effort：远端不可用只 WARN 并回退本地；`--remote-ref` 覆盖远端 ref，默认 `dev`，亦可用 `DEVENV_E2E_NUMBER_REMOTE_REF`） | `devenv e2e defect next-id [--remote] [--remote-ref REF]` | 0 或 2/3/4/10 |
+| 重建缺陷注册表（派生缓存 `apps/e2e/.registry.json`，不入库；**始终重建**，与事实源漂移仅 WARN 不硬门禁；持生命周期写锁 `e2e-lifecycle-<wt>`，写盘经 op 协议宿主侧原子应用） | `devenv e2e registry rebuild` | 0 或 2/3/4/6/10 |
 | 观察 per-run 容器日志（透传原始流；api\|worker\|web，默认 api） | `devenv e2e logs --run-id ID [svc] [-f] [--tail N]` | 0 或 2/3 或子进程码 |
 | 探索轨道：共享基础设施容器 + 每 run 独立数据库/bucket/队列键空间；per-run API/worker 绑定本 run 资源；运行期持共享栈使用租约；产物导出宿主 `.artifacts/e2e/<run-id>/`；探索发现=产出（exit 4，不提示误修测试栈） | `devenv explore [--run-id ID]` | 0 或 2/3/4/5/6 |
 
@@ -52,18 +55,22 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 以 App 身份 HTTPS 推送 | `devenv git-push <remote> <refspec...>` | 0 或 2/20/21/22/23 或 git 自身退出码 |
 | 认证入口离线测试（不访问 GitHub） | `devenv test:auth` | 0 或 1 |
 | 认证入口真实集成测试（默认只读；写操作需显式旗标） | `devenv test:auth:integration [旗标]` | 0 或 1 或 2 |
-| 命令面离线测试（引擎解析/锁与栈使用租约/输出协议/快照与不可变绑定/per-worktree 隔离/供应链门禁/CI workflow 静态门禁/脚手架生成/e2e 隔离编排，mock docker） | `devenv test:devenv` | 0 或 1 |
+| 命令面离线测试（引擎解析/锁与栈使用租约/输出协议/快照与不可变绑定/per-worktree 隔离/供应链门禁/CI workflow 静态门禁/脚手架生成/e2e 隔离编排/e2e 生命周期决策引擎，mock docker） | `devenv test:devenv` | 0 或 1 |
 
-## 退出码枚举（总表归 Spec-工程基座；7–10 e2e 专用码段由 Spec-e2e 登记）
+## 退出码枚举（总表归 Spec-工程基座；7–10 e2e 专用码段由 Spec-e2e 登记：9/10 已登记（#106），7/8 由 #116/#109 登记）
 
 | 码 | 含义 | 典型修复 |
 |---|---|---|
 | 0 | 成功 | — |
-| 2 | 用法错误（未知子命令/缺参数/非法覆盖格式；`gen nest-module` / `gen page` 缺必要业务信息、spec 非法、basePath 与既有契约路由冲突，或 `gen page` 缺少/不兼容 create/list HTTP 契约——含容器内生成器拒绝的字段类型/约束/字段不匹配错误，其退出码 2 原样透传，不降级为 4） | 按 Usage 与 COMMANDS.md；spec/契约问题按错误消息修正 `--spec` 或先生成 HTTP 契约 |
-| 3 | 环境未就绪（引擎不在矩阵、端点解析失败、服务未起、锁文件缺失、web 显式端口被占用） | 按错误内嵌修复命令（多为 `devenv up`/`devenv build`；端口占用时报占用者并给替代命令） |
-| 4 | 任务失败（test/lint/typecheck/build/verify 非零；拉取失败；快照采集期工作树持续变化——明确拒绝，不出混合内容） | 看 stderr 完整输出；采集拒绝时暂停文件修改后重试 |
+| 2 | 用法错误（未知子命令/缺参数/非法覆盖格式；`gen nest-module` / `gen page` 缺必要业务信息、spec 非法、basePath 与既有契约路由冲突，或 `gen page` 缺少/不兼容 create/list HTTP 契约——含容器内生成器拒绝的字段类型/约束/字段不匹配错误，其退出码 2 原样透传，不降级为 4；e2e 生命周期用法错误：`e2e defect` 缺动作、`e2e defect show` 缺 ID 或 ID 非 `DEF-NNNN` 形态、未知 defect/registry 动作、`next-id --remote-max` 非整数、尚未实现的子命令（report/graduate/replay/retire/renumber 等归后续票）） | 按 Usage 与 COMMANDS.md；spec/契约问题按错误消息修正 `--spec` 或先生成 HTTP 契约 |
+| 3 | 环境未就绪（引擎不在矩阵、端点解析失败、服务未起、锁文件缺失、web 显式端口被占用；V 校验载荷无 per-run 隔离栈可用） | 按错误内嵌修复命令（多为 `devenv up`/`devenv build`；端口占用时报占用者并给替代命令） |
+| 4 | 任务失败（test/lint/typecheck/build/verify 非零；拉取失败；快照采集期工作树持续变化——明确拒绝，不出混合内容；生命周期 CLI 无 END 行的异常退出（容器/构建问题，子进程码入终值 `taskRc`）；op 路径越界/载荷非 base64/应用中途失败——工作区全量还原） | 看 stderr 完整输出；采集拒绝时暂停文件修改后重试 |
 | 5 | 超时（健康等待/镜像拉取） | `devenv logs <svc>` 排查；prefetch 重跑续跑 |
-| 6 | 独占锁或栈使用租约冲突（另一会话持锁 / 测试运行中） | 等待或确认持有者已死（失效锁与失效租约会自动清理）；错误消息列出持有者与修复线索 |
+| 6 | 独占锁或栈使用租约冲突（另一会话持锁 / 测试运行中；含生命周期写锁 `e2e-lifecycle-<wt>`） | 等待或确认持有者已死（失效锁与失效租约会自动清理）；错误消息列出持有者与修复线索 |
+| 7 | 生命周期校验失败（索引/注解/编号/diff 级；**由 #116 登记**，本表留位） | 见 #116 |
+| 8 | 状态转移/前置条件不合法（重复毕业/门禁未过/退役后毕业；**由 #109/#116 登记**，本表留位） | 见 #109/#116 |
+| 9 | 毕业校验运行判定不符（op 协议 V 载荷：expect=fail 却通过 / expect=pass 却失败）——**工作区零落盘**（全有或全无） | 读 stderr 拒绝原因与 `verdict` 事件（did-not-fail/still-failing）；核对缺陷是否已修或环境漂移，重跑校验运行 |
+| 10 | 缺陷不存在或 schema 不符（未知 `DEF-NNNN`、记录 JSON 解析失败、zod 判别联合校验失败、ID 形态非法） | 核对 `apps/e2e/defects/` 下记录；按 stderr 给出的字段路径修正记录（schema 见 `apps/e2e/src/defect/schema.ts`） |
 | 20 | 配置/授权不符（认证入口） | 核对 `devenv/github-app.json` 与本机授权 |
 | 21 | 私钥缺失/权限/JWT 签名失败（认证入口） | 检查私钥路径与权限 |
 | 22 | installation token 换取失败（认证入口） | 检查网络与 App 安装状态 |
@@ -238,9 +245,10 @@ exit 3，compose v2 由 doctor `compose-plugin` 检查项校验）；裸 Linux +
 | test / test:unit / verify / lint / typecheck / seed / explore（运行期） | stack-<wt> 共享租约（per-worktree） | 多个租约可并行；与上述排他命令双向互斥（读者遇排他锁等待/exit 6）。explore 从起 per-run 资源到回收全程持租约，`down`/`migrate` 等不会中途拆掉 run 的共享基础设施 |
 | prefetch | prefetch（机器级） | 跨 worktree 互斥（基础镜像拉取）；冲突等待或 exit 6（重跑续跑） |
 | e2e build / explore 的执行器镜像构建 | e2e-image-<wt>（排他，per-worktree；仅构建/核对窗口） | 与其它 e2e 执行器镜像构建互斥（状态文件/可变 tag 读改写串行化）；不取栈锁/租约，无锁序环；冲突等待/exit 6 |
+| e2e 生命周期写命令（#106：e2e registry rebuild；后续 report/graduate/confirm-fix/retire/renumber） | e2e-lifecycle-<wt>（排他，per-worktree，**mkdir 目录锁**，从取锁到 op 应用结束持同一把） | 本 worktree 内生命周期写命令彼此互斥（校验与写入之间无间隙）；与栈锁/租约正交（决策命令不做栈变更），无锁序环；跨 worktree 互不阻塞（合入时校验兜底：撞号 renumber/索引一致性/diff 级）；冲突等待 60s 或 exit 6。V 校验载荷所在的 per-run 运行另持 stack-<wt> 共享租约与 run 所有权锁 |
 | explore 启动/运行所有权 | e2e-owner-<wt>-<runid>（排他，per-run-id，创建资源前取得 → 回收结束释放）；e2e-admit-<wt>（短临界区） | 同 run id 的第二个进程在启动窗口等待/exit 6，绝不进入清理路径破坏对方尚未启动的资源；admission 锁串行化「取得所有权 → 计数 → 登记」，并发计数含启动中预留名额；锁名与容器 worktree 标签含 worktree 后缀，跨 worktree 同名显式 run id 互不误判 |
 | build / gen 触发的 lockgen | lockgen（机器级） | 跨 worktree 互斥（共享标签/容器清理）；冲突等待或 exit 6（重跑即续） |
-| 只读（ps/logs/status/images/doctor/gen evidence/e2e runs/e2e logs） | 无 | 任意并发（gen evidence 只读绑定镜像内的证据文件，不重建、不触栈；e2e logs 只读容器日志） |
+| 只读（ps/logs/status/images/doctor/gen evidence/e2e runs/e2e logs/e2e defect show·list·next-id） | 无 | 任意并发（gen evidence 只读绑定镜像内的证据文件，不重建、不触栈；e2e logs 只读容器日志；e2e defect 查询只读事实源，经 stdin tar 进容器，零落盘） |
 | exec / shell（透传调试） | 无 | 交互时长无界，不持租约；需要稳定环境时先结束调试再拆栈 |
 
 ### 栈使用租约（#61）
@@ -566,7 +574,9 @@ compose 健康检查读 Redis 心跳（证明已进入消费循环），不发�
 
 - `devenv/e2e.Dockerfile` 基于 `images.lock` 的 `PLAYWRIGHT_IMAGE`（tag+digest，
   manifest-list）；`devenv e2e build` 从固定输入快照构建并登记不可变 image ID
-  （`workspace-image.env` 的 `E2E_*` 字段），命中快照/版本时复用。
+  （**独立状态文件 `.devenv-state/e2e-image.env`**：`E2E_SNAPSHOT_HASH`/`E2E_IMAGE_ID`/
+  `E2E_PLAYWRIGHT_IMAGE`；与 workspace 的 `workspace-image.env` 分离，#70），
+  命中快照/版本时复用。
 - **版本严格一致**：`PLAYWRIGHT_IMAGE` tag 版本必须等于 catalog 的
   `@playwright/test`（静态门禁交叉核对）；构建期再核对实际安装版本（不一致即停止）。
 - 运行参数：`--init` + `ipc: host`（Chromium /dev/shm）+ 官方镜像浏览器。
@@ -586,8 +596,69 @@ compose 健康检查读 Redis 心跳（证明已进入消费循环），不发�
 不要未经判读就改测试栈**；不是把测试栈当故障直接修。
 基础前置（基础设施未起、镜像构建失败、健康超时）仍按 3/4/5 报错。
 
+**P0 属性探索（#107）**：fast-check 属性引擎在探索轨道内运行
+（`apps/e2e/tests/explore/properties/`，不新增轨道），失败语义不变（exit 4 = 发现，
+retries 0，不掩盖）。属性命名口径 `P0/<RULE-ID>/<slug>`（规则标识 EV-STATE/EV-NAME/
+EV-BYTES/PT-GEO/PT-BOUND/PT-NAME；`charter` 字段为探索任务书联动预留位，认领机制归
+#114）。属性违规时结构化反例以附件进入 `results.json` 该用例 `results[].attachments[]`
+（`name=property-finding`，`body=base64(JSON)`：property/rule/charter/seed/counterexample/
+counterexamplePath/numRuns/numShrinks[/request]），report（#109）可机械提取 seed+反例
+登记与重放；绿跑时每个属性用例另带 `property-run` 摘要附件（seed/numRuns）。
+`E2E_FORCE_FINDING=1` 同时触发故意反例属性夹具（properties/harness-selfcheck）；
+`E2E_CHARTER_GAPS=1` 启用非默认「规则缺席」缺口探针（charter 发现素材，编码缺席规则，
+不参与默认绿跑；本票不修 api 规则）。
+
 **并行演练入口**：`E2E_PARALLEL_GROUP=<组标记> E2E_PARALLEL_SOAK_MS=<毫秒> devenv explore --run-id ...`
 把共享组标记与等待窗口传入执行器；两个 run 用同组标记并行运行，隔离 charter 会在
 等待窗口内反复读本 run 数据面并断言同组其它 run 的数据不出现（默认 0 = 单 run 不等待）。
 失败语义验收钩子：`E2E_FORCE_FINDING=1 devenv explore --run-id ...` 让自检用例故意
 失败，用于复现「失败=产出/任务失败 + 先判读再动手」的报告与产物路径。
+
+## e2e 生命周期事实源与决策引擎（#106）
+
+**事实源分层（Spec-e2e §3）**：
+
+- 每缺陷一个**入库** JSON 记录 `apps/e2e/defects/DEF-NNNN.json` 是生命周期唯一事实源，
+  永不删除（退役也留档）；完整性锚在入库记录与 git 历史。schema 归 e2e 包
+  （`apps/e2e/src/defect/schema.ts`，zod 按引擎判别联合），不入共享契约包。
+- 目录表达轨道归属：`defects/` 事实源、`replay/DEF-NNNN.mjs` 零第三方依赖复现脚本
+  （exit 0 = 复现）、`tests/repro/` 复现轨道、`tests/repro/_drafts/` 草稿区（CI 不收集）。
+- **注册表是派生缓存**：`apps/e2e/.registry.json`（`.gitignore` 排除，不入库）。
+  `devenv e2e registry rebuild` **始终重建**；与事实源漂移只 `WARN` + `registry.rebuilt`
+  事件（`drift=yes|no`），**不作硬门禁**——原型实证「漂移即红」会死锁（校验失败时
+  不重写缓存 → 下次必报漂移 → 永远红）。后续票的校验器（#116）沿用同一语义。
+- `DEF-NNNN` 取号：本地 max+1（按 `defects/` 文件名集合，坏记录仍占号），不填洞
+  （断号是校验器违规项）；`--remote` 经 `devenv gh` 叠读远端已有编号（best-effort，
+  失败只 WARN 回退本地）。撞号由后合入方机械重排（#116）。
+
+**纯决策引擎 + op 行协议（Spec-e2e §10）**：
+
+生命周期 CLI（`apps/e2e/src/cli.ts`，容器内 `node apps/e2e/dist/main.js`）**不落盘**：
+
+1. 宿主树（`apps/e2e/{defects,replay,tests}` + 既有 `.registry.json`）经 **stdin tar**
+   只读进容器 `/tmp/in`（无 bind 架构的读取通道；容器侧无宿主写通道）。
+2. CLI stdout = 协议行，stderr = 人类可读摘要：
+   - `W\t<relpath>\t<base64(utf8)>` 写文件（relpath 相对 `apps/e2e`）
+   - `D\t<relpath>` 删文件
+   - `V\t<id数字段>\t<expect:fail|pass>\t<base64>` 校验运行载荷
+   - `END\t<status:ok|error>\t<code>\t<message>` 终值（每次调用恰一行，最后输出）
+   查询命令（`defect show|list`、`next-id`）的数据行直接走 stdout（非协议行），
+   宿主转发/包装为终值 JSON（`defect`/`defects`/`id` 字段）。
+3. devenv **宿主侧原子应用**（`lib/e2e-lifecycle.sh`）：先 V（真跑一次，判定不符 →
+   **exit 9 零落盘**）→ 再 END（`status=error` → 透传引擎声明的码，**零落盘**）→
+   再 W/D（路径守卫 + 载荷预解码 + 既有文件备份；任一步失败**全量还原**）。
+   V 载荷经宿主 `apps/e2e/.verify-run/` 生成后 tar 注入执行器，用
+   `playwright.verify.config.ts`（testDir 在 repro/explore 树之外）真跑。
+4. 原型坑收口：`set -e` + 命令替换会吞掉 END 行诊断——**先捕获 rc 再判协议**：
+   有 END 行按协议拒绝（透传码 + 消息透出 stderr/终值 `reason`）；无 END 行 =
+   容器/构建问题（映射 exit 4，子进程码入终值 `taskRc`，不外逸枚举）。
+
+**输出与退出码**：查询/重建均为结构化命令（`--json` 时 stdout 只有 JSONL：引擎/
+新鲜度事件 + `registry.rebuilt` 等 + 终值）。生命周期**拒绝**（END error / V 判定
+不符）先发终值事件 `status:"failed"`（`exitCode` = 9/10/引擎声明码，`reason` = 拒绝
+原因）再以该码退出（与 explore 发现同口径）；用法/环境/锁冲突走 `die`（无终值事件，
+见输出协议节）。退出码 9/10 已登记；7/8 由 #116/#109 登记。
+
+**并发**：写命令持 per-worktree `e2e-lifecycle-<wt>`（mkdir 目录锁，**非 flock**）
+从取锁到应用结束；查询只读不取锁。跨 worktree 并发由合入时校验兜底（撞号 renumber、
+索引一致性、diff 级）。详见并发语义表。

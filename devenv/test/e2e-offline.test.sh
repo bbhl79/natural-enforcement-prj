@@ -65,8 +65,8 @@ mkdir -p "$STATE/images" "$STATE/tags"
 joined="$*"
 {
   printf 'docker %s' "$*"
-  printf ' | E2E_RUN_ID=%s E2E_DATABASE_URL=%s E2E_S3_BUCKET=%s E2E_QUEUE_NAME=%s E2E_TRACK=%s\n' \
-    "${E2E_RUN_ID:-}" "${E2E_DATABASE_URL:-}" "${E2E_S3_BUCKET:-}" "${E2E_QUEUE_NAME:-}" "${E2E_TRACK:-}"
+  printf ' | E2E_RUN_ID=%s E2E_DATABASE_URL=%s E2E_S3_BUCKET=%s E2E_QUEUE_NAME=%s E2E_TRACK=%s E2E_CHARTER_GAPS=%s\n' \
+    "${E2E_RUN_ID:-}" "${E2E_DATABASE_URL:-}" "${E2E_S3_BUCKET:-}" "${E2E_QUEUE_NAME:-}" "${E2E_TRACK:-}" "${E2E_CHARTER_GAPS:-}"
 } >> "$STATE/calls.log"
 
 sanitize() { printf '%s' "$1" | tr '/:' '__'; }
@@ -488,6 +488,28 @@ if [[ "$E6_RC" == 0 ]] && jq -e '.runs | length >= 2' "$SANDBOX/e6.out" >/dev/nu
   pass "E6 e2e runs 输出登记册 JSON（含成功/失败 run）"
 else
   fail "E6" "rc=$E6_RC out=$(cat "$SANDBOX/e6.out") err=$(tail -3 "$SANDBOX/e6.err")"
+fi
+
+# ---------------------------------------------------------------------------
+# E7 charter 缺口探针开关（#107）：E2E_CHARTER_GAPS 透传执行器；默认空（非默认探针）
+# ---------------------------------------------------------------------------
+: > "$STATE/calls.log"
+E2E_CHARTER_GAPS=1 run_cmd e7 "$DEVENV" explore --run-id gaps-a1
+E7_LINE="$(grep 'playwright test --config=playwright.explore.config.ts' "$STATE/calls.log" | head -1 || true)"
+E7_VAL="$(printf '%s\n' "$E7_LINE" | sed -n 's/.*E2E_CHARTER_GAPS=\([^ ]*\).*/\1/p')"
+if [[ "$RC" == 0 && "$E7_VAL" == "1" ]]; then
+  pass "E7 E2E_CHARTER_GAPS=1 透传探索执行器（charter 缺口探针开关）"
+else
+  fail "E7" "rc=$RC val=$E7_VAL line=$E7_LINE"
+fi
+: > "$STATE/calls.log"
+run_cmd e7b "$DEVENV" explore --run-id gaps-default-a1
+E7B_LINE="$(grep 'playwright test --config=playwright.explore.config.ts' "$STATE/calls.log" | head -1 || true)"
+E7B_VAL="$(printf '%s\n' "$E7B_LINE" | sed -n 's/.*E2E_CHARTER_GAPS=\([^ ]*\).*/\1/p')"
+if [[ "$RC" == 0 && -z "$E7B_VAL" ]]; then
+  pass "E7 默认 explore 的 E2E_CHARTER_GAPS 为空（缺口探针不默认启用）"
+else
+  fail "E7b" "rc=$RC val=$E7B_VAL line=$E7B_LINE"
 fi
 
 # ---------------------------------------------------------------------------

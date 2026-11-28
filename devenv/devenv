@@ -16,9 +16,10 @@
 #     进度与子进程原始输出走 stderr，不混入结果流。
 #   - 透传命令（exec/shell/logs）：子进程原始流；--json 仅包装终值元数据。
 #
-# 退出码枚举（总表归 Spec-工程基座；7–10 e2e 专用码段由 Spec-e2e 登记，本票不用）：
+# 退出码枚举（总表归 Spec-工程基座；7–10 e2e 专用码段由 Spec-e2e 登记，#106 起用 9/10）：
 #   0 成功 | 2 用法错误 | 3 环境未就绪（含引擎不在矩阵、端点解析失败）
 #   4 任务失败 | 5 超时（健康等待/拉取） | 6 独占锁冲突
+#   9 毕业校验运行判定不符 | 10 缺陷不存在或 schema 不符（7/8 由 #116/#109 登记）
 #   20 授权不符 | 21 私钥/签名 | 22 token 换取失败 | 23 目标未授权（认证入口）
 # ============================================================================
 set -Eeuo pipefail
@@ -43,6 +44,8 @@ source "$REPO_ROOT/devenv/lib/ci.sh"
 source "$REPO_ROOT/devenv/lib/gen.sh"
 # shellcheck source=lib/e2e.sh
 source "$REPO_ROOT/devenv/lib/e2e.sh"
+# shellcheck source=lib/e2e-lifecycle.sh
+source "$REPO_ROOT/devenv/lib/e2e-lifecycle.sh"
 # shellcheck source=lib/github-app-auth.sh
 source "$REPO_ROOT/devenv/lib/github-app-auth.sh"
 
@@ -91,6 +94,11 @@ devenv — 工程基座唯一入口（命令面权威文档：devenv/COMMANDS.md
   e2e build                 构建 e2e 执行器镜像（官方 Playwright 基座 + 项目运行时；
                             与 npm 包严格同版本；探索/复现 run 会自动确保它存在）
   e2e runs                  运行登记册（run id / status / live / db/bucket/queue；只读）
+  e2e defect show <ID>      缺陷记录摘要 + 证据 URI（事实源 apps/e2e/defects/<ID>.json；未知 ID/非法记录 exit 10）
+  e2e defect list           缺陷清单（只读；--json 输出记录数组）
+  e2e defect next-id [--remote] [--remote-ref REF]
+                            DEF-NNNN 取号（本地 max+1；--remote 经 devenv gh 叠读远端已有编号，best-effort）
+  e2e registry rebuild      重建缺陷注册表（派生缓存，不入库；始终重建，漂移仅 WARN 不硬门禁）
   e2e logs --run-id ID [svc] [-f] [--tail N]
                             观察 per-run 容器日志（透传原始流；api|worker|web，默认 api）
   explore [--run-id ID]     探索轨道：共享基础设施 + 每 run 独立库/bucket/队列键空间；
@@ -106,9 +114,9 @@ GitHub App 认证入口（身份：GitHub App，非个人账号）：
   test:auth                 认证入口离线测试（不访问 GitHub）
   test:auth:integration     认证入口真实集成测试（默认只读；写操作需显式旗标）
   test:devenv               命令面离线测试（引擎解析/锁与栈使用租约/输出协议/快照与不可变绑定/per-worktree 隔离/
-                            供应链门禁/CI workflow 静态门禁/脚手架生成/e2e 隔离编排，mock docker）
+                            供应链门禁/CI workflow 静态门禁/脚手架生成/e2e 隔离编排/e2e 生命周期决策引擎，mock docker）
 
-退出码：0 成功 | 2 用法 | 3 环境未就绪 | 4 任务失败 | 5 超时 | 6 锁冲突 | 20–23 认证入口
+退出码：0 成功 | 2 用法 | 3 环境未就绪 | 4 任务失败 | 5 超时 | 6 锁冲突 | 9 毕业校验判定不符 | 10 缺陷不存在/schema 不符 | 20–23 认证入口
 EOF
 }
 
@@ -1058,7 +1066,7 @@ case "$CMD" in
   git-push)               gha_cmd_git_push "$@" ;;
   test:auth)              bash "$REPO_ROOT/devenv/test/offline.test.sh" ;;
   test:auth:integration)  bash "$REPO_ROOT/devenv/test/integration.test.sh" "$@" ;;
-  test:devenv)            bash "$REPO_ROOT/devenv/test/stack-offline.test.sh" && bash "$REPO_ROOT/devenv/test/snapshot-offline.test.sh" && bash "$REPO_ROOT/devenv/test/isolation-offline.test.sh" && bash "$REPO_ROOT/devenv/test/supply-chain-offline.test.sh" && bash "$REPO_ROOT/devenv/test/ci-offline.test.sh" && bash "$REPO_ROOT/devenv/test/gen-offline.test.sh" && bash "$REPO_ROOT/devenv/test/e2e-offline.test.sh" ;;
+  test:devenv)            bash "$REPO_ROOT/devenv/test/stack-offline.test.sh" && bash "$REPO_ROOT/devenv/test/snapshot-offline.test.sh" && bash "$REPO_ROOT/devenv/test/isolation-offline.test.sh" && bash "$REPO_ROOT/devenv/test/supply-chain-offline.test.sh" && bash "$REPO_ROOT/devenv/test/ci-offline.test.sh" && bash "$REPO_ROOT/devenv/test/gen-offline.test.sh" && bash "$REPO_ROOT/devenv/test/e2e-offline.test.sh" && bash "$REPO_ROOT/devenv/test/e2e-lifecycle-offline.test.sh" ;;
   help)                   usage; exit 0 ;;
   # 供应链静态门禁：不触引擎，可在任意平台/无引擎时执行
   supply-chain)           cmd_supply_chain "$@" ;;

@@ -108,6 +108,7 @@ e2e_compose() {
     E2E_PARALLEL_GROUP="${E2E_PARALLEL_GROUP:-}" \
     E2E_PARALLEL_SOAK_MS="${E2E_PARALLEL_SOAK_MS:-0}" \
     E2E_FORCE_FINDING="${E2E_FORCE_FINDING:-}" \
+    E2E_CHARTER_GAPS="${E2E_CHARTER_GAPS:-}" \
     docker compose -p "$E2E_PROJECT" -f "$E2E_COMPOSE_FILE" "$@"
 }
 
@@ -564,12 +565,15 @@ cmd_e2e_logs() { # 观察 per-run 容器日志（透传；JSON 时原始流走 s
 
 cmd_e2e() {
   local sub="${1:-}"
-  [[ -n "$sub" ]] || die 2 "用法：e2e <build|runs|logs> ..."
+  [[ -n "$sub" ]] || die 2 "用法：e2e <build|runs|logs|defect|registry> ..."
   shift
   case "$sub" in
     build) cmd_e2e_build "$@" ;;
     runs)  cmd_e2e_runs "$@" ;;
     logs)  cmd_e2e_logs "$@" ;;
-    *) die 2 "未知 e2e 子命令：${sub}（当前：build | runs | logs）" ;;
+    # 生命周期命令面（#106；决策引擎宿主桥在 lib/e2e-lifecycle.sh）
+    defect)   cmd_e2e_defect "$@" ;;
+    registry) cmd_e2e_registry "$@" ;;
+    *) die 2 "未知 e2e 子命令：${sub}（当前：build | runs | logs | defect | registry）" ;;
   esac
 }
