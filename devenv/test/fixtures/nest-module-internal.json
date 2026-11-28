@@ -1,0 +1,8 @@
+{
+  "description": "巡查统计（devenv gen nest-module --internal 示例）",
+  "fields": {
+    "code": { "type": "string", "minLength": 1 },
+    "weight": { "type": "number", "minimum": 0 },
+    "enabled": { "type": "boolean", "optional": true }
+  }
+}

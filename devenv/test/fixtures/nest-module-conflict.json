@@ -1,0 +1,7 @@
+{
+  "description": "反例：basePath 与既有契约路由 /health 冲突（OpenAPI 会出现重复 operation）",
+  "basePath": "/health",
+  "fields": {
+    "title": { "type": "string" }
+  }
+}

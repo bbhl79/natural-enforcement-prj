@@ -1,0 +1,6 @@
+{
+  "description": "反例：字段类型不在 string|integer|number|boolean 内（宿主浅校验放行，生成器容器内拒绝）",
+  "fields": {
+    "occurredAt": { "type": "date" }
+  }
+}

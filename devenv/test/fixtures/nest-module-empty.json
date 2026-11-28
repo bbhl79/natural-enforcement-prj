@@ -1,0 +1,4 @@
+{
+  "description": "反例：fields 为空（缺少必要业务信息，生成器必须停止）",
+  "fields": {}
+}
