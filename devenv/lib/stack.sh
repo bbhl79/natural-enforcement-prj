@@ -74,6 +74,44 @@ DB_CREDENTIALS_LOADED=0
 DB_CREDENTIALS_ORIGIN="none"
 DB_PASSWORD_EFFECTIVE=""
 
+# --- per-worktree 对象存储凭据（#69）------------------------------------------
+# rustfs 的 access/secret 每 worktree 随机生成并持久化（.devenv-state/storage-credentials.env，
+# 0600，gitignored）；与数据库口令同口径：凭据是 worktree 身份，down/up 周期稳定。
+STORAGE_CREDENTIALS_LOADED=0
+STORAGE_CREDENTIALS_ORIGIN="none"
+S3_ACCESS_KEY_EFFECTIVE=""
+S3_SECRET_KEY_EFFECTIVE=""
+
+storage_credentials_ensure() {
+  (( STORAGE_CREDENTIALS_LOADED )) && return 0
+  local f dir access secret
+  dir="${DEVENV_STATE_DIR:-$REPO_ROOT/.devenv-state}"
+  f="$dir/storage-credentials.env"
+  if [[ -f "$f" ]]; then
+    access="$(awk -F= '/^S3_ACCESS_KEY=/{print $2}' "$f" | tail -1)"
+    secret="$(awk -F= '/^S3_SECRET_KEY=/{print $2}' "$f" | tail -1)"
+    [[ "$access" =~ ^[a-z0-9]{16,32}$ && "$secret" =~ ^[0-9a-f]{32}$ ]] \
+      || die 3 "对象存储凭据文件损坏（S3_ACCESS_KEY 应为 16-32 位小写字母数字、S3_SECRET_KEY 为 32 hex）：${f}。修复：删除该文件后重跑（将生成新凭据；旧 rustfs 数据卷需 down --volumes 重建）"
+    S3_ACCESS_KEY_EFFECTIVE="$access"
+    S3_SECRET_KEY_EFFECTIVE="$secret"
+    STORAGE_CREDENTIALS_ORIGIN="stored"
+  else
+    access="ne$(openssl rand -hex 8 2>/dev/null)" || access=""
+    secret="$(openssl rand -hex 16 2>/dev/null)" || secret=""
+    [[ "$access" =~ ^[a-z0-9]{16,32}$ && "$secret" =~ ^[0-9a-f]{32}$ ]] \
+      || die 3 "对象存储凭据生成失败（openssl rand）。修复：确认 openssl 在 PATH"
+    mkdir -p "$dir" || die 3 "状态目录不可写：$dir"
+    ( umask 077
+      printf '# devenv 对象存储凭据（devenv 维护，勿手改；每 worktree 随机生成，随状态保留）\nS3_ACCESS_KEY=%s\nS3_SECRET_KEY=%s\n' \
+        "$access" "$secret" > "$f" ) || die 3 "凭据文件写入失败：$dir"
+    S3_ACCESS_KEY_EFFECTIVE="$access"
+    S3_SECRET_KEY_EFFECTIVE="$secret"
+    STORAGE_CREDENTIALS_ORIGIN="generated"
+  fi
+  STORAGE_CREDENTIALS_LOADED=1
+  return 0
+}
+
 db_credentials_ensure() {
   (( DB_CREDENTIALS_LOADED )) && return 0
   local f dir pw
@@ -139,6 +177,17 @@ images_load() {
     || die 3 "DB_IMAGE_MACOS 必须是 repo:tag@sha256:<64hex>：${DB_IMAGE_MACOS}"
   [[ "${DB_IMAGE_MACOS_KIND:-}" == "manifest-list" ]] \
     || die 3 "DB_IMAGE_MACOS_KIND 必须为 manifest-list（kartoza multiarch）"
+  # 队列/对象存储（#69）：多架构镜像锁 manifest-list digest
+  [[ -n "${REDIS_IMAGE:-}" ]] || die 3 "images.lock 缺 REDIS_IMAGE 行"
+  images_valid_ref "$REDIS_IMAGE" \
+    || die 3 "REDIS_IMAGE 必须是 repo:tag@sha256:<64hex>：${REDIS_IMAGE}"
+  [[ "${REDIS_IMAGE_KIND:-}" == "manifest-list" ]] \
+    || die 3 "images.lock 缺 REDIS_IMAGE_KIND=manifest-list（多架构镜像锁 manifest-list digest）"
+  [[ -n "${RUSTFS_IMAGE:-}" ]] || die 3 "images.lock 缺 RUSTFS_IMAGE 行"
+  images_valid_ref "$RUSTFS_IMAGE" \
+    || die 3 "RUSTFS_IMAGE 必须是 repo:tag@sha256:<64hex>：${RUSTFS_IMAGE}"
+  [[ "${RUSTFS_IMAGE_KIND:-}" == "manifest-list" ]] \
+    || die 3 "images.lock 缺 RUSTFS_IMAGE_KIND=manifest-list（多架构镜像锁 manifest-list digest）"
   if [[ -n "${DEVENV_DB_IMAGE:-}" ]]; then
     # 可配置输入校验：repo:tag 或 repo:tag@sha256:<64hex>（拒绝裸 latest 以外的无标签引用）
     if [[ ! "$DEVENV_DB_IMAGE" =~ ^[a-z0-9]+([._/-][a-z0-9]+)*:[A-Za-z0-9._-]+(@sha256:[0-9a-f]{64})?$ ]]; then
@@ -170,6 +219,8 @@ compose() {
   # 每 worktree 数据库凭据（#59）：生成/加载后注入 compose（db POSTGRES_PASSWORD +
   # api/tools DATABASE_URL 同源）；首次生成写入 .devenv-state（per-worktree 私有）
   db_credentials_ensure
+  # 每 worktree 对象存储凭据（#69）：rustfs 服务端与 api/worker/tools 客户端同源注入
+  storage_credentials_ensure
   # 不可变绑定（#58）：优先本次核对/构建的 image ID；未跑过新鲜度核对的命令
   # （down/ps/logs 等）回退状态文件记录；均无才兜底可变 tag（仅只读/拆栈场景）。
   local ws_image="$WS_IMAGE_EFFECTIVE"
@@ -178,7 +229,9 @@ compose() {
     ws_image="${STATE_IMAGE_ID:-$WS_IMAGE}"
   fi
   REPO_ROOT="$REPO_ROOT" WORKSPACE_IMAGE="$ws_image" DB_IMAGE="$DB_IMAGE_EFFECTIVE" \
+    REDIS_IMAGE="$REDIS_IMAGE" RUSTFS_IMAGE="$RUSTFS_IMAGE" \
     DB_PASSWORD="$DB_PASSWORD_EFFECTIVE" \
+    S3_ACCESS_KEY="$S3_ACCESS_KEY_EFFECTIVE" S3_SECRET_KEY="$S3_SECRET_KEY_EFFECTIVE" \
     WEB_PORT_SPEC="${WEB_PORT_SPEC:-4173}" \
     docker compose -p "$PROJECT_NAME" -f "$COMPOSE_FILE" "$@"
 }

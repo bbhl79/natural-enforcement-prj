@@ -1,7 +1,12 @@
 // 契约消费侧校验：web 工具链下用 @ne/contracts 的 zod schema 解析 api 真实响应形状
 // （RTK Query transformResponse 同款调用路径——传输层失配在此先行暴露，无需起容器）。
 import { describe, expect, it } from 'vitest'
-import { CreateEnforcementPointResultSchema, HealthResultSchema, NearbyResultSchema } from '@ne/contracts'
+import {
+  CreateEnforcementPointResultSchema,
+  EvidenceRecordDtoSchema,
+  HealthResultSchema,
+  NearbyResultSchema,
+} from '@ne/contracts'
 
 // 广州市域响应夹具
 const NEARBY_SAMPLE = {
@@ -31,5 +36,26 @@ describe('契约 schema 在 web 侧解析', () => {
   it('契约外字段/形状失配立即失败（fail fast）', () => {
     expect(() => NearbyResultSchema.parse({ ...NEARBY_SAMPLE, points: [{ id: 'x' }] })).toThrow()
     expect(() => CreateEnforcementPointResultSchema.parse({ id: 'x' })).toThrow()
+  })
+
+  it('EvidenceRecordDtoSchema 解析处理状态响应，且拒绝内部存储字段', () => {
+    const id = '0b6c1f60-1f1e-4c55-9a70-1b8e3a7e9d21'
+    const dto = {
+      id,
+      pointId: null,
+      originalName: '广州市执法证据（2026）.jpg',
+      contentType: 'application/octet-stream',
+      bytes: 262144,
+      sha256: 'a'.repeat(64),
+      status: 'ready',
+      error: null,
+      createdAt: '2026-11-28T00:00:00.000Z',
+      contentPath: `/evidence/${id}/content`,
+    }
+    expect(EvidenceRecordDtoSchema.parse(dto)).toEqual(dto)
+    expect(EvidenceRecordDtoSchema.safeParse({ ...dto, bucket: 'internal' }).success).toBe(false)
+    expect(
+      EvidenceRecordDtoSchema.safeParse({ ...dto, contentPath: 'http://rustfs:9000/x' }).success,
+    ).toBe(false)
   })
 })

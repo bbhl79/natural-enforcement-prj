@@ -7,6 +7,8 @@
   "scripts": {
     "build": "prisma generate && tsc -p tsconfig.build.json",
     "start": "node dist/main.js",
+    "worker": "node dist/worker.js",
+    "worker-health": "node dist/scripts/worker-health.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run src",
@@ -14,6 +16,8 @@
     "openapi": "node dist/scripts/emit-openapi.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "catalog:",
+    "@aws-sdk/s3-request-presigner": "catalog:",
     "@ne/contracts": "workspace:*",
     "@nestjs/common": "catalog:",
     "@nestjs/core": "catalog:",
@@ -21,6 +25,8 @@
     "@nestjs/swagger": "catalog:",
     "@prisma/adapter-pg": "catalog:",
     "@prisma/client": "catalog:",
+    "bullmq": "catalog:",
+    "ioredis": "catalog:",
     "reflect-metadata": "catalog:",
     "rxjs": "catalog:",
     "zod": "catalog:"

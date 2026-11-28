@@ -1,4 +1,5 @@
 export * from './api-contract.js'
 export * from './api-registry.js'
 export * from './enforcement-point.js'
+export * from './evidence.js'
 export * from './http-errors.js'

@@ -78,7 +78,7 @@ devenv — 工程基座唯一入口（命令面权威文档：devenv/COMMANDS.md
   migrate                   应用全部 pending 迁移到 dev 库（prisma migrate deploy）
   migrate:create --name N   生成空迁移待编辑（prisma migrate dev --create-only）
   seed                      幂等种子数据（运行期持共享栈租约）
-  wait <svc> [--timeout N]  等待服务健康终态（默认 60s）
+  wait <svc> [--timeout N]  等待服务健康终态（db|redis|rustfs|api|worker|web；默认 60s）
   status                    人读总览（容器+锁+租约+镜像）
   images [--verify]         查看镜像锁与生效 DB 镜像（含覆盖来源）/ 校验运行态 digest 漂移
   supply-chain [--container] 供应链门禁：catalog/allowBuilds/冷却期/锁文件漂移静态核对；
@@ -139,7 +139,8 @@ cmd_doctor() {
     chk compose-plugin fail "引擎不可用，无法校验 compose"
   fi
 
-  if [[ -f "$IMAGES_LOCK" ]] && grep -q '^NODE_IMAGE=' "$IMAGES_LOCK" && grep -q '^DB_IMAGE=' "$IMAGES_LOCK"; then
+  if [[ -f "$IMAGES_LOCK" ]] && grep -q '^NODE_IMAGE=' "$IMAGES_LOCK" && grep -q '^DB_IMAGE=' "$IMAGES_LOCK" \
+      && grep -q '^REDIS_IMAGE=' "$IMAGES_LOCK" && grep -q '^RUSTFS_IMAGE=' "$IMAGES_LOCK"; then
     chk images-lock ok "$IMAGES_LOCK"
     # images_load 内含 die（锁格式/覆盖格式错误）——子shell 软化为体检项
     local db_info
@@ -149,7 +150,7 @@ cmd_doctor() {
       chk db-image fail "$db_info"
     fi
   else
-    chk images-lock fail "devenv/images.lock 缺失或缺 NODE_IMAGE/DB_IMAGE 行"
+    chk images-lock fail "devenv/images.lock 缺失或缺 NODE_IMAGE/DB_IMAGE/REDIS_IMAGE/RUSTFS_IMAGE 行"
     chk db-image fail "镜像锁不可用"
   fi
 
@@ -169,6 +170,12 @@ cmd_doctor() {
     chk db-credentials ok "每 worktree 随机口令已生成（${db_cred_f}）"
   else
     chk db-credentials ok "未生成（任一 compose 调用命令——含只读 ps/logs/down——首次执行时生成每 worktree 随机口令并持久化）"
+  fi
+  local storage_cred_f="${DEVENV_STATE_DIR:-$REPO_ROOT/.devenv-state}/storage-credentials.env"
+  if [[ -f "$storage_cred_f" ]]; then
+    chk storage-credentials ok "每 worktree 随机对象存储凭据已生成（${storage_cred_f}）"
+  else
+    chk storage-credentials ok "未生成（任一 compose 调用命令首次执行时生成每 worktree 随机对象存储凭据并持久化）"
   fi
 
   # 镜像/服务为信息项（冷启动流程 clone → doctor → prefetch → build：doctor 时未构建不判失败）
@@ -198,7 +205,7 @@ cmd_doctor() {
       chk snapshot-state ok "快照 ${STATE_SNAPSHOT_HASH:0:12}… ↔ $ws_st / $tools_st"
     fi
     local s
-    for s in db api; do
+    for s in db redis rustfs api worker; do
       if svc_healthy "$s"; then chk "svc:$s" ok healthy;
       elif svc_running "$s"; then chk "svc:$s" warn "运行中但未健康";
       else chk "svc:$s" warn "未运行（启动命令：devenv up）"; fi
@@ -231,7 +238,7 @@ cmd_prefetch() {
   # 等待，超时 exit 6（重跑续跑）。栈使用租约只协调 per-worktree 栈，不加在此。
   lock_acquire prefetch 300
   local img rc
-  for img in "$NODE_IMAGE" "$DB_IMAGE_EFFECTIVE"; do
+  for img in "$NODE_IMAGE" "$DB_IMAGE_EFFECTIVE" "$REDIS_IMAGE" "$RUSTFS_IMAGE"; do
     ev pull.started image="$img" timeout="$timeout_s"
     note "prefetch：拉取 ${img}（超时 ${timeout_s}s，可中断续跑——重复执行即可）"
     rc=0
@@ -245,8 +252,8 @@ cmd_prefetch() {
     fi
     ev pull.completed image="$img"
   done
-  note "prefetch 完成（2 个上游镜像就绪）"
-  final ok 0 images="node,db"
+  note "prefetch 完成（4 个上游镜像就绪）"
+  final ok 0 images="node,db,redis,rustfs"
 }
 
 cmd_build() {
@@ -331,23 +338,34 @@ regen_lockfile() { # $1=快照物化目录；lockgen 靶生成 lockfile 后 dock
 cmd_up() {
   lock_acquire "stack-$WT_SUFFIX" 60
   ensure_fresh_workspace
-  # 顺序：db 健康 → 迁移幂等应用（fresh clone 的 SPEC 冷启动流无独立 migrate 步，
-  # up 必须交付"真实健康终态"= 可用 schema）→ api 启动（不服务于无 schema 窗口期）
-  run_step "db 启动" compose up -d db
+  # 顺序：基础设施健康（db/redis/rustfs）→ 迁移幂等应用（fresh clone 的 SPEC 冷启动流
+  # 无独立 migrate 步，up 必须交付"真实健康终态"= 可用 schema）→ api/worker 启动
+  # （不服务于无 schema 窗口期；worker 依赖同源队列与对象存储）
+  run_step "基础设施启动（db/redis/rustfs）" compose up -d db redis rustfs
   ev wait.started service="db"
   wait_healthy db 180
   ev wait.ok service="db"
+  ev wait.started service="redis"
+  wait_healthy redis 60
+  ev wait.ok service="redis"
+  ev wait.started service="rustfs"
+  wait_healthy rustfs 120
+  ev wait.ok service="rustfs"
   ev step.started target="migrate deploy"
   run_step "迁移应用（prisma migrate deploy）" \
     in_tools pnpm --filter @ne/api exec prisma migrate deploy
   ev step.completed target="migrate deploy"
-  run_step "api 启动" compose up -d api
+  run_step "api/worker 启动" compose up -d api worker
   ev wait.started service="api"
   wait_healthy api 120
   ev wait.ok service="api"
   verify_svc_image api  # 启动核对：运行容器 == 本次构建的不可变镜像标识（#58）
-  note "全部服务健康（db, api），迁移已应用"
-  final ok 0 services="db,api"
+  ev wait.started service="worker"
+  wait_healthy worker 120
+  ev wait.ok service="worker"
+  verify_svc_image worker  # worker 与 api 同镜像，同样不可变绑定
+  note "全部服务健康（db, redis, rustfs, api, worker），迁移已应用"
+  final ok 0 services="db,redis,rustfs,api,worker"
 }
 
 cmd_down() {
@@ -442,7 +460,9 @@ run_gate() {
 cmd_test() {
   lease_acquire "stack-$WT_SUFFIX" 120  # 栈使用租约（#61）：测试运行期与拆栈/迁移/重启互斥
   ensure_fresh_workspace
-  require_services db
+  # #69：证据集成测试连真实 PostGIS + Redis + rustfs（worker 由测试进程内的独立
+  # Nest 上下文启动，使用随机队列名避免与运行中的 compose worker 竞争）。
+  require_services db redis rustfs
   if (( $# )); then
     run_task pnpm --filter @ne/api exec vitest run "$@"
   else
@@ -795,7 +815,7 @@ cmd_web() {
 }
 
 cmd_wait() {
-  local svc="${1:?用法：wait <db|api|web> [--timeout N]}"; shift || true
+  local svc="${1:?用法：wait <db|redis|rustfs|api|worker|web> [--timeout N]}"; shift || true
   local timeout=60
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -803,7 +823,7 @@ cmd_wait() {
       *) die 2 "未知参数：$1";;
     esac
   done
-  case "$svc" in db|api|web) ;; *) die 2 "未知服务：${svc}（可选：db|api|web）";; esac
+  case "$svc" in db|redis|rustfs|api|worker|web) ;; *) die 2 "未知服务：${svc}（可选：db|redis|rustfs|api|worker|web）";; esac
   wait_healthy "$svc" "$timeout"
   final ok 0 service="$svc"
 }
@@ -817,6 +837,8 @@ cmd_status() {
     # 凭据只读报告（status 不生成状态）：存在=stored，否则 none（首次 compose 调用生成）
     local cred_origin="none"
     [[ -f "${DEVENV_STATE_DIR:-$REPO_ROOT/.devenv-state}/db-credentials.env" ]] && cred_origin="stored"
+    local storage_cred_origin="none"
+    [[ -f "${DEVENV_STATE_DIR:-$REPO_ROOT/.devenv-state}/storage-credentials.env" ]] && storage_cred_origin="stored"
     # 租约只读报告（#61）：stale 仅标注，不清理（status 是只读命令）
     local leases="none"
     leases="$(lease_report_all | tr '\n' ';' | sed 's/;$//')"
@@ -827,10 +849,12 @@ cmd_status() {
     [[ -n "$web_port" ]] && web_url="http://localhost:$web_port" || web_port="none"
     final ok 0 project="$PROJECT_NAME" worktree_suffix="$WT_SUFFIX" worktree_source="$WT_IDENTITY_SOURCE" \
       db_credentials="$cred_origin" \
+      storage_credentials="$storage_cred_origin" \
       locks="$(ls -1 "$LOCK_ROOT" 2>/dev/null | grep '\.lock$' | paste -sd, - || true)" \
       leases="$leases" \
       web_port="$web_port" web_url="$web_url" \
       node_image="$NODE_IMAGE" db_image="$DB_IMAGE_EFFECTIVE" db_image_source="$DB_IMAGE_SOURCE" \
+      redis_image="$REDIS_IMAGE" rustfs_image="$RUSTFS_IMAGE" \
       snapshot_hash="${STATE_SNAPSHOT_HASH:-none}" workspace_image_id="${STATE_IMAGE_ID:-none}" \
       tools_image_id="${STATE_TOOLS_IMAGE_ID:-none}"
     return 0

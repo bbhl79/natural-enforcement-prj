@@ -11,15 +11,19 @@ import {
 import {
   CreateEnforcementPointResultSchema,
   ENFORCEMENT_POINT_ROUTES,
+  EvidenceRecordDtoSchema,
+  evidenceRecordPath,
   HEALTH_ROUTES,
   HealthResultSchema,
   NearbyResultSchema,
   type CreateEnforcementPointDto,
   type CreateEnforcementPointResult,
+  type EvidenceRecordDto,
   type HealthResult,
   type NearbyQueryDto,
   type NearbyResult,
 } from '@ne/contracts'
+import { buildEvidenceUploadRequest, type EvidenceUploadInput } from './lib/evidence.js'
 import { validated } from './lib/validate.js'
 
 // 运行时同源基准：浏览器走当前源（经 vite preview proxy → http://api:3000）；
@@ -52,7 +56,7 @@ const dynamicBaseQuery: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQueryE
 export const neApi = createApi({
   reducerPath: 'neApi',
   baseQuery: dynamicBaseQuery,
-  tagTypes: ['Points'],
+  tagTypes: ['Points', 'Evidence'],
   endpoints: (b) => ({
     health: b.query<HealthResult, void>({
       query: () => HEALTH_ROUTES.base,
@@ -70,7 +74,27 @@ export const neApi = createApi({
       transformResponse: validated(CreateEnforcementPointResultSchema),
       invalidatesTags: ['Points'], // 建点后 nearby 自动重查（PostGIS 实时可见）
     }),
+
+    // 同源证据上传（原始字节 → 后台 worker 处理）；文件名经契约 helper 编码
+    uploadEvidence: b.mutation<EvidenceRecordDto, EvidenceUploadInput>({
+      query: (input) => buildEvidenceUploadRequest(input),
+      transformResponse: validated(EvidenceRecordDtoSchema),
+      invalidatesTags: ['Evidence'],
+    }),
+
+    // 同源读取处理状态（pending → ready/failed）；浏览器不接触内部存储地址
+    getEvidence: b.query<EvidenceRecordDto, string>({
+      query: (id) => evidenceRecordPath(id),
+      transformResponse: validated(EvidenceRecordDtoSchema),
+      providesTags: ['Evidence'],
+    }),
   }),
 })
 
-export const { useHealthQuery, useNearbyQuery, useCreatePointMutation } = neApi
+export const {
+  useHealthQuery,
+  useNearbyQuery,
+  useCreatePointMutation,
+  useUploadEvidenceMutation,
+  useGetEvidenceQuery,
+} = neApi

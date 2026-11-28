@@ -1,4 +1,5 @@
-# compose 拓扑（#56 最小空间数据开发栈 + #59 per-worktree 隔离）：db + api + tools + web。
+# compose 拓扑（#56 最小空间数据开发栈 + #59 per-worktree 隔离 + #69 文件证据）：
+# db + redis + rustfs + api + worker + tools + web。
 # 人类/agent 禁止直接操作本文件对应的 compose 命令（硬不变量 2：devenv 唯一入口）。
 # 镜像引用一律经变量注入，事实源：devenv/images.lock（tag+digest 双层锁）；
 # DB 镜像经 devenv 注入生效值（DEVENV_DB_IMAGE 可覆盖，见 COMMANDS.md）。
@@ -21,10 +22,50 @@ x-app-base: &app-base
     # 口令经 devenv 注入（每 worktree 随机，.devenv-state/db-credentials.env 持久化）；
     # 32 hex 口令 URI 安全，无需转义
     DATABASE_URL: postgresql://ne:${DB_PASSWORD:?devenv 需注入 DB_PASSWORD（devenv 自动生成每 worktree 随机值）}@db:5432/natural_enforcement_dev
+    # 队列与对象存储（#69）：Redis 仅容器内网；对象存储凭据每 worktree 随机
+    # （.devenv-state/storage-credentials.env），不发布宿主端口。
+    REDIS_URL: redis://redis:6379
+    S3_ENDPOINT: http://rustfs:9000
+    S3_REGION: us-east-1
+    S3_ACCESS_KEY: ${S3_ACCESS_KEY:?devenv 需注入 S3_ACCESS_KEY（每 worktree 随机，devenv 自动生成）}
+    S3_SECRET_KEY: ${S3_SECRET_KEY:?devenv 需注入 S3_SECRET_KEY（每 worktree 随机，devenv 自动生成）}
+    S3_BUCKET: ne-dev-evidence
+    EVIDENCE_QUEUE_NAME: evidence-processing
   volumes:
     - turbo-cache:/workspace/.turbo
 
 services:
+  redis:
+    image: ${REDIS_IMAGE:?images.lock 未加载（devenv 会自动注入生效值）}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+    restart: unless-stopped
+
+  # rustfs 单节点对象存储（#2 调研采纳；仅容器内网，数据卷 per-worktree 独立）
+  rustfs:
+    image: ${RUSTFS_IMAGE:?images.lock 未加载（devenv 会自动注入生效值）}
+    command: ["/data"]
+    environment:
+      RUSTFS_ACCESS_KEY: ${S3_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${S3_SECRET_KEY}
+      RUSTFS_ADDRESS: ":9000"
+      RUSTFS_CONSOLE_ADDRESS: ":9001"
+      RUSTFS_CONSOLE_ENABLE: "false"
+    volumes:
+      - rustfs-data:/data
+    mem_limit: 1g   # 单节点内存增长 issue #9145 的缓解（调研报告 R2）
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/health || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+    restart: unless-stopped
+
   db:
     image: ${DB_IMAGE:?images.lock 未加载（devenv 会自动注入生效值）}
     environment:
@@ -51,8 +92,32 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+      rustfs:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+
+  # 后台证据 worker（#69）：独立进程消费队列，回写 pending→ready/failed；
+  # 健康检查读 Redis 心跳（证明已进入消费循环），不发布端口。
+  worker:
+    <<: *app-base
+    command: ["pnpm", "--filter", "@ne/api", "run", "worker"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rustfs:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "apps/api/dist/scripts/worker-health.js"]
       interval: 5s
       timeout: 3s
       retries: 30
@@ -80,6 +145,8 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      worker:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://localhost:4173/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 5s
@@ -90,4 +157,5 @@ services:
 
 volumes:
   pgdata:
+  rustfs-data:
   turbo-cache:

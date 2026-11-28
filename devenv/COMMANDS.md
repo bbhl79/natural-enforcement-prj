@@ -17,7 +17,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 一键体检（端点/引擎/矩阵/锁文件/worktree 身份与凭据状态/供应链门禁/镜像/快照状态/服务；退出码=可开工与否） | `devenv doctor` | 0 或 3 |
 | 预取镜像锁中的上游镜像（分阶段、有进度/超时、可中断续跑；机器级拉取锁） | `devenv prefetch` | 0 或 3/4/5/6 |
 | 固定快照构建工具镜像 + 安装依赖 + turbo build（幂等；构建前跑供应链静态门禁；记录快照哈希与不可变镜像标识） | `devenv build [--lockgen]` | 0 或 3/4/6 |
-| 启动 db → 迁移幂等应用 → api，等待真实健康终态（幂等） | `devenv up` | 0 或 3/4/5/6 |
+| 启动 db/redis/rustfs → 迁移幂等应用 → api/worker，等待真实健康终态（幂等） | `devenv up` | 0 或 3/4/5/6 |
 | 停止（连带清掉不在 compose 文件中的本项目容器；--volumes 再清数据卷；仅本 worktree 项目范围；不含 profile 隔离的 web——用 `web --down`） | `devenv down [--volumes]` | 0 或 3/6 |
 | 重启 | `devenv restart [svc...]` | 0 或 3/6 |
 | 启动前端并发布宿主端口（零端口不变量的唯一例外；省略 --port 由引擎运行时分配空闲端口并回读实际端口进终值/status，--port N 显式固定发布；up 与 --down 路径均持栈排他锁） | `devenv web [--port N] [--down]` | 0 或 2/3/4/5/6 |
@@ -25,7 +25,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 跟随日志（透传原始流） | `devenv logs [svc] [-f] [--tail N]` | 0 或 3 或子进程码 |
 | 容器内执行（默认 tools；透传原始流） | `devenv exec [svc] -- cmd...` | 0 或 2/3 或子进程码 |
 | 交互 shell（默认 tools；透传原始流） | `devenv shell [svc]` | 0 或 3 或子进程码 |
-| 单元+集成测试（需先 up；连真实 PostGIS；运行期持共享栈使用租约） | `devenv test [pattern...]` | 0 或 3/4/6 |
+| 单元+集成测试（需先 up；连真实 PostGIS/Redis/rustfs；worker 由测试进程内独立上下文启动；运行期持共享栈使用租约） | `devenv test [pattern...]` | 0 或 3/4/6 |
 | 仅单元测试（零数据库基础设施；仍使用 tools 容器/项目网络，运行期持共享栈使用租约） | `devenv test:unit` | 0 或 3/4/6 |
 | ESLint（运行期持共享栈使用租约） | `devenv lint` | 0 或 3/4/6 |
 | tsc --noEmit（运行期持共享栈使用租约） | `devenv typecheck` | 0 或 3/4/6 |
@@ -35,7 +35,7 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 | 应用全部 pending 迁移（prisma migrate deploy；与活跃租约互斥） | `devenv migrate` | 0 或 3/4/6 |
 | 生成空迁移待编辑（prisma migrate dev --create-only；与活跃租约互斥） | `devenv migrate:create --name N` | 0 或 2/3/4/6 |
 | 幂等种子数据（运行期持共享栈使用租约） | `devenv seed` | 0 或 3/4/6 |
-| 等待服务健康终态（默认 60s） | `devenv wait <db\|api\|web> [--timeout N]` | 0 或 2/3/5 |
+| 等待服务健康终态（默认 60s） | `devenv wait <db\|redis\|rustfs\|api\|worker\|web> [--timeout N]` | 0 或 2/3/5 |
 | 人读/机读总览（容器+锁+租约+镜像+web 实际端口；web 未运行如实报 none） | `devenv status` | 0 或 3 |
 | 查看镜像锁与生效 DB 镜像 / 校验运行态 digest 漂移 | `devenv images [--verify]` | 0 或 1/2/3 |
 | 供应链门禁：catalog 精确 pin / allowBuilds 版本化 / 冷却期 / 锁文件漂移 / 镜像锁类型静态核对；`--container` 追加核对待审批构建脚本与包内 agent skills（默认拒绝） | `devenv supply-chain [--container]` | 0 或 2/3/4/6 |
@@ -123,15 +123,15 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
 ## 镜像引用与可配置 DB 镜像
 
 - `devenv/images.lock` 是上游镜像 **tag + digest 双层锁**的唯一事实源
-  （`NODE_IMAGE` / `DB_IMAGE` / `DB_IMAGE_MACOS`）；升级只改锁文件，一律走 PR + 验证。
+  （`NODE_IMAGE` / `DB_IMAGE` / `DB_IMAGE_MACOS` / `REDIS_IMAGE` / `RUSTFS_IMAGE`）；升级只改锁文件，一律走 PR + 验证。
 - **digest 类型必须与镜像形态一致**（#63）：
   - 多架构镜像锁 **manifest-list digest**（跨架构成立）→ `*_KIND=manifest-list`；
   - 单架构镜像锁**该平台 digest** → `*_KIND=single-arch` 且声明
     `*_PLATFORM=<os>/<arch>`（如 `linux/amd64`）。
   - 官方 `postgis/postgis` 仅 amd64，故 `DB_IMAGE_KIND=single-arch`、
     `DB_IMAGE_PLATFORM=linux/amd64`；锁值取 registry index 中该平台的 **manifest
-    digest**（`sha256:530b81…`），不是 index 自身的 digest。`NODE_IMAGE` 与
-    `DB_IMAGE_MACOS` 为 manifest-list。
+    digest**（`sha256:530b81…`），不是 index 自身的 digest。`NODE_IMAGE`、
+    `DB_IMAGE_MACOS`、`REDIS_IMAGE`、`RUSTFS_IMAGE` 为 manifest-list。
   - 静态门禁拒绝缺 digest、缺 kind/platform、字段格式非法的锁文件；镜像实际形态
     （index vs 平台 manifest）需在登记时经 registry/`docker pull` 核对，静态检查
     不联网。
@@ -389,15 +389,17 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
   监听者经 TCP 探测区分），exit 3 且错误含服务/端口/占用者/内嵌修复命令。
   实际端口一律经 `docker port` 回读（不预测），进 `--json` 终值与 `status`
   （`web_port`/`web_url`，按本 worktree 项目标签过滤；未运行如实报 none）。
-- **对象存储凭据（前置声明）**：#56 最小栈暂无 rustfs/对象存储服务，"数据库/对象存储
-  凭据独立"中对象存储半条当前为空集；服务回归时必须复刻 db_credentials_ensure
-  模式（每 worktree 生成 + .devenv-state 持久化 + compose 同源注入），归该服务
-  的实施票并与 #75 回收核对衔接。
+- **对象存储凭据 per-worktree（#69 已落地）**：`openssl rand` 生成 S3 access key
+  （16-32 位小写字母数字）与 secret（32 hex），持久化
+  `.devenv-state/storage-credentials.env`（0600，gitignored，per-worktree 私有）；
+  rustfs `RUSTFS_ACCESS_KEY/SECRET_KEY` 与 api/worker/tools 的 `S3_ACCESS_KEY/SECRET_KEY`
+  同源注入。凭据文件损坏（格式不符）→ exit 3 并内嵌修复命令；凭据随 worktree 状态
+  保留，换凭据需 `down --volumes` 重建 rustfs 数据卷。
 
 ## 架构不变量（Spec-工程基座 硬不变量，本命令面执行）
 
 - **无 bind 烘焙镜像**：源码经 `devenv/workspace.Dockerfile` COPY 进镜像；compose
-  只挂命名卷（pgdata、turbo-cache）；零宿主端口（web 唯一显式例外，profile 隔离
+  只挂命名卷（pgdata、rustfs-data、turbo-cache）；零宿主端口（web 唯一显式例外，profile 隔离
   opt-in，端口默认引擎运行时分配、实际端口回读入 status——#62）。调试访问一律经
   `devenv exec/shell/logs`，不开放调试端口（API/数据库等调试同此入口）。
 - **宿主工具链零安装**：node/pnpm/prisma 只在容器内执行；源码消费型命令
@@ -449,3 +451,49 @@ socket 与 `/var/run/docker.sock` 时按歧义失败，须显式设置
 - **诚实口径**：本机制检查来源一致性、减少运行旧代码，**不声称完整构建证明**；
   锁与栈使用租约已落地（见「并发语义」节，Windows 证据摘要见 Issue #61），
   per-worktree 隔离已落地（见「per-worktree 运行资源隔离」节）。
+
+## 同源文件证据往返（#69）
+
+**服务拓扑**：`devenv up` 额外启动 `redis`（队列）与 `rustfs`（对象存储，单节点、
+`mem_limit: 1g`、仅容器内网），迁移后启动 `api` 与独立 `worker` 进程；`worker` 的
+compose 健康检查读 Redis 心跳（证明已进入消费循环），不发布任何宿主端口。
+`web` 的 preview proxy 仍由 `@ne/contracts` 的端点清单派生，因此 `/evidence*` 自动
+同源代理到 `api:3000`。
+
+**凭据与隔离**：rustfs 的 `S3_ACCESS_KEY` / `S3_SECRET_KEY` 每 worktree 随机生成，
+持久化 `.devenv-state/storage-credentials.env`（0600，gitignored）；与数据库口令同口径
+（凭据随 worktree 状态保留，换凭据需 `down --volumes` 重建数据卷）。对象数据卷
+`rustfs-data` per-worktree 独立。
+
+**HTTP 契约（`@ne/contracts` → OpenAPI，#66 完整性门禁）**：
+
+| 端点 | 请求 | 响应 |
+|---|---|---|
+| `POST /evidence` | `application/octet-stream` 原始字节；`x-original-name: encodeURIComponent(name)`（必需）；`x-point-id` 正整数（可选） | 201 `EvidenceRecordDto`（pending）；400/413/415/503 |
+| `GET /evidence/:id` | 路径参数 `id` | 200 `EvidenceRecordDto`；404 |
+| `GET /evidence/:id/content` | 路径参数 `id` | 200 `application/octet-stream`（同源字节，`Content-Disposition` RFC 5987）；404/503 |
+
+- 上传上限 10 MiB（`MAX_EVIDENCE_BYTES`；body parser 上限 +1 字节用于应用层返回契约
+  声明的 413）。文件名解码失败、wire 超长（>4096）、解码后超 200 码点、路径分隔符/
+  穿越名、控制字符/双向控制符/纯空白一律 400；**文件名只作展示元数据，对象键只由
+  服务端生成的记录 id 构成**（`evidence/<id>`）。
+- 浏览器响应（上传/记录/下载）不含 bucket、对象键、presigned URL 或内部存储地址；
+  记录 DTO 只给同源相对路径 `contentPath`。presigned GET 仅服务间使用：worker
+  经 presigned GET 读取对象并回写 sha256/字节数，失败的浏览器可见文案固定且不含
+  内部地址（完整异常只进服务端日志）。
+- 后台处理：`POST /evidence` 建 pending 记录并投递 BullMQ；worker 回写
+  `ready`（sha256/bytes）。**重试期间状态保持 `pending`**（前端继续轮询），
+  仅 BullMQ 最后一次尝试失败才写 `failed`——避免“首次失败、重试成功”造成
+  `failed → ready` 而 UI 停在 failed。队列名可用 `EVIDENCE_QUEUE_NAME` 注入
+  （#70 每 run 键空间的前置能力）。
+
+**证据与验证入口**：
+
+- `devenv test`：`apps/api/test/evidence.spec.ts` 连真实 PostGIS + Redis + rustfs，
+  覆盖 unicode/emoji、恶意/解码失败/长度、同源上传下载字节一致、服务间 presigned
+  与浏览器响应不泄漏内部地址；worker 以测试进程内独立 Nest 上下文启动并使用随机
+  队列名，测试自清理记录/对象/点位。
+- `devenv/test/evidence-ui-smoke.sh`（需先 `devenv up` + `devenv web`）：在 tools
+  容器内以 `EVIDENCE_UI_BASE_URL=http://web:4173` 渲染真实 `EvidencePanel`，经
+  preview proxy 完成 选择 unicode 文件 → 上传 → worker ready → 同源下载字节一致 →
+  UI 展示；结束按记录 id 自清理。
