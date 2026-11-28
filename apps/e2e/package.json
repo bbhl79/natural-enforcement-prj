@@ -3,18 +3,22 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "e2e 执行器（#70）：Playwright runner，黑盒经 API/UI 验证每 run 数据隔离与服务绑定；生命周期命令面归 Spec-e2e 后续票",
+  "description": "e2e 执行器（#70）+ 生命周期决策引擎（#106）：Playwright runner 黑盒经 API/UI 验证每 run 数据隔离与服务绑定；纯决策 CLI 经 op 行协议输出写盘意图，由 devenv 宿主侧原子应用",
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:unit": "vitest run src"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "catalog:",
     "@ne/contracts": "workspace:*",
-    "@playwright/test": "catalog:"
+    "@playwright/test": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@ne/tsconfig": "workspace:*",
     "@types/node": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }
