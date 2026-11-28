@@ -58,7 +58,8 @@ AGENTS.md 只放关键入口与指针。命令帮助（`devenv --help`）与本�
 
 | Action | Command | 期望退出码 |
 |---|---|---|
-| dev 两层规则集漂移核对（保存配置 `devenv/rulesets/` ↔ GitHub 实时，逐字段；匿名只读，`BP_GITHUB_TOKEN`/`GITHUB_TOKEN` 存在时优先；漂移 fail closed；CI quality-gate 常驻步骤） | `devenv branch-protection` | 0 或 1（漂移）或 3（无法核查） |
+| dev 两层规则集漂移核对（保存配置 `devenv/rulesets/` ↔ GitHub 实时，逐字段；匿名只读，`BP_GITHUB_TOKEN`/`GITHUB_TOKEN` 存在时优先；覆盖公开可见面，`bypass_actors` 不可见时跳过并 NOTE；漂移/无法核查 fail closed；CI quality-gate 常驻步骤） | `devenv branch-protection` | 0 或 1（漂移）或 3（无法核查） |
+| 同上但管理员强校验绕过名单（响应缺失 `bypass_actors` 即判漂移；须 `BP_GITHUB_TOKEN=<管理员令牌>`，否则用法错误） | `devenv branch-protection --require-bypass-actors` | 0 或 1 或 2 或 3 |
 | 受控验收 harness（真实 GitHub，App 身份，分阶段与指挥者 UI 操作交错；阶段：status/prepare/verify-config/negatives/negatives-dev/g/probe-audit/cleanup-test/summary；证据 `.artifacts/73-branch-protection/`） | `devenv test:branch-protection [阶段] [--pr N] [--evidence-dir PATH]` | 0 或 1 或 2 |
 
 ## 退出码枚举（总表归 Spec-工程基座；7–10 e2e 专用码段由 Spec-e2e 登记）

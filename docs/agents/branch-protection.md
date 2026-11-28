@@ -10,7 +10,12 @@ dev 分支保护由**两层规则集**承担（设计决策见
 
 事实源：`devenv/rulesets/*.json`（随分支走）。核对命令：`devenv branch-protection`
 （匿名只读拉取实时规则集逐字段比对；CI 的 quality-gate 每次运行都执行——
-削弱保护会使必需检查变红、PR 无法合入的自锁闭环）。
+削弱保护会使必需检查变红、PR 无法合入的自锁闭环）。核对覆盖**公开可见面**
+（规则及参数 / enforcement / 条件 / 额外覆盖 dev 的规则集）；`bypass_actors`
+仅对规则集写权限（Administration）者可见——公开面读不到该字段时跳过并显式
+NOTE（不谎报已核对、不死锁 CI），绕过名单的强校验用
+`BP_GITHUB_TOKEN=<管理员令牌> ./devenv/devenv branch-protection --require-bypass-actors`
+（缺失即 fail closed；建议每次应用/改配置后由指挥者跑一次）。
 
 **App 无 Administration 权限（spec 安全基线，刻意如此）**：规则集的创建/修改/
 删除只能由指挥者以管理员身份在 GitHub Web UI 完成；rule-suites（审计面）同理
@@ -22,17 +27,19 @@ dev 分支保护由**两层规则集**承担（设计决策见
 依次在 GitHub → 仓库 → **Settings → Rules → Rulesets → New ruleset** 创建
 （字段值 = 对应 JSON 文件；UI 显示名与 API 字段的对应见下表）。顺序：先建
 dev 两层 → 再建测试分支 transient 对（仅验收期需要）→ 最后删除旧规则集
-`protect-dev` → 检查 Settings → Branches 无 dev 的 classic branch protection
-残留（若有则删除——规则集是唯一机制）。
+`protect-dev`（其管理员面实际配着 `RepositoryRole/always` 绕过——repo 管理员
+可随时绕过含直推；两层设计把它收敛为「仅点名指挥者、仅 PR 合入」）→ 检查
+Settings → Branches 无 dev 的 classic branch protection 残留（若有则删除——
+规则集是唯一机制）。
 
 | JSON 字段（`devenv/rulesets/protect-dev-base.json`） | Web UI 位置 |
 |---|---|
 | `name` / `target: branch` / `enforcement: active` | Ruleset name / Targets: branches / Enforcement: Active |
-| `conditions.ref_name.include: ["refs/heads/dev"]` | Target branches: `refs/heads/dev`（不要用 default branch 通配） |
+| `conditions.ref_name.include: ["refs/heads/dev"]` | Target branches: `refs/heads/dev`（不要用 default branch 通配或 All branches） |
 | `{type: deletion}` | Rules → Add rule → **Restrict deletions** |
 | `{type: non_fast_forward}` | Rules → **Block force pushes** |
 | `{type: pull_request, parameters…count: 0 …}` | Rules → **Require a pull request before merging**（批准数留 0、不勾任何子项、合并方法三种全允许） |
-| `{type: required_status_checks, parameters…context: "quality-gate"…}` | Rules → **Require status checks to pass** → 搜索勾选 `quality-gate`（严格「要求分支最新」**不勾** = `strict…: false`） |
+| `{type: required_status_checks, parameters…context+integration_id…}` | Rules → **Require status checks to pass** → 搜索勾选 `quality-gate`（**Source 保持 GitHub Actions 默认**——保存配置已锁定 `integration_id: 15368`；严格「要求分支最新」**不勾** = `strict…: false`） |
 
 审批层 `protect-dev-approval.json` 额外字段：
 
@@ -41,6 +48,7 @@ dev 两层 → 再建测试分支 transient 对（仅验收期需要）→ 最�
 | `required_approving_review_count: 1` | Require a pull request before merging → Approvals: 1 |
 | `dismiss_stale_reviews_on_push: true` | 同上 → 勾选 **Dismiss stale approvals on new commits**（新推送使旧批准失效） |
 | `bypass_actors: [{actor_id: 3615225, actor_type: "User", bypass_mode: "pull_request"}]` | Bypass list → Add bypass → 选 `bbhl79` → 模式选 **Pull requests only**（仅 PR 合入可绕过，不能选 Always） |
+| `require_extra_approval_for_unattributed_changes: true`（沿用旧规则集现状） | Copilot 相关开关（若 UI 不可见则不设置；该参数仅对 Copilot 开的 PR 生效，本仓库无——落盘值以应用后 verify-config 比对为准，不一致时对齐 UI 实际值） |
 
 测试分支 transient 对（`protect-bp73-test-base` / `protect-bp73-test-approval`）
 内容与 dev 两层完全相同，仅 target branches 换成
@@ -83,11 +91,11 @@ harness：`./devenv/devenv test:branch-protection <阶段>`；证据目录
    DISMISSED → App 合入被拒）→ **指挥者重新批准** → 正常合入（项 g 完整链）。
    或者：批准后先 `g`，再由指挥者以绕过方式合入（项 d 在 dev 的自然复现）。
 10. **指挥者（项 i，管理员读）**：读取 rule-suites 存入
-    `.artifacts/73-branch-protection/rule-suites-admin.txt`（浏览器登录态或
-    本人令牌，例如
-    `curl -s -H 'Accept: application/vnd.github+json' 'https://api.github.com/repos/bbhl79/natural-enforcement-prj/rulesets/rule-suites?rule_suite_result=bypass&time_period=month'`，
-    或 Settings → Rules 的 insights 视图截图）；同时核对 UI 上审批层绕过名单
-    显示 `bbhl79 / Pull requests only`。**只对实际确认到的字段下结论，不预设
+    `.artifacts/73-branch-protection/rule-suites-admin.txt`——在本人登录态终端
+    运行 `gh api 'repos/bbhl79/natural-enforcement-prj/rulesets/rule-suites?rule_suite_result=bypass&time_period=month'`
+    （管理员读取为指挥者本人权限，非 agent 路径；或 Settings → Rules 的
+    insights 视图截图）；同时核对 UI 上审批层绕过名单显示
+    `bbhl79 / Pull requests only`。**只对实际确认到的字段下结论，不预设
     位置/内容/保留期，不声称能区分冒用**（actor=bbhl79 无法区分真人或冒用，
     已接受残余风险见 github-app-auth.md 安全边界节）。
 11. **`cleanup-test`**（agent；前置：指挥者已在 UI 删除两个 transient 规则集，
@@ -103,6 +111,9 @@ harness：`./devenv/devenv test:branch-protection <阶段>`；证据目录
   `devenv/rulesets/*.json`（保存配置进版本控制）；② 指挥者在 UI 同步应用同名
   规则集的对应修改。CI 的漂移核对在两步一致前保持红（合入被必需检查挡住），
   一致后转绿。**顺序建议先应用 UI 再等 CI 绿**（或同步进行），避免保护空窗。
+  涉及绕过名单的变更，应用后由指挥者跑一次
+  `BP_GITHUB_TOKEN=<管理员令牌> ./devenv/devenv branch-protection --require-bypass-actors`
+  （公开面读不到 bypass_actors，强校验缺失即 fail closed）。
 - **绕过的日常形态**：只有 `bbhl79` 在 PR 合入时可选择绕过（跳过批准数要求，
   检查仍须绿）；任何直推 dev（含指挥者）恒拒。绕过留审计（rule-suites
   bypass 事件 + PR 无批准即合入的机器特征 + 合并者身份），管理员可查。

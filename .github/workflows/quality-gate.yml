@@ -44,8 +44,12 @@ jobs:
           exit "$rc"
 
       - name: 分支保护漂移核对（dev 两层规则集 ↔ 保存配置；只读）
-        # github.token 只作读限额余量（公开仓库该端点匿名亦可读）；漂移/无法
-        # 核查即本步红（fail closed）——保护配置削弱会使必需检查变红、合入被挡。
+        # github.token 只作读限额余量（公开仓库该端点匿名亦可读）。核对覆盖
+        # 公开可见面（rules/参数/enforcement/条件/额外覆盖 dev 的规则集），漂移或
+        # 无法核查即红（fail closed）——保护配置削弱会使必需检查变红、合入被挡。
+        # bypass_actors 仅对规则集写权限者可见（实测口径）：CI 读取身份不可见时
+        # 跳过该字段并显式 NOTE（不死锁）；绕过名单靠管理员强校验
+        # （--require-bypass-actors）+ App current_user_can_bypass=never + 行为验收。
         env:
           BP_GITHUB_TOKEN: ${{ github.token }}
         run: |
