@@ -17,6 +17,9 @@ compose）；命令面权威文档：`devenv/COMMANDS.md`（命令表 / 退出�
 
 - 一切原始运行证据（命令捕获 `.jsonl`/`.out`/`.err`/`.exitcode`/`.log` 等）一律写入
   `.artifacts/<票号>-<slug>/`（已 `.gitignore`，不进代码库，不污染 `#58` 工作树快照）。
+  e2e run 的运行产物（Playwright 报告/trace/日志/run.json）按 run 组织，写入
+  `.artifacts/e2e/<run-id>/`；票号目录用于该票验收的原始证据与摘要，两者同属
+  gitignored 证据区。
 - 验收结论、关键输出摘录与对应 commit SHA 归档至 GitHub Issue / PR 评论；长期有效
   的设计/路线决策写入 `docs/adr/` 或 `docs/research/*.md`；可复用的测试脚本归入
   `devenv/test/`。

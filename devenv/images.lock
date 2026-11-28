@@ -37,3 +37,9 @@ RUSTFS_IMAGE_KIND=manifest-list
 # macOS ARM 路线（#53 Mac 实测选定；manifest-list digest，2026-11-27 本机 podman 实查）
 DB_IMAGE_MACOS=kartoza/postgis:18.6-3.6.4@sha256:5fa6f8e228a7496d544df3ab580cad9df1686b1f47d02c97f02056ecdc744739
 DB_IMAGE_MACOS_KIND=manifest-list
+
+# e2e 执行器基座（#70）：官方 Playwright 镜像，多架构 → 锁 manifest-list digest。
+# tag 的版本号必须与 catalog 的 @playwright/test 严格一致（供应链静态门禁交叉核对；
+# 2026-11-28 本机 docker pull 实查 index digest = 1507cb…，平台 manifest = 766137…）。
+PLAYWRIGHT_IMAGE=mcr.microsoft.com/playwright:v1.65.1-noble@sha256:1507cbfc550a63a6b7396791ca4f00df17beb56342d2447b3f106c306f525579
+PLAYWRIGHT_IMAGE_KIND=manifest-list

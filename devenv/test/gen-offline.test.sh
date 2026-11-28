@@ -123,6 +123,7 @@ allowBuilds:
 
 catalog:
   "@types/node": "26.6.6"
+  "@playwright/test": "1.65.1"
   typescript: "6.0.3"
   vitest: "5.1.1"
 YAML
@@ -151,6 +152,9 @@ catalogs:
     '@types/node':
       specifier: 26.6.6
       version: 26.6.6
+    '@playwright/test':
+      specifier: 1.65.1
+      version: 1.65.1
     typescript:
       specifier: 6.0.3
       version: 6.0.3

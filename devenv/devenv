@@ -38,10 +38,12 @@ source "$REPO_ROOT/devenv/lib/stack.sh"
 source "$REPO_ROOT/devenv/lib/supply-chain.sh"
 # shellcheck source=lib/gen.sh
 source "$REPO_ROOT/devenv/lib/gen.sh"
+# shellcheck source=lib/e2e.sh
+source "$REPO_ROOT/devenv/lib/e2e.sh"
 # shellcheck source=lib/github-app-auth.sh
 source "$REPO_ROOT/devenv/lib/github-app-auth.sh"
 
-trap 'gen_txn_rollback; lease_release_all; lock_release_all; snapshot_cleanup' EXIT
+trap 'e2e_cleanup_on_exit; gen_txn_rollback; lease_release_all; lock_release_all; snapshot_cleanup' EXIT
 
 usage() {
   cat >&2 <<'EOF'
@@ -83,6 +85,14 @@ devenv — 工程基座唯一入口（命令面权威文档：devenv/COMMANDS.md
   images [--verify]         查看镜像锁与生效 DB 镜像（含覆盖来源）/ 校验运行态 digest 漂移
   supply-chain [--container] 供应链门禁：catalog/allowBuilds/冷却期/锁文件漂移静态核对；
                             --container 再核对包内 agent skills/构建脚本待审批项（默认拒绝）
+  e2e build                 构建 e2e 执行器镜像（官方 Playwright 基座 + 项目运行时；
+                            与 npm 包严格同版本；探索/复现 run 会自动确保它存在）
+  e2e runs                  运行登记册（run id / status / live / db/bucket/queue；只读）
+  e2e logs --run-id ID [svc] [-f] [--tail N]
+                            观察 per-run 容器日志（透传原始流；api|worker|web，默认 api）
+  explore [--run-id ID]     探索轨道：共享基础设施 + 每 run 独立库/bucket/队列键空间；
+                            API/worker 绑定本 run 资源；运行期持共享栈使用租约；
+                            产物导出 .artifacts/e2e/<run-id>/；发现失败=产出（exit 4）
 
 GitHub App 认证入口（身份：GitHub App，非个人账号）：
   gh <args...>              以 App 身份执行 gh（拒绝 gh auth；拒绝 -R 指向未授权仓库）
@@ -190,8 +200,16 @@ cmd_doctor() {
     else
       chk workspace-image warn "未构建（冷启动正常；构建命令：devenv build）"
     fi
-    # 快照状态（#58）：状态文件记录 快照 ↔ workspace/tools 不可变镜像标识（信息项）
+    # 快照状态（#58）与 e2e 执行器镜像状态（#70）：一次加载，两项报告
     snapshot_state_load
+    snapshot_e2e_state_load
+    if [[ -n "$STATE_E2E_IMAGE_ID" ]] && docker image inspect "$STATE_E2E_IMAGE_ID" >/dev/null 2>&1; then
+      chk e2e-image ok "执行器 ${STATE_E2E_IMAGE_ID:0:19}…（快照 ${STATE_E2E_SNAPSHOT_HASH:0:12}…）"
+    elif docker image inspect "$E2E_IMAGE" >/dev/null 2>&1; then
+      chk e2e-image warn "存在 per-worktree tag 但无不可变绑定（修复：devenv e2e build）"
+    else
+      chk e2e-image warn "未构建（探索/复现前：devenv e2e build，或首次 run 自动构建）"
+    fi
     if [[ -z "$STATE_IMAGE_ID" && -z "$STATE_TOOLS_IMAGE_ID" ]]; then
       chk snapshot-state warn "无快照状态（冷启动正常；构建命令：devenv build）"
     else
@@ -238,7 +256,7 @@ cmd_prefetch() {
   # 等待，超时 exit 6（重跑续跑）。栈使用租约只协调 per-worktree 栈，不加在此。
   lock_acquire prefetch 300
   local img rc
-  for img in "$NODE_IMAGE" "$DB_IMAGE_EFFECTIVE" "$REDIS_IMAGE" "$RUSTFS_IMAGE"; do
+  for img in "$NODE_IMAGE" "$DB_IMAGE_EFFECTIVE" "$REDIS_IMAGE" "$RUSTFS_IMAGE" "$PLAYWRIGHT_IMAGE"; do
     ev pull.started image="$img" timeout="$timeout_s"
     note "prefetch：拉取 ${img}（超时 ${timeout_s}s，可中断续跑——重复执行即可）"
     rc=0
@@ -252,8 +270,8 @@ cmd_prefetch() {
     fi
     ev pull.completed image="$img"
   done
-  note "prefetch 完成（4 个上游镜像就绪）"
-  final ok 0 images="node,db,redis,rustfs"
+  note "prefetch 完成（5 个上游镜像就绪）"
+  final ok 0 images="node,db,redis,rustfs,playwright"
 }
 
 cmd_build() {
@@ -992,10 +1010,11 @@ cmd_images() {
   fi
   # 人读/机读双用：非 --json 猫锁文件原文 + 生效值；--json 只放结构化结果（不混原文进结果流）
   if (( JSON )); then
-    printf '{"node_image":"%s","node_kind":"%s","db_image":"%s","db_kind":"%s","db_platform":"%s","source":"%s","db_macos":"%s","db_macos_kind":"%s"}\n' \
+    printf '{"node_image":"%s","node_kind":"%s","db_image":"%s","db_kind":"%s","db_platform":"%s","source":"%s","db_macos":"%s","db_macos_kind":"%s","playwright_image":"%s","playwright_kind":"%s","playwright_version":"%s"}\n' \
       "$(jstr "$NODE_IMAGE")" "$(jstr "$NODE_IMAGE_KIND")" "$(jstr "$DB_IMAGE_EFFECTIVE")" \
       "$(jstr "$DB_IMAGE_KIND_EFFECTIVE")" "$(jstr "$DB_IMAGE_PLATFORM_EFFECTIVE")" \
-      "$(jstr "$DB_IMAGE_SOURCE")" "$(jstr "$DB_IMAGE_MACOS")" "$(jstr "$DB_IMAGE_MACOS_KIND")"
+      "$(jstr "$DB_IMAGE_SOURCE")" "$(jstr "$DB_IMAGE_MACOS")" "$(jstr "$DB_IMAGE_MACOS_KIND")" \
+      "$(jstr "$PLAYWRIGHT_IMAGE")" "$(jstr "$PLAYWRIGHT_IMAGE_KIND")" "$(jstr "$PLAYWRIGHT_VERSION")"
   else
     cat "$IMAGES_LOCK"
     note "生效 DB 镜像：${DB_IMAGE_EFFECTIVE}（来源：${DB_IMAGE_SOURCE}；kind=${DB_IMAGE_KIND_EFFECTIVE}${DB_IMAGE_PLATFORM_EFFECTIVE:+ platform=${DB_IMAGE_PLATFORM_EFFECTIVE}}）"
@@ -1021,14 +1040,14 @@ case "$CMD" in
   git-push)               gha_cmd_git_push "$@" ;;
   test:auth)              bash "$REPO_ROOT/devenv/test/offline.test.sh" ;;
   test:auth:integration)  bash "$REPO_ROOT/devenv/test/integration.test.sh" "$@" ;;
-  test:devenv)            bash "$REPO_ROOT/devenv/test/stack-offline.test.sh" && bash "$REPO_ROOT/devenv/test/snapshot-offline.test.sh" && bash "$REPO_ROOT/devenv/test/isolation-offline.test.sh" && bash "$REPO_ROOT/devenv/test/supply-chain-offline.test.sh" && bash "$REPO_ROOT/devenv/test/gen-offline.test.sh" ;;
+  test:devenv)            bash "$REPO_ROOT/devenv/test/stack-offline.test.sh" && bash "$REPO_ROOT/devenv/test/snapshot-offline.test.sh" && bash "$REPO_ROOT/devenv/test/isolation-offline.test.sh" && bash "$REPO_ROOT/devenv/test/supply-chain-offline.test.sh" && bash "$REPO_ROOT/devenv/test/gen-offline.test.sh" && bash "$REPO_ROOT/devenv/test/e2e-offline.test.sh" ;;
   help)                   usage; exit 0 ;;
   # 供应链静态门禁：不触引擎，可在任意平台/无引擎时执行
   supply-chain)           cmd_supply_chain "$@" ;;
   # doctor 自带软引擎检查（体检报告全部检查项，不在首个失败处退出）
   doctor)                 cmd_doctor "$@" ;;
   # 工程栈命令：先解析/校验/报告引擎端点（Spec：每条命令报告实际端点+引擎身份）
-  prefetch|build|up|down|restart|ps|logs|exec|shell|test|test:unit|lint|typecheck|verify|migrate|migrate:create|seed|wait|status|images|web|gen)
+  prefetch|build|up|down|restart|ps|logs|exec|shell|test|test:unit|lint|typecheck|verify|migrate|migrate:create|seed|wait|status|images|web|gen|e2e|explore)
     engine_init
     case "$CMD" in
       prefetch)       cmd_prefetch "$@";;
@@ -1053,6 +1072,8 @@ case "$CMD" in
       images)         cmd_images "$@";;
       web)            cmd_web "$@";;
       gen)            cmd_gen "$@";;
+      e2e)            cmd_e2e "$@";;
+      explore)        cmd_explore "$@";;
     esac
     ;;
   *)

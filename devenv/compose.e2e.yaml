@@ -1,0 +1,121 @@
+# e2e per-run 栈（#70）：基础设施容器共享（db/redis/rustfs 由 dev 栈提供），
+# 本文件只描述每 run 独立的 API / worker / web / 执行器实例。
+#
+# 用法（仅经 devenv 编排层，人类/agent 禁止直接操作）：
+#   docker compose -p <worktree-project>-e2e-<run-id> -f devenv/compose.e2e.yaml ...
+# 网络是 per-run external 网络：devenv 先建网络，再把共享的 db/redis/rustfs 容器
+# 以别名接入——因此本 run 的 api/web 服务名不会与其它 run 或 dev 栈的别名冲突。
+#
+# 服务绑定（Spec-工程基座 §4）：每 run 的 API 与 worker 启动时注入本 run 的
+# 数据库连接 / bucket / 队列名（EVIDENCE_QUEUE_NAME）；worker 只消费本 run 队列，
+# 后台任务不会处理对方数据。执行器只通过本 run 服务名（api/web）访问被测服务。
+x-run-env: &run-env
+  HOME: /tmp
+  NODE_ENV: development
+  TURBO_TELEMETRY_DISABLED: "1"
+  TURBO_LOG_DIR: /tmp/turbo-logs
+  DATABASE_URL: ${E2E_DATABASE_URL:?devenv 需注入本 run 数据库连接}
+  # 连接池显式限小（Spec-e2e §11：池 × 并发 run < max_connections；默认 2/进程）
+  DATABASE_POOL_MAX: ${E2E_DATABASE_POOL_MAX:-2}
+  REDIS_URL: ${E2E_REDIS_URL:?devenv 需注入 Redis 连接}
+  S3_ENDPOINT: ${E2E_S3_ENDPOINT:?devenv 需注入对象存储端点}
+  S3_REGION: ${E2E_S3_REGION:-us-east-1}
+  S3_ACCESS_KEY: ${E2E_S3_ACCESS_KEY:?devenv 需注入对象存储凭据}
+  S3_SECRET_KEY: ${E2E_S3_SECRET_KEY:?devenv 需注入对象存储凭据}
+  S3_BUCKET: ${E2E_S3_BUCKET:?devenv 需注入本 run bucket}
+  EVIDENCE_QUEUE_NAME: ${E2E_QUEUE_NAME:?devenv 需注入本 run 队列名}
+
+x-run-labels: &run-labels
+  devenv.e2e.run-id: ${E2E_RUN_ID:?devenv 需注入 run id}
+  devenv.e2e.track: ${E2E_TRACK:?devenv 需注入 track}
+  devenv.e2e.database: ${E2E_DATABASE_NAME:?devenv 需注入本 run 数据库名}
+  devenv.e2e.bucket: ${E2E_S3_BUCKET}
+
+services:
+  api:
+    image: ${E2E_WORKSPACE_IMAGE:?devenv 需注入本 run 绑定的 workspace 不可变镜像}
+    working_dir: /workspace
+    environment:
+      <<: *run-env
+      PORT: "3000"
+    networks: [run]
+    labels: *run-labels
+    command: ["pnpm", "--filter", "@ne/api", "start"]
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  # 后台证据 worker：与本 run API 同库、同 bucket、同队列名——跨 run 不串数据。
+  worker:
+    image: ${E2E_WORKSPACE_IMAGE:?devenv 需注入本 run 绑定的 workspace 不可变镜像}
+    working_dir: /workspace
+    environment: *run-env
+    networks: [run]
+    labels: *run-labels
+    command: ["pnpm", "--filter", "@ne/api", "run", "worker"]
+    healthcheck:
+      test: ["CMD", "node", "apps/api/dist/scripts/worker-health.js"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  # 本 run 前端：preview proxy 注入本 run API 地址；不发布宿主端口（零端口不变量）。
+  web:
+    image: ${E2E_WORKSPACE_IMAGE:?devenv 需注入本 run 绑定的 workspace 不可变镜像}
+    working_dir: /workspace
+    environment:
+      <<: *run-env
+      API_ORIGIN: http://api:3000
+    networks: [run]
+    labels: *run-labels
+    command: ["pnpm", "--filter", "@ne/web", "run", "preview"]
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:4173/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+
+  # 执行器（官方 Playwright 基座 + 项目运行时，devenv/e2e.Dockerfile）。
+  # 官方三参数：--init 防僵尸 + --ipc=host 防 Chromium /dev/shm 崩溃 + 容器内浏览器。
+  # 产物落 per-run 命名卷，运行结束后由 devenv 经 docker cp 导出宿主证据目录。
+  e2e:
+    image: ${E2E_EXECUTOR_IMAGE:?devenv 需注入 e2e 执行器不可变镜像}
+    working_dir: /workspace
+    init: true
+    ipc: host
+    environment:
+      E2E_RUN_ID: ${E2E_RUN_ID}
+      E2E_TRACK: ${E2E_TRACK}
+      E2E_API_BASE_URL: http://api:3000
+      E2E_WEB_BASE_URL: http://web:4173
+      E2E_ARTIFACTS_DIR: /artifacts
+      # 并行证据演练：两个 run 共享组标记 + 等待窗口（默认空/0，单 run 快速）
+      E2E_PARALLEL_GROUP: ${E2E_PARALLEL_GROUP:-}
+      E2E_PARALLEL_SOAK_MS: ${E2E_PARALLEL_SOAK_MS:-0}
+      # 验收演练钩子：故意制造一次探索失败，核对失败=产出/任务失败的报告语义
+      E2E_FORCE_FINDING: ${E2E_FORCE_FINDING:-}
+      # 执行器直接核对本 run bucket（服务绑定实证；凭据同 worktree，仅容器内网）
+      E2E_S3_ENDPOINT: ${E2E_S3_ENDPOINT}
+      E2E_S3_REGION: ${E2E_S3_REGION:-us-east-1}
+      E2E_S3_ACCESS_KEY: ${E2E_S3_ACCESS_KEY}
+      E2E_S3_SECRET_KEY: ${E2E_S3_SECRET_KEY}
+      E2E_S3_BUCKET: ${E2E_S3_BUCKET}
+      CI: ${CI:-}
+    volumes:
+      - e2e-artifacts:/artifacts
+    networks: [run]
+    labels: *run-labels
+    command: ["true"]
+
+networks:
+  run:
+    external: true
+    name: ${E2E_NETWORK:?devenv 需注入 per-run 网络名}
+
+volumes:
+  e2e-artifacts:

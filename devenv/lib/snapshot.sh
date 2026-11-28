@@ -250,3 +250,26 @@ snapshot_state_write_tools() { # <toolsInputHash> <toolsImageId>：写 tools 绑
   snapshot_state_load
   snapshot_state_store "$STATE_SNAPSHOT_HASH" "$STATE_IMAGE_ID" "$1" "$2"
 }
+
+# --- e2e 执行器镜像绑定（#70；独立状态文件，避免与 workspace/tools 的读改写交错）----
+snapshot_e2e_state_file() { printf '%s/e2e-image.env' "${DEVENV_STATE_DIR:-$REPO_ROOT/.devenv-state}"; }
+
+snapshot_e2e_state_load() { # → STATE_E2E_SNAPSHOT_HASH / STATE_E2E_IMAGE_ID / STATE_E2E_PLAYWRIGHT_IMAGE
+  STATE_E2E_SNAPSHOT_HASH=""; STATE_E2E_IMAGE_ID=""; STATE_E2E_PLAYWRIGHT_IMAGE=""
+  local f E2E_SNAPSHOT_HASH="" E2E_IMAGE_ID="" E2E_PLAYWRIGHT_IMAGE=""
+  f="$(snapshot_e2e_state_file)"
+  [[ -f "$f" ]] || return 0
+  # 独立状态文件同为 devenv 自写 KEY=VALUE；e2e 绑定缺失按未构建处理（可重建）。
+  . "$f"
+  STATE_E2E_SNAPSHOT_HASH="$E2E_SNAPSHOT_HASH"
+  STATE_E2E_IMAGE_ID="$E2E_IMAGE_ID"
+  STATE_E2E_PLAYWRIGHT_IMAGE="$E2E_PLAYWRIGHT_IMAGE"
+}
+
+snapshot_e2e_state_write() { # <e2eSnapshotHash> <e2eImageId> <playwrightRef>
+  local f
+  f="$(snapshot_e2e_state_file)"
+  mkdir -p "$(dirname "$f")"
+  printf '# devenv e2e 执行器镜像状态（devenv 维护，勿手改；E2E_SNAPSHOT_HASH=git 树哈希）\nE2E_SNAPSHOT_HASH=%s\nE2E_IMAGE_ID=%s\nE2E_PLAYWRIGHT_IMAGE=%s\nBUILT_AT=%s\n' \
+    "$1" "$2" "$3" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$f"
+}

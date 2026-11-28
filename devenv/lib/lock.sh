@@ -41,6 +41,17 @@ lock_release_all() {
   HELD_LOCKS=()
 }
 
+lock_release_one() { # <锁名>：只释放本次持有的某把锁（短临界区/镜像构建锁用）
+  local name="$1" dir="$LOCK_ROOT/$1.lock" d
+  local -a keep=()
+  for d in ${HELD_LOCKS[@]+"${HELD_LOCKS[@]}"}; do
+    [[ "$d" == "$dir" ]] || keep+=("$d")
+  done
+  HELD_LOCKS=(${keep[@]+"${keep[@]}"})
+  rm -rf "$dir"
+  return 0
+}
+
 lease_release_all() {
   local d
   for d in ${HELD_LEASES[@]+"${HELD_LEASES[@]}"}; do
